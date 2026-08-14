@@ -1,0 +1,316 @@
+import { useState, useRef, useCallback } from 'react'
+import { IngestedDocument, AppSettings } from '../types'
+import { apiService } from '../services/api'
+import { logger } from '../lib/logger'
+import { getEffectivePrompt } from '../components/common/SystemPromptModal'
+import { useIngestedDocuments } from './useIngestedDocuments'
+
+export const LANGUAGES = [
+  'English',
+  'Italian',
+  'German',
+  'French',
+  'Spanish',
+  'Portuguese',
+  'Russian',
+  'Chinese',
+  'Japanese',
+]
+
+export function splitMarkdownForTranslation(markdown: string, maxChunkLength: number = 3500): string[] {
+  if (!markdown || !markdown.trim()) return []
+
+  // 1. Initial split by explicit page headers if present
+  let initialChunks: string[] = []
+  if (/(?:^|\n)(?=## Page \d+|# Page \d+|--- Page \d+ ---)/i.test(markdown)) {
+    initialChunks = markdown.split(/(?=(?:^|\n)(?:## Page \d+|# Page \d+|--- Page \d+ ---))/i)
+  } else {
+    initialChunks = [markdown]
+  }
+
+  const finalChunks: string[] = []
+
+  for (const block of initialChunks) {
+    const trimmed = block.trim()
+    if (!trimmed) continue
+
+    if (trimmed.length <= maxChunkLength) {
+      finalChunks.push(trimmed)
+      continue
+    }
+
+    // 2. Block-aware paragraph splitting (protects code fences ```)
+    const paragraphs = trimmed.split(/\n\n+/)
+    let currentChunk = ''
+    let insideCodeFence = false
+
+    for (const para of paragraphs) {
+      const codeFenceCount = (para.match(/```/g) || []).length
+      if (codeFenceCount % 2 !== 0) {
+        insideCodeFence = !insideCodeFence
+      }
+
+      if (
+        !insideCodeFence &&
+        (currentChunk + '\n\n' + para).length > maxChunkLength &&
+        currentChunk.length > 0
+      ) {
+        finalChunks.push(currentChunk.trim())
+        currentChunk = para
+      } else {
+        currentChunk = currentChunk ? currentChunk + '\n\n' + para : para
+      }
+    }
+
+    if (currentChunk.trim().length > 0) {
+      finalChunks.push(currentChunk.trim())
+    }
+  }
+
+  return finalChunks.length > 0 ? finalChunks : [markdown.trim()]
+}
+
+export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): string {
+  if (!fullMarkdown) return ''
+  const regex = new RegExp(`(?:^|\\n)##\\s+Page\\s+${pageNumber}\\b[\\s\\S]*?(?=(?:\\n##\\s+Page\\s+\\d+|$))`, 'i')
+  const match = fullMarkdown.match(regex)
+  if (match) {
+    return match[0].trim()
+  }
+  return fullMarkdown
+}
+
+export function useTranslation(settings?: AppSettings) {
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+  const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
+  const [sourceLang, setSourceLang] = useState('Italian')
+  const [targetLang, setTargetLang] = useState('English')
+  const [translatedMarkdown, setTranslatedMarkdown] = useState('')
+  const [isTranslating, setIsTranslating] = useState(false)
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
+  const [totalChunks, setTotalChunks] = useState(0)
+  const [exportMessage, setExportMessage] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'split' | 'diff'>('split')
+  const [syncScroll, setSyncScroll] = useState<boolean>(true)
+
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [pageViewMode, setPageViewMode] = useState<'page' | 'all'>('all')
+  const [zoomLevel, setZoomLevel] = useState<number>(100)
+
+  const [docSearchQuery, setDocSearchQuery] = useState<string>('')
+  const [activeMatchIndex, setActiveMatchIndex] = useState<number>(0)
+
+  const leftPaneRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<any>(null)
+  const isSyncingScrollRef = useRef<boolean>(false)
+  const abortTranslationRef = useRef<boolean>(false)
+
+  const handleLeftPaneScroll = () => {
+    if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current || !editorRef.current) return
+    isSyncingScrollRef.current = true
+
+    const { scrollTop, scrollHeight, clientHeight } = leftPaneRef.current
+    const maxScroll = scrollHeight - clientHeight
+    if (maxScroll > 0) {
+      const scrollPercent = scrollTop / maxScroll
+      const editorScrollHeight = editorRef.current.getScrollHeight()
+      const editorLayout = editorRef.current.getLayoutInfo()
+      const editorClientHeight = editorLayout ? editorLayout.height : 0
+      const maxEditorScroll = editorScrollHeight - editorClientHeight
+      if (maxEditorScroll > 0) {
+        editorRef.current.setScrollTop(scrollPercent * maxEditorScroll)
+      }
+    }
+
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
+  }
+
+  const handleEditorDidMount = (editor: any) => {
+    editorRef.current = editor
+    editor.onDidScrollChange((e: any) => {
+      if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current) return
+      if (!e.scrollTopChanged) return
+
+      isSyncingScrollRef.current = true
+      const editorScrollHeight = editor.getScrollHeight()
+      const editorLayout = editor.getLayoutInfo()
+      const editorClientHeight = editorLayout ? editorLayout.height : 0
+      const maxEditorScroll = editorScrollHeight - editorClientHeight
+
+      if (maxEditorScroll > 0) {
+        const scrollPercent = e.scrollTop / maxEditorScroll
+        const { scrollHeight, clientHeight } = leftPaneRef.current
+        const maxScroll = scrollHeight - clientHeight
+        if (maxScroll > 0) {
+          leftPaneRef.current.scrollTop = scrollPercent * maxScroll
+        }
+      }
+
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
+    })
+  }
+
+  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
+    setSelectedDoc((prev) => {
+      if (!prev) return docs.length > 0 ? docs[0] : null
+      return docs.find((d) => d.id === prev.id) || (docs.length > 0 ? docs[0] : null)
+    })
+  }, [])
+
+  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
+    onDocsUpdated: handleDocsUpdated,
+    autoRetryIntervalMs: 3000,
+  })
+
+  const handleSwapLanguages = () => {
+    const prevSource = sourceLang
+    setSourceLang(targetLang)
+    setTargetLang(prevSource)
+  }
+
+  const handleStopTranslation = useCallback(async () => {
+    abortTranslationRef.current = true
+    if (window.electronAPI?.cancelOllamaStream) {
+      try {
+        await window.electronAPI.cancelOllamaStream()
+      } catch (err: any) {
+        logger.warn('useTranslation', `Error cancelling Ollama stream: ${err.message}`)
+      }
+    }
+    setIsTranslating(false)
+  }, [])
+
+  const handleStartTranslation = async () => {
+    if (!selectedDoc) return
+    abortTranslationRef.current = false
+    setIsTranslating(true)
+    setTranslatedMarkdown('')
+    setCurrentChunkIndex(0)
+
+    try {
+      const sourceMarkdown = pageViewMode === 'page' && selectedDoc.numPages > 1
+        ? extractPageMarkdown(selectedDoc.extractedMarkdown || '', currentPage)
+        : (selectedDoc.extractedMarkdown || '')
+
+      const chunks = splitMarkdownForTranslation(sourceMarkdown)
+      setTotalChunks(chunks.length)
+
+      let accumulatedResults = ''
+
+      const modelToUse = settings?.translationModel || settings?.defaultModel || 'llama3.2'
+      const effectiveSystemPrompt = settings ? getEffectivePrompt('translation', modelToUse, settings).prompt : ''
+      const systemInstruction = effectiveSystemPrompt && effectiveSystemPrompt.trim().length > 0
+        ? `${effectiveSystemPrompt}\n\nStrict Directives:\n1. Translate the input text from ${sourceLang} to ${targetLang}.\n2. Preserve all Markdown headings (#, ##), code blocks (\`\`\`), table grids, HTML tags, and formula syntax intact.\n3. Output ONLY the translated content without meta comments or greetings.`
+        : `You are an expert technical translator. Translate the following text from ${sourceLang} to ${targetLang}.\nPreserve all Markdown headings, bullet points, tables, code blocks (\`\`\`), and formatting unchanged.\nOutput ONLY the translated content without meta comments, preamble, or conversational notes.`
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (abortTranslationRef.current) {
+          logger.info('useTranslation', 'Translation aborted by user')
+          break
+        }
+
+        setCurrentChunkIndex(i + 1)
+        const chunk = chunks[i]
+        if (!chunk.trim()) continue
+
+        const prompt = `${systemInstruction}\n\n[DOCUMENT CONTENT TO TRANSLATE]:\n${chunk}`
+
+        let currentChunkTranslation = ''
+        if (window.electronAPI?.generateOllamaStream) {
+          await window.electronAPI.generateOllamaStream(modelToUse, prompt, (c) => {
+            if (abortTranslationRef.current) return
+            currentChunkTranslation += c
+            // Live token streaming into Monaco editor
+            const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
+            setTranslatedMarkdown(livePreview)
+          })
+        }
+
+        if (abortTranslationRef.current) break
+
+        accumulatedResults += (accumulatedResults ? '\n\n' : '') + (currentChunkTranslation || chunk)
+        setTranslatedMarkdown(accumulatedResults)
+      }
+    } catch (err: any) {
+      logger.error('TranslationView', `Error translating document: ${err.message}`)
+    } finally {
+      setIsTranslating(false)
+    }
+  }
+
+  const handleExportTranslation = async (format: 'pdf' | 'docx' | 'md' = 'pdf') => {
+    if (!translatedMarkdown.trim()) return
+    setExportMessage(`Preparazione esportazione ${format.toUpperCase()}...`)
+    try {
+      const res = await apiService.exportDocument(translatedMarkdown, format)
+      if (res.success) {
+        setExportMessage(res.message || `Traduzione ${format.toUpperCase()} esportata con successo!`)
+      } else {
+        setExportMessage(res.error || res.message || 'Esportazione annullata.')
+      }
+    } catch (err: any) {
+      setExportMessage(`Errore esportazione: ${err.message}`)
+    } finally {
+      setTimeout(() => setExportMessage(null), 5000)
+    }
+  }
+
+  const handleResetTranslation = () => {
+    abortTranslationRef.current = true
+    if (isTranslating && window.electronAPI?.cancelOllamaStream) {
+      window.electronAPI.cancelOllamaStream().catch(() => {})
+    }
+    setIsTranslating(false)
+    setTranslatedMarkdown('')
+    setCurrentChunkIndex(0)
+    setTotalChunks(0)
+    setSelectedDoc(null)
+    setExportMessage(null)
+  }
+
+  return {
+    isPromptModalOpen,
+    setIsPromptModalOpen,
+    documents,
+    selectedDoc,
+    setSelectedDoc,
+    sourceLang,
+    setSourceLang,
+    targetLang,
+    setTargetLang,
+    translatedMarkdown,
+    setTranslatedMarkdown,
+    isTranslating,
+    currentChunkIndex,
+    totalChunks,
+    exportMessage,
+    viewMode,
+    setViewMode,
+    syncScroll,
+    setSyncScroll,
+    currentPage,
+    setCurrentPage,
+    pageViewMode,
+    setPageViewMode,
+    zoomLevel,
+    setZoomLevel,
+    docSearchQuery,
+    setDocSearchQuery,
+    activeMatchIndex,
+    setActiveMatchIndex,
+    leftPaneRef,
+    editorRef,
+    handleLeftPaneScroll,
+    handleEditorDidMount,
+    fetchDocuments,
+    handleSwapLanguages,
+    handleStopTranslation,
+    handleStartTranslation,
+    handleExportTranslation,
+    handleResetTranslation,
+  }
+}

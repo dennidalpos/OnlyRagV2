@@ -1,0 +1,318 @@
+import path from 'node:path'
+import fs from 'node:fs'
+import { logger } from '../../../diagnostics'
+import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
+
+export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): string | null {
+  const result = domainValidatePathSafety(filePath, workspaceRoot)
+  if (!result.safePath) {
+    if (result.error) {
+      logger.log('WARN', 'WorkspaceRepo', `Path safety validation rejected '${filePath}': ${result.error}`)
+    }
+    return null
+  }
+  return result.safePath
+}
+
+export class FileSystemRepository {
+  async listFiles(targetPath: string) {
+    const rootDir = validatePathSafety(targetPath)
+    if (!rootDir) return []
+
+    try {
+      if (!fs.existsSync(rootDir) || !(await fs.promises.stat(rootDir)).isDirectory()) {
+        return []
+      }
+      const entries = await fs.promises.readdir(rootDir, { withFileTypes: true })
+      const result = []
+
+      for (const entry of entries) {
+        if (isIgnoredPath(entry.name, entry.isDirectory())) continue
+        const fullPath = path.join(rootDir, entry.name)
+        let sizeBytes = 0
+        if (!entry.isDirectory()) {
+          try {
+            const st = await fs.promises.stat(fullPath)
+            sizeBytes = st.size
+          } catch (stErr: any) {
+            logger.log('WARN', 'WorkspaceRepo', `Could not stat file '${fullPath}': ${stErr.message}`)
+          }
+        }
+        result.push({
+          name: entry.name,
+          path: fullPath,
+          isDir: entry.isDirectory(),
+          sizeBytes,
+        })
+      }
+
+      return result
+    } catch (err: any) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error listing files: ${err.message}`)
+      return []
+    }
+  }
+
+  async getProjectMap(dirPath: string) {
+    const rootDir = validatePathSafety(dirPath)
+    if (!rootDir) return []
+
+    try {
+      const st = await fs.promises.stat(rootDir)
+      if (!st.isDirectory()) return []
+    } catch (err: any) {
+      logger.log('WARN', 'WorkspaceRepo', `Directory stat failed for '${dirPath}': ${err.message}`)
+      return []
+    }
+
+    const safeRootDir = rootDir
+    const mapItems: { path: string; relativePath: string; isDir: boolean; sizeBytes: number }[] = []
+    const MAX_ITEMS = 10000
+
+    async function scanAsync(currentDir: string, depth: number) {
+      if (depth > 12 || mapItems.length >= MAX_ITEMS) return
+      try {
+        const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (mapItems.length >= MAX_ITEMS) break
+          if (isIgnoredPath(entry.name, entry.isDirectory())) continue
+
+          const fullPath = path.join(currentDir, entry.name)
+          const relPath = path.relative(safeRootDir, fullPath).replace(/\\/g, '/')
+
+          if (entry.isDirectory()) {
+            mapItems.push({ path: fullPath, relativePath: relPath + '/', isDir: true, sizeBytes: 0 })
+            await scanAsync(fullPath, depth + 1)
+          } else {
+            let size = 0
+            try {
+              const fileStat = await fs.promises.stat(fullPath)
+              size = fileStat.size
+            } catch (statErr: any) {
+              logger.log('WARN', 'WorkspaceRepo', `Stat error on ${fullPath}: ${statErr.message}`)
+            }
+            mapItems.push({ path: fullPath, relativePath: relPath, isDir: false, sizeBytes: size })
+          }
+        }
+      } catch (err: any) {
+        logger.log('WARN', 'WorkspaceRepo', `Scan skipped on ${currentDir}: ${err.message}`)
+      }
+    }
+
+    await scanAsync(safeRootDir, 0)
+    return mapItems
+  }
+
+  async readFile(
+    filePath: string,
+    startLine?: number,
+    endLine?: number
+  ): Promise<{ success: boolean; content?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }> {
+    const resolved = validatePathSafety(filePath)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved) || !(await fs.promises.stat(resolved)).isFile()) {
+        return { success: false, error: 'File not found or invalid target' }
+      }
+
+      const stats = await fs.promises.stat(resolved)
+      const MAX_READ_SIZE_BYTES = 50 * 1024 * 1024
+      if (stats.size > MAX_READ_SIZE_BYTES) {
+        return {
+          success: false,
+          error: `File size exceeds 50MB limit (${(stats.size / (1024 * 1024)).toFixed(1)}MB). Select a smaller file for editor preview.`,
+        }
+      }
+
+      const rawContent = await fs.promises.readFile(resolved, 'utf-8')
+      const lines = rawContent.split(/\r?\n/)
+      const totalLines = lines.length
+
+      if (startLine !== undefined || endLine !== undefined) {
+        const s = Math.max(1, startLine || 1)
+        const e = Math.min(totalLines, endLine || totalLines)
+        const slicedLines = lines.slice(s - 1, e)
+        const formattedSlice = slicedLines
+          .map((line, idx) => `${s + idx}: ${line}`)
+          .join('\n')
+        return { success: true, content: formattedSlice, totalLines, startLine: s, endLine: e }
+      }
+
+      return { success: true, content: rawContent, totalLines }
+    } catch (err: any) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error reading file '${filePath}': ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  }
+
+  async deleteFile(filePath: string): Promise<{ success: boolean; error?: string }> {
+    const resolved = validatePathSafety(filePath)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File does not exist' }
+      }
+      await fs.promises.unlink(resolved)
+      logger.log('INFO', 'WorkspaceRepo', `Deleted file: ${resolved}`)
+      return { success: true }
+    } catch (err: any) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to delete file ${filePath}: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  }
+
+  async writeFile(filePath: string, content: string): Promise<{ success: boolean; error?: string }> {
+    const resolved = validatePathSafety(filePath)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      await fs.promises.mkdir(path.dirname(resolved), { recursive: true })
+      await fs.promises.writeFile(resolved, content, 'utf-8')
+      logger.log('INFO', 'WorkspaceRepo', `Wrote to file: ${resolved}`)
+      return { success: true }
+    } catch (err: any) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to write file ${filePath}: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  }
+
+  async replaceChunk(
+    filePath: string,
+    targetContent: string,
+    replacementContent: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.multiReplaceChunks(filePath, [{ targetContent, replacementContent }])
+  }
+
+  async multiReplaceChunks(
+    filePath: string,
+    replacements: { targetContent: string; replacementContent: string }[]
+  ): Promise<{ success: boolean; replacedCount?: number; error?: string }> {
+    const resolved = validatePathSafety(filePath)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File does not exist' }
+      }
+      let existing = await fs.promises.readFile(resolved, 'utf-8')
+      let replacedCount = 0
+
+      for (const { targetContent, replacementContent } of replacements) {
+        if (!targetContent) continue
+
+        if (existing.includes(targetContent)) {
+          existing = existing.replace(targetContent, replacementContent)
+          replacedCount++
+        } else {
+          // Normalize CRLF to LF and retry fuzzy replacement
+          const normExisting = existing.replace(/\r\n/g, '\n')
+          const normTarget = targetContent.replace(/\r\n/g, '\n')
+          const normReplacement = replacementContent.replace(/\r\n/g, '\n')
+
+          if (normExisting.includes(normTarget)) {
+            existing = normExisting.replace(normTarget, normReplacement)
+            replacedCount++
+          } else {
+            return {
+              success: false,
+              replacedCount,
+              error: `Target content string was not found in file: "${targetContent.slice(0, 100)}..."`,
+            }
+          }
+        }
+      }
+
+      await fs.promises.writeFile(resolved, existing, 'utf-8')
+      logger.log('INFO', 'WorkspaceRepo', `Successfully applied ${replacedCount} chunk replacement(s) in: ${resolved}`)
+      return { success: true, replacedCount }
+    } catch (err: any) {
+      logger.log('ERROR', 'WorkspaceRepo', `Failed replacing chunk(s) in ${filePath}: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  }
+
+  async grepSearch(
+    dirPath: string,
+    query: string,
+    isRegex?: boolean,
+    caseInsensitive?: boolean
+  ): Promise<{ filePath: string; relativePath: string; lineNumber: number; lineContent: string }[]> {
+    const rootDir = validatePathSafety(dirPath)
+    if (!rootDir || !fs.existsSync(rootDir)) return []
+    const safeRootDir = rootDir
+
+    const IGNORED_NAMES = new Set(['.git', 'node_modules', 'dist', 'dist-electron', '.venv', 'build', 'sidecar_dist', '__pycache__'])
+    const BINARY_EXTENSIONS = new Set([
+      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz',
+      '.exe', '.dll', '.so', '.dylib', '.pyc', '.db', '.sqlite', '.bin', '.dat',
+      '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.mov', '.avi'
+    ])
+    const results: { filePath: string; relativePath: string; lineNumber: number; lineContent: string }[] = []
+    const MAX_MATCHES = 1000
+
+    let matcher: (line: string) => boolean
+    if (isRegex) {
+      try {
+        const flags = caseInsensitive ? 'i' : ''
+        const regex = new RegExp(query, flags)
+        matcher = (line: string) => regex.test(line)
+      } catch (regErr: any) {
+        logger.log('WARN', 'WorkspaceRepo', `Invalid regex pattern '${query}': ${regErr.message}`)
+        return []
+      }
+    } else {
+      const q = caseInsensitive ? query.toLowerCase() : query
+      matcher = (line: string) => (caseInsensitive ? line.toLowerCase().includes(q) : line.includes(q))
+    }
+
+    async function searchDir(currentDir: string, depth: number) {
+      if (depth > 12 || results.length >= MAX_MATCHES) return
+      try {
+        const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (results.length >= MAX_MATCHES) break
+          if (IGNORED_NAMES.has(entry.name)) continue
+
+          const fullPath = path.join(currentDir, entry.name)
+          if (entry.isDirectory()) {
+            await searchDir(fullPath, depth + 1)
+          } else {
+            try {
+              const ext = path.extname(entry.name).toLowerCase()
+              if (BINARY_EXTENSIONS.has(ext)) continue
+
+              const stat = await fs.promises.stat(fullPath)
+              if (stat.size > 10 * 1024 * 1024) continue
+
+              const content = await fs.promises.readFile(fullPath, 'utf-8')
+              const lines = content.split('\n')
+              const relPath = path.relative(safeRootDir, fullPath).replace(/\\/g, '/')
+
+              for (let i = 0; i < lines.length; i++) {
+                if (results.length >= MAX_MATCHES) break
+                if (matcher(lines[i])) {
+                  results.push({
+                    filePath: fullPath,
+                    relativePath: relPath,
+                    lineNumber: i + 1,
+                    lineContent: lines[i].trim().slice(0, 300),
+                  })
+                }
+              }
+            } catch (readErr: any) {
+              logger.log('WARN', 'WorkspaceRepo', `Grep read failed on '${fullPath}': ${readErr.message}`)
+            }
+          }
+        }
+      } catch (dirErr: any) {
+        logger.log('WARN', 'WorkspaceRepo', `Grep search directory error on '${currentDir}': ${dirErr.message}`)
+      }
+    }
+
+    await searchDir(rootDir, 0)
+    return results
+  }
+}

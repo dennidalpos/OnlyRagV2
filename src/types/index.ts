@@ -1,0 +1,383 @@
+export interface SystemRequirementsCheck {
+  isOsSupported: boolean
+  hasMinRam: boolean
+  hasRecRam: boolean
+  isOllamaReady: boolean
+  isGpuAccelerated: boolean
+  isSidecarReady?: boolean
+  overallStatus: 'optimal' | 'warning' | 'incompatible'
+}
+
+export interface DiagnosticsData {
+  sidecar: {
+    status: 'online' | 'offline' | 'checking'
+    engine?: string
+    version?: string
+    endpoint?: string
+    documentsCount?: number
+    chunksCount?: number
+    error?: string
+  }
+  ollama: {
+    status: 'online' | 'offline' | 'checking'
+    url: string
+    modelsCount: number
+    models: string[]
+    error?: string
+  }
+  gpu: {
+    hasNvidiaGpu: boolean
+    gpuName?: string
+    vramTotalMB?: number
+    vramUsedMB?: number
+    cudaVersion?: string
+    driverVersion?: string
+    error?: string
+  }
+  memory: {
+    totalRAMGB: number
+    freeRAMGB: number
+    usedRAMGB: number
+    ramUsagePercent: number
+  }
+  system: {
+    platform: string
+    arch: string
+    cpusCount: number
+    cpuModel: string
+  }
+  requirements?: SystemRequirementsCheck
+  timestamp: string
+}
+
+export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
+
+export interface LogEntry {
+  timestamp: string
+  level: LogLevel
+  message: string
+  category: string
+}
+
+export type HardwareProfile = 'Low' | 'Medium' | 'High' | 'Auto'
+
+export interface IngestedDocument {
+  id: string
+  filename: string
+  filePath: string
+  fileSize: number
+  numPages: number
+  numChunks: number
+  extractedMarkdown: string
+  status: 'processing' | 'indexed' | 'error'
+  ingestedAt: string
+  fileType: 'pdf' | 'image' | 'docx' | 'text'
+}
+
+export interface VectorSearchResult {
+  chunk_id: string
+  doc_id?: string
+  doc_name: string
+  section_header?: string
+  text: string
+  score: number
+}
+
+export interface CitationSource {
+  docName: string
+  chunkId: string
+  score: number
+  snippet: string
+}
+
+export interface ChatMessage {
+  id: string
+  sender: 'user' | 'bot'
+  text: string
+  timestamp: string
+  sources?: CitationSource[]
+  isStreaming?: boolean
+}
+
+export interface WorkspaceFile {
+  name: string
+  path: string
+  isDir: boolean
+  sizeBytes?: number
+}
+
+export interface AgentActionLog {
+  id: string
+  timestamp: string
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request'
+  message: string
+  detail?: string
+}
+
+export interface AppSettings {
+  defaultModel: string
+  chatModel?: string
+  translationModel?: string
+  codingModel?: string
+  visionModel?: string
+  embeddingModel?: string
+  allowTerminalExecution?: boolean
+  allowFileModifications?: boolean
+  hardwareProfile: HardwareProfile
+  ocrEngine: 'native_cuda' | 'vision_model'
+  ollamaHost: string
+  customWorkspacePath?: string
+  noWorkspaceMode?: boolean
+  // Family & Module System Prompt Customizations
+  customPromptOverrides?: Record<string, string> // key: `${module}:${family}` -> prompt string
+  selectedFamilyOverrides?: Record<string, string> // key: module -> family string or 'auto'
+  // Complexity-Based Routing Settings
+  useComplexityRouting?: boolean
+  complexityFastModel?: string
+  complexityStandardModel?: string
+  complexityDeepModel?: string
+  // Concurrency & Task Queue Settings
+  maxConcurrentTasks?: number // Range: 1-8, default 1
+}
+
+export interface TaskQueueStatus {
+  maxConcurrency: number
+  runningCount: number
+  queuedCount: number
+  runningTasks: { id: string; type: string; status: string; createdAt: number }[]
+  queuedTasks: { id: string; type: string; status: string; createdAt: number }[]
+}
+
+export interface ProjectMapItem {
+  path: string
+  relativePath: string
+  isDir: boolean
+  sizeBytes: number
+}
+
+export interface GrepSearchResult {
+  filePath: string
+  relativePath: string
+  lineNumber: number
+  lineContent: string
+}
+
+export interface GuestOsInfo {
+  platform: string
+  arch: string
+  release: string
+  hostname: string
+  cpuCount: number
+  cpuModel: string
+  totalMemoryGB: number
+  freeMemoryGB: number
+  nodeVersion: string
+  electronVersion: string
+  tools: {
+    git: boolean
+    node: boolean
+    npm: boolean
+    python: boolean
+    ollama: boolean
+  }
+  env: {
+    PATH: string
+    USERPROFILE: string
+    OS: string
+    PROCESSOR_ARCHITECTURE: string
+  }
+}
+
+export interface AgentToolReplacementChunk {
+  targetContent: string
+  replacementContent: string
+}
+
+export interface AgentToolCall {
+  tool:
+    | 'read_file'
+    | 'replace_file_content'
+    | 'multi_replace_file_content'
+    | 'write_file'
+    | 'delete_file'
+    | 'grep_search'
+    | 'list_dir'
+    | 'web_search'
+    | 'fetch_web_content'
+    | 'download_file'
+    | 'run_command'
+    | 'inspect_os_env'
+    | 'finish'
+  parameters: Record<string, any>
+  explanation?: string
+}
+
+export type SkillOriginType = 'local_custom' | 'hub_original' | 'hub_modified'
+
+export interface SkillDefinition {
+  id: string
+  name: string
+  description: string
+  content: string
+  filePath: string
+  isActive: boolean
+  isWorkspaceLocal: boolean
+  triggers: string[]
+  tags: string[]
+  version?: string
+  author?: string
+  originType: SkillOriginType
+  originHub?: string
+  originHubId?: string
+  originChecksum?: string
+  isModified?: boolean
+}
+
+export type SkillCategory = 'frontend' | 'backend' | 'database' | 'security' | 'architecture' | 'ai-ml' | 'devops'
+
+export interface HubSkillItem {
+  id: string
+  name: string
+  description: string
+  category: SkillCategory
+  tags: string[]
+  triggers: string[]
+  rawContent?: string
+  downloadUrl?: string
+  version: string
+  author: string
+  hubId?: string
+  hubName?: string
+  isInstalled?: boolean
+}
+
+export type HubSourceType = 'builtin' | 'json-catalog' | 'github-repo'
+
+export interface SkillHubSource {
+  id: string
+  name: string
+  url: string
+  type: HubSourceType
+  description: string
+  isBuiltin: boolean
+  isReadOnly?: boolean
+}
+
+export interface CustomHubInput {
+  name: string
+  url: string
+  type?: HubSourceType
+  description?: string
+}
+
+export interface SkillSaveInput {
+  name: string
+  description?: string
+  version?: string
+  author?: string
+  triggers?: string[]
+  tags?: string[]
+  content: string
+  originHub?: string
+  originHubId?: string
+  originChecksum?: string
+  isModified?: boolean
+}
+
+export interface IngestionStreamProgressPayload {
+  type: 'progress' | 'done'
+  percent: number
+  step: string
+  pipeline?: string
+  page?: number
+  total_pages?: number
+  fileName?: string
+  ocrTechnology?: string
+  modelName?: string
+  data?: IngestedDocument
+}
+
+export interface PagePreviewData {
+  docId: string
+  pageNumber: number
+  totalPages: number
+  imageBase64: string
+  mimeType: string
+}
+
+export interface IElectronAPI {
+  runDiagnostics: () => Promise<DiagnosticsData>
+  getLogs: () => Promise<LogEntry[]>
+  clearLogs: () => Promise<boolean>
+  getLogFilePath: () => Promise<string>
+  logTelemetry: (level: LogLevel, category: string, message: string) => Promise<boolean>
+  pullOllamaModel: (modelName: string) => Promise<{ success: boolean; data?: string; error?: string }>
+  cancelPullOllamaModel: () => Promise<{ success: boolean; error?: string }>
+  deleteOllamaModel: (modelName: string) => Promise<{ success: boolean; error?: string }>
+  installOrLaunchOllama: () => Promise<{ success: boolean; message?: string; error?: string }>
+  getSidecarStatus: () => Promise<{ status: string; engine?: string; version?: string; documentsCount?: number; chunksCount?: number }>
+  restartSidecar: () => Promise<{ success: boolean; message?: string; error?: string }>
+  openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string[]>
+  openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
+  ingestFile: (filePath: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
+  getIngestedDocuments: () => Promise<IngestedDocument[]>
+  deleteIngestedDocument: (docId: string) => Promise<{ success: boolean }>
+  searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => Promise<VectorSearchResult[]>
+  exportDocument: (markdownContent: string, format: string) => Promise<{ success: boolean; message?: string; error?: string }>
+  generateOllamaStream: (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any) => Promise<void>
+  cancelOllamaStream: () => Promise<void>
+  cancelTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
+  cleanTempResiduals: () => Promise<{ success: boolean; cleanedCount: number; bytesFreed: number }>
+  listWorkspaceFiles: (dirPath?: string) => Promise<WorkspaceFile[]>
+  getProjectMap: (dirPath: string) => Promise<ProjectMapItem[]>
+  readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => Promise<{ success: boolean; content?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
+  writeWorkspaceFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>
+  deleteWorkspaceFile: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) => Promise<{ success: boolean; error?: string }>
+  multiReplaceWorkspaceFileChunks: (filePath: string, replacements: AgentToolReplacementChunk[]) => Promise<{ success: boolean; replacedCount?: number; error?: string }>
+  grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => Promise<GrepSearchResult[]>
+  searchWeb: (query: string, maxResults?: number) => Promise<{ success: boolean; results: { title: string; url: string; snippet: string }[]; error?: string }>
+  fetchWebContent: (url: string, maxChars?: number) => Promise<{ success: boolean; content?: string; title?: string; error?: string }>
+  downloadFile: (url: string, targetFilePath: string) => Promise<{ success: boolean; downloadedBytes?: number; error?: string }>
+  inspectGuestOsEnvironment: () => Promise<GuestOsInfo>
+  executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
+  parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
+  checkDiskSpace: (models: string[]) => Promise<{ allowed: boolean; requiredGB: number; freeGB: number; missingGB: number; error?: string }>
+  startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
+  cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
+  getAgentQueueStatus: () => Promise<TaskQueueStatus>
+  setAgentMaxConcurrency: (limit: number) => Promise<{ success: boolean; maxConcurrency: number }>
+  onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
+  onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
+  onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
+  onAgentApprovalRequest: (callback: (req: any) => void) => () => void
+  onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void
+  onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
+  benchmarkModel: (modelName: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
+  listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>
+  listHubSkills: (workspaceRoot?: string) => Promise<HubSkillItem[]>
+  listHubSources: () => Promise<SkillHubSource[]>
+  addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>
+  removeCustomHubSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>
+  listHubSkillsBySource: (sourceId: string, workspaceRoot?: string) => Promise<HubSkillItem[]>
+  toggleSkillActive: (skillId: string, isActive: boolean) => Promise<boolean>
+  installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
+  installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
+  saveCustomSkill: (input: SkillSaveInput, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
+  resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
+  uninstallSkill: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; error?: string }>
+  onOllamaPullProgress?: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => () => void
+}
+
+export * from './ipcChannels'
+
+declare global {
+  interface Window {
+    electronAPI?: IElectronAPI
+  }
+}
+
+
+

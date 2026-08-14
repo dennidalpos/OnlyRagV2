@@ -1,0 +1,104 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+import { agentToolExecutorService } from './agentToolExecutorService'
+import type { AppSettings } from '../../../src/types'
+
+describe('AgentToolExecutorService Unit Tests', () => {
+  let tempDir: string
+  const settings: AppSettings = {
+    defaultModel: 'llama3.2',
+    hardwareProfile: 'Auto',
+    ocrEngine: 'native_cuda',
+    ollamaHost: '',
+    codingModel: 'llama3.2',
+    translationModel: 'llama3.2',
+    visionModel: 'llama3.2-vision',
+    embeddingModel: 'nomic-embed-text',
+    complexityFastModel: 'llama3.2:3b',
+    complexityStandardModel: 'qwen2.5-coder:7b',
+    complexityDeepModel: 'deepseek-r1:8b',
+    useComplexityRouting: true,
+    allowTerminalExecution: true,
+    allowFileModifications: true,
+    customPromptOverrides: {},
+  }
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-executor-test-'))
+  })
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    } catch {}
+  })
+
+  it('should execute write_file and read_file successfully', async () => {
+    const filePath = path.join(tempDir, 'test.txt')
+    const writeRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        parameters: { filePath, content: 'Hello AI Agent' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(writeRes.outputForHistory).toContain('Successfully wrote file')
+    expect(fs.existsSync(filePath)).toBe(true)
+
+    const readRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'read_file',
+        parameters: { filePath },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(readRes.outputForHistory).toContain('Hello AI Agent')
+  })
+
+  it('should execute replace_file_content and return auto-healing feedback if chunk is not found', async () => {
+    const filePath = path.join(tempDir, 'replace.ts')
+    fs.writeFileSync(filePath, 'const a = 1;\nconst b = 2;\n', 'utf-8')
+
+    const successRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'replace_file_content',
+        parameters: { filePath, targetContent: 'const a = 1;', replacementContent: 'const a = 100;' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(successRes.outputForHistory).toContain('Successfully replaced content')
+
+    const failRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'replace_file_content',
+        parameters: { filePath, targetContent: 'non_existent_code_chunk', replacementContent: 'const x = 0;' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(failRes.outputForHistory).toContain('[REPLACE FILE ERROR')
+  })
+
+  it('should block destructive shell commands via command security guardrail', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'run_command',
+        parameters: { command: 'git reset --hard HEAD' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
+    expect(res.logMessage).toContain('[SECURITY BLOCK]')
+  })
+})

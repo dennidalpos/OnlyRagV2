@@ -1,0 +1,621 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument } from '../types'
+import { AgentMode } from '../components/coding/CodingAgentView'
+import { useIngestedDocuments } from './useIngestedDocuments'
+
+export interface QueuedPrompt {
+  id: string
+  prompt: string
+  createdAt: string
+}
+
+export function useCodingAgent(settings?: AppSettings) {
+  const [agentMode, setAgentMode] = useState<AgentMode>('plan')
+  const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search'>('editor')
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+
+  // Prompt Queue State
+  const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([])
+  const promptQueueRef = useRef<QueuedPrompt[]>([])
+  useEffect(() => {
+    promptQueueRef.current = promptQueue
+  }, [promptQueue])
+
+  // Git Status & Diff State
+  const [gitStatusLines, setGitStatusLines] = useState<string[]>([])
+  const [gitDiffText, setGitDiffText] = useState<string>('')
+  const [isFetchingGit, setIsFetchingGit] = useState<boolean>(false)
+
+  // Guest OS Diagnostics State
+  const [guestOsInfo, setGuestOsInfo] = useState<any>(null)
+  const [isInspectingOs, setIsInspectingOs] = useState<boolean>(false)
+
+  // Grep Search State
+  const [grepQuery, setGrepQuery] = useState<string>('')
+  const [grepIsRegex, setGrepIsRegex] = useState<boolean>(false)
+  const [grepCaseInsensitive, setGrepCaseInsensitive] = useState<boolean>(true)
+  const [grepResults, setGrepResults] = useState<any[]>([])
+  const [isSearchingGrep, setIsSearchingGrep] = useState<boolean>(false)
+
+  // Workspace State
+  const [workspacePath, setWorkspacePath] = useState<string | null>(settings?.customWorkspacePath || null)
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(settings?.noWorkspaceMode || false)
+
+  // File Tree State
+  const [files, setFiles] = useState<WorkspaceFile[]>([])
+  const [openFiles, setOpenFiles] = useState<WorkspaceFile[]>([])
+  const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
+  const [editorContent, setEditorContent] = useState<string>('// Select a workspace file on the left to edit and inspect code.')
+  const [originalContent, setOriginalContent] = useState<string>('')
+  const [isSaved, setIsSaved] = useState<boolean>(true)
+
+  const [attachedDocIds, setAttachedDocIds] = useState<Set<string>>(new Set())
+  const [showDocPicker, setShowDocPicker] = useState<boolean>(false)
+
+  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
+    setAttachedDocIds((prev) => {
+      const next = new Set<string>()
+      const validIds = new Set(docs.map((d) => d.id))
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id)
+      })
+      return next
+    })
+  }, [])
+
+  const { documents: ingestedDocs, refetchDocuments: loadIngestedDocs } = useIngestedDocuments({
+    onDocsUpdated: handleDocsUpdated,
+    autoRetryIntervalMs: 3000,
+  })
+
+  // Terminal State
+  const [terminalInput, setTerminalInput] = useState<string>('')
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([
+    'Windows PowerShell v7.4.1 (UTF-8)',
+    'OnlyRag V2 AI Coding Agent Terminal Ready.',
+    'Type command or ask AI Agent to run PowerShell tasks.',
+    '',
+  ])
+
+  // Pinned Files State
+  const [pinnedFiles, setPinnedFiles] = useState<Map<string, WorkspaceFile>>(new Map())
+
+  // Agent Execution State
+  const [agentPrompt, setAgentPrompt] = useState<string>('')
+  const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
+  const [isExecuting, setIsExecuting] = useState<boolean>(false)
+  const [activeSkills, setActiveSkills] = useState<string[]>([])
+
+  // Pending Approval State
+  const [pendingApproval, setPendingApproval] = useState<{
+    type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd'
+    target: string
+    contentOrCmd: string
+    replacement?: string
+    replacements?: { targetContent: string; replacementContent: string }[]
+    parameters?: Record<string, any>
+  } | null>(null)
+
+  const addActionLog = (type: AgentActionLog['type'], message: string, detail?: string) => {
+    setActionLogs((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        type,
+        message,
+        detail,
+      },
+    ])
+  }
+
+  const loadGuestOsInfo = async () => {
+    if (window.electronAPI?.inspectGuestOsEnvironment) {
+      setIsInspectingOs(true)
+      try {
+        const info = await window.electronAPI.inspectGuestOsEnvironment()
+        setGuestOsInfo(info)
+      } catch (err) {
+        console.error('Failed inspecting guest OS:', err)
+      } finally {
+        setIsInspectingOs(false)
+      }
+    }
+  }
+
+  const handleRunGrepSearch = async () => {
+    if (!grepQuery.trim() || !workspacePath || isStandaloneMode || !window.electronAPI?.grepWorkspaceFiles) return
+    setIsSearchingGrep(true)
+    try {
+      const matches = await window.electronAPI.grepWorkspaceFiles(workspacePath, grepQuery, grepIsRegex, grepCaseInsensitive)
+      setGrepResults(matches)
+    } catch (err: any) {
+      console.error('Grep search failed:', err)
+    } finally {
+      setIsSearchingGrep(false)
+    }
+  }
+
+  const handleOpenFile = async (file: WorkspaceFile) => {
+    if (file.isDir) return
+    setSelectedFile(file)
+    setActiveTab('editor')
+    setOpenFiles((prev) => {
+      if (prev.some((f) => f.path === file.path)) return prev
+      return [...prev, file]
+    })
+    if (window.electronAPI) {
+      try {
+        const res = await window.electronAPI.readWorkspaceFile(file.path)
+        if (res.success && res.content !== undefined) {
+          setEditorContent(res.content)
+          setOriginalContent(res.content)
+          setIsSaved(true)
+        } else if (res.error) {
+          setEditorContent(`// Errore durante la lettura del file: ${res.error}`)
+          setOriginalContent('')
+        }
+      } catch (err: any) {
+        setEditorContent(`// Errore lettura file: ${err.message}`)
+        setOriginalContent('')
+      }
+    }
+  }
+
+  const handleCloseFile = (fileToClose: WorkspaceFile, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setOpenFiles((prev) => {
+      const next = prev.filter((f) => f.path !== fileToClose.path)
+      if (selectedFile?.path === fileToClose.path) {
+        if (next.length > 0) {
+          const fallback = next[next.length - 1]
+          handleOpenFile(fallback)
+        } else {
+          setSelectedFile(null)
+          setEditorContent('')
+          setOriginalContent('')
+        }
+      }
+      return next
+    })
+  }
+
+  const loadWorkspaceFiles = async (targetPath?: string | null) => {
+    if (isStandaloneMode || !targetPath) {
+      setFiles([])
+      setOpenFiles([])
+      setSelectedFile(null)
+      return
+    }
+    if (window.electronAPI) {
+      try {
+        const fileList = await window.electronAPI.listWorkspaceFiles(targetPath)
+        setFiles(fileList)
+      } catch (err) {
+        console.error('Error loading workspace files:', err)
+      }
+    }
+  }
+
+  useEffect(() => {
+    loadGuestOsInfo()
+  }, [])
+
+  useEffect(() => {
+    loadWorkspaceFiles(workspacePath)
+  }, [workspacePath, isStandaloneMode])
+
+  const fetchGitStatusAndDiff = async () => {
+    if (!window.electronAPI) return
+    setIsFetchingGit(true)
+    try {
+      const res = await window.electronAPI.executePowerShellCommand(
+        'git status --short; Write-Host "---GIT_DIFF_SPLIT---"; git diff -U3',
+        workspacePath || undefined
+      )
+      const output = res.output || ''
+      const parts = output.split('---GIT_DIFF_SPLIT---')
+      const statusRaw = (parts[0] || '').trim()
+      const diffRaw = (parts[1] || '').trim()
+
+      setGitStatusLines(statusRaw ? statusRaw.split('\n') : ['No modified files detected in Git working tree.'])
+      setGitDiffText(diffRaw || 'No uncommitted changes in Git working tree.')
+    } catch (err: any) {
+      setGitStatusLines(['Git command failed or not a Git repository.'])
+      setGitDiffText(`Git error: ${err.message}`)
+    } finally {
+      setIsFetchingGit(false)
+    }
+  }
+
+  const handleSelectWorkspaceFolder = async () => {
+    if (!window.electronAPI?.openDirectoryDialog) return
+    const chosen = await window.electronAPI.openDirectoryDialog({ title: 'Select Workspace Folder for AI Coding Agent' })
+    if (chosen) {
+      setWorkspacePath(chosen)
+      setIsStandaloneMode(false)
+      setSelectedFile(null)
+      loadWorkspaceFiles(chosen)
+    }
+  }
+
+  const handleToggleStandalone = () => {
+    setIsStandaloneMode(!isStandaloneMode)
+    if (!isStandaloneMode) {
+      setSelectedFile(null)
+      setFiles([])
+    } else if (workspacePath) {
+      loadWorkspaceFiles(workspacePath)
+    }
+  }
+
+  const toggleAttachDoc = (docId: string) => {
+    setAttachedDocIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) next.delete(docId)
+      else next.add(docId)
+      return next
+    })
+  }
+
+  const handleTogglePinFile = (file: WorkspaceFile) => {
+    if (file.isDir) return
+    setPinnedFiles((prev) => {
+      const next = new Map(prev)
+      if (next.has(file.path)) {
+        next.delete(file.path)
+        addActionLog('info', `Unpinned referenced file: ${file.name}`)
+      } else {
+        next.set(file.path, file)
+        addActionLog('info', `Pinned referenced file to chat context: ${file.name}`)
+      }
+      return next
+    })
+  }
+
+  const handleSaveFile = async () => {
+    if (!selectedFile || !window.electronAPI) return
+    const res = await window.electronAPI.writeWorkspaceFile(selectedFile.path, editorContent)
+    if (res.success) {
+      setOriginalContent(editorContent)
+      setIsSaved(true)
+      addActionLog('info', `Saved changes to ${selectedFile.name}`)
+    }
+  }
+
+  const handleRunTerminalCommand = async (cmdToRun?: string, timeoutMs: number = 120000) => {
+    const cmd = cmdToRun || terminalInput
+    if (!cmd.trim() || !window.electronAPI) return
+
+    setTerminalLogs((prev) => [...prev, `PS> ${cmd} (Executing... timeout: ${timeoutMs / 1000}s)`].slice(-500))
+    if (!cmdToRun) setTerminalInput('')
+
+    const res = await window.electronAPI.executePowerShellCommand(cmd, workspacePath || undefined, timeoutMs)
+    const outStr = res.output || ''
+    setTerminalLogs((prev) => [...prev, outStr, ''].slice(-500))
+
+    if (!res.success || outStr.includes('non è stato possibile trovare') || outStr.includes('is not recognized') || outStr.includes('CommandNotFoundException')) {
+      addActionLog(
+        'terminal',
+        `Command execution notice for "${cmd}":`,
+        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.\n${outStr.slice(0, 300)}`
+      )
+    }
+
+    return res
+  }
+
+  useEffect(() => {
+    if (!window.electronAPI) return
+
+    const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog) => {
+      setActionLogs((prev) => {
+        const filtered = prev.filter((l) => l.id !== log.id)
+        return [...filtered, log].slice(-500)
+      })
+
+      // Real-time synchronization of Right Window tabs
+      // 1. If executing a terminal command -> switch to terminal tab and append output
+      if (log.type === 'terminal' || log.message.includes('run_command') || log.message.startsWith('Ran ') || log.message.includes('Executing terminal command')) {
+        setActiveTab('terminal')
+        if (log.message) {
+          setTerminalLogs((prev) => {
+            const entry = log.detail ? `${log.message}\n${log.detail}` : log.message
+            return [...prev, entry].slice(-500)
+          })
+        }
+      }
+
+      // 2. If reading, writing, or editing a file -> open and show it in editor tab
+      if (
+        log.message.includes('replace_chunk') ||
+        log.message.includes('write_file') ||
+        log.message.includes('read_file') ||
+        log.message.startsWith('Edited ') ||
+        log.message.startsWith('Explored ') ||
+        log.message.includes('Read File')
+      ) {
+        const fileMatch =
+          log.message.match(/filePath":\s*"([^"]+)"/) ||
+          log.message.match(/\[UNTRUSTED FILE CONTENT:\s*([^\]]+)\]/) ||
+          log.message.match(/(?:Edited|Explored)\s+([^\s]+)/) ||
+          (log.detail && log.detail.match(/filePath":\s*"([^"]+)"/))
+
+        if (fileMatch && fileMatch[1]) {
+          const rawPath = fileMatch[1].trim()
+          const fileName = rawPath.split(/[\\/]/).pop() || rawPath
+          handleOpenFile({ name: fileName, path: rawPath, isDir: false })
+        }
+      }
+    })
+
+    const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data: { step: number; chunk: string }) => {
+      if (!data?.chunk) return
+      // Stream tokens received live during agent inference
+    })
+
+    const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
+      setPendingApproval(req)
+    })
+
+    const unsubSkills = window.electronAPI.onAgentSkillsMatched?.((data: { skills: string[] }) => {
+      setActiveSkills(data.skills || [])
+    })
+
+    const unsubDone = window.electronAPI.onAgentDone?.(() => {
+      setIsExecuting(false)
+      if (promptQueueRef.current.length > 0) {
+        const [nextItem, ...remaining] = promptQueueRef.current
+        setPromptQueue(remaining)
+        promptQueueRef.current = remaining
+        setTimeout(() => {
+          executeTask(nextItem.prompt)
+        }, 300)
+      }
+    })
+
+    return () => {
+      unsubLog?.()
+      unsubStreamToken?.()
+      unsubApproval?.()
+      unsubSkills?.()
+      unsubDone?.()
+    }
+  }, [])
+
+  const handleCancelAgent = () => {
+    setIsExecuting(false)
+    if (window.electronAPI) {
+      if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
+      if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
+    }
+    addActionLog('info', 'Esecuzione interrotta dall\'utente.')
+  }
+
+  const handleNewSession = () => {
+    if (isExecuting && window.electronAPI) {
+      if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
+      if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
+    }
+    setIsExecuting(false)
+    setAgentPrompt('')
+    setActiveSkills([])
+    setPromptQueue([])
+    promptQueueRef.current = []
+    setAttachedDocIds(new Set())
+    setPinnedFiles(new Map())
+    setPendingApproval(null)
+    setActionLogs([])
+  }
+
+  const executeTask = async (taskPrompt: string) => {
+    if (!taskPrompt.trim() || !window.electronAPI) return
+    setIsExecuting(true)
+    setActiveSkills([])
+    addActionLog('info', `User Prompt: ${taskPrompt}`)
+
+    try {
+      const activeModel = settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+      const contextFiles = Array.from(pinnedFiles.values()).map((f) => ({
+        path: f.path,
+        name: f.name,
+      }))
+
+      if (selectedFile && !pinnedFiles.has(selectedFile.path)) {
+        contextFiles.push({
+          path: selectedFile.path,
+          name: selectedFile.name,
+        })
+      }
+
+      const attachedDocs = ingestedDocs
+        .filter((d) => attachedDocIds.has(d.id))
+        .map((d) => ({
+          id: d.id,
+          filename: d.filename,
+          extractedMarkdown: d.extractedMarkdown || '',
+        }))
+
+      await window.electronAPI.startAgentTask({
+        userTask: taskPrompt,
+        agentMode,
+        workspacePath: workspacePath || undefined,
+        isStandaloneMode,
+        activeModel,
+        contextFiles,
+        attachedDocs,
+        pinnedFiles: Array.from(pinnedFiles.values()).map((f) => ({
+          name: f.name,
+          path: f.path,
+          content: selectedFile && selectedFile.path === f.path ? editorContent : '',
+        })),
+        activeFile: selectedFile ? { name: selectedFile.name, path: selectedFile.path, content: editorContent } : null,
+        settings,
+      })
+    } catch (err: any) {
+      addActionLog('info', `Agent Execution Error: ${err.message}`)
+      setIsExecuting(false)
+    }
+  }
+
+  const handleAgentExecute = async (overridePrompt?: string | unknown) => {
+    const rawPrompt = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
+    const text = (rawPrompt || '').trim()
+    if (!text) return
+
+    const isOverride = typeof overridePrompt === 'string'
+    if (isExecuting) {
+      addToPromptQueue(text)
+      if (!isOverride) setAgentPrompt('')
+      return
+    }
+
+    if (!isOverride) setAgentPrompt('')
+    await executeTask(text)
+  }
+
+  const addToPromptQueue = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const item: QueuedPrompt = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      prompt: trimmed,
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
+    setPromptQueue((prev) => [...prev, item])
+    addActionLog('info', `Nuovo prompt aggiunto alla coda (#${promptQueueRef.current.length + 1}): "${trimmed.slice(0, 80)}..."`)
+  }
+
+  const removeFromPromptQueue = (id: string) => {
+    setPromptQueue((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  const editPromptInQueue = (id: string, newPrompt: string) => {
+    setPromptQueue((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, prompt: newPrompt } : p))
+    )
+  }
+
+  const movePromptInQueue = (fromIndex: number, toIndex: number) => {
+    setPromptQueue((prev) => {
+      if (toIndex < 0 || toIndex >= prev.length) return prev
+      const copy = [...prev]
+      const [moved] = copy.splice(fromIndex, 1)
+      copy.splice(toIndex, 0, moved)
+      return copy
+    })
+  }
+
+  const handleApproveAction = async () => {
+    if (!pendingApproval) return
+    const current = pendingApproval
+    setPendingApproval(null)
+    setIsExecuting(true)
+
+    if (current.type === 'terminal_cmd') {
+      addActionLog('terminal', `User approved terminal command: ${current.contentOrCmd}`)
+      await handleRunTerminalCommand(current.contentOrCmd)
+    } else if (current.type === 'replace_chunk' && current.replacement && window.electronAPI) {
+      addActionLog('tool_call', `User approved chunk replacement in: ${current.target}`)
+      await window.electronAPI.replaceWorkspaceFileChunk(current.target, current.contentOrCmd, current.replacement)
+      if (selectedFile && selectedFile.path === current.target) {
+        handleOpenFile(selectedFile)
+      }
+    } else if (current.type === 'multi_replace' && current.replacements && window.electronAPI) {
+      addActionLog('tool_call', `User approved multi-chunk replacement in: ${current.target}`)
+      await window.electronAPI.multiReplaceWorkspaceFileChunks(current.target, current.replacements)
+      if (selectedFile && selectedFile.path === current.target) {
+        handleOpenFile(selectedFile)
+      }
+    } else if (current.type === 'delete_file' && window.electronAPI) {
+      addActionLog('tool_call', `User approved file deletion: ${current.target}`)
+      await window.electronAPI.deleteWorkspaceFile(current.target)
+      if (workspacePath) loadWorkspaceFiles(workspacePath)
+    } else if (current.type === 'download_file' && window.electronAPI) {
+      addActionLog('tool_call', `User approved file download from ${current.contentOrCmd} to ${current.target}`)
+      const dlRes = await window.electronAPI.downloadFile(current.contentOrCmd, current.target)
+      if (dlRes.success) {
+        addActionLog('info', `Downloaded ${dlRes.downloadedBytes} bytes to ${current.target}`)
+        if (workspacePath) loadWorkspaceFiles(workspacePath)
+      } else {
+        addActionLog('info', `Download failed: ${dlRes.error}`)
+      }
+    } else if (current.type === 'write_file' && window.electronAPI) {
+      addActionLog('tool_call', `User approved file write to: ${current.target}`)
+      await window.electronAPI.writeWorkspaceFile(current.target, current.contentOrCmd)
+      if (selectedFile && selectedFile.path === current.target) {
+        handleOpenFile(selectedFile)
+      }
+    }
+    setIsExecuting(false)
+  }
+
+  return {
+    agentMode,
+    setAgentMode,
+    activeTab,
+    setActiveTab,
+    isPromptModalOpen,
+    setIsPromptModalOpen,
+    gitStatusLines,
+    gitDiffText,
+    isFetchingGit,
+    guestOsInfo,
+    isInspectingOs,
+    grepQuery,
+    setGrepQuery,
+    grepIsRegex,
+    setGrepIsRegex,
+    grepCaseInsensitive,
+    setGrepCaseInsensitive,
+    grepResults,
+    isSearchingGrep,
+    workspacePath,
+    isStandaloneMode,
+    files,
+    openFiles,
+    selectedFile,
+    editorContent,
+    setEditorContent,
+    originalContent,
+    isSaved,
+    setIsSaved,
+    ingestedDocs,
+    attachedDocIds,
+    showDocPicker,
+    setShowDocPicker,
+    terminalInput,
+    setTerminalInput,
+    terminalLogs,
+    pinnedFiles,
+    agentPrompt,
+    setAgentPrompt,
+    promptQueue,
+    addToPromptQueue,
+    removeFromPromptQueue,
+    editPromptInQueue,
+    movePromptInQueue,
+    actionLogs,
+    isExecuting,
+    activeSkills,
+    pendingApproval,
+    setPendingApproval,
+    handleRunGrepSearch,
+    loadWorkspaceFiles,
+    fetchGitStatusAndDiff,
+    handleSelectWorkspaceFolder,
+    handleToggleStandalone,
+    toggleAttachDoc,
+    handleTogglePinFile,
+    handleOpenFile,
+    handleCloseFile,
+    handleSaveFile,
+    handleRunTerminalCommand,
+    handleClearTerminal: () => setTerminalLogs(['Windows PowerShell (Terminal Svuotato)', '']),
+    handleAgentExecute,
+    handleCancelAgent,
+    handleNewSession,
+    handleApproveAction,
+    addActionLog,
+  }
+}

@@ -1,0 +1,97 @@
+import os
+from typing import Dict, Any, List, Optional
+import pymupdf
+from sidecar.config import logger
+
+class DocumentCategory:
+    PDF = "pdf"
+    IMAGE = "image"
+    DOCX = "docx"
+    TABULAR = "tabular"
+    TEXT = "text"
+    UNKNOWN = "unknown"
+
+class PageRoutingStrategy:
+    NATIVE_TEXT = "native_text"
+    OCR_REQUIRED = "ocr_required"
+    HYBRID_VISION = "hybrid_vision"
+
+def classify_file_type(filename: str) -> str:
+    """Classifies file type category based on extension and filename."""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == ".pdf":
+        return DocumentCategory.PDF
+    elif ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif"]:
+        return DocumentCategory.IMAGE
+    elif ext in [".docx", ".doc"]:
+        return DocumentCategory.DOCX
+    elif ext in [".csv", ".tsv", ".xlsx", ".json", ".parquet"]:
+        return DocumentCategory.TABULAR
+    elif ext in [".txt", ".md", ".py", ".ts", ".js", ".html", ".css", ".yaml", ".yml", ".xml", ".sql", ".sh", ".ps1"]:
+        return DocumentCategory.TEXT
+    return DocumentCategory.UNKNOWN
+
+def analyze_pdf_page_structure(page: pymupdf.Page, min_char_threshold: int = 40) -> Dict[str, Any]:
+    """
+    Analyzes a single PDF page to classify optimal extraction route:
+    - Checks native text character count
+    - Checks count of embedded images/drawings
+    - Classifies as NATIVE_TEXT, OCR_REQUIRED, or HYBRID_VISION
+    """
+    raw_text = page.get_text("text").strip()
+    char_count = len(raw_text)
+    images_list = page.get_images(full=True)
+    image_count = len(images_list)
+    drawing_count = len(page.get_drawings())
+
+    if char_count >= min_char_threshold:
+        if image_count > 0 or drawing_count > 5:
+            strategy = PageRoutingStrategy.HYBRID_VISION
+        else:
+            strategy = PageRoutingStrategy.NATIVE_TEXT
+    else:
+        strategy = PageRoutingStrategy.OCR_REQUIRED
+
+    return {
+        "strategy": strategy,
+        "char_count": char_count,
+        "image_count": image_count,
+        "drawing_count": drawing_count,
+        "has_native_text": char_count >= min_char_threshold
+    }
+
+def route_document_ingestion(
+    filename: str,
+    content: bytes,
+    file_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Fast-Router: inspects the document in memory or on disk to determine processing plan.
+    """
+    category = classify_file_type(filename)
+    page_plans: List[Dict[str, Any]] = []
+    total_pages = 1
+
+    if category == DocumentCategory.PDF:
+        try:
+            if file_path and os.path.exists(file_path):
+                doc = pymupdf.open(file_path)
+            else:
+                doc = pymupdf.open(stream=content, filetype="pdf")
+            total_pages = len(doc)
+            for page_idx in range(total_pages):
+                page = doc.load_page(page_idx)
+                plan = analyze_pdf_page_structure(page)
+                plan["page_number"] = page_idx + 1
+                page_plans.append(plan)
+            doc.close()
+        except Exception as e:
+            logger.warning(f"Fast-Router failed to pre-analyze PDF {filename}: {e}")
+            category = DocumentCategory.UNKNOWN
+
+    return {
+        "filename": filename,
+        "category": category,
+        "total_pages": total_pages,
+        "page_plans": page_plans
+    }

@@ -1,0 +1,51 @@
+# Logs and Debugging
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node / Frontend Build Outputs
+node_modules/
+dist/
+dist-electron/
+release/
+.vite/
+
+# Python & Virtual Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# PyInstaller & Sidecar Bundling
+build/
+scripts/build/
+scripts/dist/
+sidecar_dist/
+
+# Local Vector DB & Persistent Data
+data/
+lancedb_store/
+export/
+*.lance
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini

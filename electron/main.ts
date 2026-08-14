@@ -1,0 +1,123 @@
+import { app, BrowserWindow, ipcMain } from 'electron'
+import path from 'node:path'
+import { runFullDiagnostics, logger } from './diagnostics'
+import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
+import { taskRunner } from './core/infrastructure/process/taskRunner'
+import { registerAgentIpcHandlers } from './core/presentation/agentIpc'
+import { registerWorkspaceIpcHandlers } from './core/presentation/workspaceIpc'
+import { registerSidecarIpcHandlers } from './core/presentation/sidecarIpc'
+import { registerOllamaIpcHandlers } from './core/presentation/ollamaIpc'
+import { registerSystemIpcHandlers } from './core/presentation/systemIpc'
+import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
+
+process.env.DIST = path.join(__dirname, '../dist')
+process.env.VITE_PUBLIC = app.isPackaged
+  ? process.env.DIST
+  : path.join(__dirname, '../public')
+
+let win: BrowserWindow | null = null
+
+const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
+
+// Global Exception & Unhandled Rejection Crash Safeguards
+process.on('uncaughtException', (error) => {
+  logger.log('ERROR', 'MainProcess', `Uncaught Exception in Main Process: ${error.message}\n${error.stack}`)
+  taskRunner.cancelAllTasks()
+})
+
+process.on('unhandledRejection', (reason: any) => {
+  logger.log('ERROR', 'MainProcess', `Unhandled Promise Rejection: ${reason?.message || reason}`)
+})
+
+function createWindow() {
+  win = new BrowserWindow({
+    title: 'OnlyRag V2 - Local AI Workspace',
+    width: 1400,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
+    backgroundColor: '#020617', // slate-950
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+    },
+    autoHideMenuBar: true,
+  })
+
+  win.webContents.on('render-process-gone', (_, details) => {
+    logger.log('WARN', 'MainProcess', `Renderer process gone/crashed: ${details.reason} (exitCode: ${details.exitCode})`)
+    taskRunner.cancelAllTasks()
+  })
+
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(VITE_DEV_SERVER_URL)
+  } else {
+    win.loadFile(path.join(process.env.DIST || path.join(__dirname, '../dist'), 'index.html'))
+  }
+
+  logger.log('INFO', 'MainProcess', 'Window created successfully.')
+}
+
+app.on('before-quit', () => {
+  logger.log('INFO', 'MainProcess', 'Application before-quit event triggered. Cleaning up active tasks & temp files...')
+  taskRunner.cancelAllTasks()
+  sidecarProcessManager.stopPythonSidecar()
+  taskRunner.cleanTempResiduals().catch(() => {})
+})
+
+app.on('window-all-closed', () => {
+  taskRunner.cancelAllTasks()
+  sidecarProcessManager.stopPythonSidecar()
+  if (process.platform !== 'darwin') {
+    app.quit()
+    win = null
+  }
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  }
+})
+
+app.whenReady().then(() => {
+  logger.log('INFO', 'MainProcess', 'Electron App Ready. Creating window & initializing Sidecar...')
+  
+  // Clean startup residuals
+  taskRunner.cleanTempResiduals().catch(() => {})
+
+  createWindow()
+  sidecarProcessManager.startPythonSidecar()
+
+  registerSystemIpcHandlers(() => win)
+  registerOllamaIpcHandlers()
+  registerWorkspaceIpcHandlers()
+  registerSidecarIpcHandlers()
+  registerAgentIpcHandlers(() => win)
+  registerSkillIpcHandlers()
+
+  ipcMain.handle('diagnostics:run', async () => {
+    await sidecarProcessManager.checkSidecarHealth()
+    return await runFullDiagnostics(sidecarProcessManager.getSidecarState())
+  })
+
+  ipcMain.handle('diagnostics:get-logs', async () => {
+    return logger.getLogs()
+  })
+
+  ipcMain.handle('diagnostics:clear-logs', async () => {
+    logger.clearLogs()
+    return true
+  })
+
+  ipcMain.handle('diagnostics:get-log-filepath', async () => {
+    return logger.getLogFilePath()
+  })
+
+  ipcMain.handle('diagnostics:log-telemetry', async (_, level: any, category: string, message: string) => {
+    logger.log(level, category, message)
+    return true
+  })
+})

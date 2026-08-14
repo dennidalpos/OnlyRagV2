@@ -1,0 +1,114 @@
+import { spawn } from 'node:child_process'
+import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
+import { taskRunner } from '../infrastructure/process/taskRunner'
+import { webClient } from '../infrastructure/http/webClient'
+import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
+
+export class WorkspaceAppService {
+  private repo = new FileSystemRepository()
+
+  listFiles(targetPath?: string) {
+    if (!targetPath) return Promise.resolve([])
+    return this.repo.listFiles(targetPath)
+  }
+
+  getProjectMap(dirPath: string) {
+    if (!dirPath) return Promise.resolve([])
+    return this.repo.getProjectMap(dirPath)
+  }
+
+  readFile(filePath: string, startLine?: number, endLine?: number) {
+    return this.repo.readFile(filePath, startLine, endLine)
+  }
+
+  writeFile(filePath: string, content: string) {
+    return this.repo.writeFile(filePath, content)
+  }
+
+  deleteFile(filePath: string) {
+    return this.repo.deleteFile(filePath)
+  }
+
+  replaceChunk(filePath: string, targetContent: string, replacementContent: string) {
+    return this.repo.replaceChunk(filePath, targetContent, replacementContent)
+  }
+
+  multiReplaceChunks(filePath: string, replacements: { targetContent: string; replacementContent: string }[]) {
+    return this.repo.multiReplaceChunks(filePath, replacements)
+  }
+
+  grepSearch(dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) {
+    return this.repo.grepSearch(dirPath, query, isRegex, caseInsensitive)
+  }
+
+  searchWeb(query: string, maxResults?: number) {
+    return webClient.searchWeb(query, maxResults)
+  }
+
+  fetchWebContent(url: string, maxChars?: number) {
+    return webClient.fetchWebContent(url, maxChars)
+  }
+
+  downloadFile(url: string, targetFilePath: string, workspaceRoot?: string) {
+    return webClient.downloadFile(url, targetFilePath, workspaceRoot)
+  }
+
+  async inspectGuestOsEnvironment(): Promise<GuestOsInfo> {
+    const os = await import('node:os')
+    const checkTool = (toolCmd: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        const proc = spawn('powershell.exe', ['-NoProfile', '-Command', `Get-Command ${toolCmd} -ErrorAction SilentlyContinue`], { windowsHide: true })
+        proc.on('close', (code) => resolve(code === 0))
+        proc.on('error', () => resolve(false))
+      })
+    }
+
+    const [hasGit, hasNode, hasNpm, hasPython, hasOllama] = await Promise.all([
+      checkTool('git'),
+      checkTool('node'),
+      checkTool('npm'),
+      checkTool('python'),
+      checkTool('ollama'),
+    ])
+
+    const cpuList = os.cpus() || []
+    const totalBytes = os.totalmem()
+    const freeBytes = os.freemem()
+    const totalGB = Number((totalBytes / (1024 * 1024 * 1024)).toFixed(1))
+    const freeGB = Number((freeBytes / (1024 * 1024 * 1024)).toFixed(1))
+
+    return {
+      platform: os.platform(),
+      arch: os.arch(),
+      release: os.release(),
+      hostname: os.hostname(),
+      cpuCount: cpuList.length,
+      cpuModel: cpuList[0]?.model || '',
+      totalMemoryGB: totalGB,
+      freeMemoryGB: freeGB,
+      nodeVersion: process.version,
+      electronVersion: process.versions.electron || '',
+      tools: {
+        git: hasGit,
+        node: hasNode,
+        npm: hasNpm,
+        python: hasPython,
+        ollama: hasOllama,
+      },
+      cpus: cpuList.length,
+      totalMemMb: Math.round(totalBytes / (1024 * 1024)),
+      freeMemMb: Math.round(freeBytes / (1024 * 1024)),
+      hasGit,
+      hasNode,
+      hasNpm,
+      hasPython,
+      hasOllama,
+    }
+  }
+
+  executePowerShellCommand(command: string, targetCwd?: string, timeoutMs?: number) {
+    return taskRunner.executePowerShellCommand(command, targetCwd, timeoutMs)
+  }
+}
+
+export const workspaceAppService = new WorkspaceAppService()

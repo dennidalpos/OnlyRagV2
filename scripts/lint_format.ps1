@@ -1,17 +1,21 @@
 <#
 .SYNOPSIS
-    Script di Linting e Quality Verification per OnlyRag V2.
+    Script di Linting, Formattazione e Quality Verification per OnlyRag V2.
 .DESCRIPTION
-    Esegue in modo strettamente seriale il typecheck dei file TypeScript, la suite di unit test Vitest ed il controllo sintattico Python con Fail-Fast rigoroso.
+    Esegue in modo strettamente seriale il typecheck dei file TypeScript, la suite di unit test Vitest,
+    ed il controllo sintattico Python con Fail-Fast rigoroso.
 .PARAMETER Fast
     Esegue la suite in modalità compatta ad alta velocità (default per AI Agent).
 .PARAMETER Full
     Esegue la suite con output dettagliato e diagnostica estesa.
+.PARAMETER Format
+    Esegue la verifica della formattazione e della pulizia del codice.
 #>
 
 param(
     [switch]$Fast = $true,
-    [switch]$Full = $false
+    [switch]$Full = $false,
+    [switch]$Format = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,8 +24,10 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 try {
     Write-Host "=====================================================" -ForegroundColor Cyan
-    Write-Host " OnlyRag V2 - Serial Quality & Linting Script" -ForegroundColor Cyan
+    Write-Host " OnlyRag V2 - Serial Quality, Lint & Format Script" -ForegroundColor Cyan
     Write-Host "=====================================================" -ForegroundColor Cyan
+
+    $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
 
     # 1. TypeScript Typecheck
     Write-Host "`n[1/3] Checking TypeScript type safety (tsc --noEmit)..." -ForegroundColor Yellow
@@ -31,7 +37,7 @@ try {
     }
     Write-Host "[PASS] TypeScript typecheck clean." -ForegroundColor Green
 
-    # 2. Vitest Fast Unit & E2E Benchmark Test Suite
+    # 2. Vitest Fast Unit & Benchmark Test Suite
     Write-Host "`n[2/3] Running Vitest serial test suite..." -ForegroundColor Yellow
     if ($Full) {
         npm run test
@@ -45,7 +51,7 @@ try {
 
     # 3. Python Sidecar Syntax Check
     Write-Host "`n[3/3] Checking Python sidecar syntax..." -ForegroundColor Yellow
-    $sidecarPath = Join-Path -Path $PSScriptRoot -ChildPath "..\sidecar\main.py"
+    $sidecarPath = Join-Path -Path $rootDir -ChildPath "sidecar\main.py"
     if (Test-Path $sidecarPath) {
         python -m py_compile $sidecarPath
         if ($LASTEXITCODE -ne 0) {

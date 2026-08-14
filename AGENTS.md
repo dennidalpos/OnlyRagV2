@@ -4,7 +4,7 @@
 
 * **Priority:** User request > Project `AGENTS.md` > Global defaults.
 * **Zero Speculation / Directives First:** Follow user instructions strictly. Build ONLY what is specified. NEVER invent unasked features, speculative abstractions, extra architectural layers, temporary code, or unrequested dependencies.
-* **Architecture:** Keep entrypoints thin; place logic in domain modules. Preserve existing architecture unless refactoring is explicitly requested.
+* **Architecture:** Keep entrypoints thin; place logic in domain and application modules. Preserve existing architecture unless refactoring is explicitly requested.
 * **Clean Code & Legacy Maintenance:** Develop clean, scalable code following modern best practices. Never leave dead, unused, or legacy code.
 * **Uncertainty & Ambiguity:** If in doubt, stop immediately and ask the user before proceeding.
 

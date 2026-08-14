@@ -1,5 +1,6 @@
 import React from 'react'
 import { AlertTriangle, Check, X } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 interface PendingApprovalModalProps {
   pendingApproval: {
@@ -19,6 +20,8 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
   onApprove,
   onReject,
 }) => {
+  const { t } = useTranslation()
+
   // ESC Key Listener for Accessibility
   React.useEffect(() => {
     if (!pendingApproval) return
@@ -44,17 +47,17 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
         <div className="flex items-center gap-3 text-amber-400">
           <AlertTriangle className="w-6 h-6 shrink-0" />
           <h3 id="approval-modal-title" className="font-bold text-lg text-slate-100">
-            Action Approval Required (Ask Mode)
+            {t('coding.pendingApprovalTitle')}
           </h3>
         </div>
 
         <p className="text-xs text-slate-300">
-          AI Coding Agent is requesting permission to execute the following operation on your system:
+          {t('coding.pendingApprovalDesc')}
         </p>
 
         <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs font-mono space-y-2">
           <div className="text-slate-300">
-            Operation: <span className="text-amber-300 font-bold uppercase">{pendingApproval.type}</span>
+            {t('common.actions')}: <span className="text-amber-300 font-bold uppercase">{pendingApproval.type}</span>
           </div>
           <div className="text-slate-300">
             Target: <span className="text-slate-200 font-bold">{pendingApproval.target}</span>
@@ -65,12 +68,12 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
               <div>
                 <div className="text-sky-400 text-[10px] uppercase font-bold">Source URL:</div>
                 <div className="text-slate-200 mb-2 break-all">{pendingApproval.contentOrCmd}</div>
-                <div className="text-amber-400 text-[10px] uppercase font-bold">Save Destination:</div>
+                <div className="text-amber-400 text-[10px] uppercase font-bold">Destination:</div>
                 <div className="text-emerald-300">{pendingApproval.target}</div>
               </div>
             ) : pendingApproval.type === 'delete_file' ? (
               <div className="text-rose-400 font-semibold">
-                Are you sure you want to permanently delete file: {pendingApproval.target}?
+                {t('ingestion.deleteConfirm')} {pendingApproval.target}
               </div>
             ) : pendingApproval.type === 'multi_replace' && pendingApproval.replacements ? (
               <div className="space-y-3">
@@ -90,7 +93,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
               <div>
                 <div className="text-red-400 text-[10px] uppercase font-bold">Search Target:</div>
                 <div className="text-slate-300 mb-2">{pendingApproval.contentOrCmd}</div>
-                <div className="text-emerald-400 text-[10px] uppercase font-bold">Replacement Content:</div>
+                <div className="text-emerald-400 text-[10px] uppercase font-bold">Replacement:</div>
                 <div className="text-emerald-300">{pendingApproval.replacement}</div>
               </div>
             ) : (
@@ -102,17 +105,17 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
         <div className="flex items-center justify-end gap-3 pt-2">
           <button
             onClick={onReject}
-            aria-label="Rifiuta operazione"
+            aria-label={t('coding.rejectBtn')}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5"
           >
-            <X className="w-4 h-4 text-slate-400" /> Reject Action
+            <X className="w-4 h-4 text-slate-400" /> {t('coding.rejectBtn')}
           </button>
           <button
             onClick={onApprove}
-            aria-label="Approva ed esegui operazione"
+            aria-label={t('coding.approveBtn')}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 shadow-md shadow-emerald-950/50"
           >
-            <Check className="w-4 h-4" /> Approve & Execute
+            <Check className="w-4 h-4" /> {t('coding.approveBtn')}
           </button>
         </div>
       </div>

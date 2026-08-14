@@ -9,6 +9,7 @@ import { MarketplaceSkillsList } from './skills/MarketplaceSkillsList'
 import { SkillEditorModal } from './skills/SkillEditorModal'
 import { CustomHubGuideModal } from './skills/CustomHubGuideModal'
 import { AddCustomHubModal } from './skills/AddCustomHubModal'
+import { useTranslation } from '../../i18n'
 
 export const DEFAULT_SKILL_HUB_URL = 'https://raw.githubusercontent.com/antigravity-community/skills/main/skills/clean-code/SKILL.md'
 
@@ -19,6 +20,7 @@ interface SkillHubModalProps {
 }
 
 export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, workspacePath }) => {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'installed' | 'hub'>('installed')
   const [installedSkills, setInstalledSkills] = useState<SkillDefinition[]>([])
   const [hubSkills, setHubSkills] = useState<HubSkillItem[]>([])
@@ -108,10 +110,10 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setActionMessage(null)
     const res = await apiService.installSkillFromHub(hubSkillId, workspacePath || undefined, selectedSourceId)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${hubSkillId}' installata con successo!` })
+      setActionMessage({ type: 'success', text: `Skill '${hubSkillId}' installed!` })
       await loadSourcesAndSkills(selectedSourceId)
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore installazione skill' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
@@ -121,11 +123,11 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setActionMessage(null)
     const res = await apiService.installSkillFromUrl(url, workspacePath || undefined, customName)
     if (res.success) {
-      setActionMessage({ type: 'success', text: 'Skill importata con successo da URL!' })
+      setActionMessage({ type: 'success', text: 'Skill URL imported!' })
       await loadSourcesAndSkills(selectedSourceId)
       setActiveTab('installed')
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore importazione skill da URL' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
@@ -134,39 +136,39 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.saveCustomSkill(input, workspacePath || undefined)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${input.name}' salvata con successo!` })
+      setActionMessage({ type: 'success', text: `Skill '${input.name}' saved!` })
       setIsEditorOpen(false)
       setEditingSkill(null)
       await loadSourcesAndSkills(selectedSourceId)
       setActiveTab('installed')
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore salvataggio skill' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
 
   const handleResetSkill = async (skillId: string) => {
-    if (!confirm(`Sei sicuro di voler ripristinare il contenuto originale della skill '${skillId}' dal sito sorgente?`)) return
+    if (!confirm(t('skills.confirmReset'))) return
     setIsLoading(true)
     const res = await apiService.resetSkillToOriginal(skillId, workspacePath || undefined)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${skillId}' ripristinata alla versione originale del sito!` })
+      setActionMessage({ type: 'success', text: `Skill '${skillId}' reset!` })
       await loadSourcesAndSkills(selectedSourceId)
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore ripristino skill' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
 
   const handleDeleteSkill = async (skillId: string) => {
-    if (!confirm(`Sei sicuro di voler rimuovere la skill '${skillId}'?`)) return
+    if (!confirm(t('skills.confirmDelete'))) return
     setIsLoading(true)
     const res = await apiService.uninstallSkill(skillId, workspacePath || undefined)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${skillId}' rimossa.` })
+      setActionMessage({ type: 'success', text: `Skill '${skillId}' deleted.` })
       await loadSourcesAndSkills(selectedSourceId)
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore rimozione skill' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
@@ -175,24 +177,24 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.addCustomHubSource(input)
     if (res.success && res.source) {
-      setActionMessage({ type: 'success', text: `Hub '${input.name}' aggiunto con successo!` })
+      setActionMessage({ type: 'success', text: `Hub '${input.name}' added!` })
       setIsAddHubOpen(false)
       await loadSourcesAndSkills(res.source.id)
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore aggiunta hub personalizzato' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
 
   const handleRemoveCustomHub = async (sourceId: string) => {
-    if (!confirm('Sei sicuro di voler rimuovere questa sorgente Hub?')) return
+    if (!confirm(t('skills.confirmRemoveHub'))) return
     setIsLoading(true)
     const res = await apiService.removeCustomHubSource(sourceId)
     if (res.success) {
-      setActionMessage({ type: 'success', text: 'Sorgente Hub rimossa con successo.' })
+      setActionMessage({ type: 'success', text: 'Hub source removed.' })
       await loadSourcesAndSkills('official-core')
     } else {
-      setActionMessage({ type: 'error', text: res.error || 'Errore rimozione hub' })
+      setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }
     setIsLoading(false)
   }
@@ -210,16 +212,16 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                Skill Hub &amp; Marketplace
+                {t('skills.hubTitle')}
               </h2>
               <p className="text-xs text-slate-400">
-                Gestione multi-hub, creazione skill locali e tracciamento modifiche per l'AI Agent.
+                {t('skills.hubSubtitle')}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Chiudi modale"
+            aria-label={t('common.close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
           >
             <X className="w-5 h-5" />
@@ -237,7 +239,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
                   : 'border-transparent text-slate-400 hover:text-slate-300'
               }`}
             >
-              <CheckCircle className="w-3.5 h-3.5" /> Skill Installate ({installedSkills.length})
+              <CheckCircle className="w-3.5 h-3.5" /> {t('skills.installedTab')} ({installedSkills.length})
             </button>
             <button
               onClick={() => handleTabChange('hub')}
@@ -247,7 +249,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
                   : 'border-transparent text-slate-400 hover:text-slate-300'
               }`}
             >
-              <Download className="w-3.5 h-3.5" /> Marketplace &amp; Hub Remoti
+              <Download className="w-3.5 h-3.5" /> {t('skills.marketplaceTab')}
             </button>
           </div>
         </div>

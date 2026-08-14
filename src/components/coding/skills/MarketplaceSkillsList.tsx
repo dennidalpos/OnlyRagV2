@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { HubSkillItem } from '../../../types'
+import { useTranslation } from '../../../i18n'
 
 interface MarketplaceSkillsListProps {
   hubSkills: HubSkillItem[]
@@ -28,6 +29,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
   onInstallSkill,
   onInstallFromUrl,
 }) => {
+  const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [urlInput, setUrlInput] = useState('')
@@ -48,7 +50,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
     const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
+      s.tags.some((tg) => tg.toLowerCase().includes(searchQuery.toLowerCase()))
     const matchesCategory = selectedCategory === 'all' || s.category === selectedCategory
     return matchesSearch && matchesCategory
   })
@@ -67,7 +69,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
       <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-950/10 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-cyan-300">
-            <ExternalLink className="w-4 h-4" /> Importa Skill da URL / Raw GitHub
+            <ExternalLink className="w-4 h-4" /> {t('skills.importSkillUrlTitle')}
           </div>
         </div>
 
@@ -84,7 +86,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
               type="text"
               value={customNameInput}
               onChange={(e) => setCustomNameInput(e.target.value)}
-              placeholder="Nome opzionale"
+              placeholder="Name"
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
             <button
@@ -92,7 +94,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
               disabled={!urlInput.trim() || isLoading}
               className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all shrink-0 flex items-center gap-1.5 focus-ring"
             >
-              <Plus className="w-3.5 h-3.5" /> Importa
+              <Plus className="w-3.5 h-3.5" /> {t('skills.importUrlBtn')}
             </button>
           </div>
         </form>
@@ -106,7 +108,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cerca skill, tag o framework..."
+            placeholder={t('skills.searchPlaceholder')}
             className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
           />
         </div>
@@ -122,7 +124,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                   : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-300'
               }`}
             >
-              {cat.toUpperCase()}
+              {cat === 'all' ? t('common.all').toUpperCase() : cat.toUpperCase()}
             </button>
           ))}
         </div>
@@ -132,13 +134,12 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
       {isLoading ? (
         <div className="text-center py-12 text-slate-400 space-y-3">
           <Loader2 className="w-8 h-8 mx-auto text-cyan-400 animate-spin" />
-          <p className="text-xs font-semibold text-slate-300">Connessione ed aggiornamento skill dal sito remoto in corso...</p>
-          <p className="text-[11px] text-slate-500">Download del catalogo e sincronizzazione dei manifest...</p>
+          <p className="text-xs font-semibold text-slate-300">{t('common.loading')}...</p>
         </div>
       ) : filteredSkills.length === 0 ? (
         <div className="text-center py-10 text-slate-500 space-y-2">
           <Layers className="w-8 h-8 mx-auto text-slate-600" />
-          <p className="text-sm">Nessuna skill trovata per questa sorgente / ricerca.</p>
+          <p className="text-sm">{t('skills.noSkillsFound')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -159,9 +160,9 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">{hubItem.description}</p>
                 <div className="flex flex-wrap gap-1">
-                  {hubItem.tags.map((t) => (
-                    <span key={t} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-400">
-                      #{t}
+                  {hubItem.tags.map((tg) => (
+                    <span key={tg} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-400">
+                      #{tg}
                     </span>
                   ))}
                 </div>
@@ -180,11 +181,11 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                 >
                   {hubItem.isInstalled ? (
                     <>
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Installata
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> {t('common.status')}
                     </>
                   ) : (
                     <>
-                      <Download className="w-3.5 h-3.5" /> Installa Skill
+                      <Download className="w-3.5 h-3.5" /> {t('skills.installBtn')}
                     </>
                   )}
                 </button>

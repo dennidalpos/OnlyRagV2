@@ -10,16 +10,21 @@ export interface TranslationSchema {
     cancel: string
     confirm: string
     save: string
+    saved: string
     delete: string
+    edit: string
     copy: string
     copied: string
     refresh: string
     search: string
     status: string
     loading: string
+    download: string
+    ready: string
     error: string
     success: string
     warning: string
+    info: string
     offline: string
     online: string
     checking: string
@@ -30,6 +35,20 @@ export interface TranslationSchema {
     actions: string
     export: string
     clear: string
+    back: string
+    next: string
+    done: string
+    all: string
+    selectFolder: string
+    noFileOpen: string
+    reset: string
+    active: string
+    original: string
+    modified: string
+    custom: string
+    filter: string
+    none: string
+    help: string
   }
   navigation: {
     ingestion: string
@@ -49,12 +68,235 @@ export interface TranslationSchema {
     logsConsole: string
     switchLanguage: string
     contributionsAndInfo: string
+    quickStatus: string
+  }
+  chat: {
+    title: string
+    subtitle: string
+    headerTitle: string
+    contextTitle: string
+    refreshList: string
+    noDocsIndexed: string
+    noDocsHint: string
+    emptyTitle: string
+    emptySubtitle: string
+    quickStartTitle: string
+    quickStart1: string
+    quickStart2: string
+    quickStart3: string
+    quickStart4: string
+    generating: string
+    citationsTitle: string
+    relevance: string
+    copyCitation: string
+    citationCopied: string
+    copyMsg: string
+    msgCopied: string
+    inputPlaceholder: string
+    toolsButton: string
+    toolsTitle: string
+    configurePrompt: string
+    newChat: string
+    resetConfirmTitle: string
+    resetConfirmCancel: string
+    resetConfirmAction: string
+    newChatStarted: string
+    chatCleared: string
+    send: string
+    stop: string
+  }
+  coding: {
+    title: string
+    subtitle: string
+    headerTitle: string
+    activeSkillsTitle: string
+    skillsInUse: string
+    osDetecting: string
+    planMode: string
+    askMode: string
+    agentMode: string
+    planModeDesc: string
+    askModeDesc: string
+    agentModeDesc: string
+    terminalTab: string
+    filesTab: string
+    gitDiffTab: string
+    skillsHub: string
+    noFilesOpen: string
+    dirtyBadge: string
+    diffToggleTitle: string
+    diffStandardTitle: string
+    saveButton: string
+    copyPath: string
+    pathCopied: string
+    resizePanels: string
+    stepsCount: string
+    selectFolder: string
+    selectFolderBtn: string
+    pendingApprovalTitle: string
+    pendingApprovalDesc: string
+    approveBtn: string
+    rejectBtn: string
+    cancelTask: string
+    runTask: string
+    stopTask: string
+    queuedPrompts: string
+    removeFromQueue: string
+    editQueuePrompt: string
+    emptyLogs: string
+    terminalOutput: string
+    gitDiffTitle: string
+    filesTitle: string
+    promptPlaceholder: string
+  }
+  skills: {
+    hubTitle: string
+    hubSubtitle: string
+    installedTab: string
+    marketplaceTab: string
+    searchPlaceholder: string
+    allCategories: string
+    coreCategory: string
+    codingCategory: string
+    testCategory: string
+    securityCategory: string
+    installSkill: string
+    installBtn: string
+    removeSkill: string
+    resetSkill: string
+    resetOriginal: string
+    editSkill: string
+    createSkillBtn: string
+    addCustomHub: string
+    addCustomHubTitle: string
+    hubName: string
+    hubUrl: string
+    hubType: string
+    customHubGuide: string
+    originalHubBadge: string
+    modifiedBadge: string
+    customBadge: string
+    noSkillsFound: string
+    noSkills: string
+    confirmRemove: string
+    confirmDelete: string
+    confirmRemoveHub: string
+    confirmReset: string
+    saveChanges: string
+    skillName: string
+    skillDesc: string
+    skillDescription: string
+    skillCategory: string
+    skillContent: string
+    skillTriggers: string
+    importSkillUrlTitle: string
+    importUrlBtn: string
+    author: string
+    version: string
+    tags: string
+  }
+  translation: {
+    title: string
+    subtitle: string
+    newTranslation: string
+    systemPrompt: string
+    stopTranslation: string
+    startTranslation: string
+    translating: string
+    sourceDocTitle: string
+    sourceText: string
+    translatedText: string
+    selectDocPlaceholder: string
+    noDocs: string
+    searchDocs: string
+    sourceLang: string
+    targetLang: string
+    swapLanguages: string
+    exportPdf: string
+    exportDocx: string
+    exportMd: string
+    splitView: string
+    diffView: string
+    syncScroll: string
+    zoomIn: string
+    zoomOut: string
+    resetZoom: string
+    pageView: string
+    allView: string
+    pageOf: string
+    copyTranslation: string
+    translationCopied: string
+    progressStatus: string
+    selectDocPrompt: string
+  }
+  ingestion: {
+    title: string
+    subtitle: string
+    dropzone: string
+    dropzoneActive: string
+    uploadButton: string
+    indexedDocuments: string
+    pages: string
+    chunks: string
+    date: string
+    fileSize: string
+    deleteConfirm: string
+    searchPlaceholder: string
+    noDocuments: string
+    preview: string
+    rawMarkdown: string
+    vectorSearch: string
+    ocrMode: string
+    standardMode: string
+    visionMode: string
+    deleteDoc: string
+    viewDoc: string
+    pageNavigation: string
+  }
+  diagnostics: {
+    title: string
+    subtitle: string
+    totalLogs: string
+    copyReport: string
+    exportReport: string
+    cleanWorkspace: string
+    sidecarTitle: string
+    ollamaTitle: string
+    gpuTitle: string
+    ramTitle: string
+    filterPlaceholder: string
+    allLevels: string
+    allCategories: string
+    logFile: string
+    systemTelemetry: string
+    logViewer: string
+    clearLogs: string
+    copyLogs: string
+    logsCopied: string
+    logsCleared: string
+    gpuStatus: string
+    vramStatus: string
+    ramStatus: string
+    cpuStatus: string
+    restartSidecar: string
+    restartingSidecar: string
+    cleanResiduals: string
+    filterLevel: string
+    filterCategory: string
+    autoScroll: string
+    noLogs: string
+    logFilePath: string
   }
   settings: {
     title: string
     description: string
     hardwareWizard: string
     hardwareScan: string
+    hardwareProfile: string
+    chatModel: string
+    translationModel: string
+    ollamaSection: string
+    concurrencySection: string
     ollamaManagement: string
     downloadModel: string
     downloading: string
@@ -70,6 +312,13 @@ export interface TranslationSchema {
     modelAssignments: string
     hardwareProfiles: string
     concurrencySettings: string
+    maxConcurrentTasks: string
+    maxQueuedTasks: string
+    fastTier: string
+    standardTier: string
+    deepTier: string
+    visionTier: string
+    embeddingTier: string
   }
   about: {
     title: string
@@ -95,72 +344,83 @@ export interface TranslationSchema {
     contactsSubtitle: string
     githubIssues: string
   }
-  ingestion: {
+  systemPrompt: {
     title: string
     subtitle: string
-    dropzone: string
-    uploadButton: string
-    indexedDocuments: string
-    pages: string
-    chunks: string
-    date: string
-    fileSize: string
-    deleteConfirm: string
-    searchPlaceholder: string
-    noDocuments: string
-    preview: string
-    rawMarkdown: string
-  }
-  chat: {
-    title: string
-    subtitle: string
-    placeholder: string
-    send: string
-    sources: string
-    clearHistory: string
-    confirmClear: string
-    modelSelect: string
-    noSources: string
-    relevanceScore: string
-    systemPrompt: string
-  }
-  translation: {
-    title: string
-    subtitle: string
-    sourceText: string
-    translatedText: string
-    translateButton: string
-    translating: string
-    swapLanguages: string
-    exportPdf: string
-    exportDocx: string
-    exportMd: string
-    sourceLang: string
-    targetLang: string
-  }
-  coding: {
-    title: string
-    subtitle: string
+    activeModel: string
+    detectedFamily: string
+    familyPreset: string
+    customBadge: string
+    promptText: string
+    variablesLegend: string
+    resetFamily: string
+    resetAllModule: string
+    savePrompt: string
+    modalTitle: string
+    modalSubtitle: string
+    selectPreset: string
+    defaultPreset: string
+    concisePreset: string
+    detailedPreset: string
+    creativePreset: string
+    customPrompt: string
     promptPlaceholder: string
-    runTask: string
-    stopTask: string
-    policyMode: string
-    planMode: string
-    askMode: string
-    agentMode: string
-    terminalTab: string
-    filesTab: string
-    skillsHub: string
+    resetDefault: string
+    promptSaved: string
   }
-  diagnostics: {
+  vectorSearch: {
+    modalTitle: string
+    modalSubtitle: string
+    queryPlaceholder: string
+    searchBtn: string
+    similarityThreshold: string
+    topKResults: string
+    searching: string
+    noResults: string
+    resultsFound: string
+    docName: string
+    chunkIndex: string
+    score: string
+    previewText: string
+  }
+  hardwareWizard: {
     title: string
-    systemTelemetry: string
-    logViewer: string
-    clearLogs: string
-    copyLogs: string
-    gpuStatus: string
-    vramStatus: string
-    ramStatus: string
-    cpuStatus: string
+    subtitle: string
+    modalTitle: string
+    modalSubtitle: string
+    detectedProfile: string
+    ollamaStatus: string
+    autoApplyRecommended: string
+    step1Title: string
+    step2Title: string
+    step2Desc: string
+    step3Title: string
+    step3Desc: string
+    step4Title: string
+    step4Desc: string
+    step5Vision: string
+    step5Embedding: string
+    step6Summary: string
+    nextBtn: string
+    backBtn: string
+    skipDownloadBtn: string
+    confirmDownloadBtn: string
+    hardwareSummary: string
+    cpuInfo: string
+    ramInfo: string
+    gpuInfo: string
+    vramInfo: string
+    recommendedProfile: string
+    diskSpaceCheck: string
+    diskRequired: string
+    diskFree: string
+    diskAllowed: string
+    diskError: string
+    installingOllama: string
+    downloadingModels: string
+    downloadProgress: string
+    finishBtn: string
+    applySettings: string
+    cancelBtn: string
   }
 }

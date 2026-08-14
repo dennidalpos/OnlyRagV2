@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { X, Plus, Globe, AlertCircle } from 'lucide-react'
 import { CustomHubInput, HubSourceType } from '../../../types'
+import { useTranslation } from '../../../i18n'
 
 interface AddCustomHubModalProps {
   isOpen: boolean
@@ -15,6 +16,7 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   onAdd,
   isLoading,
 }) => {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [type, setType] = useState<HubSourceType>('json-catalog')
@@ -26,11 +28,11 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
-      setError('Il nome dell\'Hub è obbligatorio')
+      setError('Hub name is required')
       return
     }
     if (!url.trim()) {
-      setError('L\'URL dell\'Hub è obbligatorio')
+      setError('Hub URL is required')
       return
     }
 
@@ -56,13 +58,13 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
               <Globe className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-100">Aggiungi Hub Personalizzato</h2>
-              <p className="text-xs text-slate-400">Collega un repository o endpoint remoto di skill</p>
+              <h2 className="text-base font-bold text-slate-100">{t('skills.addCustomHubTitle')}</h2>
+              <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Chiudi"
+            aria-label={t('common.close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
           >
             <X className="w-5 h-5" />
@@ -80,20 +82,20 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Nome Hub *
+              {t('skills.hubName')} *
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="es. Team AI Skills Hub"
+              placeholder="Team AI Skills Hub"
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              URL Endpoint / Repository *
+              {t('skills.hubUrl')} *
             </label>
             <input
               type="url"
@@ -106,27 +108,27 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Tipo Formato
+              {t('skills.hubType')}
             </label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value as HubSourceType)}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             >
-              <option value="json-catalog">Catalogo JSON Remoto (hub.json / API)</option>
-              <option value="github-repo">Repository GitHub / SKILL.md Raw</option>
+              <option value="json-catalog">JSON Catalog (hub.json / API)</option>
+              <option value="github-repo">GitHub Repo / SKILL.md Raw</option>
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Descrizione
+              {t('skills.skillDescription')}
             </label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Breve descrizione del contenuto di questo hub"
+              placeholder="Description"
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
           </div>
@@ -135,16 +137,16 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold rounded-xl transition-all"
             >
-              Annulla
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={isLoading}
               className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 focus-ring"
             >
-              <Plus className="w-4 h-4" /> Aggiungi Hub
+              <Plus className="w-4 h-4" /> {t('skills.addCustomHubTitle')}
             </button>
           </div>
         </form>

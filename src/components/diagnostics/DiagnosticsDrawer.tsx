@@ -14,6 +14,7 @@ import {
   Download,
   Filter,
 } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 interface DiagnosticsDrawerProps {
   isOpen: boolean
@@ -28,6 +29,7 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   diagnostics,
   onRefreshDiagnostics,
 }) => {
+  const { t } = useTranslation()
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [logPath, setLogPath] = useState<string>('')
   const [selectedLevel, setSelectedLevel] = useState<string>('ALL')
@@ -107,7 +109,7 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   })
 
   const generateReportMarkdown = (): string => {
-    if (!diagnostics) return 'Nessun dato diagnostico disponibile.'
+    if (!diagnostics) return 'No diagnostics data available.'
     return `# OnlyRag V2 - System Diagnostics & Health Report
 Generated at: ${diagnostics.timestamp}
 
@@ -177,9 +179,9 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
           <div className="flex items-center gap-2">
             <Terminal className="w-5 h-5 text-cyan-400" />
             <div>
-              <h2 id="diagnostics-drawer-title" className="font-semibold text-lg text-slate-100">System Diagnostics &amp; Logs</h2>
+              <h2 id="diagnostics-drawer-title" className="font-semibold text-lg text-slate-100">{t('diagnostics.title')}</h2>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] text-slate-400 font-mono">{logs.length} voci</span>
+                <span className="text-[10px] text-slate-400 font-mono">{t('diagnostics.totalLogs', { count: logs.length })}</span>
                 {errorCount > 0 && (
                   <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 font-bold border border-rose-800/60">
                     {errorCount} ERROR
@@ -202,32 +204,32 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             )}
             <button
               onClick={handleCopyReport}
-              aria-label="Copia Report Diagnostico"
+              aria-label={t('diagnostics.copyReport')}
               className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5"
-              title="Copia report diagnostico completo in Markdown"
+              title={t('diagnostics.copyReport')}
             >
               {copiedReport ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
-              <span>{copiedReport ? 'Copiato!' : 'Copia'}</span>
+              <span>{copiedReport ? t('common.copied') : t('common.copy')}</span>
             </button>
             <button
               onClick={handleExportReport}
-              aria-label="Esporta Report Diagnostico"
+              aria-label={t('diagnostics.exportReport')}
               className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5"
-              title="Scarica report diagnostico come file .md"
+              title={t('diagnostics.exportReport')}
             >
-              <Download className="w-3.5 h-3.5 text-sky-400" /> Esporta
+              <Download className="w-3.5 h-3.5 text-sky-400" /> {t('common.export')}
             </button>
             <button
               onClick={handleCleanResiduals}
-              aria-label="Pulisci file temporanei e artifact residui"
+              aria-label={t('diagnostics.cleanWorkspace')}
               className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5"
-              title="Elimina cache, file temporanei e residui di esportazione"
+              title={t('diagnostics.cleanWorkspace')}
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Pulisci
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" /> {t('diagnostics.cleanWorkspace')}
             </button>
             <button
               onClick={onClose}
-              aria-label="Chiudi System Diagnostics Drawer"
+              aria-label={t('common.close')}
               className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors focus-ring active:scale-95"
             >
               <X className="w-5 h-5" />
@@ -241,7 +243,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             {/* Python Sidecar & LanceDB Status */}
             <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Sidecar &amp; LanceDB</span>
+                <span>{t('diagnostics.sidecarTitle')}</span>
                 <span className={`w-2 h-2 rounded-full ${diagnostics.sidecar?.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
               </div>
               <div className="mt-2 flex items-center justify-between">
@@ -253,7 +255,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                     className="text-[10px] px-2 py-0.5 rounded bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition-colors"
                   >
                     <RefreshCw className={`w-3 h-3 ${isRestartingSidecar ? 'animate-spin' : ''}`} />
-                    {isRestartingSidecar ? 'Starting...' : 'Relaunch'}
+                    {isRestartingSidecar ? 'Starting...' : t('diagnostics.restartSidecar')}
                   </button>
                 ) : (
                   diagnostics.sidecar?.version && (
@@ -271,7 +273,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             {/* Ollama Status */}
             <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Ollama LLM Core</span>
+                <span>{t('diagnostics.ollamaTitle')}</span>
                 <Zap className={`w-3.5 h-3.5 ${diagnostics.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
               </div>
               <div className="mt-2 flex items-center gap-2">
@@ -279,14 +281,14 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 <span className="font-medium text-sm text-slate-200 capitalize">{diagnostics.ollama.status}</span>
               </div>
               <span className="text-[11px] text-slate-500 mt-1 truncate font-mono">
-                {diagnostics.ollama.modelsCount} local models pulled
+                {diagnostics.ollama.modelsCount} {t('settings.ollamaSection')}
               </span>
             </div>
 
             {/* GPU / CUDA */}
             <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>NVIDIA GPU</span>
+                <span>{t('diagnostics.gpuTitle')}</span>
                 <Cpu className="w-3.5 h-3.5 text-cyan-400" />
               </div>
               <div className="mt-2 text-sm font-medium text-slate-200 truncate">
@@ -295,7 +297,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
               <span className="text-[11px] text-slate-400 mt-1 truncate font-mono">
                 {diagnostics.gpu.hasNvidiaGpu
                   ? `VRAM: ${diagnostics.gpu.vramUsedMB}/${diagnostics.gpu.vramTotalMB} MB`
-                  : 'CUDA Unavailable'}
+                  : 'CPU'}
               </span>
               {diagnostics.gpu.hasNvidiaGpu && diagnostics.gpu.vramTotalMB ? (
                 <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
@@ -319,7 +321,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             {/* RAM */}
             <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>System RAM</span>
+                <span>{t('diagnostics.ramTitle')}</span>
                 <HardDrive className="w-3.5 h-3.5 text-sky-400" />
               </div>
               <div className="mt-2 text-sm font-medium text-slate-200">
@@ -345,8 +347,8 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
         <div className="p-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/40">
           <input
             type="text"
-            aria-label="Search log messages"
-            placeholder="Search log messages..."
+            aria-label={t('diagnostics.filterPlaceholder')}
+            placeholder={t('diagnostics.filterPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 min-w-[150px] bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-1.5 text-xs text-slate-200 focus-ring outline-none"
@@ -354,12 +356,12 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
 
           {/* Level Filter */}
           <select
-            aria-label="Filter logs by severity level"
+            aria-label="Filter logs by level"
             value={selectedLevel}
             onChange={(e) => setSelectedLevel(e.target.value)}
             className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus-ring outline-none font-mono"
           >
-            <option value="ALL">All Levels</option>
+            <option value="ALL">{t('diagnostics.allLevels')}</option>
             <option value="INFO">INFO</option>
             <option value="WARN">WARN</option>
             <option value="ERROR">ERROR</option>
@@ -374,7 +376,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus-ring outline-none font-mono max-w-[140px]"
             >
-              <option value="ALL">All Categories</option>
+              <option value="ALL">{t('diagnostics.allCategories')}</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat}
@@ -391,14 +393,14 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
               onChange={(e) => setAutoScroll(e.target.checked)}
               className="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-0"
             />
-            <span>Auto-scroll</span>
+            <span>{t('diagnostics.autoScroll')}</span>
           </label>
 
           <button
             onClick={fetchLogs}
             disabled={isRefreshingLogs}
-            title="Refresh Logs"
-            aria-label="Refresh logs"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all focus-ring active:scale-95 flex items-center gap-1"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingLogs ? 'animate-spin' : ''}`} />
@@ -406,8 +408,8 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
 
           <button
             onClick={handleClear}
-            title="Clear Logs"
-            aria-label="Clear all logs"
+            title={t('diagnostics.clearLogs')}
+            aria-label={t('diagnostics.clearLogs')}
             className="p-2 bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 rounded-xl text-xs transition-all focus-ring active:scale-95 flex items-center gap-1"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -415,10 +417,10 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
         </div>
 
         {/* Log Viewer Console */}
-        <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-2 bg-slate-950/90" tabIndex={0} aria-label="Console registri di sistema">
+        <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-2 bg-slate-950/90" tabIndex={0} aria-label="System logs">
           {filteredLogs.length === 0 ? (
             <div className="text-center py-12 text-slate-500 font-sans text-xs">
-              Nessun log corrisponde ai filtri o ai criteri di ricerca correnti.
+              {t('common.none')}
             </div>
           ) : (
             filteredLogs.map((log, index) => (
@@ -455,7 +457,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
         {/* Footer */}
         {logPath && (
           <div className="p-2 border-t border-slate-800 bg-slate-950 text-[11px] text-slate-500 truncate text-center">
-            Log file: <span className="text-slate-400 select-all font-mono">{logPath}</span>
+            {t('diagnostics.logFile')}: <span className="text-slate-400 select-all font-mono">{logPath}</span>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Cpu, Check } from 'lucide-react'
 import { HardwareProfile, AppSettings } from '../../types'
+import { useTranslation } from '../../i18n'
 
 interface HardwareProfileSelectorProps {
   settings: AppSettings
@@ -11,6 +12,7 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
   settings,
   onUpdateSettings,
 }) => {
+  const { t } = useTranslation()
   const profiles: { id: HardwareProfile; name: string; desc: string; vram: string }[] = [
     { id: 'Auto', name: 'Auto (Recommended)', desc: 'Automatically scales VRAM context and thread allocation based on CUDA detection.', vram: 'Dynamic' },
     { id: 'Low', name: 'Low (CPU Only)', desc: 'Optimized for systems without dedicated GPU or lower RAM (4-8GB context).', vram: 'CPU RAM' },
@@ -23,7 +25,7 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
       <div className="flex items-center gap-3">
         <Cpu className="w-5 h-5 text-cyan-400" />
         <div>
-          <h2 className="text-lg font-semibold text-slate-100">Hardware & VRAM Allocation Profile</h2>
+          <h2 className="text-lg font-semibold text-slate-100">{t('settings.hardwareProfile')}</h2>
           <p className="text-xs text-slate-400">Controls GPU VRAM context buffer and thread concurrency for Ollama and PyMuPDF sidecar</p>
         </div>
       </div>

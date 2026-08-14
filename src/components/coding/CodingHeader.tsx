@@ -3,6 +3,7 @@ import { Code, ChevronRight, Cpu, Sparkles } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { ModelBadge } from '../common/ModelBadge'
+import { useTranslation } from '../../i18n'
 
 interface CodingHeaderProps {
   guestOsInfo: any
@@ -23,6 +24,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   activeSkills = [],
   availableModels,
 }) => {
+  const { t } = useTranslation()
   const complexity = evaluateTaskComplexity(agentPrompt, {
     attachedFilesCount: pinnedFilesCount,
     contextSizeChars: editorContentLength,
@@ -40,9 +42,9 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
           <Code className="w-3.5 h-3.5 text-cyan-400" />
         </div>
-        <span className="font-bold text-slate-100">OnlyRagV2</span>
+        <span className="font-bold text-slate-100">{t('common.appName')}</span>
         <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-        <span className="text-slate-400 font-medium truncate max-w-xs">AI Coding Agent</span>
+        <span className="text-slate-400 font-medium truncate max-w-xs">{t('coding.headerTitle')}</span>
       </div>
 
       {/* Center / Right: Hardware Specs, Active Skills Badge, Model Badge */}
@@ -51,10 +53,10 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         {activeSkills.length > 0 && (
           <div
             className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-950/40 border border-cyan-500/30 rounded-xl text-[10px] text-cyan-300 font-sans shadow-sm animate-in fade-in duration-200"
-            title={`Skill attivate per questo task: ${activeSkills.join(', ')}`}
+            title={`${t('coding.activeSkillsTitle')} ${activeSkills.join(', ')}`}
           >
             <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
-            <span className="font-semibold text-slate-300 hidden md:inline">Skill in uso:</span>
+            <span className="font-semibold text-slate-300 hidden md:inline">{t('coding.skillsInUse')}</span>
             <div className="flex items-center gap-1">
               {activeSkills.map((sk) => (
                 <span
@@ -73,8 +75,8 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           <Cpu className="w-3 h-3 text-cyan-400" />
           <span>
             {guestOsInfo
-              ? `${guestOsInfo.platform || 'win32'} • ${guestOsInfo.cpuCount ?? guestOsInfo.cpus ?? 'N/A'} Cores • ${guestOsInfo.freeMemoryGB ?? (guestOsInfo.freeMemMb ? (guestOsInfo.freeMemMb / 1024).toFixed(1) : '0')}/${guestOsInfo.totalMemoryGB ?? (guestOsInfo.totalMemMb ? (guestOsInfo.totalMemMb / 1024).toFixed(1) : '0')} GB RAM`
-              : 'Detecting OS...'}
+              ? `${guestOsInfo.platform || 'win32'} • ${guestOsInfo.cpuCount ?? guestOsInfo.cpus ?? 'N/A'} Cores • ${guestOsInfo.freeMemoryGB ?? (guestOsInfo.freeMemMb ? (guestOsInfo.freeMemMb / 1024).toFixed(1) : '0')}/${guestOsInfo.totalMemoryGB ?? (guestOsInfo.totalMemMb ? (guestOsInfo.totalMemMb / 1024).toFixed(1) : '0')} GB`
+              : t('coding.osDetecting')}
           </span>
           {(guestOsInfo?.tools || guestOsInfo?.hasGit !== undefined) && (
             <span className="flex items-center gap-1 border-l border-slate-800 pl-1.5 ml-1">

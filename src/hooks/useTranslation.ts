@@ -80,7 +80,7 @@ export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): s
   return fullMarkdown
 }
 
-export function useTranslation(settings?: AppSettings) {
+export function useDocumentTranslation(settings?: AppSettings) {
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [sourceLang, setSourceLang] = useState('Italian')
@@ -314,3 +314,6 @@ export function useTranslation(settings?: AppSettings) {
     handleResetTranslation,
   }
 }
+
+// Backwards-compatibility alias
+export const useTranslation = useDocumentTranslation

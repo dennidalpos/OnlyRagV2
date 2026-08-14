@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Globe, Plus, HelpCircle, Trash2, Check, RefreshCw, ChevronDown, CheckCircle2, Shield, FolderGit2, Layers } from 'lucide-react'
 import { SkillHubSource } from '../../../types'
+import { useTranslation } from '../../../i18n'
 
 interface SkillHubSourceSelectorProps {
   sources: SkillHubSource[]
@@ -23,6 +24,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
   onRefresh,
   isLoading,
 }) => {
+  const { t } = useTranslation()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -73,8 +75,8 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             <Globe className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-xs font-bold text-slate-200">Sorgente Hub &amp; Repository:</span>
-            <p className="text-[11px] text-slate-400">Seleziona il marketplace da cui installare le skill</p>
+            <span className="text-xs font-bold text-slate-200">{t('skills.hubTitle')}:</span>
+            <p className="text-[11px] text-slate-400">{t('skills.hubSubtitle')}</p>
           </div>
         </div>
 
@@ -83,23 +85,23 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             type="button"
             onClick={onOpenGuideModal}
             className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-cyan-400 hover:bg-slate-800 text-xs font-medium transition-all flex items-center gap-1.5"
-            title="Come strutturare un Hub compatibile"
+            title={t('common.info')}
           >
-            <HelpCircle className="w-3.5 h-3.5" /> Guida Struttura Hub
+            <HelpCircle className="w-3.5 h-3.5" /> Guide
           </button>
           <button
             type="button"
             onClick={onOpenAddHubModal}
             className="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30 text-xs font-semibold transition-all flex items-center gap-1.5"
           >
-            <Plus className="w-3.5 h-3.5" /> Aggiungi Hub
+            <Plus className="w-3.5 h-3.5" /> {t('skills.addCustomHubTitle')}
           </button>
           <button
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
             className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition-all disabled:opacity-50"
-            title="Ricarica skill dalla sorgente"
+            title={t('common.refresh')}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -119,15 +121,15 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             <div className="flex items-center gap-2.5 min-w-0">
               {getSourceIcon(selectedSource?.type, selectedSource?.isBuiltin)}
               <span className="font-semibold text-slate-100 truncate">
-                {selectedSource ? selectedSource.name : 'Seleziona sorgente Hub'}
+                {selectedSource ? selectedSource.name : t('skills.hubTitle')}
               </span>
               {selectedSource?.isBuiltin ? (
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-[10px] font-mono text-emerald-300">
-                  Ufficiale
+                  Official
                 </span>
               ) : (
                 <span className="px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800 text-[10px] font-mono text-purple-300">
-                  {selectedSource?.type || 'Personalizzato'}
+                  {selectedSource?.type || 'Custom'}
                 </span>
               )}
             </div>
@@ -143,7 +145,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
               type="button"
               onClick={() => onRemoveCustomSource(selectedSource.id)}
               className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs transition-all shrink-0"
-              title="Elimina questo hub personalizzato"
+              title={t('common.delete')}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -179,7 +181,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
                         <span className="font-semibold text-xs text-slate-100">{s.name}</span>
                         {s.isBuiltin ? (
                           <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-[9px] font-mono text-emerald-400">
-                            Ufficiale
+                            Official
                           </span>
                         ) : (
                           <span className="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-800 text-[9px] font-mono text-purple-300">

@@ -23,6 +23,7 @@ import { SystemPromptModal } from '../common/SystemPromptModal'
 import { ModelBadge } from '../common/ModelBadge'
 import { useChatEngine } from '../../hooks/useChatEngine'
 import { useToast } from '../common/Toast'
+import { useTranslation } from '../../i18n'
 
 interface ChatViewProps {
   settings: AppSettings
@@ -31,6 +32,7 @@ interface ChatViewProps {
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
+  const { t } = useTranslation()
   const c = useChatEngine(settings, diagnostics)
   const toast = useToast()
   const toolsMenuRef = useRef<HTMLDivElement>(null)
@@ -60,7 +62,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             <MessageSquare className="w-5 h-5 text-cyan-400" />
           </div>
           <div>
-            <h1 className="font-bold text-slate-100 text-sm tracking-wide">RAG Chat</h1>
+            <h1 className="font-bold text-slate-100 text-sm tracking-wide">{t('chat.headerTitle')}</h1>
           </div>
         </div>
 
@@ -79,22 +81,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
         <div className="w-72 border-r border-slate-800 bg-slate-900/40 p-4 space-y-3 flex flex-col shrink-0">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-              <span>Contesto ({c.selectedDocIds.size}/{c.documents.length})</span>
+              <span>{t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}</span>
             </div>
             <button
               onClick={c.fetchDocuments}
-              aria-label="Aggiorna lista documenti"
-              title="Aggiorna lista"
+              aria-label={t('chat.refreshList')}
+              title={t('chat.refreshList')}
               className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg focus-ring active:scale-95"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label="Seleziona documenti per il contesto RAG">
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label={t('chat.toolsTitle')}>
             {c.documents.length === 0 ? (
-              <div className="text-center py-10 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4">
-                Nessun documento indicizzato. Carica file in Ingestione per attivare il contesto RAG.
+              <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
+                {t('chat.noDocsIndexed')} {t('chat.noDocsHint')}
               </div>
             ) : (
               c.documents.map((doc) => {
@@ -104,7 +106,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                     key={doc.id}
                     onClick={() => c.toggleDocSelection(doc.id)}
                     aria-pressed={isSelected}
-                    aria-label={`Documento ${doc.filename}, ${isSelected ? 'selezionato' : 'non selezionato'}`}
+                    aria-label={`${doc.filename} (${isSelected ? t('common.active') : t('common.none')})`}
                     className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all focus-ring active:scale-95 flex items-center justify-between ${
                       isSelected
                         ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
@@ -125,29 +127,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
 
         {/* Right: Messages & Input */}
         <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden min-w-0">
-          <div ref={c.messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 relative" aria-label="Cronologia messaggi chat">
+          <div ref={c.messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 relative" aria-label={t('navigation.chat')}>
             {c.messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto space-y-4 font-sans select-none">
                 <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-950/20">
                   <MessageSquare className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-100">Assistente RAG Locale</h2>
+                  <h2 className="text-base font-bold text-slate-100">{t('chat.emptyTitle')}</h2>
                   <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    Poni domande sui documenti indicizzati nel database vettoriale LanceDB con accelerazione locale Ollama.
+                    {t('chat.emptySubtitle')}
                   </p>
                 </div>
 
                 <div className="w-full pt-2 space-y-2 text-left">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">
-                    Domande di avvio rapido
+                    {t('chat.quickStartTitle')}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {[
-                      'Fornisci un riassunto dei punti chiave',
-                      'Quali sono i requisiti e le specifiche principali?',
-                      'Estrai le definizioni e i termini rilevanti',
-                      'Quali conclusioni o prossimi passi emergono?',
+                      t('chat.quickStart1'),
+                      t('chat.quickStart2'),
+                      t('chat.quickStart3'),
+                      t('chat.quickStart4'),
                     ].map((prompt, idx) => (
                       <button
                         key={idx}
@@ -187,7 +189,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                         {isPendingBot ? (
                           <div className="flex items-center gap-2 text-cyan-300 py-0.5">
                             <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                            <span className="font-mono text-[11px] animate-pulse">Generazione risposta in corso...</span>
+                            <span className="font-mono text-[11px] animate-pulse">{t('chat.generating')}</span>
                           </div>
                         ) : (
                           msg.text
@@ -197,7 +199,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       {msg.sources && msg.sources.length > 0 && (
                         <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2 text-[11px] font-mono">
                           <div className="text-cyan-400 font-bold flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3" /> Citazioni LanceDB ({msg.sources.length})
+                            <Sparkles className="w-3 h-3" /> {t('chat.citationsTitle', { count: msg.sources.length })}
                           </div>
                           {msg.sources.map((cite, idx) => {
                             const relevancePercent = cite.score ? Math.round(Math.min(1, Math.max(0, cite.score)) * 100) : null
@@ -209,7 +211,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     {relevancePercent !== null && (
                                       <span className="px-1.5 py-0.5 rounded bg-cyan-950/90 text-cyan-300 border border-cyan-800/80 text-[10px] font-bold font-mono">
-                                        Pertinenza: {relevancePercent}%
+                                        {t('chat.relevance')}: {relevancePercent}%
                                       </span>
                                     )}
                                     <button
@@ -217,11 +219,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                                       onClick={async () => {
                                         await navigator.clipboard.writeText(cite.snippet)
                                         setCopiedCitationIdx(citationKey)
-                                        toast.success(`Citazione da ${cite.docName} copiata!`)
+                                        toast.success(t('chat.citationCopied'))
                                         setTimeout(() => setCopiedCitationIdx(null), 2000)
                                       }}
-                                      aria-label={`Copia citazione da ${cite.docName}`}
-                                      title="Copia citazione"
+                                      aria-label={t('chat.copyCitation')}
+                                      title={t('chat.copyCitation')}
                                       className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
                                     >
                                       {copiedCitationIdx === citationKey ? (
@@ -245,10 +247,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                           <button
                             onClick={() => {
                               c.handleCopyMessage(msg.id, msg.text)
-                              toast.success('Messaggio copiato negli appunti!')
+                              toast.success(t('chat.msgCopied'))
                             }}
-                            aria-label="Copia testo"
-                            title="Copia testo"
+                            aria-label={t('chat.copyMsg')}
+                            title={t('chat.copyMsg')}
                             className="opacity-70 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:text-slate-200 transition-opacity focus-ring rounded p-0.5"
                           >
                             {c.copiedMsgId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -262,7 +264,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             )}
 
             <div className="sr-only" aria-live="polite" aria-atomic="true">
-              {c.isGenerating ? 'Generazione in corso...' : ''}
+              {c.isGenerating ? t('chat.generating') : ''}
             </div>
             <div ref={c.chatBottomRef} />
           </div>
@@ -291,8 +293,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                   }}
                   rows={2}
                   disabled={c.isGenerating}
-                  placeholder="Poni una domanda sui documenti indicizzati... (Enter per inviare, Shift+Enter per riga)"
-                  aria-label="Messaggio per la chat RAG"
+                  placeholder={t('chat.inputPlaceholder')}
+                  aria-label={t('chat.headerTitle')}
                   className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1"
                 />
 
@@ -303,10 +305,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                     <button
                       type="button"
                       onClick={() => setShowToolsMenu(!showToolsMenu)}
-                      aria-label="Menu strumenti e contesto RAG"
+                      aria-label={t('chat.toolsTitle')}
                       aria-haspopup="dialog"
                       aria-expanded={showToolsMenu}
-                      title="Strumenti & Contesto RAG"
+                      title={t('chat.toolsTitle')}
                       className={`px-2 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
                         showToolsMenu || c.selectedDocIds.size > 0
                           ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm'
@@ -314,7 +316,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       }`}
                     >
                       <Plus className={`w-3.5 h-3.5 ${showToolsMenu ? 'rotate-45' : ''} transition-transform text-cyan-400`} />
-                      <span className="text-[11px]">Strumenti</span>
+                      <span className="text-[11px]">{t('chat.toolsButton')}</span>
                       {c.selectedDocIds.size > 0 && (
                         <span className="px-1.5 py-0.2 rounded-full bg-cyan-500 text-slate-950 font-bold text-[9px]">
                           {c.selectedDocIds.size}
@@ -330,11 +332,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       >
                         <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                           <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                            <Sliders className="w-3.5 h-3.5 text-cyan-400" /> Strumenti &amp; Contesto RAG
+                            <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.toolsTitle')}
                           </span>
                           <button
                             type="button"
                             onClick={() => setShowToolsMenu(false)}
+                            aria-label={t('common.close')}
                             className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -344,19 +347,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                         {/* RAG Context Documents */}
                         <div className="space-y-1.5">
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                            <span>Documenti Indicizzati ({c.selectedDocIds.size}/{c.documents.length})</span>
+                            <span>{t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}</span>
                             <button
                               type="button"
                               onClick={c.fetchDocuments}
-                              title="Aggiorna lista"
+                              title={t('chat.refreshList')}
                               className="text-[9px] text-cyan-400 hover:underline"
                             >
-                              Aggiorna
+                              {t('common.refresh')}
                             </button>
                           </div>
                           <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
                             {c.documents.length === 0 ? (
-                              <div className="text-[11px] text-slate-500 italic p-1">Nessun documento indicizzato.</div>
+                              <div className="text-[11px] text-slate-500 italic p-1">{t('chat.noDocsIndexed')}</div>
                             ) : (
                               c.documents.map((doc) => {
                                 const isSelected = c.selectedDocIds.has(doc.id)
@@ -392,7 +395,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                             className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
                           >
                             <span className="flex items-center gap-2">
-                              <Sliders className="w-3.5 h-3.5 text-cyan-400" /> Configura System Prompt
+                              <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.configurePrompt')}
                             </span>
                             <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
                           </button>
@@ -411,11 +414,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                           setShowResetConfirm(true)
                         } else {
                           c.handleNewChat()
-                          toast.info('Nuova sessione di chat avviata')
+                          toast.info(t('chat.newChatStarted'))
                         }
                       }}
-                      aria-label="Nuova chat"
-                      title="Nuova Chat & Svuota Contesto"
+                      aria-label={t('chat.newChat')}
+                      title={t('chat.newChat')}
                       className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded-lg transition-colors focus-ring"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -426,7 +429,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       <div className="absolute bottom-full mb-2 right-0 bg-slate-900 border border-slate-700 rounded-xl p-2.5 shadow-2xl z-40 w-48 space-y-2 font-sans animate-in fade-in">
                         <div className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>Svuotare la chat?</span>
+                          <span>{t('chat.resetConfirmTitle')}</span>
                         </div>
                         <div className="flex items-center gap-1.5 justify-end">
                           <button
@@ -434,18 +437,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                             onClick={() => setShowResetConfirm(false)}
                             className="px-2 py-1 text-[10px] text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-750 rounded-md transition-colors"
                           >
-                            Annulla
+                            {t('chat.resetConfirmCancel')}
                           </button>
                           <button
                             type="button"
                             onClick={() => {
                               c.handleNewChat()
                               setShowResetConfirm(false)
-                              toast.info('Chat azzerata con successo')
+                              toast.info(t('chat.chatCleared'))
                             }}
                             className="px-2 py-1 text-[10px] text-slate-950 font-bold bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors"
                           >
-                            Conferma
+                            {t('chat.resetConfirmAction')}
                           </button>
                         </div>
                       </div>
@@ -462,8 +465,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       <button
                         type="button"
                         onClick={c.handleStopGeneration}
-                        aria-label="Ferma generazione"
-                        title="Ferma generazione risposta"
+                        aria-label={t('chat.stop')}
+                        title={t('chat.stop')}
                         className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-md shadow-rose-950/50 active:scale-95 animate-pulse"
                       >
                         <Square className="w-3 h-3 fill-current" />
@@ -472,7 +475,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       <button
                         type="submit"
                         disabled={!c.input.trim()}
-                        aria-label="Invia messaggio"
+                        aria-label={t('chat.send')}
                         className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95"
                       >
                         <ArrowUp className="w-3.5 h-3.5 font-bold" />

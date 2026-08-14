@@ -21,6 +21,7 @@ import {
   Info,
   StopCircle,
 } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -39,6 +40,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   onUpdateSettings,
   onRefreshDiagnostics,
 }) => {
+  const { t } = useTranslation()
   const [step, setStep] = useState<number>(1)
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(diagnostics)
 
@@ -297,17 +299,17 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             </div>
             <div>
               <h2 id="wizard-modal-title" className="text-base font-bold text-slate-100 flex items-center gap-2">
-                Hardware & Model Setup Wizard <span className="text-cyan-400">— Step {step}/6</span>
+                {t('hardwareWizard.title')} <span className="text-cyan-400">— Step {step}/6</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Ottimizzazione guidata dell'hardware locale e configurazione dei modelli AI.
+                {t('hardwareWizard.subtitle')}
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            aria-label="Chiudi Wizard Configurazione Hardware"
+            aria-label={t('common.close')}
             className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95"
           >
             <X className="w-5 h-5" />
@@ -321,19 +323,19 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="space-y-6">
               <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-cyan-400" /> Risultati Scansione Hardware Nativa
+                  <Sparkles className="w-4 h-4 text-cyan-400" /> {t('hardwareWizard.detectedProfile')}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-slate-400 block text-[11px]">Profilo Rilevato:</span>
+                    <span className="text-slate-400 block text-[11px]">{t('hardwareWizard.detectedProfile')}:</span>
                     <span className="font-semibold text-cyan-300">{recommendations.profileName}</span>
                   </div>
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <span className="text-slate-400 block text-[11px]">Accelerazione Grafica:</span>
+                    <span className="text-slate-400 block text-[11px]">{t('diagnostics.gpuTitle')}:</span>
                     <span className="font-semibold text-slate-200 font-mono">{recommendations.gpuSummary}</span>
                   </div>
                   <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 col-span-1 md:col-span-2">
-                    <span className="text-slate-400 block text-[11px]">Memoria RAM di Sistema:</span>
+                    <span className="text-slate-400 block text-[11px]">{t('diagnostics.ramTitle')}:</span>
                     <span className="font-semibold text-slate-200 font-mono">{recommendations.ramSummary}</span>
                   </div>
                 </div>
@@ -345,15 +347,15 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                   <Zap className={`w-6 h-6 ${diagnostics?.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
                   <div>
                     <div className="font-bold text-sm text-slate-100 flex items-center gap-2">
-                      <span>Stato Ollama Local Server:</span>
+                      <span>{t('hardwareWizard.ollamaStatus')}:</span>
                       <span className={`text-xs px-2 py-0.5 rounded font-mono font-bold capitalize ${diagnostics?.ollama.status === 'online' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}`}>
                         {diagnostics?.ollama.status || 'Offline'}
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {diagnostics?.ollama.status === 'online'
-                        ? `${downloadedModels.length} modelli già installati e pronti all'uso.`
-                        : 'Ollama non è in esecuzione su http://localhost:11434.'}
+                        ? `${downloadedModels.length} models ready.`
+                        : 'Ollama is not running on http://localhost:11434.'}
                     </p>
                   </div>
                 </div>
@@ -364,7 +366,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                     disabled={isInstallingOllama}
                     className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 shrink-0"
                   >
-                    <Download className="w-4 h-4" /> {isInstallingOllama ? 'Installazione / Avvio...' : 'Installa / Avvia Ollama'}
+                    <Download className="w-4 h-4" /> {isInstallingOllama ? `${t('common.loading')}...` : 'Install / Launch Ollama'}
                   </button>
                 )}
               </div>
@@ -373,10 +375,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               <div className="p-4 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-center justify-between">
                 <div className="space-y-1">
                   <span className="font-bold text-xs text-cyan-300 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-cyan-400" /> Configurazione Rapida Consigliata
+                    <Sparkles className="w-4 h-4 text-cyan-400" /> {t('hardwareWizard.autoApplyRecommended')}
                   </span>
                   <p className="text-[11px] text-slate-400">
-                    Imposta automaticamente tutti i modelli ottimali rilevati ({recFast}, {recStandard}, {recDeep}, {recVision}, {recEmbedding}) per il profilo {recommendations.profileName}.
+                    {recommendations.profileName} ({recFast}, {recStandard}, {recDeep}, {recVision}, {recEmbedding}).
                   </p>
                 </div>
                 <button
@@ -391,7 +393,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                   }}
                   className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring shrink-0 shadow-md shadow-cyan-950/40 active:scale-95"
                 >
-                  Applica &amp; Verifica (1-Click)
+                  {t('hardwareWizard.autoApplyRecommended')} (1-Click)
                 </button>
               </div>
             </div>
@@ -402,14 +404,14 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-emerald-300 flex items-center gap-2">
-                  🟢 Selezione Modello Livello Fast (Bassa Complessità)
+                  🟢 {t('hardwareWizard.step2Title')}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Utilizzato per risposte ultra-rapide (&lt; 1 secondo), spiegazioni brevi e compiti concettuali semplici.
+                  {t('hardwareWizard.step2Desc')}
                 </p>
               </div>
 
-              <div className="space-y-2.5" role="radiogroup" aria-label="Seleziona modello livello Fast">
+              <div className="space-y-2.5" role="radiogroup" aria-label={t('hardwareWizard.step2Title')}>
                 {recommendations.fastTierModels.map((m) => {
                   const isSelected = selectedFast === m.modelName
                   return (
@@ -440,12 +442,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                             <span>{m.displayName}</span>
                             {m.isRecommended && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono font-bold border border-emerald-800">
-                                CONSIGLIATO PER IL TUO HARDWARE
+                                RECOMMENDED
                               </span>
                             )}
                             {isModelDownloaded(m.modelName) && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800">
-                                GIÀ INSTALLATO
+                                INSTALLED
                               </span>
                             )}
                           </div>
@@ -465,14 +467,14 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
-                  🔵 Selezione Modello Livello Standard (Media Complessità)
+                  🔵 {t('hardwareWizard.step3Title')}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Modello principale di lavoro per task di codice standard, modifiche file e RAG sui documenti.
+                  {t('hardwareWizard.step3Desc')}
                 </p>
               </div>
 
-              <div className="space-y-2.5" role="radiogroup" aria-label="Seleziona modello livello Standard">
+              <div className="space-y-2.5" role="radiogroup" aria-label={t('hardwareWizard.step3Title')}>
                 {recommendations.standardTierModels.map((m) => {
                   const isSelected = selectedStandard === m.modelName
                   return (
@@ -503,12 +505,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                             <span>{m.displayName}</span>
                             {m.isRecommended && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800">
-                                CONSIGLIATO PER IL TUO HARDWARE
+                                RECOMMENDED
                               </span>
                             )}
                             {downloadedModels.includes(m.modelName) && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono font-bold border border-emerald-800">
-                                GIÀ INSTALLATO
+                                INSTALLED
                               </span>
                             )}
                           </div>
@@ -528,14 +530,14 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-purple-300 flex items-center gap-2">
-                  🟣 Selezione Modello Livello Deep Reasoning (Alta Complessità)
+                  🟣 {t('hardwareWizard.step4Title')}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Modello avanzato per ragionamenti complessi, refactoring multi-file, debug di stack trace e DeepSeek-R1.
+                  {t('hardwareWizard.step4Desc')}
                 </p>
               </div>
 
-              <div className="space-y-2.5" role="radiogroup" aria-label="Seleziona modello livello Deep Reasoning">
+              <div className="space-y-2.5" role="radiogroup" aria-label={t('hardwareWizard.step4Title')}>
                 {recommendations.deepReasoningTierModels.map((m) => {
                   const isSelected = selectedDeep === m.modelName
                   return (
@@ -566,12 +568,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                             <span>{m.displayName}</span>
                             {m.isRecommended && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 font-mono font-bold border border-purple-800">
-                                CONSIGLIATO PER IL TUO HARDWARE
+                                RECOMMENDED
                               </span>
                             )}
                             {downloadedModels.includes(m.modelName) && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800">
-                                GIÀ INSTALLATO
+                                INSTALLED
                               </span>
                             )}
                           </div>
@@ -591,9 +593,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="space-y-6">
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                  👁️ Modello Vision & OCR Multimodale
+                  👁️ {t('hardwareWizard.step5Vision')}
                 </h3>
-                <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Seleziona modello Vision OCR">
+                <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label={t('hardwareWizard.step5Vision')}>
                   {recommendations.visionTierModels.map((m) => {
                     const isSelected = selectedVision === m.modelName
                     return (
@@ -621,7 +623,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                           </div>
                           <span className="font-semibold text-slate-200">{m.displayName}</span>
                           {isModelDownloaded(m.modelName) && (
-                            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 font-mono rounded">INSTALLATO</span>
+                            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 font-mono rounded">INSTALLED</span>
                           )}
                         </div>
                         <span className="font-mono text-slate-400">{m.sizeBytesApprox}</span>
@@ -656,9 +658,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                               {isSelected && <Check className="w-2.5 h-2.5 text-slate-950 font-bold" />}
                             </div>
                             <span className="font-semibold text-slate-200">{dm}</span>
-                            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 font-mono rounded">INSTALLATO</span>
+                            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 font-mono rounded">INSTALLED</span>
                           </div>
-                          <span className="font-mono text-slate-400">Locale</span>
+                          <span className="font-mono text-slate-400">Local</span>
                         </div>
                       )
                     })}
@@ -667,9 +669,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 
               <div className="space-y-3 pt-3 border-t border-slate-800">
                 <h3 className="text-sm font-bold text-purple-300 flex items-center gap-2">
-                  🧠 Modello Vettoriale Vector Embedding (LanceDB)
+                  🧠 {t('hardwareWizard.step5Embedding')}
                 </h3>
-                <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Seleziona modello Vector Embedding">
+                <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label={t('hardwareWizard.step5Embedding')}>
                   {recommendations.embeddingTierModels.map((m) => {
                     const isSelected = selectedEmbedding === m.modelName
                     return (
@@ -697,7 +699,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                           </div>
                           <span className="font-semibold text-slate-200">{m.displayName}</span>
                           {isModelDownloaded(m.modelName) && (
-                            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 font-mono rounded">INSTALLATO</span>
+                            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 font-mono rounded">INSTALLED</span>
                           )}
                         </div>
                         <span className="font-mono text-slate-400">{m.sizeBytesApprox}</span>
@@ -714,29 +716,29 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="space-y-6">
               <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
                 <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" /> Riepilogo Assegnazione dei 5 Livelli
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" /> {t('hardwareWizard.step6Summary')}
                 </h3>
 
                 <div className="space-y-2 text-xs">
                   <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
-                    <span className="text-emerald-300 font-medium">🟢 Livello Fast:</span>
-                    <span className="font-mono text-slate-200 font-semibold">{selectedFast || '❌ Non selezionato'}</span>
+                    <span className="text-emerald-300 font-medium">🟢 {t('hardwareWizard.step2Title')}:</span>
+                    <span className="font-mono text-slate-200 font-semibold">{selectedFast || '❌ Not selected'}</span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
-                    <span className="text-cyan-300 font-medium">🔵 Livello Standard:</span>
-                    <span className="font-mono text-slate-200 font-semibold">{selectedStandard || '❌ Non selezionato'}</span>
+                    <span className="text-cyan-300 font-medium">🔵 {t('hardwareWizard.step3Title')}:</span>
+                    <span className="font-mono text-slate-200 font-semibold">{selectedStandard || '❌ Not selected'}</span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
-                    <span className="text-purple-300 font-medium">🟣 Livello Deep Reasoning:</span>
-                    <span className="font-mono text-slate-200 font-semibold">{selectedDeep || '❌ Non selezionato'}</span>
+                    <span className="text-purple-300 font-medium">🟣 {t('hardwareWizard.step4Title')}:</span>
+                    <span className="font-mono text-slate-200 font-semibold">{selectedDeep || '❌ Not selected'}</span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
-                    <span className="text-amber-300 font-medium">👁️ Modello Vision:</span>
-                    <span className="font-mono text-slate-200 font-semibold">{selectedVision || '❌ Non selezionato'}</span>
+                    <span className="text-amber-300 font-medium">👁️ {t('hardwareWizard.step5Vision')}:</span>
+                    <span className="font-mono text-slate-200 font-semibold">{selectedVision || '❌ Not selected'}</span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex justify-between">
-                    <span className="text-purple-300 font-medium">🧠 Modello Vector Embedding:</span>
-                    <span className="font-mono text-slate-200 font-semibold">{selectedEmbedding || '❌ Non selezionato'}</span>
+                    <span className="text-purple-300 font-medium">🧠 {t('hardwareWizard.step5Embedding')}:</span>
+                    <span className="font-mono text-slate-200 font-semibold">{selectedEmbedding || '❌ Not selected'}</span>
                   </div>
                 </div>
               </div>
@@ -745,20 +747,20 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               {!isAllSlotsPopulated ? (
                 <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/80 text-xs text-rose-300 space-y-1">
                   <div className="flex items-center gap-2 font-bold text-sm">
-                    <AlertTriangle className="w-5 h-5 text-rose-400" /> Assegnazione Incompleta
+                    <AlertTriangle className="w-5 h-5 text-rose-400" /> Incomplete Configuration
                   </div>
                   <p>
-                    Non è possibile completare il wizard finché tutti e 5 i livelli non hanno un modello valido selezionato. Torna ai passaggi precedenti per selezionare un modello per ogni slot.
+                    All 5 slots must have a model selected before finishing.
                   </p>
                 </div>
               ) : missingModels.length > 0 ? (
                 <div className="space-y-3">
                   <div className="p-4 rounded-xl bg-cyan-950/40 border border-cyan-800/80 text-xs text-cyan-300 space-y-2">
                     <div className="flex items-center gap-2 font-bold">
-                      <Download className="w-4 h-4 text-cyan-400" /> {missingModels.length} Modelli da scaricare su Ollama
+                      <Download className="w-4 h-4 text-cyan-400" /> {missingModels.length} models to pull
                     </div>
                     <p className="text-slate-300">
-                      I seguenti modelli verranno scaricati automaticamente su Ollama al tuo OK:
+                      The following models will be pulled from Ollama:
                     </p>
                     <div className="font-mono text-[11px] bg-slate-950 p-2.5 rounded border border-cyan-900/60 text-slate-200 space-y-1">
                       {missingModels.map((m) => (
@@ -770,7 +772,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                   {/* Disk Space Status Box */}
                   {isCheckingDisk ? (
                     <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400 flex items-center gap-2 font-mono">
-                      <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" /> Verifico spazio libero su disco...
+                      <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" /> Checking disk space...
                     </div>
                   ) : diskCheck ? (
                     <div
@@ -783,55 +785,21 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                       <div className="flex items-center justify-between font-bold">
                         <span className="flex items-center gap-2">
                           {diskCheck.allowed ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-rose-400" />}
-                          Validazione Spazio Disco Pre-Download
+                          Disk Space Check
                         </span>
                         <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-950 border border-slate-800">
-                          {diskCheck.freeGB} GB Liberi
+                          {diskCheck.freeGB} GB Free
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-300">
-                        Spazio stimato necessario: <strong className="font-mono">{diskCheck.requiredGB} GB</strong> (incluso buffer di sicurezza di 2 GB).
+                        Required: <strong className="font-mono">{diskCheck.requiredGB} GB</strong>
                       </p>
-                      {!diskCheck.allowed && (
-                        <div className="font-semibold text-rose-200 bg-rose-950/80 p-2 rounded border border-rose-700/60">
-                          ⚠️ Spazio su disco insufficiente! Rimangono solo {diskCheck.freeGB} GB liberi su disco, ma occorrono {diskCheck.requiredGB} GB per completare il download. Libera almeno {diskCheck.missingGB} GB prima di proseguire.
-                        </div>
-                      )}
                     </div>
                   ) : null}
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/80 text-xs text-emerald-300 flex items-center gap-3 font-semibold">
-                  <Check className="w-5 h-5 text-emerald-400" /> Tutti i modelli selezionati sono già scaricati e pronti all'uso su Ollama!
-                </div>
-              )}
-
-              {/* Pull Error Notification & Recovery Box */}
-              {pullErrorDetail && !isPullingModels && (
-                <div className="p-4 rounded-xl bg-rose-950/50 border border-rose-700 text-xs text-rose-200 space-y-3 shadow-lg">
-                  <div className="flex items-center gap-2 font-bold text-sm text-rose-300">
-                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" /> Errore durante il Download
-                  </div>
-                  <p className="font-mono text-[11px] bg-slate-950 p-2.5 rounded border border-rose-900/60 text-rose-200">
-                    {pullErrorDetail}
-                  </p>
-                  <p className="text-[11px] text-slate-300">
-                    Puoi riprovare il download (assicurati che Ollama sia in esecuzione) oppure proseguire salvando la configurazione con i modelli già installati sul sistema.
-                  </p>
-                  <div className="flex items-center gap-3 pt-1">
-                    <button
-                      onClick={handleStartBulkPull}
-                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5"
-                    >
-                      <Download className="w-3.5 h-3.5" /> Riprova Download
-                    </button>
-                    <button
-                      onClick={handleFinalSave}
-                      className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5"
-                    >
-                      <Check className="w-3.5 h-3.5 text-emerald-400" /> Salva con Modelli Presenti
-                    </button>
-                  </div>
+                  <Check className="w-5 h-5 text-emerald-400" /> All selected models are already pulled and ready!
                 </div>
               )}
 
@@ -851,7 +819,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                       onClick={handleCancelPull}
                       className="px-3 py-1 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95"
                     >
-                      <StopCircle className="w-3.5 h-3.5" /> Annulla Download
+                      <StopCircle className="w-3.5 h-3.5" /> {t('common.cancel')}
                     </button>
                   </div>
                 </div>
@@ -867,7 +835,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             disabled={step === 1 || isPullingModels}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 disabled:opacity-40 text-slate-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
           >
-            <ChevronLeft className="w-4 h-4" /> Indietro
+            <ChevronLeft className="w-4 h-4" /> {t('hardwareWizard.backBtn')}
           </button>
 
           {step < 6 ? (
@@ -875,7 +843,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               onClick={() => setStep((s) => Math.min(6, s + 1))}
               className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5"
             >
-              Avanti <ChevronRight className="w-4 h-4" />
+              {t('hardwareWizard.nextBtn')} <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -883,9 +851,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 <button
                   onClick={handleFinalSave}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-medium rounded-xl transition-all"
-                  title="Salva la configurazione attuale senza scaricare nuovi modelli"
+                  title="Save configuration"
                 >
-                  Salta Download & Salva
+                  {t('hardwareWizard.skipDownloadBtn')}
                 </button>
               )}
               <button
@@ -893,7 +861,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 disabled={!isAllSlotsPopulated || isPullingModels || (missingModels.length > 0 && !!diskCheck && !diskCheck.allowed)}
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50"
               >
-                <Check className="w-4 h-4" /> {isPullingModels ? 'Download in corso...' : missingModels.length > 0 ? 'Conferma & Scarica Modelli' : 'Salva & Attiva Complexity Router'}
+                <Check className="w-4 h-4" /> {isPullingModels ? `${t('common.loading')}...` : missingModels.length > 0 ? t('hardwareWizard.confirmDownloadBtn') : t('hardwareWizard.finishBtn')}
               </button>
             </div>
           )}

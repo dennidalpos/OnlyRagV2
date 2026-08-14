@@ -1,6 +1,7 @@
 # Logs and Debugging
 logs/
 *.log
+*.log.*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -12,6 +13,7 @@ dist/
 dist-electron/
 release/
 .vite/
+*.tsbuildinfo
 
 # Python & Virtual Environments
 .venv/
@@ -31,21 +33,44 @@ scripts/build/
 scripts/dist/
 sidecar_dist/
 
-# Local Vector DB & Persistent Data
+# Local Vector DB, Exports & Persistent Data
 data/
 lancedb_store/
 export/
 *.lance
 
-# Environment & Secrets
+# Environment & Secrets (Preserve example template)
 .env
 .env.local
 .env.*.local
 *.pem
 *.key
 *.p12
+*.pfx
+!*.env.example
+
+# Test & Coverage Outputs
+coverage/
+.nyc_output/
+test-results/
+
+# IDE & Editor Files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # OS Artifacts
 .DS_Store
 Thumbs.db
+ehthumbs.db
 desktop.ini
+*.tmp
+*.temp

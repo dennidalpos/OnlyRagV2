@@ -27,6 +27,7 @@ import { AgentActionLog, IngestedDocument, WorkspaceFile } from '../../types'
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
+import { useTranslation } from '../../i18n'
 
 interface AgentActionLogPanelProps {
   actionLogs: AgentActionLog[]
@@ -77,6 +78,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onOpenSkillHubModal,
   onResetSession,
 }) => {
+  const { t } = useTranslation()
   const bottomRef = useRef<HTMLDivElement>(null)
   const toolsMenuRef = useRef<HTMLDivElement>(null)
   const [showToolsMenu, setShowToolsMenu] = useState(false)
@@ -139,27 +141,27 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               <Code2 className="w-6 h-6" />
             </div>
             <div>
-              <div className="font-semibold text-slate-200 text-sm">Autonomous Coding Agent</div>
+              <div className="font-semibold text-slate-200 text-sm">{t('coding.headerTitle')}</div>
               <p className="text-xs max-w-xs leading-relaxed text-slate-400 mt-1">
-                Descrivi modifiche di codice, refactoring, test o esecuzione di comandi PowerShell nel tuo workspace locale.
+                {t('coding.subtitle')}
               </p>
             </div>
 
             <div className="w-full pt-3 space-y-1.5 text-left font-sans">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
-                Azioni Rapide
+                {t('common.actions')}
               </div>
               <div className="flex flex-col gap-1.5">
                 {[
-                  'Esegui i test unitari con npm run test:fast',
-                  'Esegui verifica tipi TypeScript con tsc --noEmit',
-                  'Esegui audit di conformità del codice e pulizia',
+                  'npm run test:fast',
+                  'npm run typecheck',
+                  'git status',
                 ].map((quickTask, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => setAgentPrompt(quickTask)}
-                    className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-[11px] text-slate-300 hover:text-cyan-200 transition-all text-left focus-ring active:scale-98"
+                    className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-[11px] text-slate-300 hover:text-cyan-200 transition-all text-left focus-ring active:scale-98 font-mono"
                   >
                     {quickTask}
                   </button>
@@ -200,7 +202,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
 
                   {isExpanded && (
                     <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner">
-                      <div className="text-slate-500 mb-1">../OnlyRagV2 &gt; {cmdText}</div>
+                      <div className="text-slate-500 mb-1">../workspace &gt; {cmdText}</div>
                       {log.detail || log.message}
                     </div>
                   )}
@@ -225,7 +227,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                     <button
                       onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
                       className="font-bold text-slate-200 hover:text-cyan-400 transition-colors cursor-pointer"
-                      title="Apri file nell'editor"
+                      title={t('common.viewDetails')}
                     >
                       {fileName}
                     </button>
@@ -234,7 +236,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                     onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
                     className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-cyan-400 transition-colors"
                   >
-                    Apri
+                    {t('common.viewDetails')}
                   </button>
                 </div>
               )
@@ -250,7 +252,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 >
                   <span className="flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-slate-300">
                     <span>Explored</span>
-                    <span className="font-bold text-slate-300">1 file</span>
+                    <span className="font-bold text-slate-300">workspace</span>
                   </span>
                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
                 </button>
@@ -271,7 +273,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                       className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono font-semibold"
                     >
                       {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                      {isExpanded ? 'Nascondi Dettagli' : 'Mostra Output'}
+                      {isExpanded ? t('common.close') : t('common.viewDetails')}
                     </button>
                     {isExpanded && (
                       <pre className="mt-1.5 p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-60 leading-relaxed">
@@ -289,12 +291,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
           <div className="p-3 rounded-2xl bg-[#111827] border border-slate-800 space-y-2 text-xs text-cyan-300 font-sans shadow-lg animate-in fade-in duration-150">
             <div className="flex items-center gap-2.5">
               <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-              <span className="font-semibold text-slate-200">AI Coding Agent in esecuzione...</span>
+              <span className="font-semibold text-slate-200">{t('coding.runTask')}...</span>
             </div>
             {activeSkills.length > 0 && (
               <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-300">
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="text-slate-400">Skill attive:</span>
+                <span className="text-slate-400">{t('coding.skillsInUse')}</span>
                 <div className="flex flex-wrap gap-1">
                   {activeSkills.map((sk) => (
                     <span
@@ -317,9 +319,9 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         <div className="mx-3 mb-1 p-2.5 bg-[#121826] border border-slate-800 rounded-xl space-y-2 text-xs shrink-0">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
             <span className="flex items-center gap-1.5 text-cyan-400">
-              <Clock className="w-3.5 h-3.5" /> Coda Prompt in Attesa ({promptQueue.length})
+              <Clock className="w-3.5 h-3.5" /> {t('coding.queuedPrompts', { count: promptQueue.length })}
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">Esecuzione sequenziale automatica</span>
+            <span className="text-[10px] text-slate-500 font-mono">{t('common.status')}</span>
           </div>
 
           <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
@@ -365,7 +367,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                           setEditingQueueId(null)
                         }}
                         className="p-1 hover:bg-slate-800 text-emerald-400 rounded"
-                        title="Salva modifica"
+                        title={t('common.save')}
                       >
                         <Check className="w-3 h-3" />
                       </button>
@@ -376,7 +378,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                           setEditingQueueText(item.prompt)
                         }}
                         className="p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded"
-                        title="Modifica prompt in coda"
+                        title={t('coding.editQueuePrompt')}
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
@@ -385,7 +387,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                     <button
                       onClick={() => onRemoveFromQueue?.(item.id)}
                       className="p-1 hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 rounded transition-colors"
-                      title="Rimuovi dalla coda"
+                      title={t('coding.removeFromQueue')}
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -406,12 +408,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
             onChange={(e) => setAgentPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={2}
-            aria-label="Prompt di istruzioni per l'AI Coding Agent"
-            placeholder={
-              isExecuting
-                ? 'Task in esecuzione... Scrivi qui per accodare il prossimo prompt (Enter per accodare)'
-                : 'Descrivi il task o chiedi modifiche al codice... (Enter per inviare, Shift+Enter per riga)'
-            }
+            aria-label={t('coding.promptPlaceholder')}
+            placeholder={t('coding.promptPlaceholder')}
             className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1"
           />
 
@@ -422,10 +420,10 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setShowToolsMenu(!showToolsMenu)}
-                aria-label="Menu strumenti e contesto"
+                aria-label={t('chat.toolsTitle')}
                 aria-haspopup="dialog"
                 aria-expanded={showToolsMenu}
-                title="Strumenti & Contesto"
+                title={t('chat.toolsTitle')}
                 className={`px-2 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
                   showToolsMenu || attachedDocIds.size > 0
                     ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm'
@@ -433,7 +431,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 }`}
               >
                 <Plus className={`w-3.5 h-3.5 ${showToolsMenu ? 'rotate-45' : ''} transition-transform text-cyan-400`} />
-                <span className="text-[11px]">Strumenti</span>
+                <span className="text-[11px]">{t('chat.toolsButton')}</span>
                 {attachedDocIds.size > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-cyan-500 text-slate-950 font-bold text-[9px]">
                     {attachedDocIds.size}
@@ -449,11 +447,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 >
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                     <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                      <Sliders className="w-3.5 h-3.5 text-cyan-400" /> Menu Strumenti
+                      <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.toolsTitle')}
                     </span>
                     <button
                       type="button"
                       onClick={() => setShowToolsMenu(false)}
+                      aria-label={t('common.close')}
                       className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -463,20 +462,20 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   {/* Section 1: RAG Documents Attachment */}
                   <div className="space-y-1.5">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                      <span>Allegati RAG ({attachedDocIds.size})</span>
+                      <span>{t('chat.contextTitle', { selected: attachedDocIds.size, total: ingestedDocs.length })}</span>
                       {attachedDocIds.size > 0 && (
                         <button
                           type="button"
                           onClick={() => attachedDocIds.forEach((id) => onToggleAttachDoc(id))}
                           className="text-[9px] text-cyan-400 hover:underline"
                         >
-                          Deseleziona
+                          {t('common.clear')}
                         </button>
                       )}
                     </div>
                     <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
                       {ingestedDocs.length === 0 ? (
-                        <div className="text-[11px] text-slate-500 italic p-1">Nessun documento indicizzato.</div>
+                        <div className="text-[11px] text-slate-500 italic p-1">{t('chat.noDocsIndexed')}</div>
                       ) : (
                         ingestedDocs.map((doc) => {
                           const isAttached = attachedDocIds.has(doc.id)
@@ -503,7 +502,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
 
                   {/* Section 2: Moduli & System Prompt */}
                   <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Moduli &amp; Configurazione</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('common.actions')}</div>
                     {onOpenSkillHubModal && (
                       <button
                         type="button"
@@ -514,7 +513,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                         className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
                       >
                         <span className="flex items-center gap-2">
-                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Skill Hub &amp; Marketplace
+                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.hubTitle')}
                         </span>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
                       </button>
@@ -529,7 +528,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                         className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
                       >
                         <span className="flex items-center gap-2">
-                          <Sliders className="w-3.5 h-3.5 text-cyan-400" /> Configura System Prompt
+                          <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.configurePrompt')}
                         </span>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
                       </button>
@@ -546,8 +545,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <button
                   type="button"
                   onClick={onResetSession}
-                  aria-label="Nuova Sessione Agent"
-                  title="Nuova Sessione & Svuota Contesto"
+                  aria-label={t('common.reset')}
+                  title={t('common.reset')}
                   className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded-lg transition-colors focus-ring"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -563,7 +562,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                     agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Plan
+                  {t('coding.planMode')}
                 </button>
                 <button
                   type="button"
@@ -572,7 +571,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                     agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Ask
+                  {t('coding.askMode')}
                 </button>
                 <button
                   type="button"
@@ -581,7 +580,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                     agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Agent
+                  {t('coding.agentMode')}
                 </button>
               </div>
 
@@ -610,8 +609,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <button
                   type="button"
                   onClick={onCancel}
-                  aria-label="Interrompi esecuzione task attivo"
-                  title="Interrompi task attivo"
+                  aria-label={t('coding.stopTask')}
+                  title={t('coding.stopTask')}
                   className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-lg shadow-rose-950/50 active:scale-95 shrink-0"
                 >
                   <Square className="w-3 h-3 fill-current" />
@@ -623,19 +622,19 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   type="button"
                   onClick={() => onExecute()}
                   disabled={!agentPrompt.trim()}
-                  aria-label="Accoda prompt per esecuzione successiva"
-                  title="Accoda prompt"
+                  aria-label={t('coding.queuedPrompts', { count: promptQueue.length })}
+                  title={t('coding.queuedPrompts', { count: promptQueue.length })}
                   className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95"
                 >
                   <ListPlus className="w-3.5 h-3.5" />
-                  <span className="text-[11px]">Accoda</span>
+                  <span className="text-[11px]">+</span>
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => onExecute()}
                   disabled={!agentPrompt.trim()}
-                  aria-label="Invia prompt all'AI Coding Agent"
+                  aria-label={t('coding.runTask')}
                   className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95"
                 >
                   <ArrowUp className="w-3.5 h-3.5 font-bold" />

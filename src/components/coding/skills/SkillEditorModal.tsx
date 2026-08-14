@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { X, Save, Sparkles, FileText, AlertCircle } from 'lucide-react'
 import { SkillDefinition, SkillSaveInput } from '../../../types'
+import { useTranslation } from '../../../i18n'
 
 interface SkillEditorModalProps {
   isOpen: boolean
@@ -17,6 +18,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   initialSkill,
   isLoading,
 }) => {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [version, setVersion] = useState('1.0.0')
@@ -42,7 +44,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
       setAuthor('Local')
       setTriggers('')
       setTags('custom, coding')
-      setContent('# Linee Guida Personalizzate\n\n## 1. Regole Operative\n- Descrivi qui le istruzioni e i pattern che l\'AI Agent deve seguire.')
+      setContent('# Skill Guidelines\n\n## 1. Directives\n- Enter instructions and rules for the AI Agent here.')
     }
     setValidationError(null)
   }, [initialSkill, isOpen])
@@ -52,21 +54,21 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
-      setValidationError('Il nome della skill è obbligatorio')
+      setValidationError('Skill name is required')
       return
     }
     if (!content.trim()) {
-      setValidationError('Il contenuto delle linee guida markdown non può essere vuoto')
+      setValidationError('Guidelines markdown content cannot be empty')
       return
     }
 
     const triggersList = triggers
       .split(',')
-      .map((t) => t.trim().toLowerCase())
+      .map((tr) => tr.trim().toLowerCase())
       .filter(Boolean)
     const tagsList = tags
       .split(',')
-      .map((t) => t.trim().toLowerCase())
+      .map((tg) => tg.trim().toLowerCase())
       .filter(Boolean)
 
     const payload: SkillSaveInput = {
@@ -97,18 +99,16 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100">
-                {initialSkill ? `Modifica Skill: ${initialSkill.name}` : 'Crea Nuova Skill Personalizzata'}
+                {initialSkill ? `${t('common.edit')} Skill: ${initialSkill.name}` : t('skills.createSkillBtn')}
               </h2>
               <p className="text-xs text-slate-400">
-                {initialSkill?.originHub
-                  ? 'Attenzione: la modifica segnerà questa skill come personalizzata/modificata rispetto all\'originale del sito.'
-                  : 'Definisci linee guida `SKILL.md` locali che verranno salvate nel workspace o AppData.'}
+                {t('skills.hubSubtitle')}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Chiudi editor"
+            aria-label={t('common.close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
           >
             <X className="w-5 h-5" />
@@ -127,13 +127,13 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Nome Skill (slug univoco) *
+                {t('skills.skillName')} *
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="es. my-clean-architecture"
+                placeholder="my-clean-code"
                 disabled={!!initialSkill}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-60 font-mono"
               />
@@ -141,7 +141,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Versione
+                {t('common.version')}
               </label>
               <input
                 type="text"
@@ -155,13 +155,13 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Descrizione
+              {t('skills.skillDescription')}
             </label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descrizione sintetica dello scopo della skill"
+              placeholder="Description"
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
           </div>
@@ -169,7 +169,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Triggers (separati da virgola)
+                {t('skills.skillTriggers')}
               </label>
               <input
                 type="text"
@@ -182,7 +182,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Tag (separati da virgola)
+                Tags
               </label>
               <input
                 type="text"
@@ -197,15 +197,15 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-cyan-400" /> Linee Guida Markdown *
+                <FileText className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.skillContent')} *
               </label>
-              <span className="text-[11px] text-slate-500">Istruzioni operative per l'AI Agent</span>
+              <span className="text-[11px] text-slate-500 font-mono">SKILL.md</span>
             </div>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={8}
-              placeholder="# Titolo Skill&#10;&#10;## 1. Regole&#10;- Regola 1"
+              placeholder="# Guidelines"
               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 leading-relaxed resize-y"
             />
           </div>
@@ -215,16 +215,16 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold rounded-xl transition-all"
             >
-              Annulla
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={isLoading}
               className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 focus-ring"
             >
-              <Save className="w-4 h-4" /> {initialSkill ? 'Salva Modifiche' : 'Crea Skill'}
+              <Save className="w-4 h-4" /> {t('common.save')}
             </button>
           </div>
         </form>

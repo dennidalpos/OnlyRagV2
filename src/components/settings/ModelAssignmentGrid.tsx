@@ -5,13 +5,11 @@ import {
   Languages,
   FileText,
   Database,
-  Sparkles,
-  Cpu,
-  Layers,
   Eye,
   Zap,
 } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
+import { useTranslation } from '../../i18n'
 
 interface ModelAssignmentGridProps {
   diagnostics: DiagnosticsData | null
@@ -24,6 +22,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
   settings,
   onUpdateSettings,
 }) => {
+  const { t } = useTranslation()
   const models = diagnostics?.ollama.models || []
 
   const isModelInstalled = (name: string) => {
@@ -40,7 +39,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
     const installed = isModelInstalled(name)
     return (
       <option key={name} value={name}>
-        {installed ? `✓ ${label} [Installato]` : `⬇ ${label} [Da scaricare]`}
+        {installed ? `✓ ${label} [${t('common.ready')}]` : `⬇ ${label} [${t('common.download')}]`}
       </option>
     )
   }
@@ -59,7 +58,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 1. AI Coding Agent <span className="text-emerald-400">— Complexity Router Tiers</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Smistamento dinamico in tempo reale in base alla complessità del prompt, file allegati e refactoring
+                Dynamic real-time routing based on prompt complexity, attached files, and refactoring scope
               </p>
             </div>
           </div>
@@ -72,7 +71,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500/20"
             />
             <span className={settings.useComplexityRouting !== false ? 'text-emerald-400' : 'text-slate-500'}>
-              {settings.useComplexityRouting !== false ? 'Complexity Router Attivo' : 'Router Disattivato'}
+              {settings.useComplexityRouting !== false ? 'Complexity Router Active' : 'Router Disabled'}
             </span>
           </label>
         </div>
@@ -82,18 +81,18 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                🟢 Livello Fast (&lt;3B)
+                🟢 {t('hardwareWizard.step2Title')} (&lt;3B)
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Domande veloci</span>
+              <span className="text-[10px] text-slate-500 font-mono">Fast</span>
             </div>
-            <p className="text-[11px] text-slate-400">Spiegazioni rapide, snippet brevi e consultazione concettuale.</p>
+            <p className="text-[11px] text-slate-400">{t('hardwareWizard.step2Desc')}</p>
             <select
               aria-label="Select Coding Fast Tier Model"
               value={settings.complexityFastModel || 'qwen2.5:3b'}
               onChange={(e) => onUpdateSettings({ complexityFastModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('qwen2.5:3b', 'qwen2.5:3b (Consigliato Fast)')}
+              {renderOption('qwen2.5:3b', 'qwen2.5:3b (Recommended Fast)')}
               {renderOption('llama3.2:3b', 'llama3.2:3b')}
               {renderOption('llama3.2:1b', 'llama3.2:1b')}
               {models.filter((m) => !['qwen2.5:3b', 'llama3.2:3b', 'llama3.2:1b'].includes(m)).map((m) => renderOption(m, m))}
@@ -104,11 +103,11 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                🔵 Livello Standard (7B-8B)
+                🔵 {t('hardwareWizard.step3Title')} (7B-8B)
               </span>
               <span className="text-[10px] text-slate-500 font-mono">Editing & Tools</span>
             </div>
-            <p className="text-[11px] text-slate-400">Modifica file, esecuzione comandi terminale e tool calling strutturato.</p>
+            <p className="text-[11px] text-slate-400">{t('hardwareWizard.step3Desc')}</p>
             <select
               aria-label="Select Coding Standard Tier Model"
               value={settings.complexityStandardModel || settings.codingModel || 'qwen2.5-coder:7b'}
@@ -120,7 +119,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('qwen2.5-coder:7b', 'qwen2.5-coder:7b (Consigliato Standard)')}
+              {renderOption('qwen2.5-coder:7b', 'qwen2.5-coder:7b (Recommended Standard)')}
               {renderOption('llama3.1:8b', 'llama3.1:8b')}
               {renderOption('codellama:7b', 'codellama:7b')}
               {renderOption('mistral:7b', 'mistral:7b')}
@@ -132,18 +131,18 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                🟣 Deep Reasoning (8B-14B)
+                🟣 {t('hardwareWizard.step4Title')} (8B-14B)
               </span>
               <span className="text-[10px] text-slate-500 font-mono">Refactor & Debug</span>
             </div>
-            <p className="text-[11px] text-slate-400">Refactoring multi-file, analisi stack trace e ragionamento profondo.</p>
+            <p className="text-[11px] text-slate-400">{t('hardwareWizard.step4Desc')}</p>
             <select
               aria-label="Select Coding Deep Reasoning Model"
               value={settings.complexityDeepModel || 'deepseek-r1:8b'}
               onChange={(e) => onUpdateSettings({ complexityDeepModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('deepseek-r1:8b', 'deepseek-r1:8b (Consigliato Reasoning)')}
+              {renderOption('deepseek-r1:8b', 'deepseek-r1:8b (Recommended Reasoning)')}
               {renderOption('deepseek-r1:14b', 'deepseek-r1:14b')}
               {renderOption('qwen2.5-coder:14b', 'qwen2.5-coder:14b')}
               {models.filter((m) => !['deepseek-r1:8b', 'deepseek-r1:14b', 'qwen2.5-coder:14b'].includes(m)).map((m) => renderOption(m, m))}
@@ -162,24 +161,21 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100">2. Multi-Document RAG & Chat</h2>
-              <p className="text-xs text-slate-400">Interrogazione semantica con citazioni e chunk LanceDB</p>
+              <p className="text-xs text-slate-400">Semantic retrieval with citations and LanceDB chunks</p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-cyan-300 block">Modello RAG Chat Attivo:</label>
+            <label className="text-xs font-semibold text-cyan-300 block">{t('settings.chatModel')}:</label>
             <select
               aria-label="Select RAG & Chat model"
               value={settings.chatModel || settings.complexityStandardModel || settings.defaultModel || ''}
               onChange={(e) => onUpdateSettings({ chatModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              <option value="">Usa Standard Wizard ({settings.complexityStandardModel || settings.defaultModel || 'Auto'})</option>
+              <option value="">Standard Wizard ({settings.complexityStandardModel || settings.defaultModel || 'Auto'})</option>
               {models.map((m) => renderOption(m, m))}
             </select>
-            <p className="text-[11px] text-slate-500">
-              Eredita di default il modello Standard Tier configurato nel Setup Wizard.
-            </p>
           </div>
         </div>
 
@@ -191,24 +187,21 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100">3. Document Translation Engine</h2>
-              <p className="text-xs text-slate-400">Traduzione sequenziale preservando tabelle e layout markdown</p>
+              <p className="text-xs text-slate-400">Sequential translation preserving tables and layout</p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-sky-300 block">Modello Traduzione Attivo:</label>
+            <label className="text-xs font-semibold text-sky-300 block">{t('settings.translationModel')}:</label>
             <select
               aria-label="Select Document Translation model"
               value={settings.translationModel || settings.complexityStandardModel || settings.defaultModel || ''}
               onChange={(e) => onUpdateSettings({ translationModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              <option value="">Usa Standard Wizard ({settings.complexityStandardModel || settings.defaultModel || 'Auto'})</option>
+              <option value="">Standard Wizard ({settings.complexityStandardModel || settings.defaultModel || 'Auto'})</option>
               {models.map((m) => renderOption(m, m))}
             </select>
-            <p className="text-[11px] text-slate-500">
-              Eredita di default il modello Standard Tier configurato nel Setup Wizard.
-            </p>
           </div>
         </div>
       </div>
@@ -221,7 +214,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-100">4. Document Ingestion, OCR & Vector Store</h2>
-            <p className="text-xs text-slate-400">Elaborazione layout Docling/PyMuPDF, OCR visivo e vettorizzazione LanceDB</p>
+            <p className="text-xs text-slate-400">PyMuPDF layout processing, visual OCR and LanceDB vector store</p>
           </div>
         </div>
 
@@ -229,8 +222,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           {/* Vision OCR */}
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between text-xs font-semibold text-amber-300">
-              <span className="flex items-center gap-1.5"><Eye className="w-4 h-4 text-amber-400" /> Modello Vision & Diagram OCR</span>
-              <span className="text-[10px] text-slate-500 font-mono">Vision OCR Tab</span>
+              <span className="flex items-center gap-1.5"><Eye className="w-4 h-4 text-amber-400" /> {t('hardwareWizard.step5Vision')}</span>
+              <span className="text-[10px] text-slate-500 font-mono">Vision OCR</span>
             </div>
             <select
               aria-label="Select Vision & OCR model"
@@ -238,18 +231,17 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               onChange={(e) => onUpdateSettings({ visionModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('llama3.2-vision', 'llama3.2-vision (Consigliato)')}
+              {renderOption('llama3.2-vision', 'llama3.2-vision (Recommended)')}
               {renderOption('llava', 'llava')}
               {renderOption('minicpm-v', 'minicpm-v')}
               {models.filter((m) => !['llama3.2-vision', 'llava', 'minicpm-v'].includes(m)).map((m) => renderOption(m, m))}
             </select>
-            <p className="text-[11px] text-slate-500">Utilizzato per l'ispezione diagrammi e OCR multimodale.</p>
           </div>
 
           {/* Vector Embedding */}
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between text-xs font-semibold text-purple-300">
-              <span className="flex items-center gap-1.5"><Database className="w-4 h-4 text-purple-400" /> Modello Vector Embedding (LanceDB)</span>
+              <span className="flex items-center gap-1.5"><Database className="w-4 h-4 text-purple-400" /> {t('hardwareWizard.step5Embedding')}</span>
               <span className="text-[10px] text-slate-500 font-mono">Vector Store</span>
             </div>
             <select
@@ -258,13 +250,12 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               onChange={(e) => onUpdateSettings({ embeddingModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('nomic-embed-text', 'nomic-embed-text (Predefinito 768d)')}
-              {renderOption('bge-m3:latest', 'bge-m3:latest (Multilingua 1024d)')}
+              {renderOption('nomic-embed-text', 'nomic-embed-text (Default 768d)')}
+              {renderOption('bge-m3:latest', 'bge-m3:latest (Multilingual 1024d)')}
               {renderOption('bge-large', 'bge-large')}
               {renderOption('all-minilm', 'all-minilm')}
               {models.filter((m) => !['nomic-embed-text', 'bge-m3:latest', 'bge-large', 'all-minilm'].includes(m)).map((m) => renderOption(m, m))}
             </select>
-            <p className="text-[11px] text-slate-500">Utilizzato dal sidecar Python e LanceDB per la ricerca semantica ibrida.</p>
           </div>
         </div>
       </div>
@@ -315,12 +306,12 @@ const ModelPerformanceProfiler: React.FC<{ models: string[] }> = ({ models }) =>
             <Zap className="w-4 h-4 text-cyan-400" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-100">Profilatore Prestazioni Modelli</h3>
-            <p className="text-xs text-slate-400">Misurazione throughput nativo Ollama (Tokens/sec per LLM &amp; Latency per Embedding)</p>
+            <h3 className="text-sm font-bold text-slate-100">Model Performance Profiler</h3>
+            <p className="text-xs text-slate-400">Measure native Ollama throughput (Tokens/sec for LLM &amp; Latency for Embedding)</p>
           </div>
         </div>
         <span className="text-[11px] font-mono text-slate-400">
-          {models.length} Modelli Rilevati
+          {models.length} Models Detected
         </span>
       </div>
 
@@ -344,16 +335,16 @@ const ModelPerformanceProfiler: React.FC<{ models: string[] }> = ({ models }) =>
                     ⚡ {stats.tokensPerSec} {isEmbedModel ? 'vec/s' : 't/s'} ({stats.evalDurationMs}ms)
                   </span>
                 ) : (
-                  <span className="text-[10px] text-slate-500 block mt-1">Non testato</span>
+                  <span className="text-[10px] text-slate-500 block mt-1">Not tested</span>
                 )}
               </div>
               <button
                 onClick={() => handleRunBenchmark(m)}
                 disabled={stats?.isRunning}
-                aria-label={`Avvia test prestazioni per ${m}`}
+                aria-label={`Benchmark ${m}`}
                 className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-[11px] rounded-lg font-semibold shrink-0 transition-colors focus-ring active:scale-95"
               >
-                {stats?.isRunning ? 'Test...' : 'Test Speed'}
+                {stats?.isRunning ? 'Testing...' : 'Test Speed'}
               </button>
             </div>
           )

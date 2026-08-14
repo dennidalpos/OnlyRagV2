@@ -1,6 +1,7 @@
 import React from 'react'
 import { AppSettings } from '../../types'
-import { Cpu, Layers, ShieldCheck, Zap } from 'lucide-react'
+import { Cpu, Layers, ShieldCheck } from 'lucide-react'
+import { useTranslation } from '../../i18n'
 
 interface TaskConcurrencyConfigProps {
   settings: AppSettings
@@ -11,6 +12,7 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
   settings,
   onUpdateSettings,
 }) => {
+  const { t } = useTranslation()
   const currentConcurrency = settings.maxConcurrentTasks || 1
 
   const handleSelectConcurrency = (val: number) => {
@@ -21,10 +23,10 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
   }
 
   const presets = [
-    { value: 1, label: '1 (Sequenziale)', desc: '1 task alla volta. Zero conflitti VRAM/GPU.', tag: 'Consigliato' },
-    { value: 2, label: '2 (Bilanciato)', desc: '2 task simultanei. Ideale per GPU 8-12GB VRAM.', tag: 'Veloce' },
-    { value: 4, label: '4 (Multi-Task)', desc: '4 task concorrenti per GPU 16GB+ o CPU potente.', tag: 'Avanzato' },
-    { value: 8, label: '8 (Massimo)', desc: '8 task paralleli. Massima parallelizzazione.', tag: 'Extreme' },
+    { value: 1, label: '1 (Sequential)', desc: '1 task at a time. Zero VRAM/GPU conflicts.', tag: 'Recommended' },
+    { value: 2, label: '2 (Balanced)', desc: '2 simultaneous tasks. Ideal for 8-12GB VRAM.', tag: 'Fast' },
+    { value: 4, label: '4 (Multi-Task)', desc: '4 concurrent tasks for 16GB+ VRAM or powerful CPU.', tag: 'Advanced' },
+    { value: 8, label: '8 (Maximum)', desc: '8 parallel tasks. Maximum throughput.', tag: 'Extreme' },
   ]
 
   return (
@@ -32,17 +34,17 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
         <div>
           <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
-            <Layers className="w-5 h-5 text-cyan-400" /> Coda &amp; Concorrenza Task Locali
+            <Layers className="w-5 h-5 text-cyan-400" /> {t('settings.concurrencySection')}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Controlla quanti task e modelli AI possono essere eseguiti contemporaneamente prima di accodare le richieste in eccesso.
+            Control simultaneous agent and model task execution before queuing
           </p>
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl">
           <Cpu className="w-3.5 h-3.5 text-cyan-400" />
           <span className="text-xs font-mono text-slate-200">
-            Max: <strong className="text-cyan-300">{currentConcurrency}</strong> {currentConcurrency === 1 ? 'task' : 'task'}
+            Max: <strong className="text-cyan-300">{currentConcurrency}</strong> {currentConcurrency === 1 ? 'task' : 'tasks'}
           </span>
         </div>
       </div>
@@ -55,7 +57,7 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
               key={preset.value}
               type="button"
               onClick={() => handleSelectConcurrency(preset.value)}
-              aria-label={`Imposta concorrenza a ${preset.value} task`}
+              aria-label={`Set concurrency to ${preset.value} tasks`}
               className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between space-y-3 cursor-pointer ${
                 isSelected
                   ? 'bg-cyan-950/40 border-cyan-500 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-500/50'
@@ -85,7 +87,7 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
       <div className="flex items-center gap-2 p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl text-xs text-slate-400">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
         <span>
-          <strong>Protezione Sovraccarico:</strong> Quando vengono avviati più task simultanei (anche con modelli Ollama differenti), la coda assegna gli slot disponibili ed esegue automaticamente i successivi non appena uno slot si libera.
+          <strong>Task Protection:</strong> When multiple tasks are triggered simultaneously, excess requests queue cleanly and execute as slots free up.
         </span>
       </div>
     </div>

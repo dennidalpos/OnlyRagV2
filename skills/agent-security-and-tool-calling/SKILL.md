@@ -7,6 +7,7 @@ description: Guidelines for agentic tool parsing, AppSec sandboxing, path traver
 
 ## 1. Tool Call Parsing & Quantization Resilience
 - **Multi-Format Parsing**: The tool parser (`toolParser.ts`) parses tool call blocks formatted as `<tool_call>`, ````json ````, or raw JSON objects with a `"tool"` key.
+- **CoT Thought Block Isolation**: Pre-strips `<think>...</think>` and `<thought>...</thought>` reasoning blocks before tool regex matching to prevent accidental capture of sample JSON blocks in reasoning models (DeepSeek-R1, Qwen 2.5).
 - **Quantization Resilience**: Strips single quotes, unescaped newlines in JSON string literals, and trailing commas prior to parsing to handle heavily quantized local models (3B/7B/8B Q4_K_M).
 - **Mandatory Parameter Validation**: Validates required parameters (`filePath`, `command`, `query`, `targetContent`) before execution. Malformed or incomplete calls are rejected safely with diagnostic warnings.
 
@@ -16,8 +17,8 @@ description: Guidelines for agentic tool parsing, AppSec sandboxing, path traver
 - **Prompt Injection Defense**: Untrusted content read from project files is wrapped inside explicit boundary markers (`[UNTRUSTED FILE CONTENT: ...] ... [END UNTRUSTED CONTENT]`) to prevent embedded prompt injection attacks.
 
 ## 3. Shell Execution & PowerShell Compatibility
-- **PowerShell Execution Target**: Commands execute via `spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ...])`. Common Unix shell commands are auto-translated (`rm -rf` $\rightarrow$ `Remove-Item -Recurse -Force`, `touch` $\rightarrow$ `New-Item -ItemType File`, `ls` $\rightarrow$ `Get-ChildItem`).
-- **Destructive Command Guardrails**: Commands matching destructive patterns (`git reset --hard`, `git clean -fd`, `git push --force`, `rm -rf /`, broad recursive deletions) are blocked by `checkCommandSecurity`.
+- **PowerShell Execution Target**: Commands execute via `spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ...])`. Common Unix shell commands are auto-translated (`rm -rf` $\rightarrow$ `Remove-Item -Recurse -Force`, `mkdir -p` $\rightarrow$ `New-Item -ItemType Directory -Force`, `touch` $\rightarrow$ `New-Item -ItemType File`, `ls` $\rightarrow$ `Get-ChildItem`).
+- **Destructive Command Guardrails**: Commands matching destructive patterns (`git reset --hard`, `git clean -fd`, `git push --force`, `git restore .`, `git checkout -- .`, `rm -rf /`, `Remove-Item C:\`) are blocked by `checkCommandSecurity`.
 
 ## 4. Web & Network Security Guidelines
 - **SSRF Defense & URL Validation**: Web search and web fetching (`WebClient`) permit only `http:` and `https:` protocols. Requests targeting cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`) or local loopback scanning are blocked.

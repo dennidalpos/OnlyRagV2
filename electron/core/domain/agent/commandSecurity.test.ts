@@ -26,6 +26,15 @@ describe('commandSecurity Domain Unit Tests', () => {
     expect(res2.isAllowed).toBe(false)
   })
 
+  it('should block destructive git restore and git checkout commands', () => {
+    const res1 = checkCommandSecurity('git restore .')
+    expect(res1.isAllowed).toBe(false)
+    expect(res1.blockedReason).toContain('Destructive command pattern detected')
+
+    const res2 = checkCommandSecurity('git checkout -- .')
+    expect(res2.isAllowed).toBe(false)
+  })
+
   it('should translate harmless Unix commands to PowerShell equivalents', () => {
     const res1 = checkCommandSecurity('rm -rf node_modules')
     expect(res1.isAllowed).toBe(true)
@@ -38,6 +47,10 @@ describe('commandSecurity Domain Unit Tests', () => {
     const res3 = checkCommandSecurity('ls -la')
     expect(res3.isAllowed).toBe(true)
     expect(res3.sanitizedCommand).toBe('Get-ChildItem')
+
+    const res4 = checkCommandSecurity('mkdir -p src/components/test')
+    expect(res4.isAllowed).toBe(true)
+    expect(res4.sanitizedCommand).toBe('New-Item -ItemType Directory -Path "src/components/test" -Force')
   })
 
   it('should allow normal commands like npm run typecheck or vitest', () => {

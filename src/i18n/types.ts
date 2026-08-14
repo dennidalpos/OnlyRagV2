@@ -113,8 +113,11 @@ export interface TranslationSchema {
     skillsInUse: string
     osDetecting: string
     planMode: string
+    planModeShort: string
     askMode: string
+    askModeShort: string
     agentMode: string
+    agentModeShort: string
     planModeDesc: string
     askModeDesc: string
     agentModeDesc: string

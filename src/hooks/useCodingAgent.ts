@@ -85,6 +85,7 @@ export function useCodingAgent(settings?: AppSettings) {
   const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
   const [isExecuting, setIsExecuting] = useState<boolean>(false)
   const [activeSkills, setActiveSkills] = useState<string[]>([])
+  const [streamingText, setStreamingText] = useState<string>('')
 
   // Pending Approval State
   const [pendingApproval, setPendingApproval] = useState<{
@@ -309,6 +310,7 @@ export function useCodingAgent(settings?: AppSettings) {
     if (!window.electronAPI) return
 
     const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog) => {
+      setStreamingText('')
       setActionLogs((prev) => {
         const filtered = prev.filter((l) => l.id !== log.id)
         return [...filtered, log].slice(-500)
@@ -351,7 +353,7 @@ export function useCodingAgent(settings?: AppSettings) {
 
     const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data: { step: number; chunk: string }) => {
       if (!data?.chunk) return
-      // Stream tokens received live during agent inference
+      setStreamingText((prev) => prev + data.chunk)
     })
 
     const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
@@ -364,6 +366,7 @@ export function useCodingAgent(settings?: AppSettings) {
 
     const unsubDone = window.electronAPI.onAgentDone?.(() => {
       setIsExecuting(false)
+      setStreamingText('')
       if (promptQueueRef.current.length > 0) {
         const [nextItem, ...remaining] = promptQueueRef.current
         setPromptQueue(remaining)
@@ -436,6 +439,21 @@ export function useCodingAgent(settings?: AppSettings) {
           extractedMarkdown: d.extractedMarkdown || '',
         }))
 
+      const resolvedPinnedFiles = await Promise.all(
+        Array.from(pinnedFiles.values()).map(async (f) => {
+          let content = selectedFile && selectedFile.path === f.path ? editorContent : ''
+          if (!content && window.electronAPI?.readWorkspaceFile) {
+            try {
+              const res = await window.electronAPI.readWorkspaceFile(f.path)
+              if (res.success && res.content) {
+                content = res.content
+              }
+            } catch {}
+          }
+          return { name: f.name, path: f.path, content }
+        })
+      )
+
       await window.electronAPI.startAgentTask({
         userTask: taskPrompt,
         agentMode,
@@ -444,11 +462,7 @@ export function useCodingAgent(settings?: AppSettings) {
         activeModel,
         contextFiles,
         attachedDocs,
-        pinnedFiles: Array.from(pinnedFiles.values()).map((f) => ({
-          name: f.name,
-          path: f.path,
-          content: selectedFile && selectedFile.path === f.path ? editorContent : '',
-        })),
+        pinnedFiles: resolvedPinnedFiles,
         activeFile: selectedFile ? { name: selectedFile.name, path: selectedFile.path, content: editorContent } : null,
         settings,
       })
@@ -598,6 +612,7 @@ export function useCodingAgent(settings?: AppSettings) {
     actionLogs,
     isExecuting,
     activeSkills,
+    streamingText,
     pendingApproval,
     setPendingApproval,
     handleRunGrepSearch,

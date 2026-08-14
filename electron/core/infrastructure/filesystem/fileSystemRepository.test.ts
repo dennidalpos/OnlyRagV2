@@ -70,5 +70,9 @@ describe('FileSystemRepository Unit Tests', () => {
     expect(readUpdated.content).toContain('const a = 100;')
     expect(readUpdated.content).toContain('const b = 2;')
     expect(readUpdated.content).toContain('const c = 300;')
+
+    // Verify CRLF line endings were preserved
+    const rawDisk = fs.readFileSync(testFile, 'utf-8')
+    expect(rawDisk).toContain('\r\n')
   })
 })

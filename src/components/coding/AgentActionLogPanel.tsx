@@ -23,7 +23,7 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile } from '../../types'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings } from '../../types'
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
@@ -37,6 +37,7 @@ interface AgentActionLogPanelProps {
   setAgentPrompt: (prompt: string) => void
   isExecuting: boolean
   activeSkills?: string[]
+  streamingText?: string
   onExecute: () => void
   onCancel: () => void
   pinnedFiles: Map<string, WorkspaceFile>
@@ -45,6 +46,8 @@ interface AgentActionLogPanelProps {
   onToggleAttachDoc: (docId: string) => void
   selectedFile: WorkspaceFile | null
   activeModelName?: string
+  settings?: AppSettings
+  availableModels?: string[]
   onOpenFile?: (file: WorkspaceFile) => void
   promptQueue?: QueuedPrompt[]
   onRemoveFromQueue?: (id: string) => void
@@ -62,6 +65,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   setAgentPrompt,
   isExecuting,
   activeSkills = [],
+  streamingText = '',
   onExecute,
   onCancel,
   pinnedFiles,
@@ -70,6 +74,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onToggleAttachDoc,
   selectedFile,
   activeModelName,
+  settings,
+  availableModels,
   onOpenFile,
   promptQueue = [],
   onRemoveFromQueue,
@@ -309,6 +315,11 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 </div>
               </div>
             )}
+            {streamingText && (
+              <div className="mt-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed shadow-inner">
+                {streamingText}
+              </div>
+            )}
           </div>
         )}
         <div ref={bottomRef} />
@@ -413,133 +424,132 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
             className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1"
           />
 
-          {/* Bottom row: [Left: Context Menu Popover] --- [Right: Quick actions & Send] */}
-          <div className="flex items-center justify-between pt-1 border-t border-slate-800/40">
-            {/* Left: Menu contestuale a comparsa per strumenti e contesto */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowToolsMenu(!showToolsMenu)}
-                aria-label={t('chat.toolsTitle')}
-                aria-haspopup="dialog"
-                aria-expanded={showToolsMenu}
-                title={t('chat.toolsTitle')}
-                className={`px-2 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
-                  showToolsMenu || attachedDocIds.size > 0
-                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm'
-                    : 'bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Plus className={`w-3.5 h-3.5 ${showToolsMenu ? 'rotate-45' : ''} transition-transform text-cyan-400`} />
-                <span className="text-[11px]">{t('chat.toolsButton')}</span>
-                {attachedDocIds.size > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-500 text-slate-950 font-bold text-[9px]">
-                    {attachedDocIds.size}
-                  </span>
-                )}
-              </button>
-
-              {/* Contextual Popover Panel */}
-              {showToolsMenu && (
-                <div
-                  ref={toolsMenuRef}
-                  className="absolute bottom-full mb-2 left-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3 z-30 font-sans"
+          {/* Bottom row: [Left: Tools & Reset] --- [Right: Mode selector, Complexity, Send/Stop/Queue] */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800/40">
+            {/* Left: Menu contestuale a comparsa per strumenti e contesto + Reset */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowToolsMenu(!showToolsMenu)}
+                  aria-label={t('chat.toolsTitle')}
+                  aria-haspopup="dialog"
+                  aria-expanded={showToolsMenu}
+                  title={t('chat.toolsTitle')}
+                  className={`px-2 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                    showToolsMenu || attachedDocIds.size > 0
+                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm'
+                      : 'bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
                 >
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                    <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                      <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.toolsTitle')}
+                  <Plus className={`w-3.5 h-3.5 ${showToolsMenu ? 'rotate-45' : ''} transition-transform text-cyan-400`} />
+                  <span className="text-[11px]">{t('chat.toolsButton')}</span>
+                  {attachedDocIds.size > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-cyan-500 text-slate-950 font-bold text-[9px]">
+                      {attachedDocIds.size}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowToolsMenu(false)}
-                      aria-label={t('common.close')}
-                      className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  )}
+                </button>
 
-                  {/* Section 1: RAG Documents Attachment */}
-                  <div className="space-y-1.5">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                      <span>{t('chat.contextTitle', { selected: attachedDocIds.size, total: ingestedDocs.length })}</span>
-                      {attachedDocIds.size > 0 && (
+                {/* Contextual Popover Panel */}
+                {showToolsMenu && (
+                  <div
+                    ref={toolsMenuRef}
+                    className="absolute bottom-full mb-2 left-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3 z-30 font-sans"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                      <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.toolsTitle')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowToolsMenu(false)}
+                        aria-label={t('common.close')}
+                        className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Section 1: RAG Documents Attachment */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>{t('chat.contextTitle', { selected: attachedDocIds.size, total: ingestedDocs.length })}</span>
+                        {attachedDocIds.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => attachedDocIds.forEach((id) => onToggleAttachDoc(id))}
+                            className="text-[9px] text-cyan-400 hover:underline"
+                          >
+                            {t('common.clear')}
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                        {ingestedDocs.length === 0 ? (
+                          <div className="text-[11px] text-slate-500 italic p-1">{t('chat.noDocsIndexed')}</div>
+                        ) : (
+                          ingestedDocs.map((doc) => {
+                            const isAttached = attachedDocIds.has(doc.id)
+                            return (
+                              <button
+                                key={doc.id}
+                                type="button"
+                                onClick={() => onToggleAttachDoc(doc.id)}
+                                className={`w-full text-left p-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                                  isAttached ? 'bg-cyan-950 text-cyan-200 border border-cyan-800/60' : 'hover:bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                  <span className="truncate text-[11px]">{doc.filename}</span>
+                                </div>
+                                <span className="text-[9px] font-mono shrink-0">{isAttached ? '✓' : '+'}</span>
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Section 2: Moduli & System Prompt */}
+                    <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('common.actions')}</div>
+                      {onOpenSkillHubModal && (
                         <button
                           type="button"
-                          onClick={() => attachedDocIds.forEach((id) => onToggleAttachDoc(id))}
-                          className="text-[9px] text-cyan-400 hover:underline"
+                          onClick={() => {
+                            setShowToolsMenu(false)
+                            onOpenSkillHubModal()
+                          }}
+                          className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
                         >
-                          {t('common.clear')}
+                          <span className="flex items-center gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.hubTitle')}
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                        </button>
+                      )}
+                      {onOpenPromptModal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowToolsMenu(false)
+                            onOpenPromptModal()
+                          }}
+                          className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.configurePrompt')}
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
                         </button>
                       )}
                     </div>
-                    <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
-                      {ingestedDocs.length === 0 ? (
-                        <div className="text-[11px] text-slate-500 italic p-1">{t('chat.noDocsIndexed')}</div>
-                      ) : (
-                        ingestedDocs.map((doc) => {
-                          const isAttached = attachedDocIds.has(doc.id)
-                          return (
-                            <button
-                              key={doc.id}
-                              type="button"
-                              onClick={() => onToggleAttachDoc(doc.id)}
-                              className={`w-full text-left p-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
-                                isAttached ? 'bg-cyan-950 text-cyan-200 border border-cyan-800/60' : 'hover:bg-slate-800 text-slate-400'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5 truncate">
-                                <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                                <span className="truncate text-[11px]">{doc.filename}</span>
-                              </div>
-                              <span className="text-[9px] font-mono shrink-0">{isAttached ? '✓' : '+'}</span>
-                            </button>
-                          )
-                        })
-                      )}
-                    </div>
                   </div>
+                )}
+              </div>
 
-                  {/* Section 2: Moduli & System Prompt */}
-                  <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('common.actions')}</div>
-                    {onOpenSkillHubModal && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowToolsMenu(false)
-                          onOpenSkillHubModal()
-                        }}
-                        className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.hubTitle')}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-                      </button>
-                    )}
-                    {onOpenPromptModal && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowToolsMenu(false)
-                          onOpenPromptModal()
-                        }}
-                        className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.configurePrompt')}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Quick actions, states, mode switches, reset, send */}
-            <div className="flex items-center gap-2">
               {/* Reset Session Mini Icon */}
               {onResetSession && (
                 <button
@@ -552,55 +562,73 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
               )}
+            </div>
 
+            {/* Right: Quick actions, states, mode switches, complexity router, send */}
+            <div className="flex items-center gap-1.5 shrink-0 min-w-0">
               {/* Mode Selector Pill */}
-              <div className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px]">
+              <div className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px] shrink-0" role="group" aria-label="Agent Mode">
                 <button
                   type="button"
                   onClick={() => setAgentMode('plan')}
+                  title={`${t('coding.planMode')}: ${t('coding.planModeDesc')}`}
                   className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
                     agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {t('coding.planMode')}
+                  {t('coding.planModeShort')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setAgentMode('ask')}
+                  title={`${t('coding.askMode')}: ${t('coding.askModeDesc')}`}
                   className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
                     agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {t('coding.askMode')}
+                  {t('coding.askModeShort')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setAgentMode('agent')}
+                  title={`${t('coding.agentMode')}: ${t('coding.agentModeDesc')}`}
                   className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
                     agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {t('coding.agentMode')}
+                  {t('coding.agentModeShort')}
                 </button>
               </div>
 
               {/* Complexity Router / Model Pill */}
               {agentPrompt.trim() ? (
                 (() => {
-                  const liveComplexity = evaluateTaskComplexity(agentPrompt, pinnedFiles.size, selectedFile?.sizeBytes || 0)
+                  const hasRecentToolFailure = actionLogs.some(
+                    (l) =>
+                      l.message.includes('Failed') ||
+                      l.message.includes('Error') ||
+                      (l.type === 'terminal' && (l.detail?.includes('Error') || l.detail?.includes('FAIL')))
+                  )
+                  const liveComplexity = evaluateTaskComplexity(agentPrompt, {
+                    attachedFilesCount: pinnedFiles.size,
+                    contextSizeChars: selectedFile?.sizeBytes || 0,
+                    settings,
+                    availableModels,
+                    hasRecentToolFailure,
+                  })
                   return (
                     <div
-                      className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-mono border transition-all ${liveComplexity.badgeColorClass}`}
+                      className={`hidden 2xl:flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-mono border transition-all truncate max-w-[110px] shrink ${liveComplexity.badgeColorClass}`}
                       title={`Complexity Router: ${liveComplexity.tierName} (${liveComplexity.modelName}) — ${liveComplexity.reasoning}`}
                     >
-                      <span className="truncate max-w-[120px]">{liveComplexity.badgeLabel}</span>
+                      <span className="truncate">{liveComplexity.badgeLabel}</span>
                     </div>
                   )
                 })()
               ) : (
-                <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-mono text-slate-300">
-                  <Sparkles className="w-3 h-3 text-cyan-400" />
-                  <span className="truncate max-w-[90px]">{activeModelName || 'qwen2.5-coder:7b'}</span>
+                <div className="hidden 2xl:flex items-center gap-1 px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-mono text-slate-300 truncate max-w-[90px] shrink">
+                  <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
+                  <span className="truncate">{activeModelName || 'qwen2.5-coder:7b'}</span>
                 </div>
               )}
 
@@ -624,7 +652,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   disabled={!agentPrompt.trim()}
                   aria-label={t('coding.queuedPrompts', { count: promptQueue.length })}
                   title={t('coding.queuedPrompts', { count: promptQueue.length })}
-                  className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95"
+                  className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0"
                 >
                   <ListPlus className="w-3.5 h-3.5" />
                   <span className="text-[11px]">+</span>
@@ -635,7 +663,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   onClick={() => onExecute()}
                   disabled={!agentPrompt.trim()}
                   aria-label={t('coding.runTask')}
-                  className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95"
+                  title={t('coding.runTask')}
+                  className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0"
                 >
                   <ArrowUp className="w-3.5 h-3.5 font-bold" />
                 </button>

@@ -237,6 +237,31 @@ I should call the read_file tool.
     expect(result?.explanation).toBe('Reading main entrypoint')
   })
 
+  it('should ignore example code blocks inside <think> and parse real tool call outside', () => {
+    const raw = `<think>
+Here is an example of what I could do:
+\`\`\`json
+{
+  "tool": "unrelated_sample",
+  "parameters": {}
+}
+\`\`\`
+Now I will actually read the App file.
+</think>
+<tool_call>
+{
+  "tool": "read_file",
+  "parameters": {
+    "filePath": "src/App.tsx"
+  }
+}
+</tool_call>`
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('read_file')
+    expect(result?.parameters.filePath).toBe('src/App.tsx')
+  })
+
   it('should return null when text does not contain valid tool call', () => {
     const raw = 'Just a normal text response without any tool invocations.'
     const result = parseAgentToolCall(raw)

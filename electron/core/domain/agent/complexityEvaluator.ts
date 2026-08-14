@@ -41,12 +41,17 @@ const DEEP_KEYWORDS = [
   'riscrivi',
   'overhaul',
   'security audit',
+  'audit',
   'audit di sicurezza',
   'diagnosi',
   'profiling',
+  'profiler',
+  'bottleneck',
+  'collo di bottiglia',
   'deadlock',
   'race condition',
   'concorrenza',
+  'concurrency',
   'flussi',
   'pipeline',
   'auto-healing',
@@ -64,6 +69,7 @@ const DEEP_KEYWORDS = [
   'performance tuning',
   'type check',
   'type error',
+  'typescript error',
   'dead code',
 ]
 
@@ -139,30 +145,36 @@ function matchesKeyword(text: string, keyword: string): boolean {
   return regex.test(text)
 }
 
-function isModelPresent(target: string, available: string[]): boolean {
-  if (!available || available.length === 0) return true
+export function findMatchingInstalledModel(target: string, available: string[]): string | null {
+  if (!available || available.length === 0) return null
   const clean = target.toLowerCase().trim()
   const cleanBase = clean.split(':')[0]
   const cleanTag = clean.includes(':') ? clean.split(':')[1] : ''
 
-  return available.some((m) => {
+  // 1. Exact case-insensitive match
+  for (const m of available) {
     const mClean = m.toLowerCase().trim()
-    if (
-      mClean === clean ||
-      mClean === `${clean}:latest` ||
-      `${mClean}:latest` === clean
-    ) {
-      return true
-    }
+    if (mClean === clean) return m
+  }
+
+  // 2. :latest tag equivalence
+  for (const m of available) {
+    const mClean = m.toLowerCase().trim()
+    if (mClean === `${clean}:latest` || `${mClean}:latest` === clean) return m
+  }
+
+  // 3. Base model match with compatible quant/instruction tag
+  for (const m of available) {
+    const mClean = m.toLowerCase().trim()
     const mBase = mClean.split(':')[0]
     const mTag = mClean.includes(':') ? mClean.split(':')[1] : ''
-    // Allow matching when base model matches and tags share the common prefix (e.g. 7b vs 7b-instruct-q4_K_M)
     if (mBase === cleanBase) {
-      if (!cleanTag || cleanTag === 'latest') return true
-      if (mTag && (mTag.startsWith(cleanTag) || cleanTag.startsWith(mTag))) return true
+      if (!cleanTag || cleanTag === 'latest') return m
+      if (mTag && (mTag.startsWith(cleanTag) || cleanTag.startsWith(mTag))) return m
     }
-    return false
-  })
+  }
+
+  return null
 }
 
 function resolveModelWithFallback(
@@ -174,13 +186,15 @@ function resolveModelWithFallback(
     return { model: preferredModel, isFallback: false }
   }
 
-  if (isModelPresent(preferredModel, availableModels)) {
-    return { model: preferredModel, isFallback: false }
+  const exactMatch = findMatchingInstalledModel(preferredModel, availableModels)
+  if (exactMatch) {
+    return { model: exactMatch, isFallback: false }
   }
 
   for (const fallback of candidateFallbacks) {
-    if (isModelPresent(fallback, availableModels)) {
-      return { model: fallback, isFallback: true }
+    const fallbackMatch = findMatchingInstalledModel(fallback, availableModels)
+    if (fallbackMatch) {
+      return { model: fallbackMatch, isFallback: true }
     }
   }
 

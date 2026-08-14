@@ -9,8 +9,11 @@ const DESTRUCTIVE_PATTERNS = [
   /git\s+clean\s+-[a-z]*f/i,
   /git\s+push\s+.*--force/i,
   /git\s+push\s+.*-f\b/i,
+  /git\s+restore\s+\./i,
+  /git\s+checkout\s+--\s+\./i,
   /rm\s+-rf\s+[\/\*\.]/i,
   /remove-item\s+.*-force\s+.*[\/\*\.\\]/i,
+  /remove-item\s+.*[c-z]:/i,
   /del\s+\/[fsq]\s+/i,
   /format\s+[c-z]:/i,
   /taskkill\s+\/f\s+\/im\s+(svchost|explorer|csrss)\.exe/i,
@@ -38,6 +41,9 @@ export function checkCommandSecurity(rawCmd: string): SecurityCheckResult {
   if (/^rm\s+-rf\s+(.+)$/i.test(sanitized)) {
     const target = sanitized.replace(/^rm\s+-rf\s+/i, '').trim()
     sanitized = `Remove-Item -Recurse -Force "${target}"`
+  } else if (/^mkdir\s+-p\s+(.+)$/i.test(sanitized)) {
+    const dir = sanitized.replace(/^mkdir\s+-p\s+/i, '').trim()
+    sanitized = `New-Item -ItemType Directory -Path "${dir}" -Force`
   } else if (/^touch\s+(.+)$/i.test(sanitized)) {
     const file = sanitized.replace(/^touch\s+/i, '').trim()
     sanitized = `New-Item -ItemType File -Path "${file}" -Force`

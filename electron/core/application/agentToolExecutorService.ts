@@ -244,7 +244,8 @@ export class AgentToolExecutorService {
           if (res.success) {
             return { outputForHistory: `Successfully replaced ${res.replacedCount} chunks in ${filePath}`, logMessage: `Successfully applied ${res.replacedCount} replacements in ${path.basename(filePath)}` }
           }
-          return { outputForHistory: `Multi-replace failed in ${filePath}: ${res.error}`, logMessage: `Multi-replace failed: ${res.error}` }
+          const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${res.error}\nTip: Inspect the file with read_file or check exact whitespace before replacing.`
+          return { outputForHistory: failureFeedback, logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${res.error}` }
         }
         return { outputForHistory: `Missing parameters or empty chunks for multi-replace: ${filePath || 'unknown'}`, logMessage: 'Missing multi-replace parameters' }
       }

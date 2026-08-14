@@ -103,7 +103,7 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     })
 
     expect(res.tier).toBe('standard')
-    expect(res.modelName).toBe('qwen2.5-coder:7b')
+    expect(res.modelName).toBe('qwen2.5-coder:7b-instruct-q4_K_M')
     expect(res.isFallback).toBe(false)
   })
 
@@ -113,5 +113,8 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
 
     const resType = evaluateTaskComplexity('Risolvi i type error e avvia la migrazione')
     expect(resType.tier).toBe('deep_reasoning')
+
+    const resAudit = evaluateTaskComplexity('esegui un audit critico sui flussi e pipeline')
+    expect(resAudit.tier).toBe('deep_reasoning')
   })
 })

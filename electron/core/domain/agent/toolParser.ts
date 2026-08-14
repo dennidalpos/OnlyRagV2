@@ -46,22 +46,28 @@ function sanitizeAndParseJson(raw: string): any {
 export function parseAgentToolCall(text: string): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 
+  // Strip <think>...</think> and <thought>...</thought> reasoning blocks before parsing tool calls
+  const cleanText = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+    .trim()
+
   // 1. Check for JSON block enclosed in ```json ... ```, <tool_call>...</tool_call>, or generic ``` ... ```
   const toolCallMatch =
-    text.match(/<tool_call>([\s\S]*?)<\/tool_call>/i) ||
-    text.match(/```json\s*([\s\S]*?)\s*```/i) ||
-    text.match(/```\s*([\s\S]*?)\s*```/i)
+    cleanText.match(/<tool_call>([\s\S]*?)<\/tool_call>/i) ||
+    cleanText.match(/```json\s*([\s\S]*?)\s*```/i) ||
+    cleanText.match(/```\s*([\s\S]*?)\s*```/i)
 
   let jsonStr = toolCallMatch ? toolCallMatch[1].trim() : ''
 
   if (!jsonStr) {
     // Try finding raw JSON object containing "tool" or 'tool' key
-    const toolIdx = text.toLowerCase().indexOf('"tool"') !== -1 ? text.toLowerCase().indexOf('"tool"') : text.toLowerCase().indexOf("'tool'")
+    const toolIdx = cleanText.toLowerCase().indexOf('"tool"') !== -1 ? cleanText.toLowerCase().indexOf('"tool"') : cleanText.toLowerCase().indexOf("'tool'")
     if (toolIdx !== -1) {
-      const firstBrace = text.lastIndexOf('{', toolIdx)
-      const lastBrace = text.lastIndexOf('}')
+      const firstBrace = cleanText.lastIndexOf('{', toolIdx)
+      const lastBrace = cleanText.lastIndexOf('}')
       if (firstBrace !== -1 && lastBrace > firstBrace) {
-        jsonStr = text.slice(firstBrace, lastBrace + 1).trim()
+        jsonStr = cleanText.slice(firstBrace, lastBrace + 1).trim()
       }
     }
   }

@@ -7,7 +7,7 @@ description: Official architecture guidelines, LanceDB embedded vector database 
 
 ## 1. System Architecture Principles
 
-- **Desktop Framework**: Electron (v43+) + React 19 + TypeScript + Vite 6 + Tailwind CSS v4.
+- **Desktop Framework**: Electron (v43+) + React 19 + TypeScript + Vite 7 + Tailwind CSS v4.
 - **IPC Safety Contract**: Context-isolated preload bridge exposing strict typed interface `window.electronAPI` (`IElectronAPI` in `@/types`) in `electron/preload.ts`.
 - **Python Sidecar**: FastAPI process supervised by Electron Main Process with `httpx` connection pooling. Handles document ingestion, PyMuPDF (fitz) text and layout parsing, PyMuPDF PDF compilation export (`/export`), Vision OCR, and LanceDB embedded vector operations.
 - **Local AI Core**: Ollama local REST API (`http://localhost:11434`) for text/code generation, embeddings (`nomic-embed-text`, 768d / `bge-m3`, 1024d), and Vision OCR (`llama3.2-vision`). Zero cloud dependencies or external data leaks.
@@ -34,15 +34,21 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
 
 - **Autonomous Tool Loop**: Orchestrated by `agentOrchestratorAppService.ts`:
   - **Inspection**: `read_file` (with optional `startLine`/`endLine` slicing), `list_dir`, `grep_search`.
-  - **Modification**: `replace_file_content`, `multi_replace_file_content` (CRLF/LF tolerant chunk matching), `write_file`, `delete_file`.
+  - **Modification**: `replace_file_content`, `multi_replace_file_content` (CRLF/LF line-ending preservation & fuzzy chunk matching), `write_file`, `delete_file`.
   - **Research**: `web_search` (DuckDuckGo queries), `fetch_web_content` (HTML-to-Markdown scraper), `download_file` (sandboxed HTTP/HTTPS download).
   - **Execution**: `run_command` (PowerShell command execution for dependency installation, testing, and builds), `inspect_os_env`, `finish`.
 - **Policy Modes**:
   - **Plan Mode**: Generates structured technical implementation plans without applying filesystem changes.
   - **Ask Mode**: Read-only research runs autonomously; file edits and shell commands require explicit user approval.
   - **Agent Mode**: Fully autonomous multi-turn loop with automated error recovery.
+- **Complexity Router Tiers**:
+  - **Fast Tier (🟢)**: Quick lookups, conceptual Q&A (<20 words, 0 attached files).
+  - **Standard Tier (🔵)**: Feature development, small refactoring, single-file patches.
+  - **Deep Reasoning Tier (🟣)**: Complex multi-file architecture, stack trace debugging, optimization.
+  - **Escalated Tier (⚡)**: Dynamic auto-healing escalation upon test or tool execution failure.
+  - **Exact Tag Resolution**: Resolves target model names to exact local Ollama tags (`findMatchingInstalledModel`).
 - **Context Window Budgeting**: 4-tier token budget allocation (P1: System Prompt & Rules, P2: Active files, P3: Action history [max 8 steps], P4: Workspace map & RAG docs).
-- **Fault-Tolerant Tool Parser**: Sanitizes unescaped newlines, trailing commas, and single quotes in JSON tool calls produced by quantized local models (`toolParser.ts`).
+- **Fault-Tolerant Tool Parser**: Pre-strips `<think>` CoT reasoning tags and sanitizes unescaped newlines, trailing commas, and single quotes in JSON tool calls (`toolParser.ts`).
 - **Auto-Healing Diagnostics Loop**: Captures terminal stdout/stderr on test/build failures and feeds stack traces back to Ollama for self-correction.
 
 ## 5. Skill Hub, Multi-Marketplace & Provenance

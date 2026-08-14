@@ -198,9 +198,11 @@ export class FileSystemRepository {
         return { success: false, error: 'File does not exist' }
       }
       let existing = await fs.promises.readFile(resolved, 'utf-8')
+      const hadCrlf = existing.includes('\r\n')
       let replacedCount = 0
 
-      for (const { targetContent, replacementContent } of replacements) {
+      for (let idx = 0; idx < replacements.length; idx++) {
+        const { targetContent, replacementContent } = replacements[idx]
         if (!targetContent) continue
 
         if (existing.includes(targetContent)) {
@@ -219,10 +221,15 @@ export class FileSystemRepository {
             return {
               success: false,
               replacedCount,
-              error: `Target content string was not found in file: "${targetContent.slice(0, 100)}..."`,
+              error: `Chunk #${idx + 1} target content was not found in file: "${targetContent.slice(0, 120)}..."`,
             }
           }
         }
+      }
+
+      // Preserve original CRLF line endings if the original file had them
+      if (hadCrlf && !existing.includes('\r\n')) {
+        existing = existing.replace(/\n/g, '\r\n')
       }
 
       await fs.promises.writeFile(resolved, existing, 'utf-8')

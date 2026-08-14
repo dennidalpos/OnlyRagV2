@@ -176,7 +176,17 @@ export async function runAgentOrchestratorLoop(
     .join('\n\n')
 
   const pinnedFilesContextStr = (payload.pinnedFiles || [])
-    .map((f) => `[EXPLICIT REFERENCED FILE: ${f.name} (${f.path})]\n\`\`\`\n${(f.content || '').slice(0, 12000)}\n\`\`\``)
+    .map((f) => {
+      let content = f.content || ''
+      if (!content && f.path && fs.existsSync(f.path)) {
+        try {
+          content = fs.readFileSync(f.path, 'utf-8')
+        } catch (err: any) {
+          logger.log('WARN', 'AgentOrchestratorApp', `Could not read pinned file ${f.path}: ${err.message}`)
+        }
+      }
+      return `[EXPLICIT REFERENCED FILE: ${f.name} (${f.path})]\n\`\`\`\n${(content || '').slice(0, 12000)}\n\`\`\``
+    })
     .join('\n\n')
 
   const projectContextMapStr = workspacePath && !isStandaloneMode && fs.existsSync(workspacePath)

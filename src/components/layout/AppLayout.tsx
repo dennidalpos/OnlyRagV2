@@ -20,6 +20,7 @@ import { CodingAgentView } from '../coding/CodingAgentView'
 import { DiagnosticsDrawer } from '../diagnostics/DiagnosticsDrawer'
 import { AboutModal } from '../common/AboutModal'
 import { OnlyRagLogo } from '../common/OnlyRagLogo'
+import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
 import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
 import { useTranslation, Language } from '../../i18n'
@@ -40,6 +41,7 @@ export const AppLayout: React.FC = () => {
   })
   const [isDiagnosticsDrawerOpen, setIsDiagnosticsDrawerOpen] = useState(false)
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
+  const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
@@ -58,6 +60,13 @@ export const AppLayout: React.FC = () => {
       language: 'it',
     }
   })
+
+  // Auto-launch initial setup wizard on first start
+  React.useEffect(() => {
+    if (!settings.hasCompletedInitialSetup && !settings.defaultModel) {
+      setIsWizardOpen(true)
+    }
+  }, [settings.hasCompletedInitialSetup, settings.defaultModel])
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     setSettings((prev) => {
@@ -276,6 +285,15 @@ export const AppLayout: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsWizardOpen(true)}
+              aria-label={t('settings.hardwareWizard')}
+              title={t('settings.hardwareWizard')}
+              className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 font-medium rounded-xl transition-all focus-ring active:scale-95"
+            >
+              <Zap className="w-4 h-4 text-cyan-400 fill-cyan-400/20" />
+            </button>
+
+            <button
               onClick={() => setIsDiagnosticsDrawerOpen(true)}
               aria-label={t('sidebar.logsConsole')}
               className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
@@ -317,6 +335,7 @@ export const AppLayout: React.FC = () => {
             onUpdateSettings={handleUpdateSettings}
             onRefreshDiagnostics={runDiagnosticsScan}
             onOpenAboutModal={() => setIsAboutModalOpen(true)}
+            onOpenWizard={() => setIsWizardOpen(true)}
           />
         </div>
       </main>
@@ -333,6 +352,17 @@ export const AppLayout: React.FC = () => {
       <AboutModal
         isOpen={isAboutModalOpen}
         onClose={() => setIsAboutModalOpen(false)}
+      />
+
+      {/* Complete Hardware & Model Setup Wizard Modal */}
+      <HardwareSetupWizardModal
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        diagnostics={diagnostics}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        onRefreshDiagnostics={runDiagnosticsScan}
+        isInitialSetup={!settings.hasCompletedInitialSetup}
       />
     </div>
   )

@@ -19,6 +19,8 @@ export interface HardwareRecommendations {
   fastTierModels: ModelRecommendation[]
   standardTierModels: ModelRecommendation[]
   deepReasoningTierModels: ModelRecommendation[]
+  chatTierModels: ModelRecommendation[]
+  translationTierModels: ModelRecommendation[]
   visionTierModels: ModelRecommendation[]
   embeddingTierModels: ModelRecommendation[]
 }
@@ -153,6 +155,86 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
+  // 💬 General / RAG Chat Models (Outside Coding Complexity Router)
+  const chatTierModels: ModelRecommendation[] = [
+    {
+      modelName: 'llama3.1:8b',
+      displayName: 'Llama 3.1 (8B)',
+      family: 'llama',
+      sizeBytesApprox: '4.9 GB',
+      description: 'Meta 8B balanced conversational assistant for multi-document RAG & Q&A',
+      isRecommended: profileTier !== 'legacy',
+    },
+    {
+      modelName: 'llama3.2:3b',
+      displayName: 'Llama 3.2 (3B)',
+      family: 'llama',
+      sizeBytesApprox: '2.0 GB',
+      description: 'Fast responsive conversational assistant for low-spec or CPU systems',
+      isRecommended: profileTier === 'legacy',
+    },
+    {
+      modelName: 'qwen2.5:7b',
+      displayName: 'Qwen 2.5 (7B)',
+      family: 'qwen',
+      sizeBytesApprox: '4.7 GB',
+      description: 'High-intelligence multilingual conversational model with strong factual recall',
+      isRecommended: false,
+    },
+    {
+      modelName: 'mistral:7b',
+      displayName: 'Mistral (7B)',
+      family: 'mistral',
+      sizeBytesApprox: '4.1 GB',
+      description: 'High-speed instruction model for RAG and factual Q&A',
+      isRecommended: false,
+    },
+    {
+      modelName: 'gemma2:9b',
+      displayName: 'Gemma 2 (9B)',
+      family: 'gemma',
+      sizeBytesApprox: '5.5 GB',
+      description: 'Google Gemma 2 high-precision conversational assistant',
+      isRecommended: false,
+    },
+  ]
+
+  // 🌐 Document Translation Models (Outside Coding Complexity Router)
+  const translationTierModels: ModelRecommendation[] = [
+    {
+      modelName: 'qwen2.5:7b',
+      displayName: 'Qwen 2.5 (7B)',
+      family: 'qwen',
+      sizeBytesApprox: '4.7 GB',
+      description: 'Premier multilingual translation engine preserving layout and markdown format',
+      isRecommended: profileTier !== 'legacy',
+    },
+    {
+      modelName: 'qwen2.5:1.5b',
+      displayName: 'Qwen 2.5 (1.5B)',
+      family: 'qwen',
+      sizeBytesApprox: '1.0 GB',
+      description: 'Lightweight multilingual translation engine for CPU/Legacy systems',
+      isRecommended: profileTier === 'legacy',
+    },
+    {
+      modelName: 'llama3.1:8b',
+      displayName: 'Llama 3.1 (8B)',
+      family: 'llama',
+      sizeBytesApprox: '4.9 GB',
+      description: 'Meta 8B multilingual model for cross-lingual document translation',
+      isRecommended: false,
+    },
+    {
+      modelName: 'mistral:7b',
+      displayName: 'Mistral (7B)',
+      family: 'mistral',
+      sizeBytesApprox: '4.1 GB',
+      description: 'Fast European multilingual translation model',
+      isRecommended: false,
+    },
+  ]
+
   // 👁️ Vision Tier Recommendations
   const visionTierModels: ModelRecommendation[] = [
     {
@@ -233,6 +315,8 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     fastTierModels,
     standardTierModels,
     deepReasoningTierModels,
+    chatTierModels,
+    translationTierModels,
     visionTierModels,
     embeddingTierModels,
   }

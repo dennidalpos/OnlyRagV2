@@ -30,14 +30,14 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
   ]
 
   return (
-    <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-5">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+    <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2.5">
+          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2.5">
             <Layers className="w-5 h-5 text-cyan-400" /> {t('settings.concurrencySection')}
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Control simultaneous agent and model task execution before queuing
+          <p className="text-xs text-slate-400 mt-0.5">
+            {t('settings.concurrencyDesc')}
           </p>
         </div>
 
@@ -58,7 +58,7 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
               type="button"
               onClick={() => handleSelectConcurrency(preset.value)}
               aria-label={`Set concurrency to ${preset.value} tasks`}
-              className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between space-y-3 cursor-pointer ${
+              className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between space-y-2 cursor-pointer ${
                 isSelected
                   ? 'bg-cyan-950/40 border-cyan-500 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-500/50'
                   : 'bg-slate-900/80 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700 text-slate-300'
@@ -84,10 +84,10 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
         })}
       </div>
 
-      <div className="flex items-center gap-2 p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl text-xs text-slate-400">
+      <div className="flex items-center gap-2 p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-xl text-xs text-slate-400">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
         <span>
-          <strong>Task Protection:</strong> When multiple tasks are triggered simultaneously, excess requests queue cleanly and execute as slots free up.
+          <strong>Task Queue Protection:</strong> Excess requests queue cleanly and execute in serial order.
         </span>
       </div>
     </div>

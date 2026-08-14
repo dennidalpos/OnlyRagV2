@@ -138,6 +138,8 @@ export interface AppSettings {
   complexityDeepModel?: string
   // Concurrency & Task Queue Settings
   maxConcurrentTasks?: number // Range: 1-8, default 1
+  // Initial Setup Wizard Flag
+  hasCompletedInitialSetup?: boolean
   // Internationalization
   language?: 'it' | 'en'
 }

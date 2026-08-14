@@ -1,9 +1,3 @@
 {
-  "todos": [
-    "Identify and remove orphan files, cache artifacts, and temporary debug logs",
-    "Audit and update .gitignore to ensure all environment, build and temporary paths are covered",
-    "Untrack any ignored files from git index via git rm --cached if present",
-    "Scan codebase for dead/commented-out legacy code and clean up",
-    "Run verification build, typecheck, and serial test suite"
-  ]
+  "todos": []
 }

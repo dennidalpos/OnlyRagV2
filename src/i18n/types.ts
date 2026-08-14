@@ -148,6 +148,10 @@ export interface TranslationSchema {
     gitDiffTitle: string
     filesTitle: string
     promptPlaceholder: string
+    terminalInputPlaceholder: string
+    commandBlocked: string
+    clearTerminal: string
+    runCommand: string
   }
   skills: {
     hubTitle: string
@@ -194,6 +198,16 @@ export interface TranslationSchema {
     author: string
     version: string
     tags: string
+    importFromUrl: string
+    customHubNamePlaceholder: string
+    customHubUrlPlaceholder: string
+    customHubDescPlaceholder: string
+    skillNamePlaceholder: string
+    skillVersionPlaceholder: string
+    skillDescPlaceholder: string
+    skillTriggersPlaceholder: string
+    skillTagsPlaceholder: string
+    skillGuidelinesPlaceholder: string
   }
   translation: {
     title: string
@@ -319,6 +333,24 @@ export interface TranslationSchema {
     deepTier: string
     visionTier: string
     embeddingTier: string
+    codingAgentSection: string
+    codingAgentSubtitle: string
+    complexityRouterActive: string
+    complexityRouterDisabled: string
+    ragChatSection: string
+    ragChatSubtitle: string
+    translationSection: string
+    translationSubtitle: string
+    ingestionOcrSection: string
+    ingestionOcrSubtitle: string
+    visionOcrLabel: string
+    vectorStoreLabel: string
+    standardWizardOption: string
+    pullModelPlaceholder: string
+    pullModelAria: string
+    hardwareProfileDesc: string
+    concurrencyDesc: string
+    autoScaleDesc: string
   }
   about: {
     title: string
@@ -367,6 +399,10 @@ export interface TranslationSchema {
     promptPlaceholder: string
     resetDefault: string
     promptSaved: string
+    systemPromptPlaceholder: string
+    activeModelLabel: string
+    familyLabel: string
+    moduleLabel: string
   }
   vectorSearch: {
     modalTitle: string
@@ -419,6 +455,31 @@ export interface TranslationSchema {
     installingOllama: string
     downloadingModels: string
     downloadProgress: string
+    stepGeneralLlmTitle: string
+    stepGeneralLlmDesc: string
+    chatModelTitle: string
+    chatModelDesc: string
+    translationModelTitle: string
+    translationModelDesc: string
+    complexityRouterSection: string
+    complexityRouterToggle: string
+    hardwareProfileSection: string
+    ocrEngineSection: string
+    nativeCudaOcr: string
+    visionModelOcr: string
+    initialWelcomeBadge: string
+    localInstalledBadge: string
+    step1Subtitle: string
+    step2Subtitle: string
+    step3Subtitle: string
+    step4Subtitle: string
+    step5Subtitle: string
+    step6Subtitle: string
+    modelsToPull: string
+    allModelsReady: string
+    customLocalModel: string
+    pullInterrupted: string
+    allModelsPulled: string
     finishBtn: string
     applySettings: string
     cancelBtn: string

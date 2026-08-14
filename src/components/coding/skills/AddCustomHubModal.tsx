@@ -88,7 +88,7 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Team AI Skills Hub"
+              placeholder={t('skills.customHubNamePlaceholder')}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
           </div>
@@ -101,7 +101,7 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://raw.githubusercontent.com/.../hub.json"
+              placeholder={t('skills.customHubUrlPlaceholder')}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
             />
           </div>
@@ -128,7 +128,7 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description"
+              placeholder={t('skills.customHubDescPlaceholder')}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
           </div>

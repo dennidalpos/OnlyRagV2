@@ -133,7 +133,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="my-clean-code"
+                placeholder={t('skills.skillNamePlaceholder')}
                 disabled={!!initialSkill}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-60 font-mono"
               />
@@ -147,7 +147,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
                 type="text"
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
-                placeholder="1.0.0"
+                placeholder={t('skills.skillVersionPlaceholder')}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
               />
             </div>
@@ -161,7 +161,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description"
+              placeholder={t('skills.skillDescPlaceholder')}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
           </div>
@@ -175,7 +175,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
                 type="text"
                 value={triggers}
                 onChange={(e) => setTriggers(e.target.value)}
-                placeholder="react, clean-code, pydantic"
+                placeholder={t('skills.skillTriggersPlaceholder')}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
               />
             </div>
@@ -188,7 +188,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                placeholder="frontend, backend, security"
+                placeholder={t('skills.skillTagsPlaceholder')}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
               />
             </div>
@@ -205,7 +205,7 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={8}
-              placeholder="# Guidelines"
+              placeholder={t('skills.skillGuidelinesPlaceholder')}
               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 leading-relaxed resize-y"
             />
           </div>

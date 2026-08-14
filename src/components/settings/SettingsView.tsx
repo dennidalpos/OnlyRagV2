@@ -14,6 +14,7 @@ interface SettingsViewProps {
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
   onRefreshDiagnostics: () => void
   onOpenAboutModal?: () => void
+  onOpenWizard?: () => void
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -22,6 +23,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateSettings,
   onRefreshDiagnostics,
   onOpenAboutModal,
+  onOpenWizard,
 }) => {
   const { t, language, setLanguage } = useTranslation()
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
@@ -30,6 +32,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleLanguageChange = (newLang: Language) => {
     setLanguage(newLang)
     onUpdateSettings({ language: newLang })
+  }
+
+  const handleOpenWizard = () => {
+    if (onOpenWizard) {
+      onOpenWizard()
+    } else {
+      s.setIsWizardOpen(true)
+    }
   }
 
   return (
@@ -47,7 +57,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => s.setIsWizardOpen(true)}
+            onClick={handleOpenWizard}
             aria-label={t('settings.hardwareWizard')}
             className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95"
           >
@@ -137,9 +147,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             type="text"
             value={s.pullModelInput}
             onChange={(e) => s.setPullModelInput(e.target.value)}
-            placeholder="es. llama3.2, mistral, nomic-embed-text, qwen2.5-coder..."
-            aria-label="Nome modello Ollama da scaricare"
-            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 outline-none flex-1 focus-ring"
+            placeholder={t('settings.pullModelPlaceholder')}
+            aria-label={t('settings.pullModelAria')}
+            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 outline-none flex-1 focus-ring"
           />
           <button
             type="submit"
@@ -222,14 +232,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-      <HardwareSetupWizardModal
-        isOpen={s.isWizardOpen}
-        onClose={() => s.setIsWizardOpen(false)}
-        diagnostics={diagnostics}
-        settings={settings}
-        onUpdateSettings={onUpdateSettings}
-        onRefreshDiagnostics={onRefreshDiagnostics}
-      />
+      {!onOpenWizard && (
+        <HardwareSetupWizardModal
+          isOpen={s.isWizardOpen}
+          onClose={() => s.setIsWizardOpen(false)}
+          diagnostics={diagnostics}
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
+          onRefreshDiagnostics={onRefreshDiagnostics}
+        />
+      )}
     </div>
   )
 }

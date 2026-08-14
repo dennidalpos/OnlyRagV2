@@ -322,7 +322,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
               rows={10}
               aria-label={t('systemPrompt.promptText')}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 focus-ring resize-y leading-relaxed"
-              placeholder="System prompt..."
+              placeholder={t('systemPrompt.systemPromptPlaceholder')}
             />
           </div>
 

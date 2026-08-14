@@ -62,6 +62,12 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('qwen2.5vl:3b')
 
+    const recChat = recs.chatTierModels.find((m) => m.isRecommended)
+    expect(recChat?.modelName).toBe('llama3.2:3b')
+
+    const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
+    expect(recTrans?.modelName).toBe('qwen2.5:1.5b')
+
     const recEmbed = recs.embeddingTierModels.find((m) => m.isRecommended)
     expect(recEmbed?.modelName).toBe('nomic-embed-text')
   })
@@ -85,6 +91,12 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('qwen2.5vl:3b')
 
+    const recChat = recs.chatTierModels.find((m) => m.isRecommended)
+    expect(recChat?.modelName).toBe('llama3.1:8b')
+
+    const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
+    expect(recTrans?.modelName).toBe('qwen2.5:7b')
+
     const recEmbed = recs.embeddingTierModels.find((m) => m.isRecommended)
     expect(recEmbed?.modelName).toBe('nomic-embed-text')
   })
@@ -107,6 +119,12 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llama3.2-vision:11b')
+
+    const recChat = recs.chatTierModels.find((m) => m.isRecommended)
+    expect(recChat?.modelName).toBe('llama3.1:8b')
+
+    const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
+    expect(recTrans?.modelName).toBe('qwen2.5:7b')
 
     const recEmbed = recs.embeddingTierModels.find((m) => m.isRecommended)
     expect(recEmbed?.modelName).toBe('mxbai-embed-large')

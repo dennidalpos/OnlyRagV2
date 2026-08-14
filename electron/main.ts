@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import { runFullDiagnostics, logger } from './diagnostics'
 import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
 import { taskRunner } from './core/infrastructure/process/taskRunner'
@@ -30,8 +31,10 @@ process.on('unhandledRejection', (reason: any) => {
 })
 
 function createWindow() {
+  const iconPath = path.join(__dirname, '../assets/icon.png')
   win = new BrowserWindow({
     title: 'OnlyRag V2 - Local AI Workspace',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     width: 1400,
     height: 900,
     minWidth: 1024,

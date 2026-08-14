@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo.png" alt="OnlyRag V2 Logo" width="128" height="128" style="border-radius: 28px; box-shadow: 0 8px 32px rgba(6, 182, 212, 0.3);" />
+<img src="./assets/onlyrag-icon.svg" alt="OnlyRag V2 Logo" width="128" height="128" style="border-radius: 28px; filter: drop-shadow(0 8px 32px rgba(6, 182, 212, 0.45));" />
 
 # OnlyRag V2
 ### The Privacy-First, 100% Local AI Workspace & Autonomous Coding Agent
@@ -11,11 +11,11 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4-0f172a?style=for-the-badge&logo=tailwindcss&logoColor=67e8f9)](https://tailwindcss.com)
 [![LanceDB](https://img.shields.io/badge/LanceDB-Embedded_Vector_DB-0f172a?style=for-the-badge&logo=databricks&logoColor=67e8f9)](https://lancedb.com)
 [![Ollama](https://img.shields.io/badge/Ollama-100%25_Local_LLM-0f172a?style=for-the-badge&logo=ollama&logoColor=67e8f9)](https://ollama.com)
-[![Tests](https://img.shields.io/badge/Tests-Passing_113/113-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
+[![Tests](https://img.shields.io/badge/Tests-Passing_127/127-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
 
 <br />
 
-<img src="./assets/banner.png" alt="OnlyRag V2 Product Showcase" width="100%" style="border-radius: 16px; border: 1px solid #1e293b; box-shadow: 0 16px 48px rgba(2, 6, 23, 0.8);" />
+<img src="./assets/onlyrag_poster_banner.jpg" alt="OnlyRag V2 Autonomous AI & RAG Desktop Studio" width="100%" style="border-radius: 16px; border: 1px solid #1e293b; box-shadow: 0 16px 48px rgba(2, 6, 23, 0.8);" />
 
 <br />
 
@@ -231,6 +231,21 @@ OnlyRagV2/
 - **100% Offline Capable**: Zero telemetry, zero external tracking, zero data transmission outside your machine.
 - **Local Data Confinement**: Vector embeddings, document chunks, and models remain stored on local disk (`%LOCALAPPDATA%/OnlyRagV2`).
 - **Sandboxed Agent Operations**: Command execution is subject to safety guardrails, blocking destructive actions (`git reset --hard`, `git clean`, raw disk operations) and containing filesystem actions inside workspace boundaries.
+
+---
+
+## 🎨 Brand Assets & Media Kit
+
+All official high-resolution vector and raster assets are available in the [`assets/`](./assets/) directory:
+
+| Asset | Format | Resolution / Spec | Path |
+| :--- | :--- | :--- | :--- |
+| **Vector Icon Badge** | SVG | Scalable Vector with Glow | [`assets/onlyrag-icon.svg`](./assets/onlyrag-icon.svg) |
+| **Vector Icon (Transparent)** | SVG | Transparent Background | [`assets/onlyrag-icon-transparent.svg`](./assets/onlyrag-icon-transparent.svg) |
+| **Horizontal Brand Lockup** | SVG | Banner & Badge Typography | [`assets/onlyrag-brand-horizontal.svg`](./assets/onlyrag-brand-horizontal.svg) |
+| **Brand Logo 1:1** | JPG / PNG | High Definition 512x512 | [`assets/onlyrag_brand_logo.jpg`](./assets/onlyrag_brand_logo.jpg) |
+| **Showcase & Poster Banner** | JPG | 4K Widescreen (16:9) | [`assets/onlyrag_poster_banner.jpg`](./assets/onlyrag_poster_banner.jpg) |
+| **Windows Multi-Res Icon** | ICO | 16px to 256px Layers | [`assets/icon.ico`](./assets/icon.ico) |
 
 ---
 

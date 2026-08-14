@@ -83,8 +83,9 @@ export const AppLayout: React.FC = () => {
         <div>
           {/* App Branding */}
           <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-slate-800/80">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-600 flex items-center justify-center border border-cyan-400/30">
-              <Zap className="w-5 h-5 text-slate-950 fill-current" />
+            <div className="w-10 h-10 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-cyan-950/40 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-cyan-500/10 opacity-50 group-hover:opacity-100 transition-opacity" />
+              <img src="/onlyrag-icon.svg" alt="OnlyRag V2 Logo" className="w-full h-full object-contain relative z-10 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
             </div>
             <div>
               <div className="font-bold text-base tracking-wide text-slate-100">OnlyRag V2</div>

@@ -1,17 +1,19 @@
 import React, { useState } from 'react'
 import { DiagnosticsData, AppSettings } from '../../types'
-import { Settings, RefreshCw, Download, Trash2, Zap, Loader2 } from 'lucide-react'
+import { Settings, RefreshCw, Download, Trash2, Zap, Loader2, Globe, Heart, Award } from 'lucide-react'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
 import { TaskConcurrencyConfig } from './TaskConcurrencyConfig'
 import { useSettingsManager } from '../../hooks/useSettingsManager'
+import { useTranslation, Language } from '../../i18n'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
   settings: AppSettings
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
   onRefreshDiagnostics: () => void
+  onOpenAboutModal?: () => void
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -19,9 +21,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onUpdateSettings,
   onRefreshDiagnostics,
+  onOpenAboutModal,
 }) => {
+  const { t, language, setLanguage } = useTranslation()
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
   const [deletingModel, setDeletingModel] = useState<string | null>(null)
+
+  const handleLanguageChange = (newLang: Language) => {
+    setLanguage(newLang)
+    onUpdateSettings({ language: newLang })
+  }
 
   return (
     <div className="flex-1 h-full overflow-y-auto p-8 space-y-8 bg-slate-950 select-text">
@@ -29,29 +38,66 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="flex items-center justify-between border-b border-slate-800 pb-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
-            <Settings className="w-7 h-7 text-cyan-400" /> Impostazioni &amp; Hardware
+            <Settings className="w-7 h-7 text-cyan-400" /> {t('settings.title')}
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Configurazione modelli locali AI, profili di accelerazione hardware e gestione Ollama.
+            {t('settings.description')}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={() => s.setIsWizardOpen(true)}
-            aria-label="Avvia Wizard Hardware"
+            aria-label={t('settings.hardwareWizard')}
             className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95"
           >
-            <Zap className="w-4 h-4 fill-current" /> Wizard Hardware
+            <Zap className="w-4 h-4 fill-current" /> {t('settings.hardwareWizard')}
           </button>
 
           <button
             onClick={onRefreshDiagnostics}
-            aria-label="Aggiorna scansione hardware"
+            aria-label={t('settings.hardwareScan')}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors focus-ring flex items-center gap-2 active:scale-95"
           >
-            <RefreshCw className="w-4 h-4 text-cyan-400" /> Scansione Hardware
+            <RefreshCw className="w-4 h-4 text-cyan-400" /> {t('settings.hardwareScan')}
           </button>
+        </div>
+      </div>
+
+      {/* Language Preference Card */}
+      <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-cyan-400" /> {t('settings.languagePreference')}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {t('settings.languageDescription')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => handleLanguageChange('it')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all focus-ring ${
+                language === 'it'
+                  ? 'bg-cyan-600 text-slate-950 shadow-md shadow-cyan-950/50'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              🇮🇹 Italiano
+            </button>
+            <button
+              onClick={() => handleLanguageChange('en')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all focus-ring ${
+                language === 'en'
+                  ? 'bg-cyan-600 text-slate-950 shadow-md shadow-cyan-950/50'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              🇬🇧 English
+            </button>
+          </div>
         </div>
       </div>
 
@@ -77,7 +123,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Ollama Model Management Panel */}
       <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-4">
         <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-          <Download className="w-5 h-5 text-cyan-400" /> Gestione Modelli Ollama
+          <Download className="w-5 h-5 text-cyan-400" /> {t('settings.ollamaManagement')}
         </h2>
 
         <form
@@ -98,16 +144,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="submit"
             disabled={s.isPulling || !s.pullModelInput.trim()}
-            aria-label={s.isPulling ? 'Download del modello in corso' : 'Scarica modello Ollama'}
+            aria-label={s.isPulling ? t('settings.downloading') : t('settings.downloadModel')}
             className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-colors focus-ring flex items-center gap-2 active:scale-95"
           >
             {s.isPulling ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                <span>Download...</span>
+                <span>{t('settings.downloading')}</span>
               </>
             ) : (
-              <span>Scarica Modello</span>
+              <span>{t('settings.downloadModel')}</span>
             )}
           </button>
         </form>
@@ -115,7 +161,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {s.pullMessage && <p className="text-xs text-cyan-300 font-mono">{s.pullMessage}</p>}
 
         <div className="space-y-2 pt-2">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Modelli Locali Installati</h3>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('settings.installedLocalModels')}</h3>
           {diagnostics?.ollama.models && diagnostics.ollama.models.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {diagnostics.ollama.models.map((modelName) => (
@@ -129,21 +175,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         onClick={() => { s.handleDeleteModel(modelName); setDeletingModel(null) }}
                         className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] rounded-lg transition-colors focus-ring"
                       >
-                        Conferma?
+                        {t('settings.confirmDelete')}
                       </button>
                       <button
                         onClick={() => setDeletingModel(null)}
                         className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded-lg transition-colors focus-ring"
                       >
-                        Annulla
+                        {t('common.cancel')}
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => setDeletingModel(modelName)}
                       className="p-1.5 text-slate-400 hover:text-red-400 transition-colors focus-ring"
-                      title="Elimina modello"
-                      aria-label={`Elimina modello ${modelName}`}
+                      title={t('settings.deleteModel')}
+                      aria-label={`${t('settings.deleteModel')} ${modelName}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -152,9 +198,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Nessun modello locale rilevato.</p>
+            <p className="text-xs text-slate-500">{t('settings.noModelsDetected')}</p>
           )}
         </div>
+      </div>
+
+      {/* About & Contributions Section Card */}
+      <div className="glass-panel rounded-xl p-6 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+            <Heart className="w-5 h-5 text-rose-400 fill-rose-400/20" /> {t('settings.aboutSectionTitle')}
+          </h2>
+          <p className="text-xs text-slate-400 max-w-xl">
+            {t('settings.aboutSectionDescription')}
+          </p>
+        </div>
+
+        <button
+          onClick={onOpenAboutModal}
+          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-slate-200 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-2 shrink-0 active:scale-95 shadow-sm"
+        >
+          <Award className="w-4 h-4 text-cyan-400" /> {t('settings.viewAboutButton')}
+        </button>
       </div>
 
       <HardwareSetupWizardModal
@@ -168,3 +233,4 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     </div>
   )
 }
+

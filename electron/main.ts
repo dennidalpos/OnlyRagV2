@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { runFullDiagnostics, logger } from './diagnostics'
@@ -47,6 +47,13 @@ function createWindow() {
       sandbox: false,
     },
     autoHideMenuBar: true,
+  })
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
   })
 
   win.webContents.on('render-process-gone', (_, details) => {

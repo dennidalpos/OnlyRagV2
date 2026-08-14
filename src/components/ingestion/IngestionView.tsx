@@ -29,6 +29,7 @@ import { VectorSearchPanel } from './VectorSearchPanel'
 import { SourcePagePreview } from './SourcePagePreview'
 import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
+import { useTranslation } from '../../i18n'
 
 interface IngestionViewProps {
   settings?: AppSettings
@@ -36,6 +37,7 @@ interface IngestionViewProps {
 }
 
 export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdateSettings }) => {
+  const { t } = useTranslation()
   const ing = useIngestion(settings)
   const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -178,7 +180,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
             <FileText className="w-5 h-5 text-cyan-400" />
           </div>
           <div>
-            <h1 className="font-bold text-slate-100 text-sm tracking-wide">Ingestione &amp; OCR</h1>
+            <h1 className="font-bold text-slate-100 text-sm tracking-wide">{t('navigation.ingestion')}</h1>
           </div>
         </div>
 
@@ -213,18 +215,18 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           <button
             onClick={ing.handleSelectFileNative}
             disabled={ing.isUploading}
-            aria-label={ing.isUploading ? 'Elaborazione in corso' : 'Carica documento'}
+            aria-label={ing.isUploading ? t('common.loading') : t('ingestion.uploadButton')}
             className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring flex items-center gap-2 shadow-lg shadow-cyan-950/40 active:scale-95"
           >
             {ing.isUploading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                <span>Indicizzazione...</span>
+                <span>{t('common.loading')}</span>
               </>
             ) : (
               <>
                 <Upload className="w-4 h-4" />
-                <span>Carica Documento</span>
+                <span>{t('ingestion.uploadButton')}</span>
               </>
             )}
           </button>

@@ -3,7 +3,7 @@
 <img src="./assets/onlyrag-icon.svg" alt="OnlyRag V2 Logo" width="128" height="128" style="border-radius: 28px; filter: drop-shadow(0 8px 32px rgba(6, 182, 212, 0.45));" />
 
 # OnlyRag V2
-### The Privacy-First, 100% Local AI Workspace & Autonomous Coding Agent
+### The Privacy-First, 100% Local AI Workspace & Autonomous Coding Studio
 
 [![Electron](https://img.shields.io/badge/Electron-v43+-0f172a?style=for-the-badge&logo=electron&logoColor=67e8f9)](https://electronjs.org)
 [![React 19](https://img.shields.io/badge/React-19-0f172a?style=for-the-badge&logo=react&logoColor=67e8f9)](https://react.dev)
@@ -11,85 +11,75 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4-0f172a?style=for-the-badge&logo=tailwindcss&logoColor=67e8f9)](https://tailwindcss.com)
 [![LanceDB](https://img.shields.io/badge/LanceDB-Embedded_Vector_DB-0f172a?style=for-the-badge&logo=databricks&logoColor=67e8f9)](https://lancedb.com)
 [![Ollama](https://img.shields.io/badge/Ollama-100%25_Local_LLM-0f172a?style=for-the-badge&logo=ollama&logoColor=67e8f9)](https://ollama.com)
-[![Tests](https://img.shields.io/badge/Tests-Passing_127/127-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
+[![Tests](https://img.shields.io/badge/Tests-Passing_130/130-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
+[![License](https://img.shields.io/badge/License-MIT-0f172a?style=for-the-badge&logo=open-source-initiative&logoColor=67e8f9)](LICENSE)
 
 <br />
 
-<img src="./assets/onlyrag_poster_banner.jpg" alt="OnlyRag V2 Autonomous AI & RAG Desktop Studio" width="100%" style="border-radius: 16px; border: 1px solid #1e293b; box-shadow: 0 16px 48px rgba(2, 6, 23, 0.8);" />
+<img src="./assets/onlyrag_poster_banner.jpg" alt="OnlyRag V2 Local AI Workspace" width="100%" style="border-radius: 16px; border: 1px solid #1e293b; box-shadow: 0 16px 48px rgba(2, 6, 23, 0.8);" />
 
 <br />
 
-**OnlyRag V2** is an enterprise-grade, privacy-first desktop application for Windows that brings state-of-the-art local AI capabilities directly to your hardware with **zero cloud dependencies**. From embedded vector database search (**LanceDB**) to document layout parsing (**PyMuPDF & Vision OCR**), document translation (**Monaco DiffEditor**), and an autonomous **Local AI Coding Agent Engine** with dynamic skill routing and auto-healing diagnostics.
+**OnlyRag V2** is an enterprise-grade desktop application for Windows that delivers cutting-edge local AI capabilities to your machine with **zero cloud dependencies** and **100% local privacy**. Powered by embedded vector search (**LanceDB**), document parsing (**PyMuPDF & Vision OCR**), document translation (**Monaco DiffEditor**), and an autonomous **Local AI Coding Agent Engine** with dynamic skill routing and auto-healing diagnostics.
 
 </div>
 
 ---
 
-## 🌟 Core Pillars
+## 🌟 Core Modules
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                                     ONLYRAG V2 CORE                                     │
-├───────────────────┬───────────────────┬───────────────────┬─────────────────────────────┤
-│ 📚 INGESTION & OCR│ 💬 RAG & CHAT     │ 🌐 TRANSLATION    │ 🤖 AI CODING AGENT          │
-│ • PyMuPDF Parsing │ • LanceDB Hybrid  │ • Monaco DiffView │ • Autonomous Tool Loop      │
-│ • Vision LLM OCR  │ • Vector Sim + FTS│ • Real-time Stream│ • Search & Replace Multi    │
-│ • Dual-Pane Monaco│ • Citation Scores │ • Lang Swap & Copy│ • Subprocess & Safe Terminal│
-│ • Export PDF & MD │ • Context Guard   │ • Export PDF/DOCX │ • Auto-Healing Diagnostics  │
-└───────────────────┴───────────────────┴───────────────────┴─────────────────────────────┘
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    ONLYRAG V2 SUITE                                    │
+├──────────────────┬──────────────────┬──────────────────┬───────────────────────────────┤
+│ 📚 INGESTION/OCR │ 💬 RAG & CHAT    │ 🌐 TRANSLATION   │ 🤖 AI CODING AGENT            │
+│ • PyMuPDF Engine │ • LanceDB Hybrid │ • Monaco DiffView│ • Autonomous Tool Loop        │
+│ • Vision LLM OCR │ • Vector Sim+FTS │ • Realtime Stream│ • Non-Contiguous File Patching│
+│ • Dual-Pane View │ • Citation Cards │ • Lang Inversion │ • Process Guard & Safe Shell  │
+│ • PDF/MD Export  │ • Context Guard  │ • Multi-Format   │ • Auto-Healing Diagnostics    │
+└──────────────────┴──────────────────┴──────────────────┴───────────────────────────────┘
 ```
 
 ---
 
-## ✨ Features at a Glance
+## ✨ Features
 
-### 1. 📚 Document Ingestion, Layout Extraction & Vision OCR
-- **High-Speed Extraction**: Parses PDF, DOCX, TXT, MD, CSV, JSON and images (PNG, JPG, WebP) natively.
-- **Hybrid OCR Pipeline**: Combines PyMuPDF layout parsing with Vision OCR (`llama3.2-vision`) for high-fidelity text extraction from scans and diagrams.
-- **Dual-Pane Synchronized Viewer**: Monaco Markdown editor alongside original source pages with synchronized scrolling, page jumps, zoom controls, and export to PDF/Markdown.
-- **Live Search & Filter**: Real-time document filtering and instant status badge synchronization with LanceDB.
+### 1. 📚 Document Ingestion & Vision OCR
+* **Universal Parsing**: Ingests PDF, DOCX, TXT, MD, CSV, JSON and images (PNG, JPG, WebP) natively.
+* **Hybrid OCR Pipeline**: Combines high-speed PyMuPDF text extraction with local Vision LLM OCR (`llama3.2-vision`) for scans, charts, and complex page layouts.
+* **Dual-Pane Synchronized Review**: Side-by-side Monaco Markdown editor and original document page viewer with synchronized scrolling, zoom controls, and export to PDF/Markdown.
 
 ### 2. 💬 Local RAG & Contextual Chat
-- **Embedded LanceDB Store**: Fast, serverless vector database operating locally from your AppData directory.
-- **Hybrid Search**: Fuses dense vector embeddings (`nomic-embed-text`) with BM25/keyword Full-Text Search (FTS) for maximum retrieval accuracy.
-- **Transparent Citations**: Every generated response includes verifiable LanceDB citation cards with relevance scores and 1-click clipboard copy.
-- **Safety First**: Confirmation popovers prevent accidental loss of chat context.
+* **Embedded LanceDB Engine**: Zero-configuration, serverless vector database operating locally from your AppData directory.
+* **Hybrid Retrieval**: Fuses dense vector embeddings (`nomic-embed-text`) with keyword Full-Text Search (FTS) for optimal retrieval precision.
+* **Verifiable Citation Cards**: Every AI answer includes source snippet references with relevance scores and 1-click clipboard copying.
 
 ### 3. 🌐 Structured Document Translation
-- **Side-by-Side Diff Comparison**: Monaco `DiffEditor` mode renders source and translated text with real-time token streaming.
-- **Bidirectional Language Swap**: Invert source and destination languages with a single click.
-- **Multi-Format Export**: Export translated content into formatted PDF, Word (`.docx`), or clean Markdown (`.md`).
+* **Side-by-Side Diff View**: Monaco `DiffEditor` mode renders source and translated text with real-time streaming tokens.
+* **1-Click Language Swap**: Instantly invert source and target languages.
+* **Multi-Format Compilation**: Export translated documents directly into formatted PDF, Word (`.docx`), or Markdown (`.md`).
 
-### 4. 🤖 Autonomous Local AI Coding Agent
-- **Agentic Multi-Step Tool Loop**:
-  - `read_file` (with line slicing), `list_dir`, `grep_search`.
-  - `replace_file_content`, `multi_replace_file_content` (CRLF/LF resilient non-contiguous refactoring), `write_file`, `delete_file`.
-  - `run_command` (PowerShell process execution with process tree kill guardrails), `inspect_os_env`.
-- **Real-time Task Complexity Evaluator**: Dynamically gauges prompt complexity (`Low`, `Medium`, `High`, `Ultra`) and recommends the optimal local coding model (`qwen2.5-coder:1.5b` vs `7b` vs `14b`).
-- **Operational Policy Modes**:
-  - **Plan Mode**: Generates structured technical implementation blueprints.
-  - **Ask Mode**: Read-only research runs autonomously; destructive actions require explicit user approval.
-  - **Agent Mode**: Full multi-turn autonomous loop with auto-healing feedback on build/test errors.
-- **Integrated PowerShell Session**: Dedicated terminal tab with output copying, log clearing, and live execution status.
+### 4. 🤖 Autonomous AI Coding Agent Studio
+* **Multi-Step Tool Execution**: Autonomous inspection (`read_file`, `list_dir`, `grep_search`), precise multi-chunk modification (`replace_file_content`, `multi_replace_file_content`), and sandboxed PowerShell execution (`run_command`).
+* **Dynamic Policy Modes**:
+  * **Plan Mode**: Generates technical implementation blueprints before executing changes.
+  * **Ask Mode**: Read-only research runs autonomously; destructive actions require explicit user approval.
+  * **Agent Mode**: Fully autonomous multi-turn development loop with auto-healing feedback on test/build errors.
+* **Task Complexity Evaluator**: Dynamically gauges prompt complexity (`Low`, `Medium`, `High`, `Ultra`) and assigns the optimal local coding model.
 
-### 5. 🧩 Skill Hub & Automated Skill Router
-- **Multi-Marketplace Ecosystem**: Native interoperability with:
-  - 🌐 **Skills.sh**: Open Agent Skill Directory (`skills.sh`).
-  - 🧠 **Anthropic Agent Skills**: Open standard (`agentskills.io` / `github.com/anthropics/skills`).
-  - 📦 **LobeHub Marketplace**: Plugin & tool registry (`chat-plugins.lobehub.com`).
-  - ⚙️ **Custom Hubs**: Any remote JSON catalog or GitHub raw repository.
-- **Contextual Skill Router (`skillMatcher.ts`)**: Evaluates user prompts against installed active skills, computing weighted relevance scores and injecting expert guidelines into the LLM context within token budgets.
-- **SHA-256 Provenance Tracking**: Tracks modification integrity with distinct visual badges (🟢 *Hub Originale*, 🟠 *Modificata*, 🔵 *Locale Personalizzata*) and 1-click restore.
+### 5. 🧩 Multi-Marketplace Skill Hub
+* **Open Standard Interoperability**: Seamless integration with **Skills.sh**, **Anthropic Agent Skills** (`agentskills.io`), and **LobeHub Marketplace**.
+* **Contextual Skill Router (`skillMatcher.ts`)**: Evaluates user prompts against installed skills and injects expert guidelines into the LLM context within token budgets.
+* **SHA-256 Provenance Tracking**: Validates skill integrity with visual status badges (🟢 *Hub Original*, 🟠 *Modified*, 🔵 *Custom Local*) and 1-click restore.
 
-### 6. 🚀 Hardware Wizard & Diagnostics
-- **Auto-Detection**: Scans NVIDIA GPUs, CUDA VRAM availability, and system memory to configure optimal concurrency and context limits.
-- **Global Accessible Toast System**: Instant visual feedback for file operations, clipboard transfers, indexing, and background tasks.
+### 6. 🌐 Multilingual (i18n) Architecture
+* Built-in support for **Italian 🇮🇹** and **English 🇬🇧** with instant UI switching and persistence.
 
 ---
 
-## 🏗️ Layered Architecture
+## 🏗️ Architecture
 
-OnlyRag V2 follows strict **Clean Architecture / Layered Architecture** standards:
+OnlyRag V2 is built with strict **Clean Layered Architecture**:
 
 ```mermaid
 graph TD
@@ -145,16 +135,16 @@ graph TD
 ## ⚡ Quick Start
 
 ### Prerequisites
-- **OS**: Windows 10/11 (64-bit)
-- **Node.js**: v18.0.0 or later
-- **Python**: 3.10 or later
-- **Ollama**: Installed and running on `http://127.0.0.1:11434`
+* **OS**: Windows 10 / 11 (64-bit)
+* **Node.js**: v18.0.0 or later
+* **Python**: 3.10 or later
+* **Ollama**: Installed and running locally (`http://127.0.0.1:11434`)
 
-### Installation & Setup
+### Installation & Run
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/your-username/OnlyRagV2.git
+git clone https://github.com/dennidalpos/OnlyRagV2.git
 cd OnlyRagV2
 
 # 2. Install Node.js dependencies
@@ -171,16 +161,14 @@ npm run dev
 
 ## 📜 Available Scripts
 
-| Command | Description |
+| Script | Description |
 |---|---|
-| `npm run dev` | Starts Vite Dev Server and launches Electron with live reload |
-| `npm run typecheck` | Validates TypeScript types across the entire codebase (`tsc --noEmit`) |
-| `npm run test` | Executes Vitest test suite sequentially (`113+ tests`) |
-| `npm run test:fast` | Runs Vitest in agent fast mode with summarized dot reporter |
-| `npm run test:unit-only` | Runs core domain and application unit tests exclusively |
-| `npm run test:sidecar` | Executes Python Pytest suite against FastAPI sidecar endpoints |
+| `npm run dev` | Starts Vite Dev Server and launches Electron with hot module replacement |
+| `npm run typecheck` | Validates TypeScript types across the codebase (`tsc --noEmit`) |
+| `npm run test` | Executes Vitest test suite (`130+ tests`) |
+| `npm run test:fast` | Runs Vitest in summarized fast mode with dot reporter |
+| `npm run test:sidecar` | Runs Python Pytest suite against FastAPI sidecar endpoints |
 | `npm run lint` | Runs TypeScript and Python linters with fail-fast PowerShell script |
-| `npm run build` | Builds frontend bundle, compiles Electron main/preload, and packages NSIS installer |
 | `npm run clean` | Cleans build artifacts and repository cache (`scripts/clean_workspace.ps1`) |
 | `npm run clean:full` | Full reset: cleans repo cache and user LanceDB storage in AppData |
 | `npm run package:win` | Packages Windows NSIS installer setup binary (`scripts/build_package.ps1`) |
@@ -191,7 +179,7 @@ npm run dev
 
 ```text
 OnlyRagV2/
-├── assets/                    # Brand assets, logo, and showcase banners
+├── assets/                    # Brand identity, vector icons, and showcase graphics
 ├── electron/                  # Electron Main Process (Clean Layered Architecture)
 │   ├── core/
 │   │   ├── application/       # Orchestrator, SkillAppService, ToolExecutor
@@ -200,6 +188,7 @@ OnlyRagV2/
 │   │   └── presentation/      # IPC Handlers and Typed Channels
 │   ├── main.ts                # App Lifecycle & Sidecar Process Supervisor
 │   └── preload.ts             # Context Isolation & Typed Bridge (IElectronAPI)
+├── public/                    # Static assets bundle (favicon, logos, icons)
 ├── sidecar/                   # FastAPI Python Sidecar & Vector Engine
 │   ├── main.py                # Ingestion, Vision OCR, LanceDB & Export Endpoints
 │   ├── requirements.txt       # PyMuPDF, LanceDB, FastAPI, Uvicorn dependencies
@@ -208,47 +197,33 @@ OnlyRagV2/
 │   ├── components/
 │   │   ├── chat/              # RAG Chat View & Citation Cards
 │   │   ├── coding/            # AI Coding Agent, Monaco Editor & Terminal
-│   │   ├── common/            # Toast System, Error Boundary, Hardware Wizard
+│   │   ├── common/            # OnlyRagLogo, AboutModal, Toast, Hardware Wizard
 │   │   ├── diagnostics/       # Logs Drawer & Hardware Telemetry
 │   │   ├── ingestion/         # Document List, Page Preview, Vector Search
 │   │   ├── layout/            # Sidebar Navigation & App Shell
 │   │   ├── settings/          # Model Assignments & Concurrency Config
 │   │   └── translation/       # Monaco DiffEditor & Multi-Format Export
 │   ├── hooks/                 # Custom React Hooks (useCodingAgent, useIngestion, etc.)
+│   ├── i18n/                  # Typed Internationalization (Italian & English)
 │   ├── lib/                   # Diagnostic Logger & UI utilities
 │   ├── types/                 # Strict TypeScript Type Definitions
-│   └── index.css              # Design System Tokens & Tailwind CSS v4 setup
-├── scripts/                   # PowerShell Fail-Fast Automation Scripts
-├── skills/                    # Project Skills & Agent Guidelines (SKILL.md)
+│   └── index.css              # Design System Tokens & Tailwind CSS v4
+├── scripts/                   # PowerShell Automation Scripts
+├── skills/                    # Domain Expert Skills & Agent Guidelines (SKILL.md)
 ├── AGENTS.md                  # Project Governance, Serial Execution & Rules
 └── PROJECT_STATUS.json        # Active Task Scheduler
 ```
 
 ---
 
-## 🔒 Security & Privacy Guarantees
+## 👤 Author & Credits
 
-- **100% Offline Capable**: Zero telemetry, zero external tracking, zero data transmission outside your machine.
-- **Local Data Confinement**: Vector embeddings, document chunks, and models remain stored on local disk (`%LOCALAPPDATA%/OnlyRagV2`).
-- **Sandboxed Agent Operations**: Command execution is subject to safety guardrails, blocking destructive actions (`git reset --hard`, `git clean`, raw disk operations) and containing filesystem actions inside workspace boundaries.
-
----
-
-## 🎨 Brand Assets & Media Kit
-
-All official high-resolution vector and raster assets are available in the [`assets/`](./assets/) directory:
-
-| Asset | Format | Resolution / Spec | Path |
-| :--- | :--- | :--- | :--- |
-| **Vector Icon Badge** | SVG | Scalable Vector with Glow | [`assets/onlyrag-icon.svg`](./assets/onlyrag-icon.svg) |
-| **Vector Icon (Transparent)** | SVG | Transparent Background | [`assets/onlyrag-icon-transparent.svg`](./assets/onlyrag-icon-transparent.svg) |
-| **Horizontal Brand Lockup** | SVG | Banner & Badge Typography | [`assets/onlyrag-brand-horizontal.svg`](./assets/onlyrag-brand-horizontal.svg) |
-| **Brand Logo 1:1** | JPG / PNG | High Definition 512x512 | [`assets/onlyrag_brand_logo.jpg`](./assets/onlyrag_brand_logo.jpg) |
-| **Showcase & Poster Banner** | JPG | 4K Widescreen (16:9) | [`assets/onlyrag_poster_banner.jpg`](./assets/onlyrag_poster_banner.jpg) |
-| **Windows Multi-Res Icon** | ICO | 16px to 256px Layers | [`assets/icon.ico`](./assets/icon.ico) |
+* **Author**: Danny Perondi
+* **GitHub**: [@dennidalpos](https://github.com/dennidalpos)
+* **Repository**: [https://github.com/dennidalpos/OnlyRagV2](https://github.com/dennidalpos/OnlyRagV2)
 
 ---
 
 ## 📄 License
 
-This project is open source and available under the **MIT License**.
+This project is open-source and licensed under the **[MIT License](LICENSE)**.

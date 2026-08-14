@@ -53,6 +53,7 @@ const api: IElectronAPI = {
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => ipcRenderer.invoke('workspace:execute-powershell', command, cwd, timeoutMs),
   parseAgentToolCall: (rawText: string) => ipcRenderer.invoke('agent:parse-tool-call', rawText),
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
+  openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
   getAgentQueueStatus: () => ipcRenderer.invoke('agent:get-queue-status'),

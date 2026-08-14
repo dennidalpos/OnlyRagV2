@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, shell } from 'electron'
 import { systemAppService } from '../application/systemAppService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 
@@ -20,6 +20,14 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
     return systemAppService.validateModelDownloadSpace(models || [])
   })
 
+  ipcMain.handle('system:open-external', async (_, url: string) => {
+    if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
+      await shell.openExternal(url)
+      return true
+    }
+    return false
+  })
+
   ipcMain.handle('task:cancel', async (_, taskId?: string) => {
     if (taskId) {
       return taskRunner.cancelTask(taskId)
@@ -33,3 +41,4 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
     return await taskRunner.cleanTempResiduals()
   })
 }
+

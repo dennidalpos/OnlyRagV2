@@ -9,6 +9,8 @@ import {
   Zap,
   Cpu,
   Terminal,
+  Info,
+  Globe,
 } from 'lucide-react'
 import { SettingsView } from '../settings/SettingsView'
 import { IngestionView } from '../ingestion/IngestionView'
@@ -16,13 +18,17 @@ import { ChatView } from '../chat/ChatView'
 import { TranslationView } from '../translation/TranslationView'
 import { CodingAgentView } from '../coding/CodingAgentView'
 import { DiagnosticsDrawer } from '../diagnostics/DiagnosticsDrawer'
+import { AboutModal } from '../common/AboutModal'
+import { OnlyRagLogo } from '../common/OnlyRagLogo'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
 import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
+import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
 
 export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings'
 
 export const AppLayout: React.FC = () => {
+  const { t, language, setLanguage } = useTranslation()
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     try {
       const savedTab = localStorage.getItem('onlyrag_active_tab') as NavTab
@@ -33,6 +39,7 @@ export const AppLayout: React.FC = () => {
     return 'ingestion'
   })
   const [isDiagnosticsDrawerOpen, setIsDiagnosticsDrawerOpen] = useState(false)
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
@@ -48,12 +55,16 @@ export const AppLayout: React.FC = () => {
       hardwareProfile: 'Auto',
       ocrEngine: 'native_cuda',
       ollamaHost: 'http://127.0.0.1:11434',
+      language: 'it',
     }
   })
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings }
+      if (newSettings.language && newSettings.language !== language) {
+        setLanguage(newSettings.language)
+      }
       // Schedule persistence outside React's render cycle
       queueMicrotask(() => {
         try {
@@ -64,7 +75,7 @@ export const AppLayout: React.FC = () => {
       })
       return updated
     })
-  }, [])
+  }, [language, setLanguage])
 
   const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, handleUpdateSettings)
 
@@ -76,21 +87,40 @@ export const AppLayout: React.FC = () => {
     notifyTabChanged(tab)
   }
 
+  const toggleLanguage = () => {
+    const nextLang: Language = language === 'it' ? 'en' : 'it'
+    setLanguage(nextLang)
+    handleUpdateSettings({ language: nextLang })
+  }
+
   return (
     <div className="flex h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-text">
       {/* Navigation Sidebar */}
       <aside className="w-64 glass-panel border-r border-slate-800 flex flex-col justify-between p-4 z-10 shrink-0">
         <div>
           {/* App Branding */}
-          <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-slate-800/80">
-            <div className="w-10 h-10 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-cyan-950/40 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-cyan-500/10 opacity-50 group-hover:opacity-100 transition-opacity" />
-              <img src="/onlyrag-icon.svg" alt="OnlyRag V2 Logo" className="w-full h-full object-contain relative z-10 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <div className="flex items-center justify-between px-2 py-3 mb-6 border-b border-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-cyan-950/40 relative overflow-hidden group">
+                <div className="absolute inset-0 bg-cyan-500/10 opacity-50 group-hover:opacity-100 transition-opacity" />
+                <OnlyRagLogo className="w-full h-full object-contain relative z-10 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+              </div>
+              <div>
+                <div className="font-bold text-base tracking-wide text-slate-100">{t('common.appName')}</div>
+                <div className="text-[11px] text-cyan-400 font-medium">{t('common.tagline')}</div>
+              </div>
             </div>
-            <div>
-              <div className="font-bold text-base tracking-wide text-slate-100">OnlyRag V2</div>
-              <div className="text-[11px] text-cyan-400 font-medium">Local AI Workspace</div>
-            </div>
+
+            {/* Language Switcher Badge */}
+            <button
+              onClick={toggleLanguage}
+              title={t('sidebar.switchLanguage')}
+              aria-label={t('sidebar.switchLanguage')}
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg text-[10px] font-bold text-cyan-400 flex items-center gap-1 transition-all focus-ring active:scale-95 shadow-sm"
+            >
+              <Globe className="w-3 h-3" />
+              <span>{language.toUpperCase()}</span>
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -126,7 +156,7 @@ export const AppLayout: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Layers className="w-4 h-4" /> Ingestion & OCR
+              <Layers className="w-4 h-4" /> {t('navigation.ingestion')}
             </button>
 
             <button
@@ -141,7 +171,7 @@ export const AppLayout: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <MessageSquare className="w-4 h-4" /> RAG & Chat
+              <MessageSquare className="w-4 h-4" /> {t('navigation.chat')}
             </button>
 
             <button
@@ -156,7 +186,7 @@ export const AppLayout: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Languages className="w-4 h-4" /> Doc Translation
+              <Languages className="w-4 h-4" /> {t('navigation.translation')}
             </button>
 
             <button
@@ -171,7 +201,7 @@ export const AppLayout: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Code className="w-4 h-4" /> AI Coding Agent
+              <Code className="w-4 h-4" /> {t('navigation.coding')}
             </button>
 
             <button
@@ -186,7 +216,7 @@ export const AppLayout: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Settings className="w-4 h-4" /> Settings & Hardware
+              <Settings className="w-4 h-4" /> {t('navigation.settings')}
             </button>
           </nav>
         </div>
@@ -197,34 +227,34 @@ export const AppLayout: React.FC = () => {
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-slate-400 flex items-center gap-1.5">
                 <Layers className={`w-3 h-3 ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
-                Sidecar & LanceDB
+                {t('sidebar.sidecarLanceDb')}
               </span>
               <span className={`font-semibold capitalize text-[10px] font-mono ${diagnostics?.sidecar?.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {diagnostics?.sidecar?.status === 'online'
                   ? `${diagnostics.sidecar.documentsCount || 0} Docs`
-                  : 'Offline'}
+                  : t('common.offline')}
               </span>
             </div>
 
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-slate-400 flex items-center gap-1.5">
                 <Zap className={`w-3 h-3 ${diagnostics?.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`} />
-                Ollama Local
+                {t('sidebar.ollamaLocal')}
               </span>
               <span className={`font-semibold capitalize ${diagnostics?.ollama.status === 'online' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {diagnostics?.ollama.status || 'Checking...'}
+                {diagnostics?.ollama.status === 'online' ? t('common.online') : diagnostics?.ollama.status === 'checking' ? t('common.checking') : t('common.offline')}
               </span>
             </div>
 
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-slate-400 flex items-center gap-1.5">
                 <Cpu className="w-3 h-3 text-cyan-400" />
-                GPU VRAM
+                {t('sidebar.gpuVram')}
               </span>
               <span className="font-mono text-slate-200 text-[10px]">
                 {diagnostics?.gpu.hasNvidiaGpu
                   ? `${diagnostics.gpu.vramUsedMB}/${diagnostics.gpu.vramTotalMB} MB`
-                  : 'CPU Only'}
+                  : t('sidebar.cpuOnly')}
               </span>
             </div>
           </div>
@@ -237,20 +267,32 @@ export const AppLayout: React.FC = () => {
                   runDiagnosticsScan()
                 }
               }}
-              aria-label="Installa o Avvia Ollama Local Service"
+              aria-label={t('sidebar.installLaunchOllama')}
               className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-cyan-950/40"
             >
-              <Zap className="w-3.5 h-3.5 fill-current" /> Installa / Avvia Ollama
+              <Zap className="w-3.5 h-3.5 fill-current" /> {t('sidebar.installLaunchOllama')}
             </button>
           )}
 
-          <button
-            onClick={() => setIsDiagnosticsDrawerOpen(true)}
-            aria-label="Apri Logs e System Console"
-            className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-2"
-          >
-            <Terminal className="w-3.5 h-3.5 text-cyan-400" /> Logs & System Console
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsDiagnosticsDrawerOpen(true)}
+              aria-label={t('sidebar.logsConsole')}
+              className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="truncate">{t('sidebar.logsConsole')}</span>
+            </button>
+
+            <button
+              onClick={() => setIsAboutModalOpen(true)}
+              aria-label={t('sidebar.contributionsAndInfo')}
+              title={t('sidebar.contributionsAndInfo')}
+              className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 font-medium rounded-xl transition-all focus-ring active:scale-95"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -274,6 +316,7 @@ export const AppLayout: React.FC = () => {
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
             onRefreshDiagnostics={runDiagnosticsScan}
+            onOpenAboutModal={() => setIsAboutModalOpen(true)}
           />
         </div>
       </main>
@@ -284,6 +327,12 @@ export const AppLayout: React.FC = () => {
         onClose={() => setIsDiagnosticsDrawerOpen(false)}
         diagnostics={diagnostics}
         onRefreshDiagnostics={runDiagnosticsScan}
+      />
+
+      {/* About & Contributions Modal */}
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
       />
     </div>
   )

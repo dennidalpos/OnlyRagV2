@@ -1,0 +1,166 @@
+export type Language = 'it' | 'en'
+
+export interface TranslationSchema {
+  common: {
+    appName: string
+    tagline: string
+    version: string
+    author: string
+    close: string
+    cancel: string
+    confirm: string
+    save: string
+    delete: string
+    copy: string
+    copied: string
+    refresh: string
+    search: string
+    status: string
+    loading: string
+    error: string
+    success: string
+    warning: string
+    offline: string
+    online: string
+    checking: string
+    language: string
+    italian: string
+    english: string
+    viewDetails: string
+    actions: string
+    export: string
+    clear: string
+  }
+  navigation: {
+    ingestion: string
+    chat: string
+    translation: string
+    coding: string
+    settings: string
+    diagnostics: string
+    about: string
+  }
+  sidebar: {
+    sidecarLanceDb: string
+    ollamaLocal: string
+    gpuVram: string
+    cpuOnly: string
+    installLaunchOllama: string
+    logsConsole: string
+    switchLanguage: string
+    contributionsAndInfo: string
+  }
+  settings: {
+    title: string
+    description: string
+    hardwareWizard: string
+    hardwareScan: string
+    ollamaManagement: string
+    downloadModel: string
+    downloading: string
+    installedLocalModels: string
+    noModelsDetected: string
+    deleteModel: string
+    confirmDelete: string
+    languagePreference: string
+    languageDescription: string
+    aboutSectionTitle: string
+    aboutSectionDescription: string
+    viewAboutButton: string
+    modelAssignments: string
+    hardwareProfiles: string
+    concurrencySettings: string
+  }
+  about: {
+    title: string
+    subtitle: string
+    authorTitle: string
+    authorRole: string
+    repositoryTitle: string
+    repositoryDesc: string
+    openRepo: string
+    copyUrl: string
+    licenseTitle: string
+    licenseType: string
+    licenseNotice: string
+    creditsTitle: string
+    creditsSubtitle: string
+    categories: {
+      core: string
+      aiAndVector: string
+      uiAndEditor: string
+      skillsAndEcosystem: string
+    }
+    contactsTitle: string
+    contactsSubtitle: string
+    githubIssues: string
+  }
+  ingestion: {
+    title: string
+    subtitle: string
+    dropzone: string
+    uploadButton: string
+    indexedDocuments: string
+    pages: string
+    chunks: string
+    date: string
+    fileSize: string
+    deleteConfirm: string
+    searchPlaceholder: string
+    noDocuments: string
+    preview: string
+    rawMarkdown: string
+  }
+  chat: {
+    title: string
+    subtitle: string
+    placeholder: string
+    send: string
+    sources: string
+    clearHistory: string
+    confirmClear: string
+    modelSelect: string
+    noSources: string
+    relevanceScore: string
+    systemPrompt: string
+  }
+  translation: {
+    title: string
+    subtitle: string
+    sourceText: string
+    translatedText: string
+    translateButton: string
+    translating: string
+    swapLanguages: string
+    exportPdf: string
+    exportDocx: string
+    exportMd: string
+    sourceLang: string
+    targetLang: string
+  }
+  coding: {
+    title: string
+    subtitle: string
+    promptPlaceholder: string
+    runTask: string
+    stopTask: string
+    policyMode: string
+    planMode: string
+    askMode: string
+    agentMode: string
+    terminalTab: string
+    filesTab: string
+    skillsHub: string
+  }
+  diagnostics: {
+    title: string
+    systemTelemetry: string
+    logViewer: string
+    clearLogs: string
+    copyLogs: string
+    gpuStatus: string
+    vramStatus: string
+    ramStatus: string
+    cpuStatus: string
+  }
+}

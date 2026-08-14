@@ -19,7 +19,7 @@
     "package:win": "powershell -ExecutionPolicy Bypass -File ./scripts/build_package.ps1"
   },
   "keywords": [],
-  "author": "",
+  "author": "Danny Perondi <https://github.com/dennidalpos>",
   "license": "MIT",
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

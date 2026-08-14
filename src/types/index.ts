@@ -138,6 +138,8 @@ export interface AppSettings {
   complexityDeepModel?: string
   // Concurrency & Task Queue Settings
   maxConcurrentTasks?: number // Range: 1-8, default 1
+  // Internationalization
+  language?: 'it' | 'en'
 }
 
 export interface TaskQueueStatus {
@@ -345,6 +347,7 @@ export interface IElectronAPI {
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
   checkDiskSpace: (models: string[]) => Promise<{ allowed: boolean; requiredGB: number; freeGB: number; missingGB: number; error?: string }>
+  openExternalUrl?: (url: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>

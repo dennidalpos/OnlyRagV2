@@ -72,3 +72,12 @@ Minimize response size to conserve tokens. Structure final responses strictly in
   1. **Planning:** Briefly describe scope, targeted files, and interfaces before writing code.
   2. **Architectural Impact:** Ensure each new file is placed in its correct layer directory.
   3. **Test-First / Test-Coherent:** Create or update unit tests for all business logic changes.
+
+## 9. Documentation Sync Protocol
+
+- **Single Source of Truth:** All project documentation resides in the `/docs` directory.
+- **Mandatory Sync Rule:** Whenever a change is made to:
+  - Architecture or module interfaces -> update `docs/architecture.md` / `docs/modules.md`.
+  - API endpoints, schemas, or contracts -> update `docs/api.md`.
+  - Environment variables, dependencies, or setup commands -> update `docs/setup-and-env.md`.
+- **Pre-commit / Pre-PR Checklist for Agents:** Before marking any implementation task as complete, verify that related files in `/docs/` reflect the latest changes. Pull requests or diffs without matching doc updates are considered incomplete.

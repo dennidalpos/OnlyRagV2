@@ -3,6 +3,7 @@ import { AppSettings, DiagnosticsData, IngestedDocument, ChatMessage, CitationSo
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../components/common/SystemPromptModal'
+import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
 
 export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsData | null) {
@@ -117,6 +118,18 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     isGeneratingRef.current = false
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (streamThrottleTimer.current) {
+        clearInterval(streamThrottleTimer.current)
+        streamThrottleTimer.current = null
+      }
+      if (isGeneratingRef.current && window.electronAPI?.cancelOllamaStream) {
+        window.electronAPI.cancelOllamaStream().catch(() => {})
+      }
+    }
+  }, [])
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault()
@@ -158,35 +171,40 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     setTimeout(() => scrollToBottom(true), 50)
 
     try {
+      const routingResult = evaluateDomainIntent(userText, settings)
+      logger.info('ChatEngine', `Domain Router: ${routingResult.domain.toUpperCase()} -> Model: ${routingResult.modelName} (${routingResult.reason})`)
+
       let vectorContextText = ''
       let citationSources: CitationSource[] = []
       const scopedDocIds = selectedDocIds.size > 0 ? Array.from(selectedDocIds) : undefined
 
-      try {
-        const searchResults = await apiService.searchVectorDb(
-          userText,
-          5,
-          settings.embeddingModel || 'nomic-embed-text',
-          scopedDocIds
-        )
+      if (routingResult.requiresRetrieval || (scopedDocIds && scopedDocIds.length > 0)) {
+        try {
+          const searchResults = await apiService.searchVectorDb(
+            userText,
+            5,
+            settings.embeddingModel || 'nomic-embed-text',
+            scopedDocIds
+          )
 
-        if (Array.isArray(searchResults) && searchResults.length > 0) {
-          vectorContextText = searchResults
-            .filter((res: any) => res && res.text)
-            .map((res: any, idx: number) => `[Fonte ${idx + 1}: ${res.doc_name || 'Documento'} | Sezione: ${res.section_header || 'Generale'}]\n${res.text}`)
-            .join('\n\n---\n\n')
+          if (Array.isArray(searchResults) && searchResults.length > 0) {
+            vectorContextText = searchResults
+              .filter((res: any) => res && res.text)
+              .map((res: any, idx: number) => `[Fonte ${idx + 1}: ${res.doc_name || 'Documento'} | Sezione: ${res.section_header || 'Generale'}]\n${res.text}`)
+              .join('\n\n---\n\n')
 
-          citationSources = searchResults
-            .filter((res: any) => res && res.text)
-            .map((res: any) => ({
-              chunkId: res.chunk_id || '',
-              docName: res.doc_name || 'Document',
-              snippet: (res.text || '').slice(0, 150) + (res.text?.length > 150 ? '...' : ''),
-              score: res.score || 0,
-            }))
+            citationSources = searchResults
+              .filter((res: any) => res && res.text)
+              .map((res: any) => ({
+                chunkId: res.chunk_id || '',
+                docName: res.doc_name || 'Document',
+                snippet: (res.text || '').slice(0, 150) + (res.text?.length > 150 ? '...' : ''),
+                score: res.score || 0,
+              }))
+          }
+        } catch (err: any) {
+          logger.warn('ChatView', `Vector search non-blocking notice: ${err.message}`)
         }
-      } catch (err: any) {
-        logger.warn('ChatView', `Vector search non-blocking notice: ${err.message}`)
       }
 
       // Attach citations to the bot message if available
@@ -205,7 +223,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       // Budget context to max 5500 characters to prevent context window overflow
       const boundedContext = combinedRawContext.slice(0, 5500)
 
-      const modelToUse = settings.chatModel || settings.defaultModel || 'llama3.2'
+      const modelToUse = routingResult.modelName
       const effectivePromptObj = getEffectivePrompt('chat', modelToUse, settings)
       const effectiveSystemPrompt = effectivePromptObj.prompt
 

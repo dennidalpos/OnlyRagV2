@@ -46,6 +46,17 @@ tags: ["backend", "nestjs", "typescript"]
 export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen, onClose }) => {
   const [copiedType, setCopiedType] = useState<'json' | 'md' | 'anthropic' | 'lobe' | null>(null)
 
+  React.useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const handleCopy = (text: string, type: 'json' | 'md' | 'anthropic' | 'lobe') => {
@@ -55,7 +66,12 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-hub-guide-title"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150"
+    >
       <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
@@ -64,14 +80,14 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-100">Guida alla Struttura di Skill Hub &amp; Repository</h2>
+              <h2 id="custom-hub-guide-title" className="text-base font-bold text-slate-100">Guida alla Struttura di Skill Hub &amp; Repository</h2>
               <p className="text-xs text-slate-400">Come integrare Skills.sh, Anthropic, LobeHub e Hub personalizzati in OnlyRag V2</p>
             </div>
           </div>
           <button
             onClick={onClose}
             aria-label="Chiudi guida"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
           >
             <X className="w-5 h-5" />
           </button>

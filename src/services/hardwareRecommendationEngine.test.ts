@@ -51,25 +51,31 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileName).toContain('Legacy / CPU-Only Hardware')
 
     const recFast = recs.fastTierModels.find((m) => m.isRecommended)
-    expect(recFast?.modelName).toBe('llama3.2:1b')
+    expect(recFast?.modelName).toBe('qwen2.5-coder:1.5b')
 
     const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('llama3.1:8b')
+    expect(recStd?.modelName).toBe('llama3.2:3b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
     expect(recDeep?.modelName).toBe('deepseek-r1:1.5b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
-    expect(recVision?.modelName).toBe('qwen2.5vl:3b')
+    expect(recVision?.modelName).toBe('llava:7b')
 
     const recChat = recs.chatTierModels.find((m) => m.isRecommended)
     expect(recChat?.modelName).toBe('llama3.2:3b')
 
     const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
-    expect(recTrans?.modelName).toBe('qwen2.5:1.5b')
+    expect(recTrans?.modelName).toBe('qwen2.5:7b')
 
     const recEmbed = recs.embeddingTierModels.find((m) => m.isRecommended)
-    expect(recEmbed?.modelName).toBe('nomic-embed-text')
+    expect(recEmbed?.modelName).toBe('nomic-embed-text:latest')
+
+    const recMed = recs.medicalTierModels.find((m) => m.isRecommended)
+    expect(recMed?.modelName).toBe('biomistral:latest')
+
+    const recLaw = recs.legalTierModels.find((m) => m.isRecommended)
+    expect(recLaw?.modelName).toBe('llama3.1:8b')
   })
 
   it('should recommend midrange profile for dedicated GPU with 8GB VRAM', () => {
@@ -89,7 +95,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recDeep?.modelName).toBe('deepseek-r1:8b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
-    expect(recVision?.modelName).toBe('qwen2.5vl:3b')
+    expect(recVision?.modelName).toBe('llava:7b')
 
     const recChat = recs.chatTierModels.find((m) => m.isRecommended)
     expect(recChat?.modelName).toBe('llama3.1:8b')
@@ -98,7 +104,13 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recTrans?.modelName).toBe('qwen2.5:7b')
 
     const recEmbed = recs.embeddingTierModels.find((m) => m.isRecommended)
-    expect(recEmbed?.modelName).toBe('nomic-embed-text')
+    expect(recEmbed?.modelName).toBe('nomic-embed-text:latest')
+
+    const recMed = recs.medicalTierModels.find((m) => m.isRecommended)
+    expect(recMed?.modelName).toBe('biomistral:latest')
+
+    const recLaw = recs.legalTierModels.find((m) => m.isRecommended)
+    expect(recLaw?.modelName).toBe('llama3.1:8b')
   })
 
   it('should recommend highend profile for high-end GPU with >= 12GB VRAM', () => {
@@ -109,13 +121,13 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileName).toContain('High-Performance Hardware')
 
     const recFast = recs.fastTierModels.find((m) => m.isRecommended)
-    expect(recFast?.modelName).toBe('llama3.2:3b')
+    expect(recFast?.modelName).toBe('qwen2.5-coder:3b')
 
     const recStd = recs.standardTierModels.find((m) => m.isRecommended)
     expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen2.5-coder:14b')
+    expect(recDeep?.modelName).toBe('deepseek-r1:14b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llama3.2-vision:11b')
@@ -124,15 +136,23 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recChat?.modelName).toBe('llama3.1:8b')
 
     const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
-    expect(recTrans?.modelName).toBe('qwen2.5:7b')
+    expect(recTrans?.modelName).toBe('aya-expanse:8b')
 
     const recEmbed = recs.embeddingTierModels.find((m) => m.isRecommended)
-    expect(recEmbed?.modelName).toBe('mxbai-embed-large')
+    expect(recEmbed?.modelName).toBe('bge-m3:latest')
+
+    const recMed = recs.medicalTierModels.find((m) => m.isRecommended)
+    expect(recMed?.modelName).toBe('meditron:70b')
+
+    const recLaw = recs.legalTierModels.find((m) => m.isRecommended)
+    expect(recLaw?.modelName).toBe('command-r:35b')
   })
 
   it('should handle null diagnostics gracefully with fallback defaults', () => {
     const recs = analyzeHardwareAndRecommend(null)
     expect(recs.profileTier).toBe('legacy')
     expect(recs.gpuSummary).toContain('No Dedicated GPU Detected')
+    expect(recs.medicalTierModels.length).toBeGreaterThan(0)
+    expect(recs.legalTierModels.length).toBeGreaterThan(0)
   })
 })

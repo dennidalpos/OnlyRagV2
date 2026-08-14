@@ -3,7 +3,7 @@ import {
   FeatureModule,
   DEFAULT_FAMILY_PROMPTS,
   detectModelFamily,
-} from '../../../../src/constants/promptPresets'
+} from './promptPresets'
 import type { AppSettings } from '../../../../src/types'
 
 export type { ModelFamily, FeatureModule }

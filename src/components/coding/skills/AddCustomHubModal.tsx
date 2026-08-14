@@ -23,6 +23,17 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  React.useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +60,12 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-custom-hub-title"
+      className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150"
+    >
       <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
@@ -58,14 +74,14 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
               <Globe className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-100">{t('skills.addCustomHubTitle')}</h2>
+              <h2 id="add-custom-hub-title" className="text-base font-bold text-slate-100">{t('skills.addCustomHubTitle')}</h2>
               <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             aria-label={t('common.close')}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
           >
             <X className="w-5 h-5" />
           </button>

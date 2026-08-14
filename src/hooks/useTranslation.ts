@@ -315,5 +315,3 @@ export function useDocumentTranslation(settings?: AppSettings) {
   }
 }
 
-// Backwards-compatibility alias
-export const useTranslation = useDocumentTranslation

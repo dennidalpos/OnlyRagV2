@@ -1,7 +1,6 @@
 import os
 import sys
 import logging
-import requests
 from typing import List
 
 # Setup logging
@@ -34,12 +33,7 @@ EMBEDDING_DIM: int = 768
 DOCS_TABLE_NAME: str = "documents"
 CHUNKS_TABLE_NAME: str = "chunks"
 
-try:
-    import httpx
-    HAS_HTTPX = True
-    httpx_client: httpx.Client | None = httpx.Client(timeout=10.0)
-except ImportError:
-    HAS_HTTPX = False
-    httpx_client = None
+import httpx
 
-http_session = requests.Session()
+httpx_client = httpx.Client(timeout=15.0)
+

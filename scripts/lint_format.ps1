@@ -16,11 +16,13 @@
 param(
     [switch]$Fast = $true,
     [switch]$Full = $false,
-    [switch]$Format = $false
+    [switch]$Format = $false,
+    [switch]$UnitOnly = $false
 )
 
 $ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.Encoding]::UTF8
+$ConsoleOutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 try {
@@ -72,7 +74,9 @@ try {
 
     # 4. Vitest Fast Unit & Benchmark Test Suite
     Write-Host "`n[4/4] Running Vitest serial test suite..." -ForegroundColor Yellow
-    if ($Full) {
+    if ($UnitOnly) {
+        npm run test:unit-only
+    } elseif ($Full) {
         npm run test
     } else {
         npm run test:fast

@@ -221,8 +221,18 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           aria-valuenow={leftPanelWidth}
           aria-valuemin={320}
           aria-valuemax={750}
+          aria-label={t('coding.resizePanels')}
           onMouseDown={handleMouseDown}
-          className="w-1 hover:w-1.5 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group"
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') {
+              e.preventDefault()
+              setLeftPanelWidth((prev) => Math.max(320, prev - 20))
+            } else if (e.key === 'ArrowRight') {
+              e.preventDefault()
+              setLeftPanelWidth((prev) => Math.min(750, prev + 20))
+            }
+          }}
+          className="w-1 hover:w-1.5 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring"
           title={t('coding.resizePanels')}
         >
           <GripVertical className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />

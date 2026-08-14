@@ -344,6 +344,10 @@ export interface TranslationSchema {
     ragChatSubtitle: string
     translationSection: string
     translationSubtitle: string
+    verticalDomainsSection: string
+    verticalDomainsSubtitle: string
+    medicalModel: string
+    legalModel: string
     ingestionOcrSection: string
     ingestionOcrSubtitle: string
     visionOcrLabel: string
@@ -464,6 +468,11 @@ export interface TranslationSchema {
     chatModelDesc: string
     translationModelTitle: string
     translationModelDesc: string
+    medicalModelTitle: string
+    medicalModelDesc: string
+    legalModelTitle: string
+    legalModelDesc: string
+    optionalDomainModel: string
     complexityRouterSection: string
     complexityRouterToggle: string
     hardwareProfileSection: string
@@ -486,5 +495,8 @@ export interface TranslationSchema {
     finishBtn: string
     applySettings: string
     cancelBtn: string
+    retryPull: string
+    skipModel: string
+    saveAndFinishAnyway: string
   }
 }

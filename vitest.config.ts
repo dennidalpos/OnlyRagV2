@@ -8,11 +8,15 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['electron/**', 'node'],
       ['electron/**/*', 'node'],
+      ['src/services/**', 'node'],
+      ['src/constants/**', 'node'],
     ],
     fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
     include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}'],
+    testTimeout: 5000,
+    hookTimeout: 5000,
   },
   resolve: {
     alias: {
@@ -20,3 +24,4 @@ export default defineConfig({
     },
   },
 })
+

@@ -43,14 +43,8 @@ function sanitizeAndParseJson(raw: string): any {
   }
 }
 
-export function parseAgentToolCall(text: string): AgentToolCall | null {
-  if (!text || typeof text !== 'string') return null
-
-  // Strip <think>...</think> and <thought>...</thought> reasoning blocks before parsing tool calls
-  const cleanText = text
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
-    .trim()
+function extractToolCallFromText(cleanText: string): AgentToolCall | null {
+  if (!cleanText || typeof cleanText !== 'string') return null
 
   // 1. Check for JSON block enclosed in ```json ... ```, <tool_call>...</tool_call>, or generic ``` ... ```
   const toolCallMatch =
@@ -62,7 +56,10 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
 
   if (!jsonStr) {
     // Try finding raw JSON object containing "tool" or 'tool' key
-    const toolIdx = cleanText.toLowerCase().indexOf('"tool"') !== -1 ? cleanText.toLowerCase().indexOf('"tool"') : cleanText.toLowerCase().indexOf("'tool'")
+    const toolIdx =
+      cleanText.toLowerCase().indexOf('"tool"') !== -1
+        ? cleanText.toLowerCase().indexOf('"tool"')
+        : cleanText.toLowerCase().indexOf("'tool'")
     if (toolIdx !== -1) {
       const firstBrace = cleanText.lastIndexOf('{', toolIdx)
       const lastBrace = cleanText.lastIndexOf('}')
@@ -194,6 +191,64 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
       }
     }
   }
+
+  return null
+}
+
+function parseFencedCodeBlockFallback(rawText: string): AgentToolCall | null {
+  if (!rawText || typeof rawText !== 'string') return null
+
+  const codeBlockRegex = /```(?:[a-zA-Z0-9_\-\.]+)?\s*\n([\s\S]*?)```/g
+  let match: RegExpExecArray | null
+
+  while ((match = codeBlockRegex.exec(rawText)) !== null) {
+    const blockContent = match[1]
+    const firstLine = blockContent.split('\n')[0].trim()
+
+    const filenameMatch =
+      firstLine.match(/^<!--\s*([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)\s*-->/i) ||
+      firstLine.match(/^\/\/\s*(?:file(?:name)?:\s*)?([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)/i) ||
+      firstLine.match(/^\/\*\s*(?:file(?:name)?:\s*)?([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)\s*\*\//i) ||
+      firstLine.match(/^#\s*(?:file(?:name)?:\s*)?([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)/i) ||
+      firstLine.match(/^(?:File(?:name)?|Path):\s*([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)/i)
+
+    if (filenameMatch) {
+      const filePath = filenameMatch[1].trim()
+      if (filePath && blockContent.trim().length > 0) {
+        return {
+          tool: 'write_file',
+          parameters: {
+            filePath,
+            content: blockContent.trim(),
+          },
+          explanation: `Creating file ${filePath}`,
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+export function parseAgentToolCall(text: string): AgentToolCall | null {
+  if (!text || typeof text !== 'string') return null
+
+  // 1. First attempt: Strip <think>...</think> and <thought>...</thought> reasoning blocks
+  const cleanText = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+    .trim()
+
+  const cleanTool = extractToolCallFromText(cleanText)
+  if (cleanTool) return cleanTool
+
+  // 2. Second attempt: Check raw text in case reasoning models placed tool call inside <think>
+  const rawTool = extractToolCallFromText(text)
+  if (rawTool) return rawTool
+
+  // 3. Third attempt: Check if model emitted markdown code block with embedded filename comment
+  const fallbackCodeTool = parseFencedCodeBlockFallback(cleanText) || parseFencedCodeBlockFallback(text)
+  if (fallbackCodeTool) return fallbackCodeTool
 
   return null
 }

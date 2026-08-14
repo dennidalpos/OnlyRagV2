@@ -2,7 +2,7 @@ import os
 import base64
 import subprocess
 from typing import Dict, Any, Optional
-from sidecar.config import HAS_HTTPX, httpx_client, http_session, logger
+from sidecar.config import httpx_client, logger
 
 # OCR Engine Singleton Caches
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
@@ -133,18 +133,11 @@ def run_vision_ocr(
                 "stream": False
             }
             try:
-                if HAS_HTTPX and httpx_client is not None:
-                    res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
-                    if res.status_code == 200:
-                        text_resp = res.json().get("response", "").strip()
-                        if text_resp:
-                            return text_resp
-                else:
-                    res = http_session.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
-                    if res.status_code == 200:
-                        text_resp = res.json().get("response", "").strip()
-                        if text_resp:
-                            return text_resp
+                res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
+                if res.status_code == 200:
+                    text_resp = res.json().get("response", "").strip()
+                    if text_resp:
+                        return text_resp
             except Exception as candidate_err:
                 logger.debug(f"Vision OCR with model {v_model} failed: {candidate_err}")
                 continue
@@ -303,18 +296,11 @@ def run_vision_ocr(
                 "stream": False
             }
             try:
-                if HAS_HTTPX and httpx_client is not None:
-                    res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
-                    if res.status_code == 200:
-                        text_resp = res.json().get("response", "").strip()
-                        if text_resp:
-                            return text_resp
-                else:
-                    res = http_session.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
-                    if res.status_code == 200:
-                        text_resp = res.json().get("response", "").strip()
-                        if text_resp:
-                            return text_resp
+                res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
+                if res.status_code == 200:
+                    text_resp = res.json().get("response", "").strip()
+                    if text_resp:
+                        return text_resp
             except Exception as candidate_err:
                 logger.debug(f"Vision OCR with model {v_model} failed: {candidate_err}")
                 continue

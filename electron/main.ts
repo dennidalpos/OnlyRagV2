@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import { runFullDiagnostics, logger } from './diagnostics'
+import { logger } from './diagnostics'
 import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
 import { taskRunner } from './core/infrastructure/process/taskRunner'
 import { registerAgentIpcHandlers } from './core/presentation/agentIpc'
@@ -10,6 +10,7 @@ import { registerSidecarIpcHandlers } from './core/presentation/sidecarIpc'
 import { registerOllamaIpcHandlers } from './core/presentation/ollamaIpc'
 import { registerSystemIpcHandlers } from './core/presentation/systemIpc'
 import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
+import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = app.isPackaged
@@ -107,27 +108,5 @@ app.whenReady().then(() => {
   registerSidecarIpcHandlers()
   registerAgentIpcHandlers(() => win)
   registerSkillIpcHandlers()
-
-  ipcMain.handle('diagnostics:run', async () => {
-    await sidecarProcessManager.checkSidecarHealth()
-    return await runFullDiagnostics(sidecarProcessManager.getSidecarState())
-  })
-
-  ipcMain.handle('diagnostics:get-logs', async () => {
-    return logger.getLogs()
-  })
-
-  ipcMain.handle('diagnostics:clear-logs', async () => {
-    logger.clearLogs()
-    return true
-  })
-
-  ipcMain.handle('diagnostics:get-log-filepath', async () => {
-    return logger.getLogFilePath()
-  })
-
-  ipcMain.handle('diagnostics:log-telemetry', async (_, level: any, category: string, message: string) => {
-    logger.log(level, category, message)
-    return true
-  })
+  registerDiagnosticsIpcHandlers()
 })

@@ -5,6 +5,7 @@ import json
 import csv
 from typing import List, Tuple, Optional, Any, Callable
 import pymupdf
+import pandas as pd
 from sidecar.config import logger
 from sidecar.infrastructure.ocr import run_layout_ocr
 from sidecar.domain.sanitizer import sanitize_extracted_text
@@ -142,7 +143,6 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
     # Excel formats (.xlsx, .xls)
     if ext in [".xlsx", ".xls"]:
         try:
-            import pandas as pd
             excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
             xls = pd.ExcelFile(excel_source)
             sheets_output = []
@@ -157,8 +157,8 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
                 md_lines = [f"### Sheet: {sheet_name}\n"]
                 md_lines.append("| " + " | ".join(headers) + " |")
                 md_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
-                for _, row in df.iterrows():
-                    row_vals = [str(v).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(v) else "" for v in row]
+                for row_tuple in df.itertuples(index=False):
+                    row_vals = [str(v).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(v) else "" for v in row_tuple]
                     md_lines.append("| " + " | ".join(row_vals) + " |")
                 sheets_output.append("\n".join(md_lines))
 
@@ -170,14 +170,13 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
     # Parquet format
     elif ext == ".parquet":
         try:
-            import pandas as pd
             parquet_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
             df = pd.read_parquet(parquet_source)
             df_subset = df.head(150)
             headers = [str(c).replace("|", "\\|").strip() for c in df_subset.columns]
             md_lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
-            for _, row in df_subset.iterrows():
-                row_vals = [str(v).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(v) else "" for v in row]
+            for row_tuple in df_subset.itertuples(index=False):
+                row_vals = [str(v).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(v) else "" for v in row_tuple]
                 md_lines.append("| " + " | ".join(row_vals) + " |")
             return [(1, "\n".join(md_lines))]
         except Exception as pq_err:
@@ -370,7 +369,7 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
                 header_path = header_path[:level-1] + [h_text]
 
         curr_section_header = ' > '.join([h for h in header_path if h])
-        context_prefix = f"[{curr_section_header}]\n"
+        context_prefix = f"[Documento: {filename} | Sezione: {curr_section_header}]\n"
 
         # Check for individual oversized lines
         if len(line) > 1000 and not in_code_block:
@@ -396,13 +395,13 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
 
     if current_buffer.strip():
         curr_section_header = ' > '.join([h for h in header_path if h])
-        context_prefix = f"[{curr_section_header}]\n"
+        context_prefix = f"[Documento: {filename} | Sezione: {curr_section_header}]\n"
         chunk_text = context_prefix + current_buffer.strip()
         raw_chunks.append((chunk_index, chunk_text, curr_section_header))
 
     if not raw_chunks:
         fallback_text = full_markdown.strip() or f"# {filename}\n\nDocument content ingested."
-        raw_chunks = [(0, f"[{filename} | Document Content]\n{fallback_text}", filename)]
+        raw_chunks = [(0, f"[Documento: {filename} | Sezione: Document Content]\n{fallback_text}", filename)]
 
     return raw_chunks
 

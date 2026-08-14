@@ -118,6 +118,8 @@ export interface AppSettings {
   defaultModel: string
   chatModel?: string
   translationModel?: string
+  medicalModel?: string
+  legalModel?: string
   codingModel?: string
   visionModel?: string
   embeddingModel?: string
@@ -374,9 +376,28 @@ export interface IElectronAPI {
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   uninstallSkill: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; error?: string }>
   onOllamaPullProgress?: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => () => void
+  getRunningModels: (host?: string) => Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }>
+  unloadModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
 }
 
-export * from './ipcChannels'
+export interface RunningModelDetails {
+  parent_model?: string
+  format?: string
+  family?: string
+  families?: string[]
+  parameter_size?: string
+  quantization_level?: string
+}
+
+export interface RunningModelInfo {
+  name: string
+  model: string
+  size: number
+  digest?: string
+  details?: RunningModelDetails
+  expires_at?: string
+  size_vram?: number
+}
 
 declare global {
   interface Window {

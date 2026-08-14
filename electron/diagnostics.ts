@@ -184,70 +184,135 @@ ${recentLogs.slice(-150).map((l) => `[${l.timestamp}] [${l.level}] [${l.category
 `
 }
 
-export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Promise<DiagnosticsData['ollama']> {
-  const effectiveHost = hostUrl.replace('localhost', '127.0.0.1')
-  return new Promise((resolve) => {
-    const req = http.get(`${effectiveHost}/api/tags`, { timeout: 4500 }, (res) => {
-      let data = ''
-      res.on('data', (chunk) => { data += chunk })
-      res.on('end', () => {
-        try {
-          if (res.statusCode === 200) {
-            const parsed = JSON.parse(data)
-            const models = (parsed.models || []).map((m: any) => m.name || m.model)
-            logger.log('INFO', 'Ollama', `Ollama online. Available models count: ${models.length}`)
-            resolve({
-              status: 'online',
-              url: hostUrl,
-              modelsCount: models.length,
-              models,
-            })
-          } else {
-            logger.log('WARN', 'Ollama', `Ollama returned HTTP status ${res.statusCode}`)
-            resolve({
-              status: 'offline',
-              url: hostUrl,
-              modelsCount: 0,
-              models: [],
-              error: `HTTP ${res.statusCode}`,
-            })
+function getLocalManifestModels(): string[] {
+  const possibleRoots: string[] = []
+  if (process.env.OLLAMA_MODELS) {
+    possibleRoots.push(path.join(process.env.OLLAMA_MODELS, 'manifests'))
+    possibleRoots.push(process.env.OLLAMA_MODELS)
+  }
+  possibleRoots.push(path.join(os.homedir(), '.ollama', 'models', 'manifests'))
+
+  const models: string[] = []
+  for (const manifestsRoot of possibleRoots) {
+    if (!fs.existsSync(manifestsRoot)) continue
+    try {
+      const walk = (dir: string) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name)
+          if (entry.isDirectory()) {
+            walk(fullPath)
+          } else if (entry.isFile()) {
+            const rel = path.relative(manifestsRoot, fullPath).replace(/\\/g, '/')
+            const parts = rel.split('/')
+            if (parts.length >= 3) {
+              const namespace = parts[1]
+              const model = parts[2]
+              const tag = parts.slice(3).join(':') || 'latest'
+              const modelName = namespace === 'library' ? `${model}:${tag}` : `${namespace}/${model}:${tag}`
+              models.push(modelName)
+            }
           }
-        } catch (e: any) {
-          logger.log('ERROR', 'Ollama', `Failed parsing Ollama tags output: ${e.message}`)
-          resolve({
-            status: 'offline',
-            url: hostUrl,
-            modelsCount: 0,
-            models: [],
-            error: e.message,
-          })
+        }
+      }
+      walk(manifestsRoot)
+    } catch {
+      // Ignore filesystem errors
+    }
+  }
+  return models
+}
+
+function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(urlStr, { timeout: timeoutMs }, (res) => {
+      let data = ''
+      res.on('data', (chunk) => {
+        data += chunk
+      })
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(data))
+          } catch (e: any) {
+            reject(new Error(`JSON parse error: ${e.message}`))
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`))
         }
       })
     })
-
-    req.on('error', (err) => {
-      logger.log('WARN', 'Ollama', `Ollama offline or unreachable at ${hostUrl}: ${err.message}`)
-      resolve({
-        status: 'offline',
-        url: hostUrl,
-        modelsCount: 0,
-        models: [],
-        error: err.message,
-      })
-    })
-
+    req.on('error', reject)
     req.on('timeout', () => {
       req.destroy()
-      logger.log('WARN', 'Ollama', `Ollama check timed out at ${hostUrl}`)
-      resolve({
-        status: 'offline',
-        url: hostUrl,
-        modelsCount: 0,
-        models: [],
-        error: 'Connection timeout',
-      })
+      reject(new Error('Connection timeout'))
     })
   })
+}
+
+export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Promise<DiagnosticsData['ollama']> {
+  const effectiveHost = hostUrl.replace('localhost', '127.0.0.1')
+  const isLocal =
+    effectiveHost.includes('127.0.0.1') ||
+    effectiveHost.includes('0.0.0.0') ||
+    effectiveHost.includes('localhost')
+
+  const [tagsRes, v1Res] = await Promise.allSettled([
+    fetchJsonEndpoint(`${effectiveHost}/api/tags`, 4500),
+    fetchJsonEndpoint(`${effectiveHost}/v1/models`, 4500),
+  ])
+
+  const isOnline = tagsRes.status === 'fulfilled' || v1Res.status === 'fulfilled'
+  if (!isOnline) {
+    const err =
+      tagsRes.status === 'rejected'
+        ? tagsRes.reason?.message
+        : v1Res.status === 'rejected'
+        ? v1Res.reason?.message
+        : 'Ollama unreachable'
+    logger.log('WARN', 'Ollama', `Ollama offline or unreachable at ${hostUrl}: ${err}`)
+    return {
+      status: 'offline',
+      url: hostUrl,
+      modelsCount: 0,
+      models: [],
+      error: err,
+    }
+  }
+
+  const modelSet = new Set<string>()
+
+  // 1. Ingest models from /api/tags
+  if (tagsRes.status === 'fulfilled' && tagsRes.value?.models && Array.isArray(tagsRes.value.models)) {
+    for (const m of tagsRes.value.models) {
+      const name = m.name || m.model
+      if (name && typeof name === 'string') modelSet.add(name.trim())
+    }
+  }
+
+  // 2. Ingest models from /v1/models (OpenAI-compatible Ollama endpoint)
+  if (v1Res.status === 'fulfilled' && v1Res.value?.data && Array.isArray(v1Res.value.data)) {
+    for (const item of v1Res.value.data) {
+      if (item.id && typeof item.id === 'string') modelSet.add(item.id.trim())
+    }
+  }
+
+  // 3. If running locally, discover installed models from disk manifests
+  if (isLocal) {
+    const localModels = getLocalManifestModels()
+    for (const m of localModels) {
+      modelSet.add(m)
+    }
+  }
+
+  const models = Array.from(modelSet).sort((a, b) => a.localeCompare(b))
+  logger.log('INFO', 'Ollama', `Ollama online. Available models count: ${models.length}`)
+  return {
+    status: 'online',
+    url: hostUrl,
+    modelsCount: models.length,
+    models,
+  }
 }
 
 let cachedGpuResult: DiagnosticsData['gpu'] | null = null

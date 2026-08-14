@@ -40,4 +40,12 @@ export function registerOllamaIpcHandlers() {
   ipcMain.handle('ollama:benchmark-model', async (_, modelName: string) => {
     return ollamaAppService.benchmarkModel(modelName)
   })
+
+  ipcMain.handle('ollama:get-running-models', async (_, host?: string) => {
+    return ollamaAppService.getRunningModels(host)
+  })
+
+  ipcMain.handle('ollama:unload-model', async (_, modelName: string, host?: string) => {
+    return ollamaAppService.unloadModel(modelName, host)
+  })
 }

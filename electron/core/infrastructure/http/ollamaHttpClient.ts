@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { logger } from '../../../diagnostics'
+import type { RunningModelInfo } from '../../domain/ollama/lifecycleCoordinator'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -15,6 +16,103 @@ export class OllamaHttpClient {
     } else {
       this.baseHost = 'http://127.0.0.1:11434'
     }
+  }
+
+  getRunningModels(customHost?: string): Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }> {
+    if (customHost) this.setBaseHost(customHost)
+    const urlOpts = this.resolveUrl('/api/ps')
+
+    return new Promise((resolve) => {
+      const req = http.request(
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'GET',
+          agent: httpAgent,
+        },
+        (res) => {
+          let data = ''
+          res.on('data', (chunk) => { data += chunk })
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              resolve({ success: false, models: [], error: `Ollama HTTP ${res.statusCode}` })
+              return
+            }
+            try {
+              const parsed = JSON.parse(data)
+              const models: RunningModelInfo[] = Array.isArray(parsed.models) ? parsed.models : []
+              resolve({ success: true, models })
+            } catch (err: any) {
+              resolve({ success: false, models: [], error: err.message })
+            }
+          })
+        }
+      )
+
+      req.on('error', (err: any) => {
+        resolve({ success: false, models: [], error: err.message })
+      })
+
+      req.setTimeout(5000, () => {
+        req.destroy()
+        resolve({ success: false, models: [], error: 'Ollama ps query timed out' })
+      })
+
+      req.end()
+    })
+  }
+
+  unloadModel(modelName: string, customHost?: string): Promise<{ success: boolean; error?: string }> {
+    if (customHost) this.setBaseHost(customHost)
+    if (!modelName || !modelName.trim()) {
+      return Promise.resolve({ success: false, error: 'Invalid model name' })
+    }
+    const cleanModel = modelName.trim()
+    logger.log('INFO', 'OllamaClient', `Requesting immediate model eviction (keep_alive: 0) for: ${cleanModel}`)
+
+    const urlOpts = this.resolveUrl('/api/generate')
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({
+        model: cleanModel,
+        prompt: '',
+        keep_alive: 0,
+      })
+
+      const req = http.request(
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'POST',
+          agent: httpAgent,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+        },
+        (res) => {
+          res.resume()
+          res.on('end', () => {
+            logger.log('INFO', 'OllamaClient', `Model ${cleanModel} evicted. Status: HTTP ${res.statusCode}`)
+            resolve({ success: res.statusCode === 200 })
+          })
+        }
+      )
+
+      req.on('error', (err: any) => {
+        logger.log('WARN', 'OllamaClient', `Failed to unload model ${cleanModel}: ${err.message}`)
+        resolve({ success: false, error: err.message })
+      })
+
+      req.setTimeout(10000, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Model unload timed out' })
+      })
+
+      req.write(postData)
+      req.end()
+    })
   }
 
   private resolveUrl(apiPath: string): { hostname: string; port: number | string; path: string } {
@@ -135,6 +233,12 @@ export class OllamaHttpClient {
               } catch {}
             }
 
+            if (parsedError) {
+              if (parsedError.includes('manifest') || parsedError.includes('file does not exist')) {
+                parsedError = `Tag '${cleanModelName}' non trovato nel registro ufficiale Ollama (ollama.com/library). Dettaglio: ${parsedError}`
+              }
+            }
+
             logger.log('INFO', 'OllamaClient', `Model pull stream finished for ${cleanModelName}: HTTP ${res.statusCode}, status: ${lastStatus}`)
 
             const isSuccess = res.statusCode === 200 && !parsedError
@@ -213,7 +317,7 @@ export class OllamaHttpClient {
     prompt: string,
     onChunk: (chunk: string) => void,
     onDone: () => void,
-    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number }
+    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string }
   ): Promise<{ success: boolean; error?: string }> {
     if (typeof prompt !== 'string') return Promise.resolve({ success: false, error: 'Invalid prompt' })
 
@@ -232,6 +336,7 @@ export class OllamaHttpClient {
         model: model || 'llama3.2',
         prompt,
         stream: true,
+        keep_alive: customOptions?.keep_alive,
         options: {
           num_ctx: customOptions?.num_ctx || 16384,
           temperature: customOptions?.temperature ?? 0.1,

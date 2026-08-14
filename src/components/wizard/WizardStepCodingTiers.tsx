@@ -122,6 +122,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 displayName={m.displayName}
                 description={m.description}
                 sizeBytesApprox={m.sizeBytesApprox}
+                family={m.family}
                 isRecommended={m.isRecommended}
                 isInstalled={isModelDownloaded(m.modelName)}
                 isSelected={selectedFast === m.modelName}
@@ -145,6 +146,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 displayName={m.displayName}
                 description={m.description}
                 sizeBytesApprox={m.sizeBytesApprox}
+                family={m.family}
                 isRecommended={m.isRecommended}
                 isInstalled={isModelDownloaded(m.modelName)}
                 isSelected={selectedStandard === m.modelName}
@@ -168,6 +170,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 displayName={m.displayName}
                 description={m.description}
                 sizeBytesApprox={m.sizeBytesApprox}
+                family={m.family}
                 isRecommended={m.isRecommended}
                 isInstalled={isModelDownloaded(m.modelName)}
                 isSelected={selectedDeep === m.modelName}
@@ -178,6 +181,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
           </div>
         </div>
       )}
+
 
       {/* Extra Installed Local Models Selection */}
       {extraLocalModels.length > 0 && (

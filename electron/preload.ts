@@ -94,6 +94,8 @@ const api: IElectronAPI = {
     return () => ipcRenderer.removeListener('ollama:pull-progress', subscription)
   },
   benchmarkModel: (modelName: string) => ipcRenderer.invoke('ollama:benchmark-model', modelName),
+  getRunningModels: (host?: string) => ipcRenderer.invoke('ollama:get-running-models', host),
+  unloadModel: (modelName: string, host?: string) => ipcRenderer.invoke('ollama:unload-model', modelName, host),
   listInstalledSkills: (workspaceRoot?: string) => ipcRenderer.invoke('skills:list-installed', workspaceRoot),
   listHubSkills: (workspaceRoot?: string) => ipcRenderer.invoke('skills:list-hub', workspaceRoot),
   listHubSources: () => ipcRenderer.invoke('skills:list-sources'),

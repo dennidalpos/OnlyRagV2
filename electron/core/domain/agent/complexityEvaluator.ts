@@ -20,6 +20,7 @@ export interface ComplexityEvaluationContext {
   availableModels?: string[]
   hasRecentToolFailure?: boolean
   errorCountInHistory?: number
+  consecutiveSuccessCount?: number
 }
 
 // Deep reasoning indicator keywords (EN + IT)
@@ -73,7 +74,7 @@ const DEEP_KEYWORDS = [
   'dead code',
 ]
 
-// Fast tier indicator keywords (EN + IT)
+// Fast tier indicator keywords (EN + IT) - Informational / Lookup queries
 const FAST_KEYWORDS = [
   'what is',
   'cos è',
@@ -95,26 +96,38 @@ const FAST_KEYWORDS = [
   'dove si trova',
   'dove è',
   'dov\'è',
-  'list',
-  'elenca',
-  'mostra',
-  'show',
-  'status',
-  'stato',
+  'show status',
+  'check status',
+  'mostra stato',
   'ciao',
   'hello',
   'help',
   'aiuto',
-  'versione',
-  'version',
-  'syntax',
-  'sintassi',
+  'syntax for',
+  'sintassi per',
   'differenza tra',
   'difference between',
   'a cosa serve',
 ]
 
-// Technical code failure & stack trace signals
+// Coding action imperatives that indicate active generation / modification
+const CODING_ACTION_KEYWORDS = [
+  'create',
+  'crea',
+  'implement',
+  'implementa',
+  'build',
+  'write',
+  'scrivi',
+  'add',
+  'aggiungi',
+  'modify',
+  'modifica',
+  'generate',
+  'genera',
+]
+
+// Technical code failure & stack trace signals (Multi-language)
 const CODE_FAILURE_PATTERNS = [
   'traceback (most recent call last)',
   'error: at ',
@@ -135,6 +148,11 @@ const CODE_FAILURE_PATTERNS = [
   'failed | ',
   'fail | ',
   'err!',
+  'sql syntax error',
+  'psscriptanalyzer',
+  'non-zero exit code',
+  'cargo build failed',
+  'go build:',
 ]
 
 function matchesKeyword(text: string, keyword: string): boolean {
@@ -215,6 +233,7 @@ export function evaluateTaskComplexity(
   let availableModels: string[] | undefined = undefined
   let hasRecentToolFailure = false
   let errorCountInHistory = 0
+  let consecutiveSuccessCount = 0
 
   if (typeof attachedFilesOrContext === 'object' && attachedFilesOrContext !== null) {
     attachedFilesCount = attachedFilesOrContext.attachedFilesCount || 0
@@ -223,6 +242,7 @@ export function evaluateTaskComplexity(
     availableModels = attachedFilesOrContext.availableModels
     hasRecentToolFailure = !!attachedFilesOrContext.hasRecentToolFailure
     errorCountInHistory = attachedFilesOrContext.errorCountInHistory || 0
+    consecutiveSuccessCount = attachedFilesOrContext.consecutiveSuccessCount || 0
   } else if (typeof attachedFilesOrContext === 'number') {
     attachedFilesCount = attachedFilesOrContext
   }
@@ -255,15 +275,21 @@ export function evaluateTaskComplexity(
   // Code failure / Stack trace match
   const hasFailurePattern = CODE_FAILURE_PATTERNS.some((pat) => text.includes(pat))
 
+  // Coding action match
+  const hasCodingAction = CODING_ACTION_KEYWORDS.some((kw) => matchesKeyword(text, kw))
+
   // Fast tier indicator match
   const hasFastKeyword = FAST_KEYWORDS.some((kw) => matchesKeyword(text, kw))
-  const isFastQuery = wordCount < 20 && attachedFilesCount === 0 && totalChars < 4000 && hasFastKeyword && !hasDeepKeyword && !hasFailurePattern
+  const isFastQuery = wordCount < 25 && attachedFilesCount === 0 && totalChars < 4000 && hasFastKeyword && !hasDeepKeyword && !hasFailurePattern && !hasCodingAction
 
   let tier: ComplexityTier = 'standard'
   let reasoning = 'Query di codice e modifica file standard'
   let isEscalated = false
 
-  if (hasRecentToolFailure || errorCountInHistory >= 1) {
+  // Circuit breaker: auto-escalate on error, but de-escalate if 2 consecutive steps succeeded
+  const shouldDeEscalate = !hasRecentToolFailure && consecutiveSuccessCount >= 2
+
+  if (hasRecentToolFailure || (errorCountInHistory >= 1 && !shouldDeEscalate)) {
     tier = 'deep_reasoning'
     reasoning = 'Auto-healing: Escalation a Deep Reasoning a seguito di errori nei tool/comandi'
     isEscalated = true
@@ -279,6 +305,7 @@ export function evaluateTaskComplexity(
     tier = 'fast'
     reasoning = 'Rilevata domanda concettuale rapida o lookup a bassa complessità'
   }
+
 
   let preferredModel = ''
   let candidateFallbacks: string[] = []

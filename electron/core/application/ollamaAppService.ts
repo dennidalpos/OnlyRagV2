@@ -119,6 +119,14 @@ export class OllamaAppService {
     ollamaHttpClient.cancelStream()
   }
 
+  getRunningModels(host?: string) {
+    return ollamaHttpClient.getRunningModels(host)
+  }
+
+  unloadModel(modelName: string, host?: string) {
+    return ollamaHttpClient.unloadModel(modelName, host)
+  }
+
   benchmarkModel(modelName: string) {
     return ollamaHttpClient.benchmarkModel(modelName)
   }

@@ -7,6 +7,8 @@ import {
   Database,
   Eye,
   Zap,
+  Activity,
+  Scale,
 } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
@@ -38,6 +40,15 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
         dClean.split(':')[0] === base
       )
     })
+  }
+
+  const buildModelOptions = (currentValue: string, presetOptions: string[]) => {
+    const all = [
+      currentValue,
+      ...presetOptions,
+      ...models,
+    ].filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0))
+    return Array.from(new Set(all))
   }
 
   const renderOption = (name: string, label: string) => {
@@ -96,20 +107,18 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                 🟢 {t('hardwareWizard.step2Title')}
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Fast</span>
+              <span className="text-[10px] text-slate-400 font-mono">Fast</span>
             </div>
             <select
               aria-label="Select Coding Fast Tier Model"
-              value={settings.complexityFastModel || 'qwen2.5:3b'}
+              value={settings.complexityFastModel || 'llama3.2:3b'}
               onChange={(e) => onUpdateSettings({ complexityFastModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('qwen2.5:3b', 'qwen2.5:3b')}
-              {renderOption('llama3.2:3b', 'llama3.2:3b')}
-              {renderOption('llama3.2:1b', 'llama3.2:1b')}
-              {models
-                .filter((m) => !['qwen2.5:3b', 'llama3.2:3b', 'llama3.2:1b'].includes(m))
-                .map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.complexityFastModel || '',
+                ['llama3.2:3b', 'qwen2.5-coder:1.5b', 'qwen2.5-coder:3b', 'llama3.2:1b', 'qwen2.5:1.5b']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
 
@@ -119,7 +128,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
                 🔵 {t('hardwareWizard.step3Title')}
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Standard</span>
+              <span className="text-[10px] text-slate-400 font-mono">Standard</span>
             </div>
             <select
               aria-label="Select Coding Standard Tier Model"
@@ -132,15 +141,10 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('qwen2.5-coder:7b', 'qwen2.5-coder:7b')}
-              {renderOption('llama3.1:8b', 'llama3.1:8b')}
-              {renderOption('codellama:7b', 'codellama:7b')}
-              {renderOption('mistral:7b', 'mistral:7b')}
-              {models
-                .filter(
-                  (m) => !['qwen2.5-coder:7b', 'llama3.1:8b', 'codellama:7b', 'mistral:7b'].includes(m)
-                )
-                .map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.complexityStandardModel || settings.codingModel || '',
+                ['qwen2.5-coder:7b', 'llama3.2:3b', 'llama3.1:8b', 'codestral:22b', 'mistral:7b', 'deepseek-coder:6.7b']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
 
@@ -150,7 +154,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
                 🟣 {t('hardwareWizard.step4Title')}
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Deep Reasoning</span>
+              <span className="text-[10px] text-slate-400 font-mono">Deep Reasoning</span>
             </div>
             <select
               aria-label="Select Coding Deep Reasoning Model"
@@ -158,14 +162,10 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               onChange={(e) => onUpdateSettings({ complexityDeepModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('deepseek-r1:8b', 'deepseek-r1:8b')}
-              {renderOption('deepseek-r1:14b', 'deepseek-r1:14b')}
-              {renderOption('qwen2.5-coder:14b', 'qwen2.5-coder:14b')}
-              {models
-                .filter(
-                  (m) => !['deepseek-r1:8b', 'deepseek-r1:14b', 'qwen2.5-coder:14b'].includes(m)
-                )
-                .map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.complexityDeepModel || '',
+                ['deepseek-r1:8b', 'deepseek-r1:14b', 'deepseek-r1:1.5b', 'qwen2.5-coder:14b', 'phi4:14b', 'deepseek-r1:32b']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
         </div>
@@ -189,16 +189,14 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             <label className="text-xs font-semibold text-cyan-300 block">{t('settings.chatModel')}:</label>
             <select
               aria-label="Select RAG & Chat model"
-              value={settings.chatModel || settings.complexityStandardModel || settings.defaultModel || ''}
+              value={settings.chatModel || 'llama3.1:8b'}
               onChange={(e) => onUpdateSettings({ chatModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              <option value="">
-                {t('settings.standardWizardOption', {
-                  model: settings.complexityStandardModel || settings.defaultModel || 'Auto',
-                })}
-              </option>
-              {models.map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.chatModel || '',
+                ['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
         </div>
@@ -219,16 +217,73 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             <label className="text-xs font-semibold text-sky-300 block">{t('settings.translationModel')}:</label>
             <select
               aria-label="Select Document Translation model"
-              value={settings.translationModel || settings.complexityStandardModel || settings.defaultModel || ''}
+              value={settings.translationModel || 'qwen2.5:7b'}
               onChange={(e) => onUpdateSettings({ translationModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              <option value="">
-                {t('settings.standardWizardOption', {
-                  model: settings.complexityStandardModel || settings.defaultModel || 'Auto',
-                })}
-              </option>
-              {models.map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.translationModel || '',
+                ['qwen2.5:7b', 'aya-expanse:8b', 'gemma2:2b', 'gemma2:9b', 'qwen2.5:1.5b', 'mistral:7b']
+              ).map((m) => renderOption(m, m))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Module 4: Specialized Vertical Domains (Medical & Legal) */}
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-3">
+        <div className="flex items-center gap-3 border-b border-slate-800/80 pb-2.5">
+          <div className="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center">
+            <Activity className="w-4 h-4 text-rose-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-100">{t('settings.verticalDomainsSection')}</h2>
+            <p className="text-[11px] text-slate-400">{t('settings.verticalDomainsSubtitle')}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Medical & Healthcare */}
+          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-rose-300">
+              <span className="flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-rose-400" /> {t('settings.medicalModel')}
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Clinical &amp; Health</span>
+            </div>
+            <select
+              aria-label="Select Medical & Clinical model"
+              value={settings.medicalModel || ''}
+              onChange={(e) => onUpdateSettings({ medicalModel: e.target.value })}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
+            >
+              <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
+              {buildModelOptions(
+                settings.medicalModel || '',
+                ['biomistral:latest', 'meditron:7b', 'meditron:70b', 'llama3.1:8b']
+              ).map((m) => renderOption(m, m))}
+            </select>
+          </div>
+
+          {/* Legal & Compliance */}
+          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-amber-300">
+              <span className="flex items-center gap-1.5">
+                <Scale className="w-4 h-4 text-amber-400" /> {t('settings.legalModel')}
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Legal &amp; Normative</span>
+            </div>
+            <select
+              aria-label="Select Legal & Compliance model"
+              value={settings.legalModel || ''}
+              onChange={(e) => onUpdateSettings({ legalModel: e.target.value })}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
+            >
+              <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
+              {buildModelOptions(
+                settings.legalModel || '',
+                ['llama3.1:8b', 'mistral:7b', 'command-r:35b', 'command-r-plus:104b']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
         </div>
@@ -253,20 +308,18 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <span className="flex items-center gap-1.5">
                 <Eye className="w-4 h-4 text-amber-400" /> {t('settings.visionOcrLabel')}
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Vision OCR</span>
+              <span className="text-[10px] text-slate-400 font-mono">Vision OCR</span>
             </div>
             <select
               aria-label="Select Vision & OCR model"
-              value={settings.visionModel || 'llama3.2-vision'}
+              value={settings.visionModel || 'llava:7b'}
               onChange={(e) => onUpdateSettings({ visionModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('llama3.2-vision', 'llama3.2-vision')}
-              {renderOption('llava', 'llava')}
-              {renderOption('minicpm-v', 'minicpm-v')}
-              {models
-                .filter((m) => !['llama3.2-vision', 'llava', 'minicpm-v'].includes(m))
-                .map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.visionModel || '',
+                ['llava:7b', 'llama3.2-vision:11b', 'minicpm-v:8b', 'moondream:latest']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
 
@@ -276,21 +329,18 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <span className="flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-purple-400" /> {t('settings.vectorStoreLabel')}
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Vector Store</span>
+              <span className="text-[10px] text-slate-400 font-mono">Vector Store</span>
             </div>
             <select
               aria-label="Select Vector Embedding model"
-              value={settings.embeddingModel || 'nomic-embed-text'}
+              value={settings.embeddingModel || 'nomic-embed-text:latest'}
               onChange={(e) => onUpdateSettings({ embeddingModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              {renderOption('nomic-embed-text', 'nomic-embed-text (768d)')}
-              {renderOption('bge-m3:latest', 'bge-m3:latest (1024d)')}
-              {renderOption('bge-large', 'bge-large')}
-              {renderOption('all-minilm', 'all-minilm')}
-              {models
-                .filter((m) => !['nomic-embed-text', 'bge-m3:latest', 'bge-large', 'all-minilm'].includes(m))
-                .map((m) => renderOption(m, m))}
+              {buildModelOptions(
+                settings.embeddingModel || '',
+                ['nomic-embed-text:latest', 'bge-m3:latest', 'snowflake-arctic-embed:latest', 'mxbai-embed-large:latest', 'all-minilm:latest']
+              ).map((m) => renderOption(m, m))}
             </select>
           </div>
         </div>

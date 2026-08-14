@@ -21,6 +21,8 @@ export interface HardwareRecommendations {
   deepReasoningTierModels: ModelRecommendation[]
   chatTierModels: ModelRecommendation[]
   translationTierModels: ModelRecommendation[]
+  medicalTierModels: ModelRecommendation[]
+  legalTierModels: ModelRecommendation[]
   visionTierModels: ModelRecommendation[]
   embeddingTierModels: ModelRecommendation[]
 }
@@ -47,23 +49,39 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     : 'No Dedicated GPU Detected (CPU Execution)'
   const ramSummary = `${systemRamGB} GB System RAM`
 
-  // 🟢 Fast Tier Recommendations (Lightweight models)
+  // 🟢 Fast Tier Recommendations (Lightweight models: 1B - 3B)
   const fastTierModels: ModelRecommendation[] = [
     {
       modelName: 'llama3.2:3b',
       displayName: 'Llama 3.2 (3B)',
       family: 'llama',
       sizeBytesApprox: '2.0 GB',
-      description: 'Ultra-fast lightweight model for quick questions & simple lookups',
-      isRecommended: profileTier !== 'legacy',
+      description: 'Ultra-fast lightweight model for quick lookups & rapid iterations',
+      isRecommended: profileTier === 'midrange',
+    },
+    {
+      modelName: 'qwen2.5-coder:1.5b',
+      displayName: 'Qwen 2.5 Coder (1.5B)',
+      family: 'qwen',
+      sizeBytesApprox: '1.1 GB',
+      description: 'Ultra-fast code completion & minimal memory footprint',
+      isRecommended: profileTier === 'legacy',
+    },
+    {
+      modelName: 'qwen2.5-coder:3b',
+      displayName: 'Qwen 2.5 Coder (3B)',
+      family: 'qwen',
+      sizeBytesApprox: '1.9 GB',
+      description: 'Compact high-accuracy code assistant for rapid editing',
+      isRecommended: profileTier === 'highend',
     },
     {
       modelName: 'llama3.2:1b',
       displayName: 'Llama 3.2 (1B)',
       family: 'llama',
       sizeBytesApprox: '1.3 GB',
-      description: 'Minimal footprint model for low-spec hardware',
-      isRecommended: profileTier === 'legacy',
+      description: 'Minimal footprint model for ultra low-spec hardware',
+      isRecommended: false,
     },
     {
       modelName: 'qwen2.5:1.5b',
@@ -73,25 +91,25 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       description: 'Fast Alibaba lightweight instruction model',
       isRecommended: false,
     },
-    {
-      modelName: 'qwen2.5-coder:1.5b',
-      displayName: 'Qwen 2.5 Coder (1.5B)',
-      family: 'qwen',
-      sizeBytesApprox: '1.1 GB',
-      description: 'Ultra-fast code completion & single file edits',
-      isRecommended: false,
-    },
   ]
 
-  // 🔵 Standard Tier Recommendations (Balanced workhorse models)
+  // 🔵 Standard Tier Recommendations (Balanced workhorse models: 7B - 8B)
   const standardTierModels: ModelRecommendation[] = [
     {
       modelName: 'qwen2.5-coder:7b',
       displayName: 'Qwen 2.5 Coder (7B)',
       family: 'qwen',
       sizeBytesApprox: '4.7 GB',
-      description: 'State-of-the-art coding workhorse with high JSON precision',
+      description: 'State-of-the-art coding workhorse with high JSON precision & tool support',
       isRecommended: profileTier !== 'legacy',
+    },
+    {
+      modelName: 'llama3.2:3b',
+      displayName: 'Llama 3.2 (3B)',
+      family: 'llama',
+      sizeBytesApprox: '2.0 GB',
+      description: 'Balanced low-memory standard model for CPU/Legacy systems',
+      isRecommended: profileTier === 'legacy',
     },
     {
       modelName: 'llama3.1:8b',
@@ -99,7 +117,15 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       family: 'llama',
       sizeBytesApprox: '4.9 GB',
       description: 'Meta 8B balanced instruction & conversation model',
-      isRecommended: profileTier === 'legacy',
+      isRecommended: false,
+    },
+    {
+      modelName: 'codestral:22b',
+      displayName: 'Mistral Codestral (22B Q4)',
+      family: 'mistral',
+      sizeBytesApprox: '13.0 GB',
+      description: 'Mistral high-capacity enterprise code intelligence model',
+      isRecommended: false,
     },
     {
       modelName: 'mistral:7b',
@@ -119,15 +145,31 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
-  // 🟣 Deep Reasoning Tier Recommendations (Advanced multi-step reasoning models)
+  // 🟣 Deep Reasoning Tier Recommendations (Multi-step reasoning models)
   const deepReasoningTierModels: ModelRecommendation[] = [
     {
       modelName: 'deepseek-r1:8b',
       displayName: 'DeepSeek R1 (8B)',
       family: 'deepseek',
       sizeBytesApprox: '4.9 GB',
-      description: 'Advanced step-by-step reasoning model for complex debugging',
+      description: 'Advanced step-by-step reasoning model for complex debugging & algorithms',
       isRecommended: profileTier === 'midrange',
+    },
+    {
+      modelName: 'deepseek-r1:14b',
+      displayName: 'DeepSeek R1 (14B)',
+      family: 'deepseek',
+      sizeBytesApprox: '9.2 GB',
+      description: 'High-capacity reasoning engine for deep technical analysis & architecture',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'deepseek-r1:1.5b',
+      displayName: 'DeepSeek R1 (1.5B)',
+      family: 'deepseek',
+      sizeBytesApprox: '1.1 GB',
+      description: 'Lightweight reasoning model for CPU and legacy systems',
+      isRecommended: profileTier === 'legacy',
     },
     {
       modelName: 'qwen2.5-coder:14b',
@@ -135,23 +177,23 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       family: 'qwen',
       sizeBytesApprox: '9.0 GB',
       description: 'Large-scale coding model for architectural refactoring',
-      isRecommended: profileTier === 'highend',
-    },
-    {
-      modelName: 'deepseek-r1:14b',
-      displayName: 'DeepSeek R1 (14B)',
-      family: 'deepseek',
-      sizeBytesApprox: '9.2 GB',
-      description: 'High-capacity reasoning engine for deep technical analysis',
       isRecommended: false,
     },
     {
-      modelName: 'deepseek-r1:1.5b',
-      displayName: 'DeepSeek R1 (1.5B)',
+      modelName: 'phi4:14b',
+      displayName: 'Microsoft Phi-4 (14B)',
+      family: 'phi',
+      sizeBytesApprox: '9.1 GB',
+      description: 'Microsoft state-of-the-art synthetic reasoning & math assistant',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-r1:32b',
+      displayName: 'DeepSeek R1 (32B)',
       family: 'deepseek',
-      sizeBytesApprox: '1.1 GB',
-      description: 'Lightweight reasoning model for lower-spec hardware',
-      isRecommended: profileTier === 'legacy',
+      sizeBytesApprox: '20.0 GB',
+      description: 'Ultra-capacity reasoning model for high-end workstations & servers',
+      isRecommended: false,
     },
   ]
 
@@ -199,7 +241,7 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
-  // 🌐 Document Translation Models (Outside Coding Complexity Router)
+  // 🌐 Document Translation Models (Specialized vertical translation)
   const translationTierModels: ModelRecommendation[] = [
     {
       modelName: 'qwen2.5:7b',
@@ -207,7 +249,31 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       family: 'qwen',
       sizeBytesApprox: '4.7 GB',
       description: 'Premier multilingual translation engine preserving layout and markdown format',
-      isRecommended: profileTier !== 'legacy',
+      isRecommended: profileTier === 'legacy' || profileTier === 'midrange',
+    },
+    {
+      modelName: 'aya-expanse:8b',
+      displayName: 'Aya Expanse (8B)',
+      family: 'commandr',
+      sizeBytesApprox: '5.1 GB',
+      description: 'Cohere highly-aligned multilingual translation and cross-lingual model',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'gemma2:2b',
+      displayName: 'Google Gemma 2 (2B)',
+      family: 'gemma',
+      sizeBytesApprox: '1.6 GB',
+      description: 'Ultra-lightweight fast multilingual translation model for low-spec systems',
+      isRecommended: false,
+    },
+    {
+      modelName: 'gemma2:9b',
+      displayName: 'Google Gemma 2 (9B)',
+      family: 'gemma',
+      sizeBytesApprox: '5.5 GB',
+      description: 'High-fidelity multilingual translation model for complex documents',
+      isRecommended: false,
     },
     {
       modelName: 'qwen2.5:1.5b',
@@ -215,14 +281,6 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       family: 'qwen',
       sizeBytesApprox: '1.0 GB',
       description: 'Lightweight multilingual translation engine for CPU/Legacy systems',
-      isRecommended: profileTier === 'legacy',
-    },
-    {
-      modelName: 'llama3.1:8b',
-      displayName: 'Llama 3.1 (8B)',
-      family: 'llama',
-      sizeBytesApprox: '4.9 GB',
-      description: 'Meta 8B multilingual model for cross-lingual document translation',
       isRecommended: false,
     },
     {
@@ -230,19 +288,19 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       displayName: 'Mistral (7B)',
       family: 'mistral',
       sizeBytesApprox: '4.1 GB',
-      description: 'Fast European multilingual translation model',
+      description: 'European high-speed instruction model for document translation',
       isRecommended: false,
     },
   ]
 
-  // 👁️ Vision Tier Recommendations
+  // 👁️ Vision Tier Recommendations (OCR, Multimodal & Layouts)
   const visionTierModels: ModelRecommendation[] = [
     {
-      modelName: 'qwen2.5vl:3b',
-      displayName: 'Qwen 2.5 VL (3B)',
-      family: 'qwen',
-      sizeBytesApprox: '3.2 GB',
-      description: 'Ultra-fast high-accuracy vision language model for OCR and layout inspection',
+      modelName: 'llava:7b',
+      displayName: 'LLaVA (7B)',
+      family: 'llava',
+      sizeBytesApprox: '4.5 GB',
+      description: 'Standard vision-language assistant model for general image & OCR inspection',
       isRecommended: profileTier === 'midrange' || profileTier === 'legacy',
     },
     {
@@ -269,20 +327,12 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       description: 'Compact fast vision model for lightweight/CPU hardware',
       isRecommended: false,
     },
-    {
-      modelName: 'llava:7b',
-      displayName: 'LLaVA (7B)',
-      family: 'llava',
-      sizeBytesApprox: '4.5 GB',
-      description: 'Standard vision-language assistant model for general image inspection',
-      isRecommended: false,
-    },
   ]
 
   // 🧠 Vector Embedding Tier Recommendations
   const embeddingTierModels: ModelRecommendation[] = [
     {
-      modelName: 'nomic-embed-text',
+      modelName: 'nomic-embed-text:latest',
       displayName: 'Nomic Embed Text (768-dim)',
       family: 'nomic',
       sizeBytesApprox: '274 MB',
@@ -290,19 +340,107 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       isRecommended: profileTier !== 'highend',
     },
     {
-      modelName: 'mxbai-embed-large',
-      displayName: 'MixedBread mxbai-embed-large',
-      family: 'mxbai',
-      sizeBytesApprox: '670 MB',
-      description: 'Large high-density vector embedding model',
-      isRecommended: profileTier === 'highend',
-    },
-    {
       modelName: 'bge-m3:latest',
       displayName: 'BAAI BGE-M3 (Multilingual 1024d)',
       family: 'bge',
       sizeBytesApprox: '1.1 GB',
-      description: 'Multilingual dense & sparse embedding model',
+      description: 'Multilingual dense & sparse embedding model for enterprise search',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'snowflake-arctic-embed:latest',
+      displayName: 'Snowflake Arctic Embed (1024d)',
+      family: 'generic',
+      sizeBytesApprox: '600 MB',
+      description: 'High-density multi-lingual retrieval embedding model',
+      isRecommended: false,
+    },
+    {
+      modelName: 'mxbai-embed-large:latest',
+      displayName: 'MixedBread mxbai-embed-large',
+      family: 'mxbai',
+      sizeBytesApprox: '670 MB',
+      description: 'Large high-density vector embedding model',
+      isRecommended: false,
+    },
+    {
+      modelName: 'all-minilm:latest',
+      displayName: 'All-MiniLM-L6-v2',
+      family: 'generic',
+      sizeBytesApprox: '120 MB',
+      description: 'Ultra-fast compact sentence embedding model for lightweight CPU systems',
+      isRecommended: false,
+    },
+  ]
+
+  // 🏥 Medical & Healthcare Domain Models
+  const medicalTierModels: ModelRecommendation[] = [
+    {
+      modelName: 'biomistral:latest',
+      displayName: 'BioMistral (7B)',
+      family: 'mistral',
+      sizeBytesApprox: '4.1 GB',
+      description: 'Specialized biomedical QA, clinical pharmacology & healthcare research',
+      isRecommended: profileTier === 'legacy' || profileTier === 'midrange',
+    },
+    {
+      modelName: 'meditron:7b',
+      displayName: 'Meditron (7B)',
+      family: 'llama',
+      sizeBytesApprox: '4.5 GB',
+      description: 'Clinical guidelines, PubMed evidence & medical Q&A assistant',
+      isRecommended: false,
+    },
+    {
+      modelName: 'meditron:70b',
+      displayName: 'Meditron (70B)',
+      family: 'llama',
+      sizeBytesApprox: '40.0 GB',
+      description: 'Enterprise-grade clinical decision support and nosology consultation',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'llama3.1:8b',
+      displayName: 'Llama 3.1 (8B)',
+      family: 'llama',
+      sizeBytesApprox: '4.9 GB',
+      description: 'Meta 8B balanced model with broad medical and clinical terminology support',
+      isRecommended: false,
+    },
+  ]
+
+  // ⚖️ Legal & Compliance Domain Models
+  const legalTierModels: ModelRecommendation[] = [
+    {
+      modelName: 'llama3.1:8b',
+      displayName: 'Llama 3.1 (8B)',
+      family: 'llama',
+      sizeBytesApprox: '4.9 GB',
+      description: 'Statutory compliance, legal drafting & regulatory entity extraction',
+      isRecommended: profileTier !== 'highend',
+    },
+    {
+      modelName: 'mistral:7b',
+      displayName: 'Mistral (7B)',
+      family: 'mistral',
+      sizeBytesApprox: '4.1 GB',
+      description: 'Specialized legal analysis, European jurisprudence & contract clause review',
+      isRecommended: false,
+    },
+    {
+      modelName: 'command-r:35b',
+      displayName: 'Cohere Command R (35B)',
+      family: 'commandr',
+      sizeBytesApprox: '20.0 GB',
+      description: 'Grounded RAG with strict citations, compliance policies & legal synthesis',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'command-r-plus:104b',
+      displayName: 'Cohere Command R+ (104B)',
+      family: 'commandr',
+      sizeBytesApprox: '60.0 GB',
+      description: 'Enterprise legal corpus reasoning, high-precision compliance and contract risk',
       isRecommended: false,
     },
   ]
@@ -317,6 +455,8 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     deepReasoningTierModels,
     chatTierModels,
     translationTierModels,
+    medicalTierModels,
+    legalTierModels,
     visionTierModels,
     embeddingTierModels,
   }

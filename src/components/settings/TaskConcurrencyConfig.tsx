@@ -49,16 +49,22 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+        role="radiogroup"
+        aria-label="Task concurrency preset selection"
+      >
         {presets.map((preset) => {
           const isSelected = currentConcurrency === preset.value
           return (
             <button
               key={preset.value}
               type="button"
+              role="radio"
+              aria-checked={isSelected}
               onClick={() => handleSelectConcurrency(preset.value)}
               aria-label={`Set concurrency to ${preset.value} tasks`}
-              className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between space-y-2 cursor-pointer ${
+              className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between space-y-2 cursor-pointer focus-ring active:scale-[0.98] ${
                 isSelected
                   ? 'bg-cyan-950/40 border-cyan-500 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-500/50'
                   : 'bg-slate-900/80 hover:bg-slate-800/80 border-slate-800 hover:border-slate-700 text-slate-300'

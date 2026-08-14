@@ -4,7 +4,18 @@ import {
   analyzeHardwareAndRecommend,
   HardwareRecommendations,
 } from '../../services/hardwareRecommendationEngine'
-import { Cpu, ChevronRight, ChevronLeft, X, Check } from 'lucide-react'
+import {
+  Cpu,
+  ChevronRight,
+  ChevronLeft,
+  X,
+  Check,
+  Code,
+  MessageSquare,
+  Eye,
+  Sliders,
+  Download,
+} from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { WizardStepHardware } from '../wizard/WizardStepHardware'
 import { WizardStepCodingTiers } from '../wizard/WizardStepCodingTiers'
@@ -93,6 +104,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         ? recTrans
         : downloadedModels.find((m) => m.includes('qwen2.5') && !m.includes('coder')) || recTrans)
   )
+  const [selectedMedical, setSelectedMedical] = useState<string>(
+    settings.medicalModel || ''
+  )
+  const [selectedLegal, setSelectedLegal] = useState<string>(
+    settings.legalModel || ''
+  )
   const [selectedVision, setSelectedVision] = useState<string>(
     settings.visionModel ||
       (downloadedModels.includes(recVision)
@@ -130,6 +147,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const [pullingStatusText, setPullingStatusText] = useState('')
   const [pullProgressPercent, setPullProgressPercent] = useState(0)
   const [pullErrorDetail, setPullErrorDetail] = useState<string | null>(null)
+  const [failedModelIndex, setFailedModelIndex] = useState<number | null>(null)
+  const [skippedModels, setSkippedModels] = useState<string[]>([])
   const isCancelledRef = useRef<boolean>(false)
 
   // Disk Space Pre-Check State
@@ -154,12 +173,16 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       if (settings.complexityDeepModel) setSelectedDeep(settings.complexityDeepModel)
       if (settings.chatModel) setSelectedChat(settings.chatModel)
       if (settings.translationModel) setSelectedTranslation(settings.translationModel)
+      setSelectedMedical(settings.medicalModel || '')
+      setSelectedLegal(settings.legalModel || '')
       if (settings.visionModel) setSelectedVision(settings.visionModel)
       if (settings.embeddingModel) setSelectedEmbedding(settings.embeddingModel)
       if (settings.hardwareProfile) setHardwareProfile(settings.hardwareProfile)
       if (settings.ocrEngine) setOcrEngine(settings.ocrEngine)
       setUseComplexityRouting(settings.useComplexityRouting !== false)
       setPullErrorDetail(null)
+      setFailedModelIndex(null)
+      setSkippedModels([])
       setIsPullingModels(false)
       isCancelledRef.current = false
       setStep(1)
@@ -210,12 +233,16 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       selectedDeep,
       selectedChat,
       selectedTranslation,
+      selectedMedical,
+      selectedLegal,
       selectedVision,
       selectedEmbedding,
     ])
   ).filter((m) => !!m && m.trim().length > 0)
 
-  const missingModels = uniqueSelectedModels.filter((m) => !isModelDownloaded(m.trim()))
+  const missingModels = uniqueSelectedModels
+    .filter((m) => !isModelDownloaded(m.trim()))
+    .filter((m) => !skippedModels.includes(m.trim()))
 
   // Check Disk Space when entering Step 6
   useEffect(() => {
@@ -239,12 +266,25 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     if (!isOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isPullingModels) {
-        onClose()
+        handleCloseWithSave()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, isPullingModels, onClose])
+  }, [
+    isOpen,
+    isPullingModels,
+    selectedFast,
+    selectedStandard,
+    selectedDeep,
+    selectedChat,
+    selectedTranslation,
+    selectedVision,
+    selectedEmbedding,
+    useComplexityRouting,
+    hardwareProfile,
+    ocrEngine,
+  ])
 
   if (!isOpen) return null
 
@@ -283,7 +323,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     }
   }
 
-  const handleStartBulkPull = async () => {
+  const handleStartBulkPull = async (startIndex: number = 0) => {
     if (!window.electronAPI || missingModels.length === 0) {
       handleFinalSave()
       return
@@ -299,9 +339,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     isCancelledRef.current = false
     setIsPullingModels(true)
     setPullErrorDetail(null)
+    setFailedModelIndex(null)
     let hasError = false
 
-    for (let i = 0; i < missingModels.length; i++) {
+    for (let i = startIndex; i < missingModels.length; i++) {
       if (isCancelledRef.current) {
         hasError = true
         break
@@ -324,6 +365,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           hasError = true
           const errDetail =
             res?.error || 'Download non completato. Verifica che Ollama sia attivo.'
+          setFailedModelIndex(i)
           setPullErrorDetail(`Errore download per ${modelToPull}: ${errDetail}`)
           setPullingStatusText(`Errore [${modelToPull}]: ${errDetail}`)
           console.error(`Failed pulling ${modelToPull}:`, errDetail)
@@ -336,6 +378,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         }
         hasError = true
         const errMsg = err?.message || 'Eccezione imprevista durante il download'
+        setFailedModelIndex(i)
         setPullErrorDetail(`Errore imprevisto per ${modelToPull}: ${errMsg}`)
         setPullingStatusText(`Errore [${modelToPull}]: ${errMsg}`)
         console.error(`Failed pulling ${modelToPull}:`, err)
@@ -353,6 +396,27 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     }
   }
 
+  const handleRetryPull = () => {
+    setPullErrorDetail(null)
+    handleStartBulkPull(failedModelIndex !== null ? failedModelIndex : 0)
+  }
+
+  const handleSkipCurrentPull = () => {
+    if (failedModelIndex !== null && missingModels[failedModelIndex]) {
+      const skipped = missingModels[failedModelIndex]
+      setSkippedModels((prev) => [...prev, skipped])
+      setPullErrorDetail(null)
+      const nextIdx = failedModelIndex
+      if (nextIdx < missingModels.length - 1) {
+        handleStartBulkPull(nextIdx)
+      } else {
+        handleFinalSave()
+      }
+    } else {
+      handleFinalSave()
+    }
+  }
+
   const handleAutoApplyRecommended = () => {
     setSelectedFast(recFast)
     setSelectedStandard(recStandard)
@@ -364,7 +428,43 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     setUseComplexityRouting(true)
     setHardwareProfile('Auto')
     setOcrEngine('native_cuda')
+    onUpdateSettings({
+      defaultModel: recStandard,
+      useComplexityRouting: true,
+      complexityFastModel: recFast,
+      complexityStandardModel: recStandard,
+      complexityDeepModel: recDeep,
+      codingModel: recStandard,
+      chatModel: recChat,
+      translationModel: recTrans,
+      visionModel: recVision,
+      embeddingModel: recEmbedding,
+      hardwareProfile: 'Auto',
+      ocrEngine: 'native_cuda',
+      hasCompletedInitialSetup: true,
+    })
     setStep(6)
+  }
+
+  const handleCloseWithSave = () => {
+    onUpdateSettings({
+      defaultModel: selectedStandard || settings.defaultModel,
+      useComplexityRouting,
+      complexityFastModel: selectedFast || settings.complexityFastModel,
+      complexityStandardModel: selectedStandard || settings.complexityStandardModel,
+      complexityDeepModel: selectedDeep || settings.complexityDeepModel,
+      codingModel: selectedStandard || settings.codingModel,
+      chatModel: selectedChat || settings.chatModel,
+      translationModel: selectedTranslation || settings.translationModel,
+      medicalModel: selectedMedical || settings.medicalModel,
+      legalModel: selectedLegal || settings.legalModel,
+      visionModel: selectedVision || settings.visionModel,
+      embeddingModel: selectedEmbedding || settings.embeddingModel,
+      hardwareProfile,
+      ocrEngine,
+      hasCompletedInitialSetup: true,
+    })
+    onClose()
   }
 
   const handleFinalSave = () => {
@@ -377,6 +477,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       codingModel: selectedStandard,
       chatModel: selectedChat,
       translationModel: selectedTranslation,
+      medicalModel: selectedMedical,
+      legalModel: selectedLegal,
       visionModel: selectedVision,
       embeddingModel: selectedEmbedding,
       hardwareProfile,
@@ -395,7 +497,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     >
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl flex flex-col shadow-2xl overflow-hidden max-h-[92vh]">
         {/* Wizard Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-600 flex items-center justify-center border border-cyan-400/30">
               <Cpu className="w-5 h-5 text-slate-950 fill-current" />
@@ -419,17 +521,76 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label={t('common.close')}
-            className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCloseWithSave}
+              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-xl transition-colors focus-ring cursor-pointer"
+              title="Salva le impostazioni configurate ed esci dal Wizard"
+            >
+              Salva & Esci
+            </button>
+            <button
+              onClick={handleCloseWithSave}
+              aria-label={t('common.close')}
+              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Interactive Step Navigation Bar (Stepper) */}
+        <div className="bg-slate-950/90 border-b border-slate-800 px-4 py-2.5">
+          <nav aria-label="Wizard Steps" className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            {[
+              { id: 1, label: '1. Hardware', icon: Cpu, desc: 'Rilevamento Hardware' },
+              { id: 2, label: '2. Coding', icon: Code, desc: 'AI Coding Agent' },
+              { id: 3, label: '3. Chat & LLM', icon: MessageSquare, desc: 'RAG & Traduzione' },
+              { id: 4, label: '4. Multimodale', icon: Eye, desc: 'Vision OCR & Embedding' },
+              { id: 5, label: '5. Preferenze', icon: Sliders, desc: 'Profilo & Runtime' },
+              { id: 6, label: '6. Download', icon: Download, desc: 'Riepilogo & Pull' },
+            ].map((st) => {
+              const isCurrent = step === st.id
+              const isCompleted = step > st.id
+              const Icon = st.icon
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => {
+                    if (!isPullingModels) setStep(st.id)
+                  }}
+                  disabled={isPullingModels}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  className={`px-2 py-1.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none focus-ring ${
+                    isCurrent
+                      ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-400/40'
+                      : isCompleted
+                      ? 'bg-slate-900/80 text-emerald-300/90 border-emerald-800/40 hover:bg-slate-850 hover:text-emerald-200'
+                      : 'bg-slate-900/40 text-slate-400 border-slate-800/80 hover:bg-slate-800/70 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                  title={`${st.desc} — Clicca per andare allo step ${st.id}`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
+                      isCurrent
+                        ? 'bg-cyan-400 text-slate-950 font-black'
+                        : isCompleted
+                        ? 'bg-emerald-500 text-slate-950 font-black'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {isCompleted ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : st.id}
+                  </div>
+                  <span className="truncate">{st.label}</span>
+                </button>
+              )
+            })}
+          </nav>
         </div>
 
         {/* Wizard Step Content */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 overflow-y-auto flex-1 relative">
           {step === 1 && (
             <WizardStepHardware
               diagnostics={diagnostics}
@@ -466,8 +627,14 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               onSelectChat={setSelectedChat}
               selectedTranslation={selectedTranslation}
               onSelectTranslation={setSelectedTranslation}
+              selectedMedical={selectedMedical}
+              onSelectMedical={setSelectedMedical}
+              selectedLegal={selectedLegal}
+              onSelectLegal={setSelectedLegal}
               chatTierModels={recommendations.chatTierModels}
               translationTierModels={recommendations.translationTierModels}
+              medicalTierModels={recommendations.medicalTierModels}
+              legalTierModels={recommendations.legalTierModels}
               downloadedModels={downloadedModels}
               isModelDownloaded={isModelDownloaded}
             />
@@ -504,6 +671,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               selectedDeep={selectedDeep}
               selectedChat={selectedChat}
               selectedTranslation={selectedTranslation}
+              selectedMedical={selectedMedical}
+              selectedLegal={selectedLegal}
               selectedVision={selectedVision}
               selectedEmbedding={selectedEmbedding}
               useComplexityRouting={useComplexityRouting}
@@ -518,6 +687,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               pullProgressPercent={pullProgressPercent}
               pullErrorDetail={pullErrorDetail}
               onCancelPull={handleCancelPull}
+              onRetryPull={handleRetryPull}
+              onSkipCurrentPull={handleSkipCurrentPull}
+              onFinishWithoutMissing={handleFinalSave}
             />
           )}
         </div>
@@ -533,12 +705,21 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           </button>
 
           {step < 6 ? (
-            <button
-              onClick={() => setStep((s) => Math.min(6, s + 1))}
-              className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-md shadow-cyan-950/40 active:scale-95"
-            >
-              {t('hardwareWizard.nextBtn')} <ChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCloseWithSave}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
+                title="Salva le impostazioni configurate finora ed esci"
+              >
+                <Check className="w-3.5 h-3.5 text-emerald-400" /> Salva ed Esci
+              </button>
+              <button
+                onClick={() => setStep((s) => Math.min(6, s + 1))}
+                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-md shadow-cyan-950/40 active:scale-95"
+              >
+                {t('hardwareWizard.nextBtn')} <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               {missingModels.length > 0 && !isPullingModels && (
@@ -551,7 +732,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 </button>
               )}
               <button
-                onClick={handleStartBulkPull}
+                onClick={() => handleStartBulkPull()}
                 disabled={
                   !isAllSlotsPopulated ||
                   isPullingModels ||

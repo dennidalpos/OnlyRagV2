@@ -149,6 +149,17 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const [copiedUrl, setCopiedUrl] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
 
+  React.useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const repoUrl = 'https://github.com/dennidalpos/OnlyRagV2'
@@ -306,52 +317,62 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Category Filter Tabs */}
-              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
+              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]" role="tablist" aria-label="Filtro categorie moduli">
                 <button
+                  role="tab"
+                  aria-selected={selectedCategory === 'all'}
                   onClick={() => setSelectedCategory('all')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
                     selectedCategory === 'all'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold'
+                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   Tutti
                 </button>
                 <button
+                  role="tab"
+                  aria-selected={selectedCategory === 'core'}
                   onClick={() => setSelectedCategory('core')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
                     selectedCategory === 'core'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold'
+                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   Core
                 </button>
                 <button
+                  role="tab"
+                  aria-selected={selectedCategory === 'aiAndVector'}
                   onClick={() => setSelectedCategory('aiAndVector')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
                     selectedCategory === 'aiAndVector'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold'
+                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   AI &amp; DB
                 </button>
                 <button
+                  role="tab"
+                  aria-selected={selectedCategory === 'uiAndEditor'}
                   onClick={() => setSelectedCategory('uiAndEditor')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
                     selectedCategory === 'uiAndEditor'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold'
+                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   UI &amp; Monaco
                 </button>
                 <button
+                  role="tab"
+                  aria-selected={selectedCategory === 'skillsAndEcosystem'}
                   onClick={() => setSelectedCategory('skillsAndEcosystem')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
                     selectedCategory === 'skillsAndEcosystem'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold'
+                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -387,12 +408,13 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   <div className="pt-1 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-500 font-medium capitalize">
+                    <span className="text-[10px] text-slate-400 font-medium capitalize">
                       {t(`about.categories.${item.category}` as any)}
                     </span>
                     <button
                       onClick={() => handleOpenExternal(item.url)}
-                      className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Open website for ${item.name}`}
+                      className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity focus-ring rounded px-1"
                     >
                       <span>Web</span>
                       <ExternalLink className="w-3 h-3" />
@@ -432,7 +454,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
 
         {/* Modal Footer */}
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-          <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+          <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
             <Code2 className="w-3.5 h-3.5 text-cyan-400" /> Built with Clean Architecture &amp; 100% Local AI
           </div>
           <button

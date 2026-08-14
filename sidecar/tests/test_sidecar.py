@@ -150,3 +150,48 @@ def test_semantic_chunks_oversized_line_splitting():
     for idx, c_text, header in chunks:
         assert len(c_text) < 1500
         assert "LargeDoc" in header
+        assert "[Documento: LargeDoc.md | Sezione:" in c_text
+
+
+def test_reciprocal_rank_fusion_k60():
+    from sidecar.services.search_service import reciprocal_rank_fusion
+    dense_ranks = {"chunk_1": 1, "chunk_2": 2, "chunk_3": 3}
+    sparse_ranks = {"chunk_2": 1, "chunk_1": 2, "chunk_4": 3}
+
+    rrf = reciprocal_rank_fusion(dense_ranks, sparse_ranks, k=60)
+
+    # chunk_1: 1/(60+1) + 1/(60+2) = 1/61 + 1/62 = 0.016393 + 0.016129 = 0.032522
+    # chunk_2: 1/(60+2) + 1/(60+1) = 0.032522
+    # chunk_3: 1/(60+3) = 1/63 = 0.015873
+    # chunk_4: 1/(60+3) = 1/63 = 0.015873
+    assert pytest.approx(rrf["chunk_1"], rel=1e-3) == (1/61 + 1/62)
+    assert pytest.approx(rrf["chunk_2"], rel=1e-3) == (1/61 + 1/62)
+    assert pytest.approx(rrf["chunk_3"], rel=1e-3) == (1/63)
+    assert pytest.approx(rrf["chunk_4"], rel=1e-3) == (1/63)
+    assert rrf["chunk_1"] > rrf["chunk_3"]
+
+
+def test_reranker_cross_scoring():
+    from sidecar.infrastructure.reranker import calculate_cross_score, rerank_candidates
+    query = "quantum computing error correction"
+    relevant_text = "This paper investigates quantum computing error correction algorithms in superconducting qubits."
+    irrelevant_text = "The recipe for pasta includes flour, eggs, and a pinch of salt."
+
+    score_rel = calculate_cross_score(query, relevant_text, header="Quantum Physics")
+    score_irrel = calculate_cross_score(query, irrelevant_text, header="Cooking")
+
+    assert score_rel > score_irrel
+    assert score_rel > 0.5
+    assert score_irrel < 0.2
+
+    candidates = [
+        {"chunk_id": "c_irr", "text": irrelevant_text, "score": 0.6, "doc_name": "cook.md"},
+        {"chunk_id": "c_rel", "text": relevant_text, "score": 0.4, "doc_name": "quantum.md"}
+    ]
+
+    reranked = rerank_candidates(query, candidates, top_k=2)
+    assert len(reranked) == 2
+    assert reranked[0]["chunk_id"] == "c_rel"
+    assert reranked[0]["score"] > reranked[1]["score"]
+
+

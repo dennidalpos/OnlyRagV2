@@ -1,7 +1,7 @@
 import datetime
 import numpy as np
 from typing import List
-from sidecar.config import EMBEDDING_DIM, HAS_HTTPX, httpx_client, http_session, logger
+from sidecar.config import EMBEDDING_DIM, httpx_client, logger
 
 OLLAMA_EMBED_FAILURE_COUNT: int = 0
 OLLAMA_EMBED_DISABLED_UNTIL: float = 0.0
@@ -30,10 +30,7 @@ def generate_embedding(text: str, model: str = "nomic-embed-text", ollama_url: s
         for embed_m in candidate_models:
             try:
                 payload = {"model": embed_m, "prompt": text}
-                if HAS_HTTPX and httpx_client is not None:
-                    response = httpx_client.post(f"{ollama_url}/api/embeddings", json=payload, timeout=3.0)
-                else:
-                    response = http_session.post(f"{ollama_url}/api/embeddings", json=payload, timeout=3.0)
+                response = httpx_client.post(f"{ollama_url}/api/embeddings", json=payload, timeout=5.0)
 
                 if response.status_code == 200:
                     data = response.json()

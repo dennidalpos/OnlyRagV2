@@ -197,18 +197,18 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <div key={log.id} className="space-y-1.5 font-mono">
                   <button
                     onClick={() => toggleExpand(log.id)}
-                    className="w-full text-left flex items-center justify-between text-slate-400 hover:text-slate-200 py-1 px-1 rounded transition-colors group"
+                    className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1 px-1 rounded transition-colors group focus-ring"
                   >
                     <span className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-500 font-sans">Ran</span>
-                      <span className="font-bold text-slate-300 group-hover:text-cyan-300 transition-colors">{cmdText}</span>
+                      <span className="text-slate-400 font-sans font-medium">Ran</span>
+                      <span className="font-bold text-slate-200 group-hover:text-cyan-300 transition-colors">{cmdText}</span>
                     </span>
-                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
+                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                   </button>
 
                   {isExpanded && (
                     <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner">
-                      <div className="text-slate-500 mb-1">../workspace &gt; {cmdText}</div>
+                      <div className="text-slate-400 mb-1">../workspace &gt; {cmdText}</div>
                       {log.detail || log.message}
                     </div>
                   )}
@@ -226,13 +226,13 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               return (
                 <div key={log.id} className="flex items-center justify-between text-xs py-1 px-1 rounded font-mono group">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 font-sans">Edited</span>
+                    <span className="text-slate-400 font-sans font-medium">Edited</span>
                     <span className={`px-1.5 py-0.5 rounded text-[10px] ${badge.color}`}>
                       {badge.label}
                     </span>
                     <button
                       onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
-                      className="font-bold text-slate-200 hover:text-cyan-400 transition-colors cursor-pointer"
+                      className="font-bold text-slate-200 hover:text-cyan-300 transition-colors cursor-pointer focus-ring rounded"
                       title={t('common.viewDetails')}
                     >
                       {fileName}
@@ -240,7 +240,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   </div>
                   <button
                     onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
-                    className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-cyan-400 transition-colors"
+                    className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring"
                   >
                     {t('common.viewDetails')}
                   </button>
@@ -254,13 +254,13 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <button
                   key={log.id}
                   onClick={() => toggleExpand(log.id)}
-                  className="w-full text-left flex items-center justify-between text-slate-400 hover:text-slate-200 py-1 px-1 rounded transition-colors group font-mono"
+                  className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1 px-1 rounded transition-colors group font-mono focus-ring"
                 >
-                  <span className="flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-slate-300">
-                    <span>Explored</span>
-                    <span className="font-bold text-slate-300">workspace</span>
+                  <span className="flex items-center gap-1.5 text-xs text-slate-300 group-hover:text-slate-100">
+                    <span className="text-slate-400 font-sans font-medium">Explored</span>
+                    <span className="font-bold text-slate-200">workspace</span>
                   </span>
-                  {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
+                  {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                 </button>
               )
             }

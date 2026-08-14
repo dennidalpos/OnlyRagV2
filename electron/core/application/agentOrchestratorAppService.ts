@@ -10,6 +10,7 @@ import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { isIgnoredPath } from '../domain/agent/contextFilter'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
+import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { skillAppService } from './skillAppService'
@@ -80,20 +81,20 @@ function pushToolOutputHistory(historyArr: string[], output: string, maxItems = 
   }
 }
 
-function scanProjectMap(workspacePath: string): string {
+async function scanProjectMap(workspacePath: string): Promise<string> {
   try {
     const relativeList: string[] = []
-    const scan = (curDir: string, depth: number) => {
+    const scan = async (curDir: string, depth: number) => {
       if (depth > 8 || relativeList.length >= 2000) return
       try {
-        const entries = fs.readdirSync(curDir, { withFileTypes: true })
+        const entries = await fs.promises.readdir(curDir, { withFileTypes: true })
         for (const entry of entries) {
           if (isIgnoredPath(entry.name, entry.isDirectory())) continue
           const fullPath = path.join(curDir, entry.name)
           const relPath = path.relative(workspacePath, fullPath).replace(/\\/g, '/')
           if (entry.isDirectory()) {
             relativeList.push(`[DIR] ${relPath}/`)
-            scan(fullPath, depth + 1)
+            await scan(fullPath, depth + 1)
           } else {
             relativeList.push(`[FILE] ${relPath}`)
           }
@@ -102,7 +103,7 @@ function scanProjectMap(workspacePath: string): string {
         logger.log('WARN', 'AgentOrchestratorApp', `Scan error in ${curDir}: ${err.message}`)
       }
     }
-    scan(workspacePath, 0)
+    await scan(workspacePath, 0)
     return relativeList.join('\n')
   } catch (err: any) {
     logger.log('WARN', 'AgentOrchestratorApp', `Project map scan failed: ${err.message}`)
@@ -190,7 +191,7 @@ export async function runAgentOrchestratorLoop(
     .join('\n\n')
 
   const projectContextMapStr = workspacePath && !isStandaloneMode && fs.existsSync(workspacePath)
-    ? scanProjectMap(workspacePath)
+    ? await scanProjectMap(workspacePath)
     : ''
 
   emitLog(
@@ -213,6 +214,7 @@ export async function runAgentOrchestratorLoop(
   const toolOutputHistory: string[] = []
   const MAX_STEPS = 50
   let stepCount = 0
+  let noToolStreak = 0
 
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
@@ -274,6 +276,9 @@ export async function runAgentOrchestratorLoop(
       runtimeOpts,
     })
 
+    const dynamicNumCtx = calculateDynamicContextWindow(turnPrompt.length, runtimeOpts.num_ctx)
+    runtimeOpts.num_ctx = dynamicNumCtx
+
     emitLog('tool_call', `[Step ${stepCount}/${MAX_STEPS}] Consulting LLM (${targetModel}) [ctx:${runtimeOpts.num_ctx}]...`)
 
     let streamedOutput = ''
@@ -282,6 +287,7 @@ export async function runAgentOrchestratorLoop(
         targetModel,
         prompt: turnPrompt,
         runtimeOpts,
+        keepAlive: '30m',
         ollamaEndpoint: settings.ollamaHost,
         onTokenChunk: (chunk) => {
           if (session.targetWindow && !session.targetWindow.isDestroyed()) {
@@ -325,12 +331,24 @@ export async function runAgentOrchestratorLoop(
         continue
       }
 
+      // In AGENT mode, if the model gave conversational text without invoking any tool,
+      // prompt it up to 2 times to execute a tool (e.g. write_file, read_file, list_dir, run_command) instead of exiting prematurely.
+      if (agentMode === 'agent' && stepCount < MAX_STEPS && noToolStreak < 2) {
+        noToolStreak++
+        const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive and did not invoke any tools. In AGENT mode, to create or edit files in the workspace, you MUST output a tool call formatted as:\n\`\`\`json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "index.html",\n    "content": "..."\n  },\n  "explanation": "Creating initial project file"\n}\n\`\`\`\nIf all work is finished, invoke the "finish" tool. Please invoke the required tool now.`
+        pushToolOutputHistory(toolOutputHistory, feedback)
+        emitLog('info', `Step ${stepCount}: No tool call found in LLM response. Requesting tool invocation...`)
+        continue
+      }
+
       const summary = streamedOutput.trim() || 'Task completed successfully.'
       emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
       emitDone(true, summary)
       activeAgentSessions.delete(sessionId)
       return { success: true, summary }
     }
+
+    noToolStreak = 0
 
     if (parsedTool.tool === 'finish') {
       const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'

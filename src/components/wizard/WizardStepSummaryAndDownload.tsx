@@ -9,6 +9,8 @@ export interface WizardStepSummaryAndDownloadProps {
   selectedDeep: string
   selectedChat: string
   selectedTranslation: string
+  selectedMedical?: string
+  selectedLegal?: string
   selectedVision: string
   selectedEmbedding: string
   useComplexityRouting: boolean
@@ -23,6 +25,9 @@ export interface WizardStepSummaryAndDownloadProps {
   pullProgressPercent: number
   pullErrorDetail: string | null
   onCancelPull: () => void
+  onRetryPull?: () => void
+  onSkipCurrentPull?: () => void
+  onFinishWithoutMissing?: () => void
 }
 
 export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownloadProps> = ({
@@ -31,6 +36,8 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
   selectedDeep,
   selectedChat,
   selectedTranslation,
+  selectedMedical,
+  selectedLegal,
   selectedVision,
   selectedEmbedding,
   useComplexityRouting,
@@ -45,6 +52,9 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
   pullProgressPercent,
   pullErrorDetail,
   onCancelPull,
+  onRetryPull,
+  onSkipCurrentPull,
+  onFinishWithoutMissing,
 }) => {
   const { t } = useTranslation()
 
@@ -81,6 +91,20 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
             <span className="text-sky-300 font-medium">🌐 {t('settings.translationModel')}:</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedTranslation || t('common.none')}</span>
           </div>
+
+          {selectedMedical && (
+            <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
+              <span className="text-rose-300 font-medium">🏥 {t('settings.medicalModel')}:</span>
+              <span className="font-mono text-slate-200 font-semibold">{selectedMedical}</span>
+            </div>
+          )}
+
+          {selectedLegal && (
+            <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
+              <span className="text-amber-300 font-medium">⚖️ {t('settings.legalModel')}:</span>
+              <span className="font-mono text-slate-200 font-semibold">{selectedLegal}</span>
+            </div>
+          )}
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
             <span className="text-amber-300 font-medium">👁️ {t('settings.visionOcrLabel')}:</span>
@@ -163,9 +187,45 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
         </div>
       )}
 
+      {/* Pull Error Detail & Recovery Action Bar */}
       {pullErrorDetail && (
-        <div className="p-3 bg-rose-950/50 border border-rose-800 rounded-xl text-xs text-rose-300 font-mono">
-          {pullErrorDetail}
+        <div className="p-4 bg-rose-950/50 border border-rose-800/80 rounded-xl space-y-3">
+          <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <span>Errore durante il download del modello</span>
+          </div>
+          <div className="text-xs text-rose-200 font-mono bg-slate-950/80 p-2.5 rounded-lg border border-rose-900/60 break-all">
+            {pullErrorDetail}
+          </div>
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            {onRetryPull && (
+              <button
+                type="button"
+                onClick={onRetryPull}
+                className="px-3 py-1.5 bg-rose-900 hover:bg-rose-800 text-rose-100 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-sm active:scale-95"
+              >
+                🔄 {t('hardwareWizard.retryPull')}
+              </button>
+            )}
+            {onSkipCurrentPull && (
+              <button
+                type="button"
+                onClick={onSkipCurrentPull}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 focus-ring active:scale-95"
+              >
+                ⏭️ {t('hardwareWizard.skipModel')}
+              </button>
+            )}
+            {onFinishWithoutMissing && (
+              <button
+                type="button"
+                onClick={onFinishWithoutMissing}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-emerald-700/60 text-emerald-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 focus-ring active:scale-95 ml-auto"
+              >
+                ✓ {t('hardwareWizard.saveAndFinishAnyway')}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

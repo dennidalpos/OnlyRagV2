@@ -262,6 +262,57 @@ Now I will actually read the App file.
     expect(result?.parameters.filePath).toBe('src/App.tsx')
   })
 
+  it('should fallback to parsing tool call inside <think> when none exists outside', () => {
+    const raw = `<think>
+I need to write index.html:
+\`\`\`json
+{
+  "tool": "write_file",
+  "parameters": {
+    "filePath": "index.html",
+    "content": "<!DOCTYPE html><html><body>Canvas App</body></html>"
+  },
+  "explanation": "Creating main canvas HTML file"
+}
+\`\`\`
+</think>`
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toBe('index.html')
+    expect(result?.parameters.content).toContain('Canvas App')
+  })
+
+  it('should parse markdown code block with HTML filename comment as write_file tool call', () => {
+    const raw = `I will create the HTML file now:
+\`\`\`html
+<!-- index.html -->
+<!DOCTYPE html>
+<html>
+<head><title>Test App</title></head>
+<body><h1>Hello World</h1></body>
+</html>
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toBe('index.html')
+    expect(result?.parameters.content).toContain('Test App')
+  })
+
+  it('should parse markdown code block with JS filename comment as write_file tool call', () => {
+    const raw = `Here is the JavaScript code:
+\`\`\`javascript
+// src/app.js
+console.log("App initialized");
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toBe('src/app.js')
+    expect(result?.parameters.content).toContain('App initialized')
+  })
+
   it('should return null when text does not contain valid tool call', () => {
     const raw = 'Just a normal text response without any tool invocations.'
     const result = parseAgentToolCall(raw)

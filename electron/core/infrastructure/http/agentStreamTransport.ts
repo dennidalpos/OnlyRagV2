@@ -8,6 +8,7 @@ export interface StreamSession {
   targetModel: string
   prompt: string
   runtimeOpts: OllamaRuntimeOptions
+  keepAlive?: string
   ollamaEndpoint?: string
   onTokenChunk?: (chunk: string) => void
   isCancelled: () => boolean
@@ -20,6 +21,7 @@ export class AgentStreamTransport {
       targetModel,
       prompt,
       runtimeOpts,
+      keepAlive,
       ollamaEndpoint,
       onTokenChunk,
       isCancelled,
@@ -46,6 +48,7 @@ export class AgentStreamTransport {
             model: targetModel,
             prompt,
             stream: true,
+            keep_alive: keepAlive || '30m',
             options: {
               num_ctx: runtimeOpts.num_ctx,
               temperature: runtimeOpts.temperature,

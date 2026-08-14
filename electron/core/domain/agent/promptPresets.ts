@@ -25,7 +25,6 @@ export interface ModelFamilyMeta {
 }
 
 export const MODEL_FAMILIES: ModelFamilyMeta[] = [
-  // Text & Coding LLMs
   { id: 'llama', name: 'Meta Llama 3 / 3.1 / 3.2 / 3.3', category: 'text_coder', description: 'Meta Llama 3 instruction-tuned architecture' },
   { id: 'qwen', name: 'Alibaba Qwen 2.5 / Qwen-Coder', category: 'text_coder', description: 'Alibaba Qwen 2.5 & Qwen-Coder high-precision JSON & tool calling' },
   { id: 'deepseek', name: 'DeepSeek-Coder / V3 / R1', category: 'text_coder', description: 'DeepSeek reasoning & code generation models' },
@@ -36,18 +35,12 @@ export const MODEL_FAMILIES: ModelFamilyMeta[] = [
   { id: 'commandr', name: 'Cohere Command R / Command R+', category: 'text_coder', description: 'Cohere enterprise RAG & citation models' },
   { id: 'yicoder', name: '01-AI Yi / Yi-Coder', category: 'text_coder', description: '01-AI Yi-Coder long-context models' },
   { id: 'starcoder', name: 'BigCode StarCoder / StarCoder2', category: 'text_coder', description: 'BigCode StarCoder repository context models' },
-
-  // Vision & Multimodal LLMs
   { id: 'llava', name: 'LLaVA / LLaVA-NeXT / LLaVA-Phi', category: 'vision', description: 'Large Language and Vision Assistant multimodal models' },
   { id: 'minicpm', name: 'OpenBMB MiniCPM-V', category: 'vision', description: 'OpenBMB MiniCPM-V efficient vision-language model' },
   { id: 'moondream', name: 'Moondream 2', category: 'vision', description: 'Tiny vision-language model optimized for fast diagram OCR' },
-
-  // Vector Embedding Models
   { id: 'nomic', name: 'Nomic Embed Text', category: 'embedding', description: 'Nomic AI 768-dim text embedding model' },
   { id: 'mxbai', name: 'MixedBread mxbai-embed-large', category: 'embedding', description: 'MixedBread AI high-dimensional vector model' },
   { id: 'bge', name: 'BAAI BGE-M3 / BGE-Large', category: 'embedding', description: 'Beijing Academy of AI multilingual vector embedding model' },
-
-  // Fallback
   { id: 'generic', name: 'Generico / Standard (Fallback)', category: 'generic', description: 'Universal fallback prompt preset' },
 ]
 
@@ -55,17 +48,12 @@ export function detectModelFamily(modelName: string): ModelFamily {
   if (!modelName || typeof modelName !== 'string') return 'generic'
   const name = modelName.toLowerCase().trim()
 
-  // 1. Vision & Multimodal Architectures
   if (name.includes('llava') || name.includes('bakllava')) return 'llava'
   if (name.includes('minicpm')) return 'minicpm'
   if (name.includes('moondream')) return 'moondream'
-
-  // 2. Vector Embeddings
   if (name.includes('nomic')) return 'nomic'
   if (name.includes('mxbai')) return 'mxbai'
   if (name.includes('bge')) return 'bge'
-
-  // 3. Text & Coder Architectures
   if (name.includes('qwen')) return 'qwen'
   if (name.includes('deepseek')) return 'deepseek'
   if (name.includes('codellama')) return 'codellama'

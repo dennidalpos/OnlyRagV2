@@ -24,15 +24,44 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
   const isProgrammaticScrollRef = useRef<boolean>(false)
+  const isUserInteractingRef = useRef<boolean>(false)
+  const userInteractionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
 
+  // Track explicit user scroll gestures (mouse wheel or touch)
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    const handleUserInteraction = () => {
+      isUserInteractingRef.current = true
+      if (userInteractionTimeoutRef.current) clearTimeout(userInteractionTimeoutRef.current)
+      userInteractionTimeoutRef.current = setTimeout(() => {
+        isUserInteractingRef.current = false
+      }, 600)
+    }
+
+    el.addEventListener('wheel', handleUserInteraction, { passive: true })
+    el.addEventListener('touchmove', handleUserInteraction, { passive: true })
+
+    return () => {
+      el.removeEventListener('wheel', handleUserInteraction)
+      el.removeEventListener('touchmove', handleUserInteraction)
+      if (userInteractionTimeoutRef.current) clearTimeout(userInteractionTimeoutRef.current)
+    }
+  }, [])
+
   const handleScroll = () => {
     if (!scrollContainerRef.current) return
-    if (isProgrammaticScrollRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
-    const isNearBottom = scrollHeight - scrollTop - clientHeight <= 60
-    setIsUserScrolledUp(!isNearBottom)
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight
+
+    if (distanceToBottom <= 25) {
+      setIsUserScrolledUp(false)
+    } else if (distanceToBottom > 60 && isUserInteractingRef.current) {
+      setIsUserScrolledUp(true)
+    }
   }
 
   const scrollToBottom = () => {
@@ -44,9 +73,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
       if (scrollContainerRef.current) {
         scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
       }
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false
-      }, 50)
+      isProgrammaticScrollRef.current = false
     })
   }
 

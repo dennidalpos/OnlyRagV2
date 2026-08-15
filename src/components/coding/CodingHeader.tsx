@@ -1,5 +1,5 @@
 import React from 'react'
-import { Code, ChevronRight, Cpu, Sparkles } from 'lucide-react'
+import { Code, ChevronRight, Cpu, Sparkles, Compass } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { ModelBadge } from '../common/ModelBadge'
@@ -8,6 +8,7 @@ import { useTranslation } from '../../i18n'
 interface CodingHeaderProps {
   guestOsInfo: any
   settings?: AppSettings
+  onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
   agentPrompt: string
   pinnedFilesCount: number
   editorContentLength: number
@@ -18,6 +19,7 @@ interface CodingHeaderProps {
 export const CodingHeader: React.FC<CodingHeaderProps> = ({
   guestOsInfo,
   settings,
+  onUpdateSettings,
   agentPrompt,
   pinnedFilesCount,
   editorContentLength,
@@ -35,6 +37,16 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
     ? complexity.modelName
     : (settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b')
 
+  const isAutoHubEnabled = settings?.autoInstallHubSkills !== 'disabled'
+
+  const toggleAutoHub = () => {
+    if (onUpdateSettings) {
+      onUpdateSettings({
+        autoInstallHubSkills: isAutoHubEnabled ? 'disabled' : 'auto',
+      })
+    }
+  }
+
   return (
     <div className="h-12 px-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between z-10 shrink-0 select-text font-sans">
       {/* Left: Project & Module Title */}
@@ -49,6 +61,24 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
 
       {/* Center / Right: Hardware Specs, Active Skills Badge, Model Badge */}
       <div className="flex items-center gap-2.5 text-xs">
+        {/* Quick Toggle for Auto-Discovery Skill Hub */}
+        <button
+          onClick={toggleAutoHub}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-xl text-[10px] font-sans font-bold border transition-all cursor-pointer shadow-sm ${
+            isAutoHubEnabled
+              ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
+              : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:bg-slate-800/80'
+          }`}
+          title={
+            isAutoHubEnabled
+              ? 'Auto-Discovery Skill Hub: ATTIVO (Clicca per disattivare l auto-installazione automatica da Store)'
+              : 'Auto-Discovery Skill Hub: DISATTIVATO (Clicca per attivare l auto-installazione automatica da Store)'
+          }
+        >
+          <Compass className={`w-3 h-3 ${isAutoHubEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+          <span>Auto-Hub: {isAutoHubEnabled ? 'ON' : 'OFF'}</span>
+        </button>
+
         {/* Active Skills Pill Badge */}
         {activeSkills.length > 0 && (
           <div

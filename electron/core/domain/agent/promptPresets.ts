@@ -83,7 +83,7 @@ CRITICAL REASONING & STRATEGY DIRECTIVES:
 1. STRATEGY CONSISTENCY: Choose ONE coherent implementation strategy. If building manually with write_file (e.g. package.json, vite.config.ts, src/...), stick to write_file without running destructive CLI scaffolding tools midway. If using CLI scaffolding, run it only as the very first step non-interactively.
 2. WORKSPACE ANCHORING: Ensure all file paths (e.g. "src/App.tsx", "package.json") are relative to the root workspace folder ({workspacePath}). Do not scatter files across arbitrary subfolders.
 3. ZERO UNWANTED DEPENDENCIES: Implement strictly what the user asked for. Never import or introduce unrequested third-party UI frameworks (e.g. do not import antd, mui, or bootstrap when Tailwind CSS is requested).
-4. ANTI-SURRENDER DIRECTIVE: If a CLI command fails or cancels, NEVER surrender with the 'ask' tool. Analyze the issue and directly construct the necessary project files using write_file.
+4. ANTI-SURRENDER DIRECTIVE: If a CLI command or generator (e.g. npm create vite) fails, times out, or cancels with 'Operation cancelled', DO NOT call the 'ask' tool to ask what to do next. Fallback IMMEDIATELY to constructing the required project files directly with write_file (e.g. package.json, index.html, src/App.tsx).
 5. STRICT NO-SPACES FILE NAMING & CODING BEST PRACTICES: File and folder names MUST NEVER contain spaces (e.g. use "user-profile.tsx" or "user_profile.py", NEVER "user profile.tsx" or "my file.ts"). Use clean modular architecture, explicit TypeScript types (avoid 'any'), single responsibility per file, and standard forward slashes '/'.
 
 AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
@@ -124,7 +124,7 @@ CRITICAL REASONING & STRATEGY DIRECTIVES:
 1. STRATEGY CONSISTENCY: Choose ONE coherent approach. If creating files directly with write_file (e.g. package.json, src/App.tsx, src/index.css), proceed systematically with write_file. NEVER execute conflicting CLI scaffolding generators midway through creating files manually.
 2. WORKSPACE ANCHORING: Keep all relative file paths (e.g. "package.json", "src/App.tsx") strictly rooted in the active workspace ({workspacePath}).
 3. ZERO UNWANTED DEPENDENCIES: Build strictly according to user specifications. Never introduce unrequested libraries (e.g. NEVER import antd, bootstrap, or mui when Tailwind CSS or Vanilla CSS is specified).
-4. ANTI-SURRENDER DIRECTIVE: If a terminal command fails, times out, or cancels, DO NOT call the 'ask' tool to ask what to do. Inspect the failure and proceed directly by writing the required files with write_file.
+4. ANTI-SURRENDER DIRECTIVE: If a terminal command or CLI generator (e.g. npm create vite) fails, times out, or cancels with 'Operation cancelled', DO NOT call the 'ask' tool to ask what to do next. Fallback IMMEDIATELY to constructing the required project files directly with write_file (e.g. package.json, index.html, src/App.tsx).
 5. STRICT NO-SPACES FILE NAMING & CODING BEST PRACTICES: File and folder names MUST NEVER contain spaces (e.g. use "user-profile.tsx" or "user_profile.py", NEVER "user profile.tsx" or "my file.ts"). Use clean modular architecture, explicit TypeScript types (avoid 'any'), single responsibility per file, and standard forward slashes '/'.
 
 CRITICAL TOOL CALLING CONTRACT (Output EXACTLY ONE JSON block):

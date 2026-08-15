@@ -3,7 +3,7 @@ import path from 'node:path'
 import { skillRepository, calculateSkillChecksum, parseSkillFrontmatter } from '../infrastructure/filesystem/skillRepository'
 import { customHubRepository } from '../infrastructure/filesystem/customHubRepository'
 import { skillHubClient } from '../infrastructure/http/skillHubClient'
-import { matchSkillsForTask, compileSkillsContextBlock, SkillMatchContext } from '../domain/skills/skillMatcher'
+import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock, SkillMatchContext } from '../domain/skills/skillMatcher'
 import {
   SkillDefinition,
   HubSkillItem,
@@ -285,10 +285,14 @@ export class SkillAppService {
     return skillRepository.deleteSkill(skillId, workspaceRoot)
   }
 
-  async getMatchedSkills(userTaskOrContext: string | SkillMatchContext, workspaceRoot?: string | null, maxSkills: number = 3): Promise<SkillDefinition[]> {
+  async getMatchedSkills(
+    userTaskOrContext: string | SkillMatchContext,
+    workspaceRoot?: string | null,
+    maxSkills: number = 3,
+    options?: { autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
+  ): Promise<SkillDefinition[]> {
     try {
-      const availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
-      if (availableSkills.length === 0) return []
+      let availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
 
       const ctx: SkillMatchContext = typeof userTaskOrContext === 'string'
         ? { userTask: userTaskOrContext, workspacePath: workspaceRoot || undefined }
@@ -298,16 +302,54 @@ export class SkillAppService {
         ctx.projectStack = extractProjectStack(ctx.workspacePath)
       }
 
-      return matchSkillsForTask(ctx, availableSkills, maxSkills)
+      let matched = matchSkillsForTask(ctx, availableSkills, maxSkills)
+
+      // Auto-discovery from enabled Hubs if enabled and additional domain skills are needed
+      const autoInstallMode = options?.autoInstallHubSkills || 'auto'
+      const minScore = options?.autoInstallMinScore ?? 8.0
+
+      if (autoInstallMode !== 'disabled' && matched.length < maxSkills) {
+        try {
+          const hubItems = await this.listHubSkills(workspaceRoot, false)
+          const installedNames = new Set(availableSkills.map((s) => s.name.toLowerCase()))
+          const uninstalledHubItems = hubItems.filter((item) => !installedNames.has(item.name.toLowerCase()))
+
+          if (uninstalledHubItems.length > 0) {
+            const hubMatches = matchHubSkillsForTask(ctx, uninstalledHubItems, minScore)
+            if (hubMatches.length > 0) {
+              const topHubMatch = hubMatches[0]
+              logger.log(
+                'INFO',
+                'SkillAppService',
+                `Auto-discovered high confidence hub skill '${topHubMatch.item.name}' (score: ${topHubMatch.score}). Auto-installing...`
+              )
+              const installRes = await this.installFromHub(topHubMatch.item.id, workspaceRoot, topHubMatch.item.hubId)
+              if (installRes.success) {
+                availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
+                matched = matchSkillsForTask(ctx, availableSkills, maxSkills)
+              }
+            }
+          }
+        } catch (hubErr: any) {
+          logger.log('WARN', 'SkillAppService', `Hub auto-discovery check skipped: ${hubErr.message}`)
+        }
+      }
+
+      return matched
     } catch (err: any) {
       logger.log('WARN', 'SkillAppService', `Error matching skills: ${err.message}`)
       return []
     }
   }
 
-  async getContextSkillsBlock(userTaskOrContext: string | SkillMatchContext, workspaceRoot?: string | null, maxSkills: number = 3): Promise<string> {
+  async getContextSkillsBlock(
+    userTaskOrContext: string | SkillMatchContext,
+    workspaceRoot?: string | null,
+    maxSkills: number = 3,
+    options?: { autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
+  ): Promise<string> {
     try {
-      const matched = await this.getMatchedSkills(userTaskOrContext, workspaceRoot, maxSkills)
+      const matched = await this.getMatchedSkills(userTaskOrContext, workspaceRoot, maxSkills, options)
       if (matched.length === 0) return ''
 
       logger.log('INFO', 'SkillAppService', `Injected ${matched.length} contextual skill(s): ${matched.map((s) => s.name).join(', ')}`)

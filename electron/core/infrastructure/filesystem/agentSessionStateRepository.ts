@@ -16,6 +16,7 @@ export interface SavedAgentSessionState {
   recentFullLogs: Array<{ step: number; tool: string; output: string }>
   planMilestones: PlanMilestone[]
   userTask: string
+  initialUserTask?: string
   updatedAt: string
 }
 
@@ -88,9 +89,42 @@ export class AgentSessionStateRepository {
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath)
       }
+      const fallbackPath = path.join(
+        os.homedir(),
+        '.onlyrag_v2',
+        'sessions',
+        `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`
+      )
+      if (fs.existsSync(fallbackPath)) {
+        await fs.promises.unlink(fallbackPath)
+      }
       return true
     } catch (err: any) {
       logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing session state for ${sessionId}: ${err.message}`)
+      return false
+    }
+  }
+
+  public async clearAllSessionStates(workspacePath?: string | null): Promise<boolean> {
+    try {
+      const dirs = [this.getStorageDir(workspacePath), path.join(os.homedir(), '.onlyrag_v2', 'sessions')]
+      for (const dir of dirs) {
+        if (fs.existsSync(dir)) {
+          const files = await fs.promises.readdir(dir)
+          for (const file of files) {
+            if (file.startsWith('.agent_state_') && file.endsWith('.json')) {
+              try {
+                await fs.promises.unlink(path.join(dir, file))
+              } catch (unlinkErr: any) {
+                logger.log('WARN', 'AgentSessionStateRepo', `Failed deleting state file ${file}: ${unlinkErr.message}`)
+              }
+            }
+          }
+        }
+      }
+      return true
+    } catch (err: any) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed clearing all session states: ${err.message}`)
       return false
     }
   }

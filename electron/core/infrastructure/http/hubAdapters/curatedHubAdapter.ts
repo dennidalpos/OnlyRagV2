@@ -183,6 +183,7 @@ tags: ["tailwind", "css", "frontend"]
 # Tailwind CSS v4 Best Practices
 
 ## 1. Configuration & @theme Directives
+- In Tailwind v4, use \`@import "tailwindcss";\` at the top of your main CSS file (\`src/index.css\`). DO NOT write \`@tailwind base; @tailwind components; @tailwind utilities;\`.
 - In Tailwind v4, configure tokens directly in your main CSS file using \`@theme\` variables instead of \`tailwind.config.js\`.
 - Use HSL or modern CSS color tokens with CSS custom properties (\`--color-primary\`, \`--color-surface\`).
 

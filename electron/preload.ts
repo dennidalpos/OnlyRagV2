@@ -61,6 +61,9 @@ const api: IElectronAPI = {
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
   getAgentQueueStatus: () => ipcRenderer.invoke('agent:get-queue-status'),
   setAgentMaxConcurrency: (limit: number) => ipcRenderer.invoke('agent:set-max-concurrency', limit),
+  deleteAgentSession: (sessionId: string, workspacePath?: string | null) => ipcRenderer.invoke('agent:delete-session', sessionId, workspacePath),
+  clearAllAgentSessions: (workspacePath?: string | null) => ipcRenderer.invoke('agent:clear-all-sessions', workspacePath),
+  clearCodingAgentAuditLog: () => ipcRenderer.invoke('agent:clear-audit-log'),
   onAgentLog: (callback: (log: any) => void) => {
     const subscription = (_: any, log: any) => callback(log)
     ipcRenderer.on('agent:log', subscription)

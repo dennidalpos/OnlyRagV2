@@ -77,4 +77,25 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
     expect(block).toContain('Step 4 - Tool: tool_4')
     expect(block).not.toContain('Step 1 - Tool: tool_1')
   })
+
+  it('should cap stored episodes to 100 max and deduplicate identical failure logs', () => {
+    // Record 110 steps
+    for (let i = 1; i <= 110; i++) {
+      compactor.recordStep(
+        {
+          step: i,
+          tool: 'write_file',
+          target: 'App.tsx',
+          status: 'BLOCKED',
+          summary: 'Intervention issued',
+        },
+        'Identical intervention output'
+      )
+    }
+
+    expect(compactor.episodeCount).toBe(100)
+    // Failure logs should be deduplicated (1 entry instead of 8 identical entries)
+    const state = compactor.toState()
+    expect(state.recentFullLogs.length).toBeLessThanOrEqual(3)
+  })
 })

@@ -123,6 +123,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const [editingQueueText, setEditingQueueText] = useState<string>('')
   const isProgrammaticScrollRef = useRef<boolean>(false)
   const isUserScrolledUpRef = useRef<boolean>(false)
+  const isUserInteractingRef = useRef<boolean>(false)
+  const userInteractionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
 
@@ -136,14 +138,43 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const contextPercent = Math.min(100, Math.round((estimatedTurnChars / maxContextLimit) * 100))
   const isContextHeavy = contextPercent >= 70 || actionLogs.length > 14
 
+  // Track explicit user scroll gestures (mouse wheel or touch)
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    const handleUserInteraction = (e: WheelEvent | TouchEvent) => {
+      isUserInteractingRef.current = true
+      if (userInteractionTimeoutRef.current) clearTimeout(userInteractionTimeoutRef.current)
+      userInteractionTimeoutRef.current = setTimeout(() => {
+        isUserInteractingRef.current = false
+      }, 600)
+    }
+
+    el.addEventListener('wheel', handleUserInteraction, { passive: true })
+    el.addEventListener('touchmove', handleUserInteraction, { passive: true })
+
+    return () => {
+      el.removeEventListener('wheel', handleUserInteraction)
+      el.removeEventListener('touchmove', handleUserInteraction)
+      if (userInteractionTimeoutRef.current) clearTimeout(userInteractionTimeoutRef.current)
+    }
+  }, [])
+
   const handleScroll = () => {
     if (!scrollContainerRef.current) return
-    if (isProgrammaticScrollRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
     const distanceToBottom = scrollHeight - scrollTop - clientHeight
-    const isUp = distanceToBottom > 60
-    setIsScrolledUp(isUp)
-    isUserScrolledUpRef.current = isUp
+
+    // Automatically re-attach autoscroll whenever container reaches near-bottom (<= 25px)
+    if (distanceToBottom <= 25) {
+      isUserScrolledUpRef.current = false
+      setIsScrolledUp(false)
+    } else if (distanceToBottom > 80 && isUserInteractingRef.current) {
+      // Mark as scrolled up ONLY if the user performed an explicit wheel/touch gesture
+      setIsScrolledUp(true)
+      isUserScrolledUpRef.current = true
+    }
   }
 
   const scrollToBottom = (smooth = true) => {
@@ -166,9 +197,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
       if (scrollContainerRef.current) {
         scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
       }
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false
-      }, 60)
+      isProgrammaticScrollRef.current = false
     })
   }
 
@@ -178,7 +207,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
     if (next) {
       setIsScrolledUp(false)
       isUserScrolledUpRef.current = false
-      scrollToBottom(true)
+      scrollToBottom(false)
     }
   }
 
@@ -227,7 +256,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
     el.scrollTop = el.scrollHeight
 
     const rafId = requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
+      if (scrollContainerRef.current && !isUserScrolledUpRef.current) {
         scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
       }
       isProgrammaticScrollRef.current = false
@@ -237,6 +266,25 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
       cancelAnimationFrame(rafId)
     }
   }, [actionLogs, streamingText, isExecuting, autoScroll])
+
+  // ResizeObserver on message list to scroll to bottom as height increases during streaming
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    const observer = new ResizeObserver(() => {
+      if (autoScroll && !isUserScrolledUpRef.current) {
+        isProgrammaticScrollRef.current = true
+        el.scrollTop = el.scrollHeight
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false
+        })
+      }
+    })
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [autoScroll])
 
   const toggleExpand = (id: string) => {
     setExpandedLogIds((prev) => {
@@ -274,15 +322,27 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
       <div className="p-2.5 px-4 border-b border-slate-800/90 bg-[#0d131f] flex items-center justify-between gap-3 shrink-0 z-10">
         {/* Left: Project Folder info */}
         <div className="flex items-center gap-2 min-w-0">
-          <button
-            type="button"
-            onClick={onSelectWorkspaceFolder}
-            title={workspacePath ? `Progetto: ${workspacePath}` : t('coding.selectFolder')}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 hover:text-cyan-300 transition-all text-xs font-semibold truncate focus-ring"
-          >
-            <FolderOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span className="truncate max-w-[140px] sm:max-w-[200px]">{projectName}</span>
-          </button>
+          {workspacePath ? (
+            <button
+              type="button"
+              onClick={onSelectWorkspaceFolder}
+              title={`Progetto: ${workspacePath}`}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 text-cyan-200 transition-all text-xs font-semibold truncate focus-ring shadow-sm"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="truncate max-w-[140px] sm:max-w-[200px]">{projectName}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSelectWorkspaceFolder}
+              title={t('coding.selectFolder')}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 transition-all text-xs font-medium focus-ring"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{t('coding.selectFolder')}</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Nested Sessions Selector & New Chat */}
@@ -914,13 +974,14 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 onClick={handleToggleAutoScroll}
                 aria-label={autoScroll ? 'Autoscroll attivo' : 'Autoscroll disattivato'}
                 title={autoScroll ? 'Autoscroll attivo (clicca per disattivare)' : 'Autoscroll disattivato (clicca per attivare)'}
-                className={`p-1.5 rounded-lg transition-colors focus-ring text-xs ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-all focus-ring text-[10px] font-mono font-bold cursor-pointer border ${
                   autoScroll
-                    ? 'text-cyan-300 bg-cyan-950/60 border border-cyan-800/60'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80 border border-transparent'
+                    ? 'text-cyan-300 bg-cyan-950/80 border-cyan-800/80 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-300 bg-slate-900 border-slate-800'
                 }`}
               >
-                <ArrowDown className="w-3.5 h-3.5" />
+                <ArrowDown className={`w-3 h-3 ${autoScroll ? 'text-cyan-400' : 'text-slate-500'}`} />
+                <span>Scroll: {autoScroll ? 'ON' : 'OFF'}</span>
               </button>
 
               {/* Reset Session Mini Icon */}

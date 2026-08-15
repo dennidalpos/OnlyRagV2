@@ -1,5 +1,6 @@
 import { logger } from '../../../diagnostics'
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
+import { ToolSchemaValidator } from './toolSchemaValidator'
 
 export type { AgentToolCall }
 
@@ -333,24 +334,18 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
     .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
     .trim()
 
-  const cleanTool = extractToolCallFromText(cleanText)
-  if (cleanTool) return cleanTool
+  const candidate =
+    extractToolCallFromText(cleanText) ||
+    extractToolCallFromText(text) ||
+    parseFencedCodeBlockFallback(cleanText) ||
+    parseFencedCodeBlockFallback(text) ||
+    parseShellCodeBlockFallback(cleanText) ||
+    parseShellCodeBlockFallback(text) ||
+    parseDiffCodeBlockFallback(cleanText) ||
+    parseDiffCodeBlockFallback(text)
 
-  // 2. Second attempt: Check raw text in case reasoning models placed tool call inside <think>
-  const rawTool = extractToolCallFromText(text)
-  if (rawTool) return rawTool
+  if (!candidate) return null
 
-  // 3. Third attempt: Check if model emitted markdown code block with embedded filename comment
-  const fallbackCodeTool = parseFencedCodeBlockFallback(cleanText) || parseFencedCodeBlockFallback(text)
-  if (fallbackCodeTool) return fallbackCodeTool
-
-  // 4. Fourth attempt: Check for raw shell blocks (```bash ... ```)
-  const shellTool = parseShellCodeBlockFallback(cleanText) || parseShellCodeBlockFallback(text)
-  if (shellTool) return shellTool
-
-  // 5. Fifth attempt: Check for diff blocks (<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE)
-  const diffTool = parseDiffCodeBlockFallback(cleanText) || parseDiffCodeBlockFallback(text)
-  if (diffTool) return diffTool
-
-  return null
+  const validated = ToolSchemaValidator.validateAndSanitize(candidate)
+  return validated.sanitizedToolCall
 }

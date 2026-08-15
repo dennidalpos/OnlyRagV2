@@ -7,7 +7,8 @@ import { logger } from '../../diagnostics'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
-import { isIgnoredPath } from '../domain/agent/contextFilter'
+import os from 'node:os'
+import { isIgnoredPath, isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
@@ -17,6 +18,7 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -162,7 +164,21 @@ export async function runAgentOrchestratorLoop(
 
   const userTask = payload.userTask.trim()
   const agentMode = payload.agentMode || 'plan'
-  const workspacePath = payload.workspacePath || null
+  let workspacePath = payload.workspacePath || null
+  if (workspacePath && isProtectedSystemDirectory(workspacePath)) {
+    logger.log('WARN', 'AgentOrchestratorApp', `Provided workspace '${workspacePath}' is in a protected system directory. Falling back to User Desktop workspace.`)
+    workspacePath = path.join(os.homedir(), 'Desktop', 'test_app')
+  } else if (!workspacePath && !payload.isStandaloneMode) {
+    const desktopTestApp = path.join(os.homedir(), 'Desktop', 'test_app')
+    if (fs.existsSync(desktopTestApp)) {
+      workspacePath = desktopTestApp
+    }
+  }
+  if (workspacePath && !fs.existsSync(workspacePath)) {
+    try {
+      fs.mkdirSync(workspacePath, { recursive: true })
+    } catch {}
+  }
   const isStandaloneMode = Boolean(payload.isStandaloneMode)
   const settings: AppSettings = payload.settings || {
     defaultModel: 'llama3.2',
@@ -244,14 +260,19 @@ export async function runAgentOrchestratorLoop(
   const maxStepsLabel = MAX_STEPS === Infinity ? '∞' : String(MAX_STEPS)
   let stepCount = 0
   let noToolStreak = 0
+  let stagnationStreak = 0
   let hasFileMutations = false
   let hasVerifiedBuild = false
   let hasPromptedVerification = false
   const loopDetector = new AgentActionLoopDetector(2)
+  const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
   let consecutiveTaskFailures = 0
+  let consecutiveAskAttempts = 0
 
   // Restore session state if resuming an existing session
   const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
+  const initialUserTask = savedState?.initialUserTask || payload.initialUserTask || userTask
+
   if (savedState) {
     stepCount = savedState.stepCount || 0
     if (savedState.episodes && savedState.episodes.length > 0) {
@@ -272,6 +293,14 @@ export async function runAgentOrchestratorLoop(
         statusText,
       })
     }
+    if (settings.enableCodingAgentDebugLog && goalPlanner.hasPlan()) {
+      codingAgentLogger.logPlanMilestoneUpdate(
+        sessionId,
+        stepCount,
+        [...goalPlanner.getMilestones()],
+        statusText
+      )
+    }
   }
 
   const persistCurrentState = async () => {
@@ -285,6 +314,7 @@ export async function runAgentOrchestratorLoop(
       recentFullLogs: episodicCompactor.getRecentFullLogs(),
       planMilestones: [...goalPlanner.getMilestones()],
       userTask,
+      initialUserTask,
       updatedAt: new Date().toISOString(),
     })
   }
@@ -323,7 +353,10 @@ export async function runAgentOrchestratorLoop(
       undefined,
       routedComplexity.tier
     )
-    const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath)
+    const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath, 3, {
+      autoInstallHubSkills: settings.autoInstallHubSkills,
+      autoInstallMinScore: settings.autoInstallMinScore,
+    })
 
     const compiledHistoryBlock = episodicCompactor.compilePromptHistoryBlock(10000)
     const planBlock = goalPlanner.compileProgressPrompt()
@@ -331,6 +364,7 @@ export async function runAgentOrchestratorLoop(
     // Assemble base prompt segments, then apply heuristic compaction at 75% watermark
     const basePrompt = AgentPromptAssembler.assembleTurnPrompt({
       userTask,
+      initialUserTask,
       agentMode,
       stepCount,
       maxSteps: MAX_STEPS,
@@ -544,15 +578,19 @@ export async function runAgentOrchestratorLoop(
     // Check for repetitive loop / oscillation traps before execution
     const loopCheck = loopDetector.recordAndCheck(parsedTool)
     if (loopCheck.isLooping && loopCheck.suggestedIntervention) {
+      stagnationStreak++
+      const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
+      const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${stagnationStreak})]\nYou have been blocked ${stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'. You MUST run a verification command via run_command or read a different file to break out of this loop.`
+
       episodicCompactor.recordStep(
         {
           step: stepCount,
           tool: parsedTool.tool,
-          target: parsedTool.parameters?.filePath || parsedTool.parameters?.command,
+          target: loopTarget,
           status: 'BLOCKED',
-          summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats)`,
+          summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats, Stagnation: ${stagnationStreak})`,
         },
-        loopCheck.suggestedIntervention
+        enhancedIntervention
       )
       emitLog(
         'info',
@@ -560,13 +598,73 @@ export async function runAgentOrchestratorLoop(
         'Intervento automatico: cambio di strategia inviato al modello.'
       )
       if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logToolResult(sessionId, stepCount, parsedTool.tool, loopCheck.suggestedIntervention)
+        codingAgentLogger.logLoopIntervention(
+          sessionId,
+          stepCount,
+          parsedTool.tool,
+          loopTarget,
+          loopCheck.consecutiveDuplicateCount,
+          enhancedIntervention
+        )
+      }
+      if (isUnlimitedSteps && stagnationStreak >= 15) {
+        const stagSummary = `Pausa per stagnazione: raggiunti ${stagnationStreak} step consecutivi senza progresso.`
+        emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
+        emitDone(true, stagSummary)
+        activeAgentSessions.delete(sessionId)
+        return { success: true, summary: stagSummary }
       }
       continue
     }
 
+    stagnationStreak = 0
+
     if (parsedTool.tool === 'ask') {
       const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'
+      const qLower = question.toLowerCase()
+
+      const historyText = compiledHistoryBlock.toLowerCase()
+      const hasCancellationInHistory =
+        historyText.includes('cancelled') ||
+        historyText.includes('canceled') ||
+        historyText.includes('interrupted')
+
+      // Proactive Auto-Healing Enforcement: In AGENT mode, intercept vague clarification requests after tool/command failures
+      const isVagueClarification =
+        hasRecentToolFailure ||
+        errorCountInHistory > 0 ||
+        hasCancellationInHistory ||
+        qLower.includes('interrupted') ||
+        qLower.includes('what next') ||
+        qLower.includes('what should we do') ||
+        qLower.includes('how should we proceed') ||
+        qLower.includes('what to do next') ||
+        qLower.includes('how to proceed')
+
+      if (agentMode === 'agent' && isVagueClarification && stepCount < MAX_STEPS && consecutiveAskAttempts < 2) {
+        consecutiveAskAttempts++
+        const feedback = hasCancellationInHistory
+          ? `[PROACTIVE AUTO-HEALING DIRECTIVE: CLI GENERATOR CANCELLED]\nYour previous terminal command or CLI generator cancelled or was interrupted. In AGENT mode, DO NOT ask the user what to do next.\nFallback IMMEDIATELY to constructing the project files directly with write_file (e.g. package.json, index.html, src/main.tsx, src/App.tsx).`
+          : `[PROACTIVE AUTO-HEALING DIRECTIVE: DO NOT ASK LAZY QUESTIONS]\nYour previous tool or command encountered an error or was interrupted. In AGENT mode, you MUST NOT ask vague clarification questions to the user.\nInspect the error trace in your episodic history, analyze the root cause (e.g. missing dependency, syntax error, path issue, or process timeout), and immediately issue a corrective tool call (such as run_command with a fix, read_file, list_dir, or replace_file_content) to resolve the issue autonomously.`
+        episodicCompactor.recordStep(
+          {
+            step: stepCount,
+            tool: 'ask',
+            status: 'BLOCKED',
+            summary: 'Auto-Healing Interception: Intercepted lazy clarification question after command failure',
+          },
+          feedback
+        )
+        emitLog(
+          'info',
+          `⚡ Proactive Auto-Healing: Intercettata richiesta di chiarimento pigra dopo errore/interruzione. L'agente sta analizzando l'errore per risolverlo autonomamente.`
+        )
+        if (settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logToolResult(sessionId, stepCount, 'ask', feedback)
+        }
+        continue
+      }
+
       emitLog('info', `❓ AI Agent Question: ${question}`)
       emitDone(true, question)
       if (settings.enableCodingAgentDebugLog) {
@@ -598,6 +696,29 @@ export async function runAgentOrchestratorLoop(
       episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
       emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
       continue
+    }
+
+    // Definition of Done (DoD) Execution Guard Gate
+    if ((parsedTool.tool as string) === 'finish') {
+      const pendingMilestonesCount = goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
+      const dodCheck = executionGuard.validateTaskCompletion({
+        requireVerifiedBuild: true,
+        hasVerifiedBuild,
+        pendingMilestonesCount,
+        hasFileMutations,
+      })
+
+      if (!dodCheck.allowed && dodCheck.suggestedAction) {
+        episodicCompactor.recordStep(
+          { step: stepCount, tool: 'finish', status: 'BLOCKED', summary: dodCheck.reason || 'Definition of Done Violation' },
+          dodCheck.suggestedAction
+        )
+        emitLog('info', `🔒 DoD Guard Interception: ${dodCheck.reason}`)
+        if (settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logToolResult(sessionId, stepCount, 'finish', dodCheck.suggestedAction)
+        }
+        continue
+      }
     }
 
     if (agentMode === 'ask') {
@@ -673,6 +794,17 @@ export async function runAgentOrchestratorLoop(
     if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file'].includes(parsedTool.tool)) {
       if (!isToolFailure) {
         hasFileMutations = true
+        if (targetParam) {
+          const snap = executionGuard.captureWorkspaceSnapshot([targetParam])
+          const stagCheck = executionGuard.detectStateStagnation(snap)
+          if (!stagCheck.allowed && stagCheck.suggestedAction) {
+            episodicCompactor.recordStep(
+              { step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: stagCheck.reason || 'State Stagnation' },
+              stagCheck.suggestedAction
+            )
+            emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
+          }
+        }
         const activeM = goalPlanner.getActiveMilestone()
         if (activeM && activeM.status === 'pending') {
           goalPlanner.updateMilestone(activeM.id, 'in_progress')
@@ -708,7 +840,9 @@ export async function runAgentOrchestratorLoop(
     }
   }
 
-  const endSummary = `Completed ${stepCount} agent steps.`
+  const endSummary = stepCount >= MAX_STEPS && MAX_STEPS !== Infinity
+    ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
+    : `Completed ${stepCount} agent steps.`
   emitDone(true, endSummary)
   if (settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logSessionEnd(sessionId, stepCount, true, endSummary)

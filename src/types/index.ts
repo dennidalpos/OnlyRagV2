@@ -153,6 +153,9 @@ export interface AppSettings {
   autoProceedDelaySeconds?: number
   // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
+  // Skill Hub Auto-Discovery & On-Demand Installation
+  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  autoInstallMinScore?: number
   // Internationalization
   language?: 'it' | 'en'
 }
@@ -381,6 +384,9 @@ export interface IElectronAPI {
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
   setAgentMaxConcurrency: (limit: number) => Promise<{ success: boolean; maxConcurrency: number }>
+  deleteAgentSession?: (sessionId: string, workspacePath?: string | null) => Promise<boolean>
+  clearAllAgentSessions?: (workspacePath?: string | null) => Promise<boolean>
+  clearCodingAgentAuditLog?: () => Promise<boolean>
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
   onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void

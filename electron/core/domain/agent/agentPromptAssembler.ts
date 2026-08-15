@@ -5,6 +5,7 @@ import type { AgentMode } from './agentTypes'
 
 export interface PromptAssemblerInput {
   userTask: string
+  initialUserTask?: string
   agentMode: AgentMode
   stepCount: number
   maxSteps: number
@@ -29,6 +30,7 @@ export class AgentPromptAssembler {
   static assembleTurnPrompt(input: PromptAssemblerInput): string {
     const {
       userTask,
+      initialUserTask,
       agentMode,
       stepCount,
       maxSteps,
@@ -46,6 +48,11 @@ export class AgentPromptAssembler {
       runtimeOpts,
     } = input
 
+    // Format combined user task if initial task exists and differs from turn prompt
+    const effectiveTaskText = initialUserTask && initialUserTask.trim() !== userTask.trim()
+      ? `PRIMARY OVERALL GOAL / PROJECT SPECIFICATION:\n"""\n${initialUserTask.trim()}\n"""\n\nCURRENT TURN INSTRUCTION / FOLLOW-UP ANSWER:\n"""\n${userTask.trim()}\n"""`
+      : userTask.trim()
+
     // Priority 1: Base System Prompt & User Goal Guidelines (Mandatory intact)
     const { prompt: baseSystemPrompt } = PromptCompiler.compilePrompt(
       'coding',
@@ -54,7 +61,7 @@ export class AgentPromptAssembler {
         agentMode: agentMode.toUpperCase(),
         stepCount: String(stepCount),
         MAX_STEPS: maxSteps === Infinity || maxSteps === 0 ? '∞' : String(maxSteps),
-        userTask,
+        userTask: effectiveTaskText,
         workspacePath: isStandaloneMode ? 'Standalone (No Workspace)' : (workspacePath || 'No Folder Selected'),
       },
       settings

@@ -17,10 +17,12 @@ export interface ShellExecutionOutput {
 export class PersistentPowerShellSession {
   private proc: ChildProcess | null = null
   private workspacePath: string
+  private activeCwd: string
   private isBusy = false
 
   constructor(workspacePath: string) {
     this.workspacePath = workspacePath
+    this.activeCwd = workspacePath || process.cwd()
     this.initProcess()
   }
 
@@ -30,7 +32,7 @@ export class PersistentPowerShellSession {
         'powershell.exe',
         ['-NoProfile', '-NoLogo', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', '-'],
         {
-          cwd: this.workspacePath || process.cwd(),
+          cwd: this.activeCwd || this.workspacePath || process.cwd(),
           env: {
             ...process.env,
             CI: '1',
@@ -42,6 +44,10 @@ export class PersistentPowerShellSession {
           },
         }
       )
+
+      if (this.activeCwd && this.proc.stdin) {
+        this.proc.stdin.write(`Set-Location -Path "${this.activeCwd.replace(/"/g, '""')}"\n`)
+      }
 
       this.proc.on('error', (err) => {
         logger.log('ERROR', 'PersistentPowerShell', `Underlying shell process error: ${err.message}`)

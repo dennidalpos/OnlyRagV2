@@ -1,6 +1,8 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { taskQueueAppService } from '../application/taskQueueAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
@@ -23,5 +25,19 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
 
   ipcMain.handle('agent:parse-tool-call', async (_, rawText: string) => {
     return parseAgentToolCall(rawText)
+  })
+
+  ipcMain.handle('agent:delete-session', async (_, sessionId: string, workspacePath?: string | null) => {
+    return agentSessionStateRepository.clearSessionState(sessionId, workspacePath)
+  })
+
+  ipcMain.handle('agent:clear-all-sessions', async (_, workspacePath?: string | null) => {
+    const success = await agentSessionStateRepository.clearAllSessionStates(workspacePath)
+    codingAgentLogger.clearAuditLog()
+    return success
+  })
+
+  ipcMain.handle('agent:clear-audit-log', async () => {
+    return codingAgentLogger.clearAuditLog()
   })
 }

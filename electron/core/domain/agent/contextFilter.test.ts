@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
-import { isIgnoredPath, isSecretFile, validatePathSafety, matchesIgnorePatterns } from './contextFilter'
+import { isIgnoredPath, isSecretFile, validatePathSafety, matchesIgnorePatterns, isProtectedSystemDirectory } from './contextFilter'
 
 describe('contextFilter domain logic & AppSec protection', () => {
   it('should ignore standard hidden & build directories', () => {
@@ -68,10 +68,13 @@ describe('contextFilter domain logic & AppSec protection', () => {
     expect(envFile.error).toContain('contains sensitive credentials/secrets')
   })
 
-  it('should match gitignore relative patterns', () => {
-    const patterns = ['dist/', 'coverage', '*.log']
-    expect(matchesIgnorePatterns('dist/main.js', patterns)).toBe(true)
-    expect(matchesIgnorePatterns('coverage/lcov.info', patterns)).toBe(true)
-    expect(matchesIgnorePatterns('src/App.tsx', patterns)).toBe(false)
+  it('should identify and block protected system directories (Program Files / Windows)', () => {
+    expect(isProtectedSystemDirectory('C:\\Program Files\\OnlyRag V2')).toBe(true)
+    expect(isProtectedSystemDirectory('C:\\Windows\\System32')).toBe(true)
+    expect(isProtectedSystemDirectory('C:\\Users\\Utente\\Desktop\\test_app')).toBe(false)
+
+    const sysPath = validatePathSafety('package.json', 'C:\\Program Files\\OnlyRag V2')
+    expect(sysPath.safePath).toBeNull()
+    expect(sysPath.error).toContain('protected system directory')
   })
 })

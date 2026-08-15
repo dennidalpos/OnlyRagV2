@@ -165,6 +165,24 @@ export function sanitizeFilePathSpaces(filePath: string): string {
 }
 
 /**
+ * Checks if a target path is inside a protected Windows system directory (e.g. Program Files, SystemRoot).
+ */
+export function isProtectedSystemDirectory(targetPath?: string | null): boolean {
+  if (!targetPath || typeof targetPath !== 'string') return false
+  try {
+    const normalized = path.resolve(targetPath.trim()).toLowerCase()
+    const programFiles = (process.env.ProgramFiles || 'C:\\Program Files').toLowerCase()
+    const programFilesX86 = (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)').toLowerCase()
+    const sysRoot = (process.env.SystemRoot || 'C:\\Windows').toLowerCase()
+
+    if (normalized.startsWith(programFiles) || normalized.startsWith(programFilesX86) || normalized.startsWith(sysRoot)) {
+      return true
+    }
+  } catch {}
+  return false
+}
+
+/**
  * Validates path safety, directory traversal prevention, credential blocking, and file name space sanitization.
  */
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): { safePath: string | null; error?: string } {
@@ -195,6 +213,10 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
 
     if (isSecretFile(resolvedPath)) {
       return { safePath: null, error: `Access forbidden: '${path.basename(resolvedPath)}' contains sensitive credentials/secrets.` }
+    }
+
+    if (isProtectedSystemDirectory(resolvedPath)) {
+      return { safePath: null, error: `Access forbidden: Path '${resolvedPath}' is inside a protected system directory (Program Files / Windows). Please select a user workspace directory.` }
     }
 
     if (resolvedRoot) {

@@ -12,9 +12,10 @@ import {
   Zap,
   ListCheck,
   Circle,
-  ChevronDown,
-  ChevronRight,
   Eye,
+  ChevronLeft,
+  ChevronRight,
+  History,
 } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
 import { useTranslation } from '../../i18n'
@@ -28,7 +29,11 @@ export interface PlanChecklistItem {
 
 interface PlanPanelProps {
   plan: AgentPlan | null
+  planHistory?: AgentPlan[]
+  activePlanIndex?: number
+  onSelectPlanVersion?: (index: number) => void
   isGenerating: boolean
+  isExecuting?: boolean
   countdownSeconds: number
   isAutoProceedPaused: boolean
   autoProceedEnabled: boolean
@@ -41,7 +46,11 @@ interface PlanPanelProps {
 
 export const PlanPanel: React.FC<PlanPanelProps> = ({
   plan,
+  planHistory = [],
+  activePlanIndex = 0,
+  onSelectPlanVersion,
   isGenerating,
+  isExecuting = false,
   countdownSeconds,
   isAutoProceedPaused,
   autoProceedEnabled,
@@ -146,14 +155,31 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
     })
   }
 
-  // Calculate items completed automatically or manually
+  // Calculate items completed and active item status
   const totalItems = parsedChecklist.length
+
+  // Calculate relative steps executed for this specific plan version
+  const baseOffset = plan?.baseStepOffset || 0
+  const stepsForThisPlan = Math.max(0, completedStepCount - baseOffset)
+
+  // Determine auto-step completed index based on execution state.
+  // During active execution or paused state (e.g. Circuit Breaker), items track actual progress without falsely marking 100% completion.
+  let autoStepCompletedIndex = 0
+  if (isExecuting && stepsForThisPlan > 0) {
+    autoStepCompletedIndex = Math.min(totalItems, stepsForThisPlan - 1)
+  } else if (plan?.status === 'approved' && stepsForThisPlan > 0) {
+    autoStepCompletedIndex = Math.min(Math.max(0, totalItems - 1), stepsForThisPlan - 1)
+  }
+
   const completedItemsCount = parsedChecklist.reduce((acc, item, idx) => {
     const isManuallyChecked = manualCompletedIds.has(item.id)
-    const isAutoCompletedByStep = completedStepCount > 0 && idx < completedStepCount
-    if (item.completed || isManuallyChecked || isAutoCompletedByStep) return acc + 1
+    if (item.completed || isManuallyChecked || idx < autoStepCompletedIndex) return acc + 1
     return acc
   }, 0)
+
+  const activeIndex = isExecuting && autoStepCompletedIndex < totalItems
+    ? autoStepCompletedIndex
+    : -1
 
   const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
   const countdownProgressPercent = Math.max(0, Math.min(100, ((15 - countdownSeconds) / 15) * 100))
@@ -174,18 +200,46 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
 
         {plan && (
           <div className="flex items-center gap-2">
-            {plan.status === 'approved' && totalItems > 0 && (
-              <div className="flex items-center gap-1">
+            {/* Multi-Version Plan History Navigation Bar */}
+            {planHistory.length > 1 && onSelectPlanVersion && (
+              <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 text-[10px] font-mono">
                 <button
                   type="button"
-                  onClick={() => setViewMode(viewMode === 'checklist' ? 'document' : 'checklist')}
-                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold border border-slate-700 flex items-center gap-1 transition-colors"
-                  title="Alterna tra vista Checklist e Documento esteso"
+                  disabled={activePlanIndex === 0}
+                  onClick={() => onSelectPlanVersion(activePlanIndex - 1)}
+                  className="p-0.5 hover:bg-slate-800 disabled:opacity-30 rounded text-slate-300 transition-colors"
+                  title="Versione precedente del piano"
                 >
-                  {viewMode === 'checklist' ? <Eye className="w-3 h-3 text-cyan-400" /> : <ListCheck className="w-3 h-3 text-cyan-400" />}
-                  <span>{viewMode === 'checklist' ? 'Doc Esteso' : 'Checklist'}</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+
+                <span className="font-bold text-cyan-300 px-1 flex items-center gap-1">
+                  <History className="w-3 h-3 text-cyan-400" />
+                  v{plan.version || activePlanIndex + 1}/{planHistory.length}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={activePlanIndex === planHistory.length - 1}
+                  onClick={() => onSelectPlanVersion(activePlanIndex + 1)}
+                  className="p-0.5 hover:bg-slate-800 disabled:opacity-30 rounded text-slate-300 transition-colors"
+                  title="Versione successiva del piano"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
+            )}
+
+            {plan.status === 'approved' && totalItems > 0 && (
+              <button
+                type="button"
+                onClick={() => setViewMode(viewMode === 'checklist' ? 'document' : 'checklist')}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold border border-slate-700 flex items-center gap-1 transition-colors"
+                title="Alterna tra vista Checklist e Documento esteso"
+              >
+                {viewMode === 'checklist' ? <Eye className="w-3 h-3 text-cyan-400" /> : <ListCheck className="w-3 h-3 text-cyan-400" />}
+                <span>{viewMode === 'checklist' ? 'Doc Esteso' : 'Checklist'}</span>
+              </button>
             )}
 
             <span
@@ -254,7 +308,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
         {isGenerating ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-            <div className="font-bold text-slate-200 text-xs">Generazione del Piano in corso...</div>
+            <div className="font-bold text-slate-200 text-xs">Generazione del Piano (v{planHistory.length + 1}) in corso...</div>
             <p className="text-[11px] text-slate-500 max-w-xs">
               L'AI Agent sta analizzando il prompt per delineare la strategia di esecuzione passo-passo.
             </p>
@@ -271,7 +325,10 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
           <div className="space-y-3">
             {/* User Request Pill Box */}
             <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-1">
-              <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Richiesta Utente</div>
+              <div className="flex items-center justify-between text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+                <span>Richiesta Utente</span>
+                <span>Versione {plan.version || activePlanIndex + 1}</span>
+              </div>
               <div className="font-mono text-slate-200 text-[11px] leading-relaxed">{plan.prompt}</div>
             </div>
 
@@ -282,7 +339,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
                     <ListCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Checklist Operativa</span>
+                    <span>Checklist Operativa (v{plan.version})</span>
                   </div>
                   <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">
                     {completedItemsCount}/{totalItems} Completati ({progressPercent}%)
@@ -300,7 +357,14 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                 {/* Checklist Items List */}
                 <div className="space-y-2 pt-1">
                   {parsedChecklist.map((item, idx) => {
-                    const isChecked = item.completed || manualCompletedIds.has(item.id) || (completedStepCount > 0 && idx < completedStepCount)
+                    const isManuallyChecked = manualCompletedIds.has(item.id)
+                    const isChecked =
+                      item.completed ||
+                      isManuallyChecked ||
+                      idx < autoStepCompletedIndex
+
+                    const isActive = isExecuting && !isChecked && idx === activeIndex
+
                     return (
                       <div
                         key={item.id}
@@ -308,28 +372,36 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                         className={`p-2.5 rounded-xl border text-xs flex items-start gap-2.5 cursor-pointer transition-all ${
                           isChecked
                             ? 'bg-emerald-950/20 border-emerald-800/50 text-slate-300'
-                            : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 text-slate-200'
+                            : isActive
+                              ? 'bg-amber-950/30 border-amber-800/80 text-amber-200 shadow-sm'
+                              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 text-slate-200'
                         }`}
                       >
                         <div className="mt-0.5 shrink-0">
                           {isChecked ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-950" />
+                          ) : isActive ? (
+                            <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
                           ) : (
                             <Circle className="w-4 h-4 text-slate-500 hover:text-cyan-400 transition-colors" />
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0 font-sans leading-relaxed">
-                          <span className={`text-[11px] ${isChecked ? 'line-through text-slate-400' : 'text-slate-200 font-medium'}`}>
+                          <span className={`text-[11px] ${isChecked ? 'line-through text-slate-400' : isActive ? 'font-bold text-amber-200' : 'text-slate-200 font-medium'}`}>
                             {item.title}
                           </span>
                         </div>
 
-                        {item.tag && (
+                        {isActive ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800/80 font-mono font-bold shrink-0 flex items-center gap-1">
+                            <Zap className="w-2.5 h-2.5 text-amber-400 fill-current animate-pulse" /> IN CORSO
+                          </span>
+                        ) : item.tag ? (
                           <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-mono font-bold shrink-0">
                             {item.tag}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                     )
                   })}
@@ -340,7 +412,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5 shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                   <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-cyan-400" /> Artefatto Piano d'Azione
+                    <FileText className="w-4 h-4 text-cyan-400" /> Artefatto Piano v{plan.version}
                   </span>
 
                   {!isEditing && plan.status === 'ready' && (

@@ -95,8 +95,60 @@ describe('AgentActionLoopDetector Unit Tests', () => {
 
     const res3 = detector.recordAndCheck(call3)
     expect(res3.isLooping).toBe(true)
-    expect(res3.suggestedIntervention).toContain('[CRITICAL OSCILLATION INTERVENTION: REPEATED EDITS ON src/config.ts]')
-    expect(res3.suggestedIntervention).toContain('write_file')
+    expect(res3.suggestedIntervention).toContain('[CRITICAL OSCILLATION INTERVENTION: FILE EDIT CONVERGENCE REQUIRED FOR src/config.ts]')
+    expect(res3.suggestedIntervention).toContain('DO NOT edit "src/config.ts" again in your next step.')
+  })
+
+  it('should detect redundant write_file loops when same target is written multiple times', () => {
+    const call1: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'content 1' } }
+    const call2: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'content 2' } }
+
+    detector.recordAndCheck(call1)
+    const res2 = detector.recordAndCheck(call2)
+
+    expect(res2.isLooping).toBe(true)
+    expect(res2.suggestedIntervention).toContain('[CRITICAL WRITE LOOP INTERVENTION: REPEATED FULL WRITES ON src/App.tsx]')
+  })
+
+  it('should detect redundant read loops when same target is read 3+ consecutive times', () => {
+    const call1: AgentToolCall = {
+      tool: 'read_file',
+      parameters: { filePath: 'src/App.tsx', startLine: 1, endLine: 50 },
+    }
+    const call2: AgentToolCall = {
+      tool: 'read_file',
+      parameters: { filePath: 'src/App.tsx', startLine: 51, endLine: 100 },
+    }
+    const call3: AgentToolCall = {
+      tool: 'read_file',
+      parameters: { filePath: 'src/App.tsx', startLine: 1, endLine: 100 },
+    }
+
+    detector.recordAndCheck(call1)
+    detector.recordAndCheck(call2)
+    const res3 = detector.recordAndCheck(call3)
+
+    expect(res3.isLooping).toBe(true)
+    expect(res3.suggestedIntervention).toContain('[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON src/App.tsx]')
+  })
+
+  it('should reset target history cleanly allowing fresh edit attempt after intervention', () => {
+    const call1: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'a', replacementContent: 'b' } }
+    const call2: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'c', replacementContent: 'd' } }
+    const call3: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'e', replacementContent: 'f' } }
+
+    detector.recordAndCheck(call1)
+    detector.recordAndCheck(call2)
+    const res3 = detector.recordAndCheck(call3)
+    expect(res3.isLooping).toBe(true)
+
+    // Reset target after intervention
+    detector.resetTarget('src/App.tsx')
+
+    // Next corrective action (e.g. write_file) should not be blocked immediately
+    const correctiveCall: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: '// clean rewrite' } }
+    const res4 = detector.recordAndCheck(correctiveCall)
+    expect(res4.isLooping).toBe(false)
   })
 
   it('should reset history cleanly', () => {

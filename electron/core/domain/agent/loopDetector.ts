@@ -14,7 +14,7 @@ interface TargetActionRecord {
 
 /**
  * Fingerprints agent tool invocations and tracks target-level semantic patterns
- * to detect and prevent infinite loops and oscillation traps.
+ * to detect and prevent infinite loops, oscillation traps, and redundant read loops.
  */
 export class AgentActionLoopDetector {
   private signatureHistory: string[] = []
@@ -37,6 +37,8 @@ export class AgentActionLoopDetector {
     return (
       toolCall.parameters?.filePath ||
       toolCall.parameters?.file_path ||
+      toolCall.parameters?.dirPath ||
+      toolCall.parameters?.dir_path ||
       toolCall.parameters?.path ||
       toolCall.parameters?.command ||
       toolCall.parameters?.url
@@ -44,7 +46,8 @@ export class AgentActionLoopDetector {
   }
 
   /**
-   * Records a tool call and checks for exact fingerprint repeats and semantic target oscillations.
+   * Records a tool call and checks for exact fingerprint repeats, semantic edit oscillations,
+   * and redundant read loops.
    */
   public recordAndCheck(toolCall: AgentToolCall): LoopCheckResult {
     const signature = this.generateFingerprint(toolCall)
@@ -65,18 +68,49 @@ export class AgentActionLoopDetector {
       }
     }
 
-    // 2. Semantic File Edit Oscillation Check (e.g. >=3 replace attempts on the same file in the last 6 actions)
-    if (target && ['replace_file_content', 'multi_replace_file_content'].includes(toolCall.tool)) {
+    // 2. Semantic File Edit Oscillation Check (e.g. >=3 edit/replace attempts on the same file in the last 6 actions)
+    if (target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(toolCall.tool)) {
       const recentTargets = this.targetHistory.slice(-6)
       const sameFileEdits = recentTargets.filter(
-        (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content'].includes(rec.tool)
+        (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(rec.tool)
       ).length
 
       if (sameFileEdits >= 3) {
         return {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
-          suggestedIntervention: `[CRITICAL OSCILLATION INTERVENTION: REPEATED EDITS ON ${target}]\nYou have attempted 3 or more consecutive replace operations on "${target}" without verifying convergence.\nDO NOT keep making micro-edits with replace_file_content.\nDirectives:\n1. Use read_file to inspect the entire enclosing section.\n2. If the file structure is disordered, use write_file to write the full corrected file content atomically.\n3. Run a build/test verification command via run_command to confirm syntax integrity.`,
+          suggestedIntervention: `[CRITICAL OSCILLATION INTERVENTION: FILE EDIT CONVERGENCE REQUIRED FOR ${target}]\nYou have executed ${sameFileEdits} edit operations on "${target}".\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If all code changes in the workspace are complete and verified, invoke the finish tool immediately.`,
+        }
+      }
+    }
+
+    // 2.5 Redundant Full Write Loop Check (e.g. >=2 full write_file calls on same target)
+    if (target && toolCall.tool === 'write_file') {
+      const recentWrites = this.targetHistory.slice(-4).filter(
+        (rec) => rec.target === target && rec.tool === 'write_file'
+      ).length
+
+      if (recentWrites >= 2) {
+        return {
+          isLooping: true,
+          consecutiveDuplicateCount: recentWrites,
+          suggestedIntervention: `[CRITICAL WRITE LOOP INTERVENTION: REPEATED FULL WRITES ON ${target}]\nYou have written full file replacements to "${target}" ${recentWrites} times.\nDO NOT call write_file on "${target}" again.\nDirectives:\n1. If you need to make targeted changes, use replace_file_content or multi_replace_file_content.\n2. Run a build/test verification command via run_command to verify your updates.\n3. If your implementation is complete, call the finish tool immediately.`,
+        }
+      }
+    }
+
+    // 3. Consecutive Read Loop Check (e.g. >=3 consecutive read/inspect calls on same target without action)
+    if (target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(toolCall.tool)) {
+      const recentTargets = this.targetHistory.slice(-4)
+      const consecutiveReads = recentTargets.filter(
+        (rec) => rec.target === target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(rec.tool)
+      ).length
+
+      if (consecutiveReads >= 3) {
+        return {
+          isLooping: true,
+          consecutiveDuplicateCount: consecutiveReads,
+          suggestedIntervention: `[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON ${target}]\nYou have called read/inspect tools on "${target}" ${consecutiveReads} consecutive times without making any file changes or running commands.\nDO NOT call read_file or list_dir again on this target.\nDirectives:\n1. The file contents are ALREADY visible in your RECENT DETAILED TOOL OUTPUTS.\n2. Proceed IMMEDIATELY with write_file, replace_file_content, or run_command to make progress.\n3. If you have completed all changes, execute your verification build/test command or call finish.`,
         }
       }
     }
@@ -85,6 +119,20 @@ export class AgentActionLoopDetector {
       isLooping: false,
       consecutiveDuplicateCount: duplicateCount,
     }
+  }
+
+  /**
+   * Resets history for a specific target or all targets.
+   * Call this after an intervention is issued so that the model's next attempt
+   * to fix/modify the target file is evaluated cleanly against the new strategy.
+   */
+  public resetTarget(target?: string): void {
+    this.signatureHistory = []
+    if (!target) {
+      this.targetHistory = []
+      return
+    }
+    this.targetHistory = this.targetHistory.filter((rec) => rec.target !== target)
   }
 
   /**

@@ -1,4 +1,4 @@
-import type { SkillDefinition } from './skillTypes'
+import type { SkillDefinition, HubSkillItem } from './skillTypes'
 
 const STOP_WORDS = new Set([
   'about', 'above', 'after', 'again', 'against', 'all', 'and', 'any', 'because',
@@ -200,4 +200,73 @@ export function compileSkillsContextBlock(skills: SkillDefinition[], maxTotalCha
   }
 
   return result.trim()
+}
+
+export function matchHubSkillsForTask(
+  userTaskOrContext: string | SkillMatchContext,
+  hubSkills: HubSkillItem[],
+  minScore: number = 8.0
+): { item: HubSkillItem; score: number }[] {
+  if (!userTaskOrContext || hubSkills.length === 0) return []
+
+  const userTask = typeof userTaskOrContext === 'string' ? userTaskOrContext : userTaskOrContext.userTask || ''
+  if (!userTask && typeof userTaskOrContext === 'string') return []
+
+  const ctx: SkillMatchContext = typeof userTaskOrContext === 'string' ? { userTask } : userTaskOrContext
+  const taskText = ctx.userTask.toLowerCase()
+  const projectStack = new Set((ctx.projectStack || []).map((s) => s.toLowerCase()))
+
+  const results: { item: HubSkillItem; score: number }[] = []
+
+  for (const item of hubSkills) {
+    if (item.isInstalled) continue
+
+    let promptScore = 0
+    let projectScore = 0
+
+    const slug = item.name.toLowerCase().replace(/[-_]/g, ' ')
+    if (matchesWordOrPhrase(taskText, slug) || matchesWordOrPhrase(taskText, item.name)) {
+      promptScore += 10.0
+    }
+
+    for (const trigger of item.triggers || []) {
+      if (matchesWordOrPhrase(taskText, trigger)) {
+        promptScore += 6.0
+      }
+    }
+
+    for (const tag of item.tags || []) {
+      if (matchesWordOrPhrase(taskText, tag)) {
+        promptScore += 3.0
+      }
+    }
+
+    if (projectStack.size > 0) {
+      const cleanName = item.name.toLowerCase()
+      if (projectStack.has(cleanName)) {
+        projectScore += 8.0
+      }
+      for (const trigger of item.triggers || []) {
+        if (projectStack.has(trigger.toLowerCase())) {
+          projectScore += 6.0
+        }
+      }
+      for (const tag of item.tags || []) {
+        if (projectStack.has(tag.toLowerCase())) {
+          projectScore += 4.0
+        }
+      }
+    }
+
+    let totalScore = promptScore + projectScore
+    if (promptScore > 0 && projectScore > 0) {
+      totalScore += 5.0
+    }
+
+    if (totalScore >= minScore) {
+      results.push({ item, score: totalScore })
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score)
 }

@@ -4,6 +4,7 @@ export type AgentMode = 'plan' | 'ask' | 'agent'
 
 export interface AgentTaskPayload {
   userTask: string
+  initialUserTask?: string
   agentMode: AgentMode
   sessionId?: string
   workspacePath?: string | null

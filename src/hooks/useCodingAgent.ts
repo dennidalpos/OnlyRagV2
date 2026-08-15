@@ -50,7 +50,10 @@ function loadSavedSessions(): CodingSession[] {
 
 function saveSavedSessions(sessions: CodingSession[]) {
   try {
-    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions))
+    const valid = sessions.filter(
+      (s) => (s.actionLogs && s.actionLogs.length > 0) || (s.promptQueue && s.promptQueue.length > 0)
+    )
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(valid))
   } catch (err: any) {
     logger.warn('useCodingAgent', `Could not persist sessions to localStorage: ${err?.message}`)
   }
@@ -370,9 +373,28 @@ export function useCodingAgent(settings?: AppSettings) {
     setProjects((prev) => {
       const updated = prev.filter((p) => p.path !== pathStr)
       saveSavedProjects(updated)
+
+      if (pathStr === workspacePath) {
+        if (updated.length > 0) {
+          handleSelectProject(updated[0].path)
+        } else {
+          setWorkspacePath(null)
+          try {
+            localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
+          } catch (err: any) {
+            logger.warn('useCodingAgent', `Could not clear last workspace: ${err?.message}`)
+          }
+          setFiles([])
+          setOpenFiles([])
+          setSelectedFile(null)
+          setEditorContent('')
+          setPinnedFiles(new Map())
+        }
+      }
+
       return updated
     })
-  }, [])
+  }, [workspacePath, handleSelectProject])
 
   const handleSelectWorkspaceFolder = async () => {
     await handleAddProject()
@@ -587,6 +609,14 @@ export function useCodingAgent(settings?: AppSettings) {
     setAllSessions(remaining)
     saveSavedSessions(remaining)
 
+    if (window.electronAPI?.deleteAgentSession) {
+      window.electronAPI.deleteAgentSession(sessionId, workspacePath)
+    }
+
+    if (remaining.length === 0 && window.electronAPI?.clearCodingAgentAuditLog) {
+      window.electronAPI.clearCodingAgentAuditLog()
+    }
+
     if (activeSessionId === sessionId) {
       const nextInWorkspace = remaining.filter((s) => (s.workspacePath || '') === (workspacePath || ''))
       if (nextInWorkspace.length > 0) {
@@ -659,9 +689,13 @@ export function useCodingAgent(settings?: AppSettings) {
         })
       )
 
+      const initialLog = actionLogs.find((l) => l.message.startsWith('User Prompt: '))
+      const initialUserTask = initialLog ? initialLog.message.replace(/^User Prompt:\s*/, '') : taskPrompt
+
       await window.electronAPI.startAgentTask({
         sessionId: activeSessionId || activeSession?.id,
         userTask: taskPrompt,
+        initialUserTask,
         agentMode,
         workspacePath: workspacePath || undefined,
         isStandaloneMode,

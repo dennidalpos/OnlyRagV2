@@ -24,6 +24,18 @@ export class CodingAgentLogger {
     return this.logFilePath
   }
 
+  public clearAuditLog(): boolean {
+    try {
+      if (fs.existsSync(this.logFilePath)) {
+        fs.writeFileSync(this.logFilePath, '', 'utf-8')
+      }
+      return true
+    } catch (err: any) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed clearing audit log: ${err?.message}`)
+      return false
+    }
+  }
+
   private rotateIfNeeded(): void {
     try {
       if (!fs.existsSync(this.logFilePath)) return
@@ -133,6 +145,48 @@ ${result}
 \`\`\`
 ${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` : ''}`
     this.writeEntry(`[STEP ${step} - TOOL RESULT COMPLETED] ${tool}`, content)
+  }
+
+  public logPlanMilestoneUpdate(
+    sessionId: string,
+    step: number,
+    milestones: { id: string; title: string; status: string; notes?: string }[],
+    statusText?: string
+  ): void {
+    if (!milestones || milestones.length === 0) return
+    const completed = milestones.filter((m) => m.status === 'verified').length
+    const progressPercent = Math.round((completed / milestones.length) * 100)
+
+    const milestoneLines = milestones
+      .map((m, idx) => {
+        let icon = '[ ]'
+        if (m.status === 'verified') icon = '[x]'
+        else if (m.status === 'in_progress') icon = '[>]'
+        else if (m.status === 'failed') icon = '[!]'
+        return `${idx + 1}. ${icon} ${m.title} — Status: ${m.status.toUpperCase()}${m.notes ? ` (${m.notes})` : ''}`
+      })
+      .join('\n')
+
+    const content = `Session ID: ${sessionId} | Step: ${step} | Progress: ${completed}/${milestones.length} (${progressPercent}%)${statusText ? ` | ${statusText}` : ''}
+Structured Execution Plan Milestones:
+${milestoneLines}`
+    this.writeEntry(`[STEP ${step} - PLAN MILESTONES STATE] Session: ${sessionId}`, content)
+  }
+
+  public logLoopIntervention(
+    sessionId: string,
+    step: number,
+    tool: string,
+    target: string | undefined,
+    repeatCount: number,
+    interventionMessage: string
+  ): void {
+    const content = `Session ID: ${sessionId} | Step: ${step} | Blocked Tool: ${tool} | Target: ${target || 'N/A'} | Duplicate Count: ${repeatCount}
+Intervention Strategy Delivered to LLM:
+\`\`\`
+${interventionMessage}
+\`\`\``
+    this.writeEntry(`[STEP ${step} - LOOP INTERVENTION PREVENTED] ${tool}`, content)
   }
 
   public logSessionEnd(sessionId: string, totalSteps: number, success: boolean, summary: string): void {

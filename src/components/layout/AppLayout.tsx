@@ -60,6 +60,8 @@ export const AppLayout: React.FC = () => {
       ocrEngine: 'native_cuda',
       ollamaHost: 'http://127.0.0.1:11434',
       language: 'it',
+      autoInstallHubSkills: 'auto',
+      autoInstallMinScore: 8.0,
     }
   })
 

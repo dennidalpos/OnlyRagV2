@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { matchSkillsForTask, compileSkillsContextBlock } from './skillMatcher'
-import { SkillDefinition } from './skillTypes'
+import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock } from './skillMatcher'
+import { SkillDefinition, HubSkillItem } from './skillTypes'
 
 describe('SkillMatcher Domain Tests', () => {
   const mockSkills: SkillDefinition[] = [
@@ -124,5 +124,45 @@ describe('SkillMatcher Domain Tests', () => {
 
     expect(matched.length).toBe(1)
     expect(matched[0].id).toBe('react19')
+  })
+
+  it('should auto-discover high confidence uninstalled hub skills when score exceeds threshold', () => {
+    const hubSkills: HubSkillItem[] = [
+      {
+        id: 'bigquery-sql',
+        name: 'bigquery-sql',
+        description: 'BigQuery SQL optimization and query best practices.',
+        category: 'database',
+        tags: ['bigquery', 'sql', 'database'],
+        triggers: ['bigquery', 'bq'],
+        version: '1.0.0',
+        author: 'Official',
+        isInstalled: false,
+      },
+      {
+        id: 'unrelated-hub-skill',
+        name: 'docker-container',
+        description: 'Docker build guidelines.',
+        category: 'devops',
+        tags: ['docker'],
+        triggers: ['docker'],
+        version: '1.0.0',
+        author: 'Official',
+        isInstalled: false,
+      },
+    ]
+
+    const matches = matchHubSkillsForTask(
+      {
+        userTask: 'Optimize BigQuery SQL queries for data analytics',
+        projectStack: ['python', 'bigquery'],
+      },
+      hubSkills,
+      8.0
+    )
+
+    expect(matches.length).toBe(1)
+    expect(matches[0].item.id).toBe('bigquery-sql')
+    expect(matches[0].score).toBeGreaterThanOrEqual(8.0)
   })
 })

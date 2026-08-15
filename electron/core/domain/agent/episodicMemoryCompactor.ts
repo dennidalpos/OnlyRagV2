@@ -29,6 +29,9 @@ export class EpisodicMemoryCompactor {
 
   public recordStep(record: EpisodicStepRecord, rawOutput: string): void {
     this.episodes.push(record)
+    if (this.episodes.length > 100) {
+      this.episodes.splice(1, this.episodes.length - 100)
+    }
 
     const truncated = rawOutput.length > 2500
       ? `${rawOutput.slice(0, 2500)}\n... [Output truncated for memory budget]`
@@ -42,10 +45,13 @@ export class EpisodicMemoryCompactor {
     }
 
     if (logEntry.isFailure) {
-      // Keep failure logs in a dedicated buffer so they are never lost to FIFO shifting
-      this.failureLogs.push(logEntry)
-      if (this.failureLogs.length > 8) {
-        this.failureLogs.shift()
+      // Keep failure logs in a dedicated buffer (deduplicated) so they are never lost to FIFO shifting
+      const lastFailure = this.failureLogs[this.failureLogs.length - 1]
+      if (!lastFailure || lastFailure.output !== logEntry.output || lastFailure.tool !== logEntry.tool) {
+        this.failureLogs.push(logEntry)
+        if (this.failureLogs.length > 8) {
+          this.failureLogs.shift()
+        }
       }
     }
 
@@ -81,7 +87,22 @@ export class EpisodicMemoryCompactor {
       failureSection = `\n\n### CRITICAL PREVIOUS TOOL FAILURES & DIAGNOSTICS (Analyze Carefully - Do Not Repeat Failed Inputs):\n${failureOutputs}`
     }
 
-    const detailedOutputs = this.recentFullLogs.map((l) => {
+    // Deduplicate consecutive identical read tool calls in recentDetailedLogs
+    const deduplicatedLogs: EpisodicFullLog[] = []
+    for (const log of this.recentFullLogs) {
+      const prev = deduplicatedLogs[deduplicatedLogs.length - 1]
+      if (
+        prev &&
+        prev.tool === log.tool &&
+        ['read_file', 'list_dir', 'grep_search'].includes(log.tool) &&
+        prev.output === log.output
+      ) {
+        continue
+      }
+      deduplicatedLogs.push(log)
+    }
+
+    const detailedOutputs = deduplicatedLogs.map((l) => {
       return `#### [Step ${l.step} - Tool: ${l.tool}]\n\`\`\`\n${l.output}\n\`\`\``
     }).join('\n\n')
 

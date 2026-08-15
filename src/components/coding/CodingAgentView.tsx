@@ -123,7 +123,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
     if (settings?.requirePlanApproval !== false) {
       c.setActiveTab('plan')
-      await planApproval.generatePlan(c.agentPrompt)
+      await planApproval.generatePlan(c.agentPrompt, undefined, c.currentStep)
     } else {
       c.handleAgentExecute()
     }
@@ -135,6 +135,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
       <CodingHeader
         guestOsInfo={c.guestOsInfo}
         settings={settings}
+        onUpdateSettings={onUpdateSettings}
         agentPrompt={c.agentPrompt}
         pinnedFilesCount={c.pinnedFiles.size}
         editorContentLength={c.editorContent.length}
@@ -219,7 +220,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               onEditPromptInQueue={c.editPromptInQueue}
               onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
               onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
-              onResetSession={c.handleNewSession}
+              onResetSession={() => {
+                planApproval.resetPlanHistory()
+                c.handleNewSession()
+              }}
               onCompactContext={c.compactContext}
               workspacePath={c.workspacePath}
               workspaceSessions={c.workspaceSessions}
@@ -468,7 +472,11 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
             {c.activeTab === 'plan' && (
               <PlanPanel
                 plan={planApproval.currentPlan}
+                planHistory={planApproval.planHistory}
+                activePlanIndex={planApproval.activePlanIndex}
+                onSelectPlanVersion={planApproval.selectPlanVersion}
                 isGenerating={planApproval.isGeneratingPlan}
+                isExecuting={c.isExecuting}
                 countdownSeconds={planApproval.countdownSeconds}
                 isAutoProceedPaused={planApproval.isAutoProceedPaused}
                 autoProceedEnabled={settings?.autoProceedPlan !== false}

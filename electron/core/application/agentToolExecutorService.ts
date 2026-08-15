@@ -396,9 +396,18 @@ export class AgentToolExecutorService {
           )
 
           const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
+          const lowerOut = rawOutput.toLowerCase()
+          const isCancelled =
+            lowerOut.includes('operation cancelled') ||
+            lowerOut.includes('operation canceled') ||
+            lowerOut.includes('user cancelled') ||
+            lowerOut.includes('user canceled') ||
+            lowerOut.includes('aborted')
+
           const isFailure =
             res.code !== 0 ||
             res.timedOut ||
+            isCancelled ||
             rawOutput.includes('Error:') ||
             rawOutput.includes('Exception:') ||
             rawOutput.includes('Traceback (most recent call last)') ||
@@ -408,14 +417,22 @@ export class AgentToolExecutorService {
             rawOutput.includes('CommandNotFoundException')
 
           if (isFailure) {
+            const isEperm = lowerOut.includes('eperm') || lowerOut.includes('eacces') || lowerOut.includes('operation not permitted') || lowerOut.includes('permission denied')
+            const permsDirective = isEperm
+              ? `\n\n[PERMISSIONS WARNING: EPERM DETECTED]\nCommand failed due to Windows file permission restrictions (EPERM / Access Denied). DO NOT attempt to write files or run npm install inside system-protected folders (Program Files). Move the project or work inside a user workspace directory (e.g. Desktop or Documents).`
+              : ''
+            const isZeroModulesVite = lowerOut.includes('0 modules transformed') || (lowerOut.includes('vite') && res.code !== 0)
+            const viteMissingDirective = isZeroModulesVite && workspacePath && !fs.existsSync(path.join(workspacePath, 'index.html'))
+              ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
+              : ''
             const autoHealingFeedback = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]
 Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''})
 Captured Error Stack Trace & Failure Output:
 \`\`\`
 ${rawOutput.slice(0, 4000)}
-\`\`\`
+\`\`\`${permsDirective}${viteMissingDirective}
 
-AUTO-HEALING DIRECTIVE: The command above produced an error or timed out. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the verification.`
+AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or timed out. DO NOT ask the user vague clarification questions. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the command autonomously.`
             return {
               outputForHistory: autoHealingFeedback,
               logMessage: `Terminal Command Failed (Auto-Healing Diagnostic Captured)`,

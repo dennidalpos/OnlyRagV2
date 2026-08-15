@@ -52,10 +52,18 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
             <span className="font-semibold text-cyan-300">{recommendations.profileName}</span>
           </div>
           <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+            <span className="text-slate-400 block text-[10px]">Safe Net VRAM Budget (Anti-Choke):</span>
+            <span className="font-semibold text-emerald-300 font-mono">
+              {recommendations.safeVramBudgetGB > 0
+                ? `${recommendations.safeVramBudgetGB.toFixed(1)} GB Net (Buffer 25% + 1.5GB OS)`
+                : 'CPU / RAM Bound'}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
             <span className="text-slate-400 block text-[10px]">{t('diagnostics.gpuTitle')}:</span>
             <span className="font-semibold text-slate-200 font-mono">{recommendations.gpuSummary}</span>
           </div>
-          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 col-span-1 md:col-span-2">
+          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
             <span className="text-slate-400 block text-[10px]">{t('diagnostics.ramTitle')}:</span>
             <span className="font-semibold text-slate-200 font-mono">{recommendations.ramSummary}</span>
           </div>

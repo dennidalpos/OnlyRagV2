@@ -384,7 +384,7 @@ export interface IElectronAPI {
   listHubSources: () => Promise<SkillHubSource[]>
   addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>
   removeCustomHubSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>
-  listHubSkillsBySource: (sourceId: string, workspaceRoot?: string) => Promise<HubSkillItem[]>
+  listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) => Promise<HubSkillItem[]>
   toggleSkillActive: (skillId: string, isActive: boolean) => Promise<boolean>
   installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>

@@ -75,6 +75,7 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       let toolName = parsed.tool.toLowerCase().trim()
 
       if (toolName === 'readfile' || toolName === 'read' || toolName === 'view_file' || toolName === 'view_file_slice' || toolName === 'open_file' || toolName === 'cat') toolName = 'read_file'
+      if (toolName === 'extract_code_symbols' || toolName === 'extract_symbols' || toolName === 'code_symbols' || toolName === 'symbols' || toolName === 'find_symbols' || toolName === 'get_symbols' || toolName === 'list_symbols') toolName = 'extract_code_symbols'
       if (toolName === 'writefile' || toolName === 'write' || toolName === 'create_file' || toolName === 'write_code' || toolName === 'save_file' || toolName === 'write_to_file' || toolName === 'put_file') toolName = 'write_file'
       if (toolName === 'replace_content' || toolName === 'replace_chunk' || toolName === 'edit_file' || toolName === 'replace_file' || toolName === 'modify_file' || toolName === 'update_file' || toolName === 'patch_file') toolName = 'replace_file_content'
       if (toolName === 'multi_replace' || toolName === 'replace_multiple' || toolName === 'multi_replace_content' || toolName === 'multi_edit' || toolName === 'batch_replace') toolName = 'multi_replace_file_content'
@@ -146,6 +147,10 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       // Input parameter validations for individual tools
       if (toolName === 'read_file' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {
         logger.log('WARN', 'ToolParser', 'Rejected read_file call: missing required filePath')
+        return null
+      }
+      if (toolName === 'extract_code_symbols' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {
+        logger.log('WARN', 'ToolParser', 'Rejected extract_code_symbols call: missing required filePath')
         return null
       }
       if (toolName === 'write_file' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {

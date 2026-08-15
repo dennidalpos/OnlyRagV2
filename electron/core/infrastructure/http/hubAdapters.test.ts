@@ -5,6 +5,7 @@ import { LobeHubAdapter } from './hubAdapters/lobeHubAdapter'
 import { SkillsShAdapter } from './hubAdapters/skillsShAdapter'
 import { JsonCatalogAdapter } from './hubAdapters/jsonCatalogAdapter'
 import { GitHubRawAdapter } from './hubAdapters/githubRawAdapter'
+import { SkillHubClient } from './skillHubClient'
 import { SkillHubSource } from '../../domain/skills/skillTypes'
 
 describe('Skill Hub Adapters Unit Tests', () => {
@@ -112,5 +113,27 @@ describe('Skill Hub Adapters Unit Tests', () => {
       isBuiltin: false,
     }
     expect(adapter.canHandle(ghSource)).toBe(true)
+  })
+
+  it('SkillHubClient should cache fetched skills and support cache clearing', async () => {
+    const client = new SkillHubClient()
+    const source: SkillHubSource = {
+      id: 'official-core',
+      name: 'OnlyRag Official Core Hub',
+      url: 'builtin://official-core',
+      type: 'builtin',
+      description: 'Core skills',
+      isBuiltin: true,
+    }
+
+    const firstFetch = await client.fetchSkillsFromSource(source)
+    expect(firstFetch.length).toBeGreaterThan(0)
+
+    const cachedFetch = await client.fetchSkillsFromSource(source)
+    expect(cachedFetch).toEqual(firstFetch)
+
+    client.clearCache(source.id)
+    const refreshedFetch = await client.fetchSkillsFromSource(source, true)
+    expect(refreshedFetch.length).toBe(firstFetch.length)
   })
 })

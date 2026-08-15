@@ -12,6 +12,8 @@ import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver
 import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
 import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
+import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
+import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { skillAppService } from './skillAppService'
 import { ollamaAppService } from './ollamaAppService'
@@ -49,6 +51,11 @@ function cleanupSession(session: AgentSession) {
       logger.log('WARN', 'AgentOrchestrator', `Failed terminating child process during cleanup: ${err?.message}`)
     }
     session.activeChildProcess = null
+  }
+  try {
+    agentToolExecutorService.rollbackJournal()
+  } catch (err: any) {
+    logger.log('WARN', 'AgentOrchestrator', `Failed rolling back journal during cleanup: ${err?.message}`)
   }
   if (session.targetWindow && !session.targetWindow.isDestroyed()) {
     session.targetWindow.webContents.send('agent:log', {
@@ -235,6 +242,10 @@ export async function runAgentOrchestratorLoop(
   const MAX_STEPS = Math.max(10, Math.min(250, settings.maxToolCallSteps || 50))
   let stepCount = 0
   let noToolStreak = 0
+  let hasFileMutations = false
+  let hasVerifiedBuild = false
+  let hasPromptedVerification = false
+  const loopDetector = new AgentActionLoopDetector(2)
 
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
@@ -271,6 +282,8 @@ export async function runAgentOrchestratorLoop(
       ? routedComplexity.modelName
       : (settings.codingModel || settings.defaultModel || 'llama3.2')
 
+    const fallbackModel = settings.complexityFastModel || settings.defaultModel || 'llama3.2'
+
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
       settings.hardwareProfile,
       undefined,
@@ -306,22 +319,31 @@ export async function runAgentOrchestratorLoop(
 
     let streamedOutput = ''
     try {
-      streamedOutput = await AgentStreamTransport.streamCompletion({
-        targetModel,
-        prompt: turnPrompt,
-        runtimeOpts,
-        keepAlive: '30m',
-        ollamaEndpoint: settings.ollamaHost,
-        onTokenChunk: (chunk) => {
-          if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-            session.targetWindow.webContents.send('agent:stream-token', { step: stepCount, chunk })
-          }
+      const dispatchRes = await ResilientModelDispatcher.executeWithFallback(
+        {
+          primaryModel: targetModel,
+          fallbackModel,
+          runtimeOpts,
         },
-        isCancelled: () => !isSessionActive(),
-        onHttpRequestCreated: (req) => {
-          session.activeHttpRequest = req
+        {
+          prompt: turnPrompt,
+          keepAlive: '30m',
+          ollamaEndpoint: settings.ollamaHost,
+          onTokenChunk: (chunk) => {
+            if (session.targetWindow && !session.targetWindow.isDestroyed()) {
+              session.targetWindow.webContents.send('agent:stream-token', { step: stepCount, chunk })
+            }
+          },
+          isCancelled: () => !isSessionActive(),
+          onHttpRequestCreated: (req) => {
+            session.activeHttpRequest = req
+          },
         },
-      })
+        (fromModel, toModel, reason) => {
+          emitLog('info', `⚡ Resilient Fallback: ${fromModel} → ${toModel}`, `Graceful degradation triggered: ${reason}`)
+        }
+      )
+      streamedOutput = dispatchRes.output
       session.activeHttpRequest = null
     } catch (err: any) {
       emitLog('info', `LLM Stream error on step ${stepCount}: ${err.message}`)
@@ -329,6 +351,7 @@ export async function runAgentOrchestratorLoop(
       if (settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logSessionEnd(sessionId, stepCount, false, `LLM Error: ${err.message}`)
       }
+      agentToolExecutorService.rollbackJournal()
       activeAgentSessions.delete(sessionId)
       return { success: false, summary: `LLM Error: ${err.message}` }
     }
@@ -339,6 +362,7 @@ export async function runAgentOrchestratorLoop(
       if (settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logSessionEnd(sessionId, stepCount, false, 'Task cancelled by user.')
       }
+      agentToolExecutorService.rollbackJournal()
       activeAgentSessions.delete(sessionId)
       return { success: false, summary: 'Task cancelled' }
     }
@@ -379,6 +403,7 @@ export async function runAgentOrchestratorLoop(
         continue
       }
 
+      agentToolExecutorService.commitJournal()
       const summary = streamedOutput.trim() || 'Task completed successfully.'
       emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
       emitDone(true, summary)
@@ -392,6 +417,15 @@ export async function runAgentOrchestratorLoop(
     noToolStreak = 0
 
     if (parsedTool.tool === 'finish') {
+      if (agentMode === 'agent' && hasFileMutations && !hasVerifiedBuild && !hasPromptedVerification && (settings as any).verifyBeforeFinish !== false) {
+        hasPromptedVerification = true
+        const gateMsg = `[PRE-FINISH VERIFICATION ADVICE]\nYou have made code modifications in the workspace during this task. Before concluding, please execute a verification command via run_command (e.g. npm test, npm run typecheck, or pytest) to verify that no regressions or syntax errors were introduced. If no test/build runner exists in this workspace or verification is not required, invoke finish again.`
+        pushToolOutputHistory(toolOutputHistory, gateMsg)
+        emitLog('info', '🛡️ Pre-Finish Verification Gate: richiesta validazione test/build prima della conclusione.')
+        continue
+      }
+
+      agentToolExecutorService.commitJournal()
       const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'
       emitLog('info', `Task Finished: ${summary}`)
       emitDone(true, summary)
@@ -401,6 +435,21 @@ export async function runAgentOrchestratorLoop(
       }
       activeAgentSessions.delete(sessionId)
       return { success: true, summary }
+    }
+
+    // Check for repetitive loop / oscillation traps before execution
+    const loopCheck = loopDetector.recordAndCheck(parsedTool)
+    if (loopCheck.isLooping && loopCheck.suggestedIntervention) {
+      pushToolOutputHistory(toolOutputHistory, loopCheck.suggestedIntervention)
+      emitLog(
+        'info',
+        `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
+        'Intervento automatico: cambio di strategia inviato al modello.'
+      )
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logToolResult(sessionId, stepCount, parsedTool.tool, loopCheck.suggestedIntervention)
+      }
+      continue
     }
 
     if (parsedTool.tool === 'ask') {
@@ -475,6 +524,25 @@ export async function runAgentOrchestratorLoop(
     session.activeChildProcess = null
 
     pushToolOutputHistory(toolOutputHistory, toolRes.outputForHistory)
+    if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file'].includes(parsedTool.tool)) {
+      if (!toolRes.outputForHistory.includes('Error:') && !toolRes.outputForHistory.includes('Security Violation')) {
+        hasFileMutations = true
+      }
+    }
+    if (parsedTool.tool === 'run_command') {
+      const cmdStr = (parsedTool.parameters?.command || '').toLowerCase()
+      const isVerificationCmd =
+        cmdStr.includes('test') ||
+        cmdStr.includes('typecheck') ||
+        cmdStr.includes('build') ||
+        cmdStr.includes('lint') ||
+        cmdStr.includes('pytest') ||
+        cmdStr.includes('tsc')
+      if (isVerificationCmd && !toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]')) {
+        hasVerifiedBuild = true
+      }
+    }
+
     if (toolRes.isTerminal) {
       emitLog('terminal', toolRes.logMessage, toolRes.logDetail)
     } else {

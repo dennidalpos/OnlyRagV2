@@ -322,4 +322,120 @@ export class FileSystemRepository {
     await searchDir(rootDir, 0)
     return results
   }
+
+  async extractCodeSymbols(
+    filePath: string,
+    filterKind?: string
+  ): Promise<{ success: boolean; symbols?: CodeSymbolItem[]; totalCount?: number; error?: string }> {
+    const resolved = validatePathSafety(filePath)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      if (!fs.existsSync(resolved) || !(await fs.promises.stat(resolved)).isFile()) {
+        return { success: false, error: 'File not found or invalid target' }
+      }
+
+      const rawContent = await fs.promises.readFile(resolved, 'utf-8')
+      const lines = rawContent.split(/\r?\n/)
+      const ext = path.extname(resolved).toLowerCase()
+      const symbols: CodeSymbolItem[] = []
+      const normFilter = filterKind ? filterKind.toLowerCase().trim() : null
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) {
+          continue
+        }
+
+        const lineNum = i + 1
+
+        // TypeScript / JavaScript / React (.ts, .tsx, .js, .jsx, .mjs, .cjs)
+        if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+          const fnMatch = line.match(/(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)\s*(?:<[^>]+>)?\s*\(([^)]*)\)/)
+          if (fnMatch) {
+            symbols.push({ name: fnMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const arrowMatch = line.match(/(?:export\s+)?(?:const|let|var)\s+([a-zA-Z0-9_$]+)\s*(?::\s*[^=]+)?\s*=\s*(?:async\s*)?(?:<[^>]+>)?\s*\(([^)]*)\)\s*(?::\s*[^=]+)?\s*=>/)
+          if (arrowMatch) {
+            symbols.push({ name: arrowMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const classMatch = line.match(/(?:export\s+(?:default\s+)?)?(?:abstract\s+)?class\s+([a-zA-Z0-9_$]+)/)
+          if (classMatch) {
+            symbols.push({ name: classMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const interfaceMatch = line.match(/(?:export\s+)?interface\s+([a-zA-Z0-9_$]+)/)
+          if (interfaceMatch) {
+            symbols.push({ name: interfaceMatch[1], kind: 'interface', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const typeMatch = line.match(/(?:export\s+)?type\s+([a-zA-Z0-9_$]+)(?:<[^>]+>)?\s*=/)
+          if (typeMatch) {
+            symbols.push({ name: typeMatch[1], kind: 'type', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const enumMatch = line.match(/(?:export\s+)?enum\s+([a-zA-Z0-9_$]+)/)
+          if (enumMatch) {
+            symbols.push({ name: enumMatch[1], kind: 'enum', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+        } else if (ext === '.py') {
+          // Python (.py)
+          const pyClassMatch = line.match(/^\s*class\s+([a-zA-Z0-9_]+)/)
+          if (pyClassMatch) {
+            symbols.push({ name: pyClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const pyDefMatch = line.match(/^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/)
+          if (pyDefMatch) {
+            const isMethod = line.startsWith('    ') || line.startsWith('\t')
+            symbols.push({ name: pyDefMatch[1], kind: isMethod ? 'method' : 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+        } else if (['.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.java'].includes(ext)) {
+          // Go / Rust / C / C++ / Java / C#
+          const genClassMatch = line.match(/(?:class|struct|interface|trait|enum)\s+([a-zA-Z0-9_]+)/)
+          if (genClassMatch) {
+            symbols.push({ name: genClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+
+          const genFnMatch = line.match(/(?:func|fn|def|void|int|string|bool|async|public|private)\s+([a-zA-Z0-9_]+)\s*\(/)
+          if (genFnMatch) {
+            symbols.push({ name: genFnMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+            continue
+          }
+        }
+      }
+
+      const filtered = normFilter && normFilter !== 'all'
+        ? symbols.filter((s) => s.kind === normFilter)
+        : symbols
+
+      return {
+        success: true,
+        symbols: filtered,
+        totalCount: filtered.length,
+      }
+    } catch (err: any) {
+      logger.log('ERROR', 'WorkspaceRepo', `Error extracting code symbols from '${filePath}': ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  }
+}
+
+export interface CodeSymbolItem {
+  name: string
+  kind: 'function' | 'class' | 'interface' | 'type' | 'enum' | 'method'
+  startLine: number
+  signature: string
 }

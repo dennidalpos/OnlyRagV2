@@ -23,20 +23,31 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
   const { t } = useTranslation()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
+  const isProgrammaticScrollRef = useRef<boolean>(false)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return
+    if (isProgrammaticScrollRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
-    const isNearBottom = scrollHeight - scrollTop - clientHeight <= 45
+    const isNearBottom = scrollHeight - scrollTop - clientHeight <= 60
     setIsUserScrolledUp(!isNearBottom)
   }
 
   const scrollToBottom = () => {
     if (!scrollContainerRef.current) return
-    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+    isProgrammaticScrollRef.current = true
     setIsUserScrolledUp(false)
+    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      }
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, 50)
+    })
   }
 
   const handleCopyLogs = async () => {
@@ -47,9 +58,27 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Reset scroll on new execution
+  const prevExecutingRef = useRef(isExecuting)
+  useEffect(() => {
+    if (isExecuting && !prevExecutingRef.current) {
+      setIsUserScrolledUp(false)
+      scrollToBottom()
+    }
+    prevExecutingRef.current = isExecuting
+  }, [isExecuting])
+
   useEffect(() => {
     if (!isUserScrolledUp && scrollContainerRef.current) {
+      isProgrammaticScrollRef.current = true
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      const rafId = requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+        }
+        isProgrammaticScrollRef.current = false
+      })
+      return () => cancelAnimationFrame(rafId)
     }
   }, [terminalLogs, isExecuting, isUserScrolledUp])
 

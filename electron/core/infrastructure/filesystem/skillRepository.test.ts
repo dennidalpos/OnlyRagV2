@@ -11,10 +11,11 @@ import {
 
 describe('SkillRepository Unit Tests', () => {
   let tempDir: string
-  const repo = new SkillRepository()
+  let repo: SkillRepository
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-skills-test-'))
+    repo = new SkillRepository(tempDir)
   })
 
   afterEach(() => {
@@ -51,6 +52,29 @@ Use useActionState instead of manual loading state.`
     expect(parsed.body).toContain('# React 19 Best Practices')
   })
 
+  it('should parse multi-line YAML list items for triggers and tags', () => {
+    const rawMultiline = `---
+name: python-async
+description: "Python async guidelines"
+triggers:
+  - asyncio
+  - fastapi
+  - aiohttp
+tags:
+  - python
+  - backend
+---
+
+# Python Async Standards
+Use asyncio.to_thread for blocking operations.`
+
+    const parsed = parseSkillFrontmatter(rawMultiline)
+    expect(parsed.metadata.name).toBe('python-async')
+    expect(parsed.metadata.triggers).toEqual(['asyncio', 'fastapi', 'aiohttp'])
+    expect(parsed.metadata.tags).toEqual(['python', 'backend'])
+    expect(parsed.body).toContain('# Python Async Standards')
+  })
+
   it('should calculate deterministic checksums for content', () => {
     const content1 = '# My Skill\nRule 1'
     const content2 = '# My Skill\r\nRule 1'
@@ -58,6 +82,24 @@ Use useActionState instead of manual loading state.`
 
     expect(calculateSkillChecksum(content1)).toBe(calculateSkillChecksum(content2))
     expect(calculateSkillChecksum(content1)).not.toBe(calculateSkillChecksum(content3))
+  })
+
+  it('should persist active skills state across repository instances', () => {
+    repo.setSkillActive('react19-modern-patterns', true)
+    repo.setSkillActive('fastapi-pydantic-v2', true)
+    expect(repo.isSkillActive('react19-modern-patterns')).toBe(true)
+
+    // Instantiate a new repo instance with the same state directory
+    const secondRepo = new SkillRepository(tempDir)
+    expect(secondRepo.isSkillActive('react19-modern-patterns')).toBe(true)
+    expect(secondRepo.isSkillActive('fastapi-pydantic-v2')).toBe(true)
+    expect(secondRepo.isSkillActive('unknown-skill')).toBe(false)
+
+    // Toggle off and verify persistence
+    secondRepo.setSkillActive('react19-modern-patterns', false)
+    const thirdRepo = new SkillRepository(tempDir)
+    expect(thirdRepo.isSkillActive('react19-modern-patterns')).toBe(false)
+    expect(thirdRepo.isSkillActive('fastapi-pydantic-v2')).toBe(true)
   })
 
   it('should save a new skill and list it from workspace with local_custom origin', async () => {
@@ -115,8 +157,11 @@ Use useActionState instead of manual loading state.`
     expect(skill?.isModified).toBe(true)
   })
 
-  it('should delete a skill folder from workspace', async () => {
+  it('should delete a skill folder from workspace and clear active state', async () => {
     await repo.saveSkill('temp-skill', '# Temp', tempDir)
+    repo.setSkillActive('temp-skill', true)
+    expect(repo.isSkillActive('temp-skill')).toBe(true)
+
     const installedBefore = await repo.listInstalledSkills(tempDir)
     expect(installedBefore.some((s) => s.name === 'temp-skill')).toBe(true)
 
@@ -125,5 +170,6 @@ Use useActionState instead of manual loading state.`
 
     const installedAfter = await repo.listInstalledSkills(tempDir)
     expect(installedAfter.some((s) => s.name === 'temp-skill')).toBe(false)
+    expect(repo.isSkillActive('temp-skill')).toBe(false)
   })
 })

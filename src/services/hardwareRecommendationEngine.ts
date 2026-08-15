@@ -9,6 +9,10 @@ export interface ModelRecommendation {
   sizeBytesApprox: string
   description: string
   isRecommended: boolean
+  footprintGB?: number
+  isHardwareCompatible?: boolean
+  compatibilityStatus?: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
+  compatibilityWarning?: string
 }
 
 export interface OllamaEnvVarRecommendation {
@@ -43,6 +47,25 @@ export interface HardwareRecommendations {
 }
 
 /**
+ * Analytical VRAM budgeting constants:
+ * - SAFETY_MARGIN: 25% reserve for dynamic KV Cache growth, token context expansion, background tasks.
+ * - OVERHEAD_OS_GB: 1.5 GB fixed reserve for Windows Desktop Window Manager (DWM.exe) and display buffers.
+ */
+export const VRAM_SAFETY_MARGIN = 0.25
+export const VRAM_OVERHEAD_OS_GB = 1.5
+
+/**
+ * Calculates net usable safe VRAM according to the analytical formula:
+ * VRAM_Disponibile_Reale = (VRAM_Totale * (1 - Safety_Margin)) - Overhead_OS
+ */
+export function calculateRealUsableVram(vramTotalMB: number): number {
+  if (!vramTotalMB || vramTotalMB <= 0) return 0
+  const vramTotalGB = vramTotalMB / 1024
+  const usable = vramTotalGB * (1 - VRAM_SAFETY_MARGIN) - VRAM_OVERHEAD_OS_GB
+  return Math.max(0, Math.round(usable * 100) / 100)
+}
+
+/**
  * Derives a normalized model family badge from an Ollama model tag or name.
  */
 export function getModelFamily(modelName: string): string {
@@ -72,67 +95,98 @@ export function getModelFamily(modelName: string): string {
 }
 
 /**
- * Returns an approximate memory/disk footprint string based on known model tags and parameter counts.
+ * Returns estimated model weight in GB based on exact tag catalog or parameter heuristics.
  */
-export function getModelApproxSize(modelName: string): string | undefined {
-  if (!modelName) return undefined
+export function estimateModelWeightGB(modelName: string): number {
+  if (!modelName) return 4.5
   const lower = modelName.toLowerCase().trim()
-  if (lower === 'local' || lower === 'none') return undefined
+  if (lower === 'local' || lower === 'none') return 4.5
 
-  // Specific known catalog tags
-  const knownSizes: Record<string, string> = {
-    'nomic-embed-text:latest': '274 MB',
-    'nomic-embed-text': '274 MB',
-    'all-minilm:latest': '120 MB',
-    'all-minilm': '120 MB',
-    'bge-m3:latest': '1.1 GB',
-    'bge-m3': '1.1 GB',
-    'snowflake-arctic-embed:latest': '600 MB',
-    'snowflake-arctic-embed': '600 MB',
-    'mxbai-embed-large:latest': '670 MB',
-    'mxbai-embed-large': '670 MB',
-    'moondream:latest': '1.7 GB',
-    'moondream': '1.7 GB',
-    'llama3.2:1b': '1.3 GB',
-    'qwen2.5:1.5b': '1.0 GB',
-    'qwen2.5-coder:1.5b': '1.1 GB',
-    'deepseek-r1:1.5b': '1.1 GB',
-    'gemma2:2b': '1.6 GB',
-    'llama3.2:3b': '2.0 GB',
-    'qwen2.5-coder:3b': '1.9 GB',
-    'qwen2.5:3b': '1.9 GB',
-    'deepseek-coder:6.7b': '3.8 GB',
-    'mistral:7b': '4.1 GB',
-    'qwen2.5-coder:7b': '4.7 GB',
-    'qwen2.5:7b': '4.7 GB',
-    'deepseek-r1:7b': '4.7 GB',
-    'llava:7b': '4.5 GB',
-    'meditron:7b': '4.3 GB',
-    'adrienbrault/biomistral-7b:q4_k_m': '4.1 GB',
-    'adrienbrault/biomistral-7b': '4.1 GB',
-    'llama3.1:8b': '4.9 GB',
-    'deepseek-r1:8b': '4.9 GB',
-    'aya-expanse:8b': '5.1 GB',
-    'minicpm-v:8b': '5.5 GB',
-    'gemma2:9b': '5.5 GB',
-    'llama3.2-vision:11b': '7.9 GB',
-    'solar:10.7b': '6.8 GB',
-    'qwen2.5-coder:14b': '9.0 GB',
-    'qwen2.5:14b': '9.0 GB',
-    'deepseek-r1:14b': '9.2 GB',
-    'phi4:14b': '9.1 GB',
-    'codestral:22b': '13.0 GB',
-    'deepseek-r1:32b': '20.0 GB',
-    'qwen2.5-coder:32b': '20.0 GB',
-    'command-r:35b': '20.0 GB',
-    'meditron:70b': '40.0 GB',
-    'llama3.3:70b': '40.0 GB',
-    'command-r-plus:104b': '60.0 GB',
+  const knownWeightsGB: Record<string, number> = {
+    'all-minilm:latest': 0.12,
+    'all-minilm': 0.12,
+    'nomic-embed-text:latest': 0.27,
+    'nomic-embed-text': 0.27,
+    'snowflake-arctic-embed:latest': 0.6,
+    'snowflake-arctic-embed': 0.6,
+    'mxbai-embed-large:latest': 0.67,
+    'mxbai-embed-large': 0.67,
+    'bge-m3:latest': 1.1,
+    'bge-m3': 1.1,
+    'qwen2.5-coder:0.5b': 0.4,
+    'qwen2.5:1.5b': 1.0,
+    'qwen2.5-coder:1.5b': 1.1,
+    'qwen2.5-coder:1.5b-instruct-q4_k_m': 1.0,
+    'qwen2.5-coder:1.5b-instruct-q8_0': 1.6,
+    'deepseek-r1:1.5b': 1.1,
+    'llama3.2:1b': 1.3,
+    'gemma2:2b': 1.6,
+    'moondream:latest': 1.7,
+    'moondream': 1.7,
+    'qwen2.5-coder:3b': 1.9,
+    'qwen2.5-coder:3b-instruct-q4_k_m': 1.8,
+    'qwen2.5-coder:3b-instruct-q8_0': 3.2,
+    'qwen2.5:3b': 1.9,
+    'llama3.2:3b': 2.0,
+    'starcoder2:3b': 2.0,
+    'phi3.5:3.8b': 2.2,
+    'deepseek-coder:6.7b': 3.8,
+    'deepseek-coder:6.7b-instruct-q4_k_m': 3.8,
+    'deepseek-coder:6.7b-instruct-q8_0': 7.2,
+    'codellama:7b-instruct-q4_k_m': 4.0,
+    'codellama:7b': 4.2,
+    'mistral:7b': 4.1,
+    'adrienbrault/biomistral-7b:q4_k_m': 4.1,
+    'adrienbrault/biomistral-7b:Q4_K_M': 4.1,
+    'adrienbrault/biomistral-7b': 4.1,
+    'meditron:7b': 4.3,
+    'starcoder2:7b': 4.4,
+    'llava:7b': 4.5,
+    'qwen2.5-coder:7b': 4.7,
+    'qwen2.5-coder:7b-instruct-q4_k_m': 4.4,
+    'qwen2.5-coder:7b-instruct-q5_k_m': 5.1,
+    'qwen2.5-coder:7b-instruct-q8_0': 7.6,
+    'qwen2.5:7b': 4.7,
+    'deepseek-r1:7b': 4.7,
+    'deepseek-r1:7b-qwen-distill-q4_k_m': 4.4,
+    'llama3.1:8b': 4.9,
+    'deepseek-r1:8b': 4.9,
+    'deepseek-r1:8b-llama-distill-q4_k_m': 4.9,
+    'aya-expanse:8b': 5.1,
+    'minicpm-v:8b': 5.5,
+    'gemma2:9b': 5.5,
+    'codellama:13b': 7.8,
+    'solar:10.7b': 6.8,
+    'llama3.2-vision:11b': 7.9,
+    'deepseek-coder-v2:16b-lite-instruct-q4_k_m': 8.9,
+    'deepseek-coder-v2:16b-lite-instruct-q5_k_m': 10.5,
+    'deepseek-coder-v2:16b': 8.9,
+    'qwen2.5-coder:14b': 9.0,
+    'qwen2.5-coder:14b-instruct-q4_k_m': 8.9,
+    'qwen2.5-coder:14b-instruct-q5_k_m': 10.3,
+    'qwen2.5-coder:14b-instruct-q8_0': 15.0,
+    'qwen2.5:14b': 9.0,
+    'starcoder2:15b': 9.2,
+    'phi4:14b': 9.1,
+    'phi4:14b-q4_k_m': 9.1,
+    'deepseek-r1:14b': 9.2,
+    'deepseek-r1:14b-qwen-distill-q4_k_m': 9.0,
+    'codestral:22b': 13.0,
+    'codestral:22b-v0.1-q4_k_m': 13.0,
+    'codestral:22b-v0.1-q5_k_m': 15.5,
+    'codellama:34b': 20.0,
+    'deepseek-r1:32b': 20.0,
+    'qwen2.5-coder:32b': 20.0,
+    'qwen2.5-coder:32b-instruct-q4_k_m': 19.5,
+    'command-r:35b': 20.0,
+    'meditron:70b': 40.0,
+    'llama3.3:70b': 40.0,
+    'command-r-plus:104b': 60.0,
   }
 
-  for (const [key, size] of Object.entries(knownSizes)) {
+  for (const [key, weight] of Object.entries(knownWeightsGB)) {
     if (lower === key || lower.startsWith(key) || key.startsWith(lower)) {
-      return size
+      return weight
     }
   }
 
@@ -141,55 +195,147 @@ export function getModelApproxSize(modelName: string): string | undefined {
   if (bMatch) {
     const num = parseFloat(bMatch[1])
     if (!isNaN(num) && num > 0) {
-      if (num <= 0.6) return `~${Math.round(num * 800)} MB`
-      if (num <= 1.2) return '~1.1 GB'
-      if (num <= 2.2) return '~1.6 GB'
-      if (num <= 3.5) return '~2.0 GB'
-      if (num <= 4.5) return '~2.8 GB'
-      if (num <= 7.2) return '~4.4 GB'
-      if (num <= 8.5) return '~4.9 GB'
-      if (num <= 9.5) return '~5.5 GB'
-      if (num <= 11.5) return '~7.9 GB'
-      if (num <= 14.5) return '~9.0 GB'
-      if (num <= 22.5) return '~13.0 GB'
-      if (num <= 27.5) return '~17.0 GB'
-      if (num <= 35.5) return '~20.0 GB'
-      if (num <= 72.0) return '~40.0 GB'
-      return `~${(num * 0.6).toFixed(0)} GB`
+      if (num <= 0.6) return 0.5
+      if (num <= 1.2) return 1.1
+      if (num <= 2.2) return 1.6
+      if (num <= 3.5) return 2.0
+      if (num <= 4.5) return 2.8
+      if (num <= 7.2) return 4.4
+      if (num <= 8.5) return 4.9
+      if (num <= 9.5) return 5.5
+      if (num <= 11.5) return 7.9
+      if (num <= 14.5) return 9.0
+      if (num <= 22.5) return 13.0
+      if (num <= 27.5) return 17.0
+      if (num <= 35.5) return 20.0
+      if (num <= 72.0) return 40.0
+      return num * 0.6
     }
   }
 
-  // Regex pattern matching for parameter sizes in millions (e.g. 135m, 350m, 500m)
+  // Regex pattern matching for parameter sizes in millions
   const mMatch = lower.match(/(?::|-|_|\b)(\d+)\s*m(?::|-|_|\b|$)/)
   if (mMatch) {
     const num = parseInt(mMatch[1], 10)
     if (!isNaN(num) && num > 0 && num < 1000) {
-      return `~${num} MB`
+      return num / 1000
     }
   }
 
-  // Keyword-based footprint heuristics
-  if (lower.includes('104b')) return '~60.0 GB'
-  if (lower.includes('70b') || lower.includes('72b')) return '~40.0 GB'
-  if (lower.includes('35b') || lower.includes('32b') || lower.includes('34b')) return '~20.0 GB'
-  if (lower.includes('22b') || lower.includes('27b') || lower.includes('20b')) return '~14.0 GB'
-  if (lower.includes('14b') || lower.includes('13b') || lower.includes('12b')) return '~9.0 GB'
-  if (lower.includes('11b') || lower.includes('10b')) return '~7.9 GB'
-  if (lower.includes('9b') || lower.includes('8b')) return '~5.0 GB'
-  if (lower.includes('7b') || lower.includes('6.7b')) return '~4.4 GB'
-  if (lower.includes('3b') || lower.includes('4b')) return '~2.0 GB'
-  if (lower.includes('2b') || lower.includes('1.8b')) return '~1.6 GB'
-  if (lower.includes('1.5b') || lower.includes('1b')) return '~1.1 GB'
-  if (lower.includes('embed') || lower.includes('nomic') || lower.includes('bge') || lower.includes('minilm')) return '~300-600 MB'
-  if (lower.includes('vision') || lower.includes('llava') || lower.includes('minicpm')) return '~4.5 - 8 GB'
-  if (lower.includes('tiny') || lower.includes('mini') || lower.includes('small') || lower.includes('micro') || lower.includes('nano')) return '~1.5 - 2.0 GB'
+  return 4.5
+}
 
-  return '~4.5 GB'
+/**
+ * Returns an approximate memory/disk footprint string based on known model tags and parameter counts.
+ */
+export function getModelApproxSize(modelName: string): string | undefined {
+  if (!modelName) return undefined
+  const lower = modelName.toLowerCase().trim()
+  if (lower === 'local' || lower === 'none') return undefined
+
+  const weightGB = estimateModelWeightGB(modelName)
+  if (weightGB < 1.0) {
+    return `${Math.round(weightGB * 1024)} MB`
+  }
+  return `${weightGB.toFixed(1)} GB`
+}
+
+/**
+ * Calculates KV-Cache VRAM footprint in GB:
+ * KV_Cache = 2 * n_layers * n_kv_heads * head_dim * context_tokens * bytes_per_elem
+ * Using standard Q8 quantization (1 byte/elem) or FP16 (2 bytes/elem).
+ */
+export function estimateKvCacheMemoryGB(contextTokens: number = 4096, isQuantizedQ8: boolean = true): number {
+  const bytesPerElem = isQuantizedQ8 ? 1 : 2
+  // Approximate standard 32 layers, 8 KV heads, 128 head dim
+  const bytes = 2 * 32 * 8 * 128 * contextTokens * bytesPerElem
+  const gb = bytes / (1024 * 1024 * 1024)
+  return Math.round(gb * 100) / 100
+}
+
+/**
+ * Calculates total model footprint in GB:
+ * Footprint_Totale = VRAM_Modello + VRAM_KV_Cache + Overhead_CUDA
+ */
+export function calculateTotalModelFootprintGB(
+  modelName: string,
+  contextTargetTokens: number = 4096,
+  isQuantizedQ8: boolean = true
+): number {
+  const weightGB = estimateModelWeightGB(modelName)
+  const kvCacheGB = estimateKvCacheMemoryGB(contextTargetTokens, isQuantizedQ8)
+  const cudaRuntimeOverheadGB = 0.25
+  const total = weightGB + kvCacheGB + cudaRuntimeOverheadGB
+  return Math.round(total * 100) / 100
+}
+
+/**
+ * Assesses model compatibility against detected hardware and safe usable VRAM budget.
+ */
+export function assessModelHardwareCompatibility(
+  modelName: string,
+  vramTotalMB: number,
+  totalRamGB: number,
+  contextTargetTokens: number = 4096
+): {
+  isCompatible: boolean
+  footprintGB: number
+  safeVramBudgetGB: number
+  compatibilityStatus: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
+  warning?: string
+} {
+  const footprintGB = calculateTotalModelFootprintGB(modelName, contextTargetTokens, true)
+  const safeVramBudgetGB = calculateRealUsableVram(vramTotalMB)
+  const hasGpu = vramTotalMB > 0
+
+  if (hasGpu && safeVramBudgetGB > 0) {
+    if (footprintGB <= safeVramBudgetGB) {
+      return {
+        isCompatible: true,
+        footprintGB,
+        safeVramBudgetGB,
+        compatibilityStatus: 'optimal_vram',
+      }
+    } else if (footprintGB <= safeVramBudgetGB + 1.2) {
+      return {
+        isCompatible: true,
+        footprintGB,
+        safeVramBudgetGB,
+        compatibilityStatus: 'tight_vram',
+        warning: 'Uso VRAM elevato: possibile rallentamento o swap con contesti lunghi.',
+      }
+    } else {
+      return {
+        isCompatible: false,
+        footprintGB,
+        safeVramBudgetGB,
+        compatibilityStatus: 'exceeds_vram',
+        warning: 'VRAM insufficiente: rischio elevato di Out-Of-Memory (OOM) o blocco driver.',
+      }
+    }
+  }
+
+  // CPU execution / No GPU
+  const safeRamBudget = Math.max(2.0, totalRamGB * 0.7)
+  if (footprintGB <= safeRamBudget) {
+    return {
+      isCompatible: true,
+      footprintGB,
+      safeVramBudgetGB: 0,
+      compatibilityStatus: 'optimal_vram',
+    }
+  }
+  return {
+    isCompatible: false,
+    footprintGB,
+    safeVramBudgetGB: 0,
+    compatibilityStatus: 'exceeds_vram',
+    warning: 'RAM di sistema insufficiente per eseguire questo modello su CPU.',
+  }
 }
 
 /**
  * Accurately determines if a target Ollama model tag is installed locally.
- * Handles exact tag comparisons, implicit ':latest', and registry namespace prefixes.
  */
 export function isOllamaModelInstalled(targetModel: string, downloadedModels: string[]): boolean {
   if (!targetModel || !downloadedModels || downloadedModels.length === 0) return false
@@ -261,22 +407,33 @@ export function findMatchingInstalledModel(target: string, available: string[]):
  */
 export function formatModelDisplayName(modelName: string): string {
   if (!modelName) return ''
-  if (modelName === 'adrienbrault/biomistral-7b:Q4_K_M') return 'BioMistral (7B Q4_K_M)'
-  if (modelName === 'meditron:7b') return 'Meditron (7B)'
-  if (modelName === 'meditron:70b') return 'Meditron (70B)'
-  if (modelName === 'bge-m3:latest') return 'BAAI BGE-M3 (1024d)'
-  if (modelName === 'nomic-embed-text:latest') return 'Nomic Embed Text (768d)'
+  const lower = modelName.toLowerCase().trim()
+  if (lower === 'qwen2.5-coder:7b-instruct-q4_k_m') return 'Qwen 2.5 Coder (7B Q4_K_M)'
+  if (lower === 'qwen2.5-coder:7b-instruct-q5_k_m') return 'Qwen 2.5 Coder (7B Q5_K_M)'
+  if (lower === 'qwen2.5-coder:7b-instruct-q8_0') return 'Qwen 2.5 Coder (7B Q8_0)'
+  if (lower === 'qwen2.5-coder:14b-instruct-q4_k_m') return 'Qwen 2.5 Coder (14B Q4_K_M)'
+  if (lower === 'qwen2.5-coder:32b-instruct-q4_k_m') return 'Qwen 2.5 Coder (32B Q4_K_M)'
+  if (lower === 'deepseek-coder-v2:16b-lite-instruct-q4_k_m' || lower === 'deepseek-coder-v2:16b') return 'DeepSeek Coder V2 Lite (16B Q4_K_M)'
+  if (lower === 'deepseek-coder:6.7b-instruct-q4_k_m') return 'DeepSeek Coder (6.7B Q4_K_M)'
+  if (lower === 'deepseek-r1:7b-qwen-distill-q4_k_m' || lower === 'deepseek-r1:7b') return 'DeepSeek R1 Distill Qwen (7B)'
+  if (lower === 'deepseek-r1:8b-llama-distill-q4_k_m' || lower === 'deepseek-r1:8b') return 'DeepSeek R1 Distill Llama (8B)'
+  if (lower === 'deepseek-r1:14b-qwen-distill-q4_k_m' || lower === 'deepseek-r1:14b') return 'DeepSeek R1 Distill Qwen (14B)'
+  if (lower === 'deepseek-r1:32b') return 'DeepSeek R1 Distill Qwen (32B)'
+  if (lower === 'codestral:22b-v0.1-q4_k_m' || lower === 'codestral:22b') return 'Mistral Codestral (22B Q4_K_M)'
+  if (lower === 'codellama:7b-instruct-q4_k_m') return 'Code Llama (7B Q4_K_M)'
+  if (lower === 'adrienbrault/biomistral-7b:Q4_K_M' || lower === 'adrienbrault/biomistral-7b:q4_k_m') return 'BioMistral (7B Q4_K_M)'
+  if (lower === 'meditron:7b') return 'Meditron (7B)'
+  if (lower === 'meditron:70b') return 'Meditron (70B)'
+  if (lower === 'bge-m3:latest' || lower === 'bge-m3') return 'BAAI BGE-M3 (1024d)'
+  if (lower === 'nomic-embed-text:latest' || lower === 'nomic-embed-text') return 'Nomic Embed Text (768d)'
   const base = modelName.split(':')[0].replace(/^(adrienbrault\/|library\/)/, '')
   const tag = modelName.split(':')[1] || 'latest'
   return `${base} (${tag})`
 }
 
 /**
- * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments.
- * Models are selected with a minimum 2.5 - 4.5 GB VRAM headroom to accommodate:
- * 1. OS & Desktop Window Manager (DWM) VRAM buffer (0.8 - 1.2 GB)
- * 2. Attention Key-Value Cache at 4k-32k context (1.0 - 2.5 GB)
- * 3. CUDA runtime & tensor memory fragmentation (0.5 GB)
+ * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments
+ * strictly bound by net usable VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
  */
 export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null): HardwareRecommendations {
   const hasGpu = diagnostics?.gpu.hasNvidiaGpu || false
@@ -284,39 +441,53 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
   const vramGB = Math.floor(vramTotalMB / 1024)
   const systemRamGB = Math.round(diagnostics?.memory.totalRAMGB || 8)
 
+  const safeVramBudgetGB = calculateRealUsableVram(vramTotalMB)
+
   let profileTier: HardwareProfileTier = 'midrange'
   let profileName = `Mid-Range GPU (${vramGB}GB VRAM / ${systemRamGB}GB RAM)`
-  let safeVramBudgetGB = 5.0
 
   if (!hasGpu || vramGB < 4) {
     profileTier = 'legacy'
     profileName = `Legacy / CPU-Only Hardware (${vramGB > 0 ? `${vramGB}GB VRAM` : 'No GPU'} / ${systemRamGB}GB RAM)`
-    safeVramBudgetGB = 0
   } else if (vramGB >= 4 && vramGB < 8) {
     profileTier = 'entry'
     profileName = `Entry-Level GPU (${vramGB}GB VRAM / ${systemRamGB}GB RAM)`
-    safeVramBudgetGB = Math.max(1.8, vramGB - 2.5) // Safe budget: max 2.5-3.5 GB models
   } else if (vramGB >= 8 && vramGB < 12) {
     profileTier = 'midrange'
     profileName = `Mid-Range GPU (${vramGB}GB VRAM / ${systemRamGB}GB RAM)`
-    safeVramBudgetGB = Math.max(3.5, vramGB - 4.5) // Safe budget: 3.5 GB models (leaves ~4.5GB for KV cache + Windows DWM reserve)
   } else if (vramGB >= 12 && vramGB < 20) {
     profileTier = 'highend'
     profileName = `High-End Performance GPU (${vramGB}GB VRAM / ${systemRamGB}GB RAM)`
-    safeVramBudgetGB = Math.max(9.0, vramGB - 4.5) // Safe budget: max 9.2 GB models (leaves ~5-7GB for 32k KV)
   } else {
     profileTier = 'extreme'
     profileName = `Extreme Workstation (${vramGB}GB VRAM / ${systemRamGB}GB RAM)`
-    safeVramBudgetGB = Math.max(18.0, vramGB - 6.0)
   }
 
   const gpuSummary = hasGpu
-    ? `${diagnostics?.gpu.gpuName || 'NVIDIA GPU'} (${vramGB} GB VRAM)`
+    ? `${diagnostics?.gpu.gpuName || 'NVIDIA GPU'} (${vramGB} GB VRAM — Safe Budget: ${safeVramBudgetGB.toFixed(1)} GB)`
     : 'No Dedicated GPU Detected (CPU Execution)'
   const ramSummary = `${systemRamGB} GB System RAM`
 
+  const enrich = (item: {
+    modelName: string
+    displayName: string
+    family: string
+    sizeBytesApprox: string
+    description: string
+    isRecommended: boolean
+  }): ModelRecommendation => {
+    const assessment = assessModelHardwareCompatibility(item.modelName, vramTotalMB, systemRamGB)
+    return {
+      ...item,
+      footprintGB: assessment.footprintGB,
+      isHardwareCompatible: assessment.isCompatible,
+      compatibilityStatus: assessment.compatibilityStatus,
+      compatibilityWarning: assessment.warning,
+    }
+  }
+
   // 🟢 Fast Tier Recommendations (Lightweight models: 1B - 3B)
-  const fastTierModels: ModelRecommendation[] = [
+  const rawFastTierModels = [
     {
       modelName: 'qwen2.5-coder:1.5b',
       displayName: 'Qwen 2.5 Coder (1.5B)',
@@ -324,6 +495,14 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       sizeBytesApprox: '1.1 GB',
       description: 'Ultra-fast code completion with minimal memory footprint & rapid token response',
       isRecommended: profileTier === 'legacy' || profileTier === 'entry' || profileTier === 'midrange',
+    },
+    {
+      modelName: 'qwen2.5-coder:1.5b-instruct-q8_0',
+      displayName: 'Qwen 2.5 Coder (1.5B Q8_0)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '1.6 GB',
+      description: 'High-precision 8-bit quantized fast coding model',
+      isRecommended: false,
     },
     {
       modelName: 'qwen2.5-coder:3b',
@@ -334,11 +513,19 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       isRecommended: profileTier === 'highend' || profileTier === 'extreme',
     },
     {
-      modelName: 'llama3.2:3b',
-      displayName: 'Llama 3.2 (3B)',
-      family: 'llama',
-      sizeBytesApprox: '2.0 GB',
-      description: 'Balanced lightweight model for quick lookups, doc inspection & rapid editing',
+      modelName: 'qwen2.5-coder:3b-instruct-q4_k_m',
+      displayName: 'Qwen 2.5 Coder (3B Q4_K_M)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '1.8 GB',
+      description: 'Quantized compact code assistant for fast edits',
+      isRecommended: false,
+    },
+    {
+      modelName: 'qwen2.5-coder:0.5b',
+      displayName: 'Qwen 2.5 Coder (0.5B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '400 MB',
+      description: 'Ultra-compact micro model for background helper tasks & zero memory pressure',
       isRecommended: false,
     },
     {
@@ -347,6 +534,14 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       family: 'llama',
       sizeBytesApprox: '1.3 GB',
       description: 'Minimal footprint model for ultra low-spec hardware and background helpers',
+      isRecommended: false,
+    },
+    {
+      modelName: 'llama3.2:3b',
+      displayName: 'Llama 3.2 (3B)',
+      family: 'llama',
+      sizeBytesApprox: '2.0 GB',
+      description: 'Balanced lightweight model for quick lookups, doc inspection & rapid editing',
       isRecommended: false,
     },
     {
@@ -359,31 +554,39 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
-  // 🔵 Standard Tier Recommendations (Balanced workhorse models: 3B - 7B)
-  const standardTierModels: ModelRecommendation[] = [
-    {
-      modelName: 'qwen2.5-coder:3b',
-      displayName: 'Qwen 2.5 Coder (3B)',
-      family: 'qwen-coder',
-      sizeBytesApprox: '1.9 GB',
-      description: 'Balanced low-VRAM coding assistant preserving full headroom on 4-8GB GPUs',
-      isRecommended: profileTier === 'entry' || profileTier === 'midrange',
-    },
+  // 🔵 Standard Tier Recommendations (Balanced workhorse models: 3B - 14B)
+  const rawStandardTierModels = [
     {
       modelName: 'qwen2.5-coder:7b',
       displayName: 'Qwen 2.5 Coder (7B)',
       family: 'qwen-coder',
       sizeBytesApprox: '4.7 GB',
       description: 'State-of-the-art coding workhorse with high JSON precision & tool calling support',
-      isRecommended: profileTier === 'highend',
+      isRecommended: profileTier === 'midrange' || profileTier === 'highend',
     },
     {
-      modelName: 'llama3.2:3b',
-      displayName: 'Llama 3.2 (3B)',
-      family: 'llama',
-      sizeBytesApprox: '2.0 GB',
-      description: 'Balanced low-memory standard model for CPU/Legacy systems',
-      isRecommended: profileTier === 'legacy',
+      modelName: 'qwen2.5-coder:7b-instruct-q4_k_m',
+      displayName: 'Qwen 2.5 Coder (7B Q4_K_M)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '4.4 GB',
+      description: 'Quantized 7B coding workhorse offering optimal VRAM headroom on 8GB GPUs',
+      isRecommended: false,
+    },
+    {
+      modelName: 'qwen2.5-coder:7b-instruct-q5_k_m',
+      displayName: 'Qwen 2.5 Coder (7B Q5_K_M)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '5.1 GB',
+      description: 'High-precision 5-bit quantized coding workhorse',
+      isRecommended: false,
+    },
+    {
+      modelName: 'qwen2.5-coder:3b',
+      displayName: 'Qwen 2.5 Coder (3B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '1.9 GB',
+      description: 'Balanced low-VRAM coding assistant preserving full headroom on 4-6GB GPUs or CPU',
+      isRecommended: profileTier === 'legacy' || profileTier === 'entry',
     },
     {
       modelName: 'qwen2.5-coder:14b',
@@ -394,27 +597,11 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       isRecommended: profileTier === 'extreme',
     },
     {
-      modelName: 'llama3.1:8b',
-      displayName: 'Llama 3.1 (8B)',
-      family: 'llama',
-      sizeBytesApprox: '4.9 GB',
-      description: 'Meta 8B balanced instruction & conversation model',
-      isRecommended: false,
-    },
-    {
-      modelName: 'codestral:22b',
-      displayName: 'Mistral Codestral (22B Q4)',
-      family: 'mistral',
-      sizeBytesApprox: '13.0 GB',
-      description: 'Mistral high-capacity enterprise code intelligence model',
-      isRecommended: false,
-    },
-    {
-      modelName: 'mistral:7b',
-      displayName: 'Mistral (7B)',
-      family: 'mistral',
-      sizeBytesApprox: '4.1 GB',
-      description: 'High-speed European LLM for text and documentation',
+      modelName: 'qwen2.5-coder:14b-instruct-q4_k_m',
+      displayName: 'Qwen 2.5 Coder (14B Q4_K_M)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '8.9 GB',
+      description: 'Quantized 14B coding model for high-end GPUs',
       isRecommended: false,
     },
     {
@@ -422,51 +609,83 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       displayName: 'DeepSeek Coder (6.7B)',
       family: 'deepseek',
       sizeBytesApprox: '3.8 GB',
-      description: 'DeepSeek specialized code generation model',
+      description: 'DeepSeek specialized code generation model with low VRAM requirement',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-coder:6.7b-instruct-q4_k_m',
+      displayName: 'DeepSeek Coder (6.7B Q4_K_M)',
+      family: 'deepseek',
+      sizeBytesApprox: '3.8 GB',
+      description: 'Quantized DeepSeek code model for reliable generation',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-coder-v2:16b-lite-instruct-q4_k_m',
+      displayName: 'DeepSeek Coder V2 Lite (16B Q4_K_M)',
+      family: 'deepseek',
+      sizeBytesApprox: '8.9 GB',
+      description: 'MoE coding architecture with 236 programming languages support',
+      isRecommended: false,
+    },
+    {
+      modelName: 'codestral:22b-v0.1-q4_k_m',
+      displayName: 'Mistral Codestral (22B Q4_K_M)',
+      family: 'mistral',
+      sizeBytesApprox: '13.0 GB',
+      description: 'Mistral enterprise code intelligence model (32k context)',
+      isRecommended: false,
+    },
+    {
+      modelName: 'starcoder2:7b',
+      displayName: 'StarCoder 2 (7B)',
+      family: 'starcoder',
+      sizeBytesApprox: '4.4 GB',
+      description: 'BigCode open-access code generation assistant',
+      isRecommended: false,
+    },
+    {
+      modelName: 'codellama:7b-instruct-q4_k_m',
+      displayName: 'Code Llama (7B Q4_K_M)',
+      family: 'codellama',
+      sizeBytesApprox: '4.0 GB',
+      description: 'Meta Code Llama specialized Python & C++ model',
+      isRecommended: false,
+    },
+    {
+      modelName: 'llama3.2:3b',
+      displayName: 'Llama 3.2 (3B)',
+      family: 'llama',
+      sizeBytesApprox: '2.0 GB',
+      description: 'Balanced low-memory fallback model for CPU/Legacy systems',
       isRecommended: false,
     },
   ]
 
-  // 🟣 Deep Reasoning Tier Recommendations (Multi-step reasoning models)
-  const deepReasoningTierModels: ModelRecommendation[] = [
+  // 🟣 Deep Reasoning Tier Recommendations (Multi-step reasoning & architecture)
+  const rawDeepReasoningTierModels = [
     {
-      modelName: 'deepseek-r1:1.5b',
-      displayName: 'DeepSeek R1 (1.5B)',
-      family: 'deepseek-r1',
-      sizeBytesApprox: '1.1 GB',
-      description: 'Lightweight reasoning model for CPU, 4GB, and 8GB hardware with zero lockups',
-      isRecommended: profileTier === 'legacy' || profileTier === 'entry' || profileTier === 'midrange',
+      modelName: 'qwen2.5-coder:7b',
+      displayName: 'Qwen 2.5 Coder (7B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '4.7 GB',
+      description: 'High-capability coding assistant for deep logic, multi-step refactors & debugging',
+      isRecommended: profileTier === 'midrange',
     },
     {
-      modelName: 'deepseek-r1:8b',
-      displayName: 'DeepSeek R1 (8B)',
+      modelName: 'deepseek-r1:7b',
+      displayName: 'DeepSeek R1 Distill Qwen (7B)',
       family: 'deepseek-r1',
-      sizeBytesApprox: '4.9 GB',
-      description: 'Advanced step-by-step reasoning model for 12GB+ GPUs (leaves ~7GB for KV cache)',
-      isRecommended: profileTier === 'highend',
-    },
-    {
-      modelName: 'deepseek-r1:14b',
-      displayName: 'DeepSeek R1 (14B)',
-      family: 'deepseek-r1',
-      sizeBytesApprox: '9.2 GB',
-      description: 'High-capacity reasoning engine for deep technical analysis on high-end hardware',
-      isRecommended: profileTier === 'extreme',
-    },
-    {
-      modelName: 'deepseek-r1:32b',
-      displayName: 'DeepSeek R1 (32B)',
-      family: 'deepseek-r1',
-      sizeBytesApprox: '20.0 GB',
-      description: 'Ultra-capacity reasoning model for high-end workstations & multi-GPU servers',
+      sizeBytesApprox: '4.7 GB',
+      description: 'Qwen 2.5-Coder/Math distilled reasoning model for deep algorithmic problem solving',
       isRecommended: false,
     },
     {
-      modelName: 'phi4:14b',
-      displayName: 'Microsoft Phi-4 (14B)',
-      family: 'phi',
-      sizeBytesApprox: '9.1 GB',
-      description: 'Microsoft state-of-the-art synthetic reasoning & math assistant',
+      modelName: 'deepseek-r1:7b-qwen-distill-q4_k_m',
+      displayName: 'DeepSeek R1 Distill Qwen (7B Q4_K_M)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '4.4 GB',
+      description: 'Quantized Qwen-distilled reasoning model with low VRAM footprint',
       isRecommended: false,
     },
     {
@@ -474,13 +693,93 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
       displayName: 'Qwen 2.5 Coder (14B)',
       family: 'qwen-coder',
       sizeBytesApprox: '9.0 GB',
-      description: 'Large-scale coding model for architectural refactoring',
+      description: 'Large-scale code intelligence for multi-file architecture refactors',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'deepseek-r1:14b',
+      displayName: 'DeepSeek R1 Distill Qwen (14B)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '9.2 GB',
+      description: 'High-capacity 14B Qwen-distilled reasoning engine for complex system design',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-r1:14b-qwen-distill-q4_k_m',
+      displayName: 'DeepSeek R1 Distill Qwen (14B Q4_K_M)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '9.0 GB',
+      description: 'Quantized 14B deep reasoning engine for 12GB+ GPUs',
+      isRecommended: false,
+    },
+    {
+      modelName: 'qwen2.5-coder:32b',
+      displayName: 'Qwen 2.5 Coder (32B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '20.0 GB',
+      description: 'Premier 32B coding model rivaling proprietary models on complex codebases',
+      isRecommended: profileTier === 'extreme',
+    },
+    {
+      modelName: 'deepseek-r1:32b',
+      displayName: 'DeepSeek R1 Distill Qwen (32B)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '20.0 GB',
+      description: 'Ultra-scale 32B reasoning model for exhaustive multi-file code synthesis',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-coder-v2:16b-lite-instruct-q4_k_m',
+      displayName: 'DeepSeek Coder V2 Lite (16B Q4_K_M)',
+      family: 'deepseek',
+      sizeBytesApprox: '8.9 GB',
+      description: 'MoE code reasoning engine with 236 programming languages support',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-coder:6.7b',
+      displayName: 'DeepSeek Coder (6.7B)',
+      family: 'deepseek',
+      sizeBytesApprox: '3.8 GB',
+      description: 'Specialized coding model for entry-level and legacy GPU hardware',
+      isRecommended: profileTier === 'legacy' || profileTier === 'entry',
+    },
+    {
+      modelName: 'qwen2.5-coder:3b',
+      displayName: 'Qwen 2.5 Coder (3B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '1.9 GB',
+      description: 'Compact code model for low-VRAM devices with rapid reasoning',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-r1:8b',
+      displayName: 'DeepSeek R1 Distill Llama (8B)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '4.9 GB',
+      description: 'Llama 3.1-8B distilled reasoning model for 12GB+ GPUs',
+      isRecommended: false,
+    },
+    {
+      modelName: 'phi4:14b',
+      displayName: 'Microsoft Phi-4 (14B)',
+      family: 'phi',
+      sizeBytesApprox: '9.1 GB',
+      description: 'Microsoft state-of-the-art synthetic reasoning & algorithmic assistant',
+      isRecommended: false,
+    },
+    {
+      modelName: 'codestral:22b-v0.1-q4_k_m',
+      displayName: 'Mistral Codestral (22B Q4_K_M)',
+      family: 'mistral',
+      sizeBytesApprox: '13.0 GB',
+      description: 'High-capacity code intelligence engine for complex software design',
       isRecommended: false,
     },
   ]
 
-  // 💬 General / RAG Chat Models (Outside Coding Complexity Router)
-  const chatTierModels: ModelRecommendation[] = [
+  // 💬 General / RAG Chat Models
+  const rawChatTierModels = [
     {
       modelName: 'llama3.2:3b',
       displayName: 'Llama 3.2 (3B)',
@@ -523,8 +822,8 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
-  // 🌐 Document Translation Models (Specialized vertical translation)
-  const translationTierModels: ModelRecommendation[] = [
+  // 🌐 Document Translation Models
+  const rawTranslationTierModels = [
     {
       modelName: 'qwen2.5:3b',
       displayName: 'Qwen 2.5 (3B)',
@@ -583,8 +882,8 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
-  // 👁️ Vision Tier Recommendations (OCR, Multimodal & Layouts)
-  const visionTierModels: ModelRecommendation[] = [
+  // 👁️ Vision Tier Recommendations
+  const rawVisionTierModels = [
     {
       modelName: 'moondream:latest',
       displayName: 'Moondream 2 (1.8B)',
@@ -620,7 +919,7 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
   ]
 
   // 🧠 Vector Embedding Tier Recommendations
-  const embeddingTierModels: ModelRecommendation[] = [
+  const rawEmbeddingTierModels = [
     {
       modelName: 'nomic-embed-text:latest',
       displayName: 'Nomic Embed Text (768-dim)',
@@ -663,8 +962,8 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
-  // 🏥 Medical & Healthcare Domain Models (Verified Ollama Tags)
-  const medicalTierModels: ModelRecommendation[] = [
+  // 🏥 Medical & Healthcare Domain Models
+  const rawMedicalTierModels = [
     {
       modelName: 'llama3.2:3b',
       displayName: 'Llama 3.2 (3B)',
@@ -708,7 +1007,7 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
   ]
 
   // ⚖️ Legal & Compliance Domain Models
-  const legalTierModels: ModelRecommendation[] = [
+  const rawLegalTierModels = [
     {
       modelName: 'llama3.2:3b',
       displayName: 'Llama 3.2 (3B)',
@@ -757,15 +1056,15 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     gpuSummary,
     ramSummary,
     safeVramBudgetGB,
-    fastTierModels,
-    standardTierModels,
-    deepReasoningTierModels,
-    chatTierModels,
-    translationTierModels,
-    medicalTierModels,
-    legalTierModels,
-    visionTierModels,
-    embeddingTierModels,
+    fastTierModels: rawFastTierModels.map(enrich),
+    standardTierModels: rawStandardTierModels.map(enrich),
+    deepReasoningTierModels: rawDeepReasoningTierModels.map(enrich),
+    chatTierModels: rawChatTierModels.map(enrich),
+    translationTierModels: rawTranslationTierModels.map(enrich),
+    medicalTierModels: rawMedicalTierModels.map(enrich),
+    legalTierModels: rawLegalTierModels.map(enrich),
+    visionTierModels: rawVisionTierModels.map(enrich),
+    embeddingTierModels: rawEmbeddingTierModels.map(enrich),
   }
 }
 

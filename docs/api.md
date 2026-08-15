@@ -144,6 +144,16 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
-| `skills:list` | `none` | `SkillDefinition[]` | Elenco delle skill presenti in `/skills/` con provenienza e hash SHA-256. |
-| `skills:save` | `{ name: string, content: string, origin?: SkillOrigin }` | `{ success: boolean, skill: SkillDefinition }` | Creazione o aggiornamento con calcolo checksum automatico. |
-| `skills:delete` | `{ name: string }` | `{ success: boolean }` | Rimozione della cartella skill dal workspace. |
+| `skills:list-installed` | `workspaceRoot?: string` | `SkillDefinition[]` | Elenco delle skill installate (globali e di workspace) con stato attivo e provenance. |
+| `skills:list-hub` | `workspaceRoot?: string` | `HubSkillItem[]` | Elenco delle skill del Core Hub ufficiale. |
+| `skills:list-sources` | `none` | `SkillHubSource[]` | Elenco delle sorgenti di hub configurate (builtin e custom). |
+| `skills:add-custom-source` | `input: CustomHubInput` | `{ success: boolean, source?: SkillHubSource, error?: string }` | Aggiunta e persistenza di una sorgente JSON Catalog o GitHub Repository. |
+| `skills:remove-custom-source` | `sourceId: string` | `{ success: boolean, error?: string }` | Rimozione di una sorgente di hub personalizzata. |
+| `skills:list-hub-by-source` | `sourceId: string, workspaceRoot?: string, forceRefresh?: boolean` | `HubSkillItem[]` | Elenco delle skill da una sorgente specifica con supporto a caching TTL e refresh forzato. |
+| `skills:toggle-active` | `skillId: string, isActive: boolean` | `boolean` | Attivazione/disattivazione manuale con salvataggio persistente su disco (`active_skills.json`). |
+| `skills:install-from-hub` | `hubSkillId: string, workspaceRoot?: string, hubSourceId?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Installazione di una skill da hub con calcolo SHA-256 e metadata provenance. |
+| `skills:install-from-url` | `url: string, workspaceRoot?: string, customName?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Importazione diretta di una skill tramite URL raw markdown. |
+| `skills:save-custom` | `input: SkillSaveInput, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Creazione o aggiornamento di una skill locale/personalizzata con rilevamento modifiche. |
+| `skills:reset-original` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Ripristino di una skill modificata al contenuto originale dell'hub. |
+| `skills:uninstall` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, error?: string }` | Disinstallazione ed eliminazione sicura della cartella skill. |
+

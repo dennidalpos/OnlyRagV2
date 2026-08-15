@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   analyzeHardwareAndRecommend,
+  calculateRealUsableVram,
+  calculateTotalModelFootprintGB,
+  assessModelHardwareCompatibility,
+  estimateKvCacheMemoryGB,
   getModelFamily,
   getModelApproxSize,
   formatModelDisplayName,
@@ -51,6 +55,72 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     timestamp: new Date().toISOString(),
   })
 
+  it('should calculate analytical net usable safe VRAM correctly', () => {
+    // 0 MB (CPU) -> 0 GB
+    expect(calculateRealUsableVram(0)).toBe(0)
+
+    // 4096 MB (4GB) -> (4 * 0.75) - 1.5 = 1.5 GB
+    expect(calculateRealUsableVram(4096)).toBe(1.5)
+
+    // 6144 MB (6GB) -> (6 * 0.75) - 1.5 = 3.0 GB
+    expect(calculateRealUsableVram(6144)).toBe(3.0)
+
+    // 8192 MB (8GB) -> (8 * 0.75) - 1.5 = 4.5 GB
+    expect(calculateRealUsableVram(8192)).toBe(4.5)
+
+    // 12288 MB (12GB) -> (12 * 0.75) - 1.5 = 7.5 GB
+    expect(calculateRealUsableVram(12288)).toBe(7.5)
+
+    // 16384 MB (16GB) -> (16 * 0.75) - 1.5 = 10.5 GB
+    expect(calculateRealUsableVram(16384)).toBe(10.5)
+
+    // 24576 MB (24GB) -> (24 * 0.75) - 1.5 = 16.5 GB
+    expect(calculateRealUsableVram(24576)).toBe(16.5)
+  })
+
+  it('should calculate KV cache and total model footprint accurately', () => {
+    // KV Cache Q8 at 4096 tokens
+    const kv4k = estimateKvCacheMemoryGB(4096, true)
+    expect(kv4k).toBeGreaterThanOrEqual(0.2)
+    expect(kv4k).toBeLessThanOrEqual(0.4)
+
+    // Total footprint for 1.5B model
+    const fp1_5b = calculateTotalModelFootprintGB('qwen2.5-coder:1.5b', 4096, true)
+    expect(fp1_5b).toBeGreaterThan(1.0)
+    expect(fp1_5b).toBeLessThan(2.0)
+
+    // Total footprint for 7B model
+    const fp7b = calculateTotalModelFootprintGB('qwen2.5-coder:7b', 4096, true)
+    expect(fp7b).toBeGreaterThan(4.5)
+    expect(fp7b).toBeLessThan(5.5)
+
+    // Total footprint for 14B model
+    const fp14b = calculateTotalModelFootprintGB('qwen2.5-coder:14b', 4096, true)
+    expect(fp14b).toBeGreaterThan(8.5)
+  })
+
+  it('should accurately evaluate hardware compatibility and flag OOM risks', () => {
+    // 8GB GPU (safe budget = 4.5GB)
+    const fit1 = assessModelHardwareCompatibility('qwen2.5-coder:1.5b', 8192, 16)
+    expect(fit1.isCompatible).toBe(true)
+    expect(fit1.compatibilityStatus).toBe('optimal_vram')
+
+    const fit2 = assessModelHardwareCompatibility('qwen2.5-coder:3b', 8192, 16)
+    expect(fit2.isCompatible).toBe(true)
+    expect(fit2.compatibilityStatus).toBe('optimal_vram')
+
+    // 14B model on 8GB GPU -> exceeds VRAM
+    const fit3 = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 16)
+    expect(fit3.isCompatible).toBe(false)
+    expect(fit3.compatibilityStatus).toBe('exceeds_vram')
+    expect(fit3.warning).toContain('VRAM insufficiente')
+
+    // 32B model on 8GB GPU -> exceeds VRAM
+    const fit4 = assessModelHardwareCompatibility('deepseek-r1:32b', 8192, 16)
+    expect(fit4.isCompatible).toBe(false)
+    expect(fit4.compatibilityStatus).toBe('exceeds_vram')
+  })
+
   it('should recommend legacy profile for CPU-only or low VRAM hardware (< 4GB)', () => {
     const diag = createMockDiagnostics(false, 0, 8)
     const recs = analyzeHardwareAndRecommend(diag)
@@ -62,10 +132,10 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recFast?.modelName).toBe('qwen2.5-coder:1.5b')
 
     const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('llama3.2:3b')
+    expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-r1:1.5b')
+    expect(recDeep?.modelName).toBe('deepseek-coder:6.7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -92,10 +162,13 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     expect(recs.profileTier).toBe('entry')
     expect(recs.profileName).toContain('Entry-Level GPU')
-    expect(recs.safeVramBudgetGB).toBeLessThanOrEqual(4.0)
+    expect(recs.safeVramBudgetGB).toBe(3.0)
 
     const recStd = recs.standardTierModels.find((m) => m.isRecommended)
     expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
+
+    const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
+    expect(recDeep?.modelName).toBe('deepseek-coder:6.7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -104,22 +177,22 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recChat?.modelName).toBe('llama3.2:3b')
   })
 
-  it('should recommend midrange profile for dedicated GPU with 8GB VRAM with lightweight zero-lockup models', () => {
+  it('should recommend midrange profile for dedicated GPU with 8GB VRAM with coding workhorse models', () => {
     const diag = createMockDiagnostics(true, 8192, 16, 'NVIDIA GeForce RTX 2070')
     const recs = analyzeHardwareAndRecommend(diag)
 
     expect(recs.profileTier).toBe('midrange')
     expect(recs.profileName).toContain('Mid-Range GPU')
-    expect(recs.safeVramBudgetGB).toBeLessThanOrEqual(4.0)
+    expect(recs.safeVramBudgetGB).toBe(4.5)
 
     const recFast = recs.fastTierModels.find((m) => m.isRecommended)
     expect(recFast?.modelName).toBe('qwen2.5-coder:1.5b')
 
     const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
+    expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-r1:1.5b')
+    expect(recDeep?.modelName).toBe('qwen2.5-coder:7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -146,6 +219,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     expect(recs.profileTier).toBe('highend')
     expect(recs.profileName).toContain('High-End Performance GPU')
+    expect(recs.safeVramBudgetGB).toBe(10.5)
 
     const recFast = recs.fastTierModels.find((m) => m.isRecommended)
     expect(recFast?.modelName).toBe('qwen2.5-coder:3b')
@@ -154,7 +228,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-r1:8b')
+    expect(recDeep?.modelName).toBe('qwen2.5-coder:14b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llava:7b')
@@ -175,12 +249,13 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     expect(recs.profileTier).toBe('extreme')
     expect(recs.profileName).toContain('Extreme Workstation')
+    expect(recs.safeVramBudgetGB).toBe(16.5)
 
     const recStd = recs.standardTierModels.find((m) => m.isRecommended)
     expect(recStd?.modelName).toBe('qwen2.5-coder:14b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-r1:14b')
+    expect(recDeep?.modelName).toBe('qwen2.5-coder:32b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llama3.2-vision:11b')
@@ -204,7 +279,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     expect(getModelApproxSize('adrienbrault/biomistral-7b:Q4_K_M')).toBe('4.1 GB')
     expect(getModelApproxSize('qwen2.5-coder:7b')).toBe('4.7 GB')
-    expect(getModelApproxSize('nomic-embed-text:latest')).toBe('274 MB')
+    expect(getModelApproxSize('nomic-embed-text:latest')).toBe('276 MB')
     expect(getModelApproxSize('local')).toBeUndefined()
 
     expect(formatModelDisplayName('adrienbrault/biomistral-7b:Q4_K_M')).toBe('BioMistral (7B Q4_K_M)')

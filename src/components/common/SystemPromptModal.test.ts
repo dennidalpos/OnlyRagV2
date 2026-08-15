@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { detectModelFamily } from '../../constants/promptPresets'
-import { getEffectivePrompt } from './SystemPromptModal'
+import {
+  getEffectivePrompt,
+  compilePromptWithSampleVars,
+  MODULE_VARIABLES,
+} from './SystemPromptModal'
 import { PromptCompiler } from '../../../electron/core/domain/agent/promptCompiler'
 import { AppSettings } from '../../types'
 
@@ -86,6 +90,27 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(compiled.prompt).toContain('Italiano')
     expect(compiled.prompt).toContain('Inglese')
     expect(compiled.isCustom).toBe(false)
+  })
+
+  it('should compile prompt with sample variables in compilePromptWithSampleVars', () => {
+    const rawTemplate = 'Translate from {sourceLang} to {targetLang}: "{chunkText}"'
+    const compiled = compilePromptWithSampleVars(rawTemplate, 'translation')
+
+    expect(compiled).toContain('Italian')
+    expect(compiled).toContain('English')
+    expect(compiled).not.toContain('{sourceLang}')
+    expect(compiled).not.toContain('{targetLang}')
+  })
+
+  it('should provide comprehensive variable metadata across all feature modules', () => {
+    expect(MODULE_VARIABLES.coding.length).toBeGreaterThanOrEqual(3)
+    expect(MODULE_VARIABLES.translation.length).toBeGreaterThanOrEqual(3)
+    expect(MODULE_VARIABLES.chat.length).toBeGreaterThanOrEqual(1)
+    expect(MODULE_VARIABLES.vision.length).toBeGreaterThanOrEqual(1)
+
+    const codingReq = MODULE_VARIABLES.coding.filter((v) => v.required)
+    expect(codingReq.map((v) => v.name)).toContain('{userTask}')
+    expect(codingReq.map((v) => v.name)).toContain('{workspacePath}')
   })
 
   it('should respect selectedFamilyOverrides in PromptCompiler', () => {

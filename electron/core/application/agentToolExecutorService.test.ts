@@ -61,6 +61,79 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('should extract code symbols from TypeScript file', async () => {
+    const filePath = path.join(tempDir, 'symbols.ts')
+    const codeContent = `
+export interface UserDTO {
+  id: string;
+  name: string;
+}
+
+export type UserRole = 'admin' | 'user';
+
+export class UserService {
+  getUser(): UserDTO {
+    return { id: '1', name: 'Alice' };
+  }
+}
+
+export async function fetchAllUsers(): Promise<UserDTO[]> {
+  return [];
+}
+
+export const processUserData = async (data: UserDTO) => {
+  return data;
+};
+`
+    fs.writeFileSync(filePath, codeContent, 'utf-8')
+
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'extract_code_symbols',
+        parameters: { filePath },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[CODE SYMBOLS:')
+    expect(res.outputForHistory).toContain('[interface] UserDTO')
+    expect(res.outputForHistory).toContain('[type] UserRole')
+    expect(res.outputForHistory).toContain('[class] UserService')
+    expect(res.outputForHistory).toContain('[function] fetchAllUsers')
+    expect(res.outputForHistory).toContain('[function] processUserData')
+  })
+
+  it('should extract filtered code symbols from Python file', async () => {
+    const pyPath = path.join(tempDir, 'models.py')
+    const pyContent = `
+class BaseModel:
+    pass
+
+class UserModel(BaseModel):
+    def get_id(self):
+        return 1
+
+async def async_handler():
+    return True
+`
+    fs.writeFileSync(pyPath, pyContent, 'utf-8')
+
+    // Filter only classes
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'extract_code_symbols',
+        parameters: { filePath: pyPath, symbolType: 'class' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[class] BaseModel')
+    expect(res.outputForHistory).toContain('[class] UserModel')
+    expect(res.outputForHistory).not.toContain('[function] async_handler')
+  })
+
   it('should execute replace_file_content and return auto-healing feedback if chunk is not found', async () => {
     const filePath = path.join(tempDir, 'replace.ts')
     fs.writeFileSync(filePath, 'const a = 1;\nconst b = 2;\n', 'utf-8')
@@ -100,5 +173,29 @@ describe('AgentToolExecutorService Unit Tests', () => {
 
     expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
+  })
+
+  it('should maintain state across sequential run_command invocations', async () => {
+    // Step 1: Set persistent environment variable
+    const step1 = await agentToolExecutorService.executeTool(
+      {
+        tool: 'run_command',
+        parameters: { command: '$env:MY_AGENT_PERSISTENT_ENV = "OnlyRagActive"' },
+      },
+      tempDir,
+      settings
+    )
+    expect(step1.logMessage).toContain('Terminal Command Finished')
+
+    // Step 2: Read it back in subsequent call
+    const step2 = await agentToolExecutorService.executeTool(
+      {
+        tool: 'run_command',
+        parameters: { command: 'Write-Output $env:MY_AGENT_PERSISTENT_ENV' },
+      },
+      tempDir,
+      settings
+    )
+    expect(step2.outputForHistory).toContain('OnlyRagActive')
   })
 })

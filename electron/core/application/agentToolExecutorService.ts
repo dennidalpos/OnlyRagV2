@@ -6,6 +6,8 @@ import { logger } from '../../diagnostics'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
+import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
+import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { webClient } from '../infrastructure/http/webClient'
 import type { AppSettings } from '../../../src/types'
@@ -19,6 +21,37 @@ export interface ToolExecutionResult {
 
 export class AgentToolExecutorService {
   private repo = new FileSystemRepository()
+  private journal = new AtomicWorkspaceJournal()
+  private shellSessions = new Map<string, PersistentPowerShellSession>()
+
+  public getJournal(): AtomicWorkspaceJournal {
+    return this.journal
+  }
+
+  public rollbackJournal(): RollbackResult {
+    return this.journal.rollbackAll()
+  }
+
+  public commitJournal(): number {
+    return this.journal.commit()
+  }
+
+  public getOrCreateShellSession(workspacePath?: string | null): PersistentPowerShellSession {
+    const key = workspacePath || process.cwd()
+    let session = this.shellSessions.get(key)
+    if (!session || !session.isRunning) {
+      session = new PersistentPowerShellSession(key)
+      this.shellSessions.set(key, session)
+    }
+    return session
+  }
+
+  public disposeShellSessions(): void {
+    for (const session of this.shellSessions.values()) {
+      session.dispose()
+    }
+    this.shellSessions.clear()
+  }
 
   async executeTool(
     parsedTool: AgentToolCall,
@@ -59,6 +92,46 @@ export class AgentToolExecutorService {
         return {
           outputForHistory: `Error: File reading failed: ${res.error || targetPath}`,
           logMessage: `File Read Error: ${res.error || targetPath}`,
+        }
+      }
+
+      case 'extract_code_symbols': {
+        const targetPath = parameters.filePath
+        const pathCheck = validatePathSafety(targetPath, workspacePath)
+        if (!pathCheck.safePath) {
+          return {
+            outputForHistory: `Security Violation: ${pathCheck.error}`,
+            logMessage: `Extract Code Symbols Rejected: ${pathCheck.error}`,
+          }
+        }
+
+        const filterKind = parameters.symbolType || parameters.kind
+        const res = await this.repo.extractCodeSymbols(pathCheck.safePath, filterKind)
+
+        if (res.success && res.symbols) {
+          if (res.symbols.length === 0) {
+            const noSym = `[CODE SYMBOLS: ${targetPath}]\nNo symbols (functions, classes, interfaces) matching filter '${filterKind || 'all'}' found in file.\n[END CODE SYMBOLS]`
+            return {
+              outputForHistory: noSym,
+              logMessage: `Code Symbols: 0 found in ${path.basename(pathCheck.safePath)}`,
+            }
+          }
+
+          const formatted = res.symbols
+            .map((sym) => `Line ${sym.startLine}: [${sym.kind}] ${sym.name} -> \`${sym.signature}\``)
+            .join('\n')
+
+          const outStr = `[CODE SYMBOLS: ${targetPath} (${res.symbols.length} symbols found)]\n${formatted}\n[END CODE SYMBOLS]`
+          return {
+            outputForHistory: outStr,
+            logMessage: `Code Symbols: ${res.symbols.length} symbols in ${path.basename(pathCheck.safePath)}`,
+            logDetail: formatted.slice(0, 600),
+          }
+        }
+
+        return {
+          outputForHistory: `Error: Extracting code symbols failed: ${res.error || targetPath}`,
+          logMessage: `Code Symbols Error: ${res.error || targetPath}`,
         }
       }
 
@@ -200,6 +273,7 @@ export class AgentToolExecutorService {
         if (!pathCheck.safePath) {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
         }
+        this.journal.recordBeforeModification(pathCheck.safePath)
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {
           return { outputForHistory: `Successfully wrote file ${filePath}`, logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}` }
@@ -219,6 +293,7 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `File Replace Rejected: ${pathCheck.error}` }
         }
         if (filePath && targetContent) {
+          this.journal.recordBeforeModification(pathCheck.safePath)
           const res = await this.repo.replaceChunk(pathCheck.safePath, targetContent, replacementContent)
           if (res.success) {
             return { outputForHistory: `Successfully replaced content in ${filePath}`, logMessage: `Successfully replaced target chunk in ${path.basename(filePath)}` }
@@ -240,6 +315,7 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Multi Replace Rejected: ${pathCheck.error}` }
         }
         if (filePath && replacements.length > 0) {
+          this.journal.recordBeforeModification(pathCheck.safePath)
           const res = await this.repo.multiReplaceChunks(pathCheck.safePath, replacements)
           if (res.success) {
             return { outputForHistory: `Successfully replaced ${res.replacedCount} chunks in ${filePath}`, logMessage: `Successfully applied ${res.replacedCount} replacements in ${path.basename(filePath)}` }
@@ -260,6 +336,7 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Delete File Rejected: ${pathCheck.error}` }
         }
         if (filePath) {
+          this.journal.recordBeforeModification(pathCheck.safePath)
           const res = await this.repo.deleteFile(pathCheck.safePath)
           if (res.success) {
             return { outputForHistory: `Successfully deleted file ${filePath}`, logMessage: `Successfully deleted file ${path.basename(filePath)}` }
@@ -280,6 +357,7 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Download File Rejected: ${pathCheck.error}` }
         }
         if (url && filePath) {
+          this.journal.recordBeforeModification(pathCheck.safePath)
           const dlRes = await webClient.downloadFile(url, pathCheck.safePath, workspacePath)
           if (dlRes.success) {
             return { outputForHistory: `Successfully downloaded ${dlRes.downloadedBytes} bytes from ${url} to ${filePath}`, logMessage: `Successfully downloaded ${dlRes.downloadedBytes} bytes to ${path.basename(filePath)}` }
@@ -307,69 +385,15 @@ export class AgentToolExecutorService {
         const COMMAND_TIMEOUT_MS = 60000
 
         try {
-          const res = await new Promise<{ code: number; stdout: string; stderr: string; timedOut?: boolean }>((resolve) => {
-            let isDone = false
-            const proc = spawn(
-              'powershell.exe',
-              ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', execCmd],
-              {
-                cwd: workspacePath || process.cwd(),
-                env: {
-                  ...process.env,
-                  CI: '1',
-                  PAGER: 'cat',
-                  NPM_CONFIG_YES: 'true',
-                  PIP_NO_INPUT: '1',
-                },
-              }
-            )
-
-            if (onProcessSpawned) onProcessSpawned(proc)
-
-            let stdout = ''
-            let stderr = ''
-
-            const timeoutTimer = setTimeout(() => {
-              if (!isDone) {
-                isDone = true
-                logger.log('WARN', 'AgentToolExecutor', `Command "${cmd}" timed out after ${COMMAND_TIMEOUT_MS / 1000}s. Terminating PID ${proc.pid}...`)
-                if (process.platform === 'win32' && proc.pid) {
-                  spawn('taskkill', ['/pid', proc.pid.toString(), '/f', '/t'])
-                } else {
-                  proc.kill('SIGKILL')
-                }
-                resolve({ code: 124, stdout, stderr: `[Command timed out after ${COMMAND_TIMEOUT_MS / 1000}s limit]`, timedOut: true })
-              }
-            }, COMMAND_TIMEOUT_MS)
-
-            proc.stdout?.on('data', (d) => {
-              const chunk = d.toString()
-              stdout += chunk
+          const shell = this.getOrCreateShellSession(workspacePath)
+          const res = await shell.execute(
+            execCmd,
+            (chunk) => {
               if (onTerminalOutput) onTerminalOutput(chunk.trim())
-            })
-
-            proc.stderr?.on('data', (d) => {
-              const chunk = d.toString()
-              stderr += chunk
-              if (onTerminalOutput) onTerminalOutput(chunk.trim())
-            })
-
-            proc.on('error', (err) => {
-              if (!isDone) {
-                isDone = true
-                clearTimeout(timeoutTimer)
-                resolve({ code: 1, stdout: '', stderr: err.message })
-              }
-            })
-
-            proc.on('close', (code) => {
-              if (!isDone) {
-                isDone = true
-                clearTimeout(timeoutTimer)
-                resolve({ code: code || 0, stdout, stderr })
-              }
-            })
-          })
+            },
+            onProcessSpawned,
+            COMMAND_TIMEOUT_MS
+          )
 
           const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
           const isFailure =

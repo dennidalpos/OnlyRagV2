@@ -40,7 +40,7 @@ export class SkillAppService {
     }
   }
 
-  async listHubSkillsBySource(sourceId: string, workspaceRoot?: string | null): Promise<HubSkillItem[]> {
+  async listHubSkillsBySource(sourceId: string, workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
     const sources = await customHubRepository.listSources()
     const source = sources.find((s) => s.id === sourceId) || sources[0]
     if (!source) return []
@@ -48,15 +48,15 @@ export class SkillAppService {
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
     const installedNames = new Set(installed.map((s) => s.name.toLowerCase()))
 
-    const skills = await skillHubClient.fetchSkillsFromSource(source)
+    const skills = await skillHubClient.fetchSkillsFromSource(source, forceRefresh)
     return skills.map((item) => ({
       ...item,
       isInstalled: installedNames.has(item.name.toLowerCase()) || installedNames.has(item.id.toLowerCase()),
     }))
   }
 
-  async listHubSkills(workspaceRoot?: string | null): Promise<HubSkillItem[]> {
-    return this.listHubSkillsBySource('official-core', workspaceRoot)
+  async listHubSkills(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
+    return this.listHubSkillsBySource('official-core', workspaceRoot, forceRefresh)
   }
 
   toggleSkillActive(skillId: string, isActive: boolean): boolean {

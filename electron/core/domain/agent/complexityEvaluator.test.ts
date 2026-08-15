@@ -56,6 +56,39 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     expect(res.isEscalated).toBe(false)
   })
 
+  it('should scale deep reasoning fallbacks to coding models on mid-range VRAM profiles (8GB GPU)', () => {
+    const ctxMid: ComplexityEvaluationContext = {
+      safeVramBudgetGB: 4.5,
+      vramTotalMB: 8192,
+      availableModels: ['qwen2.5-coder:7b', 'deepseek-r1:14b'],
+    }
+    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxMid)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('qwen2.5-coder:7b')
+  })
+
+  it('should scale deep reasoning fallbacks to lightweight models on legacy/CPU profiles (< 6GB)', () => {
+    const ctxLow: ComplexityEvaluationContext = {
+      safeVramBudgetGB: 1.5,
+      vramTotalMB: 0,
+      availableModels: ['deepseek-r1:1.5b', 'deepseek-r1:14b'],
+    }
+    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxLow)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('deepseek-r1:1.5b')
+  })
+
+  it('should allow larger reasoning models on extreme VRAM profiles (24GB+)', () => {
+    const ctxExtreme: ComplexityEvaluationContext = {
+      safeVramBudgetGB: 16.5,
+      vramTotalMB: 24576,
+      availableModels: ['qwen2.5-coder:32b', 'deepseek-r1:32b', 'qwen2.5-coder:14b'],
+    }
+    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxExtreme)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('qwen2.5-coder:32b')
+  })
+
   it('should find matching installed models accurately with fuzzy tags', () => {
     const available = ['qwen2.5-coder:7b', 'llama3.1:8b', 'deepseek-r1:8b']
     expect(findMatchingInstalledModel('qwen2.5-coder:7b', available)).toBe('qwen2.5-coder:7b')

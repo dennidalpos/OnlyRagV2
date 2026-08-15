@@ -35,35 +35,97 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
   }
 
   const lines = rawYaml.split(/\r?\n/)
-  for (const line of lines) {
-    const colonIdx = line.indexOf(':')
-    if (colonIdx === -1) continue
+  let currentArrayKey: 'triggers' | 'tags' | null = null
 
-    const key = line.slice(0, colonIdx).trim().toLowerCase().replace(/[-_]/g, '')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+
+    // Handle YAML multiline list items: "- trigger_or_tag"
+    if (trimmed.startsWith('-') && currentArrayKey) {
+      const itemVal = trimmed.replace(/^-+\s*/, '').replace(/^['"]|['"]$/g, '').trim().toLowerCase()
+      if (itemVal) {
+        if (currentArrayKey === 'triggers') {
+          if (!metadata.triggers) metadata.triggers = []
+          metadata.triggers.push(itemVal)
+        } else if (currentArrayKey === 'tags') {
+          if (!metadata.tags) metadata.tags = []
+          metadata.tags.push(itemVal)
+        }
+      }
+      continue
+    }
+
+    const colonIdx = line.indexOf(':')
+    if (colonIdx === -1) {
+      currentArrayKey = null
+      continue
+    }
+
+    const rawKey = line.slice(0, colonIdx).trim().toLowerCase().replace(/[-_]/g, '')
     const val = line.slice(colonIdx + 1).trim()
     const cleanVal = val.replace(/^['"]|['"]$/g, '')
 
-    if (key === 'name') metadata.name = cleanVal
-    else if (key === 'description') metadata.description = cleanVal
-    else if (key === 'version') metadata.version = cleanVal
-    else if (key === 'author') metadata.author = cleanVal
-    else if (key === 'originhub') metadata.originHub = cleanVal
-    else if (key === 'originhubid') metadata.originHubId = cleanVal
-    else if (key === 'originchecksum') metadata.originChecksum = cleanVal
-    else if (key === 'ismodified') metadata.isModified = cleanVal.toLowerCase() === 'true'
-    else if (key === 'triggers') {
-      metadata.triggers = val
-        .replace(/[\[\]'"]/g, '')
-        .split(',')
-        .map((t) => t.trim().toLowerCase())
-        .filter(Boolean)
-    } else if (key === 'tags') {
-      metadata.tags = val
-        .replace(/[\[\]'"]/g, '')
-        .split(',')
-        .map((t) => t.trim().toLowerCase())
-        .filter(Boolean)
+    if (rawKey === 'name') {
+      currentArrayKey = null
+      metadata.name = cleanVal
+    } else if (rawKey === 'description') {
+      currentArrayKey = null
+      metadata.description = cleanVal
+    } else if (rawKey === 'version') {
+      currentArrayKey = null
+      metadata.version = cleanVal
+    } else if (rawKey === 'author') {
+      currentArrayKey = null
+      metadata.author = cleanVal
+    } else if (rawKey === 'originhub') {
+      currentArrayKey = null
+      metadata.originHub = cleanVal
+    } else if (rawKey === 'originhubid') {
+      currentArrayKey = null
+      metadata.originHubId = cleanVal
+    } else if (rawKey === 'originchecksum') {
+      currentArrayKey = null
+      metadata.originChecksum = cleanVal
+    } else if (rawKey === 'ismodified') {
+      currentArrayKey = null
+      metadata.isModified = cleanVal.toLowerCase() === 'true'
+    } else if (rawKey === 'triggers') {
+      if (val) {
+        currentArrayKey = null
+        metadata.triggers = val
+          .replace(/[\[\]'"]/g, '')
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean)
+      } else {
+        currentArrayKey = 'triggers'
+        metadata.triggers = []
+      }
+    } else if (rawKey === 'tags') {
+      if (val) {
+        currentArrayKey = null
+        metadata.tags = val
+          .replace(/[\[\]'"]/g, '')
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean)
+      } else {
+        currentArrayKey = 'tags'
+        metadata.tags = []
+      }
+    } else {
+      currentArrayKey = null
     }
+  }
+
+  // Deduplicate array fields
+  if (metadata.triggers && metadata.triggers.length > 0) {
+    metadata.triggers = Array.from(new Set(metadata.triggers))
+  }
+  if (metadata.tags && metadata.tags.length > 0) {
+    metadata.tags = Array.from(new Set(metadata.tags))
   }
 
   return { metadata, body }
@@ -107,17 +169,66 @@ export function serializeSkillContent(body: string, metadata: Partial<SkillMetad
 
 export class SkillRepository {
   private activeSkillIds = new Set<string>()
+  private stateFilePath: string | null = null
+  private isLoaded = false
+
+  constructor(customStateDir?: string) {
+    if (customStateDir) {
+      this.stateFilePath = path.join(customStateDir, 'active_skills.json')
+    }
+  }
+
+  private getStateFilePath(): string {
+    if (this.stateFilePath) return this.stateFilePath
+    const baseDir = app && typeof app.getPath === 'function'
+      ? app.getPath('userData')
+      : path.join(process.cwd(), 'userdata_dev')
+    return path.join(baseDir, 'active_skills.json')
+  }
+
+  private loadActiveSkills() {
+    if (this.isLoaded) return
+    try {
+      const p = this.getStateFilePath()
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf-8')
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          this.activeSkillIds = new Set(parsed.map((s) => String(s).toLowerCase()))
+        }
+      }
+    } catch (err: any) {
+      logger.log('WARN', 'SkillRepo', `Failed loading active skills state: ${err.message}`)
+    } finally {
+      this.isLoaded = true
+    }
+  }
+
+  private persistActiveSkills() {
+    try {
+      const p = this.getStateFilePath()
+      fs.mkdirSync(path.dirname(p), { recursive: true })
+      fs.writeFileSync(p, JSON.stringify(Array.from(this.activeSkillIds), null, 2), 'utf-8')
+    } catch (err: any) {
+      logger.log('WARN', 'SkillRepo', `Failed persisting active skills state: ${err.message}`)
+    }
+  }
 
   setSkillActive(skillId: string, isActive: boolean) {
-    if (isActive) this.activeSkillIds.add(skillId)
-    else this.activeSkillIds.delete(skillId)
+    this.loadActiveSkills()
+    const normalized = skillId.toLowerCase()
+    if (isActive) this.activeSkillIds.add(normalized)
+    else this.activeSkillIds.delete(normalized)
+    this.persistActiveSkills()
   }
 
   isSkillActive(skillId: string): boolean {
-    return this.activeSkillIds.has(skillId)
+    this.loadActiveSkills()
+    return this.activeSkillIds.has(skillId.toLowerCase())
   }
 
   async listInstalledSkills(workspaceRoot?: string | null): Promise<SkillDefinition[]> {
+    this.loadActiveSkills()
     const skillsMap = new Map<string, SkillDefinition>()
     const scannedDirs: { dir: string; isWorkspace: boolean }[] = []
 
@@ -182,7 +293,7 @@ export class SkillRepository {
                 description: metadata.description || `Skill definition in ${skillName}`,
                 content: body || rawContent,
                 filePath: skillFilePath,
-                isActive: this.activeSkillIds.has(id),
+                isActive: this.isSkillActive(id) || this.isSkillActive(skillName),
                 isWorkspaceLocal: isWorkspace,
                 triggers: metadata.triggers && metadata.triggers.length > 0 ? metadata.triggers : [skillName.toLowerCase()],
                 tags: metadata.tags && metadata.tags.length > 0 ? metadata.tags : ['skill'],
@@ -263,7 +374,8 @@ export class SkillRepository {
       } else {
         await fs.promises.unlink(target.filePath)
       }
-      this.activeSkillIds.delete(skillId)
+      this.setSkillActive(skillId, false)
+      this.setSkillActive(target.name, false)
       logger.log('INFO', 'SkillRepo', `Deleted skill '${skillId}'`)
       return { success: true }
     } catch (err: any) {

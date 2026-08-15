@@ -336,10 +336,10 @@ export const apiService = {
     }
   },
 
-  async listHubSkillsBySource(sourceId: string, workspaceRoot?: string): Promise<HubSkillItem[]> {
+  async listHubSkillsBySource(sourceId: string, workspaceRoot?: string, forceRefresh?: boolean): Promise<HubSkillItem[]> {
     if (!window.electronAPI?.listHubSkillsBySource) return []
     try {
-      return await window.electronAPI.listHubSkillsBySource(sourceId, workspaceRoot)
+      return await window.electronAPI.listHubSkillsBySource(sourceId, workspaceRoot, forceRefresh)
     } catch (err: any) {
       logger.error('ApiService:Skills', `Failed listing skills for hub ${sourceId}: ${err.message}`)
       return []

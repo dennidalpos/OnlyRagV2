@@ -81,19 +81,20 @@ Always write all explanations, step reasoning, thoughts, and finish summaries in
 
 AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
 1. read_file: { "filePath": "path/to/file", "startLine"?: 1, "endLine"?: 50 }
-2. replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
-3. multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old1", "replacementContent": "new1" }] }
-4. write_file: { "filePath": "path", "content": "full text" }
-5. delete_file: { "filePath": "path" }
-6. grep_search: { "query": "pattern", "isRegex": false }
-7. list_dir: { "dirPath": "path" }
-8. web_search: { "query": "documentation or technical search term" }
-9. fetch_web_content: { "url": "https://..." }
-10. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
-11. run_command: { "command": "powershell command line (e.g. npm install, pip install, npm test)" }
-12. ask: { "question": "Question or clarification for the user in user's language" }
-13. inspect_os_env: {}
-14. finish: { "summary": "Task completed summary in user's language" }
+2. extract_code_symbols: { "filePath": "path/to/file", "symbolType"?: "all" | "function" | "class" | "interface" }
+3. replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
+4. multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old1", "replacementContent": "new1" }] }
+5. write_file: { "filePath": "path", "content": "full text" }
+6. delete_file: { "filePath": "path" }
+7. grep_search: { "query": "pattern", "isRegex": false }
+8. list_dir: { "dirPath": "path" }
+9. web_search: { "query": "documentation or technical search term" }
+10. fetch_web_content: { "url": "https://..." }
+11. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
+12. run_command: { "command": "powershell command line (e.g. npm install, pip install, npm test)" }
+13. ask: { "question": "Question or clarification for the user in user's language" }
+14. inspect_os_env: {}
+15. finish: { "summary": "Task completed summary in user's language" }
 
 OPERATIONAL GUIDELINES:
 - In PLAN mode: Analyze requirements, missing dependencies, files to edit, and present a structured plan.
@@ -127,6 +128,7 @@ Once the user's requested changes, build, or command have run, immediately call 
 
 TOOLS AVAILABLE:
 - read_file: { "filePath": "string", "startLine"?: number, "endLine"?: number }
+- extract_code_symbols: { "filePath": "string", "symbolType"?: "all" | "function" | "class" | "interface" }
 - replace_file_content: { "filePath": "string", "targetContent": "string", "replacementContent": "string" }
 - multi_replace_file_content: { "filePath": "string", "replacements": [{ "targetContent": "string", "replacementContent": "string" }] }
 - write_file: { "filePath": "string", "content": "string" }
@@ -158,18 +160,19 @@ CRITICAL TOOL CALLING CONTRACT:
 AVAILABLE AGENT TOOLS:
 1. write_file: { "filePath": "path/to/file.ext", "content": "full text content" }
 2. read_file: { "filePath": "path/to/file", "startLine"?: number, "endLine"?: number }
-3. replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
-4. multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old", "replacementContent": "new" }] }
-5. delete_file: { "filePath": "path" }
-6. grep_search: { "query": "pattern", "isRegex": false }
-7. list_dir: { "dirPath": "path" }
-8. web_search: { "query": "search term" }
-9. fetch_web_content: { "url": "https://..." }
-10. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
-11. run_command: { "command": "powershell command line (e.g. npm install, pip install)" }
-12. ask: { "question": "question for user" }
-13. inspect_os_env: {}
-14. finish: { "summary": "Task completed summary in user's language" }
+3. extract_code_symbols: { "filePath": "path/to/file", "symbolType"?: "all" | "function" | "class" | "interface" }
+4. replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
+5. multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old", "replacementContent": "new" }] }
+6. delete_file: { "filePath": "path" }
+7. grep_search: { "query": "pattern", "isRegex": false }
+8. list_dir: { "dirPath": "path" }
+9. web_search: { "query": "search term" }
+10. fetch_web_content: { "url": "https://..." }
+11. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
+12. run_command: { "command": "powershell command line (e.g. npm install, pip install)" }
+13. ask: { "question": "question for user" }
+14. inspect_os_env: {}
+15. finish: { "summary": "Task completed summary in user's language" }
 
 REQUIRED OUTPUT FORMAT (Outside <think>):
 \`\`\`json
@@ -272,18 +275,19 @@ When finished, invoke "finish".
 AVAILABLE AGENT TOOLS:
 1. write_file: { "filePath": "path/to/file.ext", "content": "full text" }
 2. read_file: { "filePath": "path/to/file", "startLine"?: number, "endLine"?: number }
-3. replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
-4. multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old", "replacementContent": "new" }] }
-5. delete_file: { "filePath": "path" }
-6. grep_search: { "query": "pattern", "isRegex": false }
-7. list_dir: { "dirPath": "path" }
-8. web_search: { "query": "documentation or search query" }
-9. fetch_web_content: { "url": "https://..." }
-10. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
-11. run_command: { "command": "powershell command line (e.g. npm install, pip install)" }
-12. ask: { "question": "question for user" }
-13. inspect_os_env: {}
-14. finish: { "summary": "Task completed summary in user's language" }
+3. extract_code_symbols: { "filePath": "path/to/file", "symbolType"?: "all" | "function" | "class" | "interface" }
+4. replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
+5. multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old", "replacementContent": "new" }] }
+6. delete_file: { "filePath": "path" }
+7. grep_search: { "query": "pattern", "isRegex": false }
+8. list_dir: { "dirPath": "path" }
+9. web_search: { "query": "documentation or search query" }
+10. fetch_web_content: { "url": "https://..." }
+11. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
+12. run_command: { "command": "powershell command line (e.g. npm install, pip install)" }
+13. ask: { "question": "question for user" }
+14. inspect_os_env: {}
+15. finish: { "summary": "Task completed summary in user's language" }
 
 \`\`\`json
 {

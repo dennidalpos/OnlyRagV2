@@ -42,6 +42,7 @@ export interface AgentToolReplacementChunk {
 
 export type SupportedToolName =
   | 'read_file'
+  | 'extract_code_symbols'
   | 'replace_file_content'
   | 'multi_replace_file_content'
   | 'write_file'

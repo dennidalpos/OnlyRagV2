@@ -21,6 +21,9 @@ export interface ComplexityEvaluationContext {
   hasRecentToolFailure?: boolean
   errorCountInHistory?: number
   consecutiveSuccessCount?: number
+  vramTotalMB?: number
+  hardwareProfile?: 'Low' | 'Medium' | 'High' | 'Auto'
+  safeVramBudgetGB?: number
 }
 
 // Deep reasoning indicator keywords (EN + IT)
@@ -234,6 +237,9 @@ export function evaluateTaskComplexity(
   let hasRecentToolFailure = false
   let errorCountInHistory = 0
   let consecutiveSuccessCount = 0
+  let safeVramBudgetGB: number | undefined = undefined
+  let vramTotalMB: number | undefined = undefined
+  let hardwareProfile: 'Low' | 'Medium' | 'High' | 'Auto' = 'Auto'
 
   if (typeof attachedFilesOrContext === 'object' && attachedFilesOrContext !== null) {
     attachedFilesCount = attachedFilesOrContext.attachedFilesCount || 0
@@ -243,16 +249,38 @@ export function evaluateTaskComplexity(
     hasRecentToolFailure = !!attachedFilesOrContext.hasRecentToolFailure
     errorCountInHistory = attachedFilesOrContext.errorCountInHistory || 0
     consecutiveSuccessCount = attachedFilesOrContext.consecutiveSuccessCount || 0
+    safeVramBudgetGB = attachedFilesOrContext.safeVramBudgetGB
+    vramTotalMB = attachedFilesOrContext.vramTotalMB
+    hardwareProfile = attachedFilesOrContext.hardwareProfile || activeSettings?.hardwareProfile || 'Auto'
   } else if (typeof attachedFilesOrContext === 'number') {
     attachedFilesCount = attachedFilesOrContext
+  }
+
+  // If safeVramBudgetGB not explicitly passed, derive from vramTotalMB or hardwareProfile
+  if (safeVramBudgetGB === undefined) {
+    if (vramTotalMB !== undefined && vramTotalMB > 0) {
+      const vramGB = vramTotalMB / 1024
+      safeVramBudgetGB = Math.max(0, vramGB * 0.75 - 1.5)
+    } else if (hardwareProfile === 'Low') {
+      safeVramBudgetGB = 1.5
+    } else if (hardwareProfile === 'Medium') {
+      safeVramBudgetGB = 4.5
+    } else if (hardwareProfile === 'High') {
+      safeVramBudgetGB = 9.0
+    }
   }
 
   const defaultStandard = activeSettings?.complexityStandardModel || activeSettings?.codingModel || activeSettings?.defaultModel || 'qwen2.5-coder:7b'
 
   if (!userPrompt || typeof userPrompt !== 'string' || !userPrompt.trim()) {
+    const standardFallbacks =
+      safeVramBudgetGB !== undefined && safeVramBudgetGB < 4.0
+        ? ['qwen2.5-coder:3b', 'llama3.2:3b', 'qwen2.5-coder:1.5b']
+        : ['qwen2.5-coder:7b', 'llama3.1:8b', 'mistral:7b', 'llama3.2:3b']
+
     const { model, isFallback } = resolveModelWithFallback(
       defaultStandard,
-      ['llama3.1:8b', 'llama3.2:8b', 'mistral:7b', 'codellama:7b'],
+      standardFallbacks,
       availableModels
     )
     return {
@@ -272,7 +300,7 @@ export function evaluateTaskComplexity(
   // High complexity keyword match
   const hasDeepKeyword = DEEP_KEYWORDS.some((kw) => matchesKeyword(text, kw))
 
-  // Code failure / Stack trace match
+  // Code failure / Stack trace signal
   const hasFailurePattern = CODE_FAILURE_PATTERNS.some((pat) => text.includes(pat))
 
   // Coding action match
@@ -306,19 +334,100 @@ export function evaluateTaskComplexity(
     reasoning = 'Rilevata domanda concettuale rapida o lookup a bassa complessità'
   }
 
-
   let preferredModel = ''
   let candidateFallbacks: string[] = []
 
   if (tier === 'fast') {
-    preferredModel = activeSettings?.complexityFastModel || 'qwen2.5:3b'
-    candidateFallbacks = ['llama3.2:3b', 'llama3.2:1b', 'qwen2.5:1.5b', defaultStandard]
+    preferredModel = activeSettings?.complexityFastModel || 'qwen2.5-coder:1.5b'
+    candidateFallbacks = [
+      'qwen2.5-coder:1.5b',
+      'qwen2.5-coder:1.5b-instruct-q8_0',
+      'qwen2.5-coder:3b',
+      'qwen2.5-coder:0.5b',
+      'llama3.2:1b',
+      'qwen2.5:1.5b',
+      'llama3.2:3b',
+    ]
   } else if (tier === 'deep_reasoning') {
-    preferredModel = activeSettings?.complexityDeepModel || 'deepseek-r1:8b'
-    candidateFallbacks = ['deepseek-r1:14b', 'qwen2.5-coder:14b', 'deepseek-r1:1.5b', defaultStandard]
+    // Hardware-bound Deep Reasoning candidate selection strictly tuned for code architecture and refactoring
+    const isLegacyOrEntry = safeVramBudgetGB !== undefined && safeVramBudgetGB < 3.0
+    const isMidRange = safeVramBudgetGB !== undefined && safeVramBudgetGB >= 3.0 && safeVramBudgetGB < 7.0
+    const isExtremeVram = safeVramBudgetGB !== undefined && safeVramBudgetGB >= 12.0
+
+    if (isLegacyOrEntry) {
+      // On CPU or low VRAM (< 6GB GPU)
+      preferredModel = activeSettings?.complexityDeepModel || 'deepseek-coder:6.7b'
+      candidateFallbacks = [
+        'deepseek-coder:6.7b',
+        'deepseek-coder:6.7b-instruct-q4_k_m',
+        'qwen2.5-coder:3b',
+        'deepseek-r1:1.5b',
+        defaultStandard,
+      ]
+    } else if (isMidRange) {
+      // On 8GB GPUs (Safe Net Budget ~4.5 GB): Qwen2.5-Coder 7B or DeepSeek R1 Distill Qwen 7B
+      preferredModel = activeSettings?.complexityDeepModel || 'qwen2.5-coder:7b'
+      candidateFallbacks = [
+        'qwen2.5-coder:7b',
+        'qwen2.5-coder:7b-instruct-q4_k_m',
+        'deepseek-r1:7b',
+        'deepseek-r1:7b-qwen-distill-q4_k_m',
+        'deepseek-coder:6.7b',
+        'qwen2.5-coder:3b',
+        defaultStandard,
+      ]
+    } else if (isExtremeVram) {
+      // On 24GB+ GPUs: 32B models
+      preferredModel = activeSettings?.complexityDeepModel || 'qwen2.5-coder:32b'
+      candidateFallbacks = [
+        'qwen2.5-coder:32b',
+        'deepseek-r1:32b',
+        'qwen2.5-coder:14b',
+        'deepseek-r1:14b',
+        'codestral:22b-v0.1-q4_k_m',
+        defaultStandard,
+      ]
+    } else {
+      // High-End 12-16GB VRAM: 14B models
+      preferredModel = activeSettings?.complexityDeepModel || 'qwen2.5-coder:14b'
+      candidateFallbacks = [
+        'qwen2.5-coder:14b',
+        'qwen2.5-coder:14b-instruct-q4_k_m',
+        'deepseek-r1:14b',
+        'deepseek-coder-v2:16b-lite-instruct-q4_k_m',
+        'deepseek-r1:8b',
+        'qwen2.5-coder:7b',
+        defaultStandard,
+      ]
+    }
   } else {
+    // Standard tier
     preferredModel = defaultStandard
-    candidateFallbacks = ['qwen2.5-coder:7b', 'llama3.1:8b', 'llama3.2:8b', 'mistral:7b']
+    if (safeVramBudgetGB !== undefined && safeVramBudgetGB < 3.0) {
+      candidateFallbacks = [
+        'qwen2.5-coder:3b',
+        'deepseek-coder:6.7b',
+        'qwen2.5-coder:1.5b',
+        'llama3.2:3b',
+        defaultStandard,
+      ]
+    } else if (safeVramBudgetGB !== undefined && safeVramBudgetGB >= 12.0) {
+      candidateFallbacks = [
+        'qwen2.5-coder:14b',
+        'qwen2.5-coder:7b',
+        'codestral:22b-v0.1-q4_k_m',
+        defaultStandard,
+      ]
+    } else {
+      candidateFallbacks = [
+        'qwen2.5-coder:7b',
+        'qwen2.5-coder:7b-instruct-q4_k_m',
+        'deepseek-coder:6.7b',
+        'qwen2.5-coder:3b',
+        'deepseek-coder-v2:16b-lite-instruct-q4_k_m',
+        defaultStandard,
+      ]
+    }
   }
 
   const { model: selectedModel, isFallback } = resolveModelWithFallback(preferredModel, candidateFallbacks, availableModels)

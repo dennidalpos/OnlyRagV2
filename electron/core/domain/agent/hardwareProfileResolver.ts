@@ -21,6 +21,7 @@ export interface HardwareEnvironment {
 export class HardwareProfileResolver {
   /**
    * Resolves effective hardware tier and optimal Ollama runtime options based on user settings, hardware diagnostics, and complexity tier.
+   * Uses safe VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
    */
   static resolveOllamaOptions(
     profile: HardwareProfile = 'Auto',
@@ -43,17 +44,18 @@ export class HardwareProfileResolver {
       const hasGpu = !!env?.hasGpu
       const vramMB = env?.vramTotalMB || 0
       const vramGB = Math.floor(vramMB / 1024)
+      const safeBudgetGB = hasGpu ? Math.max(0, vramGB * 0.75 - 1.5) : 0
 
-      if (hasGpu && vramGB >= 12) {
+      if (hasGpu && safeBudgetGB >= 7.5) {
         effectiveTier = 'High'
-      } else if (hasGpu && vramGB >= 6) {
+      } else if (hasGpu && safeBudgetGB >= 3.0) {
         effectiveTier = 'Medium'
       } else {
         effectiveTier = 'Low'
       }
     }
 
-    // Base profile configurations
+    // Base profile configurations with hardware-constrained context windows
     if (effectiveTier === 'Low') {
       const isDeep = tier === 'deep_reasoning'
       return {

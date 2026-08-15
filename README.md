@@ -11,7 +11,7 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4-0f172a?style=for-the-badge&logo=tailwindcss&logoColor=67e8f9)](https://tailwindcss.com)
 [![LanceDB](https://img.shields.io/badge/LanceDB-Embedded_Vector_DB-0f172a?style=for-the-badge&logo=databricks&logoColor=67e8f9)](https://lancedb.com)
 [![Ollama](https://img.shields.io/badge/Ollama-100%25_Local_LLM-0f172a?style=for-the-badge&logo=ollama&logoColor=67e8f9)](https://ollama.com)
-[![Tests](https://img.shields.io/badge/Tests-Passing_132/132-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
+[![Tests](https://img.shields.io/badge/Tests-Passing_178/178-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
 [![License](https://img.shields.io/badge/License-MIT-0f172a?style=for-the-badge&logo=open-source-initiative&logoColor=67e8f9)](LICENSE)
 
 <br />
@@ -20,9 +20,21 @@
 
 <br />
 
-**OnlyRag V2** is an enterprise-grade desktop application for Windows that delivers cutting-edge local AI capabilities to your machine with **zero cloud dependencies** and **100% local privacy**. Powered by embedded vector search (**LanceDB**), document parsing (**PyMuPDF & Vision OCR**), document translation (**Monaco DiffEditor**), and an autonomous **Local AI Coding Agent Engine** with dynamic skill routing and auto-healing diagnostics.
+**OnlyRag V2** is an enterprise-grade desktop application for Windows that delivers cutting-edge local AI capabilities to your machine with **zero cloud dependencies** and **100% local privacy**. Powered by embedded vector search (**LanceDB**), document parsing (**PyMuPDF & Vision OCR**), document translation (**Monaco DiffEditor**), and an autonomous **Local AI Coding Agent Engine** with dynamic skill routing, loop prevention, and auto-healing diagnostics.
 
 </div>
+
+---
+
+## 📚 Official Documentation (Single Source of Truth)
+
+All architectural, operational, API and setup specifications reside strictly in the **[`/docs/`](./docs/README.md)** directory:
+
+- 🏛️ [**Architecture & System Topology**](./docs/architecture.md): Multi-process topology, 4-tier Clean Architecture, Mermaid diagrams, 2-level router, hybrid RAG pipeline, and resilient agent studio.
+- 🧩 [**Modules & Responsibilities**](./docs/modules.md): Complete mapping of Frontend, Electron Main Core, Python Sidecar, and Skill Hub components with input/output contracts.
+- 🔌 [**API Reference & Contracts**](./docs/api.md): REST endpoints (`/health`, `/ingest`, `/search`, `/documents`, `/export`), Electron IPC channels (`window.electronAPI`), TypeScript schemas and error codes.
+- ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware presets (**P1 – P5**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
+- 📖 [**Documentation Index**](./docs/README.md): Navigable master index.
 
 ---
 
@@ -180,6 +192,7 @@ npm run dev
 ```text
 OnlyRagV2/
 ├── assets/                    # Brand identity, vector icons, and showcase graphics
+├── docs/                      # Single Source of Truth Documentation (Architecture, Modules, API, Setup)
 ├── electron/                  # Electron Main Process (Clean Layered Architecture)
 │   ├── core/
 │   │   ├── application/       # Orchestrator, SkillAppService, ToolExecutor

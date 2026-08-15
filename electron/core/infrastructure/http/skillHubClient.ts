@@ -9,6 +9,11 @@ import { GitHubRawAdapter } from './hubAdapters/githubRawAdapter'
 import { webClient } from './webClient'
 import { logger } from '../../../diagnostics'
 
+interface CachedCatalogEntry {
+  timestamp: number
+  skills: HubSkillItem[]
+}
+
 export class SkillHubClient {
   private adapters: ISkillHubAdapter[] = [
     new CuratedHubAdapter(),
@@ -19,27 +24,64 @@ export class SkillHubClient {
     new GitHubRawAdapter(),
   ]
 
-  async fetchSkillsFromSource(source: SkillHubSource): Promise<HubSkillItem[]> {
-    logger.log('INFO', 'SkillHubClient', `Fetching skills for source: ${source.name} (${source.url})`)
+  private catalogCache = new Map<string, CachedCatalogEntry>()
+  private cacheTtlMs = 5 * 60 * 1000 // 5 minutes cache TTL
+
+  clearCache(sourceId?: string) {
+    if (sourceId) {
+      this.catalogCache.delete(sourceId)
+      logger.log('INFO', 'SkillHubClient', `Cleared cache for source: ${sourceId}`)
+    } else {
+      this.catalogCache.clear()
+      logger.log('INFO', 'SkillHubClient', 'Cleared all catalog cache entries')
+    }
+  }
+
+  async fetchSkillsFromSource(source: SkillHubSource, forceRefresh = false): Promise<HubSkillItem[]> {
+    const cacheKey = `${source.id}_${source.url}`
+    const now = Date.now()
+
+    if (!forceRefresh && this.catalogCache.has(cacheKey)) {
+      const cached = this.catalogCache.get(cacheKey)!
+      if (now - cached.timestamp < this.cacheTtlMs && cached.skills.length > 0) {
+        logger.log('INFO', 'SkillHubClient', `Returning cached catalog for source: ${source.name} (${cached.skills.length} skills)`)
+        return cached.skills
+      }
+    }
+
+    logger.log('INFO', 'SkillHubClient', `Fetching skills for source: ${source.name} (${source.url}) [forceRefresh: ${forceRefresh}]`)
+
+    let fetchedSkills: HubSkillItem[] = []
 
     for (const adapter of this.adapters) {
       if (adapter.canHandle(source)) {
         try {
           const skills = await adapter.fetchSkills(source)
-          if (skills.length > 0) return skills
+          if (skills.length > 0) {
+            fetchedSkills = skills
+            break
+          }
         } catch (err: any) {
           logger.log('WARN', 'SkillHubClient', `Adapter failed for ${source.name}: ${err.message}`)
         }
       }
     }
 
-    // Fallback: Try JSON catalog adapter directly if others didn't match
-    try {
-      const jsonAdapter = new JsonCatalogAdapter()
-      return await jsonAdapter.fetchSkills(source)
-    } catch {
-      return []
+    // Fallback: Try JSON catalog adapter directly if others didn't match or returned empty
+    if (fetchedSkills.length === 0) {
+      try {
+        const jsonAdapter = new JsonCatalogAdapter()
+        fetchedSkills = await jsonAdapter.fetchSkills(source)
+      } catch {
+        fetchedSkills = []
+      }
     }
+
+    if (fetchedSkills.length > 0) {
+      this.catalogCache.set(cacheKey, { timestamp: now, skills: fetchedSkills })
+    }
+
+    return fetchedSkills
   }
 
   async fetchSkillContent(urlOrItem: string | HubSkillItem): Promise<{ success: boolean; content?: string; error?: string }> {

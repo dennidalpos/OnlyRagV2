@@ -78,12 +78,12 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
   }, [isOpen, isEditorOpen, isGuideOpen, isAddHubOpen, onClose])
 
   // Instant remote refresh when hub source is changed
-  const handleSourceChange = async (newSourceId: string) => {
+  const handleSourceChange = async (newSourceId: string, forceRefresh = false) => {
     setSelectedSourceId(newSourceId)
     setIsLoading(true)
-    setHubSkills([]) // Clear previous items immediately to indicate fresh remote fetch
+    if (forceRefresh) setHubSkills([]) // Clear previous items when explicitly refreshing
     try {
-      const hub = await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined)
+      const hub = await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
       setHubSkills(hub)
     } catch (err: any) {
       logger.error('SkillHubModal', `Error changing source: ${err.message}`)
@@ -333,7 +333,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
                 onOpenAddHubModal={() => setIsAddHubOpen(true)}
                 onOpenGuideModal={() => setIsGuideOpen(true)}
                 onRemoveCustomSource={handleRemoveCustomHub}
-                onRefresh={() => handleSourceChange(selectedSourceId)}
+                onRefresh={() => handleSourceChange(selectedSourceId, true)}
                 isLoading={isLoading}
               />
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Check, Star, CheckCircle2 } from 'lucide-react'
+import { Check, Star, CheckCircle2, AlertTriangle, Zap } from 'lucide-react'
 import { getModelFamily, getModelApproxSize } from '../../services/hardwareRecommendationEngine'
 
 export interface ModelOptionCardProps {
@@ -14,6 +14,9 @@ export interface ModelOptionCardProps {
   onSelect: () => void
   accentColor?: 'emerald' | 'cyan' | 'purple' | 'amber' | 'sky' | 'rose'
   ariaLabel?: string
+  isHardwareCompatible?: boolean
+  compatibilityStatus?: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
+  compatibilityWarning?: string
 }
 
 export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
@@ -28,6 +31,8 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
   onSelect,
   accentColor = 'cyan',
   ariaLabel,
+  compatibilityStatus,
+  compatibilityWarning,
 }) => {
   const colorStyles = {
     emerald: {
@@ -76,6 +81,8 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
       className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-all focus-ring active:scale-[0.99] ${
         isSelected
           ? colorStyles.selectedBg
+          : compatibilityStatus === 'exceeds_vram'
+          ? 'bg-slate-900/40 border-rose-900/40 hover:border-rose-800/70 hover:bg-slate-900/70'
           : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/90'
       }`}
     >
@@ -107,9 +114,28 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
                 INSTALLATO
               </span>
             )}
+            {compatibilityStatus === 'exceeds_vram' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono font-bold border border-rose-500/50 shadow-sm flex items-center gap-1">
+                <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
+                RISCHIO OOM
+              </span>
+            )}
+            {compatibilityStatus === 'tight_vram' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/50 shadow-sm flex items-center gap-1">
+                <Zap className="w-2.5 h-2.5 text-amber-400" />
+                VRAM RISICATA
+              </span>
+            )}
           </div>
           {description && (
             <p className="text-[11px] text-slate-400 mt-0.5 leading-snug break-words">{description}</p>
+          )}
+          {compatibilityWarning && (
+            <p className={`text-[10px] mt-1 font-medium ${
+              compatibilityStatus === 'exceeds_vram' ? 'text-rose-400' : 'text-amber-400/90'
+            }`}>
+              {compatibilityWarning}
+            </p>
           )}
         </div>
       </div>
@@ -121,4 +147,3 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
     </div>
   )
 }
-

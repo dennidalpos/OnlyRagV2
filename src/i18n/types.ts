@@ -441,6 +441,15 @@ export interface TranslationSchema {
     activeModelLabel: string
     familyLabel: string
     moduleLabel: string
+    editTab: string
+    previewTab: string
+    previewDescription: string
+    exportJson: string
+    importJson: string
+    importSuccess: string
+    importError: string
+    missingVarWarning: string
+    clickToInsert: string
   }
   vectorSearch: {
     modalTitle: string

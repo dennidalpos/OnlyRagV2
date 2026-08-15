@@ -128,6 +128,9 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 isSelected={selectedFast === m.modelName}
                 onSelect={() => onSelectFast(m.modelName)}
                 accentColor="emerald"
+                isHardwareCompatible={m.isHardwareCompatible}
+                compatibilityStatus={m.compatibilityStatus}
+                compatibilityWarning={m.compatibilityWarning}
               />
             ))}
           </div>
@@ -152,6 +155,9 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 isSelected={selectedStandard === m.modelName}
                 onSelect={() => onSelectStandard(m.modelName)}
                 accentColor="cyan"
+                isHardwareCompatible={m.isHardwareCompatible}
+                compatibilityStatus={m.compatibilityStatus}
+                compatibilityWarning={m.compatibilityWarning}
               />
             ))}
           </div>
@@ -176,6 +182,9 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 isSelected={selectedDeep === m.modelName}
                 onSelect={() => onSelectDeep(m.modelName)}
                 accentColor="purple"
+                isHardwareCompatible={m.isHardwareCompatible}
+                compatibilityStatus={m.compatibilityStatus}
+                compatibilityWarning={m.compatibilityWarning}
               />
             ))}
           </div>

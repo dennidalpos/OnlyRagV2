@@ -139,7 +139,7 @@ flowchart TD
 
 ---
 
-## 5. Agent Studio: Tool Loop, Auto-Healing e Sessioni Contestuali
+## 5. Agent Studio: Tool Loop, Resilienza & Transazionalità
 
 - **Autonomous Tool Calling Loop**:
   - **Ispezione**: `read_file` (con line slicing), `list_dir`, `grep_search`.
@@ -147,6 +147,14 @@ flowchart TD
   - **Esecuzione & Diagnostica**: `run_command` (PowerShell non-interattivo con timeout a 60s e cattura output in streaming), `inspect_os_env`, `finish`.
   - **Web & Risorse**: `web_search`, `fetch_web_content`, `download_file`.
   - **Interazione Utente**: `ask` (alias `ask_question`) per chiarimenti diretti.
+- **Action Loop Fingerprinting & Oscillation Prevention (`AgentActionLoopDetector`)**:
+  - Ogni invocazione di tool viene tracciata tramite hash crittografico deterministico SHA-256 (`tool:parameters`).
+  - Se la medesima azione fallisce ripetutamente ($\ge 2$ volte consecutive), il runtime blocca l'esecuzione e inietta una direttiva correttiva forzata (`[CRITICAL LOOP INTERVENTION]`) per costringere il modello a esplorare percorsi alternativi.
+- **Resilient Multi-Tier Model Dispatching (`ResilientModelDispatcher`)**:
+  - Se il modello primario ad alta intensità incontra timeout, disconnessioni socket o esaurimento VRAM (OOM), l'orchestratore degrada automaticamente verso il modello di fallback, dimezzando il context window per garantire la continuità del task.
+- **Transactional Workspace Journal (`AtomicWorkspaceJournal`)**:
+  - Prima di qualsiasi operazione di scrittura, patch o cancellazione file, viene salvato uno snapshot preventivo in memoria.
+  - In caso di annullamento da parte dell'utente o fallimento non sanabile, viene eseguito il `rollbackAll()` ripristinando istantaneamente il filesystem allo stato pre-task. A task concluso con successo, le modifiche vengono consolidate (`commit()`).
 - **Auto-Healing Loop**: Se l'esecuzione di un comando fallisce (exit code non nullo o presenza di errori nello stack trace), l'output viene formattato come blocco diagnostico e rinviato al modello per l'auto-correzione autonoma.
 - **Project Workspaces & Nested Sessions**:
   - Ogni progetto memorizza la radice del workspace e una collezione isolata di sessioni di lavoro nidificate (`CodingSession`).

@@ -119,6 +119,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null)
   const [editingQueueText, setEditingQueueText] = useState<string>('')
+  const isProgrammaticScrollRef = useRef<boolean>(false)
+  const isUserScrolledUpRef = useRef<boolean>(false)
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
 
@@ -134,22 +136,48 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return
+    if (isProgrammaticScrollRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
     const distanceToBottom = scrollHeight - scrollTop - clientHeight
-    const isUp = distanceToBottom > 45
+    const isUp = distanceToBottom > 60
     setIsScrolledUp(isUp)
+    isUserScrolledUpRef.current = isUp
   }
 
   const scrollToBottom = (smooth = true) => {
-    if (scrollContainerRef.current) {
+    if (!scrollContainerRef.current) return
+    isProgrammaticScrollRef.current = true
+    setIsScrolledUp(false)
+    isUserScrolledUpRef.current = false
+
+    if (smooth && !isExecuting && !streamingText) {
       scrollContainerRef.current.scrollTo({
         top: scrollContainerRef.current.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
+        behavior: 'smooth',
       })
     } else {
-      bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
     }
-    setIsScrolledUp(false)
+
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      }
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, 60)
+    })
+  }
+
+  const handleToggleAutoScroll = () => {
+    const next = !autoScroll
+    setAutoScroll(next)
+    if (next) {
+      setIsScrolledUp(false)
+      isUserScrolledUpRef.current = false
+      scrollToBottom(true)
+    }
   }
 
   // Close tools popover on click outside or Escape
@@ -174,15 +202,39 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
     }
   }, [showToolsMenu])
 
+  // When execution starts, automatically reset user scroll state and scroll to bottom
+  const prevExecutingRef = useRef(isExecuting)
   useEffect(() => {
-    if (autoScroll && !isScrolledUp && scrollContainerRef.current) {
-      if (isExecuting || streamingText) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
-      } else {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }
+    if (isExecuting && !prevExecutingRef.current) {
+      setIsScrolledUp(false)
+      isUserScrolledUpRef.current = false
+      scrollToBottom(false)
     }
-  }, [actionLogs.length, isExecuting, streamingText, autoScroll, isScrolledUp])
+    prevExecutingRef.current = isExecuting
+  }, [isExecuting])
+
+  // Continuous Autoscroll during action logs arrival and text streaming
+  useEffect(() => {
+    if (!autoScroll) return
+    if (isUserScrolledUpRef.current) return
+
+    const el = scrollContainerRef.current
+    if (!el) return
+
+    isProgrammaticScrollRef.current = true
+    el.scrollTop = el.scrollHeight
+
+    const rafId = requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      }
+      isProgrammaticScrollRef.current = false
+    })
+
+    return () => {
+      cancelAnimationFrame(rafId)
+    }
+  }, [actionLogs, streamingText, isExecuting, autoScroll])
 
   const toggleExpand = (id: string) => {
     setExpandedLogIds((prev) => {
@@ -868,7 +920,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               {/* Autoscroll Toggle Button */}
               <button
                 type="button"
-                onClick={() => setAutoScroll(!autoScroll)}
+                onClick={handleToggleAutoScroll}
                 aria-label={autoScroll ? 'Autoscroll attivo' : 'Autoscroll disattivato'}
                 title={autoScroll ? 'Autoscroll attivo (clicca per disattivare)' : 'Autoscroll disattivato (clicca per attivare)'}
                 className={`p-1.5 rounded-lg transition-colors focus-ring text-xs ${

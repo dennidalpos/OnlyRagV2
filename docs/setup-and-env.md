@@ -18,17 +18,17 @@ Questo documento costituisce la guida operativa e tecnica di riferimento per l'i
 
 OnlyRag V2 include un motore deterministico di calcolo delle risorse ([`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts)) che assegna automaticamente la suite di modelli ottimali prevenendo il blocco del driver grafico di Windows (DWM) e l'esaurimento della memoria:
 
-| Profilo | Target Hardware Host | VRAM Dedicata | Safe Budget Pesi ($W_{\text{mem}}$) | RAM di Sistema | Suite Modelli Consigliata (Zero-Lockup) | Storage SSD Richiesto |
+| Profilo | Target Hardware Host | VRAM Dedicata | Safe Budget Pesi ($W_{\text{mem}}$) | RAM di Sistema | Suite Modelli Consigliata (Coding & Multi-Tier) | Storage SSD Richiesto |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **P1: Ultra-Light** | Solo CPU (AVX2), iGPU Intel/AMD | 0 GB (Integrata) | Offload RAM completo | 8 – 16 GB | `llama3.2:3b`, `qwen2.5-coder:1.5b`, `moondream:latest`, `nomic-embed-text:latest` | 15 – 20 GB |
-| **P2: Entry-Level** | GPU NVIDIA GTX 1660 / RTX 3050, Laptop 4–6GB | 4 – 6 GB | $\le 2.5\text{ GB}$ | 16 – 32 GB | `llama3.2:3b`, `qwen2.5-coder:3b`, `adrienbrault/biomistral-7b:Q4_K_M`, `moondream:latest`, `nomic-embed-text:latest` | 20 – 30 GB |
-| **P3: Mid-Tier** | GPU NVIDIA RTX 2070, RTX 3070, RTX 4060 8GB | 8 – 11 GB | $\le 3.5\text{ GB}$ | 16 – 32 GB | `llama3.2:3b`, `qwen2.5-coder:3b` *(o 7B standard)*, `deepseek-r1:1.5b`, `moondream:latest`, `nomic-embed-text:latest` | 35 – 50 GB |
-| **P4: High-End Pro**| GPU NVIDIA RTX 3060 12GB, RTX 4070 12GB, RTX 4080 16GB | 12 – 16 GB | $\le 8.0\text{ GB}$ | 32 – 64 GB | `llama3.1:8b`, `qwen2.5-coder:7b`, `deepseek-r1:8b` / `14b`, `llama3.2-vision:11b`, `bge-m3:latest` | 60 – 90 GB |
-| **P5: Enterprise** | GPU NVIDIA RTX 3090 / 4090 (24GB), Multi-GPU, A100/H100 | 24 – 48+ GB | $\ge 18.0\text{ GB}$ | 64 – 128 GB | `qwen2.5-coder:14b` / `32b`, `deepseek-r1:32b`, `meditron:70b`, `command-r:35b`, `llama3.2-vision:11b` | 120 – 250 GB |
+| **P1: Ultra-Light** | Solo CPU (AVX2), iGPU Intel/AMD | 0 GB (Integrata) | Offload RAM completo | 8 – 16 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `deepseek-coder:6.7b`, `moondream:latest`, `nomic-embed-text:latest` | 15 – 20 GB |
+| **P2: Entry-Level** | GPU NVIDIA GTX 1660 / RTX 3050, Laptop 4–6GB | 4 – 6 GB | $\le 3.0\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `deepseek-coder:6.7b`, `moondream:latest`, `nomic-embed-text:latest` | 20 – 30 GB |
+| **P3: Mid-Tier** | GPU NVIDIA RTX 2070, RTX 3070, RTX 4060 8GB | 8 – 11 GB | $\le 4.5\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:7b` *(o Q4_K_M)*, `deepseek-r1:7b` *(distill Qwen)*, `moondream:latest`, `nomic-embed-text:latest` | 35 – 50 GB |
+| **P4: High-End Pro**| GPU NVIDIA RTX 3060 12GB, RTX 4070 12GB, RTX 4080 16GB | 12 – 16 GB | $\le 10.5\text{ GB}$ | 32 – 64 GB | `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `qwen2.5-coder:14b` / `deepseek-r1:14b`, `llava:7b`, `bge-m3:latest` | 60 – 90 GB |
+| **P5: Enterprise** | GPU NVIDIA RTX 3090 / 4090 (24GB), Multi-GPU, A100/H100 | 24 – 48+ GB | $\ge 16.5\text{ GB}$ | 64 – 128 GB | `qwen2.5-coder:14b`, `qwen2.5-coder:32b`, `deepseek-r1:32b`, `codestral:22b`, `llama3.2-vision:11b` | 120 – 250 GB |
 
 > [!IMPORTANT]
-> **Nota Critica su GPU da 8GB (es. RTX 2070 / RTX 3070 / RTX 4060):**
-> Su Windows, il Desktop Window Manager (DWM.exe) riserva permanentemente $1.2 - 1.8\text{ GB}$ di VRAM. Caricando un modello da 8B ($4.9\text{ GB}$) con catene di ragionamento prolungate (DeepSeek-R1), la KV-Cache e i buffer CUDA occupano ulteriori $2.5\text{ GB}$, superando gli 8GB fisici e causando il congelamento del driver NVIDIA. Su GPU da 8GB, **`deepseek-r1:1.5b`** ($1.1\text{ GB}$) e **`qwen2.5-coder:3b`** ($1.9\text{ GB}$) sono le scelte consigliate per garantire oltre 60 token/s con zero blocchi.
+> **Ottimizzazione GPU da 8GB (es. RTX 2070 / RTX 3070 / RTX 4060):**
+> Con VRAM netta sicura di $4.5\text{ GB}$ (dopo riserva DWM di $1.5\text{ GB}$ e margine di sicurezza del $25\%$), i modelli **`qwen2.5-coder:7b`** (4.7 GB) e le sue quantizzazioni **`qwen2.5-coder:7b-instruct-q4_k_m`** (4.4 GB) e **`deepseek-r1:7b`** (4.7 GB, distillato su Qwen Math/Code) operano stabilmente in VRAM offrendo massima precisione architetturale per il coding senza rischiare crash OOM.
 
 ---
 
@@ -43,11 +43,16 @@ $$KV_{\text{mem}} \text{ (GB)} = 2 \times N_{\text{layers}} \times N_{\text{head
 * **KV-Cache standard FP16:** $\text{BytesPerElem} = 2$ bytes.
 * **KV-Cache quantizzata (`OLLAMA_KV_CACHE_TYPE=q8_0`):** $\text{BytesPerElem} = 1$ byte (**dimezza del 50% il consumo di VRAM**).
 
-### 3.3. Safe VRAM Budget & Pre-Flight Storage Check
-$$VRAM_{\text{safe\_budget}} = VRAM_{\text{host}} - \Delta_{\text{headroom}}$$
-dove $\Delta_{\text{headroom}} = \text{DWM Buffer (1.2 GB)} + \text{KV-Cache (2.0 GB)} + \text{CUDA Runtime (0.5 GB)} \approx 3.7\text{ GB}$.
+### 3.3. Safe Net VRAM Budget & Pre-Flight Storage Check
+$$VRAM_{\text{Disponibile\_Reale}} = \max\left(0, (VRAM_{\text{Totale}} \times (1 - \text{Safety\_Margin})) - \text{Overhead\_OS}\right)$$
+dove:
+- $\text{Safety\_Margin} = 0.25 \quad (25\% \text{ buffer anti-choke})$
+- $\text{Overhead\_OS} = 1.5\text{ GB} \quad (\text{DWM.exe, driver display, background processes})$
 
-Prima del download dei modelli, il sistema verifica che:
+Condizione di ammissibilità per i modelli e le quantizzazioni:
+$$\text{Footprint\_Totale} = VRAM_{\text{Modello}}(\text{Quant}) + VRAM_{\text{KV\_Cache}}(C_{\text{target}}) + \text{Overhead\_CUDA} \le VRAM_{\text{Disponibile\_Reale}}$$
+
+Prima del download dei modelli, il sistema verifica lo storage libero su disco:
 $$S_{\text{free\_disk}} \ge \sum_{i=1}^{n} \text{Size}_{\text{model}_i} \times 1.25$$
 
 ---

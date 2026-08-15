@@ -75,11 +75,18 @@ try {
         }
         Write-Host "[PASS] Pytest sidecar test suite clean." -ForegroundColor Green
     } else {
-        python -m pytest "$rootDir\sidecar\tests\test_sidecar.py" -q
+        $appDataPy = "$env:APPDATA\onlyrag-v2\python_venv\Scripts\python.exe"
+        $pyCmd = if (Test-Path $appDataPy) { $appDataPy } else { "python" }
+        
+        # Try running with pytest first, then fallback to direct test execution
+        & $pyCmd -m pytest "$rootDir\sidecar\tests\test_sidecar.py" -q 2>$null
         if ($LASTEXITCODE -ne 0) {
-            throw "[FAIL] Pytest test suite failed with exit code $LASTEXITCODE."
+            & $pyCmd "$rootDir\sidecar\tests\test_sidecar.py"
+            if ($LASTEXITCODE -ne 0) {
+                throw "[FAIL] Sidecar test suite failed with exit code $LASTEXITCODE."
+            }
         }
-        Write-Host "[PASS] Pytest sidecar test suite clean." -ForegroundColor Green
+        Write-Host "[PASS] Sidecar test suite clean." -ForegroundColor Green
     }
 
     Write-Host "`n=====================================================" -ForegroundColor Cyan

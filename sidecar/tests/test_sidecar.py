@@ -115,18 +115,23 @@ def test_deterministic_fallback_embeddings():
 
 def test_ocr_prepare_image_resizing():
     from sidecar.infrastructure.ocr import _prepare_image_for_ocr
-    from PIL import Image
-    import io
-    
-    # Create large 3000x2000 image
-    large_img = Image.new("RGB", (3000, 2000), color="blue")
-    buf = io.BytesIO()
-    large_img.save(buf, format="PNG")
-    raw_bytes = buf.getvalue()
-    
-    resized_bytes = _prepare_image_for_ocr(raw_bytes, max_dim=1500)
-    resized_img = Image.open(io.BytesIO(resized_bytes))
-    assert max(resized_img.size) <= 1500
+    try:
+        from PIL import Image
+        import io
+        
+        # Create large 3000x2000 image
+        large_img = Image.new("RGB", (3000, 2000), color="blue")
+        buf = io.BytesIO()
+        large_img.save(buf, format="PNG")
+        raw_bytes = buf.getvalue()
+        
+        resized_bytes = _prepare_image_for_ocr(raw_bytes, max_dim=1500)
+        resized_img = Image.open(io.BytesIO(resized_bytes))
+        assert max(resized_img.size) <= 1500
+    except ImportError:
+        # Gracefully test passthrough fallback when PIL is not present
+        dummy_bytes = b"non-image-binary-payload"
+        assert _prepare_image_for_ocr(dummy_bytes, max_dim=1500) == dummy_bytes
 
 def test_extract_tabular_document_csv_and_json():
     from sidecar.domain.ingestion import extract_tabular_document
@@ -193,5 +198,26 @@ def test_reranker_cross_scoring():
     assert len(reranked) == 2
     assert reranked[0]["chunk_id"] == "c_rel"
     assert reranked[0]["score"] > reranked[1]["score"]
+
+
+if __name__ == "__main__":
+    import inspect
+    import sys
+    current_module = sys.modules[__name__]
+    test_functions = [obj for name, obj in inspect.getmembers(current_module) if inspect.isfunction(obj) and name.startswith("test_")]
+    passed = 0
+    failed = 0
+    print(f"Running {len(test_functions)} sidecar test functions...")
+    for fn in test_functions:
+        try:
+            fn()
+            passed += 1
+            print(f"  [PASS] {fn.__name__}")
+        except Exception as e:
+            failed += 1
+            print(f"  [FAIL] {fn.__name__}: {e}")
+    print(f"\nResult: {passed} passed, {failed} failed.")
+    if failed > 0:
+        sys.exit(1)
 
 

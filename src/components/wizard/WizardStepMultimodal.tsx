@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Eye, Database, FileText, CheckCircle2 } from 'lucide-react'
+import { Eye, Database, FileText } from 'lucide-react'
 import { ModelRecommendation } from '../../services/hardwareRecommendationEngine'
 import { ModelOptionCard } from './ModelOptionCard'
 import { useTranslation } from '../../i18n'
@@ -46,41 +46,27 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
         <button
           type="button"
           onClick={() => setSubTab('vision')}
-          className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between gap-2 transition-all ${
+          className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer focus-ring ${
             subTab === 'vision'
               ? 'bg-amber-950/90 text-amber-300 border border-amber-500/50 shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <span className="flex items-center gap-1.5">
-            <Eye className="w-3.5 h-3.5" />
-            1. {t('hardwareWizard.step5Vision')}
-          </span>
-          {selectedVision && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-200 truncate max-w-[120px] flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-amber-400" /> {selectedVision}
-            </span>
-          )}
+          <Eye className="w-3.5 h-3.5" />
+          <span>1. {t('hardwareWizard.step5Vision')}</span>
         </button>
 
         <button
           type="button"
           onClick={() => setSubTab('embedding')}
-          className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between gap-2 transition-all ${
+          className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer focus-ring ${
             subTab === 'embedding'
               ? 'bg-purple-950/90 text-purple-300 border border-purple-500/50 shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <span className="flex items-center gap-1.5">
-            <Database className="w-3.5 h-3.5" />
-            2. {t('hardwareWizard.step5Embedding')}
-          </span>
-          {selectedEmbedding && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-200 truncate max-w-[120px] flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-purple-400" /> {selectedEmbedding}
-            </span>
-          )}
+          <Database className="w-3.5 h-3.5" />
+          <span>2. {t('hardwareWizard.step5Embedding')}</span>
         </button>
       </div>
 

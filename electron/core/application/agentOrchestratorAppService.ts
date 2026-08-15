@@ -20,6 +20,7 @@ import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { skillAppService } from './skillAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -129,7 +130,7 @@ export async function runAgentOrchestratorLoop(
     return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required' }
   }
 
-  const sessionId = customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  const sessionId = payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
   const session: AgentSession = {
     id: sessionId,
     isCancelled: false,
@@ -235,7 +236,7 @@ export async function runAgentOrchestratorLoop(
     }
   }
 
-  const episodicCompactor = new EpisodicMemoryCompactor(4)
+  const episodicCompactor = new EpisodicMemoryCompactor(6)
   const goalPlanner = new GoalDecompositionPlanner()
   const fsmMode = new AgentRuntimeModeFsm(agentMode)
   const isUnlimitedSteps = settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
@@ -249,8 +250,49 @@ export async function runAgentOrchestratorLoop(
   const loopDetector = new AgentActionLoopDetector(2)
   let consecutiveTaskFailures = 0
 
+  // Restore session state if resuming an existing session
+  const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
+  if (savedState) {
+    stepCount = savedState.stepCount || 0
+    if (savedState.episodes && savedState.episodes.length > 0) {
+      episodicCompactor.fromState(savedState.episodes, savedState.recentFullLogs)
+    }
+    if (savedState.planMilestones && savedState.planMilestones.length > 0) {
+      goalPlanner.loadMilestones(savedState.planMilestones)
+    }
+    emitLog('info', `🔄 Restored Session State [${sessionId}]: Continuing from Step ${stepCount} with ${episodicCompactor.episodeCount} prior steps in memory.`)
+  }
+
+  const emitStepUpdate = (statusText?: string) => {
+    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
+      session.targetWindow.webContents.send('agent:step-update', {
+        step: stepCount,
+        maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
+        maxStepsLabel,
+        statusText,
+      })
+    }
+  }
+
+  const persistCurrentState = async () => {
+    await agentSessionStateRepository.saveSessionState({
+      sessionId,
+      workspacePath,
+      agentMode,
+      stepCount,
+      maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
+      episodes: episodicCompactor.getEpisodes(),
+      recentFullLogs: episodicCompactor.getRecentFullLogs(),
+      planMilestones: [...goalPlanner.getMilestones()],
+      userTask,
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
+    emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
+    await persistCurrentState()
 
     const hasRecentToolFailure = episodicCompactor.failureCount > 0
     const errorCountInHistory = episodicCompactor.failureCount

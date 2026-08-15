@@ -5,6 +5,7 @@ export type AgentMode = 'plan' | 'ask' | 'agent'
 export interface AgentTaskPayload {
   userTask: string
   agentMode: AgentMode
+  sessionId?: string
   workspacePath?: string | null
   isStandaloneMode?: boolean
   activeModel?: string

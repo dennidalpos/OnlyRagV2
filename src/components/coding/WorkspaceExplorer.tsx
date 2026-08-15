@@ -191,9 +191,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
               <span>Cartelle Progetto Salvale</span>
               <button
                 onClick={onAddProject}
-                className="text-[10px] text-cyan-400 hover:underline flex items-center gap-1 font-sans"
+                title="Aggiungi nuova cartella progetto"
+                className="p-1 hover:bg-slate-800 text-cyan-400 hover:text-cyan-300 rounded transition-colors"
               >
-                <Plus className="w-3 h-3" /> Aggiungi
+                <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -252,9 +253,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
               <span>Storico Chat Progetto</span>
               <button
                 onClick={onCreateSession}
-                className="text-[10px] text-indigo-400 hover:underline flex items-center gap-1 font-sans"
+                title="Crea nuova sessione di chat"
+                className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
               >
-                <Plus className="w-3 h-3" /> Nuova Sessione
+                <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
 

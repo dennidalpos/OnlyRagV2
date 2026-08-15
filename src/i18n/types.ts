@@ -303,6 +303,8 @@ export interface TranslationSchema {
     copyReport: string
     exportReport: string
     cleanWorkspace: string
+    cleanWorkspaceHelp?: string
+    seeOsParameters?: string
     sidecarTitle: string
     ollamaTitle: string
     gpuTitle: string

@@ -185,7 +185,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
             </button>
 
             <span className="text-[11px] font-mono text-slate-400">
-              {t('coding.stepsCount', { count: c.actionLogs.length })}
+              {c.isExecuting && c.currentStep > 0
+                ? `Step ${c.currentStep}/${c.maxSteps}`
+                : t('coding.stepsCount', { count: c.actionLogs.length })}
             </span>
           </div>
 
@@ -197,6 +199,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               agentPrompt={c.agentPrompt}
               setAgentPrompt={c.setAgentPrompt}
               isExecuting={c.isExecuting}
+              currentStep={c.currentStep}
+              maxSteps={c.maxSteps}
               activeSkills={c.activeSkills}
               streamingText={c.streamingText}
               onExecute={handleInitiateTaskExecution}
@@ -472,6 +476,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                 onReject={planApproval.handleRejectPlan}
                 onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused(!planApproval.isAutoProceedPaused)}
                 onUpdatePlanText={planApproval.handleUpdatePlanText}
+                completedStepCount={c.currentStep}
               />
             )}
 

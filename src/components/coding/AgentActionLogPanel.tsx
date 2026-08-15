@@ -40,6 +40,8 @@ interface AgentActionLogPanelProps {
   agentPrompt: string
   setAgentPrompt: (prompt: string) => void
   isExecuting: boolean
+  currentStep?: number
+  maxSteps?: number | string
   activeSkills?: string[]
   streamingText?: string
   onExecute: () => void

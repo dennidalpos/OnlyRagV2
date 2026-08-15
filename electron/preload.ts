@@ -66,6 +66,11 @@ const api: IElectronAPI = {
     ipcRenderer.on('agent:log', subscription)
     return () => ipcRenderer.removeListener('agent:log', subscription)
   },
+  onAgentStepUpdate: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('agent:step-update', subscription)
+    return () => ipcRenderer.removeListener('agent:step-update', subscription)
+  },
   onAgentStreamToken: (callback: (data: any) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('agent:stream-token', subscription)

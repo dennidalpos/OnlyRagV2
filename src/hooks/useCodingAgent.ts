@@ -140,6 +140,8 @@ export function useCodingAgent(settings?: AppSettings) {
   const [isExecuting, setIsExecuting] = useState<boolean>(false)
   const [activeSkills, setActiveSkills] = useState<string[]>([])
   const [streamingText, setStreamingText] = useState<string>('')
+  const [currentStep, setCurrentStep] = useState<number>(0)
+  const [maxSteps, setMaxSteps] = useState<number | string>(50)
 
   // Pending Approval State
   const [pendingApproval, setPendingApproval] = useState<{
@@ -481,6 +483,12 @@ export function useCodingAgent(settings?: AppSettings) {
       setStreamingText((prev) => prev + data.chunk)
     })
 
+    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps: number; maxStepsLabel: string }) => {
+      if (data?.step !== undefined) setCurrentStep(data.step)
+      if (data?.maxStepsLabel !== undefined) setMaxSteps(data.maxStepsLabel)
+      else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
+    })
+
     const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
       setPendingApproval(req)
     })
@@ -505,6 +513,7 @@ export function useCodingAgent(settings?: AppSettings) {
     return () => {
       unsubLog?.()
       unsubStreamToken?.()
+      unsubStep?.()
       unsubApproval?.()
       unsubSkills?.()
       unsubDone?.()
@@ -651,6 +660,7 @@ export function useCodingAgent(settings?: AppSettings) {
       )
 
       await window.electronAPI.startAgentTask({
+        sessionId: activeSessionId || activeSession?.id,
         userTask: taskPrompt,
         agentMode,
         workspacePath: workspacePath || undefined,
@@ -823,6 +833,8 @@ export function useCodingAgent(settings?: AppSettings) {
     movePromptInQueue,
     actionLogs,
     isExecuting,
+    currentStep,
+    maxSteps,
     activeSkills,
     streamingText,
     pendingApproval,

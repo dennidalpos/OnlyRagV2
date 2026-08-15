@@ -382,6 +382,7 @@ export interface IElectronAPI {
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
   setAgentMaxConcurrency: (limit: number) => Promise<{ success: boolean; maxConcurrency: number }>
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
+  onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
   onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
   onAgentApprovalRequest: (callback: (req: any) => void) => () => void

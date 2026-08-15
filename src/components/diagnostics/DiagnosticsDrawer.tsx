@@ -11,18 +11,19 @@ import {
   X,
   Copy,
   Check,
-  Download,
   Filter,
   FolderOpen,
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
+  Sliders,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import {
   getRecommendedOllamaEnvVars,
   OllamaEnvConfig,
 } from '../../services/hardwareRecommendationEngine'
+import { OllamaEnvParamsModal } from './OllamaEnvParamsModal'
 
 interface DiagnosticsDrawerProps {
   isOpen: boolean
@@ -47,6 +48,7 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   const [copiedReport, setCopiedReport] = useState<boolean>(false)
   const [copiedEnvScript, setCopiedEnvScript] = useState<string | null>(null)
   const [showEnvConfig, setShowEnvConfig] = useState<boolean>(false)
+  const [showEnvParamsModal, setShowEnvParamsModal] = useState<boolean>(false)
   const [showApprovalModal, setShowApprovalModal] = useState<boolean>(false)
   const [isApplyingEnvVars, setIsApplyingEnvVars] = useState<boolean>(false)
   const [restartOllamaAfterApply, setRestartOllamaAfterApply] = useState<boolean>(true)
@@ -182,17 +184,6 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
     setTimeout(() => setCopiedReport(false), 2500)
   }
 
-  const handleExportReport = () => {
-    const markdown = generateReportMarkdown()
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `onlyrag_diagnostics_${new Date().toISOString().replace(/[:.]/g, '-')}.md`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -245,32 +236,31 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             <button
               onClick={handleCopyReport}
               aria-label={t('diagnostics.copyReport')}
-              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5"
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
               title={t('diagnostics.copyReport')}
             >
               {copiedReport ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
               <span>{copiedReport ? t('common.copied') : t('common.copy')}</span>
             </button>
-            <button
-              onClick={handleExportReport}
-              aria-label={t('diagnostics.exportReport')}
-              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5"
-              title={t('diagnostics.exportReport')}
-            >
-              <Download className="w-3.5 h-3.5 text-sky-400" /> {t('common.export')}
-            </button>
-            <button
-              onClick={handleCleanResiduals}
-              aria-label={t('diagnostics.cleanWorkspace')}
-              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5"
-              title={t('diagnostics.cleanWorkspace')}
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" /> {t('diagnostics.cleanWorkspace')}
-            </button>
+
+            <div className="group relative flex items-center">
+              <button
+                onClick={handleCleanResiduals}
+                aria-label={t('diagnostics.cleanWorkspace')}
+                className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                title={t('diagnostics.cleanWorkspaceHelp') || 'Rimuove i file temporanei e resetta la sessione dell\'agente. I file di codice sorgente non verranno eliminati.'}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" /> {t('diagnostics.cleanWorkspace')}
+              </button>
+              <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block z-30 w-72 p-2 bg-slate-900 border border-slate-700 rounded-xl shadow-xl text-[10px] text-slate-300 leading-tight">
+                {t('diagnostics.cleanWorkspaceHelp') || 'Rimuove i file temporanei e resetta la sessione dell\'agente. I file di codice sorgente non verranno eliminati.'}
+              </div>
+            </div>
+
             <button
               onClick={onClose}
               aria-label={t('common.close')}
-              className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors focus-ring active:scale-95"
+              className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors focus-ring active:scale-95 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -385,102 +375,40 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
           </div>
         )}
 
-        {/* Ollama OS Environment Parameters & Script */}
+        {/* Ollama OS Environment Parameters Synthetic Preview & Actions */}
         {envConfig && (
-          <div className="border-b border-slate-800 bg-slate-950/70">
-            <div className="px-4 py-2 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs">
-                <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-slate-200 font-semibold text-xs">Parametri OS Client Ollama ({envConfig.profileTier.toUpperCase()}):</span>
-                <span className="text-slate-400 font-mono text-[11px] hidden sm:inline truncate max-w-xs">
-                  {envConfig.variables.slice(0, 3).map((v) => `${v.name}=${v.value}`).join(' | ')}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowEnvConfig(!showEnvConfig)}
-                  className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-[11px] font-semibold rounded-lg transition-all focus-ring active:scale-95"
-                >
-                  {showEnvConfig ? 'Nascondi' : 'Dettagli OS'}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(envConfig.powershellScript)
-                    setCopiedEnvScript('ps')
-                    setTimeout(() => setCopiedEnvScript(null), 2500)
-                  }}
-                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-semibold rounded-lg transition-all focus-ring flex items-center gap-1 active:scale-95"
-                  title="Copia script PowerShell per impostare le variabili d'ambiente OS utente"
-                >
-                  {copiedEnvScript === 'ps' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedEnvScript === 'ps' ? 'Copiato!' : 'Copia PowerShell'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowApprovalModal(true)}
-                  className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-cyan-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 border border-amber-500/50 text-[11px] font-bold rounded-lg transition-all focus-ring flex items-center gap-1.5 active:scale-95 shadow-sm"
-                  title="Applica le variabili d'ambiente al sistema operativo (richiede conferma)"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Applica all'OS...</span>
-                </button>
-              </div>
+          <div className="border-b border-slate-800 bg-slate-950/70 px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="text-slate-200 font-semibold text-xs">
+                Parametri OS Client Ollama ({envConfig.profileTier.toUpperCase()}):
+              </span>
+              <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-amber-300 text-[10px] font-mono font-bold">
+                {envConfig.variables.length} variabili attive
+              </span>
             </div>
 
-            {applyEnvFeedback && (
-              <div
-                className={`mx-4 my-2 p-2.5 rounded-lg border text-xs flex items-center justify-between ${
-                  applyEnvFeedback.success
-                    ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300'
-                    : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
-                }`}
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setShowEnvParamsModal(true)}
+                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                title="Visualizza i dettagli completi dei parametri OS Ollama"
               >
-                <div className="flex items-center gap-2">
-                  {applyEnvFeedback.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                  )}
-                  <span>{applyEnvFeedback.message}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setApplyEnvFeedback(null)}
-                  className="p-1 hover:bg-slate-800/60 rounded text-slate-400 hover:text-slate-200"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+                <Sliders className="w-3.5 h-3.5" />
+                <span>{t('diagnostics.seeOsParameters') || 'Vedi Parametri'}</span>
+              </button>
 
-            {showEnvConfig && (
-              <div className="p-4 border-t border-slate-800/80 bg-slate-950 space-y-3 max-h-60 overflow-y-auto">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                    ⚡ Variabili d'Ambiente Consigliate per il tuo Hardware
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">
-                    Profilo: {envConfig.profileTier.toUpperCase()}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                  {envConfig.variables.map((v) => (
-                    <div key={v.name} className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1">
-                      <div className="flex items-center justify-between font-mono">
-                        <strong className="text-cyan-300 text-[11px]">{v.name}</strong>
-                        <span className="px-1.5 py-0.2 rounded bg-slate-950 text-amber-300 font-bold border border-slate-800 text-[10px]">
-                          {v.value}
-                        </span>
-                      </div>
-                      <p className="text-slate-300 text-[10px] leading-tight">{v.description}</p>
-                      <p className="text-slate-500 text-[9px] italic">{v.rationale}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              <button
+                type="button"
+                onClick={() => setShowApprovalModal(true)}
+                className="px-3 py-1 bg-gradient-to-r from-amber-500/20 to-cyan-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 border border-amber-500/50 text-xs font-bold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
+                title="Applica le variabili d'ambiente al sistema operativo (richiede conferma)"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>Applica all'OS...</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -699,6 +627,15 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             </div>
           </div>
         </div>
+      )}
+
+      {envConfig && (
+        <OllamaEnvParamsModal
+          isOpen={showEnvParamsModal}
+          onClose={() => setShowEnvParamsModal(false)}
+          envConfig={envConfig}
+          onOpenApprovalModal={() => setShowApprovalModal(true)}
+        />
       )}
     </div>
   )

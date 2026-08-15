@@ -18,6 +18,10 @@ export class GoalDecompositionPlanner {
     }))
   }
 
+  public loadMilestones(milestones: PlanMilestone[]): void {
+    this.milestones = milestones ? [...milestones] : []
+  }
+
   public getMilestones(): ReadonlyArray<PlanMilestone> {
     return this.milestones
   }

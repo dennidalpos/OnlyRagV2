@@ -1,5 +1,6 @@
 import React from 'react'
 import { Check, Star, CheckCircle2 } from 'lucide-react'
+import { getModelFamily, getModelApproxSize } from '../../services/hardwareRecommendationEngine'
 
 export interface ModelOptionCardProps {
   modelName: string
@@ -55,6 +56,10 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
     },
   }[accentColor]
 
+  const effectiveFamily = family && family !== 'generic' ? family : getModelFamily(modelName)
+  const rawSize = sizeBytesApprox && sizeBytesApprox.toLowerCase() !== 'local' ? sizeBytesApprox : undefined
+  const effectiveSize = rawSize || getModelApproxSize(modelName)
+
   return (
     <div
       role="radio"
@@ -85,9 +90,9 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
         <div className="min-w-0">
           <div className="font-semibold text-slate-200 text-xs flex items-center gap-2 flex-wrap">
             <span className="truncate">{displayName}</span>
-            {family && (
+            {effectiveFamily && effectiveFamily !== 'generic' && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700 uppercase">
-                {family}
+                {effectiveFamily}
               </span>
             )}
             {isRecommended && (
@@ -104,13 +109,13 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
             )}
           </div>
           {description && (
-            <p className="text-[11px] text-slate-400 mt-0.5 truncate">{description}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 leading-snug break-words">{description}</p>
           )}
         </div>
       </div>
-      {sizeBytesApprox && (
+      {effectiveSize && (
         <span className="font-mono text-slate-400 text-xs shrink-0 font-medium pl-2">
-          {sizeBytesApprox}
+          {effectiveSize}
         </span>
       )}
     </div>

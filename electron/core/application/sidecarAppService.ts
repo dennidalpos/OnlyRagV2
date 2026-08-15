@@ -106,7 +106,9 @@ export class SidecarAppService {
                     if (event.type === 'done' && event.data) {
                       finalResult = event.data
                     }
-                  } catch {}
+                  } catch (err: any) {
+                    logger.log('DEBUG', 'SidecarApp', `Trailing buffer was not SSE JSON: ${err?.message}`)
+                  }
                 }
 
                 if (finalResult) {
@@ -214,7 +216,9 @@ export class SidecarAppService {
               try {
                 const parsed = JSON.parse(raw)
                 if (parsed.detail) detail = parsed.detail
-              } catch {}
+              } catch (err: any) {
+                logger.log('DEBUG', 'SidecarApp', `Sidecar error response was not JSON: ${err?.message}`)
+              }
               resolve({ success: false, error: detail })
             }
           })
@@ -453,7 +457,9 @@ export class SidecarAppService {
                 try {
                   const parsedErr = JSON.parse(raw)
                   if (parsedErr.detail) errDetail = parsedErr.detail
-                } catch {}
+                } catch (err: any) {
+                  logger.log('DEBUG', 'SidecarApp', `Export error response was not JSON: ${err?.message}`)
+                }
                 logger.log('ERROR', 'SidecarApp', errDetail)
                 resolve({ success: false, error: errDetail })
               }

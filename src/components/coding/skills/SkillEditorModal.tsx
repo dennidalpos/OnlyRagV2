@@ -142,87 +142,93 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label htmlFor="skill-name-input" className="block text-xs font-semibold text-slate-300 mb-1">
                 {t('skills.skillName')} *
               </label>
               <input
+                id="skill-name-input"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('skills.skillNamePlaceholder')}
                 disabled={!!initialSkill}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-60 font-mono"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring disabled:opacity-60 font-mono placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label htmlFor="skill-version-input" className="block text-xs font-semibold text-slate-300 mb-1">
                 {t('common.version')}
               </label>
               <input
+                id="skill-version-input"
                 type="text"
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
                 placeholder={t('skills.skillVersionPlaceholder')}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono placeholder:text-slate-400"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor="skill-desc-input" className="block text-xs font-semibold text-slate-300 mb-1">
               {t('skills.skillDescription')}
             </label>
             <input
+              id="skill-desc-input"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('skills.skillDescPlaceholder')}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring placeholder:text-slate-400"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label htmlFor="skill-triggers-input" className="block text-xs font-semibold text-slate-300 mb-1">
                 {t('skills.skillTriggers')}
               </label>
               <input
+                id="skill-triggers-input"
                 type="text"
                 value={triggers}
                 onChange={(e) => setTriggers(e.target.value)}
                 placeholder={t('skills.skillTriggersPlaceholder')}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label htmlFor="skill-tags-input" className="block text-xs font-semibold text-slate-300 mb-1">
                 Tags
               </label>
               <input
+                id="skill-tags-input"
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder={t('skills.skillTagsPlaceholder')}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono placeholder:text-slate-400"
               />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <label htmlFor="skill-content-textarea" className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.skillContent')} *
               </label>
-              <span className="text-[11px] text-slate-500 font-mono">SKILL.md</span>
+              <span className="text-[11px] text-slate-400 font-mono">SKILL.md</span>
             </div>
             <textarea
+              id="skill-content-textarea"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={8}
               placeholder={t('skills.skillGuidelinesPlaceholder')}
-              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 leading-relaxed resize-y"
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 font-mono focus-ring leading-relaxed resize-y placeholder:text-slate-400"
             />
           </div>
 

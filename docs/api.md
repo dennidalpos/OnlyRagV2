@@ -1,7 +1,7 @@
 # Riferimento API & Contratti di Comunicazione — OnlyRag V2
 
 OnlyRag V2 implementa due livelli di interfaccia:
-1. **REST API (FastAPI Sidecar)** per l'elaborazione dei documenti, l'ingestione e la ricerca ibrida su LanceDB.
+1. **REST API (FastAPI Sidecar)** per l'elaborazione dei documenti, l'ingestione, l'export e la ricerca ibrida su LanceDB.
 2. **IPC API (Electron Main/Renderer)** per l'esecuzione dei tool agentici, la diagnostica hardware e la gestione dei modelli Ollama.
 
 ---
@@ -36,7 +36,7 @@ OnlyRag V2 implementa due livelli di interfaccia:
   "doc_id": "doc_a1b2c3d4",
   "filename": "Contratto_Fornitura.pdf",
   "chunks_created": 18,
-  "embedding_model": "bge-m3",
+  "embedding_model": "nomic-embed-text",
   "extracted_preview": "# Contratto di Fornitura..."
 }
 ```
@@ -51,7 +51,7 @@ OnlyRag V2 implementa due livelli di interfaccia:
 {
   "query": "Quali sono le penali per recesso anticipato secondo art. 1341?",
   "top_k": 5,
-  "embedding_model": "bge-m3",
+  "embedding_model": "nomic-embed-text",
   "allowed_doc_ids": ["doc_a1b2c3d4"]
 }
 ```
@@ -72,14 +72,30 @@ OnlyRag V2 implementa due livelli di interfaccia:
 ---
 
 ### 1.4. Gestione Documenti Memorizzati
-* **`GET /documents`**: Restituisce la lista di tutti i documenti indicizzati in LanceDB.
-* **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali associati.
+* **`GET /documents`**: Restituisce la lista di tutti i documenti indicizzati in LanceDB con metadati (`id`, `filename`, `file_size`, `num_pages`, `num_chunks`, `status`, `ingested_at`).
+* **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali associati da LanceDB.
+
+---
+
+### 1.5. Esportazione Documento Formattato
+* **Endpoint:** `POST /export`
+* **Content-Type:** `application/json`
+* **Request Body:**
+```json
+{
+  "title": "Relazione_Tradotta",
+  "content": "# Relazione Clinica\n\nTesto tradotto...",
+  "format": "pdf"
+}
+```
+* **Formati Supportati:** `pdf`, `md`, `docx`.
+* **Risposta (200 OK):** File binario scaricabile con appropriato `Content-Disposition`.
 
 ---
 
 ## 2. Electron IPC API (`window.electronAPI`)
 
-Tutte le chiamate IPC sono tipizzate tramite TypeScript in `src/types/index.ts`.
+Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/types/index.ts`.
 
 ### 2.1. Canali Modelli Ollama (`ollama:*`)
 
@@ -113,13 +129,14 @@ Tutte le chiamate IPC sono tipizzate tramite TypeScript in `src/types/index.ts`.
 
 ---
 
-### 2.4. Canali Sistema & Diagnostica (`system:*`)
+### 2.4. Canali Sistema & Diagnostica (`system:*` / `diagnostics:*`)
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
 | `system:get-diagnostics`| `none` | `DiagnosticsData` | Ispezione di CPU, RAM, VRAM, GPU NVML e capienza disco. |
 | `system:read-logs` | `none` | `string[]` | Lettura dei log applicativi da disco. |
 | `system:clear-logs` | `none` | `{ success: boolean }` | Pulizia del buffer in memoria e azzeramento del file fisico `logs/app.log`. |
+| `diagnostics:open-logs-folder` | `none` | `{ success: boolean, path: string }` | Apre la cartella locale dei log (`logs/`) sul file system host Windows. |
 
 ---
 

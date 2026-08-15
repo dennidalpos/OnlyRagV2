@@ -150,16 +150,29 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
   }
 
   try {
-    const resolvedPath = path.resolve(filePath)
+    let cleanPath = filePath.trim().replace(/^["']+|["']+$/g, '')
+    if (!cleanPath) {
+      return { safePath: null, error: 'Empty or invalid file path' }
+    }
+
+    const resolvedRoot = workspaceRoot && workspaceRoot.trim() ? path.resolve(workspaceRoot.trim()) : null
+
+    // If path is relative and workspaceRoot is provided, resolve against workspaceRoot
+    let resolvedPath: string
+    if (path.isAbsolute(cleanPath)) {
+      resolvedPath = path.resolve(cleanPath)
+    } else if (resolvedRoot) {
+      resolvedPath = path.resolve(resolvedRoot, cleanPath)
+    } else {
+      resolvedPath = path.resolve(cleanPath)
+    }
 
     if (isSecretFile(resolvedPath)) {
       return { safePath: null, error: `Access forbidden: '${path.basename(resolvedPath)}' contains sensitive credentials/secrets.` }
     }
 
-    if (workspaceRoot && workspaceRoot.trim()) {
-      const resolvedRoot = path.resolve(workspaceRoot)
+    if (resolvedRoot) {
       const relative = path.relative(resolvedRoot, resolvedPath)
-
       const isOutside = relative.startsWith('..') || path.isAbsolute(relative)
       if (isOutside && resolvedPath !== resolvedRoot) {
         return { safePath: null, error: `Directory Traversal Blocked: Path '${filePath}' is outside workspace root '${workspaceRoot}'.` }

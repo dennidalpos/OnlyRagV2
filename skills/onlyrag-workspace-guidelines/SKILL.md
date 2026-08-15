@@ -11,6 +11,7 @@ description: Official architecture guidelines, LanceDB embedded vector database 
 - **IPC Safety Contract**: Context-isolated preload bridge exposing strict typed interface `window.electronAPI` (`IElectronAPI` in `@/types`) in `electron/preload.ts`.
 - **Python Sidecar**: FastAPI process supervised by Electron Main Process with `httpx` connection pooling. Handles document ingestion, PyMuPDF (fitz) text and layout parsing, PyMuPDF PDF compilation export (`/export`), Vision OCR, and LanceDB embedded vector operations.
 - **Local AI Core**: Ollama local REST API (`http://localhost:11434`) for text/code generation, embeddings (`nomic-embed-text`, 768d / `bge-m3`, 1024d), and Vision OCR (`llama3.2-vision`). Zero cloud dependencies or external data leaks.
+- **Single Source of Truth**: All architectural and operational specifications reside in `/docs/` (`docs/README.md`, `docs/architecture.md`, `docs/modules.md`, `docs/api.md`, `docs/setup-and-env.md`).
 
 ## 2. LanceDB Embedded Vector Database Standards
 

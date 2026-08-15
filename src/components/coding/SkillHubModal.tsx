@@ -27,6 +27,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
   const [sources, setSources] = useState<SkillHubSource[]>([])
   const [selectedSourceId, setSelectedSourceId] = useState<string>('official-core')
   const [isLoading, setIsLoading] = useState(false)
+  const [installingSkillId, setInstallingSkillId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Sub-modal states
@@ -118,16 +119,27 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
   }
 
   const handleInstallFromHub = async (hubSkillId: string) => {
-    setIsLoading(true)
+    setInstallingSkillId(hubSkillId)
     setActionMessage(null)
-    const res = await apiService.installSkillFromHub(hubSkillId, workspacePath || undefined, selectedSourceId)
-    if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${hubSkillId}' installed!` })
-      await loadSourcesAndSkills(selectedSourceId)
-    } else {
-      setActionMessage({ type: 'error', text: res.error || t('common.error') })
+    try {
+      const res = await apiService.installSkillFromHub(hubSkillId, workspacePath || undefined, selectedSourceId)
+      if (res.success) {
+        setActionMessage({ type: 'success', text: `Skill '${hubSkillId}' installed!` })
+        // Mark as installed in local hubSkills state immediately
+        setHubSkills((prev) =>
+          prev.map((s) => (s.id === hubSkillId ? { ...s, isInstalled: true } : s))
+        )
+        // Refresh installed skills in background without triggering full-page loading or scroll reset
+        const installed = await apiService.listInstalledSkills(workspacePath || undefined)
+        setInstalledSkills(installed)
+      } else {
+        setActionMessage({ type: 'error', text: res.error || t('common.error') })
+      }
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err?.message || t('common.error') })
+    } finally {
+      setInstallingSkillId(null)
     }
-    setIsLoading(false)
   }
 
   const handleInstallFromUrl = async (url: string, customName?: string) => {
@@ -246,11 +258,15 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/30">
+        <div className="flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/30" role="tablist" aria-label={t('skills.hubTitle')}>
           <div className="flex gap-4">
             <button
+              role="tab"
+              aria-selected={activeTab === 'installed'}
+              id="skill-tab-installed"
+              aria-controls="skill-panel-installed"
               onClick={() => handleTabChange('installed')}
-              className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+              className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
                 activeTab === 'installed'
                   ? 'border-cyan-500 text-cyan-400'
                   : 'border-transparent text-slate-400 hover:text-slate-300'
@@ -259,8 +275,12 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               <CheckCircle className="w-3.5 h-3.5" /> {t('skills.installedTab')} ({installedSkills.length})
             </button>
             <button
+              role="tab"
+              aria-selected={activeTab === 'hub'}
+              id="skill-tab-hub"
+              aria-controls="skill-panel-hub"
               onClick={() => handleTabChange('hub')}
-              className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+              className={`py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 focus-ring ${
                 activeTab === 'hub'
                   ? 'border-cyan-500 text-cyan-400'
                   : 'border-transparent text-slate-400 hover:text-slate-300'
@@ -287,23 +307,25 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {activeTab === 'installed' ? (
-            <InstalledSkillsList
-              skills={installedSkills}
-              onToggleActive={handleToggleActive}
-              onEditSkill={(skill) => {
-                setEditingSkill(skill)
-                setIsEditorOpen(true)
-              }}
-              onResetSkill={handleResetSkill}
-              onDeleteSkill={handleDeleteSkill}
-              onOpenCreateModal={() => {
-                setEditingSkill(null)
-                setIsEditorOpen(true)
-              }}
-              onSwitchToHub={() => handleTabChange('hub')}
-            />
+            <div id="skill-panel-installed" role="tabpanel" aria-labelledby="skill-tab-installed">
+              <InstalledSkillsList
+                skills={installedSkills}
+                onToggleActive={handleToggleActive}
+                onEditSkill={(skill) => {
+                  setEditingSkill(skill)
+                  setIsEditorOpen(true)
+                }}
+                onResetSkill={handleResetSkill}
+                onDeleteSkill={handleDeleteSkill}
+                onOpenCreateModal={() => {
+                  setEditingSkill(null)
+                  setIsEditorOpen(true)
+                }}
+                onSwitchToHub={() => handleTabChange('hub')}
+              />
+            </div>
           ) : (
-            <div className="space-y-6">
+            <div id="skill-panel-hub" role="tabpanel" aria-labelledby="skill-tab-hub" className="space-y-6">
               <SkillHubSourceSelector
                 sources={sources}
                 selectedSourceId={selectedSourceId}
@@ -318,6 +340,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               <MarketplaceSkillsList
                 hubSkills={hubSkills}
                 isLoading={isLoading}
+                installingSkillId={installingSkillId}
                 onInstallSkill={handleInstallFromHub}
                 onInstallFromUrl={handleInstallFromUrl}
               />

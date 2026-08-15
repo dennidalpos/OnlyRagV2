@@ -6,6 +6,7 @@ const api: IElectronAPI = {
   getLogs: () => ipcRenderer.invoke('diagnostics:get-logs'),
   clearLogs: () => ipcRenderer.invoke('diagnostics:clear-logs'),
   getLogFilePath: () => ipcRenderer.invoke('diagnostics:get-log-filepath'),
+  openLogsFolder: () => ipcRenderer.invoke('diagnostics:open-logs-folder'),
   logTelemetry: (level, category, message) => ipcRenderer.invoke('diagnostics:log-telemetry', level, category, message),
   pullOllamaModel: (modelName: string) => ipcRenderer.invoke('ollama:pull-model', modelName),
   cancelPullOllamaModel: () => ipcRenderer.invoke('ollama:cancel-pull'),

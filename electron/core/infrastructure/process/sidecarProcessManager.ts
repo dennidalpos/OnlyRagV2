@@ -220,11 +220,23 @@ export class SidecarProcessManager {
     }
 
     sidecarProcess.stdout?.on('data', (data) => {
-      logger.log('INFO', 'SidecarProcess', data.toString().trim())
+      const msg = data.toString().trim()
+      if (
+        msg.includes('GET /health HTTP/1.1" 200') ||
+        msg.includes('GET /documents HTTP/1.1" 200') ||
+        msg.includes('GET /docs HTTP/1.1" 200')
+      ) {
+        return // Suppress redundant periodic polling stdout access logs
+      }
+      logger.log('INFO', 'SidecarProcess', msg)
     })
 
     sidecarProcess.stderr?.on('data', (data) => {
-      logger.log('WARN', 'SidecarProcess', data.toString().trim())
+      const msg = data.toString().trim()
+      if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200')) {
+        return
+      }
+      logger.log('WARN', 'SidecarProcess', msg)
     })
 
     sidecarProcess.on('close', (code) => {

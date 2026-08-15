@@ -42,25 +42,36 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
   const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
+  const dragCounterRef = useRef<number>(0)
   const [copiedMarkdown, setCopiedMarkdown] = useState(false)
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current += 1
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDraggingOver(true)
+    }
+  }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!isDraggingOver) setIsDraggingOver(true)
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // Only reset if leaving the outer container
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return
-    setIsDraggingOver(false)
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1)
+    if (dragCounterRef.current === 0) {
+      setIsDraggingOver(false)
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    dragCounterRef.current = 0
     setIsDraggingOver(false)
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0]
@@ -155,6 +166,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
 
   return (
     <div
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -162,13 +174,13 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
     >
       {/* Drag & Drop Visual Overlay */}
       {isDraggingOver && (
-        <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm border-2 border-dashed border-cyan-400 flex flex-col items-center justify-center p-8 transition-all animate-in fade-in">
+        <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm border-2 border-dashed border-cyan-400 flex flex-col items-center justify-center p-8 transition-all animate-in fade-in pointer-events-none">
           <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-400 mb-4 shadow-xl shadow-cyan-950/50">
             <Upload className="w-8 h-8 animate-bounce" />
           </div>
-          <div className="text-lg font-bold text-slate-100">Rilascia il file qui per caricarlo</div>
+          <div className="text-lg font-bold text-slate-100">{t('ingestion.dropzoneRelease')}</div>
           <p className="text-xs text-slate-400 mt-1 max-w-sm text-center">
-            Supporta PDF, DOCX, TXT, MD, CSV, JSON e immagini (PNG, JPG, WebP) con OCR automatico PyMuPDF e Vision LLM.
+            {t('ingestion.dropzoneSupportedFormats')}
           </p>
         </div>
       )}
@@ -277,10 +289,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
 
             <button
               onClick={ing.handleCancelIngestion}
-              aria-label="Annulla operazione"
-              className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/50 text-rose-300 text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0"
+              aria-label={t('ingestion.cancelOperation')}
+              className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/50 text-rose-300 text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 focus-ring active:scale-95"
             >
-              <AlertTriangle className="w-3 h-3" /> Annulla
+              <AlertTriangle className="w-3 h-3" /> {t('common.cancel')}
             </button>
           </div>
 
@@ -347,7 +359,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         <div className="mx-4 mt-3 p-3 bg-rose-950/50 border border-rose-800/60 rounded-xl flex items-start gap-2.5 shrink-0" role="alert">
           <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <div className="text-xs font-semibold text-rose-300">Errore Ingestione</div>
+            <div className="text-xs font-semibold text-rose-300">{t('ingestion.ingestionError')}</div>
             <div className="text-[11px] text-rose-400/80 mt-0.5 font-mono">{ing.uploadError}</div>
           </div>
         </div>
@@ -359,15 +371,15 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         <div className="w-80 border-r border-slate-800 bg-slate-900/40 p-4 space-y-4 flex flex-col shrink-0">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-              <span>Documenti ({ing.documents.length})</span>
+              <span>{t('ingestion.indexedDocuments')} ({ing.documents.length})</span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/70 border border-cyan-800/80 text-cyan-300 font-normal">
                 LanceDB
               </span>
             </div>
             <button
               onClick={ing.fetchDocuments}
-              aria-label="Aggiorna lista documenti"
-              title="Aggiorna lista"
+              aria-label={t('common.refresh')}
+              title={t('common.refresh')}
               className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg focus-ring active:scale-95"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -392,11 +404,11 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
             <div className="flex items-center gap-3 text-slate-200 font-semibold truncate max-w-sm">
               <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
               <span className="truncate" title={ing.selectedDoc?.filename || ''}>
-                {ing.selectedDoc ? ing.selectedDoc.filename : 'Nessun documento selezionato'}
+                {ing.selectedDoc ? ing.selectedDoc.filename : t('ingestion.noDocumentSelected')}
               </span>
               {ing.selectedDoc && (
                 <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-cyan-300 font-mono">
-                  {totalPages} pag.
+                  {totalPages} {t('ingestion.pages').toLowerCase()}
                 </span>
               )}
               {ing.selectedDoc && (
@@ -406,10 +418,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                       ? 'bg-amber-950/80 border-amber-800/80 text-amber-300 animate-pulse'
                       : 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400'
                   }`}
-                  title={ing.isDirty ? 'Modifiche non salvate (Ctrl+S per salvare)' : 'Sincronizzato con LanceDB'}
+                  title={ing.isDirty ? `${t('ingestion.unsavedChanges')} (Ctrl+S)` : t('ingestion.synchronized')}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${ing.isDirty ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                  <span>{ing.isDirty ? 'Modificato' : 'Sincronizzato'}</span>
+                  <span>{ing.isDirty ? t('ingestion.unsavedChanges') : t('ingestion.synchronized')}</span>
                 </span>
               )}
             </div>
@@ -420,8 +432,8 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <button
                   onClick={handlePrevPage}
                   disabled={ing.currentPage <= 1 || ing.viewMode === 'all'}
-                  aria-label="Pagina precedente"
-                  title="Pagina precedente"
+                  aria-label={t('common.back')}
+                  title={t('common.back')}
                   className="p-1.5 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors focus-ring"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -429,11 +441,11 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
 
                 {ing.viewMode === 'page' ? (
                   <div className="flex items-center gap-1.5 px-2 font-mono text-xs text-slate-200">
-                    <span>Pag.</span>
+                    <span>{t('ingestion.singlePage')}</span>
                     <select
                       value={activePageNum}
                       onChange={(e) => ing.scrollToPage(Number(e.target.value))}
-                      aria-label="Seleziona pagina"
+                      aria-label={t('ingestion.pageNavigation')}
                       className="bg-slate-900 border border-slate-700 rounded-md px-2 py-0.5 text-cyan-300 font-bold outline-none text-xs focus-ring font-mono"
                     >
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
@@ -445,14 +457,14 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     <span>/ {totalPages}</span>
                   </div>
                 ) : (
-                  <span className="px-2 font-mono text-[11px] text-cyan-300 font-semibold">Tutte ({totalPages})</span>
+                  <span className="px-2 font-mono text-[11px] text-cyan-300 font-semibold">{t('ingestion.allPages')} ({totalPages})</span>
                 )}
 
                 <button
                   onClick={handleNextPage}
                   disabled={ing.currentPage >= totalPages || ing.viewMode === 'all'}
-                  aria-label="Pagina successiva"
-                  title="Pagina successiva"
+                  aria-label={t('common.next')}
+                  title={t('common.next')}
                   className="p-1.5 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors focus-ring"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -461,7 +473,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <div className="w-[1px] h-4 bg-slate-800 mx-1" />
 
                 {/* Single Page vs Continuous Mode Toggle */}
-                <div className="flex items-center gap-1" role="group" aria-label="Modalità visualizzazione">
+                <div className="flex items-center gap-1" role="group" aria-label={t('ingestion.ocrMode')}>
                   <button
                     onClick={() => ing.setViewMode('page')}
                     aria-pressed={ing.viewMode === 'page'}
@@ -471,7 +483,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    Pagina
+                    {t('ingestion.singlePage')}
                   </button>
                   <button
                     onClick={() => ing.setViewMode('all')}
@@ -482,7 +494,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    Tutte
+                    {t('ingestion.allPages')}
                   </button>
                 </div>
               </div>
@@ -495,8 +507,8 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <button
                   onClick={ing.handleSaveDocument}
                   disabled={!ing.isDirty || ing.isSaving}
-                  aria-label="Salva modifiche e ri-indicizza"
-                  title="Salva modifiche e ri-indicizza vettori in LanceDB (Ctrl+S)"
+                  aria-label={t('ingestion.saveChanges')}
+                  title={`${t('ingestion.saveChanges')} (Ctrl+S)`}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all focus-ring active:scale-95 shadow-md ${
                     ing.isDirty
                       ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-950/40 cursor-pointer'
@@ -506,12 +518,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                   {ing.isSaving ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Salvataggio...</span>
+                      <span>{t('ingestion.saving')}</span>
                     </>
                   ) : (
                     <>
                       <Save className="w-3.5 h-3.5" />
-                      <span>Salva Modifiche</span>
+                      <span>{t('ingestion.saveChanges')}</span>
                     </>
                   )}
                 </button>
@@ -520,24 +532,24 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 p-0.5 text-slate-300">
                   <button
                     onClick={handleZoomOut}
-                    aria-label="Riduci zoom"
-                    title="Riduci zoom"
+                    aria-label={t('translation.zoomOut')}
+                    title={t('translation.zoomOut')}
                     className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-slate-200 focus-ring"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={handleZoomReset}
-                    aria-label="Ripristina zoom 100%"
-                    title="Ripristina 100%"
+                    aria-label={t('translation.resetZoom')}
+                    title={t('translation.resetZoom')}
                     className="px-2 py-0.5 text-[10px] font-mono font-bold text-cyan-300 hover:text-cyan-200"
                   >
                     {ing.zoomLevel}%
                   </button>
                   <button
                     onClick={handleZoomIn}
-                    aria-label="Aumenta zoom"
-                    title="Aumenta zoom"
+                    aria-label={t('translation.zoomIn')}
+                    title={t('translation.zoomIn')}
                     className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-slate-200 focus-ring"
                   >
                     <ZoomIn className="w-3.5 h-3.5" />
@@ -547,14 +559,14 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <button
                   onClick={() => ing.setSyncScroll(!ing.syncScroll)}
                   aria-pressed={ing.syncScroll}
-                  aria-label="Sincronizza scorrimento"
-                  title="Sincronizza scorrimento"
+                  aria-label={t('translation.syncScroll')}
+                  title={t('translation.syncScroll')}
                   className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
                     ing.syncScroll ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   <Link className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Sync</span>
+                  <span className="hidden sm:inline">{t('ingestion.sync')}</span>
                 </button>
 
                 <button
@@ -562,12 +574,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     if (ing.markdownContent) {
                       await navigator.clipboard.writeText(ing.markdownContent)
                       setCopiedMarkdown(true)
-                      toast.success('Testo Markdown copiato negli appunti!')
+                      toast.success(t('ingestion.markdownCopied'))
                       setTimeout(() => setCopiedMarkdown(false), 2000)
                     }
                   }}
-                  aria-label="Copia testo Markdown"
-                  title="Copia l'intero testo Markdown negli appunti"
+                  aria-label={t('ingestion.copyMarkdown')}
+                  title={t('ingestion.copyMarkdown')}
                   className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all focus-ring active:scale-95"
                 >
                   {copiedMarkdown ? (
@@ -575,17 +587,17 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                   ) : (
                     <Copy className="w-3.5 h-3.5 text-cyan-400" />
                   )}
-                  <span className="hidden sm:inline">Copia MD</span>
+                  <span className="hidden sm:inline">{t('ingestion.copyMarkdown')}</span>
                 </button>
 
                 <div className="flex items-center gap-1 bg-slate-950 rounded-xl border border-slate-800 p-0.5 shadow-sm">
                   <button
                     onClick={() => {
                       ing.handleExportMarkdown('pdf')
-                      toast.info('Generazione export PDF in corso...')
+                      toast.info(t('translation.exportPdf'))
                     }}
-                    aria-label="Esporta PDF"
-                    title="Esporta in formato PDF"
+                    aria-label={t('translation.exportPdf')}
+                    title={t('translation.exportPdf')}
                     className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 hover:text-cyan-300 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all focus-ring active:scale-95"
                   >
                     <Download className="w-3.5 h-3.5 text-cyan-400" />
@@ -594,10 +606,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                   <button
                     onClick={() => {
                       ing.handleExportMarkdown('md')
-                      toast.info('Esportazione Markdown (.md) avviata...')
+                      toast.info(t('translation.exportMd'))
                     }}
-                    aria-label="Esporta Markdown"
-                    title="Esporta in formato Markdown"
+                    aria-label={t('translation.exportMd')}
+                    title={t('translation.exportMd')}
                     className="px-2 py-1.5 bg-slate-900 hover:bg-slate-800 hover:text-cyan-300 text-slate-300 text-xs font-semibold rounded-lg flex items-center gap-1 transition-all focus-ring active:scale-95 font-mono"
                   >
                     MD
@@ -609,13 +621,13 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
 
           {/* Main Paginated Split Layout */}
           {!ing.selectedDoc ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-3 text-slate-500">
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-3 text-slate-400">
               <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-500/40">
                 <Layers className="w-7 h-7" />
               </div>
-              <div className="font-semibold text-slate-300 text-sm">Nessun Documento Selezionato</div>
-              <p className="text-xs max-w-md text-slate-500 leading-relaxed">
-                Seleziona un documento a sinistra o carica un file per visualizzare l'anteprima sorgente e modificare il Markdown.
+              <div className="font-semibold text-slate-200 text-sm">{t('ingestion.noDocumentSelected')}</div>
+              <p className="text-xs max-w-md text-slate-400 leading-relaxed">
+                {t('ingestion.noDocSelectedPrompt')}
               </p>
             </div>
           ) : (
@@ -625,10 +637,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-cyan-300">
                     <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Preview Originale (Sorgente)</span>
+                    <span>{t('ingestion.sourcePreview')}</span>
                   </div>
                   <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                    {ing.viewMode === 'page' ? `Pagina ${activePageNum} / ${totalPages}` : `${totalPages} Pagine`}
+                    {ing.viewMode === 'page' ? `${t('ingestion.singlePage')} ${activePageNum} / ${totalPages}` : `${totalPages} ${t('ingestion.pages')}`}
                   </span>
                 </div>
 
@@ -665,16 +677,16 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-cyan-300">
                     <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Editor Markdown (Modificabile)</span>
+                    <span>{t('ingestion.markdownEditor')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {ing.isDirty && (
                       <span className="text-[10px] text-amber-400 font-mono">
-                        Non salvato
+                        {t('ingestion.unsavedChanges')}
                       </span>
                     )}
                     <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                      {ing.markdownContent.length} caratteri
+                      {ing.markdownContent.length} chars
                     </span>
                   </div>
                 </div>

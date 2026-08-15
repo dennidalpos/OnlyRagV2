@@ -189,7 +189,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             {t('hardwareWizard.localInstalledBadge')}:
           </span>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="space-y-1.5">
             {extraLocalModels.map((dm) => {
               const currentVal =
                 subTab === 'fast'
@@ -199,22 +199,20 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                   : selectedDeep
               const isSelected = currentVal === dm
               return (
-                <button
+                <ModelOptionCard
                   key={dm}
-                  type="button"
-                  onClick={() => {
+                  modelName={dm}
+                  displayName={dm}
+                  description={t('hardwareWizard.customLocalModel')}
+                  isInstalled={true}
+                  isSelected={isSelected}
+                  onSelect={() => {
                     if (subTab === 'fast') onSelectFast(dm)
                     else if (subTab === 'standard') onSelectStandard(dm)
                     else onSelectDeep(dm)
                   }}
-                  className={`p-2 rounded-xl border text-xs text-left font-mono truncate transition-all ${
-                    isSelected
-                      ? 'bg-cyan-950/60 border-cyan-400 text-cyan-300 font-bold shadow-sm'
-                      : 'bg-slate-900/40 border-slate-800 text-slate-300 hover:border-slate-700'
-                  }`}
-                >
-                  ✓ {dm}
-                </button>
+                  accentColor={subTab === 'fast' ? 'emerald' : subTab === 'standard' ? 'cyan' : 'purple'}
+                />
               )
             })}
           </div>

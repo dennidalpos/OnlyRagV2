@@ -1,9 +1,12 @@
+import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { validatePathSafety, isIgnoredPath } from '../domain/agent/contextFilter'
 
 describe('Agent Engine Synthetic End-to-End Benchmark Suite', () => {
+  const repoRoot = process.cwd()
+
   it('Scenario A (Full Cycle): Read File -> Bug Detection -> Chunk Replace -> Verification', () => {
     // 1. Step 1 LLM response proposes reading file
     const llmStep1 = `\`\`\`json
@@ -20,8 +23,8 @@ describe('Agent Engine Synthetic End-to-End Benchmark Suite', () => {
     expect(step1Parsed?.tool).toBe('read_file')
     expect(step1Parsed?.parameters.filePath).toBe('src/utils/math.ts')
 
-    // 2. Validate path safety
-    const pathCheck = validatePathSafety(step1Parsed!.parameters.filePath, 'D:/GITHUB/OnlyRagV2')
+    // 2. Validate path safety against repository root
+    const pathCheck = validatePathSafety(step1Parsed!.parameters.filePath, repoRoot)
     expect(pathCheck.safePath).not.toBeNull()
 
     // 3. Step 2 LLM response proposes replace_file_content fix
@@ -80,14 +83,14 @@ describe('Agent Engine Synthetic End-to-End Benchmark Suite', () => {
     expect(secCheck.blockedReason).toContain('Destructive command pattern detected')
 
     // 2. Traversal Read Attempt
-    const traversalPath = 'D:/GITHUB/OnlyRagV2/../../Windows/System32/config/SAM'
-    const pathCheck = validatePathSafety(traversalPath, 'D:/GITHUB/OnlyRagV2')
+    const traversalPath = path.resolve(repoRoot, '../../external-secret-folder/secret.txt')
+    const pathCheck = validatePathSafety(traversalPath, repoRoot)
     expect(pathCheck.safePath).toBeNull()
     expect(pathCheck.error).toContain('Directory Traversal Blocked')
 
     // 3. Secret File Read Attempt
-    const secretPath = 'D:/GITHUB/OnlyRagV2/.env.production'
-    const secretCheck = validatePathSafety(secretPath, 'D:/GITHUB/OnlyRagV2')
+    const secretPath = path.resolve(repoRoot, '.env.production')
+    const secretCheck = validatePathSafety(secretPath, repoRoot)
     expect(secretCheck.safePath).toBeNull()
     expect(secretCheck.error).toContain('contains sensitive credentials/secrets')
   })

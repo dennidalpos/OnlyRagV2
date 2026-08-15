@@ -36,7 +36,9 @@ export const AppLayout: React.FC = () => {
       if (savedTab && ['ingestion', 'chat', 'translation', 'coding', 'settings'].includes(savedTab)) {
         return savedTab
       }
-    } catch {}
+    } catch (err: any) {
+      logger.warn('AppLayout', `Failed reading active tab from localStorage: ${err?.message}`)
+    }
     return 'ingestion'
   })
   const [isDiagnosticsDrawerOpen, setIsDiagnosticsDrawerOpen] = useState(false)
@@ -92,7 +94,9 @@ export const AppLayout: React.FC = () => {
     setActiveTab(tab)
     try {
       localStorage.setItem('onlyrag_active_tab', tab)
-    } catch {}
+    } catch (err: any) {
+      logger.warn('AppLayout', `Failed saving active tab to localStorage: ${err?.message}`)
+    }
     notifyTabChanged(tab)
   }
 

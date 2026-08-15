@@ -58,88 +58,108 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
         <button
           type="button"
           onClick={() => setSubTab('chat')}
-          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 transition-all cursor-pointer focus-ring min-w-0 ${
             subTab === 'chat'
               ? 'bg-cyan-950/90 text-cyan-300 border border-cyan-500/60 shadow-sm shadow-cyan-950/40 ring-1 ring-cyan-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
           title="1. Modello RAG Chat & Q&A Documentale"
         >
-          <span className="flex items-center gap-1.5 truncate">
+          <span className="flex items-center gap-1.5 shrink-0">
             <MessageSquare className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
             1. Chat RAG
           </span>
-          {selectedChat && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-700/50 shrink-0 flex items-center gap-0.5">
-              <CheckCircle2 className="w-2.5 h-2.5 text-cyan-400 shrink-0" /> {selectedChat.split(':')[0]}
+          {selectedChat ? (
+            <span
+              title={selectedChat}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-700/50 max-w-full sm:max-w-[110px] truncate flex items-center gap-0.5"
+            >
+              <CheckCircle2 className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+              <span className="truncate">{selectedChat}</span>
             </span>
+          ) : (
+            <span className="text-[9px] text-slate-500 font-mono">Opzionale</span>
           )}
         </button>
 
         <button
           type="button"
           onClick={() => setSubTab('translation')}
-          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 transition-all cursor-pointer focus-ring min-w-0 ${
             subTab === 'translation'
               ? 'bg-sky-950/90 text-sky-300 border border-sky-500/60 shadow-sm shadow-sky-950/40 ring-1 ring-sky-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
           title="2. Modello Traduzione Documenti"
         >
-          <span className="flex items-center gap-1.5 truncate">
+          <span className="flex items-center gap-1.5 shrink-0">
             <Languages className="w-3.5 h-3.5 shrink-0 text-sky-400" />
             2. Traduzione
           </span>
-          {selectedTranslation && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/50 shrink-0 flex items-center gap-0.5">
-              <CheckCircle2 className="w-2.5 h-2.5 text-sky-400 shrink-0" /> {selectedTranslation.split(':')[0]}
+          {selectedTranslation ? (
+            <span
+              title={selectedTranslation}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/50 max-w-full sm:max-w-[110px] truncate flex items-center gap-0.5"
+            >
+              <CheckCircle2 className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+              <span className="truncate">{selectedTranslation}</span>
             </span>
+          ) : (
+            <span className="text-[9px] text-slate-500 font-mono">Opzionale</span>
           )}
         </button>
 
         <button
           type="button"
           onClick={() => setSubTab('medical')}
-          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 transition-all cursor-pointer focus-ring min-w-0 ${
             subTab === 'medical'
               ? 'bg-rose-950/90 text-rose-300 border border-rose-500/60 shadow-sm shadow-rose-950/40 ring-1 ring-rose-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
           title="3. Modello Medico & Sanitario"
         >
-          <span className="flex items-center gap-1.5 truncate">
+          <span className="flex items-center gap-1.5 shrink-0">
             <Activity className="w-3.5 h-3.5 shrink-0 text-rose-400" />
             3. Medico
           </span>
           {selectedMedical ? (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-900/60 text-rose-200 border border-rose-700/50 shrink-0 flex items-center gap-0.5">
-              <CheckCircle2 className="w-2.5 h-2.5 text-rose-400 shrink-0" /> {selectedMedical.split(':')[0]}
+            <span
+              title={selectedMedical}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-900/60 text-rose-200 border border-rose-700/50 max-w-full sm:max-w-[110px] truncate flex items-center gap-0.5"
+            >
+              <CheckCircle2 className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+              <span className="truncate">{selectedMedical}</span>
             </span>
           ) : (
-            <span className="text-[9px] text-slate-500 font-mono shrink-0">Opzionale</span>
+            <span className="text-[9px] text-slate-500 font-mono">Opzionale</span>
           )}
         </button>
 
         <button
           type="button"
           onClick={() => setSubTab('legal')}
-          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 px-2.5 rounded-lg text-xs font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 transition-all cursor-pointer focus-ring min-w-0 ${
             subTab === 'legal'
               ? 'bg-amber-950/90 text-amber-300 border border-amber-500/60 shadow-sm shadow-amber-950/40 ring-1 ring-amber-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
           title="4. Modello Legale & Normativo"
         >
-          <span className="flex items-center gap-1.5 truncate">
+          <span className="flex items-center gap-1.5 shrink-0">
             <Scale className="w-3.5 h-3.5 shrink-0 text-amber-400" />
             4. Legale
           </span>
           {selectedLegal ? (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-200 border border-amber-700/50 shrink-0 flex items-center gap-0.5">
-              <CheckCircle2 className="w-2.5 h-2.5 text-amber-400 shrink-0" /> {selectedLegal.split(':')[0]}
+            <span
+              title={selectedLegal}
+              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-200 border border-amber-700/50 max-w-full sm:max-w-[110px] truncate flex items-center gap-0.5"
+            >
+              <CheckCircle2 className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+              <span className="truncate">{selectedLegal}</span>
             </span>
           ) : (
-            <span className="text-[9px] text-slate-500 font-mono shrink-0">Opzionale</span>
+            <span className="text-[9px] text-slate-500 font-mono">Opzionale</span>
           )}
         </button>
       </div>
@@ -183,8 +203,6 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                   modelName={dm}
                   displayName={dm}
                   description={t('hardwareWizard.customLocalModel')}
-                  sizeBytesApprox="Local"
-                  family={dm.split(':')[0].split('-')[0]}
                   isInstalled={true}
                   isSelected={selectedChat === dm}
                   onSelect={() => onSelectChat(dm)}
@@ -234,8 +252,6 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                   modelName={dm}
                   displayName={dm}
                   description={t('hardwareWizard.customLocalModel')}
-                  sizeBytesApprox="Local"
-                  family={dm.split(':')[0].split('-')[0]}
                   isInstalled={true}
                   isSelected={selectedTranslation === dm}
                   onSelect={() => onSelectTranslation(dm)}
@@ -304,8 +320,6 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                   modelName={dm}
                   displayName={dm}
                   description={t('hardwareWizard.customLocalModel')}
-                  sizeBytesApprox="Local"
-                  family={dm.split(':')[0].split('-')[0]}
                   isInstalled={true}
                   isSelected={selectedMedical === dm}
                   onSelect={() => onSelectMedical?.(dm)}
@@ -374,8 +388,6 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                   modelName={dm}
                   displayName={dm}
                   description={t('hardwareWizard.customLocalModel')}
-                  sizeBytesApprox="Local"
-                  family={dm.split(':')[0].split('-')[0]}
                   isInstalled={true}
                   isSelected={selectedLegal === dm}
                   onSelect={() => onSelectLegal?.(dm)}

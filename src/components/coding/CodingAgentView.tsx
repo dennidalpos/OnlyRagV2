@@ -46,22 +46,29 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [isDiffMode, setIsDiffMode] = useState<boolean>(false)
   const [copiedPath, setCopiedPath] = useState<boolean>(false)
   const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
+  const [isResizing, setIsResizing] = useState<boolean>(false)
+
   const isDraggingRef = useRef(false)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(460)
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     isDraggingRef.current = true
+    setIsResizing(true)
+    startXRef.current = e.clientX
+    startWidthRef.current = leftPanelWidth
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingRef.current) return
-      const newWidth = moveEvent.clientX - (showWorkspaceSidebar ? 240 : 64)
-      if (newWidth >= 320 && newWidth <= 750) {
-        setLeftPanelWidth(newWidth)
-      }
+      const deltaX = moveEvent.clientX - startXRef.current
+      const newWidth = Math.min(850, Math.max(300, startWidthRef.current + deltaX))
+      setLeftPanelWidth(newWidth)
     }
 
     const handleMouseUp = () => {
       isDraggingRef.current = false
+      setIsResizing(false)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
@@ -161,13 +168,13 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           </div>
         )}
 
-        {/* Left Column: Antigravity Interactive Timeline & Prompt Composer */}
-        <div style={{ width: `${leftPanelWidth}px` }} className="flex flex-col border-r border-slate-800/80 bg-[#0b0f17] shrink-0 overflow-hidden">
+        {/* Left Column: Interactive Timeline & Prompt Composer */}
+        <div style={{ width: `${leftPanelWidth}px` }} className="flex flex-col border-r border-slate-800 bg-slate-950 shrink-0 overflow-hidden">
           {/* Sub-toolbar: Workspace trigger & conversation status */}
-          <div className="px-3 py-2 border-b border-slate-800/80 bg-[#0d121d]/80 flex items-center justify-between text-xs shrink-0">
+          <div className="px-3 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs shrink-0">
             <button
               onClick={() => setShowWorkspaceSidebar(!showWorkspaceSidebar)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors focus-ring ${
                 showWorkspaceSidebar
                   ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80'
                   : 'bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200'
@@ -177,7 +184,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               <span>{t('coding.filesTab')} ({c.files.length})</span>
             </button>
 
-            <span className="text-[11px] font-mono text-slate-500">
+            <span className="text-[11px] font-mono text-slate-400">
               {t('coding.stepsCount', { count: c.actionLogs.length })}
             </span>
           </div>
@@ -209,6 +216,16 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
               onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
               onResetSession={c.handleNewSession}
+              onCompactContext={c.compactContext}
+              workspacePath={c.workspacePath}
+              workspaceSessions={c.workspaceSessions}
+              activeSessionId={c.activeSessionId}
+              activeSession={c.activeSession}
+              onCreateSession={c.handleCreateSession}
+              onSwitchSession={c.handleSwitchSession}
+              onDeleteSession={c.handleDeleteSession}
+              onRenameSession={c.handleRenameSession}
+              onSelectWorkspaceFolder={c.handleSelectWorkspaceFolder}
             />
           </div>
         </div>
@@ -219,29 +236,31 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           tabIndex={0}
           aria-orientation="vertical"
           aria-valuenow={leftPanelWidth}
-          aria-valuemin={320}
-          aria-valuemax={750}
+          aria-valuemin={300}
+          aria-valuemax={850}
           aria-label={t('coding.resizePanels')}
           onMouseDown={handleMouseDown}
           onKeyDown={(e) => {
             if (e.key === 'ArrowLeft') {
               e.preventDefault()
-              setLeftPanelWidth((prev) => Math.max(320, prev - 20))
+              setLeftPanelWidth((prev) => Math.max(300, prev - 20))
             } else if (e.key === 'ArrowRight') {
               e.preventDefault()
-              setLeftPanelWidth((prev) => Math.min(750, prev + 20))
+              setLeftPanelWidth((prev) => Math.min(850, prev + 20))
             }
           }}
-          className="w-1 hover:w-1.5 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring"
+          className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
+            isResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+          }`}
           title={t('coding.resizePanels')}
         >
-          <GripVertical className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`} />
         </div>
 
         {/* Right Column: Multi-tab Monaco Code & Diff Editor */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-[#0e131f] min-w-[350px]">
+        <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
           {/* Top Editor Tab Bar */}
-          <div className="bg-[#0b0f17] border-b border-slate-800/80 px-2 pt-1 flex items-center justify-between text-xs shrink-0 overflow-x-auto select-none">
+          <div className="bg-slate-900/90 border-b border-slate-800 px-2 pt-1 flex items-center justify-between text-xs shrink-0 overflow-x-auto select-none">
             <div className="flex items-center gap-1 overflow-x-auto py-0.5">
               {/* File Tabs */}
               {c.openFiles.map((file) => {
@@ -251,10 +270,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                   <div
                     key={file.path}
                     onClick={() => c.handleOpenFile(file)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg font-mono text-xs cursor-pointer transition-all border-x border-slate-800/80 ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg font-mono text-xs cursor-pointer transition-all border-x border-slate-800 ${
                       isActive
-                        ? 'bg-[#161c28] border-t-2 border-t-cyan-400 text-slate-100 font-bold shadow-md'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-t-2 border-transparent'
+                        ? 'bg-slate-950 border-t-2 border-t-cyan-400 text-slate-100 font-bold shadow-md'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-t-2 border-transparent'
                     }`}
                   >
                     <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
@@ -262,7 +281,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                     {isDirty && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={t('coding.dirtyBadge')} />}
                     <button
                       onClick={(e) => c.handleCloseFile(file, e)}
-                      className="p-0.5 hover:bg-slate-700/80 hover:text-slate-100 text-slate-500 rounded transition-colors"
+                      className="p-0.5 hover:bg-slate-800 hover:text-slate-100 text-slate-400 rounded transition-colors focus-ring"
                       title={t('common.close')}
                     >
                       <X className="w-3 h-3" />
@@ -272,7 +291,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               })}
 
               {c.openFiles.length === 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#161c28] border-t-2 border-t-cyan-400 border-x border-slate-800/80 rounded-t-lg text-slate-400 font-mono text-xs">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-950 border-t-2 border-t-cyan-400 border-x border-slate-800 rounded-t-lg text-slate-400 font-mono text-xs">
                   <FileCode2 className="w-3.5 h-3.5 text-cyan-400" />
                   <span>{t('coding.noFilesOpen')}</span>
                 </div>
@@ -281,10 +300,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               {/* Utility Tabs: Terminal & Git Diff */}
               <button
                 onClick={() => c.setActiveTab('terminal')}
-                className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 ${
+                className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
                   c.activeTab === 'terminal'
-                    ? 'bg-[#161c28] text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
+                    ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
                 }`}
               >
                 <Terminal className="w-3.5 h-3.5" /> {t('coding.terminalTab')}
@@ -295,10 +314,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                   c.setActiveTab('git_diff')
                   c.fetchGitStatusAndDiff()
                 }}
-                className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 ${
+                className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
                   c.activeTab === 'git_diff'
-                    ? 'bg-[#161c28] text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border-transparent'
+                    ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
                 }`}
               >
                 <GitBranch className="w-3.5 h-3.5" /> {t('coding.gitDiffTab')}

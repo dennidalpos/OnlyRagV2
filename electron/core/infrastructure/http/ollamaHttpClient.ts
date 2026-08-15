@@ -230,7 +230,9 @@ export class OllamaHttpClient {
                 const parsed = JSON.parse(buffer)
                 if (parsed.error) parsedError = parsed.error
                 if (parsed.status) lastStatus = parsed.status
-              } catch {}
+              } catch (err: any) {
+                logger.log('DEBUG', 'OllamaClient', `Trailing pull buffer was not complete JSON: ${err?.message}`)
+              }
             }
 
             if (parsedError) {

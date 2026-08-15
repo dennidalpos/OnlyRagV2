@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { isIgnoredPath, isSecretFile, validatePathSafety, matchesIgnorePatterns } from './contextFilter'
 
@@ -32,21 +33,37 @@ describe('contextFilter domain logic & AppSec protection', () => {
   })
 
   it('should prevent Directory Traversal outside workspace root', () => {
-    const root = 'D:/GITHUB/OnlyRagV2'
+    const root = process.cwd()
     
     // Inside workspace -> allowed
-    const valid = validatePathSafety('D:/GITHUB/OnlyRagV2/src/App.tsx', root)
+    const valid = validatePathSafety('src/App.tsx', root)
     expect(valid.safePath).not.toBeNull()
 
+    // Relative path inside workspace -> resolved relative to workspaceRoot and allowed
+    const validRelative = validatePathSafety('src/App.tsx', root)
+    expect(validRelative.safePath).not.toBeNull()
+    expect(validRelative.safePath?.replace(/\\/g, '/')).toContain('/src/App.tsx')
+
+    // Relative path with quotes
+    const testDir = path.resolve(root, 'test_app')
+    const validQuoted = validatePathSafety('"project-dashboard-task/index.html"', testDir)
+    expect(validQuoted.safePath).not.toBeNull()
+    expect(validQuoted.safePath?.replace(/\\/g, '/')).toContain('test_app/project-dashboard-task/index.html')
+
     // Outside workspace -> blocked
-    const traversal = validatePathSafety('D:/GITHUB/other-folder/secret.txt', root)
+    const traversal = validatePathSafety(path.resolve(root, '../other-folder/secret.txt'), root)
     expect(traversal.safePath).toBeNull()
     expect(traversal.error).toContain('Directory Traversal Blocked')
+
+    // Relative traversal escaping workspace -> blocked
+    const relativeEscape = validatePathSafety('../../other-folder/secret.txt', root)
+    expect(relativeEscape.safePath).toBeNull()
+    expect(relativeEscape.error).toContain('Directory Traversal Blocked')
   })
 
   it('should block access to credential files via validatePathSafety', () => {
-    const root = 'D:/GITHUB/OnlyRagV2'
-    const envFile = validatePathSafety('D:/GITHUB/OnlyRagV2/.env', root)
+    const root = process.cwd()
+    const envFile = validatePathSafety(path.resolve(root, '.env'), root)
     expect(envFile.safePath).toBeNull()
     expect(envFile.error).toContain('contains sensitive credentials/secrets')
   })

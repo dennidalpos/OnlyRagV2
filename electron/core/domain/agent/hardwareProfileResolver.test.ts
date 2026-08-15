@@ -10,10 +10,10 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     expect(opts.temperature).toBe(0.1)
   })
 
-  it('should resolve Medium profile with 8192 context and 32k max context chars', () => {
+  it('should resolve Medium profile with 8192 context and 28k max context chars', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Medium')
     expect(opts.num_ctx).toBe(8192)
-    expect(opts.maxContextChars).toBe(32000)
+    expect(opts.maxContextChars).toBe(28000)
     expect(opts.num_thread).toBeUndefined()
   })
 
@@ -41,7 +41,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       systemRamGB: 16,
     })
     expect(opts.num_ctx).toBe(8192)
-    expect(opts.maxContextChars).toBe(32000)
+    expect(opts.maxContextChars).toBe(28000)
   })
 
   it('should dynamically resolve Auto profile to Low when no dedicated GPU is detected', () => {
@@ -62,10 +62,10 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     expect(fastOpts.num_ctx).toBe(4096)
     expect(fastOpts.maxContextChars).toBe(16000)
 
-    // Deep reasoning tier on Medium profile expands context
+    // Deep reasoning tier on Medium profile uses safe 8k context window to prevent OOM
     const deepOpts = HardwareProfileResolver.resolveOllamaOptions('Medium', undefined, 'deep_reasoning')
-    expect(deepOpts.num_ctx).toBe(16384)
-    expect(deepOpts.maxContextChars).toBe(48000)
+    expect(deepOpts.num_ctx).toBe(8192)
+    expect(deepOpts.maxContextChars).toBe(28000)
 
     // Deep reasoning tier on High profile expands up to 32k context
     const deepHighOpts = HardwareProfileResolver.resolveOllamaOptions('High', undefined, 'deep_reasoning')

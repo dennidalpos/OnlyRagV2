@@ -13,8 +13,13 @@ import {
   Check,
   Download,
   Filter,
+  FolderOpen,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import {
+  getRecommendedOllamaEnvVars,
+  OllamaEnvConfig,
+} from '../../services/hardwareRecommendationEngine'
 
 interface DiagnosticsDrawerProps {
   isOpen: boolean
@@ -37,8 +42,12 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isRefreshingLogs, setIsRefreshingLogs] = useState<boolean>(false)
   const [copiedReport, setCopiedReport] = useState<boolean>(false)
+  const [copiedEnvScript, setCopiedEnvScript] = useState<string | null>(null)
+  const [showEnvConfig, setShowEnvConfig] = useState<boolean>(false)
   const [autoScroll, setAutoScroll] = useState<boolean>(false)
   const consoleBottomRef = useRef<HTMLDivElement | null>(null)
+
+  const envConfig: OllamaEnvConfig | null = diagnostics ? getRecommendedOllamaEnvVars(diagnostics) : null
 
   const fetchLogs = async () => {
     setIsRefreshingLogs(true)
@@ -343,6 +352,70 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
           </div>
         )}
 
+        {/* Ollama OS Environment Parameters & Script */}
+        {envConfig && (
+          <div className="border-b border-slate-800 bg-slate-950/70">
+            <div className="px-4 py-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs">
+                <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-slate-200 font-semibold text-xs">Parametri OS Client Ollama ({envConfig.profileTier.toUpperCase()}):</span>
+                <span className="text-slate-400 font-mono text-[11px] hidden sm:inline truncate max-w-xs">
+                  {envConfig.variables.slice(0, 3).map((v) => `${v.name}=${v.value}`).join(' | ')}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowEnvConfig(!showEnvConfig)}
+                  className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-[11px] font-semibold rounded-lg transition-all focus-ring active:scale-95"
+                >
+                  {showEnvConfig ? 'Nascondi' : 'Dettagli OS'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(envConfig.powershellScript)
+                    setCopiedEnvScript('ps')
+                    setTimeout(() => setCopiedEnvScript(null), 2500)
+                  }}
+                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 text-[11px] font-bold rounded-lg transition-all focus-ring flex items-center gap-1 active:scale-95"
+                  title="Copia script PowerShell per impostare le variabili d'ambiente OS utente"
+                >
+                  {copiedEnvScript === 'ps' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedEnvScript === 'ps' ? 'Copiato!' : 'Copia PowerShell'}</span>
+                </button>
+              </div>
+            </div>
+
+            {showEnvConfig && (
+              <div className="p-4 border-t border-slate-800/80 bg-slate-950 space-y-3 max-h-60 overflow-y-auto">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                    ⚡ Variabili d'Ambiente Consigliate per il tuo Hardware
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">
+                    Profilo: {envConfig.profileTier.toUpperCase()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  {envConfig.variables.map((v) => (
+                    <div key={v.name} className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between font-mono">
+                        <strong className="text-cyan-300 text-[11px]">{v.name}</strong>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-950 text-amber-300 font-bold border border-slate-800 text-[10px]">
+                          {v.value}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 text-[10px] leading-tight">{v.description}</p>
+                      <p className="text-slate-500 text-[9px] italic">{v.rationale}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Toolbar & Filters */}
         <div className="p-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/40">
           <input
@@ -404,6 +477,17 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all focus-ring active:scale-95 flex items-center gap-1"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingLogs ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={async () => {
+              await apiService.openLogsFolder()
+            }}
+            title={t('diagnostics.openLogsFolder')}
+            aria-label={t('diagnostics.openLogsFolder')}
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs transition-all focus-ring active:scale-95 flex items-center gap-1"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
           </button>
 
           <button

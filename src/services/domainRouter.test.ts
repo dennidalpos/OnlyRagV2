@@ -11,7 +11,7 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
   const mockSettings: AppSettings = {
     defaultModel: 'llama3.2',
     chatModel: 'llama3.1:8b',
-    medicalModel: 'biomistral:latest',
+    medicalModel: 'adrienbrault/biomistral-7b:Q4_K_M',
     legalModel: 'saul-instruct:7b',
     hardwareProfile: 'Auto',
     ocrEngine: 'native_cuda',
@@ -21,7 +21,7 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
   it('should route medical queries to medicalModel', () => {
     const res = evaluateDomainIntent('Quali sono i sintomi della polmonite e la posologia del farmaco?', mockSettings)
     expect(res.domain).toBe('medical')
-    expect(res.modelName).toBe('biomistral:latest')
+    expect(res.modelName).toBe('adrienbrault/biomistral-7b:Q4_K_M')
     expect(res.requiresRetrieval).toBe(true)
   })
 

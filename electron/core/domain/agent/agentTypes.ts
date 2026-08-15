@@ -53,6 +53,7 @@ export type SupportedToolName =
   | 'download_file'
   | 'run_command'
   | 'inspect_os_env'
+  | 'ask'
   | 'finish'
 
 export interface AgentToolCall {
@@ -68,6 +69,7 @@ export interface AgentToolCall {
     query?: string
     url?: string
     targetPath?: string
+    question?: string
     isRegex?: boolean
     caseInsensitive?: boolean
     startLine?: number

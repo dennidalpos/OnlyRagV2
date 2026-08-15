@@ -22,8 +22,12 @@ import {
   ListPlus,
   X,
   RotateCcw,
+  ArrowDown,
+  AlertTriangle,
+  FolderOpen,
+  MessageSquare,
 } from 'lucide-react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings } from '../../types'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession } from '../../types'
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
@@ -55,6 +59,16 @@ interface AgentActionLogPanelProps {
   onOpenPromptModal?: () => void
   onOpenSkillHubModal?: () => void
   onResetSession?: () => void
+  onCompactContext?: () => void
+  workspacePath?: string | null
+  workspaceSessions?: CodingSession[]
+  activeSessionId?: string
+  activeSession?: CodingSession | null
+  onCreateSession?: () => void
+  onSwitchSession?: (id: string) => void
+  onDeleteSession?: (id: string) => void
+  onRenameSession?: (id: string, title: string) => void
+  onSelectWorkspaceFolder?: () => void
 }
 
 export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
@@ -83,31 +97,92 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onOpenPromptModal,
   onOpenSkillHubModal,
   onResetSession,
+  onCompactContext,
+  workspacePath,
+  workspaceSessions = [],
+  activeSessionId,
+  activeSession,
+  onCreateSession,
+  onSwitchSession,
+  onDeleteSession,
+  onRenameSession,
+  onSelectWorkspaceFolder,
 }) => {
   const { t } = useTranslation()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const toolsMenuRef = useRef<HTMLDivElement>(null)
   const [showToolsMenu, setShowToolsMenu] = useState(false)
+  const [showSessionsDropdown, setShowSessionsDropdown] = useState(false)
+  const [editingSessionTitleId, setEditingSessionTitleId] = useState<string | null>(null)
+  const [sessionTitleText, setSessionTitleText] = useState<string>('')
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null)
   const [editingQueueText, setEditingQueueText] = useState<string>('')
+  const [autoScroll, setAutoScroll] = useState<boolean>(true)
+  const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
 
-  // Close tools popover on click outside
+  // Context window tracking (reflecting actual turn prompt assembly: max 8 steps + system + prompt)
+  const maxContextLimit = settings?.hardwareProfile === 'High' ? 48000 : settings?.hardwareProfile === 'Low' ? 16000 : 28000
+  const recentLogs = actionLogs.slice(-8)
+  const estimatedTurnChars = Math.min(
+    maxContextLimit,
+    2500 + agentPrompt.length + recentLogs.reduce((acc, log) => acc + log.message.length + Math.min(log.detail?.length || 0, 1200), 0)
+  )
+  const contextPercent = Math.min(100, Math.round((estimatedTurnChars / maxContextLimit) * 100))
+  const isContextHeavy = contextPercent >= 70 || actionLogs.length > 14
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight
+    const isUp = distanceToBottom > 45
+    setIsScrolledUp(isUp)
+  }
+
+  const scrollToBottom = (smooth = true) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      })
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
+    }
+    setIsScrolledUp(false)
+  }
+
+  // Close tools popover on click outside or Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
         setShowToolsMenu(false)
       }
     }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowToolsMenu(false)
+      }
+    }
     if (showToolsMenu) {
       document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleKeyDown)
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [showToolsMenu])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [actionLogs.length, isExecuting])
+    if (autoScroll && !isScrolledUp && scrollContainerRef.current) {
+      if (isExecuting || streamingText) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+      } else {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
+    }
+  }, [actionLogs.length, isExecuting, streamingText, autoScroll, isScrolledUp])
 
   const toggleExpand = (id: string) => {
     setExpandedLogIds((prev) => {
@@ -137,17 +212,183 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
     return { label: 'TXT', color: 'bg-slate-800 text-slate-300' }
   }
 
+  const projectName = workspacePath ? workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace' : t('coding.noProjectAttached')
+
   return (
-    <div className="h-full flex flex-col bg-[#0b0f17] text-slate-200 overflow-hidden select-text">
+    <div className="h-full flex flex-col bg-[#0b0f17] text-slate-200 overflow-hidden select-text relative">
+      {/* Project Context & Nested Sessions Header Bar */}
+      <div className="p-2.5 px-4 border-b border-slate-800/90 bg-[#0d131f] flex items-center justify-between gap-3 shrink-0 z-10">
+        {/* Left: Project Folder info */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={onSelectWorkspaceFolder}
+            title={workspacePath ? `Progetto: ${workspacePath}` : t('coding.selectFolder')}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 hover:text-cyan-300 transition-all text-xs font-semibold truncate focus-ring"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="truncate max-w-[140px] sm:max-w-[200px]">{projectName}</span>
+          </button>
+        </div>
+
+        {/* Right: Nested Sessions Selector & New Chat */}
+        <div className="flex items-center gap-1.5 relative">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSessionsDropdown(!showSessionsDropdown)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-slate-100 transition-all text-xs font-medium focus-ring"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="truncate max-w-[120px] font-semibold text-slate-200">
+                {activeSession?.title || t('coding.sessionTitleDefault')}
+              </span>
+              <span className="text-[10px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
+                {workspaceSessions.length}
+              </span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {/* Sessions Dropdown */}
+            {showSessionsDropdown && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 rounded-2xl bg-[#0f172a] border border-slate-800 shadow-2xl p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                <div className="flex items-center justify-between px-2 py-1 border-b border-slate-800/80 text-[11px] font-bold text-slate-400">
+                  <span>{t('coding.projectSessions')}</span>
+                  <button
+                    onClick={() => {
+                      onCreateSession?.()
+                      setShowSessionsDropdown(false)
+                    }}
+                    className="p-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1 text-[10px] font-bold"
+                    title={t('coding.newProjectSession')}
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto space-y-1 pt-1">
+                  {workspaceSessions.map((session) => {
+                    const isActive = session.id === activeSessionId
+                    const isEditing = editingSessionTitleId === session.id
+
+                    return (
+                      <div
+                        key={session.id}
+                        className={`flex items-center justify-between p-1.5 rounded-xl text-xs transition-colors group ${
+                          isActive
+                            ? 'bg-indigo-950/70 border border-indigo-800/60 text-indigo-200'
+                            : 'hover:bg-slate-800/70 text-slate-300'
+                        }`}
+                      >
+                        {isEditing ? (
+                          <div className="flex items-center gap-1 w-full">
+                            <input
+                              type="text"
+                              value={sessionTitleText}
+                              onChange={(e) => setSessionTitleText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  onRenameSession?.(session.id, sessionTitleText)
+                                  setEditingSessionTitleId(null)
+                                }
+                                if (e.key === 'Escape') setEditingSessionTitleId(null)
+                              }}
+                              className="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-100 outline-none"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => {
+                                onRenameSession?.(session.id, sessionTitleText)
+                                setEditingSessionTitleId(null)
+                              }}
+                              className="p-1 text-emerald-400 hover:bg-slate-800 rounded"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSwitchSession?.(session.id)
+                                setShowSessionsDropdown(false)
+                              }}
+                              className="flex-1 text-left truncate flex items-center gap-1.5"
+                            >
+                              <MessageSquare className={`w-3 h-3 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
+                              <span className="truncate">{session.title}</span>
+                            </button>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => {
+                                  setEditingSessionTitleId(session.id)
+                                  setSessionTitleText(session.title)
+                                }}
+                                className="p-1 hover:text-cyan-300 rounded"
+                                title="Rinomina sessione"
+                              >
+                                <Edit2 className="w-2.5 h-2.5" />
+                              </button>
+                              {workspaceSessions.length > 1 && (
+                                <button
+                                  onClick={() => onDeleteSession?.(session.id)}
+                                  className="p-1 hover:text-rose-400 rounded"
+                                  title="Elimina sessione"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* New Chat Button */}
+          <button
+            type="button"
+            onClick={onCreateSession}
+            title={t('coding.newProjectSession')}
+            className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all text-xs font-bold flex items-center gap-1 focus-ring active:scale-95 shadow-md shadow-indigo-950/40"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t('chat.newChat')}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Timeline Stream */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs font-mono">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs font-mono relative"
+      >
+        {/* Floating Scroll-to-Bottom Button */}
+        {isScrolledUp && (
+          <button
+            type="button"
+            onClick={() => scrollToBottom(true)}
+            className="sticky bottom-2 ml-auto z-20 px-3 py-1.5 rounded-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-1.5 transition-all active:scale-95"
+            aria-label="Scorri fino in fondo"
+          >
+            <ArrowDown className="w-3.5 h-3.5" />
+            <span>In fondo</span>
+          </button>
+        )}
+
         {actionLogs.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-500 font-sans select-none">
             <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-1 shadow-lg shadow-cyan-950/20">
               <Code2 className="w-6 h-6" />
             </div>
             <div>
-              <div className="font-semibold text-slate-200 text-sm">{t('coding.headerTitle')}</div>
+              <div className="font-semibold text-slate-200 text-sm">{activeSession?.title || t('coding.headerTitle')}</div>
               <p className="text-xs max-w-xs leading-relaxed text-slate-400 mt-1">
                 {t('coding.subtitle')}
               </p>
@@ -178,13 +419,49 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         ) : (
           actionLogs.map((log) => {
             const isUserMsg = log.message.startsWith('User Prompt: ')
+            const isAgentQuestion =
+              log.message.includes('❓ AI Agent Question:') ||
+              log.message.startsWith('Agent Question:') ||
+              log.message.startsWith('Agent requested clarification:')
             const isExpanded = expandedLogIds.has(log.id)
 
+            // Distinct User Prompt Bubble
             if (isUserMsg) {
               const text = log.message.replace('User Prompt: ', '')
               return (
-                <div key={log.id} className="p-3.5 rounded-2xl bg-[#161c28] border border-slate-800/80 text-slate-100 font-sans text-xs whitespace-pre-wrap shadow-lg">
-                  {text}
+                <div key={log.id} className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-blue-950/40 to-slate-900/90 border border-indigo-500/40 text-slate-100 font-sans text-xs space-y-2 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
+                        <User className="w-3 h-3" />
+                      </div>
+                      <span className="font-bold text-xs text-indigo-300">{t('coding.userRole')}</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-400/70 font-mono">{log.timestamp}</span>
+                  </div>
+                  <div className="whitespace-pre-wrap leading-relaxed text-slate-100 font-medium">{text}</div>
+                </div>
+              )
+            }
+
+            // Distinct Agent Question (Ask tool / Clarification request)
+            if (isAgentQuestion) {
+              const qText = log.message
+                .replace('❓ AI Agent Question: ', '')
+                .replace('Agent Question: ', '')
+                .replace('Agent requested clarification: ', '')
+              return (
+                <div key={log.id} className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/50 to-slate-900/90 border-2 border-amber-500/70 text-amber-100 font-sans text-xs space-y-2 shadow-xl animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <span className="font-bold text-xs text-amber-300">{t('coding.agentQuestion')}</span>
+                    </div>
+                    <span className="text-[10px] text-amber-400/80 font-mono">{log.timestamp}</span>
+                  </div>
+                  <div className="whitespace-pre-wrap leading-relaxed font-semibold text-amber-200">{qText}</div>
                 </div>
               )
             }
@@ -269,9 +546,21 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
             return (
               <div
                 key={log.id}
-                className="p-3 rounded-xl bg-[#111827]/70 border border-slate-800/80 text-slate-200 font-sans text-xs leading-relaxed"
+                className="p-3.5 rounded-2xl bg-[#0e1422] border border-slate-800/90 text-slate-200 font-sans text-xs leading-relaxed space-y-2 shadow-md"
               >
-                <div className="whitespace-pre-wrap">{log.message}</div>
+                <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                      <Bot className="w-3 h-3" />
+                    </div>
+                    <span className="font-bold text-xs text-emerald-400">{t('coding.agentRole')}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono">
+                      {activeModelName || 'LLM'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">{log.timestamp}</span>
+                </div>
+                <div className="whitespace-pre-wrap leading-relaxed">{log.message}</div>
                 {log.detail && (
                   <div className="mt-2">
                     <button
@@ -410,9 +699,32 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         </div>
       )}
 
-      {/* Antigravity-Style Floating Prompt Composer Card */}
-      <div className="p-3 bg-[#0b0f17] shrink-0">
-        <div className="bg-[#161c28] border border-slate-800/80 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
+      {/* Context Window Tracking & Compaction Banner */}
+      {isContextHeavy && (
+        <div className="mx-3 mb-1.5 p-2.5 rounded-xl bg-amber-950/40 border border-amber-800/60 flex items-center justify-between text-xs text-amber-300 animate-in fade-in">
+          <div className="flex items-center gap-2 text-[11px] font-sans">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Contesto turno: <strong>{estimatedTurnChars.toLocaleString()}</strong> / {maxContextLimit.toLocaleString()} car. ({contextPercent}%)
+            </span>
+          </div>
+          {onCompactContext && (
+            <button
+              type="button"
+              disabled={isExecuting}
+              onClick={onCompactContext}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-lg text-[10px] transition-all active:scale-95 shadow-sm"
+              title="Sintetizza e rimuovi i passaggi storici più vecchi mantenendo gli ultimi step"
+            >
+              🧹 Compatta Contesto
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Floating Prompt Composer Card */}
+      <div className="p-3 bg-slate-950 shrink-0">
+        <div className="bg-slate-900 border border-slate-800 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
           {/* Top/Center: Prompt Textarea */}
           <textarea
             value={agentPrompt}
@@ -421,12 +733,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
             rows={2}
             aria-label={t('coding.promptPlaceholder')}
             placeholder={t('coding.promptPlaceholder')}
-            className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1"
+            className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-400 resize-none font-sans leading-relaxed px-1"
           />
 
-          {/* Bottom row: [Left: Tools & Reset] --- [Right: Mode selector, Complexity, Send/Stop/Queue] */}
+          {/* Bottom row: [Left: Tools & Reset & Autoscroll] --- [Right: Mode selector, Complexity, Send/Stop/Queue] */}
           <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800/40">
-            {/* Left: Menu contestuale a comparsa per strumenti e contesto + Reset */}
+            {/* Left: Context menu trigger + Reset + Autoscroll toggle */}
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="relative">
                 <button
@@ -436,7 +748,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                   aria-haspopup="dialog"
                   aria-expanded={showToolsMenu}
                   title={t('chat.toolsTitle')}
-                  className={`px-2 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                  className={`px-2 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
                     showToolsMenu || attachedDocIds.size > 0
                       ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm'
                       : 'bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200'
@@ -455,7 +767,10 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 {showToolsMenu && (
                   <div
                     ref={toolsMenuRef}
-                    className="absolute bottom-full mb-2 left-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3 z-30 font-sans"
+                    role="dialog"
+                    aria-modal="false"
+                    aria-label={t('chat.toolsTitle')}
+                    className="absolute bottom-full mb-2 left-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3 z-30 font-sans animate-in fade-in"
                   >
                     <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
@@ -465,7 +780,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                         type="button"
                         onClick={() => setShowToolsMenu(false)}
                         aria-label={t('common.close')}
-                        className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800"
+                        className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 focus-ring"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -550,6 +865,21 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 )}
               </div>
 
+              {/* Autoscroll Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setAutoScroll(!autoScroll)}
+                aria-label={autoScroll ? 'Autoscroll attivo' : 'Autoscroll disattivato'}
+                title={autoScroll ? 'Autoscroll attivo (clicca per disattivare)' : 'Autoscroll disattivato (clicca per attivare)'}
+                className={`p-1.5 rounded-lg transition-colors focus-ring text-xs ${
+                  autoScroll
+                    ? 'text-cyan-300 bg-cyan-950/60 border border-cyan-800/60'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80 border border-transparent'
+                }`}
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
+
               {/* Reset Session Mini Icon */}
               {onResetSession && (
                 <button
@@ -567,12 +897,14 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
             {/* Right: Quick actions, states, mode switches, complexity router, send */}
             <div className="flex items-center gap-1.5 shrink-0 min-w-0">
               {/* Mode Selector Pill */}
-              <div className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px] shrink-0" role="group" aria-label="Agent Mode">
+              <div className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px] shrink-0" role="radiogroup" aria-label="Agent Mode">
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={agentMode === 'plan'}
                   onClick={() => setAgentMode('plan')}
                   title={`${t('coding.planMode')}: ${t('coding.planModeDesc')}`}
-                  className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
+                  className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
                     agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -580,9 +912,11 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={agentMode === 'ask'}
                   onClick={() => setAgentMode('ask')}
                   title={`${t('coding.askMode')}: ${t('coding.askModeDesc')}`}
-                  className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
+                  className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
                     agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -590,9 +924,11 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={agentMode === 'agent'}
                   onClick={() => setAgentMode('agent')}
                   title={`${t('coding.agentMode')}: ${t('coding.agentModeDesc')}`}
-                  className={`px-2 py-0.5 rounded-lg font-semibold transition-all ${
+                  className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
                     agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >

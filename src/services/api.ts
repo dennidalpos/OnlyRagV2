@@ -51,6 +51,16 @@ export const apiService = {
     }
   },
 
+  async openLogsFolder(): Promise<{ success: boolean; path?: string; error?: string }> {
+    if (!window.electronAPI?.openLogsFolder) return { success: false, error: 'Electron API unavailable' }
+    try {
+      return await window.electronAPI.openLogsFolder()
+    } catch (err: any) {
+      logger.error('ApiService:Logs', `Failed to open logs folder: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  },
+
   async getIngestedDocuments(): Promise<IngestedDocument[]> {
     if (!window.electronAPI) return []
     try {

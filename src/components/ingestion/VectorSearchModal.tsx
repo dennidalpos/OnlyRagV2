@@ -109,7 +109,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({
                 autoFocus
                 aria-label={t('vectorSearch.queryPlaceholder')}
                 placeholder={t('vectorSearch.queryPlaceholder')}
-                className="w-full bg-slate-950 border border-slate-800 focus-within:border-cyan-500 rounded-xl px-4 py-3 text-xs text-slate-100 outline-none focus-ring font-mono placeholder:text-slate-500 leading-relaxed shadow-inner"
+                className="w-full bg-slate-950 border border-slate-800 focus-within:border-cyan-500 rounded-xl px-4 py-3 text-xs text-slate-100 outline-none focus-ring font-mono placeholder:text-slate-400 leading-relaxed shadow-inner"
               />
             </div>
 

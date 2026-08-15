@@ -1,7 +1,7 @@
 import { skillRepository, calculateSkillChecksum, parseSkillFrontmatter } from '../infrastructure/filesystem/skillRepository'
 import { customHubRepository } from '../infrastructure/filesystem/customHubRepository'
 import { skillHubClient } from '../infrastructure/http/skillHubClient'
-import { matchSkillsForTask, compileSkillsContextBlock } from '../domain/skills/skillMatcher'
+import { matchSkillsForTask, compileSkillsContextBlock, SkillMatchContext } from '../domain/skills/skillMatcher'
 import {
   SkillDefinition,
   HubSkillItem,
@@ -231,20 +231,20 @@ export class SkillAppService {
     return skillRepository.deleteSkill(skillId, workspaceRoot)
   }
 
-  async getMatchedSkills(userTask: string, workspaceRoot?: string | null, maxSkills: number = 3): Promise<SkillDefinition[]> {
+  async getMatchedSkills(userTaskOrContext: string | SkillMatchContext, workspaceRoot?: string | null, maxSkills: number = 3): Promise<SkillDefinition[]> {
     try {
       const availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
       if (availableSkills.length === 0) return []
-      return matchSkillsForTask(userTask, availableSkills, maxSkills)
+      return matchSkillsForTask(userTaskOrContext, availableSkills, maxSkills)
     } catch (err: any) {
       logger.log('WARN', 'SkillAppService', `Error matching skills: ${err.message}`)
       return []
     }
   }
 
-  async getContextSkillsBlock(userTask: string, workspaceRoot?: string | null, maxSkills: number = 3): Promise<string> {
+  async getContextSkillsBlock(userTaskOrContext: string | SkillMatchContext, workspaceRoot?: string | null, maxSkills: number = 3): Promise<string> {
     try {
-      const matched = await this.getMatchedSkills(userTask, workspaceRoot, maxSkills)
+      const matched = await this.getMatchedSkills(userTaskOrContext, workspaceRoot, maxSkills)
       if (matched.length === 0) return ''
 
       logger.log('INFO', 'SkillAppService', `Injected ${matched.length} contextual skill(s): ${matched.map((s) => s.name).join(', ')}`)

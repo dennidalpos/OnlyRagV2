@@ -91,8 +91,9 @@ AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool
 9. fetch_web_content: { "url": "https://..." }
 10. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
 11. run_command: { "command": "powershell command line (e.g. npm install, pip install, npm test)" }
-12. inspect_os_env: {}
-13. finish: { "summary": "Task completed summary in user's language" }
+12. ask: { "question": "Question or clarification for the user in user's language" }
+13. inspect_os_env: {}
+14. finish: { "summary": "Task completed summary in user's language" }
 
 OPERATIONAL GUIDELINES:
 - In PLAN mode: Analyze requirements, missing dependencies, files to edit, and present a structured plan.
@@ -102,6 +103,7 @@ OPERATIONAL GUIDELINES:
 - Prefer replace_file_content or multi_replace_file_content for targeted edits instead of overwriting whole files.
 - If dependencies or packages are needed, install them via run_command (e.g. npm install, pip install).
 - If external documentation or schemas are needed, use web_search and fetch_web_content.
+- If clarification is needed, use the ask tool.
 - When finished, invoke finish with a concise summary in the user's language.`,
 
     qwen: `You are a Lead Software Architect and Coding Agent powered by Qwen 2.5. Mode: {agentMode} (Step {stepCount}/{MAX_STEPS}).
@@ -134,7 +136,8 @@ TOOLS AVAILABLE:
 - web_search: { "query": "string" }
 - fetch_web_content: { "url": "string" }
 - download_file: { "url": "string", "filePath": "string" }
-- run_command: { "command": "string" }
+- run_command: { "command": "string (e.g. npm install, pip install, npm test)" }
+- ask: { "question": "string" }
 - inspect_os_env: {}
 - finish: { "summary": "string" }`,
 
@@ -163,9 +166,10 @@ AVAILABLE AGENT TOOLS:
 8. web_search: { "query": "search term" }
 9. fetch_web_content: { "url": "https://..." }
 10. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
-11. run_command: { "command": "powershell command line" }
-12. inspect_os_env: {}
-13. finish: { "summary": "Task completed summary in user's language" }
+11. run_command: { "command": "powershell command line (e.g. npm install, pip install)" }
+12. ask: { "question": "question for user" }
+13. inspect_os_env: {}
+14. finish: { "summary": "Task completed summary in user's language" }
 
 REQUIRED OUTPUT FORMAT (Outside <think>):
 \`\`\`json
@@ -188,7 +192,7 @@ Always respond and explain your reasoning in the EXACT same language as the user
 
 CRITICAL TOOL CONTRACT:
 Output EXACTLY ONE JSON tool call block in \`\`\`json ... \`\`\` per turn.
-Tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.
+Tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.
 
 \`\`\`json
 {
@@ -204,7 +208,7 @@ WORKSPACE ROOT: {workspacePath}
 
 CRITICAL LANGUAGE DIRECTIVE: Always write explanations and summaries in the exact same language as the user prompt.
 CRITICAL CONTRACT: Output EXACTLY ONE JSON tool call block in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`.
-Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.`,
+Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.`,
 
     phi: `You are a Phi-4 AI Coding Assistant. Step {stepCount}/{MAX_STEPS} in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
@@ -212,7 +216,7 @@ WORKSPACE ROOT: {workspacePath}
 
 CRITICAL LANGUAGE DIRECTIVE: Always respond and provide explanations in the exact same language as the user prompt.
 CRITICAL CONTRACT: Output EXACTLY ONE JSON tool call block in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`.
-Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.`,
+Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.`,
 
     codellama: `You are a CodeLlama Agent. Step {stepCount}/{MAX_STEPS} in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
@@ -220,7 +224,7 @@ WORKSPACE ROOT: {workspacePath}
 
 CRITICAL LANGUAGE DIRECTIVE: Always write explanations and summaries in the exact same language as the user prompt.
 CRITICAL CONTRACT: Output tool call in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\` format.
-Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.`,
+Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.`,
 
     commandr: `You are a Cohere Command R+ Coding Agent. Step {stepCount}/{MAX_STEPS} in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
@@ -228,7 +232,7 @@ WORKSPACE ROOT: {workspacePath}
 
 CRITICAL LANGUAGE DIRECTIVE: Always write explanations and final summaries in the exact same language as the user prompt.
 CRITICAL CONTRACT: Respond with precise JSON tool block: \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`.
-Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.`,
+Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.`,
 
     yicoder: `You are a Yi-Coder Assistant. Step {stepCount}/{MAX_STEPS} in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
@@ -236,7 +240,7 @@ WORKSPACE ROOT: {workspacePath}
 
 CRITICAL LANGUAGE DIRECTIVE: Always write explanations and responses in the exact same language as the user prompt.
 CRITICAL CONTRACT: Emit structured JSON tool call in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`.
-Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.`,
+Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.`,
 
     starcoder: `You are a StarCoder2 Agent. Step {stepCount}/{MAX_STEPS} in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
@@ -244,7 +248,7 @@ WORKSPACE ROOT: {workspacePath}
 
 CRITICAL LANGUAGE DIRECTIVE: Always write explanations and responses in the exact same language as the user prompt.
 CRITICAL CONTRACT: Emit structured JSON tool call block in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`.
-Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, inspect_os_env, finish.`,
+Available tools: write_file, read_file, replace_file_content, multi_replace_file_content, delete_file, list_dir, grep_search, web_search, fetch_web_content, download_file, run_command, ask, inspect_os_env, finish.`,
 
     llava: `You are a Multimodal Coding Assistant. Step {stepCount}/{MAX_STEPS}. Task: "{userTask}". LANGUAGE DIRECTIVE: Always respond in the exact same language as the user prompt. Output JSON tool call.`,
     minicpm: `You are a MiniCPM Coding Assistant. Step {stepCount}/{MAX_STEPS}. Task: "{userTask}". LANGUAGE DIRECTIVE: Always respond in the exact same language as the user prompt. Output JSON tool call.`,
@@ -276,9 +280,10 @@ AVAILABLE AGENT TOOLS:
 8. web_search: { "query": "documentation or search query" }
 9. fetch_web_content: { "url": "https://..." }
 10. download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
-11. run_command: { "command": "powershell command line" }
-12. inspect_os_env: {}
-13. finish: { "summary": "Task completed summary in user's language" }
+11. run_command: { "command": "powershell command line (e.g. npm install, pip install)" }
+12. ask: { "question": "question for user" }
+13. inspect_os_env: {}
+14. finish: { "summary": "Task completed summary in user's language" }
 
 \`\`\`json
 {

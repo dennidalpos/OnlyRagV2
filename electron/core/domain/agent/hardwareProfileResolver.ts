@@ -70,11 +70,11 @@ export class HardwareProfileResolver {
       const isFast = tier === 'fast'
       const isDeep = tier === 'deep_reasoning'
       return {
-        num_ctx: isFast ? 4096 : isDeep ? 16384 : 8192,
+        num_ctx: isFast ? 4096 : isDeep ? 8192 : 8192,
         temperature: 0.1,
         top_p: 0.9,
         repeat_penalty: 1.1,
-        maxContextChars: isFast ? 16000 : isDeep ? 48000 : 32000,
+        maxContextChars: isFast ? 16000 : isDeep ? 28000 : 28000,
       }
     }
 

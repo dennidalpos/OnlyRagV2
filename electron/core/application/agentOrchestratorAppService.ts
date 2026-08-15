@@ -15,6 +15,7 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { skillAppService } from './skillAppService'
 import { ollamaAppService } from './ollamaAppService'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AppSettings } from '../../../src/types'
 
 interface AgentSession {
@@ -32,7 +33,9 @@ function cleanupSession(session: AgentSession) {
   if (session.activeHttpRequest) {
     try {
       session.activeHttpRequest.destroy()
-    } catch {}
+    } catch (err: any) {
+      logger.log('WARN', 'AgentOrchestrator', `Failed destroying active HTTP request during cleanup: ${err?.message}`)
+    }
     session.activeHttpRequest = null
   }
   if (session.activeChildProcess) {
@@ -42,7 +45,9 @@ function cleanupSession(session: AgentSession) {
       } else {
         session.activeChildProcess.kill('SIGKILL')
       }
-    } catch {}
+    } catch (err: any) {
+      logger.log('WARN', 'AgentOrchestrator', `Failed terminating child process during cleanup: ${err?.message}`)
+    }
     session.activeChildProcess = null
   }
   if (session.targetWindow && !session.targetWindow.isDestroyed()) {
@@ -200,19 +205,34 @@ export async function runAgentOrchestratorLoop(
     `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Workspace: ${workspacePath || 'Standalone'}`
   )
 
+  if (settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logSessionStart(sessionId, userTask, agentMode, settings.codingModel || settings.defaultModel || 'llama3.2', workspacePath)
+  }
+
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
 
-  const matchedSkills = await skillAppService.getMatchedSkills(userTask, workspacePath)
+  const skillMatchContext = {
+    userTask,
+    activeFilePath: payload.activeFile?.path,
+    activeFileContent: payload.activeFile?.content,
+    pinnedFiles: payload.pinnedFiles?.map((f) => ({ path: f.path, name: f.name })),
+    workspacePath: workspacePath || undefined,
+  }
+
+  const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath)
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
     if (session.targetWindow && !session.targetWindow.isDestroyed()) {
       session.targetWindow.webContents.send('agent:skills-matched', { skills: skillNames })
     }
     emitLog('info', `✨ Skill Router: Attivate ${matchedSkills.length} skill [${skillNames.join(', ')}]`)
+    if (settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logSkillsMatched(sessionId, skillNames)
+    }
   }
 
   const toolOutputHistory: string[] = []
-  const MAX_STEPS = 50
+  const MAX_STEPS = Math.max(10, Math.min(250, settings.maxToolCallSteps || 50))
   let stepCount = 0
   let noToolStreak = 0
 
@@ -256,7 +276,7 @@ export async function runAgentOrchestratorLoop(
       undefined,
       routedComplexity.tier
     )
-    const skillsBlock = await skillAppService.getContextSkillsBlock(userTask, workspacePath)
+    const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath)
 
     const turnPrompt = AgentPromptAssembler.assembleTurnPrompt({
       userTask,
@@ -280,6 +300,9 @@ export async function runAgentOrchestratorLoop(
     runtimeOpts.num_ctx = dynamicNumCtx
 
     emitLog('tool_call', `[Step ${stepCount}/${MAX_STEPS}] Consulting LLM (${targetModel}) [ctx:${runtimeOpts.num_ctx}]...`)
+    if (settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logTurnPrompt(sessionId, stepCount, targetModel, runtimeOpts.num_ctx, turnPrompt)
+    }
 
     let streamedOutput = ''
     try {
@@ -303,6 +326,9 @@ export async function runAgentOrchestratorLoop(
     } catch (err: any) {
       emitLog('info', `LLM Stream error on step ${stepCount}: ${err.message}`)
       emitDone(false, `LLM Stream Error: ${err.message}`)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, false, `LLM Error: ${err.message}`)
+      }
       activeAgentSessions.delete(sessionId)
       return { success: false, summary: `LLM Error: ${err.message}` }
     }
@@ -310,11 +336,17 @@ export async function runAgentOrchestratorLoop(
     if (!isSessionActive()) {
       emitLog('info', 'Agent execution cancelled by user.')
       emitDone(false, 'Task cancelled by user.')
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, false, 'Task cancelled by user.')
+      }
       activeAgentSessions.delete(sessionId)
       return { success: false, summary: 'Task cancelled' }
     }
 
     emitLog('info', `AI Agent (${agentMode.toUpperCase()} Step ${stepCount}):`, streamedOutput)
+    if (settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logLlmResponse(sessionId, stepCount, streamedOutput)
+    }
 
     const parsedTool = parseAgentToolCall(streamedOutput)
 
@@ -328,6 +360,9 @@ export async function runAgentOrchestratorLoop(
         const feedback = `[TOOL PARSER REJECTION DIAGNOSTIC]\nYour tool call could not be executed because mandatory input parameters were missing or malformed.\nPlease ensure you provide valid JSON with all required parameters.`
         pushToolOutputHistory(toolOutputHistory, feedback)
         emitLog('info', `Step ${stepCount} Tool Call Rejected: Missing required parameters in JSON payload.`)
+        if (settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logToolResult(sessionId, stepCount, 'unparsed_tool', feedback)
+        }
         continue
       }
 
@@ -338,12 +373,18 @@ export async function runAgentOrchestratorLoop(
         const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive and did not invoke any tools. In AGENT mode, to create or edit files in the workspace, you MUST output a tool call formatted as:\n\`\`\`json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "index.html",\n    "content": "..."\n  },\n  "explanation": "Creating initial project file"\n}\n\`\`\`\nIf all work is finished, invoke the "finish" tool. Please invoke the required tool now.`
         pushToolOutputHistory(toolOutputHistory, feedback)
         emitLog('info', `Step ${stepCount}: No tool call found in LLM response. Requesting tool invocation...`)
+        if (settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logToolResult(sessionId, stepCount, 'no_tool_detected', feedback)
+        }
         continue
       }
 
       const summary = streamedOutput.trim() || 'Task completed successfully.'
       emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
       emitDone(true, summary)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, summary)
+      }
       activeAgentSessions.delete(sessionId)
       return { success: true, summary }
     }
@@ -354,15 +395,37 @@ export async function runAgentOrchestratorLoop(
       const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'
       emitLog('info', `Task Finished: ${summary}`)
       emitDone(true, summary)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logToolCall(sessionId, stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, summary)
+      }
       activeAgentSessions.delete(sessionId)
       return { success: true, summary }
     }
 
+    if (parsedTool.tool === 'ask') {
+      const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'
+      emitLog('info', `❓ AI Agent Question: ${question}`)
+      emitDone(true, question)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logToolCall(sessionId, stepCount, 'ask', parsedTool.parameters, parsedTool.explanation)
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, question)
+      }
+      activeAgentSessions.delete(sessionId)
+      return { success: true, summary: question }
+    }
+
     emitLog('tool_call', `Step ${stepCount} Tool Call [${parsedTool.tool}]:`, JSON.stringify(parsedTool.parameters, null, 2))
+    if (settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolCall(sessionId, stepCount, parsedTool.tool, parsedTool.parameters, parsedTool.explanation)
+    }
 
     if (agentMode === 'plan') {
       emitLog('info', `Plan Mode Proposed Tool (${parsedTool.tool}):`, JSON.stringify(parsedTool.parameters, null, 2))
       emitDone(true, `Plan Mode completed step proposal for ${parsedTool.tool}`)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Proposed tool call: ${parsedTool.tool}`)
+      }
       activeAgentSessions.delete(sessionId)
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
@@ -391,6 +454,9 @@ export async function runAgentOrchestratorLoop(
           })
         }
         emitDone(true, `Awaiting user approval for ${parsedTool.tool}`)
+        if (settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for ${parsedTool.tool}`)
+        }
         activeAgentSessions.delete(sessionId)
         return { success: true, summary: `Awaiting approval for ${parsedTool.tool}` }
       }
@@ -414,9 +480,17 @@ export async function runAgentOrchestratorLoop(
     } else {
       emitLog('info', toolRes.logMessage, toolRes.logDetail)
     }
+
+    if (settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolResult(sessionId, stepCount, parsedTool.tool, toolRes.outputForHistory, toolRes.isTerminal, toolRes.logDetail)
+    }
   }
 
-  emitDone(true, `Completed ${stepCount} agent steps.`)
+  const endSummary = `Completed ${stepCount} agent steps.`
+  emitDone(true, endSummary)
+  if (settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logSessionEnd(sessionId, stepCount, true, endSummary)
+  }
   activeAgentSessions.delete(sessionId)
-  return { success: true, summary: `Completed ${stepCount} steps` }
+  return { success: true, summary: endSummary }
 }

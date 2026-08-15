@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { AppSettings, DiagnosticsData, HardwareProfile } from '../../types'
 import {
   analyzeHardwareAndRecommend,
   HardwareRecommendations,
+  isOllamaModelInstalled,
 } from '../../services/hardwareRecommendationEngine'
 import {
   Cpu,
@@ -161,9 +162,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   } | null>(null)
   const [isCheckingDisk, setIsCheckingDisk] = useState(false)
 
-  // Sync settings when modal opens
+  const prevIsOpenRef = useRef<boolean>(false)
+
+  // Sync settings only when modal initially opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       if (settings.complexityFastModel) setSelectedFast(settings.complexityFastModel)
       if (settings.complexityStandardModel || settings.codingModel || settings.defaultModel) {
         setSelectedStandard(
@@ -187,7 +190,57 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       isCancelledRef.current = false
       setStep(1)
     }
-  }, [isOpen, settings])
+    prevIsOpenRef.current = isOpen
+  }, [isOpen])
+
+  const handleCloseWithSave = useCallback(() => {
+    onUpdateSettings({
+      defaultModel: selectedStandard || settings.defaultModel,
+      useComplexityRouting,
+      complexityFastModel: selectedFast || settings.complexityFastModel,
+      complexityStandardModel: selectedStandard || settings.complexityStandardModel,
+      complexityDeepModel: selectedDeep || settings.complexityDeepModel,
+      codingModel: selectedStandard || settings.codingModel,
+      chatModel: selectedChat || settings.chatModel,
+      translationModel: selectedTranslation || settings.translationModel,
+      medicalModel: selectedMedical || settings.medicalModel,
+      legalModel: selectedLegal || settings.legalModel,
+      visionModel: selectedVision || settings.visionModel,
+      embeddingModel: selectedEmbedding || settings.embeddingModel,
+      hardwareProfile,
+      ocrEngine,
+      hasCompletedInitialSetup: true,
+    })
+    onClose()
+  }, [
+    onUpdateSettings,
+    selectedStandard,
+    settings,
+    useComplexityRouting,
+    selectedFast,
+    selectedDeep,
+    selectedChat,
+    selectedTranslation,
+    selectedMedical,
+    selectedLegal,
+    selectedVision,
+    selectedEmbedding,
+    hardwareProfile,
+    ocrEngine,
+    onClose,
+  ])
+
+  // ESC Key Listener for Accessibility
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isPullingModels) {
+        handleCloseWithSave()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isPullingModels, handleCloseWithSave])
 
   // Live Stream Progress Listener
   useEffect(() => {
@@ -211,18 +264,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }, [])
 
   const isModelDownloaded = (modelName: string): boolean => {
-    if (!modelName) return false
-    const clean = modelName.trim().toLowerCase()
-    const base = clean.split(':')[0]
-    return downloadedModels.some((d) => {
-      const dClean = d.toLowerCase().trim()
-      return (
-        dClean === clean ||
-        dClean === `${clean}:latest` ||
-        `${dClean}:latest` === clean ||
-        dClean.split(':')[0] === base
-      )
-    })
+    return isOllamaModelInstalled(modelName, downloadedModels)
   }
 
   // Calculate unique missing models
@@ -260,31 +302,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         })
     }
   }, [step, missingModels.join(',')])
-
-  // ESC Key Listener for Accessibility
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isPullingModels) {
-        handleCloseWithSave()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    isOpen,
-    isPullingModels,
-    selectedFast,
-    selectedStandard,
-    selectedDeep,
-    selectedChat,
-    selectedTranslation,
-    selectedVision,
-    selectedEmbedding,
-    useComplexityRouting,
-    hardwareProfile,
-    ocrEngine,
-  ])
 
   if (!isOpen) return null
 
@@ -428,6 +445,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     setUseComplexityRouting(true)
     setHardwareProfile('Auto')
     setOcrEngine('native_cuda')
+    setPullErrorDetail(null)
+    setFailedModelIndex(null)
+    setSkippedModels([])
+    setDiskCheck(null)
     onUpdateSettings({
       defaultModel: recStandard,
       useComplexityRouting: true,
@@ -444,27 +465,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       hasCompletedInitialSetup: true,
     })
     setStep(6)
-  }
-
-  const handleCloseWithSave = () => {
-    onUpdateSettings({
-      defaultModel: selectedStandard || settings.defaultModel,
-      useComplexityRouting,
-      complexityFastModel: selectedFast || settings.complexityFastModel,
-      complexityStandardModel: selectedStandard || settings.complexityStandardModel,
-      complexityDeepModel: selectedDeep || settings.complexityDeepModel,
-      codingModel: selectedStandard || settings.codingModel,
-      chatModel: selectedChat || settings.chatModel,
-      translationModel: selectedTranslation || settings.translationModel,
-      medicalModel: selectedMedical || settings.medicalModel,
-      legalModel: selectedLegal || settings.legalModel,
-      visionModel: selectedVision || settings.visionModel,
-      embeddingModel: selectedEmbedding || settings.embeddingModel,
-      hardwareProfile,
-      ocrEngine,
-      hasCompletedInitialSetup: true,
-    })
-    onClose()
   }
 
   const handleFinalSave = () => {

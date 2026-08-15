@@ -313,6 +313,72 @@ console.log("App initialized");
     expect(result?.parameters.content).toContain('App initialized')
   })
 
+  it('should parse ask tool call and prompt user aliases correctly', () => {
+    const raw = `\`\`\`json
+{
+  "tool": "ask",
+  "parameters": {
+    "question": "Quale framework UI preferisci usare?"
+  },
+  "explanation": "Chiedo chiarimento all'utente"
+}
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('ask')
+    expect(result?.parameters.question).toBe('Quale framework UI preferisci usare?')
+    expect(result?.explanation).toBe("Chiedo chiarimento all'utente")
+  })
+
+  it('should parse ask_question alias with query/prompt fallback', () => {
+    const raw = `\`\`\`json
+{
+  "tool": "ask_question",
+  "parameters": {
+    "query": "Vuoi procedere con l'installazione?"
+  }
+}
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('ask')
+    expect(result?.parameters.question).toBe("Vuoi procedere con l'installazione?")
+  })
+
+  it('should parse download_file tool call correctly', () => {
+    const raw = `\`\`\`json
+{
+  "tool": "download_file",
+  "parameters": {
+    "url": "https://example.com/assets/logo.png",
+    "filePath": "src/assets/logo.png"
+  }
+}
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('download_file')
+    expect(result?.parameters.url).toBe('https://example.com/assets/logo.png')
+    expect(result?.parameters.filePath).toBe('src/assets/logo.png')
+  })
+
+  it('should parse extended tool aliases (run_cmd, write_code, replace_file, find_text, read_url_content)', () => {
+    const rawRunCmd = '```json\n{"tool": "run_cmd", "parameters": {"command": "git status"}}\n```'
+    expect(parseAgentToolCall(rawRunCmd)?.tool).toBe('run_command')
+
+    const rawWriteCode = '```json\n{"tool": "write_code", "parameters": {"filePath": "index.ts", "content": "console.log(1)"}}\n```'
+    expect(parseAgentToolCall(rawWriteCode)?.tool).toBe('write_file')
+
+    const rawReplaceFile = '```json\n{"tool": "replace_file", "parameters": {"filePath": "index.ts", "targetContent": "1", "replacementContent": "2"}}\n```'
+    expect(parseAgentToolCall(rawReplaceFile)?.tool).toBe('replace_file_content')
+
+    const rawFindText = '```json\n{"tool": "find_text", "parameters": {"query": "useTranslation"}}\n```'
+    expect(parseAgentToolCall(rawFindText)?.tool).toBe('grep_search')
+
+    const rawReadUrl = '```json\n{"tool": "read_url_content", "parameters": {"url": "https://example.com"}}\n```'
+    expect(parseAgentToolCall(rawReadUrl)?.tool).toBe('fetch_web_content')
+  })
+
   it('should return null when text does not contain valid tool call', () => {
     const raw = 'Just a normal text response without any tool invocations.'
     const result = parseAgentToolCall(raw)

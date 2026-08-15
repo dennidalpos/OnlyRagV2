@@ -155,6 +155,15 @@ export interface TranslationSchema {
     commandBlocked: string
     clearTerminal: string
     runCommand: string
+    projectContext: string
+    noProjectAttached: string
+    projectSessions: string
+    newProjectSession: string
+    deleteSessionConfirm: string
+    userRole: string
+    agentRole: string
+    agentQuestion: string
+    sessionTitleDefault: string
   }
   skills: {
     hubTitle: string
@@ -269,6 +278,23 @@ export interface TranslationSchema {
     deleteDoc: string
     viewDoc: string
     pageNavigation: string
+    dropzoneRelease: string
+    dropzoneSupportedFormats: string
+    saveChanges: string
+    saving: string
+    sync: string
+    copyMarkdown: string
+    markdownCopied: string
+    sourcePreview: string
+    markdownEditor: string
+    unsavedChanges: string
+    synchronized: string
+    noDocumentSelected: string
+    noDocSelectedPrompt: string
+    allPages: string
+    singlePage: string
+    ingestionError: string
+    cancelOperation: string
   }
   diagnostics: {
     title: string
@@ -303,6 +329,7 @@ export interface TranslationSchema {
     autoScroll: string
     noLogs: string
     logFilePath: string
+    openLogsFolder: string
   }
   settings: {
     title: string
@@ -331,6 +358,10 @@ export interface TranslationSchema {
     concurrencySettings: string
     maxConcurrentTasks: string
     maxQueuedTasks: string
+    codingAgentDebugLog: string
+    codingAgentDebugLogDesc: string
+    openLogsFolder: string
+    openLogsFolderDesc: string
     fastTier: string
     standardTier: string
     deepTier: string

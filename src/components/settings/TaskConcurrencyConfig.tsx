@@ -96,6 +96,33 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
           <strong>Task Queue Protection:</strong> Excess requests queue cleanly and execute in serial order.
         </span>
       </div>
+
+      {/* Max Tool Call Steps Slider / Selector */}
+      <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <span className="text-xs font-bold text-slate-200">
+            Limite Passaggi Tool Call (Agent Loops)
+          </span>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Numero massimo di passaggi consecutivi di tool (lettura, refactoring, comandi) consentiti all'agente prima di richiedere conferma.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
+          <input
+            type="range"
+            min={10}
+            max={200}
+            step={5}
+            value={settings.maxToolCallSteps || 50}
+            onChange={(e) => onUpdateSettings({ maxToolCallSteps: parseInt(e.target.value, 10) })}
+            className="w-32 accent-cyan-400 bg-slate-900 cursor-pointer"
+            aria-label="Limite massimo passaggi tool call"
+          />
+          <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[54px] text-center shadow-inner">
+            {settings.maxToolCallSteps || 50} step
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

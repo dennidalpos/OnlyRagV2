@@ -2,6 +2,7 @@ import React from 'react'
 import { ShieldCheck, AlertTriangle, Download, Check, StopCircle, HardDrive } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { HardwareProfile } from '../../types'
+import { getModelApproxSize } from '../../services/hardwareRecommendationEngine'
 
 export interface WizardStepSummaryAndDownloadProps {
   selectedFast: string
@@ -140,10 +141,20 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
               <Download className="w-4 h-4 text-cyan-400" />{' '}
               {t('hardwareWizard.modelsToPull', { count: missingModels.length })}
             </div>
-            <div className="font-mono text-[11px] bg-slate-950 p-2 rounded border border-cyan-900/60 text-slate-200 space-y-0.5">
-              {missingModels.map((m) => (
-                <div key={m}>• {m}</div>
-              ))}
+            <div className="font-mono text-[11px] bg-slate-950 p-2 rounded border border-cyan-900/60 text-slate-200 space-y-1">
+              {missingModels.map((m) => {
+                const approxSize = getModelApproxSize(m)
+                return (
+                  <div key={m} className="flex items-center justify-between gap-2 py-0.5 border-b border-slate-800/40 last:border-0">
+                    <span className="truncate">• {m}</span>
+                    {approxSize && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/70 shrink-0 font-semibold">
+                        {approxSize}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
 

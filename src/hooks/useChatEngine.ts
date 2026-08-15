@@ -46,6 +46,18 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isGeneratingRef = useRef<boolean>(false)
   const streamThrottleTimer = useRef<any>(null)
+  const [autoScroll, setAutoScroll] = useState<boolean>(true)
+  const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
+  const autoScrollRef = useRef<boolean>(true)
+  const isScrolledUpRef = useRef<boolean>(false)
+
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+    const isUp = scrollHeight - scrollTop - clientHeight > 80
+    isScrolledUpRef.current = isUp
+    setIsScrolledUp(isUp)
+  }, [])
 
   const scrollToBottom = useCallback((smooth = false) => {
     if (messagesContainerRef.current) {
@@ -60,7 +72,28 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     } else if (chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' })
     }
+    isScrolledUpRef.current = false
+    setIsScrolledUp(false)
   }, [])
+
+  const handleSetAutoScroll = useCallback((val: boolean) => {
+    autoScrollRef.current = val
+    setAutoScroll(val)
+    if (val) {
+      scrollToBottom(true)
+    }
+  }, [scrollToBottom])
+
+  // Reactive autoscroll effect on every message state update
+  useEffect(() => {
+    if (autoScrollRef.current && !isScrolledUpRef.current) {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+      } else if (chatBottomRef.current) {
+        chatBottomRef.current.scrollIntoView({ behavior: 'auto', block: 'nearest' })
+      }
+    }
+  }, [messages, isGenerating])
 
   const toggleDocSelection = (id: string) => {
     setSelectedDocIds((prev) => {
@@ -250,7 +283,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           setMessages((prev) =>
             prev.map((msg) => (msg.id === botMsgId ? { ...msg, text: accumulated } : msg))
           )
-          scrollToBottom(false)
+          if (autoScrollRef.current && !isScrolledUpRef.current) {
+            scrollToBottom(false)
+          }
         }
 
         const intervalId = setInterval(flushAccumulatedText, 40)
@@ -343,6 +378,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     filteredMentions,
     chatBottomRef,
     messagesContainerRef,
+    autoScroll,
+    setAutoScroll: handleSetAutoScroll,
+    isScrolledUp,
+    handleScroll,
     scrollToBottom,
     fetchDocuments,
     toggleDocSelection,

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { OnlyRagLogo } from './OnlyRagLogo'
+import { logger } from '../../lib/logger'
 
 interface AboutModalProps {
   isOpen: boolean
@@ -169,7 +170,9 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       await navigator.clipboard.writeText(repoUrl)
       setCopiedUrl(true)
       setTimeout(() => setCopiedUrl(false), 2000)
-    } catch {}
+    } catch (err: any) {
+      logger.warn('AboutModal', `Failed copying repo url to clipboard: ${err?.message}`)
+    }
   }
 
   const handleOpenExternal = (url: string) => {

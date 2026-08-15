@@ -19,6 +19,7 @@ import { useTranslation } from '../../../i18n'
 interface MarketplaceSkillsListProps {
   hubSkills: HubSkillItem[]
   isLoading: boolean
+  installingSkillId?: string | null
   onInstallSkill: (skillId: string) => void
   onInstallFromUrl: (url: string, customName?: string) => void
 }
@@ -26,6 +27,7 @@ interface MarketplaceSkillsListProps {
 export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
   hubSkills,
   isLoading,
+  installingSkillId,
   onInstallSkill,
   onInstallFromUrl,
 }) => {
@@ -130,8 +132,8 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
         </div>
       </div>
 
-      {/* Loading state indicator */}
-      {isLoading ? (
+      {/* Loading state indicator - only unmount on initial empty fetch */}
+      {isLoading && hubSkills.length === 0 ? (
         <div className="text-center py-12 text-slate-400 space-y-3">
           <Loader2 className="w-8 h-8 mx-auto text-cyan-400 animate-spin" />
           <p className="text-xs font-semibold text-slate-300">{t('common.loading')}...</p>
@@ -143,55 +145,66 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredSkills.map((hubItem) => (
-            <div
-              key={hubItem.id}
-              className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 hover:border-slate-700 transition-all flex flex-col justify-between space-y-3"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    {getCategoryIcon(hubItem.category)}
-                    <h3 className="text-sm font-bold text-slate-200">{hubItem.name}</h3>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    v{hubItem.version}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">{hubItem.description}</p>
-                <div className="flex flex-wrap gap-1">
-                  {hubItem.tags.map((tg) => (
-                    <span key={tg} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-400">
-                      #{tg}
+          {filteredSkills.map((hubItem) => {
+            const isInstallingThis = installingSkillId === hubItem.id
+            return (
+              <div
+                key={hubItem.id}
+                className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 hover:border-slate-700 transition-all flex flex-col justify-between space-y-3"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {getCategoryIcon(hubItem.category)}
+                      <h3 className="text-sm font-bold text-slate-200">{hubItem.name}</h3>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                      v{hubItem.version}
                     </span>
-                  ))}
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">{hubItem.description}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {hubItem.tags.map((tg) => (
+                      <span key={tg} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-400">
+                        #{tg}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-500 font-medium">{hubItem.author}</span>
+                  <button
+                    type="button"
+                    onClick={() => onInstallSkill(hubItem.id)}
+                    disabled={hubItem.isInstalled || isInstallingThis || !!installingSkillId}
+                    aria-label={hubItem.isInstalled ? `${t('common.status')}: ${hubItem.name}` : `${t('skills.installBtn')} ${hubItem.name}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 focus-ring ${
+                      hubItem.isInstalled
+                        ? 'bg-slate-800/80 text-slate-400 cursor-default border border-slate-700/50'
+                        : isInstallingThis
+                        ? 'bg-cyan-900/80 text-cyan-200 cursor-wait border border-cyan-500/50'
+                        : 'bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold active:scale-95 shadow-sm shadow-cyan-950/40'
+                    }`}
+                  >
+                    {hubItem.isInstalled ? (
+                      <>
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> {t('common.status')}
+                      </>
+                    ) : isInstallingThis ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-300" /> {t('common.loading')}...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" /> {t('skills.installBtn')}
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-
-              <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
-                <span className="text-[11px] text-slate-500 font-medium">{hubItem.author}</span>
-                <button
-                  onClick={() => onInstallSkill(hubItem.id)}
-                  disabled={hubItem.isInstalled || isLoading}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    hubItem.isInstalled
-                      ? 'bg-slate-800 text-slate-500 cursor-default'
-                      : 'bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold'
-                  }`}
-                >
-                  {hubItem.isInstalled ? (
-                    <>
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> {t('common.status')}
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-3.5 h-3.5" /> {t('skills.installBtn')}
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

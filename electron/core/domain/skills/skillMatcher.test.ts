@@ -83,4 +83,19 @@ describe('SkillMatcher Domain Tests', () => {
     const matchedValid = matchSkillsForTask('compile ts files for release', skillsWithShortTriggers)
     expect(matchedValid.length).toBe(1)
   })
+
+  it('should match skills based on attached code file extensions and workspace metadata in SkillMatchContext', () => {
+    // User task prompt is generic, but active file is a Python FastAPI file
+    const matched = matchSkillsForTask(
+      {
+        userTask: 'Refactor this router endpoint to use dependency injection',
+        activeFilePath: 'src/routers/auth.py',
+        activeFileContent: 'from fastapi import APIRouter, Depends\nfrom pydantic import BaseModel',
+        workspacePath: 'D:/Projects/fastapi-backend',
+      },
+      mockSkills
+    )
+
+    expect(matched.some((s) => s.id === 'fastapi')).toBe(true)
+  })
 })

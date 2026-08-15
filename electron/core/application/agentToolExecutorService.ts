@@ -416,6 +416,15 @@ AUTO-HEALING DIRECTIVE: The command above produced an error or timed out. Inspec
         }
       }
 
+      case 'ask': {
+        const question = parameters.question || parameters.query || parsedTool.explanation || 'Clarification requested from user.'
+        return {
+          outputForHistory: `Agent requested clarification: "${question}"`,
+          logMessage: `Agent Question: ${question}`,
+          logDetail: question,
+        }
+      }
+
       default:
         return {
           outputForHistory: `Unrecognized or unsupported tool: ${tool}`,

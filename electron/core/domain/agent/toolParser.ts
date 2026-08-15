@@ -74,19 +74,20 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
     if (parsed && typeof parsed.tool === 'string') {
       let toolName = parsed.tool.toLowerCase().trim()
 
-      if (toolName === 'readfile' || toolName === 'read' || toolName === 'view_file' || toolName === 'view_file_slice') toolName = 'read_file'
-      if (toolName === 'writefile' || toolName === 'write' || toolName === 'create_file') toolName = 'write_file'
-      if (toolName === 'replace_content' || toolName === 'replace_chunk' || toolName === 'edit_file') toolName = 'replace_file_content'
-      if (toolName === 'multi_replace' || toolName === 'replace_multiple' || toolName === 'multi_replace_content' || toolName === 'multi_edit') toolName = 'multi_replace_file_content'
-      if (toolName === 'delete_file' || toolName === 'remove_file' || toolName === 'unlink' || toolName === 'delete' || toolName === 'del_file') toolName = 'delete_file'
-      if (toolName === 'grep' || toolName === 'search' || toolName === 'search_files' || toolName === 'find_in_files') toolName = 'grep_search'
-      if (toolName === 'list' || toolName === 'ls' || toolName === 'listdir' || toolName === 'list_files') toolName = 'list_dir'
-      if (toolName === 'web_search' || toolName === 'search_web' || toolName === 'google' || toolName === 'duckduckgo' || toolName === 'web' || toolName === 'search_internet') toolName = 'web_search'
-      if (toolName === 'fetch_web_content' || toolName === 'fetch_url' || toolName === 'read_url' || toolName === 'web_fetch' || toolName === 'read_web_page' || toolName === 'browse' || toolName === 'get_url') toolName = 'fetch_web_content'
+      if (toolName === 'readfile' || toolName === 'read' || toolName === 'view_file' || toolName === 'view_file_slice' || toolName === 'open_file' || toolName === 'cat') toolName = 'read_file'
+      if (toolName === 'writefile' || toolName === 'write' || toolName === 'create_file' || toolName === 'write_code' || toolName === 'save_file' || toolName === 'write_to_file' || toolName === 'put_file') toolName = 'write_file'
+      if (toolName === 'replace_content' || toolName === 'replace_chunk' || toolName === 'edit_file' || toolName === 'replace_file' || toolName === 'modify_file' || toolName === 'update_file' || toolName === 'patch_file') toolName = 'replace_file_content'
+      if (toolName === 'multi_replace' || toolName === 'replace_multiple' || toolName === 'multi_replace_content' || toolName === 'multi_edit' || toolName === 'batch_replace') toolName = 'multi_replace_file_content'
+      if (toolName === 'delete_file' || toolName === 'remove_file' || toolName === 'unlink' || toolName === 'delete' || toolName === 'del_file' || toolName === 'rm') toolName = 'delete_file'
+      if (toolName === 'grep' || toolName === 'search' || toolName === 'search_files' || toolName === 'find_in_files' || toolName === 'search_in_files' || toolName === 'grep_files' || toolName === 'search_code' || toolName === 'find_text') toolName = 'grep_search'
+      if (toolName === 'list' || toolName === 'ls' || toolName === 'listdir' || toolName === 'list_files' || toolName === 'list_directory' || toolName === 'dir') toolName = 'list_dir'
+      if (toolName === 'web_search' || toolName === 'search_web' || toolName === 'google' || toolName === 'duckduckgo' || toolName === 'web' || toolName === 'search_internet' || toolName === 'bing') toolName = 'web_search'
+      if (toolName === 'fetch_web_content' || toolName === 'fetch_url' || toolName === 'read_url' || toolName === 'web_fetch' || toolName === 'read_web_page' || toolName === 'browse' || toolName === 'get_url' || toolName === 'read_url_content' || toolName === 'fetch_web') toolName = 'fetch_web_content'
       if (toolName === 'download_file' || toolName === 'download' || toolName === 'fetch_file' || toolName === 'download_asset' || toolName === 'save_url') toolName = 'download_file'
-      if (toolName === 'runcommand' || toolName === 'terminal' || toolName === 'exec' || toolName === 'powershell' || toolName === 'exec_command' || toolName === 'cmd') toolName = 'run_command'
-      if (toolName === 'inspect_os' || toolName === 'os_env' || toolName === 'system_info') toolName = 'inspect_os_env'
-      if (toolName === 'complete' || toolName === 'done' || toolName === 'finish_task' || toolName === 'stop') toolName = 'finish'
+      if (toolName === 'runcommand' || toolName === 'terminal' || toolName === 'exec' || toolName === 'powershell' || toolName === 'exec_command' || toolName === 'cmd' || toolName === 'run_cmd' || toolName === 'execute_command' || toolName === 'shell' || toolName === 'bash') toolName = 'run_command'
+      if (toolName === 'inspect_os' || toolName === 'os_env' || toolName === 'system_info' || toolName === 'system_environment') toolName = 'inspect_os_env'
+      if (toolName === 'ask' || toolName === 'ask_question' || toolName === 'question' || toolName === 'clarify' || toolName === 'user_input' || toolName === 'prompt_user' || toolName === 'inquire') toolName = 'ask'
+      if (toolName === 'complete' || toolName === 'done' || toolName === 'finish_task' || toolName === 'stop' || toolName === 'end_task') toolName = 'finish'
 
       const rawParams = parsed.parameters || parsed.args || parsed.params || {}
       const parameters: Record<string, any> = { ...rawParams }
@@ -114,6 +115,9 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       }
       if (!parameters.query) {
         parameters.query = rawParams.pattern || rawParams.search || rawParams.term || rawParams.keyword || rawParams.search_query || rawParams.q || rawParams.Query
+      }
+      if (!parameters.question) {
+        parameters.question = rawParams.question || rawParams.query || rawParams.prompt || rawParams.message || rawParams.text || parsed.explanation || parsed.reason || ''
       }
 
       // Line slice parsing

@@ -70,7 +70,7 @@ class SystemDiagnosticsLogger {
   private logFilePath: string
   private logsBuffer: LogEntry[] = []
   private maxBufferLength = 1000
-  private maxLogFileSizeBytes = 5 * 1024 * 1024 // 5 MB max per log file
+  private maxLogFileSizeBytes = 2 * 1024 * 1024 // 2 MB max per log file
 
   constructor() {
     const baseDir = (app && typeof app.getPath === 'function') ? app.getPath('userData') : process.cwd()
@@ -105,7 +105,7 @@ class SystemDiagnosticsLogger {
           }
           fs.renameSync(this.logFilePath, log1)
           fs.writeFileSync(this.logFilePath, '', 'utf-8')
-        } catch (renameErr) {
+        } catch {
           // Fallback on Windows if file handle is locked: truncate in place
           fs.writeFileSync(this.logFilePath, '', 'utf-8')
         }
@@ -131,7 +131,9 @@ class SystemDiagnosticsLogger {
       console.error('Failed writing log to file:', err)
     }
 
-    console.log(logFormatted.trim())
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(logFormatted.trim())
+    }
     return entry
   }
 
@@ -250,6 +252,8 @@ function fetchJsonEndpoint(urlStr: string, timeoutMs = 4500): Promise<any> {
   })
 }
 
+let lastOllamaSignature: string | null = null
+
 export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Promise<DiagnosticsData['ollama']> {
   const effectiveHost = hostUrl.replace('localhost', '127.0.0.1')
   const isLocal =
@@ -306,7 +310,10 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
   }
 
   const models = Array.from(modelSet).sort((a, b) => a.localeCompare(b))
-  logger.log('INFO', 'Ollama', `Ollama online. Available models count: ${models.length}`)
+  if (lastOllamaSignature !== `online:${models.length}`) {
+    lastOllamaSignature = `online:${models.length}`
+    logger.log('INFO', 'Ollama', `Ollama online. Available models count: ${models.length}`)
+  }
   return {
     status: 'online',
     url: hostUrl,
@@ -317,6 +324,7 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
 
 let cachedGpuResult: DiagnosticsData['gpu'] | null = null
 let cachedGpuTimestamp = 0
+let lastGpuSignature: string | null = null
 const GPU_CACHE_TTL_MS = 30000 // 30 seconds TTL cache for GPU process execution
 
 export async function detectNvidiaGpu(): Promise<DiagnosticsData['gpu']> {
@@ -328,7 +336,10 @@ export async function detectNvidiaGpu(): Promise<DiagnosticsData['gpu']> {
   return new Promise((resolve) => {
     exec('nvidia-smi', (error, stdout) => {
       if (error || !stdout.trim()) {
-        logger.log('INFO', 'GPU', `nvidia-smi check failed or GPU not present: ${error?.message || 'No output'}`)
+        if (lastGpuSignature !== 'none') {
+          lastGpuSignature = 'none'
+          logger.log('INFO', 'GPU', `nvidia-smi check failed or GPU not present: ${error?.message || 'No output'}`)
+        }
         const res: DiagnosticsData['gpu'] = {
           hasNvidiaGpu: false,
           error: 'No NVIDIA GPU detected or nvidia-smi unavailable',
@@ -365,7 +376,11 @@ export async function detectNvidiaGpu(): Promise<DiagnosticsData['gpu']> {
             vramUsedMB = parseInt(parts[2], 10) || 0
           }
 
-          logger.log('INFO', 'GPU', `Detected GPU: ${gpuName} | VRAM: ${vramUsedMB}/${vramTotalMB} MB | CUDA: ${cudaVersion}`)
+          const currentSignature = `${gpuName}:${cudaVersion}`
+          if (lastGpuSignature !== currentSignature) {
+            lastGpuSignature = currentSignature
+            logger.log('INFO', 'GPU', `Detected GPU: ${gpuName} | VRAM: ${vramUsedMB}/${vramTotalMB} MB | CUDA: ${cudaVersion}`)
+          }
           const res: DiagnosticsData['gpu'] = {
             hasNvidiaGpu: true,
             gpuName,
@@ -409,11 +424,12 @@ export function getMemoryInfo(): DiagnosticsData['memory'] {
   }
 }
 
+let lastOverallDiagnosticsSignature: string | null = null
+
 export async function runFullDiagnostics(
   sidecarStatus: DiagnosticsData['sidecar'] = { status: 'offline', error: 'Not checked' },
   ollamaHost = 'http://127.0.0.1:11434'
 ): Promise<DiagnosticsData> {
-  logger.log('INFO', 'Diagnostics', 'Running full system diagnostics scan...')
   const [ollama, gpu] = await Promise.all([
     checkOllamaStatus(ollamaHost),
     detectNvidiaGpu(),
@@ -459,6 +475,11 @@ export async function runFullDiagnostics(
     timestamp: new Date().toISOString(),
   }
 
-  logger.log('INFO', 'Diagnostics', `Full scan complete. Status: ${overallStatus}, Sidecar: ${sidecarStatus.status}, Ollama: ${ollama.status}, GPU: ${gpu.hasNvidiaGpu ? gpu.gpuName : 'None'}, RAM: ${memory.usedRAMGB}/${memory.totalRAMGB} GB`)
+  const currentDiagSig = `${overallStatus}:${sidecarStatus.status}:${ollama.status}:${gpu.hasNvidiaGpu}`
+  if (lastOverallDiagnosticsSignature !== currentDiagSig) {
+    lastOverallDiagnosticsSignature = currentDiagSig
+    logger.log('INFO', 'Diagnostics', `System status: ${overallStatus} | Sidecar: ${sidecarStatus.status} | Ollama: ${ollama.status} | GPU: ${gpu.hasNvidiaGpu ? gpu.gpuName : 'None'} | RAM: ${memory.usedRAMGB}/${memory.totalRAMGB} GB`)
+  }
+
   return diagnosticsData
 }

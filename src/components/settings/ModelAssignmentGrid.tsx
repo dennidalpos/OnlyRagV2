@@ -260,7 +260,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
               {buildModelOptions(
                 settings.medicalModel || '',
-                ['biomistral:latest', 'meditron:7b', 'meditron:70b', 'llama3.1:8b']
+                ['adrienbrault/biomistral-7b:Q4_K_M', 'meditron:7b', 'meditron:70b', 'llama3.1:8b']
               ).map((m) => renderOption(m, m))}
             </select>
           </div>

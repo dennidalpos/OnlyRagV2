@@ -1,26 +1,37 @@
 # Specifiche Tecniche dei Moduli — OnlyRag V2
 
-Questo documento descrive in dettaglio la struttura modulare, le responsabilità, i flussi di dati e le interdipendenze di tutti i componenti di OnlyRag V2.
+Questo documento descrive in dettaglio la struttura modulare, le responsabilità, gli entry point, gli input/output e le interdipendenze di tutti i componenti di OnlyRag V2.
 
 ---
 
 ## 1. Moduli Frontend (Renderer React 19)
 
 ### 1.1. Core Hooks & State Engines (`src/hooks/`)
-* **`useChatEngine.ts`**: Gestisce lo stato conversazionale della chat RAG, l'interrogazione asincrona al database vettoriale, l'instradamento di dominio (`domainRouter.ts`), la formattazione dei prompt contestualizzati con bounding budget e lo streaming della risposta da Ollama.
-* **`useAgentStudio.ts`**: Gestisce il ciclo agentico autonomo (Tool Calling Loop), l'orchestrazione delle sessioni di lavoro, la sincronizzazione del file system e l'iniezione dei feedback di auto-healing.
-* **`useIngestedDocuments.ts`**: Mantiene l'elenco e lo stato di sincronizzazione dei documenti memorizzati in LanceDB, gestendo il polling e le operazioni di cancellazione.
+* **`useChatEngine.ts`**:
+  * **Responsabilità**: Gestisce lo stato conversazionale della chat RAG, l'interrogazione asincrona al database vettoriale, l'instradamento di dominio (`domainRouter.ts`), la formattazione dei prompt contestualizzati con bounding budget e lo streaming della risposta da Ollama.
+  * **Input/Output**: Accetta messaggi utente, lista documenti attivi; emette lo stream di token e l'elenco delle citazioni verificate.
+* **`useCodingAgent.ts`**:
+  * **Responsabilità**: Gestisce il ciclo agentico autonomo (Tool Calling Loop), l'orchestrazione delle sessioni di lavoro nidificate, la sincronizzazione del file system e l'iniezione dei feedback di auto-healing.
+  * **Input/Output**: Accetta istruzioni di coding e file allegati; emette log di tool eseguiti, diff di file e messaggi dell'agente.
+* **`useIngestedDocuments.ts`**:
+  * **Responsabilità**: Mantiene l'elenco e lo stato di sincronizzazione dei documenti memorizzati in LanceDB, gestendo il polling e le operazioni atomiche di eliminazione.
 
 ### 1.2. Servizi Frontend (`src/services/`)
-* **`api.ts` (`apiService`)**: Adapter di comunicazione HTTP verso il FastAPI Sidecar locale (ingestion, hybrid search vettoriale, export report).
-* **`domainRouter.ts`**: Sub-Router specialistico per la classificazione dell'intento (Medical, Legal, General) basato su keyword regex e **Vector Centroid Semantic Matching** con morfi clinici e giuridici (`calculateCentroidSimilarity`).
-* **`hardwareRecommendationEngine.ts`**: Motore deterministico di raccomandazione dei modelli basato su profilo hardware (**P1 – P5**), calcolo della VRAM, RAM di sistema e capienza disco richiesta.
+* **`api.ts` (`apiService`)**:
+  * **Responsabilità**: Adapter di comunicazione HTTP verso il FastAPI Sidecar locale (`http://127.0.0.1:8000`).
+  * **Metodi**: `ingestFile(formData)`, `search(query, topK, model, docIds)`, `getDocuments()`, `deleteDocument(docId)`, `exportDocument(params)`.
+* **`domainRouter.ts`**:
+  * **Responsabilità**: Sub-Router specialistico per la classificazione dell'intento (Medical, Legal, General) basato su keyword regex e **Vector Centroid Semantic Matching** con morfi clinici e giuridici (`calculateCentroidSimilarity`).
+* **`hardwareRecommendationEngine.ts`**:
+  * **Responsabilità**: Motore deterministico di profilazione hardware (**P1 – P5**) e raccomandazione modelli basato su calcolo della VRAM GPU, RAM di sistema e capienza disco richiesta.
 
 ### 1.3. Viste e Componenti UI (`src/components/`)
 * **`components/chat/`**: Interfaccia di conversazione RAG con visualizzazione badge di citazione sorgente, anteprima snippet dei chunk ed espansione fonti.
-* **`components/studio/`**: AI Coding Agent Studio con editor Monaco integrato, split diff viewer, terminale interattivo xterm (ConPTY) e file explorer.
-* **`components/wizard/`**: Setup Wizard hardware guidato con sub-tab di selezione modelli per Chat Generale, Coding, Settore Medico/Clinico, Legale/Compliance e Vision OCR.
-* **`components/skills/`**: Gestione, installazione e modifica delle Skill agentiche (`SKILL.md`) con calcolo di checksum SHA-256 e tracciamento provenance (`local_custom`, `hub_original`, `hub_modified`).
+* **`components/coding/`**: AI Coding Agent Studio con editor Monaco integrato, split diff viewer, terminale interattivo xterm (ConPTY) e file explorer.
+* **`components/translation/`**: Vista di traduzione strutturata con Monaco `DiffEditor` side-by-side ed export multi-formato.
+* **`components/ingestion/`**: Vista di caricamento documenti, anteprima testo estratto e ricerca vettoriale live.
+* **`components/wizard/`**: Setup Wizard hardware guidato per la configurazione iniziale dei modelli.
+* **`components/skills/`**: Gestione, installazione e modifica delle Skill agentiche (`SKILL.md`) con calcolo di checksum SHA-256 e tracciamento provenance.
 
 ---
 
@@ -28,8 +39,8 @@ Questo documento descrive in dettaglio la struttura modulare, le responsabilità
 
 ### 2.1. Presentation Layer (`electron/core/presentation/`)
 Espone e valida i canali IPC bidirezionali tra Renderer e Main:
-* **`agentIpc.ts`**: Canali per l'esecuzione di turni agentici, stop generation, gestione sessioni e benchmark.
-* **`ollamaIpc.ts`**: Canali per download modelli (`pull`), stato modelli residenti in VRAM (`get-running-models`) ed evizione controllata (`unload-model`).
+* **`agentIpc.ts`**: Canali per l'esecuzione di turni agentici (`agent:run-turn`), stop generation (`agent:stop-generation`) e benchmark (`agent:run-benchmark`).
+* **`ollamaIpc.ts`**: Canali per download modelli (`ollama:pull-model`), modelli residenti in VRAM (`ollama:get-running-models`) ed evizione esplicita (`ollama:unload-model`).
 * **`systemIpc.ts`**: Diagnostica di sistema (CPU, RAM, GPU/VRAM via NVML, spazio su disco) e gestione del logger.
 * **`workspaceIpc.ts`**: Operazioni su file, directory, terminale PTY e comandi shell.
 * **`skillIpc.ts`**: Sincronizzazione, salvataggio e cancellazione delle skill nel workspace.
@@ -38,16 +49,18 @@ Espone e valida i canali IPC bidirezionali tra Renderer e Main:
 Orchestra i casi d'uso di sistema implementando la logica applicativa:
 * **`agentOrchestratorAppService.ts`**: Esegue il loop agentico multi-step (Tool Calling), coordina lo streaming token per token verso la UI, calcola il `dynamicNumCtx` e gestisce l'auto-healing in caso di errori di build o test.
 * **`agentToolExecutorService.ts`**: Esegue in modo sicuro i tool invocati dal modello (`read_file`, `write_file`, `replace_file_content`, `run_command`, `list_dir`).
+* **`skillAppService.ts`**: Gestisce il ciclo di vita delle skill, l'installazione dai marketplace e la sincronizzazione con il file system.
 * **`ollamaAppService.ts`**: Facade per la gestione dello stato del daemon Ollama e del ciclo di vita dei modelli.
 * **`systemAppService.ts`**: Ispezione delle risorse hardware e verifica preventiva dello spazio su disco.
 
 ### 2.3. Domain Layer (`electron/core/domain/`)
 Contiene entità pure, logica decisionale e regole di business indipendenti dall'infrastruttura:
-* **`ollama/lifecycleCoordinator.ts`**: Regole di residenza in memoria (`primary_pinned`, `ephemeral`, `standard`), calcolo `calculateVramAllocationRatio` per memorie unificate/discrete e prevenzione del VRAM thrashing.
-* **`agent/contextWindowCalculator.ts`**: Calcolo a bucket dinamici ($2048, 4096, 8192, 16384, 32768, 65536$) del parametro `num_ctx` per il risparmio di KV-Cache.
-* **`agent/toolParser.ts`**: Parser tollerante per l'estrazione di chiamate tool strutturate, rimozione di tag `<think>...</think>` e auto-riparazione di JSON dirty.
-* **`agent/complexityEvaluator.ts`**: Valutazione della complessità del prompt per instradamento gerarchico (Fast Tier, Standard Tier, Deep Tier, Escalated Tier) con Circuit Breaker per la de-escalation graduale.
-
+* **`ollama/lifecycleCoordinator.ts`**: Regole di residenza in memoria (`primary_pinned`, `ephemeral`, `standard`), calcolo allocazione VRAM e prevenzione del thrashing.
+* **`agent/contextWindowCalculator.ts`**: Calcolo dinamico a bucket ($2048, 4096, 8192, 16384, 32768, 65536$) del parametro `num_ctx` per il risparmio di KV-Cache.
+* **`agent/toolParser.ts`**: Parser tollerante per l'estrazione di chiamate tool strutturate, rimozione di tag `<think>...</think>` e auto-riparazione di JSON malformato.
+* **`agent/complexityEvaluator.ts`**: Valutazione della complessità del prompt per instradamento gerarchico (Fast Tier, Standard Tier, Deep Tier, Escalated Tier).
+* **`agent/hardwareProfileResolver.ts`**: Risoluzione del profilo hardware e mappatura dei parametri ottimali di runtime.
+* **`skills/skillMatcher.ts`**: Valutazione euristica e scoring ponderato per l'abbinamento contestuale delle skill al prompt utente.
 
 ### 2.4. Infrastructure Layer (`electron/core/infrastructure/`)
 Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
@@ -55,6 +68,7 @@ Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
 * **`http/agentStreamTransport.ts`**: Gestore dello streaming SSE/NDJSON per i turni dell'agente con supporto a `keep_alive` pinning.
 * **`filesystem/fileSystemRepository.ts`**: Repository per la lettura, scrittura sicura, patch e rimpiazzo multi-chunk tollerante a CRLF.
 * **`filesystem/skillRepository.ts`**: Repository per il caricamento, parsing YAML e verifica SHA-256 delle skill agentiche.
+* **`logging/codingAgentLogger.ts`**: Logger di audit strutturato per Coding Agent Studio (`logs/coding_agent_audit.log`) con registrazione dettagliata di prompt, tool call, parametri JSON, log di esecuzione terminale e feedback di auto-healing.
 * **`pty/ptySessionManager.ts`**: Gestore di sessioni terminale Windows ConPTY su `node-pty`.
 
 ---

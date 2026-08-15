@@ -51,7 +51,9 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
       if (navLang.startsWith('en')) {
         return 'en'
       }
-    } catch {}
+    } catch (err: any) {
+      logger.warn('I18n', `Could not read initial language preference: ${err?.message}`)
+    }
     return 'it'
   })
 

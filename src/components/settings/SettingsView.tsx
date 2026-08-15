@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { DiagnosticsData, AppSettings } from '../../types'
-import { Settings, RefreshCw, Download, Trash2, Zap, Loader2, Globe, Heart, Award } from 'lucide-react'
+import { Settings, RefreshCw, Download, Trash2, Zap, Loader2, Globe, Heart, Award, FolderOpen } from 'lucide-react'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
 import { TaskConcurrencyConfig } from './TaskConcurrencyConfig'
 import { useSettingsManager } from '../../hooks/useSettingsManager'
 import { useTranslation, Language } from '../../i18n'
+import { apiService } from '../../services/api'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -129,6 +130,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         settings={settings}
         onUpdateSettings={onUpdateSettings}
       />
+
+      {/* Coding Agent Studio Audit & Debug Logging */}
+      <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-cyan-400" /> {t('settings.codingAgentDebugLog')}
+            </h2>
+            <p className="text-xs text-slate-400 max-w-2xl">
+              {t('settings.codingAgentDebugLogDesc')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={async () => {
+                await apiService.openLogsFolder()
+              }}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-cyan-500/60 text-slate-200 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-2 active:scale-95 shadow-sm"
+              aria-label={t('settings.openLogsFolder')}
+            >
+              <FolderOpen className="w-4 h-4 text-cyan-400" /> {t('settings.openLogsFolder')}
+            </button>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(settings.enableCodingAgentDebugLog)}
+              onClick={() => onUpdateSettings({ enableCodingAgentDebugLog: !settings.enableCodingAgentDebugLog })}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950 ${
+                settings.enableCodingAgentDebugLog ? 'bg-cyan-600' : 'bg-slate-800'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  settings.enableCodingAgentDebugLog ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Ollama Model Management Panel */}
       <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-4">

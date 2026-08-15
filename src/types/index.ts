@@ -140,6 +140,9 @@ export interface AppSettings {
   complexityDeepModel?: string
   // Concurrency & Task Queue Settings
   maxConcurrentTasks?: number // Range: 1-8, default 1
+  maxToolCallSteps?: number // Range: 10-200, default 50
+  // Coding Agent Audit & Debug Logging
+  enableCodingAgentDebugLog?: boolean
   // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
   // Internationalization
@@ -213,9 +216,21 @@ export interface AgentToolCall {
     | 'download_file'
     | 'run_command'
     | 'inspect_os_env'
+    | 'ask'
     | 'finish'
   parameters: Record<string, any>
   explanation?: string
+}
+
+export interface CodingSession {
+  id: string
+  workspacePath: string | null
+  title: string
+  createdAt: string
+  updatedAt: string
+  actionLogs: AgentActionLog[]
+  promptQueue?: { id: string; prompt: string; createdAt: string }[]
+  pinnedFilePaths?: string[]
 }
 
 export type SkillOriginType = 'local_custom' | 'hub_original' | 'hub_modified'
@@ -316,6 +331,7 @@ export interface IElectronAPI {
   getLogs: () => Promise<LogEntry[]>
   clearLogs: () => Promise<boolean>
   getLogFilePath: () => Promise<string>
+  openLogsFolder?: () => Promise<{ success: boolean; path?: string; error?: string }>
   logTelemetry: (level: LogLevel, category: string, message: string) => Promise<boolean>
   pullOllamaModel: (modelName: string) => Promise<{ success: boolean; data?: string; error?: string }>
   cancelPullOllamaModel: () => Promise<{ success: boolean; error?: string }>

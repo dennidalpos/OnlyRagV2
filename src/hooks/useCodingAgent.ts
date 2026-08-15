@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument } from '../types'
+import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument, CodingSession } from '../types'
 import { AgentMode } from '../components/coding/CodingAgentView'
 import { useIngestedDocuments } from './useIngestedDocuments'
+import { logger } from '../lib/logger'
 
 export interface QueuedPrompt {
   id: string
@@ -9,10 +10,44 @@ export interface QueuedPrompt {
   createdAt: string
 }
 
+const SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
+const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
+
+function loadSavedSessions(): CodingSession[] {
+  try {
+    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch (err: any) {
+    logger.warn('useCodingAgent', `Could not parse saved sessions from localStorage: ${err?.message}`)
+  }
+  return []
+}
+
+function saveSavedSessions(sessions: CodingSession[]) {
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions))
+  } catch (err: any) {
+    logger.warn('useCodingAgent', `Could not persist sessions to localStorage: ${err?.message}`)
+  }
+}
+
 export function useCodingAgent(settings?: AppSettings) {
   const [agentMode, setAgentMode] = useState<AgentMode>('plan')
   const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search'>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
+
+  // Workspace State
+  const [workspacePath, setWorkspacePath] = useState<string | null>(() => {
+    return settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null
+  })
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(settings?.noWorkspaceMode || false)
+
+  // Sessions State
+  const [allSessions, setAllSessions] = useState<CodingSession[]>(() => loadSavedSessions())
+  const [activeSessionId, setActiveSessionId] = useState<string>('')
 
   // Prompt Queue State
   const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([])
@@ -36,10 +71,6 @@ export function useCodingAgent(settings?: AppSettings) {
   const [grepCaseInsensitive, setGrepCaseInsensitive] = useState<boolean>(true)
   const [grepResults, setGrepResults] = useState<any[]>([])
   const [isSearchingGrep, setIsSearchingGrep] = useState<boolean>(false)
-
-  // Workspace State
-  const [workspacePath, setWorkspacePath] = useState<string | null>(settings?.customWorkspacePath || null)
-  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(settings?.noWorkspaceMode || false)
 
   // File Tree State
   const [files, setFiles] = useState<WorkspaceFile[]>([])
@@ -96,6 +127,57 @@ export function useCodingAgent(settings?: AppSettings) {
     replacements?: { targetContent: string; replacementContent: string }[]
     parameters?: Record<string, any>
   } | null>(null)
+
+  // Initialize or restore session for active workspace
+  useEffect(() => {
+    const currentWorkspaceSessions = allSessions.filter(
+      (s) => (s.workspacePath || '') === (workspacePath || '')
+    )
+    if (currentWorkspaceSessions.length === 0) {
+      const newSession: CodingSession = {
+        id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        workspacePath,
+        title: 'Nuova Sessione',
+        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        actionLogs: [],
+        promptQueue: [],
+      }
+      setAllSessions((prev) => {
+        const next = [newSession, ...prev]
+        saveSavedSessions(next)
+        return next
+      })
+      setActiveSessionId(newSession.id)
+      setActionLogs([])
+      setPromptQueue([])
+    } else {
+      const active = currentWorkspaceSessions.find((s) => s.id === activeSessionId) || currentWorkspaceSessions[0]
+      setActiveSessionId(active.id)
+      setActionLogs(active.actionLogs || [])
+      setPromptQueue(active.promptQueue || [])
+    }
+  }, [workspacePath])
+
+  // Sync actionLogs and promptQueue changes to active session in storage
+  useEffect(() => {
+    if (!activeSessionId) return
+    setAllSessions((prev) => {
+      const next = prev.map((s) => {
+        if (s.id === activeSessionId) {
+          return {
+            ...s,
+            actionLogs,
+            promptQueue,
+            updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }
+        }
+        return s
+      })
+      saveSavedSessions(next)
+      return next
+    })
+  }, [actionLogs, promptQueue, activeSessionId])
 
   const addActionLog = (type: AgentActionLog['type'], message: string, detail?: string) => {
     setActionLogs((prev) => [
@@ -234,6 +316,11 @@ export function useCodingAgent(settings?: AppSettings) {
     const chosen = await window.electronAPI.openDirectoryDialog({ title: 'Select Workspace Folder for AI Coding Agent' })
     if (chosen) {
       setWorkspacePath(chosen)
+      try {
+        localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, chosen)
+      } catch (err: any) {
+        logger.warn('useCodingAgent', `Failed saving last workspace to localStorage: ${err?.message}`)
+      }
       setIsStandaloneMode(false)
       setSelectedFile(null)
       loadWorkspaceFiles(chosen)
@@ -328,25 +415,14 @@ export function useCodingAgent(settings?: AppSettings) {
         }
       }
 
-      // 2. If reading, writing, or editing a file -> open and show it in editor tab
+      // 2. Refresh workspace files on file write/replace/delete operations without opening unwanted tabs
       if (
-        log.message.includes('replace_chunk') ||
-        log.message.includes('write_file') ||
-        log.message.includes('read_file') ||
-        log.message.startsWith('Edited ') ||
-        log.message.startsWith('Explored ') ||
-        log.message.includes('Read File')
+        log.message.includes('Successfully wrote file') ||
+        log.message.includes('Successfully replaced') ||
+        log.message.includes('Successfully deleted')
       ) {
-        const fileMatch =
-          log.message.match(/filePath":\s*"([^"]+)"/) ||
-          log.message.match(/\[UNTRUSTED FILE CONTENT:\s*([^\]]+)\]/) ||
-          log.message.match(/(?:Edited|Explored)\s+([^\s]+)/) ||
-          (log.detail && log.detail.match(/filePath":\s*"([^"]+)"/))
-
-        if (fileMatch && fileMatch[1]) {
-          const rawPath = fileMatch[1].trim()
-          const fileName = rawPath.split(/[\\/]/).pop() || rawPath
-          handleOpenFile({ name: fileName, path: rawPath, isDir: false })
+        if (workspacePath) {
+          loadWorkspaceFiles(workspacePath)
         }
       }
     })
@@ -395,11 +471,31 @@ export function useCodingAgent(settings?: AppSettings) {
     addActionLog('info', 'Esecuzione interrotta dall\'utente.')
   }
 
-  const handleNewSession = () => {
+  const workspaceSessions = allSessions.filter(
+    (s) => (s.workspacePath || '') === (workspacePath || '')
+  )
+  const activeSession = allSessions.find((s) => s.id === activeSessionId) || workspaceSessions[0] || null
+
+  const handleCreateSession = () => {
     if (isExecuting && window.electronAPI) {
       if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
+    const newSession: CodingSession = {
+      id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      workspacePath,
+      title: 'Nuova Sessione',
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actionLogs: [],
+      promptQueue: [],
+    }
+    setAllSessions((prev) => {
+      const next = [newSession, ...prev]
+      saveSavedSessions(next)
+      return next
+    })
+    setActiveSessionId(newSession.id)
     setIsExecuting(false)
     setAgentPrompt('')
     setActiveSkills([])
@@ -411,11 +507,60 @@ export function useCodingAgent(settings?: AppSettings) {
     setActionLogs([])
   }
 
+  const handleSwitchSession = (sessionId: string) => {
+    if (sessionId === activeSessionId) return
+    if (isExecuting && window.electronAPI) {
+      if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
+      if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
+    }
+    const target = allSessions.find((s) => s.id === sessionId)
+    if (target) {
+      setActiveSessionId(target.id)
+      setActionLogs(target.actionLogs || [])
+      setPromptQueue(target.promptQueue || [])
+      promptQueueRef.current = target.promptQueue || []
+      setIsExecuting(false)
+      setAgentPrompt('')
+    }
+  }
+
+  const handleDeleteSession = (sessionId: string) => {
+    const remaining = allSessions.filter((s) => s.id !== sessionId)
+    setAllSessions(remaining)
+    saveSavedSessions(remaining)
+
+    if (activeSessionId === sessionId) {
+      const nextInWorkspace = remaining.filter((s) => (s.workspacePath || '') === (workspacePath || ''))
+      if (nextInWorkspace.length > 0) {
+        handleSwitchSession(nextInWorkspace[0].id)
+      } else {
+        handleCreateSession()
+      }
+    }
+  }
+
+  const handleRenameSession = (sessionId: string, newTitle: string) => {
+    if (!newTitle.trim()) return
+    setAllSessions((prev) => {
+      const next = prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle.trim() } : s))
+      saveSavedSessions(next)
+      return next
+    })
+  }
+
+  const handleNewSession = handleCreateSession
+
   const executeTask = async (taskPrompt: string) => {
     if (!taskPrompt.trim() || !window.electronAPI) return
     setIsExecuting(true)
     setActiveSkills([])
     addActionLog('info', `User Prompt: ${taskPrompt}`)
+
+    // Auto-update session title if it is default
+    if (activeSession && (activeSession.title === 'Nuova Sessione' || activeSession.title === 'New Session' || activeSession.title.startsWith('Session '))) {
+      const autoTitle = taskPrompt.slice(0, 32).trim() + (taskPrompt.length > 32 ? '...' : '')
+      handleRenameSession(activeSession.id, autoTitle)
+    }
 
     try {
       const activeModel = settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
@@ -448,7 +593,9 @@ export function useCodingAgent(settings?: AppSettings) {
               if (res.success && res.content) {
                 content = res.content
               }
-            } catch {}
+            } catch (err: any) {
+              logger.warn('useCodingAgent', `Error reading pinned file ${f.path}: ${err?.message}`)
+            }
           }
           return { name: f.name, path: f.path, content }
         })
@@ -564,6 +711,18 @@ export function useCodingAgent(settings?: AppSettings) {
     setIsExecuting(false)
   }
 
+  const compactContext = useCallback(() => {
+    if (actionLogs.length === 0) return
+    const recentLogs = actionLogs.slice(-6)
+    const summaryLog: AgentActionLog = {
+      id: `compacted-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type: 'info',
+      message: `🧹 Session Context Compacted: Pruned older action steps (${actionLogs.length - recentLogs.length} entries removed) to optimize context window headroom.`,
+    }
+    setActionLogs([summaryLog, ...recentLogs])
+  }, [actionLogs])
+
   return {
     agentMode,
     setAgentMode,
@@ -629,8 +788,17 @@ export function useCodingAgent(settings?: AppSettings) {
     handleClearTerminal: () => setTerminalLogs(['Windows PowerShell (Terminal Svuotato)', '']),
     handleAgentExecute,
     handleCancelAgent,
+    allSessions,
+    workspaceSessions,
+    activeSessionId,
+    activeSession,
+    handleCreateSession,
+    handleSwitchSession,
+    handleDeleteSession,
+    handleRenameSession,
     handleNewSession,
     handleApproveAction,
+    compactContext,
     addActionLog,
   }
 }

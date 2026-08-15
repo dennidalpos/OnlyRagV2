@@ -165,8 +165,10 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
               {/* Action Buttons */}
               <div className="flex items-center gap-1.5 self-end sm:self-start shrink-0">
                 <button
+                  type="button"
                   onClick={() => onToggleActive(skill.id, skill.isActive)}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  aria-label={skill.isActive ? `${t('common.active')}: ${skill.name}` : `Auto: ${skill.name}`}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 focus-ring ${
                     skill.isActive
                       ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -178,8 +180,10 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => onEditSkill(skill)}
-                  className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-slate-700 transition-all"
+                  aria-label={`${t('common.edit')} ${skill.name}`}
+                  className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-slate-700 transition-all focus-ring"
                   title={t('common.edit')}
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -187,8 +191,10 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
 
                 {skill.originType === 'hub_modified' && (
                   <button
+                    type="button"
                     onClick={() => onResetSkill(skill.id)}
-                    className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all"
+                    aria-label={`${t('skills.resetOriginal')} ${skill.name}`}
+                    className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all focus-ring"
                     title={t('skills.resetOriginal')}
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -196,8 +202,10 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
                 )}
 
                 <button
+                  type="button"
                   onClick={() => onDeleteSkill(skill.id)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                  aria-label={`${t('common.delete')} ${skill.name}`}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all focus-ring"
                   title={t('common.delete')}
                 >
                   <Trash2 className="w-3.5 h-3.5" />

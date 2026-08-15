@@ -36,7 +36,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
     : (settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b')
 
   return (
-    <div className="h-12 px-4 border-b border-slate-800/80 bg-[#0b0f17] flex items-center justify-between z-10 shrink-0 select-text font-sans">
+    <div className="h-12 px-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between z-10 shrink-0 select-text font-sans">
       {/* Left: Project & Module Title */}
       <div className="flex items-center gap-2 text-xs">
         <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">

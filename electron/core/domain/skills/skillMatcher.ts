@@ -28,14 +28,52 @@ function matchesWordOrPhrase(text: string, term: string): boolean {
   return text.includes(clean)
 }
 
+export interface SkillMatchContext {
+  userTask: string
+  activeFilePath?: string
+  activeFileContent?: string
+  pinnedFiles?: { path: string; name?: string }[]
+  workspacePath?: string
+}
+
 export function matchSkillsForTask(
-  userTask: string,
+  userTaskOrContext: string | SkillMatchContext,
   availableSkills: SkillDefinition[],
   maxSkillsToInject: number = 3
 ): SkillDefinition[] {
-  if (!userTask || availableSkills.length === 0) return []
+  if (!userTaskOrContext || availableSkills.length === 0) return []
 
-  const lowerTask = userTask.toLowerCase()
+  const userTask = typeof userTaskOrContext === 'string' ? userTaskOrContext : userTaskOrContext.userTask || ''
+  if (!userTask && typeof userTaskOrContext === 'string') return []
+
+  let expandedLookup = userTask.toLowerCase()
+
+  if (typeof userTaskOrContext !== 'string') {
+    const ctx = userTaskOrContext
+    if (ctx.activeFilePath) {
+      const ext = ctx.activeFilePath.split('.').pop() || ''
+      const fileName = ctx.activeFilePath.split(/[\/\\]/).pop() || ''
+      expandedLookup += ` ${fileName.toLowerCase()} ext:${ext.toLowerCase()} ${ext.toLowerCase()}`
+    }
+    if (ctx.pinnedFiles && ctx.pinnedFiles.length > 0) {
+      for (const pf of ctx.pinnedFiles) {
+        const pExt = pf.path.split('.').pop() || ''
+        const pName = pf.name || pf.path.split(/[\/\\]/).pop() || ''
+        expandedLookup += ` ${pName.toLowerCase()} ${pExt.toLowerCase()}`
+      }
+    }
+    if (ctx.workspacePath) {
+      const wsName = ctx.workspacePath.split(/[\/\\]/).pop() || ''
+      expandedLookup += ` workspace:${wsName.toLowerCase()}`
+    }
+    if (ctx.activeFileContent) {
+      // Sample first 300 characters for import and framework signatures
+      const snippet = ctx.activeFileContent.slice(0, 300).toLowerCase().replace(/[^a-z0-9-_]/g, ' ')
+      expandedLookup += ` ${snippet}`
+    }
+  }
+
+  const lowerTask = expandedLookup
   const scoredSkills: { skill: SkillDefinition; score: number }[] = []
 
   for (const skill of availableSkills) {

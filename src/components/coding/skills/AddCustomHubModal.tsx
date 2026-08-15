@@ -97,39 +97,42 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor="hub-name-input" className="block text-xs font-semibold text-slate-300 mb-1">
               {t('skills.hubName')} *
             </label>
             <input
+              id="hub-name-input"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('skills.customHubNamePlaceholder')}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring placeholder:text-slate-400"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor="hub-url-input" className="block text-xs font-semibold text-slate-300 mb-1">
               {t('skills.hubUrl')} *
             </label>
             <input
+              id="hub-url-input"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder={t('skills.customHubUrlPlaceholder')}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring font-mono placeholder:text-slate-400"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor="hub-type-select" className="block text-xs font-semibold text-slate-300 mb-1">
               {t('skills.hubType')}
             </label>
             <select
+              id="hub-type-select"
               value={type}
               onChange={(e) => setType(e.target.value as HubSourceType)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring"
             >
               <option value="json-catalog">JSON Catalog (hub.json / API)</option>
               <option value="github-repo">GitHub Repo / SKILL.md Raw</option>
@@ -137,15 +140,16 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor="hub-desc-input" className="block text-xs font-semibold text-slate-300 mb-1">
               {t('skills.skillDescription')}
             </label>
             <input
+              id="hub-desc-input"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('skills.customHubDescPlaceholder')}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus-ring placeholder:text-slate-400"
             />
           </div>
 

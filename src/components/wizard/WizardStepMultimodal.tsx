@@ -127,8 +127,6 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
                   modelName={dm}
                   displayName={dm}
                   description={t('hardwareWizard.customLocalModel')}
-                  sizeBytesApprox="Local"
-                  family={dm.split(':')[0].split('-')[0]}
                   isInstalled={true}
                   isSelected={selectedVision === dm}
                   onSelect={() => onSelectVision(dm)}
@@ -182,8 +180,6 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
                   modelName={dm}
                   displayName={dm}
                   description={t('hardwareWizard.customLocalModel')}
-                  sizeBytesApprox="Local"
-                  family={dm.split(':')[0].split('-')[0]}
                   isInstalled={true}
                   isSelected={selectedEmbedding === dm}
                   onSelect={() => onSelectEmbedding(dm)}

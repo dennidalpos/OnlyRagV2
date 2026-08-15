@@ -16,25 +16,41 @@ function sanitizeAndParseJson(raw: string): any {
   try {
     let clean = raw.trim()
 
-    // Strip <think>...</think> and <thought>...</thought> reasoning blocks if present
+    // 1. Strip <think>...</think> and <thought>...</thought> reasoning blocks if present
     clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim()
 
-    // Fix unescaped Windows file path backslashes (e.g., C:\path\to\file -> C:\\path\\to\\file)
-    clean = clean.replace(/\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\')
+    // 2. Convert JS backtick-quoted template literal values: "key": `value` or key: `value`
+    clean = clean.replace(/:\s*`([\s\S]*?)`(?=\s*[,}\]])/g, (_match, p1) => {
+      const escaped = p1
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\r\n|\r|\n/g, '\\n')
+        .replace(/\t/g, '\\t')
+      return `: "${escaped}"`
+    })
 
-    // Fix trailing commas before closing braces/brackets across multi-line strings
+    // 3. Fix unescaped control newlines, carriage returns, and tabs inside double-quoted strings
+    clean = clean.replace(/("(?:[^"\\]|\\.)*")/gs, (match) => {
+      return match.replace(/\r\n|\r|\n/g, '\\n').replace(/\t/g, '\\t')
+    })
+
+    // 4. Fix lone single backslashes in path fields (e.g. C:\Users\test_app -> C:\\Users\\test_app)
+    clean = clean.replace(/("(?:filePath|path|dirPath|target_file|file_path|filename|destination)"\s*:\s*)"([^"]*)"/gi, (_m, keyPart, pathVal) => {
+      const fixedSlashes = pathVal.replace(/(?<!\\)\\(?!\\)/g, '\\\\')
+      return `${keyPart}"${fixedSlashes}"`
+    })
+
+    // 5. Fix remaining lone unescaped backslashes across JSON without corrupting existing \\
+    clean = clean.replace(/(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4}|\\)/g, '\\\\')
+
+    // 6. Fix trailing commas before closing braces/brackets across multi-line strings
     clean = clean.replace(/,\s*([}\]])/g, '$1')
 
-    // Fix single quoted keys e.g. {'tool': ...} -> {"tool": ...}
+    // 7. Fix single quoted keys e.g. {'tool': ...} -> {"tool": ...}
     clean = clean.replace(/([{,]\s*)'([^']+)'\s*:/g, '$1"$2":')
 
-    // Fix single quoted values e.g. "tool": 'read_file' -> "tool": "read_file"
+    // 8. Fix single quoted values e.g. "tool": 'read_file' -> "tool": "read_file"
     clean = clean.replace(/:\s*'([^']*)'/g, ':"$1"')
-
-    // Fix unescaped control newlines inside quotes
-    clean = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-      return match.replace(/\r?\n/g, '\\n').replace(/\t/g, '\\t')
-    })
 
     return JSON.parse(clean)
   } catch (err: any) {
@@ -90,7 +106,10 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       if (toolName === 'ask' || toolName === 'ask_question' || toolName === 'question' || toolName === 'clarify' || toolName === 'user_input' || toolName === 'prompt_user' || toolName === 'inquire') toolName = 'ask'
       if (toolName === 'complete' || toolName === 'done' || toolName === 'finish_task' || toolName === 'stop' || toolName === 'end_task') toolName = 'finish'
 
-      const rawParams = parsed.parameters || parsed.args || parsed.params || {}
+      const rawParams: Record<string, any> = {
+        ...parsed,
+        ...(parsed.parameters || parsed.args || parsed.params || {}),
+      }
       const parameters: Record<string, any> = { ...rawParams }
 
       if (!parameters.filePath) {

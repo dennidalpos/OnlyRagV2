@@ -395,7 +395,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             <button
               onClick={handleExportJson}
               title={t('systemPrompt.exportJson')}
-              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5"
+              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5 focus-ring"
             >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">{t('systemPrompt.exportJson')}</span>
@@ -404,7 +404,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             <button
               onClick={() => fileInputRef.current?.click()}
               title={t('systemPrompt.importJson')}
-              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5"
+              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5 focus-ring"
             >
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">{t('systemPrompt.importJson')}</span>

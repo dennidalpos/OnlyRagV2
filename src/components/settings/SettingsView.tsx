@@ -240,7 +240,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ) : (
                     <button
                       onClick={() => setDeletingModel(modelName)}
-                      className="p-1.5 text-slate-400 hover:text-red-400 transition-colors focus-ring"
+                      className="p-1.5 text-slate-400 hover:text-red-400 transition-colors focus-ring rounded-lg"
                       title={t('settings.deleteModel')}
                       aria-label={`${t('settings.deleteModel')} ${modelName}`}
                     >

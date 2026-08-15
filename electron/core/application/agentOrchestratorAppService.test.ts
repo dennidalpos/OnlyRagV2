@@ -99,4 +99,67 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.summary).toBe('Pivoted and completed.')
     expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(4)
   })
+
+  it('should execute in plan mode and complete with step proposal without mutating files', async () => {
+    const proposedActionJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: proposedActionJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Plan the architecture',
+        agentMode: 'plan',
+        workspacePath: tempDir,
+      },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    expect(res.summary).toContain('Proposed tool call: write_file')
+    // Workspace must not have index.ts created in plan mode
+    expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
+  })
+
+  it('should hot-swap from plan to agent mode smoothly on consecutive turns', async () => {
+    // Turn 1: Plan Mode
+    const planJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "app.ts", "content": "export const a = 1;" }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: planJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const turn1Res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Step 1: Plan architecture',
+        agentMode: 'plan',
+        workspacePath: tempDir,
+      },
+      null
+    )
+    expect(turn1Res.success).toBe(true)
+    expect(turn1Res.summary).toContain('Proposed tool call')
+
+    // Turn 2: Hot-swapped to Agent Mode (executes and finishes)
+    const agentFinishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Code executed and verified." }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: agentFinishJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const turn2Res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Step 2: Execute plan',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+      },
+      null
+    )
+    expect(turn2Res.success).toBe(true)
+    expect(turn2Res.summary).toBe('Code executed and verified.')
+  })
 })

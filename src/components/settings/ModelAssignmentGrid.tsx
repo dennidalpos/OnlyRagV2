@@ -100,7 +100,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Fast Tier */}
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
@@ -168,7 +168,33 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
+
+          {/* Heavy Escalation Tier (14B+) */}
+          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-amber-900/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                🔶 Heavy Tier
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Escalation</span>
+            </div>
+            <select
+              aria-label="Select Coding Heavy Escalation Tier Model"
+              value={settings.complexityHeavyModel || ''}
+              onChange={(e) => onUpdateSettings({ complexityHeavyModel: e.target.value || undefined })}
+              className="w-full bg-slate-950 border border-amber-900/40 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
+            >
+              <option value="">— Disabled —</option>
+              {buildModelOptions(
+                settings.complexityHeavyModel || '',
+                ['qwen2.5-coder:14b', 'deepseek-r1:14b', 'phi4:14b', 'codestral:22b', 'deepseek-r1:32b', 'qwen2.5-coder:32b']
+              ).map((m) => renderOption(m, m))}
+            </select>
+            <p className="text-[10px] text-amber-500/70 leading-tight">
+              On-demand 14B+ model. Activates only when all lighter tiers fail. Triggers VRAM eviction before loading.
+            </p>
+          </div>
         </div>
+
       </div>
 
       {/* Module 2 & 3: RAG Chat & Document Translation */}

@@ -81,4 +81,20 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
 
     expect(prompt.length).toBeLessThanOrEqual(20000)
   })
+
+  it('should render ∞ when maxSteps is Infinity or 0', () => {
+    const prompt = AgentPromptAssembler.assembleTurnPrompt({
+      userTask: 'Long running task',
+      agentMode: 'agent',
+      stepCount: 1,
+      maxSteps: Infinity,
+      targetModel: 'qwen2.5-coder:7b',
+      workspacePath: 'D:/project',
+      toolOutputHistory: [],
+      settings: defaultSettings,
+      runtimeOpts,
+    })
+
+    expect(prompt).toContain('Step 1/∞')
+  })
 })

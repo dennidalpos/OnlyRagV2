@@ -14,6 +14,9 @@ import {
   Download,
   Filter,
   FolderOpen,
+  ShieldCheck,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import {
@@ -44,6 +47,10 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   const [copiedReport, setCopiedReport] = useState<boolean>(false)
   const [copiedEnvScript, setCopiedEnvScript] = useState<string | null>(null)
   const [showEnvConfig, setShowEnvConfig] = useState<boolean>(false)
+  const [showApprovalModal, setShowApprovalModal] = useState<boolean>(false)
+  const [isApplyingEnvVars, setIsApplyingEnvVars] = useState<boolean>(false)
+  const [restartOllamaAfterApply, setRestartOllamaAfterApply] = useState<boolean>(true)
+  const [applyEnvFeedback, setApplyEnvFeedback] = useState<{ success: boolean; message: string } | null>(null)
   const [autoScroll, setAutoScroll] = useState<boolean>(false)
   const consoleBottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -100,6 +107,30 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
     if (window.electronAPI) {
       await window.electronAPI.clearLogs()
       setLogs([])
+    }
+  }
+
+  const handleApplyEnvVars = async () => {
+    if (!envConfig || envConfig.variables.length === 0) return
+    setIsApplyingEnvVars(true)
+    try {
+      const res = await apiService.applyOllamaEnvironmentVariables(
+        envConfig.variables.map((v) => ({ name: v.name, value: v.value })),
+        restartOllamaAfterApply
+      )
+      setApplyEnvFeedback({
+        success: res.success,
+        message: res.message || (res.success ? 'Variabili applicate con successo!' : "Errore durante l'applicazione"),
+      })
+      setShowApprovalModal(false)
+      onRefreshDiagnostics()
+    } catch (err: any) {
+      setApplyEnvFeedback({
+        success: false,
+        message: `Errore: ${err.message}`,
+      })
+    } finally {
+      setIsApplyingEnvVars(false)
     }
   }
 
@@ -378,14 +409,49 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                     setCopiedEnvScript('ps')
                     setTimeout(() => setCopiedEnvScript(null), 2500)
                   }}
-                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 text-[11px] font-bold rounded-lg transition-all focus-ring flex items-center gap-1 active:scale-95"
+                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-semibold rounded-lg transition-all focus-ring flex items-center gap-1 active:scale-95"
                   title="Copia script PowerShell per impostare le variabili d'ambiente OS utente"
                 >
                   {copiedEnvScript === 'ps' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedEnvScript === 'ps' ? 'Copiato!' : 'Copia PowerShell'}</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowApprovalModal(true)}
+                  className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-cyan-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 border border-amber-500/50 text-[11px] font-bold rounded-lg transition-all focus-ring flex items-center gap-1.5 active:scale-95 shadow-sm"
+                  title="Applica le variabili d'ambiente al sistema operativo (richiede conferma)"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Applica all'OS...</span>
+                </button>
               </div>
             </div>
+
+            {applyEnvFeedback && (
+              <div
+                className={`mx-4 my-2 p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                  applyEnvFeedback.success
+                    ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300'
+                    : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {applyEnvFeedback.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{applyEnvFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setApplyEnvFeedback(null)}
+                  className="p-1 hover:bg-slate-800/60 rounded text-slate-400 hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {showEnvConfig && (
               <div className="p-4 border-t border-slate-800/80 bg-slate-950 space-y-3 max-h-60 overflow-y-auto">
@@ -545,6 +611,93 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
           </div>
         )}
       </div>
+
+      {/* User Approval Modal for Environment Variables */}
+      {showApprovalModal && envConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-100 text-sm">Richiesta di Approvazione Utente</h3>
+                  <p className="text-[11px] text-slate-400">Applicazione Variabili d'Ambiente Ollama OS</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApprovalModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
+              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-800/40 text-amber-200/90 leading-relaxed text-[11px]">
+                Le seguenti variabili d'ambiente verranno impostate in modo persistente nel profilo utente del sistema operativo (Windows User Environment) per ottimizzare l'allocazione VRAM, la velocità di inferenza (Flash Attention) e la concorrenza di Ollama per il profilo hardware <strong>{envConfig.profileTier.toUpperCase()}</strong>:
+              </div>
+
+              <div className="space-y-2 font-mono">
+                {envConfig.variables.map((v) => (
+                  <div key={v.name} className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-cyan-300 text-[11px]">{v.name}</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-900 text-amber-300 font-bold border border-slate-700 text-[10px]">
+                        {v.value}
+                      </span>
+                    </div>
+                    <p className="text-slate-400 font-sans text-[10px]">{v.description} — <span className="italic text-slate-500">{v.rationale}</span></p>
+                  </div>
+                ))}
+              </div>
+
+              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={restartOllamaAfterApply}
+                  onChange={(e) => setRestartOllamaAfterApply(e.target.checked)}
+                  className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4 bg-slate-900"
+                />
+                <span className="text-[11px] text-slate-300">
+                  Riavvia automaticamente l'applicazione Ollama per rendere attive le modifiche immediatamente
+                </span>
+              </label>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowApprovalModal(false)}
+                disabled={isApplyingEnvVars}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyEnvVars}
+                disabled={isApplyingEnvVars}
+                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+              >
+                {isApplyingEnvVars ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Applicazione in corso...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Approva e Applica</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

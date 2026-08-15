@@ -168,72 +168,74 @@ def process_and_index_document_generator(
             else:
                 pdf_doc = pymupdf.open(stream=content, filetype="pdf")
 
-            num_pages = len(pdf_doc)
-            yield json.dumps({
-                "type": "progress",
-                "percent": 10,
-                "step": f"Rilevate {num_pages} pagine nel documento PDF. Inizio estrazione ad alta precisione...",
-                "pipeline": "PDF Stream & Table Extraction",
-                "page": 1,
-                "total_pages": num_pages,
-                "fileName": filename
-            }) + "\n"
+            try:
+                num_pages = len(pdf_doc)
+                yield json.dumps({
+                    "type": "progress",
+                    "percent": 10,
+                    "step": f"Rilevate {num_pages} pagine nel documento PDF. Inizio estrazione ad alta precisione...",
+                    "pipeline": "PDF Stream & Table Extraction",
+                    "page": 1,
+                    "total_pages": num_pages,
+                    "fileName": filename
+                }) + "\n"
 
-            for page_idx in range(num_pages):
-                page_num = page_idx + 1
-                page = pdf_doc.load_page(page_idx)
-                page_md_parts: List[str] = []
+                for page_idx in range(num_pages):
+                    page_num = page_idx + 1
+                    page = pdf_doc.load_page(page_idx)
+                    page_md_parts: List[str] = []
 
-                # 1. Native table extraction
-                md_tables, _ = extract_tables_from_page(page)
-                table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
+                    # 1. Native table extraction
+                    md_tables, _ = extract_tables_from_page(page)
+                    table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
 
-                # 2. Text extraction
-                raw_text = page.get_text("text").strip()
-                if len(raw_text) < 40:
-                    yield json.dumps({
-                        "type": "progress",
-                        "percent": int(10 + (page_num / num_pages) * 55),
-                        "step": f"Pagina {page_num}/{num_pages}: Esecuzione OCR Layout su pagina scansionata...",
-                        "pipeline": "OCR Layout (Scansione)",
-                        "page": page_num,
-                        "total_pages": num_pages,
-                        "fileName": filename
-                    }) + "\n"
+                    # 2. Text extraction
+                    raw_text = page.get_text("text").strip()
+                    if len(raw_text) < 40:
+                        yield json.dumps({
+                            "type": "progress",
+                            "percent": int(10 + (page_num / num_pages) * 55),
+                            "step": f"Pagina {page_num}/{num_pages}: Esecuzione OCR Layout su pagina scansionata...",
+                            "pipeline": "OCR Layout (Scansione)",
+                            "page": page_num,
+                            "total_pages": num_pages,
+                            "fileName": filename
+                        }) + "\n"
 
-                    pix = page.get_pixmap(dpi=150)
-                    img_bytes = pix.tobytes("png")
-                    ocr_result = run_layout_ocr(img_bytes)
-                    if ocr_result.strip():
-                        page_md_parts.append(ocr_result.strip())
+                        pix = page.get_pixmap(dpi=150)
+                        img_bytes = pix.tobytes("png")
+                        ocr_result = run_layout_ocr(img_bytes)
+                        if ocr_result.strip():
+                            page_md_parts.append(ocr_result.strip())
+                        else:
+                            page_md_parts.append("[Scanned page - No readable text extracted]")
                     else:
-                        page_md_parts.append("[Scanned page - No readable text extracted]")
-                else:
-                    yield json.dumps({
-                        "type": "progress",
-                        "percent": int(10 + (page_num / num_pages) * 55),
-                        "step": f"Pagina {page_num}/{num_pages}: Estrazione testo{table_info}...",
-                        "pipeline": "PDF Stream & Table Finder",
-                        "page": page_num,
-                        "total_pages": num_pages,
-                        "fileName": filename
-                    }) + "\n"
+                        yield json.dumps({
+                            "type": "progress",
+                            "percent": int(10 + (page_num / num_pages) * 55),
+                            "step": f"Pagina {page_num}/{num_pages}: Estrazione testo{table_info}...",
+                            "pipeline": "PDF Stream & Table Finder",
+                            "page": page_num,
+                            "total_pages": num_pages,
+                            "fileName": filename
+                        }) + "\n"
 
-                    if md_tables:
-                        page_md_parts.append(raw_text)
-                        page_md_parts.extend(md_tables)
-                    else:
-                        page_md_parts.append(raw_text)
+                        if md_tables:
+                            page_md_parts.append(raw_text)
+                            page_md_parts.extend(md_tables)
+                        else:
+                            page_md_parts.append(raw_text)
 
-                # 3. Figure / Diagram annotations
-                diagrams = extract_images_and_diagrams_from_page(pdf_doc, page, page_num)
-                if diagrams:
-                    page_md_parts.extend(diagrams)
+                    # 3. Figure / Diagram annotations
+                    diagrams = extract_images_and_diagrams_from_page(pdf_doc, page, page_num)
+                    if diagrams:
+                        page_md_parts.extend(diagrams)
 
-                page_content = "\n\n".join(page_md_parts).strip() or "[Empty Page Content]"
-                page_blocks.append((page_num, sanitize_extracted_text(page_content)))
+                    page_content = "\n\n".join(page_md_parts).strip() or "[Empty Page Content]"
+                    page_blocks.append((page_num, sanitize_extracted_text(page_content)))
+            finally:
+                pdf_doc.close()
 
-            pdf_doc.close()
             paginated_sections = [f"## Page {p_idx}\n\n{p_text}" for p_idx, p_text in page_blocks]
             full_markdown = f"# {filename}\n\n" + "\n\n".join(paginated_sections)
         except Exception as pdf_err:
@@ -492,21 +494,22 @@ def render_document_page_preview(doc_id: str, page_num: int) -> PagePreviewRespo
         if ext == ".pdf":
             try:
                 pdf_doc = pymupdf.open(file_path)
-                real_page_idx = target_page - 1
-                if 0 <= real_page_idx < len(pdf_doc):
-                    page = pdf_doc.load_page(real_page_idx)
-                    pix = page.get_pixmap(dpi=150)
-                    png_bytes = pix.tobytes("png")
+                try:
+                    real_page_idx = target_page - 1
+                    if 0 <= real_page_idx < len(pdf_doc):
+                        page = pdf_doc.load_page(real_page_idx)
+                        pix = page.get_pixmap(dpi=150)
+                        png_bytes = pix.tobytes("png")
+                        b64_png = base64.b64encode(png_bytes).decode("utf-8")
+                        return PagePreviewResponse(
+                            doc_id=doc_id,
+                            page_number=target_page,
+                            total_pages=num_pages,
+                            image_base64=b64_png,
+                            mime_type="image/png"
+                        )
+                finally:
                     pdf_doc.close()
-                    b64_png = base64.b64encode(png_bytes).decode("utf-8")
-                    return PagePreviewResponse(
-                        doc_id=doc_id,
-                        page_number=target_page,
-                        total_pages=num_pages,
-                        image_base64=b64_png,
-                        mime_type="image/png"
-                    )
-                pdf_doc.close()
             except Exception as pdf_err:
                 logger.warning(f"Failed rendering real PDF page {target_page} from {file_path}: {pdf_err}")
 
@@ -534,15 +537,17 @@ def render_document_page_preview(doc_id: str, page_num: int) -> PagePreviewRespo
 
     try:
         temp_pdf = pymupdf.open()
-        page_doc = temp_pdf.new_page(width=595, height=842)
-        page_text = pages[target_page - 1] if len(pages) >= target_page else (pages[0] if pages else "Page Content")
-        clean_render_text = re.sub(r'^##\s+Page\s+\d+\s*', '', page_text, flags=re.IGNORECASE)
-        page_doc.insert_text((50, 60), f"PAGINA {target_page} / {num_pages} — ANTEPRIMA", fontsize=11, fontname="helv", color=(0.2, 0.6, 0.8))
-        page_doc.insert_textbox(pymupdf.Rect(50, 80, 545, 800), clean_render_text[:3000], fontsize=10, fontname="helv", color=(0.15, 0.15, 0.15))
-        
-        pix = page_doc.get_pixmap(dpi=150)
-        png_bytes = pix.tobytes("png")
-        temp_pdf.close()
+        try:
+            page_doc = temp_pdf.new_page(width=595, height=842)
+            page_text = pages[target_page - 1] if len(pages) >= target_page else (pages[0] if pages else "Page Content")
+            clean_render_text = re.sub(r'^##\s+Page\s+\d+\s*', '', page_text, flags=re.IGNORECASE)
+            page_doc.insert_text((50, 60), f"PAGINA {target_page} / {num_pages} — ANTEPRIMA", fontsize=11, fontname="helv", color=(0.2, 0.6, 0.8))
+            page_doc.insert_textbox(pymupdf.Rect(50, 80, 545, 800), clean_render_text[:3000], fontsize=10, fontname="helv", color=(0.15, 0.15, 0.15))
+            
+            pix = page_doc.get_pixmap(dpi=150)
+            png_bytes = pix.tobytes("png")
+        finally:
+            temp_pdf.close()
         
         b64_png = base64.b64encode(png_bytes).decode("utf-8")
         return PagePreviewResponse(

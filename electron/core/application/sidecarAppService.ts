@@ -239,10 +239,11 @@ export class SidecarAppService {
   }
 
   getDocumentPagePreview(docId: string, pageNumber: number) {
-    if (!docId) return Promise.resolve(null)
+    if (!docId || typeof docId !== 'string') return Promise.resolve(null)
+    const page = Math.max(1, Number(pageNumber) || 1)
     return new Promise((resolve) => {
       const req = http.get(
-        `http://127.0.0.1:8000/documents/${encodeURIComponent(docId)}/page-preview/${pageNumber}`,
+        `http://127.0.0.1:8000/documents/${encodeURIComponent(docId)}/page-preview/${page}`,
         { agent: httpAgent, timeout: 5000 },
         (res) => {
           let raw = ''
@@ -259,17 +260,23 @@ export class SidecarAppService {
                   mimeType: data.mime_type || 'image/png',
                 })
               } catch (parseErr: any) {
+                logger.log('WARN', 'SidecarApp', `Failed parsing page preview JSON for ${docId}: ${parseErr.message}`)
                 resolve(null)
               }
             } else {
+              logger.log('DEBUG', 'SidecarApp', `Page preview HTTP ${res.statusCode} for doc ${docId} page ${page}`)
               resolve(null)
             }
           })
         }
       )
-      req.on('error', () => resolve(null))
+      req.on('error', (err) => {
+        logger.log('WARN', 'SidecarApp', `Failed page preview request for ${docId}: ${err.message}`)
+        resolve(null)
+      })
       req.setTimeout(5000, () => {
         req.destroy()
+        logger.log('WARN', 'SidecarApp', `Page preview request timed out (5s) for ${docId}`)
         resolve(null)
       })
     })

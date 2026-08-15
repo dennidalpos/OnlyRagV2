@@ -61,6 +61,7 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
               key={preset.value}
               type="button"
               role="radio"
+              tabIndex={isSelected ? 0 : -1}
               aria-checked={isSelected}
               onClick={() => handleSelectConcurrency(preset.value)}
               aria-label={`Set concurrency to ${preset.value} tasks`}
@@ -113,13 +114,18 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
             min={10}
             max={200}
             step={5}
-            value={settings.maxToolCallSteps || 50}
-            onChange={(e) => onUpdateSettings({ maxToolCallSteps: parseInt(e.target.value, 10) })}
+            value={settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200) ? 200 : (settings.maxToolCallSteps || 50)}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10)
+              onUpdateSettings({ maxToolCallSteps: val >= 200 ? 0 : val })
+            }}
             className="w-32 accent-cyan-400 bg-slate-900 cursor-pointer"
             aria-label="Limite massimo passaggi tool call"
           />
-          <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[54px] text-center shadow-inner">
-            {settings.maxToolCallSteps || 50} step
+          <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[70px] text-center shadow-inner">
+            {settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200)
+              ? '∞ Illimitato'
+              : `${settings.maxToolCallSteps || 50} step`}
           </span>
         </div>
       </div>

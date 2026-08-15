@@ -401,17 +401,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               </div>
             )}
           </div>
-
-          {/* New Chat Button */}
-          <button
-            type="button"
-            onClick={onCreateSession}
-            title={t('coding.newProjectSession')}
-            className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all text-xs font-bold flex items-center gap-1 focus-ring active:scale-95 shadow-md shadow-indigo-950/40"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{t('chat.newChat')}</span>
-          </button>
         </div>
       </div>
 
@@ -953,11 +942,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <button
                   type="button"
                   role="radio"
+                  tabIndex={agentMode === 'plan' ? 0 : -1}
                   aria-checked={agentMode === 'plan'}
                   onClick={() => setAgentMode('plan')}
                   title={`${t('coding.planMode')}: ${t('coding.planModeDesc')}`}
                   className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-                    agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold' : 'text-slate-400 hover:text-slate-200'
+                    agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {t('coding.planModeShort')}
@@ -965,11 +955,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <button
                   type="button"
                   role="radio"
+                  tabIndex={agentMode === 'ask' ? 0 : -1}
                   aria-checked={agentMode === 'ask'}
                   onClick={() => setAgentMode('ask')}
                   title={`${t('coding.askMode')}: ${t('coding.askModeDesc')}`}
                   className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-                    agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold' : 'text-slate-400 hover:text-slate-200'
+                    agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold border border-amber-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {t('coding.askModeShort')}
@@ -977,11 +968,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 <button
                   type="button"
                   role="radio"
+                  tabIndex={agentMode === 'agent' ? 0 : -1}
                   aria-checked={agentMode === 'agent'}
                   onClick={() => setAgentMode('agent')}
                   title={`${t('coding.agentMode')}: ${t('coding.agentModeDesc')}`}
                   className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-                    agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold' : 'text-slate-400 hover:text-slate-200'
+                    agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {t('coding.agentModeShort')}

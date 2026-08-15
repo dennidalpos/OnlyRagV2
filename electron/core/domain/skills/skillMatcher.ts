@@ -34,6 +34,7 @@ export interface SkillMatchContext {
   activeFileContent?: string
   pinnedFiles?: { path: string; name?: string }[]
   workspacePath?: string
+  projectStack?: string[]
 }
 
 export function matchSkillsForTask(
@@ -46,65 +47,59 @@ export function matchSkillsForTask(
   const userTask = typeof userTaskOrContext === 'string' ? userTaskOrContext : userTaskOrContext.userTask || ''
   if (!userTask && typeof userTaskOrContext === 'string') return []
 
-  let expandedLookup = userTask.toLowerCase()
+  const ctx: SkillMatchContext = typeof userTaskOrContext === 'string'
+    ? { userTask }
+    : userTaskOrContext
 
-  if (typeof userTaskOrContext !== 'string') {
-    const ctx = userTaskOrContext
-    if (ctx.activeFilePath) {
-      const ext = ctx.activeFilePath.split('.').pop() || ''
-      const fileName = ctx.activeFilePath.split(/[\/\\]/).pop() || ''
-      expandedLookup += ` ${fileName.toLowerCase()} ext:${ext.toLowerCase()} ${ext.toLowerCase()}`
-    }
-    if (ctx.pinnedFiles && ctx.pinnedFiles.length > 0) {
-      for (const pf of ctx.pinnedFiles) {
-        const pExt = pf.path.split('.').pop() || ''
-        const pName = pf.name || pf.path.split(/[\/\\]/).pop() || ''
-        expandedLookup += ` ${pName.toLowerCase()} ${pExt.toLowerCase()}`
-      }
-    }
-    if (ctx.workspacePath) {
-      const wsName = ctx.workspacePath.split(/[\/\\]/).pop() || ''
-      expandedLookup += ` workspace:${wsName.toLowerCase()}`
-    }
-    if (ctx.activeFileContent) {
-      // Sample first 300 characters for import and framework signatures
-      const snippet = ctx.activeFileContent.slice(0, 300).toLowerCase().replace(/[^a-z0-9-_]/g, ' ')
-      expandedLookup += ` ${snippet}`
+  const taskText = ctx.userTask.toLowerCase()
+  const projectStack = new Set((ctx.projectStack || []).map((s) => s.toLowerCase()))
+
+  let fileContextText = ''
+  if (ctx.activeFilePath) {
+    const ext = ctx.activeFilePath.split('.').pop() || ''
+    const fileName = ctx.activeFilePath.split(/[\/\\]/).pop() || ''
+    fileContextText += ` ${fileName.toLowerCase()} ext:${ext.toLowerCase()} ${ext.toLowerCase()}`
+  }
+  if (ctx.pinnedFiles && ctx.pinnedFiles.length > 0) {
+    for (const pf of ctx.pinnedFiles) {
+      const pExt = pf.path.split('.').pop() || ''
+      const pName = pf.name || pf.path.split(/[\/\\]/).pop() || ''
+      fileContextText += ` ${pName.toLowerCase()} ${pExt.toLowerCase()}`
     }
   }
+  if (ctx.workspacePath) {
+    const wsName = ctx.workspacePath.split(/[\/\\]/).pop() || ''
+    fileContextText += ` workspace:${wsName.toLowerCase()}`
+  }
+  if (ctx.activeFileContent) {
+    const snippet = ctx.activeFileContent.slice(0, 300).toLowerCase().replace(/[^a-z0-9-_]/g, ' ')
+    fileContextText += ` ${snippet}`
+  }
 
-  const lowerTask = expandedLookup
   const scoredSkills: { skill: SkillDefinition; score: number }[] = []
 
   for (const skill of availableSkills) {
-    let score = 0
+    let promptScore = 0
+    let projectScore = 0
 
-    // 1. Explicit active toggle by user (+10.0)
-    if (skill.isActive) {
-      score += 10.0
-    }
-
-    // 2. Exact name match in task (+5.0)
+    // --- 1. User Prompt Matching ---
     const skillSlug = skill.name.toLowerCase().replace(/[-_]/g, ' ')
-    if (matchesWordOrPhrase(lowerTask, skillSlug) || matchesWordOrPhrase(lowerTask, skill.name)) {
-      score += 5.0
+    if (matchesWordOrPhrase(taskText, skillSlug) || matchesWordOrPhrase(taskText, skill.name)) {
+      promptScore += 10.0
     }
 
-    // 3. Triggers matching (+3.0 each)
     for (const trigger of skill.triggers) {
-      if (matchesWordOrPhrase(lowerTask, trigger)) {
-        score += 3.0
+      if (matchesWordOrPhrase(taskText, trigger)) {
+        promptScore += 6.0
       }
     }
 
-    // 4. Tags matching (+1.5 each)
     for (const tag of skill.tags) {
-      if (matchesWordOrPhrase(lowerTask, tag)) {
-        score += 1.5
+      if (matchesWordOrPhrase(taskText, tag)) {
+        promptScore += 3.0
       }
     }
 
-    // 5. Description unique keywords matching (+1.0 each, deduplicated)
     const descWords = Array.from(
       new Set(
         skill.description
@@ -115,13 +110,59 @@ export function matchSkillsForTask(
     )
 
     for (const word of descWords) {
-      if (matchesWordOrPhrase(lowerTask, word)) {
-        score += 1.0
+      if (matchesWordOrPhrase(taskText, word)) {
+        promptScore += 1.5
       }
     }
 
-    if (score > 0) {
-      scoredSkills.push({ skill, score })
+    // --- 2. Project Stack & File Context Matching ---
+    if (projectStack.size > 0) {
+      const skillNameClean = skill.name.toLowerCase()
+      if (projectStack.has(skillNameClean)) {
+        projectScore += 8.0
+      }
+
+      for (const trigger of skill.triggers) {
+        if (projectStack.has(trigger.toLowerCase())) {
+          projectScore += 6.0
+        }
+      }
+
+      for (const tag of skill.tags) {
+        if (projectStack.has(tag.toLowerCase())) {
+          projectScore += 4.0
+        }
+      }
+    }
+
+    if (fileContextText) {
+      for (const trigger of skill.triggers) {
+        if (matchesWordOrPhrase(fileContextText, trigger)) {
+          projectScore += 3.0
+        }
+      }
+      for (const tag of skill.tags) {
+        if (matchesWordOrPhrase(fileContextText, tag)) {
+          projectScore += 1.5
+        }
+      }
+    }
+
+    // --- 3. Combined Score & Synergy ---
+    let totalScore = promptScore + projectScore
+
+    // Synergy bonus when both prompt and project stack match
+    if (promptScore > 0 && projectScore > 0) {
+      totalScore += 5.0
+    }
+
+    // Baseline active preference
+    if (skill.isActive) {
+      totalScore += 1.0
+    }
+
+    if (totalScore > 0) {
+      scoredSkills.push({ skill, score: totalScore })
     }
   }
 

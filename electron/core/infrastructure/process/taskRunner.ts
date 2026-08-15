@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 import { spawn } from 'node:child_process'
 import { logger } from '../../../diagnostics'
 
@@ -10,6 +11,35 @@ export interface ActiveTask {
   filePath?: string
   destroy: () => void
   createdAt: number
+}
+
+export function normalizePowerShellCommand(command: string): string {
+  if (!command || typeof command !== 'string') return ''
+  let normalized = command.trim()
+
+  // 1. Ensure npx uses non-interactive -y flag if not already specified
+  normalized = normalized.replace(/^npx\s+(?!-y|--yes)(.+)/i, 'npx -y $1')
+
+  // 2. Ensure create-vite / npm create vite commands are non-interactive
+  if (/\bnpm\s+create\s+vite\b/i.test(normalized) || /\bcreate-vite\b/i.test(normalized)) {
+    if (!normalized.includes('--yes') && !normalized.includes('-y')) {
+      if (normalized.includes('--template') && !normalized.includes('-- --template')) {
+        normalized = normalized.replace(/--template\s+([^\s]+)/i, '-- --template $1 --yes')
+      } else {
+        normalized = `${normalized} --yes`
+      }
+    }
+  }
+
+  // 3. Convert compound && chaining (e.g. "cd dir && npm install") to PowerShell compatible sequence
+  if (normalized.includes('&&')) {
+    const parts = normalized.split(/\s*&&\s*/)
+    if (parts.length > 1) {
+      normalized = parts.join('; if ($?) { ') + ' }'.repeat(parts.length - 1)
+    }
+  }
+
+  return normalized
 }
 
 export class TaskRunner {
@@ -91,50 +121,37 @@ export class TaskRunner {
     let cleanedCount = 0
     let bytesFreed = 0
 
-    const userAppData = app.getPath('userData')
-    const tempDir = app.getPath('temp')
+    const userAppData = app?.getPath ? app.getPath('userData') : path.join(os.tmpdir(), 'OnlyRagV2_userData')
+    const tempDir = app?.getPath ? app.getPath('temp') : os.tmpdir()
 
     const dirsToClean = [
       path.join(userAppData, 'data', 'exports'),
       path.join(tempDir, 'OnlyRagV2_tmp'),
+      path.join(tempDir, 'onlyrag_temp'),
     ]
 
-    for (const targetDir of dirsToClean) {
-      if (fs.existsSync(targetDir)) {
+    for (const d of dirsToClean) {
+      if (fs.existsSync(d)) {
         try {
-          const files = fs.readdirSync(targetDir)
-          for (const file of files) {
-            const fullPath = path.join(targetDir, file)
+          const files = fs.readdirSync(d)
+          for (const f of files) {
+            const p = path.join(d, f)
             try {
-              const stat = fs.statSync(fullPath)
-              if (stat.isFile()) {
-                bytesFreed += stat.size
-                fs.unlinkSync(fullPath)
+              const st = fs.statSync(p)
+              if (st.isFile()) {
+                bytesFreed += st.size
+                fs.unlinkSync(p)
                 cleanedCount++
               }
-            } catch (fileErr: any) {
-              logger.log('WARN', 'TaskRunner', `Could not clean file ${fullPath}: ${fileErr.message}`)
-            }
+            } catch {}
           }
         } catch (err: any) {
-          logger.log('WARN', 'TaskRunner', `Failed cleaning residual directory ${targetDir}: ${err.message}`)
+          logger.log('WARN', 'TaskRunner', `Error reading residual dir ${d}: ${err.message}`)
         }
       }
     }
 
-    const tempInstaller = path.join(tempDir, 'OllamaSetup.exe')
-    if (fs.existsSync(tempInstaller)) {
-      try {
-        const stat = fs.statSync(tempInstaller)
-        bytesFreed += stat.size
-        fs.unlinkSync(tempInstaller)
-        cleanedCount++
-      } catch (instErr: any) {
-        logger.log('WARN', 'TaskRunner', `Failed unlinking temp installer ${tempInstaller}: ${instErr.message}`)
-      }
-    }
-
-    logger.log('INFO', 'TaskRunner', `Temp residual cleanup completed: ${cleanedCount} files removed, ${(bytesFreed / 1024 / 1024).toFixed(2)} MB freed.`)
+    logger.log('INFO', 'TaskRunner', `Cleaned ${cleanedCount} temporary residual files, freed ${(bytesFreed / 1024 / 1024).toFixed(2)} MB.`)
     return { success: true, cleanedCount, bytesFreed }
   }
 
@@ -143,13 +160,23 @@ export class TaskRunner {
     targetCwd?: string,
     timeoutMs?: number
   ): Promise<{ success: boolean; output: string; error?: string }> {
+    return this.executeTerminalCommand(command, targetCwd, undefined, timeoutMs)
+  }
+
+  async executeTerminalCommand(
+    command: string,
+    targetCwd?: string,
+    onChunk?: (chunk: string) => void,
+    timeoutMs?: number
+  ): Promise<{ success: boolean; output: string; error?: string }> {
     if (typeof command !== 'string' || !command.trim()) {
       return { success: false, output: '', error: 'Invalid command' }
     }
+    const normalizedCommand = normalizePowerShellCommand(command)
     const effectiveTimeoutMs = Math.min(Math.max(timeoutMs || 300000, 5000), 1800000)
-    logger.log('INFO', 'TaskRunner', `Executing PowerShell command: ${command}${targetCwd ? ` (CWD: ${targetCwd})` : ''} [Timeout: ${effectiveTimeoutMs / 1000}s]`)
+    logger.log('INFO', 'TaskRunner', `Executing PowerShell command: ${normalizedCommand}${targetCwd ? ` (CWD: ${targetCwd})` : ''} [Timeout: ${effectiveTimeoutMs / 1000}s]`)
 
-    let executionCwd = app.getPath('userData')
+    let executionCwd = app?.getPath ? app.getPath('userData') : process.cwd()
     if (targetCwd && typeof targetCwd === 'string' && fs.existsSync(targetCwd)) {
       try {
         const st = fs.statSync(targetCwd)
@@ -177,122 +204,131 @@ export class TaskRunner {
       PIP_NO_INPUT: '1',
     }
 
-    if (ptyModule) {
+    const runWithChildProcess = (): Promise<{ success: boolean; output: string; error?: string }> => {
       return new Promise((resolve) => {
         let isCompleted = false
-        let outputText = ''
 
-        try {
-          const ptyProcess = ptyModule.spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
-            name: 'xterm-color',
-            cols: 120,
-            rows: 30,
+        const psProcess = spawn(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', normalizedCommand],
+          {
             cwd: executionCwd,
-            env: execEnv as any,
-          })
+            env: execEnv,
+            windowsHide: true,
+          }
+        )
 
-          const timeoutTimer = setTimeout(() => {
-            if (!isCompleted && ptyProcess.pid) {
-              logger.log(
-                'WARN',
-                'TaskRunner',
-                `node-pty command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process PID ${ptyProcess.pid}...`
-              )
-              if (process.platform === 'win32') {
-                spawn('taskkill', ['/pid', ptyProcess.pid.toString(), '/f', '/t'])
-              } else {
-                ptyProcess.kill()
-              }
+        let stdout = ''
+        let stderr = ''
+
+        const timeoutTimer = setTimeout(() => {
+          if (!isCompleted && !psProcess.killed && psProcess.pid) {
+            logger.log(
+              'WARN',
+              'TaskRunner',
+              `Command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process tree PID ${psProcess.pid}...`
+            )
+            if (process.platform === 'win32') {
+              spawn('taskkill', ['/pid', psProcess.pid.toString(), '/f', '/t'])
+            } else {
+              psProcess.kill('SIGKILL')
             }
-          }, effectiveTimeoutMs)
+          }
+        }, effectiveTimeoutMs)
 
-          ptyProcess.onData((data: string) => {
-            outputText += data
-          })
+        psProcess.stdout?.on('data', (data) => {
+          stdout += data.toString()
+        })
+        psProcess.stderr?.on('data', (data) => {
+          stderr += data.toString()
+        })
 
-          ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
-            isCompleted = true
-            clearTimeout(timeoutTimer)
-            logger.log('INFO', 'TaskRunner', `node-pty PowerShell process PID ${ptyProcess.pid} finished with exit code ${exitCode}`)
-            const cleanOutput = outputText.replace(/\x1b\[[0-9;]*[a-zA-K]/g, '').trim()
-            resolve({
-              success: exitCode === 0,
-              output: cleanOutput || (exitCode === 0 ? 'Command executed successfully.' : `Process exited with code ${exitCode}`),
-              error: exitCode !== 0 ? cleanOutput || `Exit code ${exitCode}` : undefined,
-            })
+        psProcess.on('close', (code) => {
+          isCompleted = true
+          clearTimeout(timeoutTimer)
+          logger.log('INFO', 'TaskRunner', `PowerShell process PID ${psProcess.pid} finished with exit code ${code}`)
+          const output = (
+            stdout ||
+            stderr ||
+            (code === 0 ? 'Command executed successfully.' : `Process exited with code ${code}`)
+          ).trim()
+          resolve({
+            success: code === 0,
+            output,
+            error: code !== 0 ? stderr.trim() || `Exit code ${code}` : undefined,
           })
-        } catch (ptyErr: any) {
-          logger.log('WARN', 'TaskRunner', `node-pty spawn failed, falling back to child_process: ${ptyErr.message}`)
-          ptyModule = null
-        }
+        })
+
+        psProcess.on('error', (err) => {
+          isCompleted = true
+          clearTimeout(timeoutTimer)
+          logger.log('ERROR', 'TaskRunner', `PowerShell process error: ${err.message}`)
+          resolve({
+            success: false,
+            output: err.message,
+            error: err.message,
+          })
+        })
       })
     }
 
-    return new Promise((resolve) => {
-      let isCompleted = false
+    if (ptyModule) {
+      try {
+        return await new Promise((resolve) => {
+          let isCompleted = false
+          let outputText = ''
 
-      const psProcess = spawn(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
-        {
-          cwd: executionCwd,
-          env: execEnv,
-          windowsHide: true,
-        }
-      )
+          try {
+            const ptyProcess = ptyModule.spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+              name: 'xterm-color',
+              cols: 120,
+              rows: 30,
+              cwd: executionCwd,
+              env: execEnv as any,
+            })
 
-      let stdout = ''
-      let stderr = ''
+            const timeoutTimer = setTimeout(() => {
+              if (!isCompleted && ptyProcess.pid) {
+                logger.log(
+                  'WARN',
+                  'TaskRunner',
+                  `node-pty command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process PID ${ptyProcess.pid}...`
+                )
+                if (process.platform === 'win32') {
+                  spawn('taskkill', ['/pid', ptyProcess.pid.toString(), '/f', '/t'])
+                } else {
+                  ptyProcess.kill()
+                }
+              }
+            }, effectiveTimeoutMs)
 
-      const timeoutTimer = setTimeout(() => {
-        if (!isCompleted && !psProcess.killed && psProcess.pid) {
-          logger.log(
-            'WARN',
-            'TaskRunner',
-            `Command timed out after ${effectiveTimeoutMs / 1000}s. Terminating process tree PID ${psProcess.pid}...`
-          )
-          if (process.platform === 'win32') {
-            spawn('taskkill', ['/pid', psProcess.pid.toString(), '/f', '/t'])
-          } else {
-            psProcess.kill('SIGKILL')
+            ptyProcess.onData((data: string) => {
+              outputText += data
+            })
+
+            ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+              isCompleted = true
+              clearTimeout(timeoutTimer)
+              logger.log('INFO', 'TaskRunner', `node-pty PowerShell process PID ${ptyProcess.pid} finished with exit code ${exitCode}`)
+              const cleanOutput = outputText.replace(/\x1b\[[0-9;]*[a-zA-K]/g, '').trim()
+              resolve({
+                success: exitCode === 0,
+                output: cleanOutput || (exitCode === 0 ? 'Command executed successfully.' : `Process exited with code ${exitCode}`),
+                error: exitCode !== 0 ? cleanOutput || `Exit code ${exitCode}` : undefined,
+              })
+            })
+          } catch (ptyErr: any) {
+            logger.log('WARN', 'TaskRunner', `node-pty spawn failed synchronously, delegating to child_process: ${ptyErr.message}`)
+            runWithChildProcess().then(resolve)
           }
-        }
-      }, effectiveTimeoutMs)
-
-      psProcess.stdout?.on('data', (data) => {
-        stdout += data.toString()
-      })
-      psProcess.stderr?.on('data', (data) => {
-        stderr += data.toString()
-      })
-
-      psProcess.on('close', (code) => {
-        isCompleted = true
-        clearTimeout(timeoutTimer)
-        logger.log('INFO', 'TaskRunner', `PowerShell process PID ${psProcess.pid} finished with exit code ${code}`)
-        const output = (
-          stdout ||
-          stderr ||
-          (code === 0 ? 'Command executed successfully.' : `Process exited with code ${code}`)
-        ).trim()
-        resolve({
-          success: code === 0,
-          output,
-          error: code !== 0 ? stderr.trim() || `Exit code ${code}` : undefined,
         })
-      })
+      } catch (outerPtyErr: any) {
+        logger.log('WARN', 'TaskRunner', `node-pty outer failure: ${outerPtyErr.message}, falling back to child_process`)
+        return runWithChildProcess()
+      }
+    }
 
-      psProcess.on('error', (err) => {
-        isCompleted = true
-        clearTimeout(timeoutTimer)
-        logger.log('ERROR', 'TaskRunner', `PowerShell process error: ${err.message}`)
-        resolve({
-          success: false,
-          output: err.message,
-          error: err.message,
-        })
-      })
-    })
+    return runWithChildProcess()
   }
 }
 

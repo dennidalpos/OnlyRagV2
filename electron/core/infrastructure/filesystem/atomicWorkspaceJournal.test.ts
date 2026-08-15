@@ -76,4 +76,17 @@ describe('AtomicWorkspaceJournal Unit Tests', () => {
     expect(journal.trackedCount).toBe(0)
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('V2')
   })
+
+  it('should safely handle directory targets without throwing EISDIR and remove new directory on rollback', () => {
+    const subDir = path.join(tempDir, 'new_sub_dir')
+    journal.recordBeforeModification(subDir)
+
+    fs.mkdirSync(subDir, { recursive: true })
+    fs.writeFileSync(path.join(subDir, 'sub_file.txt'), 'content', 'utf-8')
+    expect(fs.existsSync(subDir)).toBe(true)
+
+    const rollbackRes = journal.rollbackAll()
+    expect(rollbackRes.restoredCount).toBe(1)
+    expect(fs.existsSync(subDir)).toBe(false)
+  })
 })

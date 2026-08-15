@@ -14,7 +14,8 @@ export interface PromptAssemblerInput {
   activeFile?: { name: string; path: string; content: string } | null
   pinnedFilesContextStr?: string
   skillsBlock?: string
-  toolOutputHistory: string[]
+  planBlock?: string
+  toolOutputHistory: string[] | string
   attachedContext?: string
   projectContextMapStr?: string
   settings: AppSettings
@@ -37,6 +38,7 @@ export class AgentPromptAssembler {
       activeFile,
       pinnedFilesContextStr,
       skillsBlock,
+      planBlock,
       toolOutputHistory,
       attachedContext,
       projectContextMapStr,
@@ -51,12 +53,15 @@ export class AgentPromptAssembler {
       {
         agentMode: agentMode.toUpperCase(),
         stepCount: String(stepCount),
-        MAX_STEPS: String(maxSteps),
+        MAX_STEPS: maxSteps === Infinity || maxSteps === 0 ? '∞' : String(maxSteps),
         userTask,
         workspacePath: isStandaloneMode ? 'Standalone (No Workspace)' : (workspacePath || 'No Folder Selected'),
       },
       settings
     )
+
+    // Priority 1.5: Dynamic Execution Plan & Goal Decomposition
+    const planSection = planBlock ? `${planBlock}\n` : ''
 
     // Priority 2: Active File Snippet & Explicitly Pinned Workspace Code Files
     const activeFileBlock = activeFile
@@ -69,11 +74,13 @@ export class AgentPromptAssembler {
     // Priority 2.5: Contextual Domain Skills & Guidelines
     const skillsSection = skillsBlock ? `${skillsBlock}\n` : ''
 
-    // Priority 3: Tool Execution History (Max 8 steps, capped)
-    const historyBlock =
-      toolOutputHistory.length > 0
-        ? `\nPREVIOUS COMPLETED TOOL STEPS & RESULTS (MAX LAST 8):\n${toolOutputHistory.join('\n\n').slice(0, 10000)}\n`
-        : ''
+    // Priority 3: Tool Execution History (Episodic Trajectory & Recent Detailed Outputs)
+    let historyBlock = ''
+    if (typeof toolOutputHistory === 'string' && toolOutputHistory.trim()) {
+      historyBlock = `\n${toolOutputHistory.slice(0, 10000)}\n`
+    } else if (Array.isArray(toolOutputHistory) && toolOutputHistory.length > 0) {
+      historyBlock = `\nPREVIOUS COMPLETED TOOL STEPS & RESULTS:\n${toolOutputHistory.join('\n\n').slice(0, 10000)}\n`
+    }
 
     // Priority 4: Auxiliary Background Context (RAG docs & Repository Tree Map)
     const maxRAGChars = runtimeOpts.maxContextChars <= 16000 ? 2500 : 6000
@@ -83,6 +90,7 @@ export class AgentPromptAssembler {
 
     const promptParts = [
       baseSystemPrompt,
+      planSection,
       pinnedBlock,
       activeFileBlock,
       skillsSection,
@@ -97,6 +105,7 @@ export class AgentPromptAssembler {
     if (fullPrompt.length > runtimeOpts.maxContextChars) {
       const compactedParts = [
         baseSystemPrompt,
+        planSection,
         pinnedBlock ? pinnedBlock.slice(0, 8000) : '',
         activeFileBlock ? activeFileBlock.slice(0, 4000) : '',
         skillsSection,

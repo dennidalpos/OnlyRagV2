@@ -42,4 +42,19 @@ describe('SystemAppService Unit Tests', () => {
     expect(typeof storagePath).toBe('string')
     expect(storagePath.length).toBeGreaterThan(0)
   })
+
+  it('should handle applying environment variables without errors', async () => {
+    const res = await service.applyOllamaEnvironmentVariables(
+      [
+        { name: 'OLLAMA_FLASH_ATTENTION', value: '1' },
+        { name: 'OLLAMA_KV_CACHE_TYPE', value: 'q8_0' },
+      ],
+      false
+    )
+
+    expect(res.success).toBe(true)
+    expect(res.appliedCount).toBe(2)
+    expect(process.env.OLLAMA_FLASH_ATTENTION).toBe('1')
+    expect(process.env.OLLAMA_KV_CACHE_TYPE).toBe('q8_0')
+  })
 })

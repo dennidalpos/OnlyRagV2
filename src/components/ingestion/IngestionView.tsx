@@ -74,6 +74,9 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
     dragCounterRef.current = 0
     setIsDraggingOver(false)
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (e.dataTransfer.files.length > 1) {
+        toast.info(`Caricamento di ${e.dataTransfer.files[0].name} (1 di ${e.dataTransfer.files.length} file)`)
+      }
       const file = e.dataTransfer.files[0]
       ing.handleFileUpload(file)
     }

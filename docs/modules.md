@@ -47,34 +47,38 @@ Espone e valida i canali IPC bidirezionali tra Renderer e Main:
 
 ### 2.2. Application Layer (`electron/core/application/`)
 Orchestra i casi d'uso di sistema implementando la logica applicativa:
-* **`agentOrchestratorAppService.ts`**: Esegue il loop agentico multi-step (Tool Calling), coordina lo streaming token per token verso la UI, calcola il `dynamicNumCtx`, intercetta loop ripetitivi con `AgentActionLoopDetector`, esegue il **Pre-Finish Verification Gate** per validare modifiche al codice prima della terminazione e gestisce l'auto-healing con rollback transazionale del filesystem.
-* **`resilientModelDispatcher.ts`**: Gestore del dispacciamento resiliente verso Ollama con degradazione graduale (fallback automatico su modelli alternativi e dimezzamento del context window in caso di OOM o timeout).
+* **`agentOrchestratorAppService.ts`**: Esegue il loop agentico multi-step (Tool Calling), coordina lo streaming token per token verso la UI, calcola il `dynamicNumCtx`, intercetta loop ripetitivi con `AgentActionLoopDetector`, esegue il **Pre-Finish Verification Gate** per validare modifiche al codice prima della terminazione e gestisce l'auto-healing con rollback transazionale del filesystem. Integra `AgentRuntimeModeFsm` per il gate di permessi per tool in base alla modalità FSM attiva, `HeuristicContextCompactor` per la compattazione deterministica del contesto al 75% watermark, e il tier HEAVY tramite `ResilientModelDispatcher.escalateToHeavyTier` su esaurimento dei tentativi sui tier leggeri.
+* **`resilientModelDispatcher.ts`**: Gestore del dispacciamento resiliente verso Ollama con degradazione graduale su 4 tier: Primary → Intermediate → Fallback → Heavy Escalation. Il tier HEAVY (14B+) è attivato solo su esaurimento di tutti i tier leggeri, previa evizione VRAM esplicita (`keep_alive: 0`) per liberare memoria. Configurabile tramite `complexityHeavyModel` in `AppSettings`.
 * **`agentToolExecutorService.ts`**: Esegue in modo sicuro i tool invocati dal modello (`read_file`, `extract_code_symbols`, `write_file`, `replace_file_content`, `multi_replace_file_content`, `run_command`, `list_dir`, `grep_search`), registrando gli snapshot preventivi su `AtomicWorkspaceJournal`.
 * **`skillAppService.ts`**: Gestisce il ciclo di vita delle skill, l'installazione dai marketplace e la sincronizzazione con il file system.
 * **`ollamaAppService.ts`**: Facade per la gestione dello stato del daemon Ollama e del ciclo di vita dei modelli.
-* **`systemAppService.ts`**: Ispezione delle risorse hardware e verifica preventiva dello spazio su disco.
+* **`systemAppService.ts`**: Ispezione delle risorse hardware, verifica preventiva dello spazio su disco e applicazione persistente delle variabili d'ambiente OS utente per l'ottimizzazione dell'hardware host.
 
 ### 2.3. Domain Layer (`electron/core/domain/`)
 Contiene entità pure, logica decisionale e regole di business indipendenti dall'infrastruttura:
 * **`agent/loopDetector.ts`**: Fingerprinting crittografico (SHA-256) delle invocazioni di tool per il rilevamento istantaneo di oscillazioni e loop ripetitivi con iniezione di direttive correttive (`[CRITICAL LOOP INTERVENTION]`).
+* **`agent/agentRuntimeMode.ts`**: FSM (Finite State Machine) per la gestione dei permessi di esecuzione per modalità (`ASK`, `PLAN`, `AGENT`). Definisce la matrice di permessi per tool (`ModePermissionConfig`), il gate di autorizzazione `isToolAllowed()` e il filtro dinamico degli strumenti disponibili per ciascuna modalità.
+* **`agent/planManager.ts`**: Parser e serializzatore del piano di esecuzione `.assistant/plan.md` in formato markdown checklist machine-parseable. Gestisce il ciclo di vita delle task (`- [ ]` / `- [x]`), l'identificazione della prima task pendente e il rilevamento della condizione di piano completato (`GOAL_COMPLETED`).
+* **`agent/heuristicContextCompactor.ts`**: Compattatore deterministico a costo zero (nessuna inferenza LLM aggiuntiva) attivato al 75% del watermark del contesto hardware. Segmenta il prompt in 4 tier di priorità (Immutable Anchor, Pinned Files, History, Aux Context) e riduce proporzionalmente i segmenti a bassa priorità usando `DiagnosticOutputReducer` per distillare i log di terminale.
 * **`ollama/lifecycleCoordinator.ts`**: Regole di residenza in memoria (`primary_pinned`, `ephemeral`, `standard`), calcolo allocazione VRAM e prevenzione del thrashing.
 * **`agent/contextWindowCalculator.ts`**: Calcolo dinamico a bucket ($2048, 4096, 8192, 16384, 32768, 65536$) del parametro `num_ctx` per il risparmio di KV-Cache.
-* **`agent/toolParser.ts`**: Parser tollerante per l'estrazione di chiamate tool strutturate, rimozione di tag `<think>...</think>` e auto-riparazione di JSON malformato.
+* **`agent/toolParser.ts`**: Parser tollerante per l'estrazione di chiamate tool strutturate, unificazione e unwrapping automatico di parametri flat (root-level), conversione resiliente di template literals JavaScript con backtick in stringhe JSON conformi, rimozione di tag `<think>...</think>` e auto-riparazione di JSON malformato.
 * **`agent/complexityEvaluator.ts`**: Valutazione della complessità del prompt per instradamento gerarchico (Fast Tier, Standard Tier, Deep Tier, Escalated Tier).
 * **`agent/hardwareProfileResolver.ts`**: Risoluzione del profilo hardware e mappatura dei parametri ottimali di runtime.
-* **`agent/promptCompiler.ts`**: Compilatore e risolutore di template per prompt di sistema con sostituzione deterministica di variabili contestuali (`{userTask}`, `{workspacePath}`, `{sourceLang}`, `{targetLang}`) ed ereditarietà tra preset di famiglia.
-* **`agent/promptPresets.ts`**: Definizione unificata e canonica (Single Source of Truth) dei prompt factory, metadati delle famiglie di modelli (`MODEL_FAMILIES`) e logica di rilevamento architetturale (`detectModelFamily`).
-* **`skills/skillMatcher.ts`**: Valutazione euristica e scoring ponderato per l'abbinamento contestuale delle skill al prompt utente.
+* **`agent/planAndSolveGraph.ts`**: Planner gerarchico disaccoppiato (`GoalDecompositionPlanner`) che scompone gli obiettivi in milestone verificabili con assunzioni falsificabili e traccia la convergenza del task.
+* **`agent/diagnosticOutputReducer.ts`**: Compattatore semantico per l'output di terminale e test runner (`DiagnosticOutputReducer`), con rimozione dei codici ANSI ed estrazione deterministica delle asserzioni fallite e degli stack trace.
+* **`agent/episodicMemoryCompactor.ts`**: Gestore della memoria episodica a finestra scorrevole con compattazione del contesto per prevenire il context drift nei task multi-step lunghi.
+* **`skills/skillMatcher.ts`**: Valutazione euristica e scoring ponderato per l'abbinamento contestuale delle skill al prompt utente, arricchito da fingerprinting automatico dello stack tecnologico del progetto (`package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`) e bonus di sinergia prompt+progetto.
 
 ### 2.4. Infrastructure Layer (`electron/core/infrastructure/`)
 Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
-* **`filesystem/atomicWorkspaceJournal.ts`**: Snapshot preventivo e gestione transazionale delle mutazioni file su disco con supporto a `rollbackAll()` completo su errore/annullamento e `commit()` a fine task.
+* **`filesystem/atomicWorkspaceJournal.ts`**: Snapshot preventivo e gestione transazionale delle mutazioni file su disco con gestione sicura di directory e file inesistenti, supporto a `rollbackAll()` completo su errore/annullamento e `commit()` a fine task.
 * **`http/ollamaHttpClient.ts`**: Client HTTP verso Ollama (`/api/generate`, `/api/tags`, `/api/ps`, `/api/pull`, `/api/show`).
 * **`http/agentStreamTransport.ts`**: Gestore dello streaming SSE/NDJSON per i turni dell'agente con supporto a `keep_alive` pinning.
 * **`filesystem/fileSystemRepository.ts`**: Repository per la lettura, scrittura sicura, patch e rimpiazzo multi-chunk tollerante a CRLF.
-* **`filesystem/skillRepository.ts`**: Repository per il caricamento, parsing YAML multi-line, verifica SHA-256 e persistenza dello stato attivo (`active_skills.json`) delle skill agentiche.
+* **`process/taskRunner.ts` & `process/persistentPowerShellSession.ts`**: Gestore di processi e sessioni PowerShell persistenti con mantenimento dello stato della shell e normalizzazione automatica dei comandi concatenati (`&&`) in sintassi condizionale PowerShell compatibile nativa.
+* **`filesystem/skillRepository.ts`**: Repository per il caricamento, parsing YAML multi-line, verifica SHA-256 e persistenza globale cross-project (`userData/skills/`) e locale (`workspace/skills/`) con tracciamento dello stato attivo.
 * **`http/skillHubClient.ts`**: Client di integrazione marketplace multi-hub con adapter specifici (Anthropic `agentskills.io`, LobeHub, Skills.sh, cataloghi JSON e repository GitHub) dotato di caching in-memory TTL e mitigazione rate-limiting.
-* **`process/persistentPowerShellSession.ts`**: Gestore di sessioni PowerShell interattive persistenti con mantenimento dello stato della shell (variabili d'ambiente `$env:`, percorsi `cd`, virtualenv) tra chiamate sequenziali di `run_command`.
 * **`logging/codingAgentLogger.ts`**: Logger di audit strutturato per Coding Agent Studio (`logs/coding_agent_audit.log`) con registrazione dettagliata di prompt, tool call, parametri JSON, log di esecuzione terminale e feedback di auto-healing.
 * **`pty/ptySessionManager.ts`**: Gestore di sessioni terminale Windows ConPTY su `node-pty`.
 

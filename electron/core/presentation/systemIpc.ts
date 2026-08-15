@@ -20,6 +20,10 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
     return systemAppService.validateModelDownloadSpace(models || [])
   })
 
+  ipcMain.handle('system:apply-env-vars', async (_, variables: { name: string; value: string }[], restartOllama?: boolean) => {
+    return systemAppService.applyOllamaEnvironmentVariables(variables, restartOllama)
+  })
+
   ipcMain.handle('system:open-external', async (_, url: string) => {
     if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
       await shell.openExternal(url)

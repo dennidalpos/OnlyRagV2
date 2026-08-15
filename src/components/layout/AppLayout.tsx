@@ -159,6 +159,7 @@ export const AppLayout: React.FC = () => {
           >
             <button
               role="tab"
+              tabIndex={activeTab === 'ingestion' ? 0 : -1}
               aria-selected={activeTab === 'ingestion'}
               aria-controls="panel-ingestion"
               id="tab-ingestion"
@@ -174,6 +175,7 @@ export const AppLayout: React.FC = () => {
 
             <button
               role="tab"
+              tabIndex={activeTab === 'chat' ? 0 : -1}
               aria-selected={activeTab === 'chat'}
               aria-controls="panel-chat"
               id="tab-chat"
@@ -189,6 +191,7 @@ export const AppLayout: React.FC = () => {
 
             <button
               role="tab"
+              tabIndex={activeTab === 'translation' ? 0 : -1}
               aria-selected={activeTab === 'translation'}
               aria-controls="panel-translation"
               id="tab-translation"
@@ -204,6 +207,7 @@ export const AppLayout: React.FC = () => {
 
             <button
               role="tab"
+              tabIndex={activeTab === 'coding' ? 0 : -1}
               aria-selected={activeTab === 'coding'}
               aria-controls="panel-coding"
               id="tab-coding"
@@ -219,6 +223,7 @@ export const AppLayout: React.FC = () => {
 
             <button
               role="tab"
+              tabIndex={activeTab === 'settings' ? 0 : -1}
               aria-selected={activeTab === 'settings'}
               aria-controls="panel-settings"
               id="tab-settings"

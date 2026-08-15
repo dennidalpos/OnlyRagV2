@@ -154,11 +154,16 @@ export class FileSystemRepository {
       if (!fs.existsSync(resolved)) {
         return { success: false, error: 'File does not exist' }
       }
-      await fs.promises.unlink(resolved)
-      logger.log('INFO', 'WorkspaceRepo', `Deleted file: ${resolved}`)
+      const stat = await fs.promises.stat(resolved)
+      if (stat.isDirectory()) {
+        await fs.promises.rm(resolved, { recursive: true, force: true })
+      } else {
+        await fs.promises.unlink(resolved)
+      }
+      logger.log('INFO', 'WorkspaceRepo', `Deleted: ${resolved}`)
       return { success: true }
     } catch (err: any) {
-      logger.log('ERROR', 'WorkspaceRepo', `Failed to delete file ${filePath}: ${err.message}`)
+      logger.log('ERROR', 'WorkspaceRepo', `Failed to delete ${filePath}: ${err.message}`)
       return { success: false, error: err.message }
     }
   }

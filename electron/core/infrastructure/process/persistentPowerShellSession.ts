@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process'
 import crypto from 'node:crypto'
 import { logger } from '../../../diagnostics'
+import { normalizePowerShellCommand } from './taskRunner'
 
 export interface ShellExecutionOutput {
   stdout: string
@@ -36,6 +37,8 @@ export class PersistentPowerShellSession {
             PAGER: 'cat',
             NPM_CONFIG_YES: 'true',
             PIP_NO_INPUT: '1',
+            DEBIAN_FRONTEND: 'noninteractive',
+            PYTHONUNBUFFERED: '1',
           },
         }
       )
@@ -155,7 +158,8 @@ export class PersistentPowerShellSession {
       this.proc?.stderr?.on('data', onStderr)
 
       // Wrap command with delimiters and status code capture
-      const wrappedPayload = `Write-Output "${startDelimiter}"\n${command}\nWrite-Output "${endDelimiter}"\nWrite-Output "$LASTEXITCODE"\nWrite-Output "${exitDelimiter}"\n`
+      const normalized = normalizePowerShellCommand(command)
+      const wrappedPayload = `Write-Output "${startDelimiter}"\n${normalized}\nWrite-Output "${endDelimiter}"\nWrite-Output "$LASTEXITCODE"\nWrite-Output "${exitDelimiter}"\n`
       this.proc?.stdin?.write(wrappedPayload)
     })
   }

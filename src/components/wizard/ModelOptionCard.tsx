@@ -70,7 +70,7 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
       role="radio"
       aria-checked={isSelected}
       aria-label={ariaLabel || displayName}
-      tabIndex={0}
+      tabIndex={isSelected ? 0 : -1}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

@@ -39,12 +39,14 @@ export const ModelBadge: React.FC<ModelBadgeProps> = ({
   return (
     <div
       title={titleText}
+      role="status"
+      aria-label={titleText}
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-mono font-semibold border transition-colors select-none ${badgeStyle} ${className}`}
     >
       <IconComponent className="w-3.5 h-3.5 shrink-0 text-current" />
       <span className="truncate max-w-[150px]">{modelName}</span>
       {tier && tierName && (
-        <span className="text-[9px] uppercase tracking-wider opacity-70 border-l border-current/30 pl-1.5 ml-0.5">
+        <span className="text-[10px] uppercase tracking-wider opacity-85 border-l border-current/30 pl-1.5 ml-0.5 font-bold">
           {tier === 'deep_reasoning' ? 'Deep' : tier}
         </span>
       )}

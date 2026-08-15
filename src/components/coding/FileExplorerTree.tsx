@@ -110,7 +110,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
       </div>
 
       {item.isDir && isOpen && (
-        <div role="group" className="space-y-0.5 mt-0.5">
+        <div role="group" aria-label={`Contenuto cartella ${item.name}`} className="space-y-0.5 mt-0.5">
           {children.length === 0 && !isLoading ? (
             <div
               style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}

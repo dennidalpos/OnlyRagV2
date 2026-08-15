@@ -78,13 +78,15 @@ def route_document_ingestion(
                 doc = pymupdf.open(file_path)
             else:
                 doc = pymupdf.open(stream=content, filetype="pdf")
-            total_pages = len(doc)
-            for page_idx in range(total_pages):
-                page = doc.load_page(page_idx)
-                plan = analyze_pdf_page_structure(page)
-                plan["page_number"] = page_idx + 1
-                page_plans.append(plan)
-            doc.close()
+            try:
+                total_pages = len(doc)
+                for page_idx in range(total_pages):
+                    page = doc.load_page(page_idx)
+                    plan = analyze_pdf_page_structure(page)
+                    plan["page_number"] = page_idx + 1
+                    page_plans.append(plan)
+            finally:
+                doc.close()
         except Exception as e:
             logger.warning(f"Fast-Router failed to pre-analyze PDF {filename}: {e}")
             category = DocumentCategory.UNKNOWN

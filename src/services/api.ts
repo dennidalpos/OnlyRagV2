@@ -405,4 +405,20 @@ export const apiService = {
       return { success: false, error: err.message }
     }
   },
+
+  async applyOllamaEnvironmentVariables(
+    variables: { name: string; value: string }[],
+    restartOllama: boolean = false
+  ): Promise<{ success: boolean; appliedCount: number; message: string; error?: string }> {
+    if (!window.electronAPI?.applyOllamaEnvironmentVariables) {
+      return { success: false, appliedCount: 0, message: 'Electron API non disponibile' }
+    }
+    try {
+      logger.info('ApiService:System', `Applying ${variables.length} environment variables (restart=${restartOllama})`)
+      return await window.electronAPI.applyOllamaEnvironmentVariables(variables, restartOllama)
+    } catch (err: any) {
+      logger.error('ApiService:System', `Failed applying environment variables: ${err.message}`)
+      return { success: false, appliedCount: 0, message: err.message, error: err.message }
+    }
+  },
 }

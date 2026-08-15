@@ -72,6 +72,33 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     expect(res3.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
   })
 
+  it('should detect semantic oscillation when multiple distinct replaces target the same file', () => {
+    // 3 distinct replace operations on the same file with different parameters
+    const call1: AgentToolCall = {
+      tool: 'replace_file_content',
+      parameters: { filePath: 'src/config.ts', targetContent: 'port = 3000', replacementContent: 'port = 8080' },
+    }
+    const call2: AgentToolCall = {
+      tool: 'replace_file_content',
+      parameters: { filePath: 'src/config.ts', targetContent: 'host = "localhost"', replacementContent: 'host = "0.0.0.0"' },
+    }
+    const call3: AgentToolCall = {
+      tool: 'replace_file_content',
+      parameters: { filePath: 'src/config.ts', targetContent: 'debug = false', replacementContent: 'debug = true' },
+    }
+
+    const res1 = detector.recordAndCheck(call1)
+    expect(res1.isLooping).toBe(false)
+
+    const res2 = detector.recordAndCheck(call2)
+    expect(res2.isLooping).toBe(false)
+
+    const res3 = detector.recordAndCheck(call3)
+    expect(res3.isLooping).toBe(true)
+    expect(res3.suggestedIntervention).toContain('[CRITICAL OSCILLATION INTERVENTION: REPEATED EDITS ON src/config.ts]')
+    expect(res3.suggestedIntervention).toContain('write_file')
+  })
+
   it('should reset history cleanly', () => {
     const call: AgentToolCall = {
       tool: 'list_dir',

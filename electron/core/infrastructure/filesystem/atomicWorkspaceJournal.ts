@@ -32,11 +32,14 @@ export class AtomicWorkspaceJournal {
 
     try {
       if (fs.existsSync(resolved)) {
-        const content = fs.readFileSync(resolved, 'utf-8')
-        this.backupMap.set(resolved, {
-          originalContent: content,
-          modifiedTimestamp: Date.now(),
-        })
+        const st = fs.statSync(resolved)
+        if (st.isFile()) {
+          const content = fs.readFileSync(resolved, 'utf-8')
+          this.backupMap.set(resolved, {
+            originalContent: content,
+            modifiedTimestamp: Date.now(),
+          })
+        }
       } else {
         this.backupMap.set(resolved, {
           originalContent: null,
@@ -59,7 +62,12 @@ export class AtomicWorkspaceJournal {
       try {
         if (entry.originalContent === null) {
           if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath)
+            const st = fs.statSync(filePath)
+            if (st.isDirectory()) {
+              fs.rmSync(filePath, { recursive: true, force: true })
+            } else {
+              fs.unlinkSync(filePath)
+            }
           }
         } else {
           const parentDir = path.dirname(filePath)

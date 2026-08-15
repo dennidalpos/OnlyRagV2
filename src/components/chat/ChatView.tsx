@@ -88,16 +88,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
           <button
             type="button"
             onClick={() => c.setAutoScroll(!c.autoScroll)}
+            aria-pressed={c.autoScroll}
             aria-label={c.autoScroll ? 'Autoscroll attivo' : 'Autoscroll disattivato'}
             title={c.autoScroll ? 'Autoscroll attivo (clicca per disattivare)' : 'Autoscroll disattivato (clicca per attivare)'}
             className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
               c.autoScroll
-                ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/80'
-                : 'bg-slate-900 border border-slate-800 text-slate-500 hover:text-slate-300'
+                ? 'bg-cyan-950/90 text-cyan-300 border border-cyan-500/60 shadow-sm'
+                : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-slate-200'
             }`}
           >
-            <ArrowDown className="w-3.5 h-3.5" />
-            <span className="text-[11px] hidden sm:inline">Autoscroll</span>
+            <ArrowDown className={`w-3.5 h-3.5 ${c.autoScroll ? 'text-cyan-400' : 'text-slate-400'}`} />
+            <span className="text-[11px] hidden sm:inline font-medium">Autoscroll</span>
           </button>
 
           {/* Active Chat Model Badge */}

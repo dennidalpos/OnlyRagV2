@@ -54,6 +54,8 @@ const api: IElectronAPI = {
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => ipcRenderer.invoke('workspace:execute-powershell', command, cwd, timeoutMs),
   parseAgentToolCall: (rawText: string) => ipcRenderer.invoke('agent:parse-tool-call', rawText),
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
+  applyOllamaEnvironmentVariables: (variables: { name: string; value: string }[], restartOllama?: boolean) =>
+    ipcRenderer.invoke('system:apply-env-vars', variables, restartOllama),
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),

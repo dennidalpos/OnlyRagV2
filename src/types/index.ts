@@ -138,6 +138,8 @@ export interface AppSettings {
   complexityFastModel?: string
   complexityStandardModel?: string
   complexityDeepModel?: string
+  /** Heavy escalation model (14B+) used when all lighter tiers fail on complex tasks */
+  complexityHeavyModel?: string
   // Concurrency & Task Queue Settings
   maxConcurrentTasks?: number // Range: 1-8, default 1
   maxToolCallSteps?: number // Range: 10-200, default 50
@@ -367,6 +369,7 @@ export interface IElectronAPI {
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
   checkDiskSpace: (models: string[]) => Promise<{ allowed: boolean; requiredGB: number; freeGB: number; missingGB: number; error?: string }>
+  applyOllamaEnvironmentVariables: (variables: { name: string; value: string }[], restartOllama?: boolean) => Promise<{ success: boolean; appliedCount: number; message: string; error?: string }>
   openExternalUrl?: (url: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>

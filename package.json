@@ -12,6 +12,8 @@
     "test:fast": "vitest run --reporter=dot",
     "test:unit": "vitest run",
     "test:unit-only": "vitest run --reporter=dot electron/core/domain electron/core/application",
+    "test:agent": "vitest run --reporter=dot electron/core/domain/agent",
+    "test:skills": "vitest run --reporter=dot electron/core/domain/skills",
     "test:sidecar": "powershell -ExecutionPolicy Bypass -File ./scripts/test_sidecar_health.ps1 -Fast",
     "lint": "powershell -ExecutionPolicy Bypass -File ./scripts/lint_format.ps1 -Fast",
     "clean": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Repo",

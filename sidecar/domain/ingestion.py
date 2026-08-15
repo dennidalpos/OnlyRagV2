@@ -235,9 +235,11 @@ def extract_document_markdown(
                 pdf_doc = pymupdf.open(file_path)
             else:
                 pdf_doc = pymupdf.open(stream=content, filetype="pdf")
-            num_pages = len(pdf_doc)
-            page_blocks = extract_pdf_document(pdf_doc, progress_callback=progress_callback)
-            pdf_doc.close()
+            try:
+                num_pages = len(pdf_doc)
+                page_blocks = extract_pdf_document(pdf_doc, progress_callback=progress_callback)
+            finally:
+                pdf_doc.close()
         except Exception as pdf_err:
             logger.warning(f"PyMuPDF parse error: {pdf_err}. Falling back to plain text read.")
 

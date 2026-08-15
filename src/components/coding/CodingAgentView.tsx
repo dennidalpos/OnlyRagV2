@@ -152,7 +152,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs">
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs" role="tree" aria-label={t('coding.filesTitle')}>
               {c.files.map((file) => (
                 <FileTreeNode
                   key={file.path}

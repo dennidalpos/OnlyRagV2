@@ -98,4 +98,31 @@ describe('SkillMatcher Domain Tests', () => {
 
     expect(matched.some((s) => s.id === 'fastapi')).toBe(true)
   })
+
+  it('should match skills based on projectStack in context even with generic prompt', () => {
+    const matched = matchSkillsForTask(
+      {
+        userTask: 'Fix button responsive layout',
+        projectStack: ['react', 'tailwindcss', 'vite'],
+      },
+      mockSkills
+    )
+
+    expect(matched.some((s) => s.id === 'react19')).toBe(true)
+    expect(matched.some((s) => s.id === 'fastapi')).toBe(false)
+  })
+
+  it('should prioritize skills matching both projectStack and prompt triggers (synergy bonus)', () => {
+    const matched = matchSkillsForTask(
+      {
+        userTask: 'Refactor useActionState and hooks in form',
+        projectStack: ['react', 'typescript'],
+      },
+      mockSkills,
+      1
+    )
+
+    expect(matched.length).toBe(1)
+    expect(matched[0].id).toBe('react19')
+  })
 })

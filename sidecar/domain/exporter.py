@@ -8,109 +8,111 @@ from sidecar.config import EXPORT_DIR, logger
 def _render_pdf_from_markdown(markdown_content: str, output_path: str):
     """Compiles Markdown content to PDF preserving layout, headings, tables, and code blocks."""
     doc = pymupdf.open()
-    page = doc.new_page(width=595, height=842)  # Standard A4 (595x842 pt)
-    margin = 40
-    page_width = 595 - (2 * margin)
-    page_height = 842 - (2 * margin)
-    y_offset = margin
+    try:
+        page = doc.new_page(width=595, height=842)  # Standard A4 (595x842 pt)
+        margin = 40
+        page_width = 595 - (2 * margin)
+        page_height = 842 - (2 * margin)
+        y_offset = margin
 
-    lines = markdown_content.splitlines()
-    in_code_block = False
-    code_block_lines: List[str] = []
+        lines = markdown_content.splitlines()
+        in_code_block = False
+        code_block_lines: List[str] = []
 
-    for raw_line in lines:
-        line = raw_line.rstrip()
+        for raw_line in lines:
+            line = raw_line.rstrip()
 
-        # Handle Code Blocks
-        if line.strip().startswith("```"):
+            # Handle Code Blocks
+            if line.strip().startswith("```"):
+                if in_code_block:
+                    # End of code block - render code box
+                    code_text = "\n".join(code_block_lines)
+                    code_block_lines = []
+                    in_code_block = False
+                    
+                    # Check page overflow
+                    if y_offset + 60 > 842 - margin:
+                        page = doc.new_page(width=595, height=842)
+                        y_offset = margin
+
+                    rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + 50)
+                    page.draw_rect(rect, color=(0.2, 0.2, 0.2), fill=(0.95, 0.95, 0.97))
+                    page.insert_textbox(rect, code_text, fontsize=9, fontname="couri", color=(0.1, 0.1, 0.1))
+                    y_offset += 60
+                else:
+                    in_code_block = True
+                continue
+
             if in_code_block:
-                # End of code block - render code box
-                code_text = "\n".join(code_block_lines)
-                code_block_lines = []
-                in_code_block = False
-                
-                # Check page overflow
-                if y_offset + 60 > 842 - margin:
+                code_block_lines.append(line)
+                continue
+
+            # Handle Markdown Tables
+            if line.strip().startswith("|") and line.strip().endswith("|"):
+                parts = [p.strip() for p in line.strip().split("|")[1:-1]]
+                if all(set(p) <= {"-", ":", " "} for p in parts if p):
+                    continue  # Skip table separator line
+                table_row_str = "  |  ".join(parts)
+                if y_offset + 18 > 842 - margin:
                     page = doc.new_page(width=595, height=842)
                     y_offset = margin
+                rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + 16)
+                page.draw_rect(rect, color=(0.8, 0.8, 0.8), fill=(0.96, 0.96, 0.96))
+                page.insert_textbox(rect, table_row_str, fontsize=10, fontname="helv", color=(0.1, 0.1, 0.3))
+                y_offset += 18
+                continue
 
-                rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + 50)
-                page.draw_rect(rect, color=(0.2, 0.2, 0.2), fill=(0.95, 0.95, 0.97))
-                page.insert_textbox(rect, code_text, fontsize=9, fontname="couri", color=(0.1, 0.1, 0.1))
-                y_offset += 60
+            if not line.strip():
+                y_offset += 10
+                if y_offset > 842 - margin:
+                    page = doc.new_page(width=595, height=842)
+                    y_offset = margin
+                continue
+
+            # Determine typography style
+            if line.startswith("# "):
+                font_size = 18
+                line_height = 24
+                font_name = "hebo"
+                clean_text = line[2:].strip()
+                color = (0.05, 0.15, 0.35)
+            elif line.startswith("## "):
+                font_size = 14
+                line_height = 20
+                font_name = "hebo"
+                clean_text = line[3:].strip()
+                color = (0.1, 0.25, 0.45)
+            elif line.startswith("### "):
+                font_size = 12
+                line_height = 16
+                font_name = "hebo"
+                clean_text = line[4:].strip()
+                color = (0.15, 0.3, 0.5)
+            elif line.startswith("* ") or line.startswith("- "):
+                font_size = 10
+                line_height = 14
+                font_name = "helv"
+                clean_text = "• " + line[2:].strip()
+                color = (0.1, 0.1, 0.1)
             else:
-                in_code_block = True
-            continue
+                font_size = 10
+                line_height = 14
+                font_name = "helv"
+                clean_text = line.strip()
+                color = (0.1, 0.1, 0.1)
 
-        if in_code_block:
-            code_block_lines.append(line)
-            continue
-
-        # Handle Markdown Tables
-        if line.strip().startswith("|") and line.strip().endswith("|"):
-            parts = [p.strip() for p in line.strip().split("|")[1:-1]]
-            if all(set(p) <= {"-", ":", " "} for p in parts if p):
-                continue  # Skip table separator line
-            table_row_str = "  |  ".join(parts)
-            if y_offset + 18 > 842 - margin:
+            # Check page boundary
+            if y_offset + line_height > 842 - margin:
                 page = doc.new_page(width=595, height=842)
                 y_offset = margin
-            rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + 16)
-            page.draw_rect(rect, color=(0.8, 0.8, 0.8), fill=(0.96, 0.96, 0.96))
-            page.insert_textbox(rect, table_row_str, fontsize=10, fontname="helv", color=(0.1, 0.1, 0.3))
-            y_offset += 18
-            continue
 
-        if not line.strip():
-            y_offset += 10
-            if y_offset > 842 - margin:
-                page = doc.new_page(width=595, height=842)
-                y_offset = margin
-            continue
+            rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + line_height + 4)
+            page.insert_textbox(rect, clean_text, fontsize=font_size, fontname=font_name, color=color)
+            y_offset += line_height
 
-        # Determine typography style
-        if line.startswith("# "):
-            font_size = 18
-            line_height = 24
-            font_name = "hebo"
-            clean_text = line[2:].strip()
-            color = (0.05, 0.15, 0.35)
-        elif line.startswith("## "):
-            font_size = 14
-            line_height = 20
-            font_name = "hebo"
-            clean_text = line[3:].strip()
-            color = (0.1, 0.25, 0.45)
-        elif line.startswith("### "):
-            font_size = 12
-            line_height = 16
-            font_name = "hebo"
-            clean_text = line[4:].strip()
-            color = (0.15, 0.3, 0.5)
-        elif line.startswith("* ") or line.startswith("- "):
-            font_size = 10
-            line_height = 14
-            font_name = "helv"
-            clean_text = "• " + line[2:].strip()
-            color = (0.1, 0.1, 0.1)
-        else:
-            font_size = 10
-            line_height = 14
-            font_name = "helv"
-            clean_text = line.strip()
-            color = (0.1, 0.1, 0.1)
-
-        # Check page boundary
-        if y_offset + line_height > 842 - margin:
-            page = doc.new_page(width=595, height=842)
-            y_offset = margin
-
-        rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + line_height + 4)
-        page.insert_textbox(rect, clean_text, fontsize=font_size, fontname=font_name, color=color)
-        y_offset += line_height
-
-    doc.save(output_path)
-    doc.close()
+        doc.save(output_path)
+    finally:
+        doc.close()
 
 
 def _render_docx_from_markdown(markdown_content: str, output_path: str):

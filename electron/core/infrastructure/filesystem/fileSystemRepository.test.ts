@@ -75,4 +75,17 @@ describe('FileSystemRepository Unit Tests', () => {
     const rawDisk = fs.readFileSync(testFile, 'utf-8')
     expect(rawDisk).toContain('\r\n')
   })
+
+  it('should delete a directory recursively without throwing EPERM', async () => {
+    const subDir = path.join(tempDir, 'project-dashboard-task')
+    fs.mkdirSync(path.join(subDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(subDir, 'src', 'App.tsx'), 'export const App = () => null')
+    fs.writeFileSync(path.join(subDir, 'package.json'), '{"name": "test"}')
+
+    expect(fs.existsSync(subDir)).toBe(true)
+
+    const delRes = await repo.deleteFile(subDir)
+    expect(delRes.success).toBe(true)
+    expect(fs.existsSync(subDir)).toBe(false)
+  })
 })

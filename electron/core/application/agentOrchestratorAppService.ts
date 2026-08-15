@@ -10,9 +10,14 @@ import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { isIgnoredPath } from '../domain/agent/contextFilter'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
+import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
+import { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
+import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
+import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { skillAppService } from './skillAppService'
@@ -82,14 +87,6 @@ export function cancelActiveAgentTask(targetSessionId?: string) {
       activeAgentSessions.delete(id)
     }
     logger.log('INFO', 'AgentOrchestratorApp', `All active agent sessions cancelled by user.`)
-  }
-}
-
-function pushToolOutputHistory(historyArr: string[], output: string, maxItems = 8, maxCharPerOutput = 4000) {
-  const truncated = output.length > maxCharPerOutput ? `${output.slice(0, maxCharPerOutput)}\n... [Output truncated for context limit]` : output
-  historyArr.push(truncated)
-  while (historyArr.length > maxItems) {
-    historyArr.shift()
   }
 }
 
@@ -238,32 +235,25 @@ export async function runAgentOrchestratorLoop(
     }
   }
 
-  const toolOutputHistory: string[] = []
-  const MAX_STEPS = Math.max(10, Math.min(250, settings.maxToolCallSteps || 50))
+  const episodicCompactor = new EpisodicMemoryCompactor(4)
+  const goalPlanner = new GoalDecompositionPlanner()
+  const fsmMode = new AgentRuntimeModeFsm(agentMode)
+  const isUnlimitedSteps = settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
+  const MAX_STEPS = isUnlimitedSteps ? Infinity : Math.max(10, Math.min(200, settings.maxToolCallSteps || 50))
+  const maxStepsLabel = MAX_STEPS === Infinity ? '∞' : String(MAX_STEPS)
   let stepCount = 0
   let noToolStreak = 0
   let hasFileMutations = false
   let hasVerifiedBuild = false
   let hasPromptedVerification = false
   const loopDetector = new AgentActionLoopDetector(2)
+  let consecutiveTaskFailures = 0
 
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
 
-    const lastToolLog = toolOutputHistory.length > 0 ? toolOutputHistory[toolOutputHistory.length - 1] : ''
-    const hasRecentToolFailure = Boolean(lastToolLog && (
-      lastToolLog.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
-      lastToolLog.includes('[REPLACE FILE ERROR') ||
-      lastToolLog.toLowerCase().includes('failed') ||
-      lastToolLog.toLowerCase().includes('error:')
-    ))
-
-    const errorCountInHistory = toolOutputHistory.filter((h) =>
-      h.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
-      h.includes('[REPLACE FILE ERROR') ||
-      h.toLowerCase().includes('failed') ||
-      h.toLowerCase().includes('error:')
-    ).length
+    const hasRecentToolFailure = episodicCompactor.failureCount > 0
+    const errorCountInHistory = episodicCompactor.failureCount
 
     const routedComplexity = evaluateTaskComplexity(userTask, {
       attachedFilesCount: payload.pinnedFiles?.length || 0,
@@ -282,7 +272,9 @@ export async function runAgentOrchestratorLoop(
       ? routedComplexity.modelName
       : (settings.codingModel || settings.defaultModel || 'llama3.2')
 
+    const intermediateModel = settings.complexityStandardModel || settings.codingModel || settings.defaultModel || 'llama3.2'
     const fallbackModel = settings.complexityFastModel || settings.defaultModel || 'llama3.2'
+    const heavyEscalationModel = settings.complexityHeavyModel || undefined
 
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
       settings.hardwareProfile,
@@ -291,7 +283,11 @@ export async function runAgentOrchestratorLoop(
     )
     const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath)
 
-    const turnPrompt = AgentPromptAssembler.assembleTurnPrompt({
+    const compiledHistoryBlock = episodicCompactor.compilePromptHistoryBlock(10000)
+    const planBlock = goalPlanner.compileProgressPrompt()
+
+    // Assemble base prompt segments, then apply heuristic compaction at 75% watermark
+    const basePrompt = AgentPromptAssembler.assembleTurnPrompt({
       userTask,
       agentMode,
       stepCount,
@@ -302,27 +298,49 @@ export async function runAgentOrchestratorLoop(
       activeFile: payload.activeFile,
       pinnedFilesContextStr,
       skillsBlock,
-      toolOutputHistory,
+      planBlock,
+      toolOutputHistory: compiledHistoryBlock,
       attachedContext,
       projectContextMapStr,
       settings,
       runtimeOpts,
     })
 
+    const compactionResult = HeuristicContextCompactor.compile(
+      {
+        systemPrompt: basePrompt.split('\n\n')[0] || basePrompt,
+        activePlanBlock: planBlock,
+        pinnedFilesBlock: pinnedFilesContextStr,
+        activeFileBlock: payload.activeFile ? `Active File: ${payload.activeFile.name}\n${(payload.activeFile.content || '').slice(0, 8000)}` : '',
+        skillsBlock,
+        historyBlock: compiledHistoryBlock,
+        attachedContext,
+        projectMapBlock: projectContextMapStr,
+      },
+      runtimeOpts.maxContextChars
+    )
+    const turnPrompt = compactionResult.wasCompacted ? compactionResult.prompt : basePrompt
+    if (compactionResult.wasCompacted) {
+      emitLog('info', `🗜️ Context Compacted: ${compactionResult.originalChars} → ${compactionResult.finalChars} chars (heuristic, zero-cost)`)
+    }
+
     const dynamicNumCtx = calculateDynamicContextWindow(turnPrompt.length, runtimeOpts.num_ctx)
     runtimeOpts.num_ctx = dynamicNumCtx
 
-    emitLog('tool_call', `[Step ${stepCount}/${MAX_STEPS}] Consulting LLM (${targetModel}) [ctx:${runtimeOpts.num_ctx}]...`)
+    emitLog('tool_call', `[Step ${stepCount}/${maxStepsLabel}] Consulting LLM (${targetModel}) [ctx:${runtimeOpts.num_ctx}${fsmMode.getMode() !== 'AGENT' ? ` | Mode:${fsmMode.getMode()}` : ''}]...`)
     if (settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logTurnPrompt(sessionId, stepCount, targetModel, runtimeOpts.num_ctx, turnPrompt)
     }
 
     let streamedOutput = ''
+    let lastDispatchEscalated = false
     try {
       const dispatchRes = await ResilientModelDispatcher.executeWithFallback(
         {
           primaryModel: targetModel,
+          intermediateModel,
           fallbackModel,
+          heavyEscalationModel,
           runtimeOpts,
         },
         {
@@ -340,10 +358,21 @@ export async function runAgentOrchestratorLoop(
           },
         },
         (fromModel, toModel, reason) => {
-          emitLog('info', `⚡ Resilient Fallback: ${fromModel} → ${toModel}`, `Graceful degradation triggered: ${reason}`)
+          const isHeavy = toModel === heavyEscalationModel
+          lastDispatchEscalated = isHeavy
+          const label = isHeavy ? '🔺 Heavy Tier Escalation' : '⚡ Resilient Fallback'
+          emitLog('info', `${label}: ${fromModel} → ${toModel}`, `Triggered: ${reason}`)
         }
       )
       streamedOutput = dispatchRes.output
+      if (dispatchRes.isFallback) {
+        consecutiveTaskFailures++
+      } else {
+        consecutiveTaskFailures = 0
+      }
+      if (dispatchRes.isEscalated || lastDispatchEscalated) {
+        emitLog('info', `🔺 Heavy Tier active (${dispatchRes.usedModel}): VRAM eviction applied before escalation.`)
+      }
       session.activeHttpRequest = null
     } catch (err: any) {
       emitLog('info', `LLM Stream error on step ${stepCount}: ${err.message}`)
@@ -372,6 +401,15 @@ export async function runAgentOrchestratorLoop(
       codingAgentLogger.logLlmResponse(sessionId, stepCount, streamedOutput)
     }
 
+    // Try extracting / initializing dynamic execution plan if not yet set
+    if (!goalPlanner.hasPlan() && (streamedOutput.includes('<plan>') || streamedOutput.includes('- [ ]') || streamedOutput.includes('1. '))) {
+      const extractedMilestones = GoalDecompositionPlanner.parsePlanFromText(streamedOutput)
+      if (extractedMilestones.length >= 2) {
+        goalPlanner.initializePlan(extractedMilestones)
+        emitLog('info', `📋 Execution Plan Initialized (${extractedMilestones.length} milestones)`)
+      }
+    }
+
     const parsedTool = parseAgentToolCall(streamedOutput)
 
     if (!parsedTool) {
@@ -382,7 +420,15 @@ export async function runAgentOrchestratorLoop(
 
       if (hasToolCallAttempt) {
         const feedback = `[TOOL PARSER REJECTION DIAGNOSTIC]\nYour tool call could not be executed because mandatory input parameters were missing or malformed.\nPlease ensure you provide valid JSON with all required parameters.`
-        pushToolOutputHistory(toolOutputHistory, feedback)
+        episodicCompactor.recordStep(
+          {
+            step: stepCount,
+            tool: 'unparsed_tool',
+            status: 'BLOCKED',
+            summary: 'Tool call rejected: missing mandatory JSON parameters',
+          },
+          feedback
+        )
         emitLog('info', `Step ${stepCount} Tool Call Rejected: Missing required parameters in JSON payload.`)
         if (settings.enableCodingAgentDebugLog) {
           codingAgentLogger.logToolResult(sessionId, stepCount, 'unparsed_tool', feedback)
@@ -395,7 +441,15 @@ export async function runAgentOrchestratorLoop(
       if (agentMode === 'agent' && stepCount < MAX_STEPS && noToolStreak < 2) {
         noToolStreak++
         const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive and did not invoke any tools. In AGENT mode, to create or edit files in the workspace, you MUST output a tool call formatted as:\n\`\`\`json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "index.html",\n    "content": "..."\n  },\n  "explanation": "Creating initial project file"\n}\n\`\`\`\nIf all work is finished, invoke the "finish" tool. Please invoke the required tool now.`
-        pushToolOutputHistory(toolOutputHistory, feedback)
+        episodicCompactor.recordStep(
+          {
+            step: stepCount,
+            tool: 'no_tool_detected',
+            status: 'BLOCKED',
+            summary: 'No tool call found in conversational response',
+          },
+          feedback
+        )
         emitLog('info', `Step ${stepCount}: No tool call found in LLM response. Requesting tool invocation...`)
         if (settings.enableCodingAgentDebugLog) {
           codingAgentLogger.logToolResult(sessionId, stepCount, 'no_tool_detected', feedback)
@@ -420,7 +474,15 @@ export async function runAgentOrchestratorLoop(
       if (agentMode === 'agent' && hasFileMutations && !hasVerifiedBuild && !hasPromptedVerification && (settings as any).verifyBeforeFinish !== false) {
         hasPromptedVerification = true
         const gateMsg = `[PRE-FINISH VERIFICATION ADVICE]\nYou have made code modifications in the workspace during this task. Before concluding, please execute a verification command via run_command (e.g. npm test, npm run typecheck, or pytest) to verify that no regressions or syntax errors were introduced. If no test/build runner exists in this workspace or verification is not required, invoke finish again.`
-        pushToolOutputHistory(toolOutputHistory, gateMsg)
+        episodicCompactor.recordStep(
+          {
+            step: stepCount,
+            tool: 'finish',
+            status: 'BLOCKED',
+            summary: 'Verification Gate: Requested test/build run before release',
+          },
+          gateMsg
+        )
         emitLog('info', '🛡️ Pre-Finish Verification Gate: richiesta validazione test/build prima della conclusione.')
         continue
       }
@@ -440,7 +502,16 @@ export async function runAgentOrchestratorLoop(
     // Check for repetitive loop / oscillation traps before execution
     const loopCheck = loopDetector.recordAndCheck(parsedTool)
     if (loopCheck.isLooping && loopCheck.suggestedIntervention) {
-      pushToolOutputHistory(toolOutputHistory, loopCheck.suggestedIntervention)
+      episodicCompactor.recordStep(
+        {
+          step: stepCount,
+          tool: parsedTool.tool,
+          target: parsedTool.parameters?.filePath || parsedTool.parameters?.command,
+          status: 'BLOCKED',
+          summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats)`,
+        },
+        loopCheck.suggestedIntervention
+      )
       emitLog(
         'info',
         `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
@@ -469,14 +540,22 @@ export async function runAgentOrchestratorLoop(
       codingAgentLogger.logToolCall(sessionId, stepCount, parsedTool.tool, parsedTool.parameters, parsedTool.explanation)
     }
 
-    if (agentMode === 'plan') {
-      emitLog('info', `Plan Mode Proposed Tool (${parsedTool.tool}):`, JSON.stringify(parsedTool.parameters, null, 2))
+    if (fsmMode.getMode() === 'PLAN') {
+      emitLog('info', `[PLAN Mode] Proposed Tool (${parsedTool.tool}):`, JSON.stringify(parsedTool.parameters, null, 2))
       emitDone(true, `Plan Mode completed step proposal for ${parsedTool.tool}`)
       if (settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Proposed tool call: ${parsedTool.tool}`)
       }
       activeAgentSessions.delete(sessionId)
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
+    }
+
+    // FSM Tool Permission Gate: block unauthorized tools in current mode
+    if (!fsmMode.isToolAllowed(parsedTool.tool as any)) {
+      const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${[...Array.from(Object.values(fsmMode.filterAllowedTools([parsedTool.tool as any])))].join(', ') || 'read-only tools only'}. Switch to AGENT mode to execute mutating operations.`
+      episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
+      emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
+      continue
     }
 
     if (agentMode === 'ask') {
@@ -521,12 +600,41 @@ export async function runAgentOrchestratorLoop(
         session.activeChildProcess = childProc
       }
     )
-    session.activeChildProcess = null
+    const isToolFailure =
+      toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
+      toolRes.outputForHistory.includes('[REPLACE FILE ERROR') ||
+      toolRes.outputForHistory.includes('Security Violation') ||
+      toolRes.outputForHistory.toLowerCase().startsWith('error:')
 
-    pushToolOutputHistory(toolOutputHistory, toolRes.outputForHistory)
+    const targetParam =
+      parsedTool.parameters?.filePath ||
+      parsedTool.parameters?.file_path ||
+      parsedTool.parameters?.path ||
+      parsedTool.parameters?.command ||
+      parsedTool.parameters?.url
+
+    const distilledOutput = toolRes.isTerminal
+      ? DiagnosticOutputReducer.distillTerminalOutput(toolRes.outputForHistory, 2500)
+      : toolRes.outputForHistory
+
+    episodicCompactor.recordStep(
+      {
+        step: stepCount,
+        tool: parsedTool.tool,
+        target: targetParam,
+        status: isToolFailure ? 'FAILURE' : 'SUCCESS',
+        summary: toolRes.logMessage,
+      },
+      distilledOutput
+    )
+
     if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file'].includes(parsedTool.tool)) {
-      if (!toolRes.outputForHistory.includes('Error:') && !toolRes.outputForHistory.includes('Security Violation')) {
+      if (!isToolFailure) {
         hasFileMutations = true
+        const activeM = goalPlanner.getActiveMilestone()
+        if (activeM && activeM.status === 'pending') {
+          goalPlanner.updateMilestone(activeM.id, 'in_progress')
+        }
       }
     }
     if (parsedTool.tool === 'run_command') {
@@ -538,8 +646,12 @@ export async function runAgentOrchestratorLoop(
         cmdStr.includes('lint') ||
         cmdStr.includes('pytest') ||
         cmdStr.includes('tsc')
-      if (isVerificationCmd && !toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]')) {
+      if (isVerificationCmd && !toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
         hasVerifiedBuild = true
+        const activeM = goalPlanner.getActiveMilestone()
+        if (activeM) {
+          goalPlanner.updateMilestone(activeM.id, 'verified')
+        }
       }
     }
 

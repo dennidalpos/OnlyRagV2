@@ -60,6 +60,7 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
             type="button"
             key={p.id}
             role="radio"
+            tabIndex={settings.hardwareProfile === p.id ? 0 : -1}
             aria-checked={settings.hardwareProfile === p.id}
             onClick={() => onUpdateSettings({ hardwareProfile: p.id })}
             onKeyDown={(e) => {
@@ -70,8 +71,8 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
             }}
             className={`p-3.5 rounded-xl border cursor-pointer flex flex-col justify-between transition-all select-none text-left focus-ring active:scale-[0.98] ${
               settings.hardwareProfile === p.id
-                ? 'bg-cyan-950/40 border-cyan-500 shadow-md shadow-cyan-950/30'
-                : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                ? 'bg-cyan-950/50 border-cyan-500 shadow-md shadow-cyan-950/30'
+                : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
             }`}
           >
             <div>

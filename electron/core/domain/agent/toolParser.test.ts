@@ -379,6 +379,49 @@ console.log("App initialized");
     expect(parseAgentToolCall(rawReadUrl)?.tool).toBe('fetch_web_content')
   })
 
+  it('should parse tool calls with JS backtick template literals in content parameter', () => {
+    const raw = '```json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "src/App.tsx",\n    "content": `import React from "react";\nimport Dashboard from "./components/Dashboard";\n\nfunction App() {\n  return <Dashboard />;\n}\n\nexport default App;\n`\n  },\n  "explanation": "Creating initial App.tsx file"\n}\n```'
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toBe('src/App.tsx')
+    expect(result?.parameters.content).toContain('import React from "react"')
+    expect(result?.explanation).toBe('Creating initial App.tsx file')
+  })
+
+  it('should parse Windows single-backslash file paths without corrupting escape characters', () => {
+    const raw = '```json\n{\n  "tool": "write_file",\n  "parameters": {\n    "filePath": "C:\\Users\\Utente\\Desktop\\test_app\\project-dashboard-task\\src\\App.tsx",\n    "content": "export const test = 1;"\n  }\n}\n```'
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toContain('test_app')
+    expect(result?.parameters.filePath).toContain('App.tsx')
+  })
+
+  it('should parse tool calls with flat parameters at root level without nested parameters object', () => {
+    const raw = '```json\n{\n  "tool": "write_file",\n  "filePath": "C:\\\\Users\\\\Utente\\\\Desktop\\\\test_app\\\\project-dashboard-task\\\\src\\\\App.tsx",\n  "content": "// Import necessary libraries\\nimport React from \'react\';\\nexport default App;"\n}\n```'
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toContain('App.tsx')
+    expect(result?.parameters.content).toContain("import React from 'react'")
+  })
+
+  it('should parse flat run_command and replace_file_content at root level', () => {
+    const rawCmd = '```json\n{\n  "tool": "run_command",\n  "command": "npm install tailwindcss",\n  "explanation": "Installing tailwind"\n}\n```'
+    const resCmd = parseAgentToolCall(rawCmd)
+    expect(resCmd).not.toBeNull()
+    expect(resCmd?.tool).toBe('run_command')
+    expect(resCmd?.parameters.command).toBe('npm install tailwindcss')
+    expect(resCmd?.explanation).toBe('Installing tailwind')
+
+    const rawReplace = '```json\n{\n  "tool": "replace_file_content",\n  "filePath": "package.json",\n  "targetContent": "\\"scripts\\": {}",\n  "replacementContent": "\\"scripts\\": {\\"start\\": \\"vite\\"}"\n}\n```'
+    const resReplace = parseAgentToolCall(rawReplace)
+    expect(resReplace).not.toBeNull()
+    expect(resReplace?.tool).toBe('replace_file_content')
+    expect(resReplace?.parameters.filePath).toBe('package.json')
+  })
+
   it('should return null when text does not contain valid tool call', () => {
     const raw = 'Just a normal text response without any tool invocations.'
     const result = parseAgentToolCall(raw)

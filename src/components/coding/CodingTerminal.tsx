@@ -160,13 +160,13 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
             if (e.key === 'Enter') onRunCommand()
           }}
           placeholder={t('coding.terminalInputPlaceholder')}
-          className="flex-1 bg-[#030712] border border-slate-800 rounded-xl px-3 py-1.5 text-slate-200 outline-none font-mono text-xs focus-ring"
+          className="flex-1 bg-[#030712] border border-slate-700 focus:border-cyan-500 rounded-xl px-3 py-1.5 text-slate-100 placeholder:text-slate-500 outline-none font-mono text-xs focus-ring"
         />
         <button
           onClick={onRunCommand}
           disabled={isExecuting || !terminalInput.trim()}
           aria-label={t('coding.runCommand')}
-          className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center gap-1 active:scale-95"
+          className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1 active:scale-95 focus-ring shadow-md shadow-cyan-950/40"
         >
           <Play className="w-3 h-3 fill-current" />
           <span>{t('coding.runCommand')}</span>

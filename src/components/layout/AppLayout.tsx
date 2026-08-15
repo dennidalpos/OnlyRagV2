@@ -72,11 +72,56 @@ export const AppLayout: React.FC = () => {
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     setSettings((prev) => {
-      const updated = { ...prev, ...newSettings }
+      let updated = { ...prev, ...newSettings }
+
+      // Automatic System Prompt Synchronization:
+      // When a model changes for a module (coding, chat, translation, vision), clear manual prompt overrides
+      // for that module so it automatically switches to the new model's optimal system prompt.
+      // If the user manually edits the system prompt in SystemPromptModal, it remains stored until the model is changed again.
+      const moduleModelMap: Record<string, keyof AppSettings> = {
+        coding: 'codingModel',
+        chat: 'chatModel',
+        translation: 'translationModel',
+        vision: 'visionModel',
+      }
+
+      let customOverrides = { ...(updated.customPromptOverrides || {}) }
+      let familyOverrides = { ...(updated.selectedFamilyOverrides || {}) }
+
+      for (const [moduleKey, settingKey] of Object.entries(moduleModelMap)) {
+        const newModelVal = newSettings[settingKey]
+        const prevModelVal = prev[settingKey]
+
+        if (newModelVal !== undefined && newModelVal !== prevModelVal) {
+          for (const k of Object.keys(customOverrides)) {
+            if (k.startsWith(`${moduleKey}:`)) {
+              delete customOverrides[k]
+            }
+          }
+          familyOverrides[moduleKey] = 'auto'
+        }
+      }
+
+      if (newSettings.defaultModel !== undefined && newSettings.defaultModel !== prev.defaultModel) {
+        for (const [moduleKey, settingKey] of Object.entries(moduleModelMap)) {
+          if (!prev[settingKey] && !newSettings[settingKey]) {
+            for (const k of Object.keys(customOverrides)) {
+              if (k.startsWith(`${moduleKey}:`)) {
+                delete customOverrides[k]
+              }
+            }
+            familyOverrides[moduleKey] = 'auto'
+          }
+        }
+      }
+
+      updated.customPromptOverrides = customOverrides
+      updated.selectedFamilyOverrides = familyOverrides
+
       if (newSettings.language && newSettings.language !== language) {
         setLanguage(newSettings.language)
       }
-      // Schedule persistence outside React's render cycle
+
       queueMicrotask(() => {
         try {
           localStorage.setItem('onlyrag_app_settings', JSON.stringify(updated))

@@ -1,5 +1,5 @@
 import React from 'react'
-import { ShieldCheck, AlertTriangle, Download, Check, StopCircle, HardDrive } from 'lucide-react'
+import { ShieldCheck, AlertTriangle, Download, Check, StopCircle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { HardwareProfile } from '../../types'
 import { getModelApproxSize } from '../../services/hardwareRecommendationEngine'
@@ -8,6 +8,8 @@ export interface WizardStepSummaryAndDownloadProps {
   selectedFast: string
   selectedStandard: string
   selectedDeep: string
+  /** Optional Heavy Escalation Tier model. Empty string = disabled. */
+  selectedHeavy?: string
   selectedChat: string
   selectedTranslation: string
   selectedMedical?: string
@@ -35,6 +37,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
   selectedFast,
   selectedStandard,
   selectedDeep,
+  selectedHeavy,
   selectedChat,
   selectedTranslation,
   selectedMedical,
@@ -104,6 +107,13 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
             <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
               <span className="text-amber-300 font-medium">⚖️ {t('settings.legalModel')}:</span>
               <span className="font-mono text-slate-200 font-semibold">{selectedLegal}</span>
+            </div>
+          )}
+
+          {selectedHeavy && useComplexityRouting && (
+            <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-800/50 flex justify-between items-center">
+              <span className="text-amber-300 font-medium">⚡ Heavy Escalation:</span>
+              <span className="font-mono text-amber-200 font-semibold">{selectedHeavy}</span>
             </div>
           )}
 

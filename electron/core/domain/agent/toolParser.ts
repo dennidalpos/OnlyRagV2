@@ -128,8 +128,16 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
         parameters.replacementContent = rawParams.replacement || rawParams.replacement_content || rawParams.new_content || rawParams.new_str || rawParams.replace_text || rawParams.ReplacementContent
       }
       if (!parameters.command) {
-        parameters.command = rawParams.cmd || rawParams.terminal_command || rawParams.exec || rawParams.command_line || rawParams.CommandLine
+        const rawCmd = rawParams.cmd || rawParams.terminal_command || rawParams.exec || rawParams.command_line || rawParams.CommandLine || parsed.parameters
+        if (Array.isArray(rawCmd)) {
+          parameters.command = rawCmd.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
+        } else if (typeof rawCmd === 'string') {
+          parameters.command = rawCmd
+        }
+      } else if (Array.isArray(parameters.command)) {
+        parameters.command = parameters.command.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
       }
+
       if (!parameters.content) {
         parameters.content = rawParams.code || rawParams.text || rawParams.file_content || rawParams.data || rawParams.CodeContent
       }
@@ -258,6 +266,64 @@ function parseFencedCodeBlockFallback(rawText: string): AgentToolCall | null {
   return null
 }
 
+function parseShellCodeBlockFallback(rawText: string): AgentToolCall | null {
+  if (!rawText || typeof rawText !== 'string') return null
+
+  const shellBlockRegex = /```(?:bash|sh|powershell|cmd)\s*\n([\s\S]*?)```/gi
+  const match = shellBlockRegex.exec(rawText)
+  if (match) {
+    const commands = match[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#') && !l.startsWith('//'))
+      .join('; ')
+
+    if (commands) {
+      return {
+        tool: 'run_command',
+        parameters: { command: commands },
+        explanation: `Executing shell commands: ${commands.slice(0, 80)}`,
+      }
+    }
+  }
+
+  return null
+}
+
+function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
+  if (!rawText || typeof rawText !== 'string') return null
+
+  const diffMatch = rawText.match(/(?:([\s\S]*?))?<<<<<<<\s*SEARCH\s*\n([\s\S]*?)\n=======\n([\s\S]*?)\n>>>>>>>\s*REPLACE/i)
+  if (diffMatch) {
+    const precedingText = (diffMatch[1] || '').trim()
+    let filePath = ''
+    const lines = precedingText.split('\n').map((l) => l.trim()).filter(Boolean)
+    if (lines.length > 0) {
+      const lastLine = lines[lines.length - 1]
+      const fileMatch = lastLine.match(/([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)/)
+      if (fileMatch) {
+        filePath = fileMatch[1].trim()
+      }
+    }
+
+    const targetContent = diffMatch[2]
+    const replacementContent = diffMatch[3]
+    if (targetContent !== undefined) {
+      return {
+        tool: 'replace_file_content',
+        parameters: {
+          filePath: filePath || 'file',
+          targetContent,
+          replacementContent: replacementContent || '',
+        },
+        explanation: `Replacing content in ${filePath || 'file'}`,
+      }
+    }
+  }
+
+  return null
+}
+
 export function parseAgentToolCall(text: string): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 
@@ -277,6 +343,14 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
   // 3. Third attempt: Check if model emitted markdown code block with embedded filename comment
   const fallbackCodeTool = parseFencedCodeBlockFallback(cleanText) || parseFencedCodeBlockFallback(text)
   if (fallbackCodeTool) return fallbackCodeTool
+
+  // 4. Fourth attempt: Check for raw shell blocks (```bash ... ```)
+  const shellTool = parseShellCodeBlockFallback(cleanText) || parseShellCodeBlockFallback(text)
+  if (shellTool) return shellTool
+
+  // 5. Fifth attempt: Check for diff blocks (<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE)
+  const diffTool = parseDiffCodeBlockFallback(cleanText) || parseDiffCodeBlockFallback(text)
+  if (diffTool) return diffTool
 
   return null
 }

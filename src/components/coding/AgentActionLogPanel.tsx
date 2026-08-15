@@ -980,37 +980,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                 </button>
               </div>
 
-              {/* Complexity Router / Model Pill */}
-              {agentPrompt.trim() ? (
-                (() => {
-                  const hasRecentToolFailure = actionLogs.some(
-                    (l) =>
-                      l.message.includes('Failed') ||
-                      l.message.includes('Error') ||
-                      (l.type === 'terminal' && (l.detail?.includes('Error') || l.detail?.includes('FAIL')))
-                  )
-                  const liveComplexity = evaluateTaskComplexity(agentPrompt, {
-                    attachedFilesCount: pinnedFiles.size,
-                    contextSizeChars: selectedFile?.sizeBytes || 0,
-                    settings,
-                    availableModels,
-                    hasRecentToolFailure,
-                  })
-                  return (
-                    <div
-                      className={`hidden 2xl:flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-mono border transition-all truncate max-w-[110px] shrink ${liveComplexity.badgeColorClass}`}
-                      title={`Complexity Router: ${liveComplexity.tierName} (${liveComplexity.modelName}) — ${liveComplexity.reasoning}`}
-                    >
-                      <span className="truncate">{liveComplexity.badgeLabel}</span>
-                    </div>
-                  )
-                })()
-              ) : (
-                <div className="hidden 2xl:flex items-center gap-1 px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-mono text-slate-300 truncate max-w-[90px] shrink">
-                  <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
-                  <span className="truncate">{activeModelName || 'qwen2.5-coder:7b'}</span>
-                </div>
-              )}
+
 
               {/* Action Buttons: Accoda / Send / Stop */}
               {isExecuting && (

@@ -114,6 +114,8 @@ export interface AgentActionLog {
   detail?: string
 }
 
+export * from './workspace'
+
 export interface AppSettings {
   defaultModel: string
   chatModel?: string
@@ -145,6 +147,10 @@ export interface AppSettings {
   maxToolCallSteps?: number // Range: 10-200, default 50
   // Coding Agent Audit & Debug Logging
   enableCodingAgentDebugLog?: boolean
+  // Plan Approval Settings
+  requirePlanApproval?: boolean
+  autoProceedPlan?: boolean
+  autoProceedDelaySeconds?: number
   // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
   // Internationalization

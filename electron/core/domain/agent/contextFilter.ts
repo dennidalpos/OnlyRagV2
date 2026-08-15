@@ -142,7 +142,30 @@ export function isIgnoredPath(name: string, isDirectory: boolean = false): boole
 }
 
 /**
- * Validates path safety, directory traversal prevention, and credential blocking.
+ * Sanitizes file path segments by converting space-containing file and directory names into clean kebab-case.
+ * e.g. "src/my component/App Header.tsx" -> "src/my-component/App-Header.tsx"
+ */
+export function sanitizeFilePathSpaces(filePath: string): string {
+  if (!filePath || typeof filePath !== 'string') return filePath
+  const normalized = filePath.replace(/\\/g, '/')
+  const isAbsolute = path.isAbsolute(normalized) || /^[a-zA-Z]:\//.test(normalized)
+
+  const parts = normalized.split('/')
+  const sanitizedParts = parts.map((part, index) => {
+    // Preserve Windows drive letters like "D:" or root slashes
+    if (index === 0 && /^[a-zA-Z]:$/.test(part)) return part
+    if (!part.trim()) return part
+
+    // Replace multiple spaces with a single dash in file and directory names
+    return part.trim().replace(/\s+/g, '-')
+  })
+
+  const clean = sanitizedParts.join('/')
+  return isAbsolute ? path.normalize(clean) : clean
+}
+
+/**
+ * Validates path safety, directory traversal prevention, credential blocking, and file name space sanitization.
  */
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): { safePath: string | null; error?: string } {
   if (!filePath || typeof filePath !== 'string' || !filePath.trim()) {
@@ -154,6 +177,9 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
     if (!cleanPath) {
       return { safePath: null, error: 'Empty or invalid file path' }
     }
+
+    // Automatically sanitize spaces in file/directory path segments
+    cleanPath = sanitizeFilePathSpaces(cleanPath)
 
     const resolvedRoot = workspaceRoot && workspaceRoot.trim() ? path.resolve(workspaceRoot.trim()) : null
 

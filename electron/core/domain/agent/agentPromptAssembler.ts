@@ -76,10 +76,19 @@ export class AgentPromptAssembler {
 
     // Priority 3: Tool Execution History (Episodic Trajectory & Recent Detailed Outputs)
     let historyBlock = ''
+    let recoveryHint = ''
+
     if (typeof toolOutputHistory === 'string' && toolOutputHistory.trim()) {
       historyBlock = `\n${toolOutputHistory.slice(0, 10000)}\n`
+      if (toolOutputHistory.includes('TOOL PARSER REJECTION DIAGNOSTIC') || toolOutputHistory.includes('NO TOOL INVOCATION DETECTED')) {
+        recoveryHint = `\nCRITICAL RECOVERY DIRECTIVE:\nYour previous tool invocation failed to parse. Correct your syntax NOW: Emit EXACTLY ONE JSON block wrapped in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`. Do NOT emit raw markdown shell code blocks or arrays for parameters.\n`
+      }
     } else if (Array.isArray(toolOutputHistory) && toolOutputHistory.length > 0) {
-      historyBlock = `\nPREVIOUS COMPLETED TOOL STEPS & RESULTS:\n${toolOutputHistory.join('\n\n').slice(0, 10000)}\n`
+      const historyStr = toolOutputHistory.join('\n\n')
+      historyBlock = `\nPREVIOUS COMPLETED TOOL STEPS & RESULTS:\n${historyStr.slice(0, 10000)}\n`
+      if (historyStr.includes('TOOL PARSER REJECTION DIAGNOSTIC') || historyStr.includes('NO TOOL INVOCATION DETECTED')) {
+        recoveryHint = `\nCRITICAL RECOVERY DIRECTIVE:\nYour previous tool invocation failed to parse. Correct your syntax NOW: Emit EXACTLY ONE JSON block wrapped in \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`. Do NOT emit raw markdown shell code blocks or arrays for parameters.\n`
+      }
     }
 
     // Priority 4: Auxiliary Background Context (RAG docs & Repository Tree Map)
@@ -90,6 +99,7 @@ export class AgentPromptAssembler {
 
     const promptParts = [
       baseSystemPrompt,
+      recoveryHint,
       planSection,
       pinnedBlock,
       activeFileBlock,

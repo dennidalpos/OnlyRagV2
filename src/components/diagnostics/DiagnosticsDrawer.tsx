@@ -213,7 +213,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
       aria-labelledby="diagnostics-drawer-title"
       className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in"
     >
-      <div className="w-full max-w-2xl h-full glass-panel border-l border-slate-800 flex flex-col shadow-2xl">
+      <div className="w-full max-w-3xl h-full glass-panel border-l border-slate-800 flex flex-col shadow-2xl">
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
           <div className="flex items-center gap-2">
@@ -279,7 +279,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
 
         {/* System Summary Cards */}
         {diagnostics && (
-          <div className="p-4 border-b border-slate-800/80 grid grid-cols-4 gap-3 bg-slate-950/40">
+          <div className="p-4 border-b border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-950/40">
             {/* Python Sidecar & LanceDB Status */}
             <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
@@ -331,8 +331,10 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 <span>{t('diagnostics.gpuTitle')}</span>
                 <Cpu className="w-3.5 h-3.5 text-cyan-400" />
               </div>
-              <div className="mt-2 text-sm font-medium text-slate-200 truncate">
-                {diagnostics.gpu.hasNvidiaGpu ? diagnostics.gpu.gpuName : 'CPU Only'}
+              <div className="mt-2 text-sm font-medium text-slate-200 overflow-hidden">
+                <span className="block truncate" title={diagnostics.gpu.hasNvidiaGpu ? (diagnostics.gpu.gpuName ?? '') : 'CPU Only'}>
+                  {diagnostics.gpu.hasNvidiaGpu ? diagnostics.gpu.gpuName : 'CPU Only'}
+                </span>
               </div>
               <span className="text-[11px] text-slate-400 mt-1 truncate font-mono">
                 {diagnostics.gpu.hasNvidiaGpu

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument, CodingSession } from '../types'
+import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument, CodingSession, WorkspaceProject } from '../types'
 import { AgentMode } from '../components/coding/CodingAgentView'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { logger } from '../lib/logger'
@@ -12,6 +12,28 @@ export interface QueuedPrompt {
 
 const SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
 const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
+const PROJECTS_STORAGE_KEY = 'onlyrag_workspace_projects'
+
+function loadSavedProjects(): WorkspaceProject[] {
+  try {
+    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch (err: any) {
+    logger.warn('useCodingAgent', `Could not parse saved projects: ${err?.message}`)
+  }
+  return []
+}
+
+function saveSavedProjects(projects: WorkspaceProject[]) {
+  try {
+    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects))
+  } catch (err: any) {
+    logger.warn('useCodingAgent', `Could not save projects: ${err?.message}`)
+  }
+}
 
 function loadSavedSessions(): CodingSession[] {
   try {
@@ -36,10 +58,11 @@ function saveSavedSessions(sessions: CodingSession[]) {
 
 export function useCodingAgent(settings?: AppSettings) {
   const [agentMode, setAgentMode] = useState<AgentMode>('plan')
-  const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search'>('editor')
+  const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan'>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 
-  // Workspace State
+  // Workspace & Projects State
+  const [projects, setProjects] = useState<WorkspaceProject[]>(() => loadSavedProjects())
   const [workspacePath, setWorkspacePath] = useState<string | null>(() => {
     return settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null
   })
@@ -311,20 +334,46 @@ export function useCodingAgent(settings?: AppSettings) {
     }
   }
 
-  const handleSelectWorkspaceFolder = async () => {
-    if (!window.electronAPI?.openDirectoryDialog) return
-    const chosen = await window.electronAPI.openDirectoryDialog({ title: 'Select Workspace Folder for AI Coding Agent' })
-    if (chosen) {
-      setWorkspacePath(chosen)
-      try {
-        localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, chosen)
-      } catch (err: any) {
-        logger.warn('useCodingAgent', `Failed saving last workspace to localStorage: ${err?.message}`)
-      }
-      setIsStandaloneMode(false)
-      setSelectedFile(null)
-      loadWorkspaceFiles(chosen)
+  const handleSelectProject = useCallback((pathStr: string) => {
+    setWorkspacePath(pathStr)
+    try {
+      localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, pathStr)
+    } catch (err: any) {
+      logger.warn('useCodingAgent', `Failed saving last workspace: ${err?.message}`)
     }
+    setProjects((prev) => {
+      const folderName = pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
+      const existing = prev.filter((p) => p.path !== pathStr)
+      const updated: WorkspaceProject[] = [
+        { path: pathStr, name: folderName, addedAt: new Date().toISOString(), lastOpenedAt: new Date().toISOString() },
+        ...existing,
+      ]
+      saveSavedProjects(updated)
+      return updated
+    })
+    setIsStandaloneMode(false)
+    setSelectedFile(null)
+    loadWorkspaceFiles(pathStr)
+  }, [loadWorkspaceFiles])
+
+  const handleAddProject = useCallback(async () => {
+    if (!window.electronAPI?.openDirectoryDialog) return
+    const chosen = await window.electronAPI.openDirectoryDialog({ title: 'Aggiungi Cartella Progetto per Coding Agent Studio' })
+    if (chosen) {
+      handleSelectProject(chosen)
+    }
+  }, [handleSelectProject])
+
+  const handleRemoveProject = useCallback((pathStr: string) => {
+    setProjects((prev) => {
+      const updated = prev.filter((p) => p.path !== pathStr)
+      saveSavedProjects(updated)
+      return updated
+    })
+  }, [])
+
+  const handleSelectWorkspaceFolder = async () => {
+    await handleAddProject()
   }
 
   const handleToggleStandalone = () => {
@@ -735,6 +784,10 @@ export function useCodingAgent(settings?: AppSettings) {
     isFetchingGit,
     guestOsInfo,
     isInspectingOs,
+    projects,
+    handleAddProject,
+    handleRemoveProject,
+    handleSelectProject,
     grepQuery,
     setGrepQuery,
     grepIsRegex,

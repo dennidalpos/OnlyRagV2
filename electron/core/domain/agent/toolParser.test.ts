@@ -422,6 +422,68 @@ console.log("App initialized");
     expect(resReplace?.parameters.filePath).toBe('package.json')
   })
 
+  it('should auto-repair run_command when parameters or command is passed as an array of strings', () => {
+    const rawArrayParams = `\`\`\`json
+{
+  "tool": "run_command",
+  "parameters": [
+    "npm create vite@latest . --template react-ts --yes",
+    "yarn add @tailwindcss/forms",
+    "yarn add react-scroll-tree"
+  ],
+  "explanation": "Installing project dependencies"
+}
+\`\`\``
+    const resArrayParams = parseAgentToolCall(rawArrayParams)
+    expect(resArrayParams).not.toBeNull()
+    expect(resArrayParams?.tool).toBe('run_command')
+    expect(resArrayParams?.parameters.command).toBe(
+      'npm create vite@latest . --template react-ts --yes; yarn add @tailwindcss/forms; yarn add react-scroll-tree'
+    )
+
+    const rawArrayCommand = `\`\`\`json
+{
+  "tool": "run_command",
+  "parameters": {
+    "command": ["npm install", "npm run build"]
+  }
+}
+\`\`\``
+    const resArrayCommand = parseAgentToolCall(rawArrayCommand)
+    expect(resArrayCommand).not.toBeNull()
+    expect(resArrayCommand?.tool).toBe('run_command')
+    expect(resArrayCommand?.parameters.command).toBe('npm install; npm run build')
+  })
+
+  it('should parse raw markdown bash blocks into run_command tool calls', () => {
+    const raw = `Here is how you set up the application:
+\`\`\`bash
+npm create vite@latest . --template react-ts -y
+npm install
+\`\`\``
+    const res = parseAgentToolCall(raw)
+    expect(res).not.toBeNull()
+    expect(res?.tool).toBe('run_command')
+    expect(res?.parameters.command).toBe('npm create vite@latest . --template react-ts -y; npm install')
+  })
+
+  it('should parse Aider-style search/replace diff blocks into replace_file_content tool calls', () => {
+    const raw = `Updating src/App.tsx:
+
+src/App.tsx
+<<<<<<< SEARCH
+import React from 'react';
+=======
+import React, { useState } from 'react';
+>>>>>>> REPLACE`
+    const res = parseAgentToolCall(raw)
+    expect(res).not.toBeNull()
+    expect(res?.tool).toBe('replace_file_content')
+    expect(res?.parameters.filePath).toBe('src/App.tsx')
+    expect(res?.parameters.targetContent).toBe("import React from 'react';")
+    expect(res?.parameters.replacementContent).toBe("import React, { useState } from 'react';")
+  })
+
   it('should return null when text does not contain valid tool call', () => {
     const raw = 'Just a normal text response without any tool invocations.'
     const result = parseAgentToolCall(raw)

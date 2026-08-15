@@ -14,7 +14,6 @@ export interface ModelOptionCardProps {
   onSelect: () => void
   accentColor?: 'emerald' | 'cyan' | 'purple' | 'amber' | 'sky' | 'rose'
   ariaLabel?: string
-  isHardwareCompatible?: boolean
   compatibilityStatus?: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
   compatibilityWarning?: string
 }

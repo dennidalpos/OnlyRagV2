@@ -70,23 +70,24 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           </div>
         )}
 
-        {/* Hardware Status Pill */}
-        <div className="hidden xl:flex items-center gap-2 text-[11px] text-slate-300 font-mono bg-slate-900/80 px-2.5 py-1 rounded-xl border border-slate-800">
-          <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-          <span>
-            {guestOsInfo
-              ? `${guestOsInfo.platform || 'win32'} • ${guestOsInfo.cpuCount ?? guestOsInfo.cpus ?? 'N/A'} Cores • ${guestOsInfo.freeMemoryGB ?? (guestOsInfo.freeMemMb ? (guestOsInfo.freeMemMb / 1024).toFixed(1) : '0')}/${guestOsInfo.totalMemoryGB ?? (guestOsInfo.totalMemMb ? (guestOsInfo.totalMemMb / 1024).toFixed(1) : '0')} GB`
-              : t('coding.osDetecting')}
-          </span>
-          {(guestOsInfo?.tools || guestOsInfo?.hasGit !== undefined) && (
-            <span className="flex items-center gap-1 border-l border-slate-700 pl-1.5 ml-1">
-              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${(guestOsInfo.tools?.git ?? guestOsInfo.hasGit) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'}`}>GIT</span>
-              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${(guestOsInfo.tools?.node ?? guestOsInfo.hasNode) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'}`}>NODE</span>
-              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${(guestOsInfo.tools?.python ?? guestOsInfo.hasPython) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'}`}>PY</span>
-              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${(guestOsInfo.tools?.ollama ?? guestOsInfo.hasOllama) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'}`}>OLLAMA</span>
-            </span>
-          )}
-        </div>
+        {/* Active Tools Badges */}
+        {(guestOsInfo?.tools || guestOsInfo?.hasGit !== undefined) && (
+          <div className="hidden sm:flex items-center gap-1 font-mono bg-slate-900/80 px-2.5 py-1 rounded-xl border border-slate-800 text-[9px] font-bold">
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.git ?? guestOsInfo.hasGit) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>GIT</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.node ?? guestOsInfo.hasNode) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>NODE</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.python ?? guestOsInfo.hasPython) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>PY</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.ollama ?? guestOsInfo.hasOllama) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>OLLAMA</span>
+            {guestOsInfo.tools?.docker !== undefined && (
+              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.docker ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>DOCKER</span>
+            )}
+            {guestOsInfo.tools?.uv !== undefined && (
+              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.uv ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>UV</span>
+            )}
+            {guestOsInfo.tools?.bun !== undefined && (
+              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.bun ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>BUN</span>
+            )}
+          </div>
+        )}
 
         {/* Model Badge with Complexity Router Tier */}
         <ModelBadge

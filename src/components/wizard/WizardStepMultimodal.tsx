@@ -111,7 +111,7 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
                 isSelected={selectedVision === m.modelName}
                 onSelect={() => onSelectVision(m.modelName)}
                 accentColor="amber"
-                isHardwareCompatible={m.isHardwareCompatible}
+
                 compatibilityStatus={m.compatibilityStatus}
                 compatibilityWarning={m.compatibilityWarning}
               />
@@ -167,7 +167,7 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
                 isSelected={selectedEmbedding === m.modelName}
                 onSelect={() => onSelectEmbedding(m.modelName)}
                 accentColor="purple"
-                isHardwareCompatible={m.isHardwareCompatible}
+
                 compatibilityStatus={m.compatibilityStatus}
                 compatibilityWarning={m.compatibilityWarning}
               />

@@ -192,7 +192,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                 isSelected={selectedChat === m.modelName}
                 onSelect={() => onSelectChat(m.modelName)}
                 accentColor="cyan"
-                isHardwareCompatible={m.isHardwareCompatible}
+
                 compatibilityStatus={m.compatibilityStatus}
                 compatibilityWarning={m.compatibilityWarning}
               />
@@ -244,7 +244,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                 isSelected={selectedTranslation === m.modelName}
                 onSelect={() => onSelectTranslation(m.modelName)}
                 accentColor="sky"
-                isHardwareCompatible={m.isHardwareCompatible}
+
                 compatibilityStatus={m.compatibilityStatus}
                 compatibilityWarning={m.compatibilityWarning}
               />
@@ -315,7 +315,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                 isSelected={selectedMedical === m.modelName}
                 onSelect={() => onSelectMedical?.(m.modelName)}
                 accentColor="rose"
-                isHardwareCompatible={m.isHardwareCompatible}
+
                 compatibilityStatus={m.compatibilityStatus}
                 compatibilityWarning={m.compatibilityWarning}
               />
@@ -386,7 +386,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                 isSelected={selectedLegal === m.modelName}
                 onSelect={() => onSelectLegal?.(m.modelName)}
                 accentColor="amber"
-                isHardwareCompatible={m.isHardwareCompatible}
+
                 compatibilityStatus={m.compatibilityStatus}
                 compatibilityWarning={m.compatibilityWarning}
               />

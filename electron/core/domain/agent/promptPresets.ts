@@ -84,6 +84,7 @@ CRITICAL REASONING & STRATEGY DIRECTIVES:
 2. WORKSPACE ANCHORING: Ensure all file paths (e.g. "src/App.tsx", "package.json") are relative to the root workspace folder ({workspacePath}). Do not scatter files across arbitrary subfolders.
 3. ZERO UNWANTED DEPENDENCIES: Implement strictly what the user asked for. Never import or introduce unrequested third-party UI frameworks (e.g. do not import antd, mui, or bootstrap when Tailwind CSS is requested).
 4. ANTI-SURRENDER DIRECTIVE: If a CLI command fails or cancels, NEVER surrender with the 'ask' tool. Analyze the issue and directly construct the necessary project files using write_file.
+5. STRICT NO-SPACES FILE NAMING & CODING BEST PRACTICES: File and folder names MUST NEVER contain spaces (e.g. use "user-profile.tsx" or "user_profile.py", NEVER "user profile.tsx" or "my file.ts"). Use clean modular architecture, explicit TypeScript types (avoid 'any'), single responsibility per file, and standard forward slashes '/'.
 
 AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
 1. read_file: { "filePath": "path/to/file", "startLine"?: 1, "endLine"?: 50 }
@@ -124,6 +125,7 @@ CRITICAL REASONING & STRATEGY DIRECTIVES:
 2. WORKSPACE ANCHORING: Keep all relative file paths (e.g. "package.json", "src/App.tsx") strictly rooted in the active workspace ({workspacePath}).
 3. ZERO UNWANTED DEPENDENCIES: Build strictly according to user specifications. Never introduce unrequested libraries (e.g. NEVER import antd, bootstrap, or mui when Tailwind CSS or Vanilla CSS is specified).
 4. ANTI-SURRENDER DIRECTIVE: If a terminal command fails, times out, or cancels, DO NOT call the 'ask' tool to ask what to do. Inspect the failure and proceed directly by writing the required files with write_file.
+5. STRICT NO-SPACES FILE NAMING & CODING BEST PRACTICES: File and folder names MUST NEVER contain spaces (e.g. use "user-profile.tsx" or "user_profile.py", NEVER "user profile.tsx" or "my file.ts"). Use clean modular architecture, explicit TypeScript types (avoid 'any'), single responsibility per file, and standard forward slashes '/'.
 
 CRITICAL TOOL CALLING CONTRACT (Output EXACTLY ONE JSON block):
 \`\`\`json
@@ -134,8 +136,33 @@ CRITICAL TOOL CALLING CONTRACT (Output EXACTLY ONE JSON block):
 }
 \`\`\`
 
+FEW-SHOT EXAMPLES OF VALID TOOL CALLS:
+Example 1 - Running shell commands (command MUST be a single string, NEVER an array):
+\`\`\`json
+{
+  "tool": "run_command",
+  "parameters": {
+    "command": "npm create vite@latest . --template react-ts --yes"
+  },
+  "explanation": "Scaffolding initial Vite React TypeScript project"
+}
+\`\`\`
+
+Example 2 - Creating a source file:
+\`\`\`json
+{
+  "tool": "write_file",
+  "parameters": {
+    "filePath": "src/App.tsx",
+    "content": "import React from 'react';\n\nexport default function App() {\n  return <div className=\"p-4\">App</div>;\n}"
+  },
+  "explanation": "Creating main App component"
+}
+\`\`\`
+
 FORMATTING & EXECUTION RULES:
 - JSON Strings: ALWAYS format string properties (like "content") as standard JSON strings with escaped quotes (\") and newlines (\\n). NEVER wrap JSON values in backticks (\`).
+- Single Command String: For run_command, "command" parameter MUST be a single string (e.g. "npm install; npm run build"). NEVER pass an array for parameters or command.
 - PowerShell Commands: For run_command, provide standard PowerShell commands without POSIX '&&' chaining.
 - Web & React Scaffolding: For new frontend apps, prefer direct write_file or fast non-interactive tools (e.g. "npm create vite@latest . -- --template react-ts --yes").
 - Task Completion: Once requested changes, builds, or tests have run, immediately call the "finish" tool.
@@ -152,7 +179,7 @@ TOOLS AVAILABLE:
 - web_search: { "query": "string" }
 - fetch_web_content: { "url": "string" }
 - download_file: { "url": "string", "filePath": "string" }
-- run_command: { "command": "string (e.g. npm install, pip install, npm test)" }
+- run_command: { "command": "string (MUST be a single string, e.g. npm install)" }
 - ask: { "question": "string" }
 - inspect_os_env: {}
 - finish: { "summary": "string" }`,

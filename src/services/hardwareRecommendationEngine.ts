@@ -38,6 +38,8 @@ export interface HardwareRecommendations {
   fastTierModels: ModelRecommendation[]
   standardTierModels: ModelRecommendation[]
   deepReasoningTierModels: ModelRecommendation[]
+  /** Heavy Escalation Tier (⚡): optional 14B+ models for complex multi-file tasks. Requires 12GB+ VRAM. */
+  heavyEscalationTierModels: ModelRecommendation[]
   chatTierModels: ModelRecommendation[]
   translationTierModels: ModelRecommendation[]
   medicalTierModels: ModelRecommendation[]
@@ -1006,6 +1008,66 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     },
   ]
 
+  // ⚡ Heavy Escalation Tier (14B+) — Auto-healing fallback for complex multi-file tasks
+  const rawHeavyEscalationTierModels = [
+    {
+      modelName: 'qwen2.5-coder:14b',
+      displayName: 'Qwen 2.5 Coder (14B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '9.0 GB',
+      description: 'Large-scale coding intelligence for complex multi-file refactoring and architecture tasks (12GB+ VRAM)',
+      isRecommended: profileTier === 'highend',
+    },
+    {
+      modelName: 'qwen2.5-coder:14b-instruct-q4_k_m',
+      displayName: 'Qwen 2.5 Coder (14B Q4_K_M)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '8.9 GB',
+      description: 'Quantized 14B heavy escalation model with reduced VRAM footprint on 12GB GPUs',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-r1:14b',
+      displayName: 'DeepSeek R1 Distill Qwen (14B)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '9.2 GB',
+      description: 'High-capacity 14B Qwen-distilled chain-of-thought reasoning engine for escalated debugging',
+      isRecommended: false,
+    },
+    {
+      modelName: 'deepseek-r1:14b-qwen-distill-q4_k_m',
+      displayName: 'DeepSeek R1 Distill Qwen (14B Q4_K_M)',
+      family: 'deepseek-r1',
+      sizeBytesApprox: '9.0 GB',
+      description: 'Quantized heavy reasoning model for auto-healing tool loop escalation on 12GB GPUs',
+      isRecommended: false,
+    },
+    {
+      modelName: 'codestral:22b-v0.1-q4_k_m',
+      displayName: 'Mistral Codestral (22B Q4_K_M)',
+      family: 'mistral',
+      sizeBytesApprox: '13.0 GB',
+      description: 'Enterprise-grade Mistral code intelligence for exhaustive system-wide architecture refactors',
+      isRecommended: profileTier === 'extreme',
+    },
+    {
+      modelName: 'qwen2.5-coder:32b',
+      displayName: 'Qwen 2.5 Coder (32B)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '20.0 GB',
+      description: 'Premier 32B coding model rivaling proprietary models — requires 24GB+ VRAM workstation',
+      isRecommended: false,
+    },
+    {
+      modelName: 'qwen2.5-coder:32b-instruct-q4_k_m',
+      displayName: 'Qwen 2.5 Coder (32B Q4_K_M)',
+      family: 'qwen-coder',
+      sizeBytesApprox: '19.5 GB',
+      description: 'Quantized 32B coding model for extreme workstations and multi-GPU setups',
+      isRecommended: false,
+    },
+  ]
+
   // ⚖️ Legal & Compliance Domain Models
   const rawLegalTierModels = [
     {
@@ -1059,6 +1121,7 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     fastTierModels: rawFastTierModels.map(enrich),
     standardTierModels: rawStandardTierModels.map(enrich),
     deepReasoningTierModels: rawDeepReasoningTierModels.map(enrich),
+    heavyEscalationTierModels: rawHeavyEscalationTierModels.map(enrich),
     chatTierModels: rawChatTierModels.map(enrich),
     translationTierModels: rawTranslationTierModels.map(enrich),
     medicalTierModels: rawMedicalTierModels.map(enrich),

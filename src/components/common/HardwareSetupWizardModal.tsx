@@ -48,7 +48,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const [step, setStep] = useState<number>(1)
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(diagnostics)
 
-  const downloadedModels = diagnostics?.ollama.models || []
+  // Derived directly from diagnostics so it reacts to onRefreshDiagnostics() without stale state
+  const downloadedModels = diagnostics?.ollama.models ?? []
 
   const recFast =
     recommendations.fastTierModels.find((m) => m.isRecommended)?.modelName ||
@@ -73,37 +74,24 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     recommendations.embeddingTierModels[0].modelName
 
   // Model State across all Functional Slots
+  // Pre-selection: prefer already saved settings, then recommended model. No substring guessing.
   const [selectedFast, setSelectedFast] = useState<string>(
-    settings.complexityFastModel ||
-      (downloadedModels.includes(recFast)
-        ? recFast
-        : downloadedModels.find((m) => m.includes('3b') || m.includes('1.5b')) || recFast)
+    settings.complexityFastModel || recFast
   )
   const [selectedStandard, setSelectedStandard] = useState<string>(
     settings.complexityStandardModel ||
       settings.codingModel ||
       settings.defaultModel ||
-      (downloadedModels.includes(recStandard)
-        ? recStandard
-        : downloadedModels.find((m) => m.includes('7b') || m.includes('8b')) || recStandard)
+      recStandard
   )
   const [selectedDeep, setSelectedDeep] = useState<string>(
-    settings.complexityDeepModel ||
-      (downloadedModels.includes(recDeep)
-        ? recDeep
-        : downloadedModels.find((m) => m.includes('8b') && m.includes('r1')) || recDeep)
+    settings.complexityDeepModel || recDeep
   )
   const [selectedChat, setSelectedChat] = useState<string>(
-    settings.chatModel ||
-      (downloadedModels.includes(recChat)
-        ? recChat
-        : downloadedModels.find((m) => m.includes('llama3.1') || m.includes('mistral')) || recChat)
+    settings.chatModel || recChat
   )
   const [selectedTranslation, setSelectedTranslation] = useState<string>(
-    settings.translationModel ||
-      (downloadedModels.includes(recTrans)
-        ? recTrans
-        : downloadedModels.find((m) => m.includes('qwen2.5') && !m.includes('coder')) || recTrans)
+    settings.translationModel || recTrans
   )
   const [selectedMedical, setSelectedMedical] = useState<string>(
     settings.medicalModel || ''
@@ -112,23 +100,13 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     settings.legalModel || ''
   )
   const [selectedVision, setSelectedVision] = useState<string>(
-    settings.visionModel ||
-      (downloadedModels.includes(recVision)
-        ? recVision
-        : downloadedModels.find(
-            (m) =>
-              m.includes('vision') ||
-              m.includes('vl') ||
-              m.includes('minicpm') ||
-              m.includes('llava') ||
-              m.includes('moondream')
-          ) || recVision)
+    settings.visionModel || recVision
   )
   const [selectedEmbedding, setSelectedEmbedding] = useState<string>(
-    settings.embeddingModel ||
-      (downloadedModels.includes(recEmbedding)
-        ? recEmbedding
-        : downloadedModels.find((m) => m.includes('embed') || m.includes('nomic')) || recEmbedding)
+    settings.embeddingModel || recEmbedding
+  )
+  const [selectedHeavy, setSelectedHeavy] = useState<string>(
+    settings.complexityHeavyModel || ''
   )
 
   // Runtime Preferences State
@@ -174,6 +152,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         )
       }
       if (settings.complexityDeepModel) setSelectedDeep(settings.complexityDeepModel)
+      setSelectedHeavy(settings.complexityHeavyModel || '')
       if (settings.chatModel) setSelectedChat(settings.chatModel)
       if (settings.translationModel) setSelectedTranslation(settings.translationModel)
       setSelectedMedical(settings.medicalModel || '')
@@ -200,6 +179,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       complexityFastModel: selectedFast || settings.complexityFastModel,
       complexityStandardModel: selectedStandard || settings.complexityStandardModel,
       complexityDeepModel: selectedDeep || settings.complexityDeepModel,
+      complexityHeavyModel: selectedHeavy || settings.complexityHeavyModel,
       codingModel: selectedStandard || settings.codingModel,
       chatModel: selectedChat || settings.chatModel,
       translationModel: selectedTranslation || settings.translationModel,
@@ -219,6 +199,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     useComplexityRouting,
     selectedFast,
     selectedDeep,
+    selectedHeavy,
     selectedChat,
     selectedTranslation,
     selectedMedical,
@@ -267,12 +248,14 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     return isOllamaModelInstalled(modelName, downloadedModels)
   }
 
-  // Calculate unique missing models
+  // Calculate unique missing models (exclude empty heavy slot — it is optional)
   const uniqueSelectedModels = Array.from(
     new Set([
       selectedFast,
       selectedStandard,
       selectedDeep,
+      // Heavy is optional: only include if explicitly assigned
+      ...(selectedHeavy ? [selectedHeavy] : []),
       selectedChat,
       selectedTranslation,
       selectedMedical,
@@ -438,6 +421,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     setSelectedFast(recFast)
     setSelectedStandard(recStandard)
     setSelectedDeep(recDeep)
+    setSelectedHeavy('')
     setSelectedChat(recChat)
     setSelectedTranslation(recTrans)
     setSelectedVision(recVision)
@@ -455,6 +439,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       complexityFastModel: recFast,
       complexityStandardModel: recStandard,
       complexityDeepModel: recDeep,
+      complexityHeavyModel: '',
       codingModel: recStandard,
       chatModel: recChat,
       translationModel: recTrans,
@@ -474,6 +459,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       complexityFastModel: selectedFast,
       complexityStandardModel: selectedStandard,
       complexityDeepModel: selectedDeep,
+      complexityHeavyModel: selectedHeavy || '',
       codingModel: selectedStandard,
       chatModel: selectedChat,
       translationModel: selectedTranslation,
@@ -613,9 +599,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               onSelectStandard={setSelectedStandard}
               selectedDeep={selectedDeep}
               onSelectDeep={setSelectedDeep}
+              selectedHeavy={selectedHeavy}
+              onSelectHeavy={setSelectedHeavy}
               fastTierModels={recommendations.fastTierModels}
               standardTierModels={recommendations.standardTierModels}
               deepReasoningTierModels={recommendations.deepReasoningTierModels}
+              heavyEscalationTierModels={recommendations.heavyEscalationTierModels}
               downloadedModels={downloadedModels}
               isModelDownloaded={isModelDownloaded}
             />
@@ -669,6 +658,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               selectedFast={selectedFast}
               selectedStandard={selectedStandard}
               selectedDeep={selectedDeep}
+              selectedHeavy={selectedHeavy}
               selectedChat={selectedChat}
               selectedTranslation={selectedTranslation}
               selectedMedical={selectedMedical}

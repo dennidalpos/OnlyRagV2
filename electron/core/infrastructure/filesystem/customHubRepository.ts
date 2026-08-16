@@ -75,6 +75,11 @@ export class CustomHubRepository {
       throw new Error('Hub name and URL are mandatory')
     }
 
+    const trimmedUrl = input.url.trim().toLowerCase()
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://') && !trimmedUrl.startsWith('builtin://')) {
+      throw new Error('Invalid Hub URL: Must start with http://, https://, or builtin://')
+    }
+
     const cleanId = `custom-${input.name.toLowerCase().replace(/[^a-z0-9-_]/g, '-')}-${Date.now().toString(36)}`
     const newSource: SkillHubSource = {
       id: cleanId,

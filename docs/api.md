@@ -108,13 +108,37 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 
 ---
 
-### 2.2. Canali Agente di Sviluppo (`agent:*`)
+### 2.2. Canali Agente di Sviluppo (`agent:*`) & Tool Set (19 Strumenti)
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
-| `agent:run-turn` | `AgentTurnRequest` | `Async Stream` | Esecuzione di un turno agentico con Tool-Calling e auto-healing. |
+| `agent:run-turn` | `AgentTurnRequest` | `Async Stream` | Esecuzione di un turno agentico con Tool-Calling (19 strumenti), auto-healing e FSM mode gating. |
 | `agent:stop-generation` | `none` | `void` | Interruzione immediata della generazione del token stream. |
 | `agent:run-benchmark` | `none` | `BenchmarkReport` | Valutazione quantitativa delle prestazioni dei modelli locali. |
+
+#### Matrice Completa dei 19 Strumenti Agentici Supportati
+
+| Tool Name | Aliases Supportati | Parametri Principali | Descrizione |
+| :--- | :--- | :--- | :--- |
+| `read_file` | `read`, `view_file`, `cat`, `open_file` | `filePath`, `startLine`, `endLine` | Lettura file con slicing opzionale di righe. |
+| `extract_code_symbols` | `extract_symbols`, `code_symbols`, `list_symbols` | `filePath` | Estrazione AST/Regex di funzioni, classi e interfacce. |
+| `write_file` | `write`, `create_file`, `save_file` | `filePath`, `content` | Scrittura file con creazione automatica cartelle padre. |
+| `create_directory` | `mkdir`, `make_directory`, `create_folder` | `dirPath` | Creazione ricorsiva sicura di directory. |
+| `copy_file` | `copy`, `cp`, `duplicate_file` | `sourcePath`, `targetPath` | Copia di file con tracciamento su journal transazionale. |
+| `move_file` | `move`, `mv`, `rename`, `rename_file` | `sourcePath`, `targetPath` | Spostamento/rinomina di file con snapshot preventivo. |
+| `replace_file_content` | `replace_chunk`, `edit_file`, `modify_file` | `filePath`, `targetContent`, `replacementContent` | Sostituzione mirata di un singolo blocco di testo. |
+| `multi_replace_file_content` | `multi_replace`, `multi_edit`, `batch_replace` | `filePath`, `replacements[]` | Sostituzione non contigua di molteplici blocchi in un file. |
+| `delete_file` | `remove_file`, `unlink`, `rm` | `filePath` | Eliminazione sicura di un file dal workspace. |
+| `grep_search` | `grep`, `search_files`, `find_in_files` | `query`, `dirPath`, `isRegex`, `caseInsensitive` | Ricerca di testo o regex attraverso i file del progetto. |
+| `list_dir` | `ls`, `listdir`, `dir` | `dirPath` | Elenco file e cartelle di un singolo livello. |
+| `list_files_recursive` | `tree`, `find_files`, `file_tree` | `dirPath`, `maxDepth` | Scansione ricorsiva della struttura cartelle (escludendo `node_modules`, `.git`). |
+| `run_command` | `terminal`, `exec`, `powershell`, `cmd`, `bash` | `command`, `cwd` | Esecuzione comandi PowerShell non interattivi con diagnostica auto-healing. |
+| `inspect_os_env` | `system_info`, `os_env` | `none` | Ispezione di CPU, RAM, OS platform ed estensione hardware. |
+| `web_search` | `search_web`, `google`, `duckduckgo` | `query` | Ricerca web tramite DuckDuckGo. |
+| `fetch_web_content` | `read_url`, `web_fetch`, `browse` | `url` | Estrazione e conversione in markdown di pagine web remote. |
+| `download_file` | `download`, `fetch_file`, `save_url` | `url`, `targetPath` | Download di file binari o sorgenti nel workspace. |
+| `ask` | `ask_question`, `clarify`, `question` | `question` | Richiesta di chiarimento all'utente (intercettata in modalita AGENT). |
+| `finish` | `done`, `complete`, `finish_task` | `summary` | Conclusione del turno previo superamento del Pre-Finish Gate. |
 
 ---
 

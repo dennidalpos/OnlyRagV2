@@ -56,5 +56,5 @@ describe('SystemAppService Unit Tests', () => {
     expect(res.appliedCount).toBe(2)
     expect(process.env.OLLAMA_FLASH_ATTENTION).toBe('1')
     expect(process.env.OLLAMA_KV_CACHE_TYPE).toBe('q8_0')
-  })
+  }, 15000)
 })

@@ -29,9 +29,41 @@ export class CodingAgentLogger {
       if (fs.existsSync(this.logFilePath)) {
         fs.writeFileSync(this.logFilePath, '', 'utf-8')
       }
+      const logDir = path.dirname(this.logFilePath)
+      const oldFile = path.join(logDir, 'coding_agent_audit.1.log')
+      if (fs.existsSync(oldFile)) {
+        fs.writeFileSync(oldFile, '', 'utf-8')
+      }
       return true
     } catch (err: any) {
       logger.log('WARN', 'CodingAgentLogger', `Failed clearing audit log: ${err?.message}`)
+      return false
+    }
+  }
+
+  public removeSessionFromAuditLog(sessionId: string): boolean {
+    if (!sessionId || typeof sessionId !== 'string') return false
+    try {
+      const logFiles = [
+        this.logFilePath,
+        path.join(path.dirname(this.logFilePath), 'coding_agent_audit.1.log'),
+      ]
+
+      for (const filePath of logFiles) {
+        if (!fs.existsSync(filePath)) continue
+        const raw = fs.readFileSync(filePath, 'utf-8')
+        if (!raw.includes(sessionId)) continue
+
+        const entries = raw.split(/\n={80}\n/)
+        const filtered = entries.filter(
+          (entry) => !entry.includes(`Session: ${sessionId}`) && !entry.includes(`Session ID: ${sessionId}`)
+        )
+        const cleaned = filtered.join('\n================================================================================\n')
+        fs.writeFileSync(filePath, cleaned, 'utf-8')
+      }
+      return true
+    } catch (err: any) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed removing session ${sessionId} from audit log: ${err?.message}`)
       return false
     }
   }

@@ -128,6 +128,30 @@ export class ToolSchemaValidator {
         break
       }
 
+      case 'git_status':
+      case 'rollback_workspace': {
+        break
+      }
+
+      case 'git_diff': {
+        if (rawParams.filePath) {
+          rawParams.filePath = String(rawParams.filePath)
+        }
+        if (rawParams.staged !== undefined) {
+          rawParams.staged = Boolean(rawParams.staged)
+        }
+        break
+      }
+
+      case 'get_file_info': {
+        if (!rawParams.filePath && !rawParams.path) {
+          errors.push("Missing required parameter 'filePath' for get_file_info")
+        } else {
+          rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        }
+        break
+      }
+
       case 'ask': {
         if (!rawParams.question && !rawParams.query) {
           errors.push("Missing required parameter 'question' for ask")

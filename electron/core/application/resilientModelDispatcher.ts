@@ -28,7 +28,44 @@ async function evictModelsFromVram(
   ollamaEndpoint?: string
 ): Promise<void> {
   const host = ollamaEndpoint || 'http://127.0.0.1:11434'
-  for (const modelName of modelsToEvict) {
+  const targets = new Set<string>()
+
+  if (modelsToEvict.includes('*')) {
+    try {
+      const psRes = await fetch(`${host}/api/ps`, { signal: AbortSignal.timeout(2000) })
+      if (psRes.ok) {
+        const data = await psRes.json()
+        if (Array.isArray(data?.models)) {
+          for (const m of data.models) {
+            if (m?.name) targets.add(m.name)
+          }
+        }
+      }
+    } catch {
+      // ignore ps fetch error
+    }
+  }
+
+  for (const m of modelsToEvict) {
+    if (m !== '*') targets.add(m)
+  }
+
+  if (targets.size === 0) {
+    // If no explicit models discovered, issue generic keep_alive 0
+    try {
+      await fetch(`${host}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keep_alive: 0 }),
+        signal: AbortSignal.timeout(3000),
+      })
+    } catch {
+      // Best effort
+    }
+    return
+  }
+
+  for (const modelName of targets) {
     try {
       await fetch(`${host}/api/generate`, {
         method: 'POST',
@@ -48,6 +85,52 @@ async function evictModelsFromVram(
  * Tier cascade: primaryModel → intermediateModel → fallbackModel → heavyEscalationModel (on demand).
  */
 export class ResilientModelDispatcher {
+  /**
+   * Evicts active models from VRAM immediately.
+   */
+  public static async evictVram(modelsToEvict: string[] = ['*'], ollamaEndpoint?: string): Promise<void> {
+    return evictModelsFromVram(modelsToEvict, ollamaEndpoint)
+  }
+
+  /**
+   * Evaluates the multi-tier escalation chain: Fast Tier -> Standard Tier -> Deep Reasoning Tier -> Heavy Tier.
+   * Cycles through available distinct models starting from current model tier upwards.
+   */
+  public static getNextEscalationModel(
+    currentModel: string,
+    plan: {
+      fastModel?: string
+      standardModel?: string
+      deepReasoningModel?: string
+      heavyEscalationModel?: string
+    }
+  ): { nextModel: string; tierLabel: string } | null {
+    const { fastModel, standardModel, deepReasoningModel, heavyEscalationModel } = plan
+
+    const tierList: { model: string; label: string }[] = []
+    if (fastModel) tierList.push({ model: fastModel, label: '🟢 Fast Tier' })
+    if (standardModel) tierList.push({ model: standardModel, label: '🔵 Standard Tier' })
+    if (deepReasoningModel) tierList.push({ model: deepReasoningModel, label: '🟣 Deep Reasoning Tier' })
+    if (heavyEscalationModel) tierList.push({ model: heavyEscalationModel, label: '🔶 Heavy Tier' })
+
+    const distinctTiers = tierList.filter(
+      (item, index, self) => Boolean(item.model) && self.findIndex((t) => t.model === item.model) === index
+    )
+
+    if (distinctTiers.length <= 1) return null
+
+    const currentIndex = distinctTiers.findIndex((t) => t.model === currentModel)
+    if (currentIndex === -1) {
+      const candidate = distinctTiers.find((t) => t.model !== currentModel)
+      return candidate ? { nextModel: candidate.model, tierLabel: candidate.label } : null
+    }
+
+    const nextIndex = (currentIndex + 1) % distinctTiers.length
+    if (nextIndex === currentIndex) return null
+
+    return { nextModel: distinctTiers[nextIndex].model, tierLabel: distinctTiers[nextIndex].label }
+  }
+
   /**
    * Executes streaming with primary model, progressively degrading across intermediate and fallback tiers.
    * If a heavyEscalationModel is configured and all primary tiers fail, escalates to it after VRAM eviction.

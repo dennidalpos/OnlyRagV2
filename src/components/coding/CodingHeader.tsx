@@ -43,6 +43,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
     if (onUpdateSettings) {
       onUpdateSettings({
         autoInstallHubSkills: isAutoHubEnabled ? 'disabled' : 'auto',
+        enableSkillRouter: !isAutoHubEnabled,
       })
     }
   }

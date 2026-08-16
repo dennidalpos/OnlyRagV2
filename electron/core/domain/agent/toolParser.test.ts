@@ -94,6 +94,50 @@ const y = 20;"
     expect(parseAgentToolCall(rawNoCmd)).toBeNull()
   })
 
+  it('should parse create_directory, copy_file, move_file, and list_files_recursive aliases correctly', () => {
+    const rawMkdir = `\`\`\`json
+{
+  "tool": "mkdir",
+  "parameters": { "path": "src/components/ui" }
+}
+\`\`\``
+    const resMkdir = parseAgentToolCall(rawMkdir)
+    expect(resMkdir?.tool).toBe('create_directory')
+    expect(resMkdir?.parameters.dirPath).toBe('src/components/ui')
+
+    const rawCopy = `\`\`\`json
+{
+  "tool": "cp",
+  "parameters": { "source": "src/App.tsx", "destination": "src/App.backup.tsx" }
+}
+\`\`\``
+    const resCopy = parseAgentToolCall(rawCopy)
+    expect(resCopy?.tool).toBe('copy_file')
+    expect(resCopy?.parameters.sourcePath).toBe('src/App.tsx')
+    expect(resCopy?.parameters.targetPath).toBe('src/App.backup.tsx')
+
+    const rawMove = `\`\`\`json
+{
+  "tool": "mv",
+  "parameters": { "src": "src/App.tsx", "dest": "src/components/App.tsx" }
+}
+\`\`\``
+    const resMove = parseAgentToolCall(rawMove)
+    expect(resMove?.tool).toBe('move_file')
+    expect(resMove?.parameters.sourcePath).toBe('src/App.tsx')
+    expect(resMove?.parameters.targetPath).toBe('src/components/App.tsx')
+
+    const rawTree = `\`\`\`json
+{
+  "tool": "tree",
+  "parameters": { "path": "src", "maxDepth": 4 }
+}
+\`\`\``
+    const resTree = parseAgentToolCall(rawTree)
+    expect(resTree?.tool).toBe('list_files_recursive')
+    expect(resTree?.parameters.dirPath).toBe('src')
+  })
+
   it('should parse multi_replace_file_content with chunks correctly', () => {
     const raw = `\`\`\`json
 {
@@ -482,6 +526,24 @@ import React, { useState } from 'react';
     expect(res?.parameters.filePath).toBe('src/App.tsx')
     expect(res?.parameters.targetContent).toBe("import React from 'react';")
     expect(res?.parameters.replacementContent).toBe("import React, { useState } from 'react';")
+  })
+
+  it('should parse search/replace diff blocks with empty SEARCH section into write_file tool calls', () => {
+    const raw = `Creating package.json:
+
+package.json
+<<<<<<< SEARCH
+=======
+{
+  "name": "my-app",
+  "version": "1.0.0"
+}
+>>>>>>> REPLACE`
+    const res = parseAgentToolCall(raw)
+    expect(res).not.toBeNull()
+    expect(res?.tool).toBe('write_file')
+    expect(res?.parameters.filePath).toBe('package.json')
+    expect(res?.parameters.content).toContain('"name": "my-app"')
   })
 
   it('should return null when text does not contain valid tool call', () => {

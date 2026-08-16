@@ -10,7 +10,7 @@ describe('SkillMatcher Domain Tests', () => {
       description: 'Best practices for React 19, Server Actions, useActionState, and hooks.',
       content: '# React 19 Guidelines\nAlways use useActionState for form handling.',
       filePath: 'skills/react19/SKILL.md',
-      isActive: false,
+      isActive: true,
       isWorkspaceLocal: true,
       triggers: ['react', 'react 19', 'useactionstate', 'hook'],
       tags: ['react', 'frontend', 'hooks'],
@@ -22,7 +22,7 @@ describe('SkillMatcher Domain Tests', () => {
       description: 'FastAPI standards, async endpoints, Pydantic v2 schemas.',
       content: '# FastAPI Guidelines\nUse dependency injection for db sessions.',
       filePath: 'skills/fastapi/SKILL.md',
-      isActive: false,
+      isActive: true,
       isWorkspaceLocal: true,
       triggers: ['fastapi', 'python', 'pydantic'],
       tags: ['python', 'backend', 'api'],
@@ -42,11 +42,28 @@ describe('SkillMatcher Domain Tests', () => {
     },
   ]
 
+  it('should not match skills that are deactivated (isActive === false)', () => {
+    const disabledSkill: SkillDefinition = {
+      id: 'disabled-skill',
+      name: 'react19-guidelines',
+      description: 'React 19 guidelines',
+      content: '# React 19',
+      filePath: 'skills/react19/SKILL.md',
+      isActive: false,
+      isWorkspaceLocal: true,
+      triggers: ['react', 'react 19'],
+      tags: ['react'],
+      originType: 'local_custom',
+    }
+
+    const matched = matchSkillsForTask('Optimize React 19 form', [disabledSkill])
+    expect(matched.length).toBe(0)
+  })
+
   it('should match relevant skills based on user prompt triggers', () => {
-    const matched = matchSkillsForTask('Optimize the React 19 form using useActionState', mockSkills)
+    const matched = matchSkillsForTask('Optimize the React 19 form using useActionState with appsec security guardrails', mockSkills)
     expect(matched.length).toBeGreaterThan(0)
     expect(matched.some((s) => s.id === 'react19')).toBe(true)
-    // explicitly active skill is also matched
     expect(matched.some((s) => s.id === 'security')).toBe(true)
     // unrelated skill is not top scored or excluded
     expect(matched.some((s) => s.id === 'fastapi')).toBe(false)
@@ -67,7 +84,7 @@ describe('SkillMatcher Domain Tests', () => {
         description: 'TypeScript clean typing rules.',
         content: '# TypeScript rules',
         filePath: 'skills/ts/SKILL.md',
-        isActive: false,
+        isActive: true,
         isWorkspaceLocal: true,
         triggers: ['ts'],
         tags: ['ts'],

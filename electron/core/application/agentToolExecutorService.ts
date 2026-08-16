@@ -1,7 +1,7 @@
 import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn, ChildProcess } from 'node:child_process'
+import { spawn, ChildProcess, execSync } from 'node:child_process'
 import { logger } from '../../diagnostics'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
@@ -9,7 +9,9 @@ import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
+import { NonInteractiveStreamSessionGuard } from '../domain/agent/shellStreamGuard'
 import { webClient } from '../infrastructure/http/webClient'
+import { FuzzyPatchEngineWithASTValidator } from '../domain/agent/fuzzyPatchEngine'
 import type { AppSettings } from '../../../src/types'
 
 export interface ToolExecutionResult {
@@ -273,12 +275,140 @@ export class AgentToolExecutorService {
         if (!pathCheck.safePath) {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
         }
+
+        // In-flight AST Pre-Commit Syntax Validation
+        const astCheck = FuzzyPatchEngineWithASTValidator.validateAST(pathCheck.safePath, content)
+        if (!astCheck.isValid) {
+          return {
+            outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nFile write blocked before disk persistence to prevent workspace corruption. Please fix syntax error.`,
+            logMessage: `Write File Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
+          }
+        }
+
         this.journal.recordBeforeModification(pathCheck.safePath)
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {
           return { outputForHistory: `Successfully wrote file ${filePath}`, logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}` }
         }
         return { outputForHistory: `Error writing file ${filePath}: ${res.error}`, logMessage: `Write file error: ${res.error}` }
+      }
+
+      case 'create_directory': {
+        if (settings.allowFileModifications === false) {
+          return { outputForHistory: 'Directory creation disabled in Settings.', logMessage: 'Directory creation disabled in settings' }
+        }
+        const dirPath = parameters.dirPath || parameters.filePath
+        const pathCheck = validatePathSafety(dirPath, workspacePath)
+        if (!pathCheck.safePath) {
+          return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Create Directory Rejected: ${pathCheck.error}` }
+        }
+        try {
+          fs.mkdirSync(pathCheck.safePath, { recursive: true })
+          return {
+            outputForHistory: `Successfully created directory ${dirPath}`,
+            logMessage: `Successfully created directory ${path.basename(pathCheck.safePath)}`,
+          }
+        } catch (err: any) {
+          return { outputForHistory: `Error creating directory ${dirPath}: ${err.message}`, logMessage: `Create directory error: ${err.message}` }
+        }
+      }
+
+      case 'copy_file': {
+        if (settings.allowFileModifications === false) {
+          return { outputForHistory: 'File copy disabled in Settings.', logMessage: 'File copy disabled in settings' }
+        }
+        const srcPath = parameters.sourcePath || parameters.filePath
+        const dstPath = parameters.targetPath || parameters.destination
+        const srcCheck = validatePathSafety(srcPath, workspacePath)
+        const dstCheck = validatePathSafety(dstPath, workspacePath)
+
+        if (!srcCheck.safePath || !dstCheck.safePath) {
+          return { outputForHistory: `Security Violation: ${srcCheck.error || dstCheck.error}`, logMessage: `Copy File Rejected: Security Violation` }
+        }
+
+        try {
+          fs.mkdirSync(path.dirname(dstCheck.safePath), { recursive: true })
+          this.journal.recordBeforeModification(dstCheck.safePath)
+          fs.copyFileSync(srcCheck.safePath, dstCheck.safePath)
+          return {
+            outputForHistory: `Successfully copied file from ${srcPath} to ${dstPath}`,
+            logMessage: `Successfully copied ${path.basename(srcCheck.safePath)} -> ${path.basename(dstCheck.safePath)}`,
+          }
+        } catch (err: any) {
+          return { outputForHistory: `Error copying file from ${srcPath} to ${dstPath}: ${err.message}`, logMessage: `Copy file error: ${err.message}` }
+        }
+      }
+
+      case 'move_file': {
+        if (settings.allowFileModifications === false) {
+          return { outputForHistory: 'File move/rename disabled in Settings.', logMessage: 'File move disabled in settings' }
+        }
+        const srcPath = parameters.sourcePath || parameters.filePath
+        const dstPath = parameters.targetPath || parameters.destination
+        const srcCheck = validatePathSafety(srcPath, workspacePath)
+        const dstCheck = validatePathSafety(dstPath, workspacePath)
+
+        if (!srcCheck.safePath || !dstCheck.safePath) {
+          return { outputForHistory: `Security Violation: ${srcCheck.error || dstCheck.error}`, logMessage: `Move File Rejected: Security Violation` }
+        }
+
+        try {
+          fs.mkdirSync(path.dirname(dstCheck.safePath), { recursive: true })
+          this.journal.recordBeforeModification(srcCheck.safePath)
+          this.journal.recordBeforeModification(dstCheck.safePath)
+          fs.renameSync(srcCheck.safePath, dstCheck.safePath)
+          return {
+            outputForHistory: `Successfully moved file from ${srcPath} to ${dstPath}`,
+            logMessage: `Successfully moved ${path.basename(srcCheck.safePath)} -> ${path.basename(dstCheck.safePath)}`,
+          }
+        } catch (err: any) {
+          return { outputForHistory: `Error moving file from ${srcPath} to ${dstPath}: ${err.message}`, logMessage: `Move file error: ${err.message}` }
+        }
+      }
+
+      case 'list_files_recursive': {
+        const dirPath = parameters.dirPath || workspacePath || '.'
+        const maxDepth = Math.max(1, Math.min(6, parameters.maxDepth || 3))
+        const pathCheck = validatePathSafety(dirPath, workspacePath)
+
+        if (!pathCheck.safePath) {
+          return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `List Files Recursive Rejected: ${pathCheck.error}` }
+        }
+
+        const safePath = pathCheck.safePath
+        try {
+          const ignoreDirs = new Set(['node_modules', '.git', 'dist', '.venv', 'build', '.next', 'out', 'coverage', '.pytest_cache'])
+          const discovered: string[] = []
+
+          const walk = (currentDir: string, depth: number) => {
+            if (depth > maxDepth) return
+            const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+            for (const entry of entries) {
+              if (ignoreDirs.has(entry.name)) continue
+              const fullPath = path.join(currentDir, entry.name)
+              const relPath = path.relative(safePath, fullPath).replace(/\\/g, '/')
+              if (entry.isDirectory()) {
+                discovered.push(`[DIR]  ${relPath}/`)
+                walk(fullPath, depth + 1)
+              } else if (entry.isFile()) {
+                discovered.push(`[FILE] ${relPath}`)
+              }
+            }
+          }
+
+          if (fs.existsSync(safePath)) {
+            walk(safePath, 1)
+            const outStr = `Recursive Directory Structure for [${dirPath}] (depth <= ${maxDepth}, ${discovered.length} items):\n` + discovered.slice(0, 150).join('\n')
+            return {
+              outputForHistory: outStr,
+              logMessage: `Recursive List: ${discovered.length} items in ${dirPath}`,
+              logDetail: outStr.slice(0, 800),
+            }
+          }
+          return { outputForHistory: `Directory not found: ${dirPath}`, logMessage: `Directory not found: ${dirPath}` }
+        } catch (err: any) {
+          return { outputForHistory: `Error listing files recursively: ${err.message}`, logMessage: `Recursive list error: ${err.message}` }
+        }
       }
 
       case 'replace_file_content': {
@@ -293,13 +423,35 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `File Replace Rejected: ${pathCheck.error}` }
         }
         if (filePath && targetContent) {
-          this.journal.recordBeforeModification(pathCheck.safePath)
-          const res = await this.repo.replaceChunk(pathCheck.safePath, targetContent, replacementContent)
-          if (res.success) {
-            return { outputForHistory: `Successfully replaced content in ${filePath}`, logMessage: `Successfully replaced target chunk in ${path.basename(filePath)}` }
+          if (!fs.existsSync(pathCheck.safePath)) {
+            return { outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
           }
-          const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${res.error}\nTip: Inspect the file with read_file or check exact whitespace before replacing.`
-          return { outputForHistory: failureFeedback, logMessage: `Replacement failed in ${path.basename(filePath)}: ${res.error}` }
+          const currentContent = fs.readFileSync(pathCheck.safePath, 'utf-8')
+          const fuzzyRes = FuzzyPatchEngineWithASTValidator.applyFuzzyReplace(currentContent, targetContent, replacementContent)
+
+          if (fuzzyRes.success && fuzzyRes.updatedContent !== undefined) {
+            const astCheck = FuzzyPatchEngineWithASTValidator.validateAST(pathCheck.safePath, fuzzyRes.updatedContent)
+            if (!astCheck.isValid) {
+              return {
+                outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nReplacement blocked before disk persistence to prevent syntax corruption.`,
+                logMessage: `File Replace Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
+              }
+            }
+
+            this.journal.recordBeforeModification(pathCheck.safePath)
+            const writeRes = await this.repo.writeFile(pathCheck.safePath, fuzzyRes.updatedContent)
+            if (writeRes.success) {
+              const confidenceNote = fuzzyRes.confidenceScore < 1.0 ? ` (Fuzzy Match Confidence: ${(fuzzyRes.confidenceScore * 100).toFixed(1)}%)` : ''
+              return {
+                outputForHistory: `Successfully replaced content in ${filePath}${confidenceNote}`,
+                logMessage: `Successfully replaced target chunk in ${path.basename(filePath)}${confidenceNote}`,
+              }
+            }
+            return { outputForHistory: `Error writing replaced content to ${filePath}: ${writeRes.error}`, logMessage: `Write error in ${path.basename(filePath)}` }
+          }
+
+          const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${fuzzyRes.error || 'Target chunk not found.'}\nTip: Inspect the file with read_file or check exact whitespace before replacing.`
+          return { outputForHistory: failureFeedback, logMessage: `Replacement failed in ${path.basename(filePath)}: ${fuzzyRes.error}` }
         }
         return { outputForHistory: `File not found or missing parameters for replacement: ${filePath || 'unknown'}`, logMessage: 'Missing replace parameters' }
       }
@@ -381,7 +533,10 @@ export class AgentToolExecutorService {
           return { outputForHistory: blockFeedback, logMessage: `[SECURITY BLOCK] Forbidden command: "${cmd}"`, isTerminal: true }
         }
 
-        const execCmd = secCheck.sanitizedCommand
+        let execCmd = secCheck.sanitizedCommand
+        if (process.platform === 'win32') {
+          execCmd = NonInteractiveStreamSessionGuard.sanitizePowerShellCommand(execCmd)
+        }
         const COMMAND_TIMEOUT_MS = 60000
 
         try {
@@ -425,12 +580,20 @@ export class AgentToolExecutorService {
             const viteMissingDirective = isZeroModulesVite && workspacePath && !fs.existsSync(path.join(workspacePath, 'index.html'))
               ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
               : ''
+            const isCreateViteCancelled = (cmd.includes('create-vite') || cmd.includes('create vite') || cmd.includes('create-app')) && isCancelled
+            const createViteDirective = isCreateViteCancelled
+              ? `\n\n[VITE CLI NON-INTERACTIVE DIRECTIVE]\n'npm create vite' was cancelled because the target directory is not empty or requires interactive prompt selections. DO NOT re-run 'npm create vite' interactively.\nInstead, construct 'package.json', 'index.html', and 'src/main.tsx' directly using write_file, or run 'npx -y create-vite@latest . -- --template react-ts' after clearing conflicting files.`
+              : ''
+            const isMissingDependency = lowerOut.includes('cannot find module') || lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import')
+            const missingDepDirective = isMissingDependency
+              ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation or runtime failed because an imported module/package is missing. Install the missing dependency via run_command (e.g. 'npm install <package-name>') or add it to 'package.json' before re-running.`
+              : ''
             const autoHealingFeedback = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]
 Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''})
 Captured Error Stack Trace & Failure Output:
 \`\`\`
 ${rawOutput.slice(0, 4000)}
-\`\`\`${permsDirective}${viteMissingDirective}
+\`\`\`${permsDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}
 
 AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or timed out. DO NOT ask the user vague clarification questions. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the command autonomously.`
             return {
@@ -453,6 +616,130 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
             outputForHistory: errorFeedback,
             logMessage: `Terminal Execution Exception: ${err.message}`,
             isTerminal: true,
+          }
+        }
+      }
+
+      case 'git_status': {
+        const cwd = workspacePath || process.cwd()
+        try {
+          const stdout = execSync('git status --short', { cwd, encoding: 'utf-8', timeout: 10000 })
+          const outStr = stdout.trim()
+            ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
+            : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
+          return {
+            outputForHistory: outStr,
+            logMessage: `Git Status checked in ${path.basename(cwd)}`,
+          }
+        } catch (err: any) {
+          return {
+            outputForHistory: `Git Status Error: ${err.message}`,
+            logMessage: `Git Status Error: ${err.message}`,
+          }
+        }
+      }
+
+      case 'git_diff': {
+        const cwd = workspacePath || process.cwd()
+        const targetPath = parameters.filePath
+        const isStaged = Boolean(parameters.staged)
+        const pathCheck = targetPath ? validatePathSafety(targetPath, workspacePath) : null
+
+        if (targetPath && pathCheck && !pathCheck.safePath) {
+          return {
+            outputForHistory: `Security Violation: ${pathCheck.error}`,
+            logMessage: `Git Diff Rejected: ${pathCheck.error}`,
+          }
+        }
+
+        try {
+          const fileArg = pathCheck?.safePath ? ` -- "${pathCheck.safePath}"` : ''
+          const stagedFlag = isStaged ? ' --staged' : ''
+          const cmdStr = `git diff${stagedFlag}${fileArg}`
+          const stdout = execSync(cmdStr, { cwd, encoding: 'utf-8', timeout: 15000 })
+          const truncated = stdout.trim().slice(0, 8000)
+          const outStr = stdout.trim()
+            ? `[GIT DIFF (${isStaged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`
+            : `[GIT DIFF: ${targetPath || cwd}]\nNo differences detected.\n[END GIT DIFF]`
+          return {
+            outputForHistory: outStr,
+            logMessage: `Git Diff completed for ${targetPath ? path.basename(targetPath) : 'workspace'}`,
+          }
+        } catch (err: any) {
+          return {
+            outputForHistory: `Git Diff Error: ${err.message}`,
+            logMessage: `Git Diff Error: ${err.message}`,
+          }
+        }
+      }
+
+      case 'rollback_workspace': {
+        const result = this.rollbackJournal()
+        const summary = `[ATOMIC WORKSPACE ROLLBACK EXECUTED]\nRestored: ${result.restoredCount} file(s).\n` +
+          (result.errors.length > 0 ? `Errors: ${result.errors.join('; ')}` : 'All journaled modifications successfully reverted to pre-session state.')
+        return {
+          outputForHistory: summary,
+          logMessage: `Workspace Rollback: ${result.restoredCount} files restored`,
+        }
+      }
+
+      case 'get_file_info': {
+        const targetPath = parameters.filePath
+        const pathCheck = validatePathSafety(targetPath, workspacePath)
+        if (!pathCheck.safePath) {
+          return {
+            outputForHistory: `Security Violation: ${pathCheck.error}`,
+            logMessage: `Get File Info Rejected: ${pathCheck.error}`,
+          }
+        }
+
+        try {
+          if (!fs.existsSync(pathCheck.safePath)) {
+            return {
+              outputForHistory: `[FILE INFO: ${targetPath}]\nStatus: Does Not Exist\n[END FILE INFO]`,
+              logMessage: `File Info: File not found: ${targetPath}`,
+            }
+          }
+
+          const stats = fs.statSync(pathCheck.safePath)
+          let lineCount = 0
+          let isBinary = false
+
+          if (stats.isFile()) {
+            const buf = Buffer.alloc(1024)
+            const fd = fs.openSync(pathCheck.safePath, 'r')
+            const bytesRead = fs.readSync(fd, buf, 0, 1024, 0)
+            fs.closeSync(fd)
+
+            for (let i = 0; i < bytesRead; i++) {
+              if (buf[i] === 0) {
+                isBinary = true
+                break
+              }
+            }
+
+            if (!isBinary) {
+              const fullContent = fs.readFileSync(pathCheck.safePath, 'utf-8')
+              lineCount = fullContent.split('\n').length
+            }
+          }
+
+          const infoStr = `[FILE INFO: ${targetPath}]\n` +
+            `Type: ${stats.isDirectory() ? 'Directory' : 'File'}\n` +
+            `Size: ${stats.size} bytes (${(stats.size / 1024).toFixed(2)} KB)\n` +
+            `Is Binary: ${isBinary}\n` +
+            `Line Count: ${lineCount}\n` +
+            `Last Modified: ${stats.mtime.toISOString()}\n` +
+            `[END FILE INFO]`
+
+          return {
+            outputForHistory: infoStr,
+            logMessage: `File Info retrieved for ${path.basename(pathCheck.safePath)}`,
+          }
+        } catch (err: any) {
+          return {
+            outputForHistory: `Get File Info Error: ${err.message}`,
+            logMessage: `File Info Error: ${err.message}`,
           }
         }
       }

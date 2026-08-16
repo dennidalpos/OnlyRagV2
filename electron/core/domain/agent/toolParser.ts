@@ -98,12 +98,20 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       if (toolName === 'multi_replace' || toolName === 'replace_multiple' || toolName === 'multi_replace_content' || toolName === 'multi_edit' || toolName === 'batch_replace') toolName = 'multi_replace_file_content'
       if (toolName === 'delete_file' || toolName === 'remove_file' || toolName === 'unlink' || toolName === 'delete' || toolName === 'del_file' || toolName === 'rm') toolName = 'delete_file'
       if (toolName === 'grep' || toolName === 'search' || toolName === 'search_files' || toolName === 'find_in_files' || toolName === 'search_in_files' || toolName === 'grep_files' || toolName === 'search_code' || toolName === 'find_text') toolName = 'grep_search'
+      if (toolName === 'create_directory' || toolName === 'mkdir' || toolName === 'make_directory' || toolName === 'create_folder' || toolName === 'ensure_dir') toolName = 'create_directory'
+      if (toolName === 'copy_file' || toolName === 'copy' || toolName === 'cp' || toolName === 'duplicate_file') toolName = 'copy_file'
+      if (toolName === 'move_file' || toolName === 'move' || toolName === 'mv' || toolName === 'rename_file' || toolName === 'rename') toolName = 'move_file'
+      if (toolName === 'list_files_recursive' || toolName === 'find_files' || toolName === 'tree' || toolName === 'list_files_tree' || toolName === 'file_tree') toolName = 'list_files_recursive'
       if (toolName === 'list' || toolName === 'ls' || toolName === 'listdir' || toolName === 'list_files' || toolName === 'list_directory' || toolName === 'dir') toolName = 'list_dir'
       if (toolName === 'web_search' || toolName === 'search_web' || toolName === 'google' || toolName === 'duckduckgo' || toolName === 'web' || toolName === 'search_internet' || toolName === 'bing') toolName = 'web_search'
       if (toolName === 'fetch_web_content' || toolName === 'fetch_url' || toolName === 'read_url' || toolName === 'web_fetch' || toolName === 'read_web_page' || toolName === 'browse' || toolName === 'get_url' || toolName === 'read_url_content' || toolName === 'fetch_web') toolName = 'fetch_web_content'
       if (toolName === 'download_file' || toolName === 'download' || toolName === 'fetch_file' || toolName === 'download_asset' || toolName === 'save_url') toolName = 'download_file'
       if (toolName === 'runcommand' || toolName === 'terminal' || toolName === 'exec' || toolName === 'powershell' || toolName === 'exec_command' || toolName === 'cmd' || toolName === 'run_cmd' || toolName === 'execute_command' || toolName === 'shell' || toolName === 'bash') toolName = 'run_command'
       if (toolName === 'inspect_os' || toolName === 'os_env' || toolName === 'system_info' || toolName === 'system_environment') toolName = 'inspect_os_env'
+      if (toolName === 'git_status' || toolName === 'gitstatus' || toolName === 'status_git' || toolName === 'git_state') toolName = 'git_status'
+      if (toolName === 'git_diff' || toolName === 'gitdiff' || toolName === 'git_changes' || toolName === 'diff') toolName = 'git_diff'
+      if (toolName === 'rollback_workspace' || toolName === 'rollback' || toolName === 'undo' || toolName === 'undo_changes' || toolName === 'revert_workspace') toolName = 'rollback_workspace'
+      if (toolName === 'get_file_info' || toolName === 'file_info' || toolName === 'stat_file' || toolName === 'file_stats' || toolName === 'file_metadata') toolName = 'get_file_info'
       if (toolName === 'ask' || toolName === 'ask_question' || toolName === 'question' || toolName === 'clarify' || toolName === 'user_input' || toolName === 'prompt_user' || toolName === 'inquire') toolName = 'ask'
       if (toolName === 'complete' || toolName === 'done' || toolName === 'finish_task' || toolName === 'stop' || toolName === 'end_task') toolName = 'finish'
 
@@ -115,6 +123,12 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
 
       if (!parameters.filePath) {
         parameters.filePath = rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.targetPath || rawParams.destination || rawParams.save_as || rawParams.TargetFile
+      }
+      if (!parameters.sourcePath) {
+        parameters.sourcePath = rawParams.source || rawParams.src || rawParams.from || rawParams.source_path || rawParams.filePath || rawParams.path
+      }
+      if (!parameters.targetPath) {
+        parameters.targetPath = rawParams.target || rawParams.dest || rawParams.destination || rawParams.to || rawParams.target_path || rawParams.new_path || rawParams.newPath
       }
       if (!parameters.dirPath) {
         parameters.dirPath = rawParams.path || rawParams.dir || rawParams.directory || rawParams.dir_path || rawParams.folder
@@ -294,22 +308,37 @@ function parseShellCodeBlockFallback(rawText: string): AgentToolCall | null {
 function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
   if (!rawText || typeof rawText !== 'string') return null
 
-  const diffMatch = rawText.match(/(?:([\s\S]*?))?<<<<<<<\s*SEARCH\s*\n([\s\S]*?)\n=======\n([\s\S]*?)\n>>>>>>>\s*REPLACE/i)
+  const diffMatch = rawText.match(/(?:([\s\S]*?))?<<<<<<<\s*SEARCH\s*\r?\n?([\s\S]*?)\r?\n?=======\r?\n?([\s\S]*?)\r?\n?>>>>>>>\s*REPLACE/i)
   if (diffMatch) {
     const precedingText = (diffMatch[1] || '').trim()
     let filePath = ''
     const lines = precedingText.split('\n').map((l) => l.trim()).filter(Boolean)
     if (lines.length > 0) {
-      const lastLine = lines[lines.length - 1]
-      const fileMatch = lastLine.match(/([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)/)
-      if (fileMatch) {
-        filePath = fileMatch[1].trim()
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i]
+        const cleanLine = line.replace(/^(?:File(?:name)?|Path|Create|Update|Edit|Write):\s*/i, '').trim()
+        const fileMatch = cleanLine.match(/([a-zA-Z0-9_\-\.\/\\\s]+\.[a-zA-Z0-9_]+)/)
+        if (fileMatch) {
+          filePath = fileMatch[1].trim()
+          break
+        }
       }
     }
 
     const targetContent = diffMatch[2]
     const replacementContent = diffMatch[3]
     if (targetContent !== undefined) {
+      if (targetContent.trim() === '' && filePath) {
+        return {
+          tool: 'write_file',
+          parameters: {
+            filePath,
+            content: replacementContent || '',
+          },
+          explanation: `Creating file ${filePath} via diff block fallback`,
+        }
+      }
+
       return {
         tool: 'replace_file_content',
         parameters: {

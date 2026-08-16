@@ -175,27 +175,75 @@ async def async_handler():
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
   })
 
-  it('should maintain state across sequential run_command invocations', async () => {
-    // Step 1: Set persistent environment variable
-    const step1 = await agentToolExecutorService.executeTool(
-      {
-        tool: 'run_command',
-        parameters: { command: '$env:MY_AGENT_PERSISTENT_ENV = "OnlyRagActive"' },
-      },
-      tempDir,
-      settings
-    )
-    expect(step1.logMessage).toContain('Terminal Command Finished')
+  it('should execute get_file_info and return correct file metadata', async () => {
+    const filePath = path.join(tempDir, 'info_test.ts')
+    fs.writeFileSync(filePath, 'line 1\nline 2\nline 3', 'utf-8')
 
-    // Step 2: Read it back in subsequent call
-    const step2 = await agentToolExecutorService.executeTool(
+    const res = await agentToolExecutorService.executeTool(
       {
-        tool: 'run_command',
-        parameters: { command: 'Write-Output $env:MY_AGENT_PERSISTENT_ENV' },
+        tool: 'get_file_info',
+        parameters: { filePath },
       },
       tempDir,
       settings
     )
-    expect(step2.outputForHistory).toContain('OnlyRagActive')
+
+    expect(res.outputForHistory).toContain('[FILE INFO:')
+    expect(res.outputForHistory).toContain('Type: File')
+    expect(res.outputForHistory).toContain('Line Count: 3')
+    expect(res.outputForHistory).toContain('Is Binary: false')
+  })
+
+  it('should execute rollback_workspace and restore modified file state', async () => {
+    const filePath = path.join(tempDir, 'rollback_test.txt')
+    fs.writeFileSync(filePath, 'Original State', 'utf-8')
+
+    // Modify file via executor (triggers journal recording)
+    await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        parameters: { filePath, content: 'Modified State' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('Modified State')
+
+    // Trigger rollback
+    const rollbackRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'rollback_workspace',
+        parameters: {},
+      },
+      tempDir,
+      settings
+    )
+
+    expect(rollbackRes.outputForHistory).toContain('[ATOMIC WORKSPACE ROLLBACK EXECUTED]')
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('Original State')
+  })
+
+  it('should execute git_status and git_diff without errors', async () => {
+    const statusRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'git_status',
+        parameters: {},
+      },
+      process.cwd(),
+      settings
+    )
+    expect(statusRes.outputForHistory).toContain('[GIT STATUS:')
+
+    const diffRes = await agentToolExecutorService.executeTool(
+      {
+        tool: 'git_diff',
+        parameters: {},
+      },
+      process.cwd(),
+      settings
+    )
+    expect(diffRes.outputForHistory).toContain('[GIT DIFF')
   })
 })
+

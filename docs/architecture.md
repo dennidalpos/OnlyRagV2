@@ -142,16 +142,25 @@ flowchart TD
 ## 5. Agent Studio: Tool Loop, Resilienza & Transazionalità
 
 - **Autonomous Tool Calling Loop**:
-  - **Ispezione**: `read_file` (con line slicing), `list_dir`, `grep_search`.
-  - **Modifica**: `replace_file_content`, `multi_replace_file_content` (patch atomico con gestione CRLF/LF), `write_file`, `delete_file`.
-  - **Esecuzione & Diagnostica**: `run_command` (PowerShell non-interattivo con timeout a 60s e cattura output in streaming), `inspect_os_env`, `finish`.
+  - **Ispezione & Navigazione**: `read_file` (con line slicing), `list_dir`, `grep_search`, `extract_code_symbols` (estrazione AST dei simboli esportati).
+  - **Modifica & Patching**: `replace_file_content` (fuzzy matching con tolleranza Levenshtein $\ge 82\%$ e AST pre-commit validation via `FuzzyPatchEngineWithASTValidator`), `multi_replace_file_content`, `write_file` (con validazione AST sintattica in-flight), `delete_file`.
+  - **Esecuzione & Diagnostica**: `run_command` (PowerShell non-interattivo supervised da `NonInteractiveStreamSessionGuard` con cattura prompt interattivi ed enviroment CI=true), `inspect_os_env`, `finish`.
   - **Web & Risorse**: `web_search`, `fetch_web_content`, `download_file`.
   - **Interazione Utente**: `ask` (alias `ask_question`) per chiarimenti diretti.
-- **Action Loop Fingerprinting & Oscillation Prevention (`AgentActionLoopDetector`)**:
+- **Action Loop Fingerprinting & Multi-State Oscillation Prevention (`AgentActionLoopDetector` & `CycleOscillationDetectorAndReproOracle`)**:
   - Ogni invocazione di tool viene tracciata tramite hash crittografico deterministico SHA-256 (`tool:parameters`).
-  - Se la medesima azione fallisce ripetutamente ($\ge 2$ volte consecutive), il runtime blocca l'esecuzione e inietta una direttiva correttiva forzata (`[CRITICAL LOOP INTERVENTION]`) per costringere il modello a esplorare percorsi alternativi.
+  - Rilevamento avanzato di cicli alternati di oscillazione a $k$-Stati ($k \in [2, 4]$, es. $A \rightarrow B \rightarrow A \rightarrow B$). Se l'agente instaura un ciclo alternato o ripete la stessa azione $\ge 2$ volte, il runtime inietta una direttiva correttiva forzata (`[CRITICAL LOOP INTERVENTION]`) ed uno script di riproduzione TDD.
+- **Role-Based Agent Graph (`RoleBasedAgentGraphOrchestrator`)**:
+  - Macchina a stati finiti con separazione dei ruoli agentici (`PLANNER`, `EXPLORER`, `CODER`, `VERIFIER`) e matrice di autorizzazione ad accesso ristretto per ruolo per prevenire il goal drift nei task complessi.
+- **AST-Aware Compact Repo Mapper (`CompactSemanticRepoMapper`)**:
+  - Scansione ad alta densità sintattica della struttura del repository con estrazione dell'albero dei simboli esportati (`class`, `function`, `interface`, `type`) per la generazione di una Repo Map ottimizzata per il budget del contesto.
+- **Optimizations per Hardware Minimo (Previeni Runaway Loops >300 Step)**:
+  - **`VirtualMemorySymbolStore`**: Conservazione cross-step dei simboli dei file già ispezionati per eliminare riletture ridondanti su modelli compatti (3B/7B/8B).
+  - **`ASTAwareStackTraceExtractor`**: Estrazione deterministica dei blocchi di errore e numeri di riga dai log di terminale per una diagnostica ad alta precisione.
+  - **`StrictAnchorFuzzyPatcher`**: Garantisce l'unicità dell'ancora di sostituzione prima dell'applicazione delle patch su disco.
+  - **`StagnationCircuitBreaker`**: Interruttore automatico di blocco sulle streak di inattività o errori ripetuti per prevenire loop infiniti runaway.
 - **Resilient Multi-Tier Model Dispatching (`ResilientModelDispatcher`)**:
-  - Se il modello primario ad alta intensità incontra timeout, disconnessioni socket o esaurimento VRAM (OOM), l'orchestratore degrada automaticamente verso il modello di fallback, dimezzando il context window per garantire la continuità del task.
+  - Se il modello primario ad alta intensità incontra timeout, disconnessioni socket o esaurimento VRAM (OOM), l'orchestratore degrada automaticamente verso il modello di fallback su 4 tier (Primary → Intermediate → Fallback → Heavy Escalation), applicando l'evizione VRAM esplicita prima di attivare il tier HEAVY.
 - **Transactional Workspace Journal (`AtomicWorkspaceJournal`)**:
   - Prima di qualsiasi operazione di scrittura, patch o cancellazione file, viene salvato uno snapshot preventivo in memoria.
   - In caso di annullamento da parte dell'utente o fallimento non sanabile, viene eseguito il `rollbackAll()` ripristinando istantaneamente il filesystem allo stato pre-task. A task concluso con successo, le modifiche vengono consolidate (`commit()`).

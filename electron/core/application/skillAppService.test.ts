@@ -104,4 +104,28 @@ describe('SkillAppService Unit Tests', () => {
     expect(matched.length).toBeGreaterThan(0)
     expect(matched[0].name).toBe('react19-modern-patterns')
   })
+
+  it('should not auto-install hub skills when autoInstallHubSkills option is disabled', async () => {
+    // Uninstalled query for bigquery-sql from hub
+    const matched = await skillAppService.getMatchedSkills('Optimize BigQuery SQL queries for data analytics', tempDir, 3, {
+      autoInstallHubSkills: 'disabled',
+    })
+    expect(matched.length).toBe(0)
+
+    const installed = await skillAppService.listInstalledSkills(tempDir)
+    expect(installed.some((s) => s.name === 'bigquery-sql')).toBe(false)
+  })
+
+  it('should return empty skills when enableSkillRouter is false', async () => {
+    await skillAppService.installFromHub('react19-modern-patterns', tempDir, 'official-core')
+    const matched = await skillAppService.getMatchedSkills('Create a React 19 component', tempDir, 3, {
+      enableSkillRouter: false,
+    })
+    expect(matched.length).toBe(0)
+
+    const block = await skillAppService.getContextSkillsBlock('Create a React 19 component', tempDir, 3, {
+      enableSkillRouter: false,
+    })
+    expect(block).toBe('')
+  })
 })

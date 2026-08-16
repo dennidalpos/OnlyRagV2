@@ -142,12 +142,38 @@ export function isIgnoredPath(name: string, isDirectory: boolean = false): boole
 }
 
 /**
+ * Strips shell command chaining characters (;, &&, ||, \n) and CLI prefixes from path strings.
+ * Prevents command pollution from creating directories named after shell commands.
+ */
+export function stripShellCommandChaining(rawPath: string): string {
+  if (!rawPath || typeof rawPath !== 'string') return rawPath
+  let pathOnly = rawPath.trim()
+
+  if (/;|\&\&|\|\||\n/.test(pathOnly)) {
+    pathOnly = pathOnly.split(/;|\&\&|\|\||\n/)[0].trim()
+  }
+
+  const cliIndex = pathOnly.search(/\b(?:cd|npx|npm|pip|node|git|yarn|pnpm)\s+/i)
+  if (cliIndex > 0) {
+    pathOnly = pathOnly.substring(0, cliIndex).trim()
+  } else if (cliIndex === 0) {
+    const match = pathOnly.match(/^cd\s+["']?([^"';&\n]+)["']?/i)
+    if (match && match[1]) {
+      pathOnly = match[1].trim()
+    }
+  }
+
+  return pathOnly.trim()
+}
+
+/**
  * Sanitizes file path segments by converting space-containing file and directory names into clean kebab-case.
  * e.g. "src/my component/App Header.tsx" -> "src/my-component/App-Header.tsx"
  */
 export function sanitizeFilePathSpaces(filePath: string): string {
   if (!filePath || typeof filePath !== 'string') return filePath
-  const normalized = filePath.replace(/\\/g, '/')
+  const stripped = stripShellCommandChaining(filePath)
+  const normalized = stripped.replace(/\\/g, '/')
   const isAbsolute = path.isAbsolute(normalized) || /^[a-zA-Z]:\//.test(normalized)
 
   const parts = normalized.split('/')

@@ -42,4 +42,18 @@ describe('CodingAgentLogger Unit Tests', () => {
     expect(content).toContain('COMPLETED')
     expect(content).toContain('Counter component created and verified.')
   })
+
+  it('should remove session entries when removeSessionFromAuditLog is called', () => {
+    loggerInstance.logSessionStart('session-to-delete', 'Task A', 'agent', 'llama3.2')
+    loggerInstance.logSessionStart('session-to-keep', 'Task B', 'agent', 'llama3.2')
+
+    expect(fs.readFileSync(logPath, 'utf-8')).toContain('session-to-delete')
+    expect(fs.readFileSync(logPath, 'utf-8')).toContain('session-to-keep')
+
+    loggerInstance.removeSessionFromAuditLog('session-to-delete')
+
+    const contentAfter = fs.readFileSync(logPath, 'utf-8')
+    expect(contentAfter).not.toContain('session-to-delete')
+    expect(contentAfter).toContain('session-to-keep')
+  })
 })

@@ -154,6 +154,7 @@ export interface AppSettings {
   // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
   // Skill Hub Auto-Discovery & On-Demand Installation
+  enableSkillRouter?: boolean // Default: true. Set false to completely disable skill injection.
   autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
   autoInstallMinScore?: number
   // Internationalization

@@ -289,9 +289,13 @@ export class SkillAppService {
     userTaskOrContext: string | SkillMatchContext,
     workspaceRoot?: string | null,
     maxSkills: number = 3,
-    options?: { autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
+    options?: { enableSkillRouter?: boolean; autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
   ): Promise<SkillDefinition[]> {
     try {
+      if (options?.enableSkillRouter === false || options?.autoInstallHubSkills === 'disabled') {
+        return []
+      }
+
       let availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
 
       const ctx: SkillMatchContext = typeof userTaskOrContext === 'string'
@@ -305,7 +309,7 @@ export class SkillAppService {
       let matched = matchSkillsForTask(ctx, availableSkills, maxSkills)
 
       // Auto-discovery from enabled Hubs if enabled and additional domain skills are needed
-      const autoInstallMode = options?.autoInstallHubSkills || 'auto'
+      const autoInstallMode = options?.autoInstallHubSkills ?? 'disabled'
       const minScore = options?.autoInstallMinScore ?? 8.0
 
       if (autoInstallMode !== 'disabled' && matched.length < maxSkills) {
@@ -346,7 +350,7 @@ export class SkillAppService {
     userTaskOrContext: string | SkillMatchContext,
     workspaceRoot?: string | null,
     maxSkills: number = 3,
-    options?: { autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
+    options?: { enableSkillRouter?: boolean; autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
   ): Promise<string> {
     try {
       const matched = await this.getMatchedSkills(userTaskOrContext, workspaceRoot, maxSkills, options)

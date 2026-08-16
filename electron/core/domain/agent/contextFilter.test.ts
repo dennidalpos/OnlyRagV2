@@ -50,6 +50,12 @@ describe('contextFilter domain logic & AppSec protection', () => {
     expect(validQuoted.safePath).not.toBeNull()
     expect(validQuoted.safePath?.replace(/\\/g, '/')).toContain('test_app/project-dashboard-task/index.html')
 
+    // Shell command chaining artifact stripping
+    const rawCmd = 'Project Dashboard Task; cd Project Dashboard Task; npx vite --template project --workspace DashboardTask --mode dev'
+    const validChained = validatePathSafety(rawCmd, testDir)
+    expect(validChained.safePath).not.toBeNull()
+    expect(validChained.safePath?.replace(/\\/g, '/')).toContain('test_app/Project-Dashboard-Task')
+
     // Outside workspace -> blocked
     const traversal = validatePathSafety(path.resolve(root, '../other-folder/secret.txt'), root)
     expect(traversal.safePath).toBeNull()

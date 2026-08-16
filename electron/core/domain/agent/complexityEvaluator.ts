@@ -75,6 +75,17 @@ const DEEP_KEYWORDS = [
   'type error',
   'typescript error',
   'dead code',
+  'dashboard',
+  'complexity router',
+  'tiers',
+  'routing',
+  'ipc',
+  'electron',
+  'lancedb',
+  'vector database',
+  'embedding',
+  'sidecar',
+  'fastapi',
 ]
 
 // Fast tier indicator keywords (EN + IT) - Informational / Lookup queries
@@ -111,6 +122,9 @@ const FAST_KEYWORDS = [
   'differenza tra',
   'difference between',
   'a cosa serve',
+  'che serve',
+  'version',
+  'versione',
 ]
 
 // Coding action imperatives that indicate active generation / modification
@@ -128,6 +142,10 @@ const CODING_ACTION_KEYWORDS = [
   'modifica',
   'generate',
   'genera',
+  'setup',
+  'inizializza',
+  'configure',
+  'configura',
 ]
 
 // Technical code failure & stack trace signals (Multi-language)
@@ -191,7 +209,15 @@ export function findMatchingInstalledModel(target: string, available: string[]):
     const mTag = mClean.includes(':') ? mClean.split(':')[1] : ''
     if (mBase === cleanBase) {
       if (!cleanTag || cleanTag === 'latest') return m
-      if (mTag && (mTag.startsWith(cleanTag) || cleanTag.startsWith(mTag))) return m
+      if (mTag && (mTag.startsWith(cleanTag) || cleanTag.startsWith(mTag) || mTag.includes(cleanTag) || cleanTag.includes(mTag))) return m
+    }
+  }
+
+  // 4. Substring base model match (e.g. qwen2.5-coder matching qwen2.5-coder:7b-instruct-q4_k_m)
+  for (const m of available) {
+    const mClean = m.toLowerCase().trim()
+    if (mClean.includes(cleanBase) || cleanBase.includes(mClean.split(':')[0])) {
+      return m
     }
   }
 
@@ -267,6 +293,8 @@ export function evaluateTaskComplexity(
       safeVramBudgetGB = 4.5
     } else if (hardwareProfile === 'High') {
       safeVramBudgetGB = 9.0
+    } else {
+      safeVramBudgetGB = 4.5
     }
   }
 

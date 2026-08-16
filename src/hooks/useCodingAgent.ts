@@ -476,10 +476,8 @@ export function useCodingAgent(settings?: AppSettings) {
         return [...filtered, log].slice(-500)
       })
 
-      // Real-time synchronization of Right Window tabs
-      // 1. If executing a terminal command -> switch to terminal tab and append output
+      // Real-time synchronization of terminal logs without hijacking user's active tab
       if (log.type === 'terminal' || log.message.includes('run_command') || log.message.startsWith('Ran ') || log.message.includes('Executing terminal command')) {
-        setActiveTab('terminal')
         if (log.message) {
           setTerminalLogs((prev) => {
             const entry = log.detail ? `${log.message}\n${log.detail}` : log.message

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import type { AgentToolCall } from './agentTypes'
+import { CycleOscillationDetectorAndReproOracle } from './cycleOscillationDetector'
 
 export interface LoopCheckResult {
   isLooping: boolean
@@ -19,6 +20,7 @@ interface TargetActionRecord {
 export class AgentActionLoopDetector {
   private signatureHistory: string[] = []
   private targetHistory: TargetActionRecord[] = []
+  private cycleDetector = new CycleOscillationDetectorAndReproOracle()
   private readonly maxRepeatsAllowed: number
 
   constructor(maxRepeatsAllowed = 2) {
@@ -65,6 +67,16 @@ export class AgentActionLoopDetector {
         isLooping: true,
         consecutiveDuplicateCount: duplicateCount,
         suggestedIntervention: `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`,
+      }
+    }
+
+    // 1.5 Multi-step Cycle Oscillation Check (k-mer cycle detection)
+    const cycleRes = this.cycleDetector.recordAndDetectCycle(toolCall.tool, toolCall.parameters || {})
+    if (cycleRes.isOscillating) {
+      return {
+        isLooping: true,
+        consecutiveDuplicateCount: cycleRes.cycleLength || 2,
+        suggestedIntervention: cycleRes.suggestedDirective,
       }
     }
 

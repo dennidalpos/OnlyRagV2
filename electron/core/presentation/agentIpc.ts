@@ -28,7 +28,9 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
   })
 
   ipcMain.handle('agent:delete-session', async (_, sessionId: string, workspacePath?: string | null) => {
-    return agentSessionStateRepository.clearSessionState(sessionId, workspacePath)
+    const success = await agentSessionStateRepository.clearSessionState(sessionId, workspacePath)
+    codingAgentLogger.removeSessionFromAuditLog(sessionId)
+    return success
   })
 
   ipcMain.handle('agent:clear-all-sessions', async (_, workspacePath?: string | null) => {

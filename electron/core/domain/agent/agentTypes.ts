@@ -48,14 +48,22 @@ export type SupportedToolName =
   | 'replace_file_content'
   | 'multi_replace_file_content'
   | 'write_file'
+  | 'create_directory'
+  | 'copy_file'
+  | 'move_file'
   | 'delete_file'
   | 'grep_search'
   | 'list_dir'
+  | 'list_files_recursive'
   | 'web_search'
   | 'fetch_web_content'
   | 'download_file'
   | 'run_command'
   | 'inspect_os_env'
+  | 'git_diff'
+  | 'git_status'
+  | 'rollback_workspace'
+  | 'get_file_info'
   | 'ask'
   | 'finish'
 
@@ -63,6 +71,8 @@ export interface AgentToolCall {
   tool: SupportedToolName
   parameters: {
     filePath?: string
+    sourcePath?: string
+    targetPath?: string
     dirPath?: string
     targetContent?: string
     replacementContent?: string
@@ -71,14 +81,15 @@ export interface AgentToolCall {
     command?: string
     query?: string
     url?: string
-    targetPath?: string
     question?: string
     isRegex?: boolean
     caseInsensitive?: boolean
     startLine?: number
     endLine?: number
+    maxDepth?: number
     maxResults?: number
     summary?: string
+    staged?: boolean
     [key: string]: any
   }
   explanation?: string

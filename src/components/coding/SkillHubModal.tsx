@@ -294,6 +294,8 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         {/* Action Status Banner */}
         {actionMessage && (
           <div
+            role={actionMessage.type === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
             className={`px-6 py-2 text-xs font-medium border-b ${
               actionMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'

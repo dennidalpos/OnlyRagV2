@@ -88,8 +88,8 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
         </div>
 
         {error && (
-          <div className="px-6 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div role="alert" className="px-6 py-2 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}

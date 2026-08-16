@@ -20,6 +20,12 @@ import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
+import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
+import { RoleBasedAgentGraphOrchestrator } from '../domain/agent/roleAgentGraph'
+import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
+import { CycleOscillationDetectorAndReproOracle } from '../domain/agent/cycleOscillationDetector'
+import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
+import { ASTAwareStackTraceExtractor } from '../domain/agent/astStackTraceExtractor'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -95,28 +101,7 @@ export function cancelActiveAgentTask(targetSessionId?: string) {
 
 async function scanProjectMap(workspacePath: string): Promise<string> {
   try {
-    const relativeList: string[] = []
-    const scan = async (curDir: string, depth: number) => {
-      if (depth > 8 || relativeList.length >= 2000) return
-      try {
-        const entries = await fs.promises.readdir(curDir, { withFileTypes: true })
-        for (const entry of entries) {
-          if (isIgnoredPath(entry.name, entry.isDirectory())) continue
-          const fullPath = path.join(curDir, entry.name)
-          const relPath = path.relative(workspacePath, fullPath).replace(/\\/g, '/')
-          if (entry.isDirectory()) {
-            relativeList.push(`[DIR] ${relPath}/`)
-            await scan(fullPath, depth + 1)
-          } else {
-            relativeList.push(`[FILE] ${relPath}`)
-          }
-        }
-      } catch (err: any) {
-        logger.log('WARN', 'AgentOrchestratorApp', `Scan error in ${curDir}: ${err.message}`)
-      }
-    }
-    await scan(workspacePath, 0)
-    return relativeList.join('\n')
+    return CompactSemanticRepoMapper.generateCompactRepoMap(workspacePath, 150)
   } catch (err: any) {
     logger.log('WARN', 'AgentOrchestratorApp', `Project map scan failed: ${err.message}`)
     return ''
@@ -240,7 +225,11 @@ export async function runAgentOrchestratorLoop(
     workspacePath: workspacePath || undefined,
   }
 
-  const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath)
+  const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath, 3, {
+    enableSkillRouter: settings.enableSkillRouter !== false && settings.autoInstallHubSkills !== 'disabled',
+    autoInstallHubSkills: settings.autoInstallHubSkills,
+    autoInstallMinScore: settings.autoInstallMinScore,
+  })
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
     if (session.targetWindow && !session.targetWindow.isDestroyed()) {
@@ -265,6 +254,8 @@ export async function runAgentOrchestratorLoop(
   let hasVerifiedBuild = false
   let hasPromptedVerification = false
   const loopDetector = new AgentActionLoopDetector(2)
+  const cycleDetector = new CycleOscillationDetectorAndReproOracle()
+  const circuitBreaker = new StagnationCircuitBreaker(10, 5)
   const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
   let consecutiveTaskFailures = 0
   let consecutiveAskAttempts = 0
@@ -319,6 +310,8 @@ export async function runAgentOrchestratorLoop(
     })
   }
 
+  let currentOverriddenModel: string | null = null
+
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
     emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
@@ -340,7 +333,9 @@ export async function runAgentOrchestratorLoop(
       emitLog('info', `⚡ Complexity Escalated: ${routedComplexity.modelName}`, routedComplexity.reasoning)
     }
 
-    const targetModel = settings.useComplexityRouting
+    let targetModel: string = currentOverriddenModel
+      ? currentOverriddenModel
+      : settings.useComplexityRouting
       ? routedComplexity.modelName
       : (settings.codingModel || settings.defaultModel || 'llama3.2')
 
@@ -354,12 +349,29 @@ export async function runAgentOrchestratorLoop(
       routedComplexity.tier
     )
     const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath, 3, {
+      enableSkillRouter: settings.enableSkillRouter !== false && settings.autoInstallHubSkills !== 'disabled',
       autoInstallHubSkills: settings.autoInstallHubSkills,
       autoInstallMinScore: settings.autoInstallMinScore,
     })
 
     const compiledHistoryBlock = episodicCompactor.compilePromptHistoryBlock(10000)
     const planBlock = goalPlanner.compileProgressPrompt()
+
+    let debtTrackerBlock = ''
+    if (workspacePath) {
+      try {
+        const trackerFile = path.join(workspacePath, '.assistant', 'SESSION_TRACKER.md')
+        if (fs.existsSync(trackerFile)) {
+          const trackerContent = fs.readFileSync(trackerFile, 'utf-8')
+          const tracker = SessionDebtTracker.parseTrackerMarkdown(trackerContent)
+          debtTrackerBlock = tracker.compilePromptBlock()
+        }
+      } catch (err: any) {
+        logger.log('WARN', 'AgentOrchestratorAppService', `Failed reading SESSION_TRACKER.md: ${err.message}`)
+      }
+    }
+
+    const effectiveAttachedContext = [debtTrackerBlock, attachedContext].filter(Boolean).join('\n\n')
 
     // Assemble base prompt segments, then apply heuristic compaction at 75% watermark
     const basePrompt = AgentPromptAssembler.assembleTurnPrompt({
@@ -376,7 +388,7 @@ export async function runAgentOrchestratorLoop(
       skillsBlock,
       planBlock,
       toolOutputHistory: compiledHistoryBlock,
-      attachedContext,
+      attachedContext: effectiveAttachedContext,
       projectContextMapStr,
       settings,
       runtimeOpts,
@@ -565,6 +577,22 @@ export async function runAgentOrchestratorLoop(
 
       agentToolExecutorService.commitJournal()
       const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'
+
+      if (workspacePath) {
+        try {
+          const assistantDir = path.join(workspacePath, '.assistant')
+          if (!fs.existsSync(assistantDir)) {
+            fs.mkdirSync(assistantDir, { recursive: true })
+          }
+          const tracker = SessionDebtTracker.parseTrackerMarkdown(summary)
+          const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
+          fs.writeFileSync(trackerPath, tracker.compileTrackerMarkdown(), 'utf-8')
+          emitLog('info', '📝 Session Debt Tracker salvato in .assistant/SESSION_TRACKER.md')
+        } catch (trackErr: any) {
+          logger.log('WARN', 'AgentOrchestratorAppService', `Impossibile salvare SESSION_TRACKER.md: ${trackErr.message}`)
+        }
+      }
+
       emitLog('info', `Task Finished: ${summary}`)
       emitDone(true, summary)
       if (settings.enableCodingAgentDebugLog) {
@@ -614,6 +642,26 @@ export async function runAgentOrchestratorLoop(
         activeAgentSessions.delete(sessionId)
         return { success: true, summary: stagSummary }
       }
+
+      loopDetector.resetTarget(loopTarget)
+      continue
+    }
+
+    const cycleCheck = cycleDetector.recordAndDetectCycle(parsedTool.tool, parsedTool.parameters)
+    if (cycleCheck.isOscillating && cycleCheck.suggestedDirective) {
+      stagnationStreak++
+      const targetStr = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url || ''
+      episodicCompactor.recordStep(
+        {
+          step: stepCount,
+          tool: parsedTool.tool,
+          target: targetStr,
+          status: 'BLOCKED',
+          summary: `Multi-Step Cycle Oscillation Trap Detected (cycle length ${cycleCheck.cycleLength})`,
+        },
+        cycleCheck.suggestedDirective
+      )
+      emitLog('info', `🔁 Cycle Oscillation Prevented: ${parsedTool.tool} (length ${cycleCheck.cycleLength})`)
       continue
     }
 
@@ -776,9 +824,43 @@ export async function runAgentOrchestratorLoop(
       parsedTool.parameters?.command ||
       parsedTool.parameters?.url
 
-    const distilledOutput = toolRes.isTerminal
+    let distilledOutput = toolRes.isTerminal
       ? DiagnosticOutputReducer.distillTerminalOutput(toolRes.outputForHistory, 2500)
       : toolRes.outputForHistory
+
+    if (isToolFailure && toolRes.isTerminal) {
+      const frame = ASTAwareStackTraceExtractor.extractErrorDiagnostics(toolRes.outputForHistory)
+      if (frame) {
+        distilledOutput = `${distilledOutput}\n\n${ASTAwareStackTraceExtractor.formatDiagnosticPrompt(frame)}`
+      }
+    }
+
+    const isMutating = ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool)
+    const cbRes = circuitBreaker.recordStep(isMutating, isToolFailure)
+    if (cbRes.shouldBreak && isUnlimitedSteps) {
+      const escalation = ResilientModelDispatcher.getNextEscalationModel(targetModel, {
+        fastModel: fallbackModel,
+        standardModel: settings.codingModel || settings.defaultModel || 'llama3.2',
+        deepReasoningModel: intermediateModel,
+        heavyEscalationModel,
+      })
+
+      if (escalation && escalation.nextModel !== targetModel) {
+        emitLog(
+          'info',
+          `🔺 Circuit Breaker Escalation (${cbRes.reason}): Evicting VRAM & switching model ${targetModel} → ${escalation.nextModel} [${escalation.tierLabel}]`
+        )
+        await ResilientModelDispatcher.evictVram(['*'], settings.ollamaHost)
+        currentOverriddenModel = escalation.nextModel
+        circuitBreaker.reset()
+      } else {
+        const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
+        emitLog('info', cbMsg)
+        emitDone(true, cbRes.suggestedAction || cbMsg)
+        activeAgentSessions.delete(sessionId)
+        return { success: true, summary: cbRes.suggestedAction || cbMsg }
+      }
+    }
 
     episodicCompactor.recordStep(
       {
@@ -791,7 +873,7 @@ export async function runAgentOrchestratorLoop(
       distilledOutput
     )
 
-    if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file'].includes(parsedTool.tool)) {
+    if (isMutating) {
       if (!isToolFailure) {
         hasFileMutations = true
         if (targetParam) {

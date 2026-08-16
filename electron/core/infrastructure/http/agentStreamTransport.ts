@@ -58,6 +58,30 @@ export class AgentStreamTransport {
             },
           })
 
+          let responseTimer: NodeJS.Timeout | null = setTimeout(() => {
+            req.destroy(new Error(`Ollama initial response timeout (45s): model '${targetModel}' loading stalled.`))
+          }, 45000)
+
+          let tokenStallTimer: NodeJS.Timeout | null = null
+
+          const resetTokenStallTimer = () => {
+            if (tokenStallTimer) clearTimeout(tokenStallTimer)
+            tokenStallTimer = setTimeout(() => {
+              req.destroy(new Error(`Ollama stream stalled: no tokens received for 30s from model '${targetModel}'.`))
+            }, 30000)
+          }
+
+          const cleanupTimers = () => {
+            if (responseTimer) {
+              clearTimeout(responseTimer)
+              responseTimer = null
+            }
+            if (tokenStallTimer) {
+              clearTimeout(tokenStallTimer)
+              tokenStallTimer = null
+            }
+          }
+
           const req = http.request(
             {
               hostname: ollamaUrl.hostname,
@@ -71,7 +95,13 @@ export class AgentStreamTransport {
               },
             },
             (res) => {
+              if (responseTimer) {
+                clearTimeout(responseTimer)
+                responseTimer = null
+              }
+
               if (res.statusCode && res.statusCode !== 200) {
+                cleanupTimers()
                 let errBody = ''
                 res.on('data', (chunk) => {
                   errBody += chunk.toString()
@@ -86,15 +116,19 @@ export class AgentStreamTransport {
                 return
               }
 
+              resetTokenStallTimer()
+
               let buffer = ''
               let fullText = ''
 
               res.on('data', (chunk) => {
                 if (isCancelled()) {
+                  cleanupTimers()
                   req.destroy()
                   resolve(fullText)
                   return
                 }
+                resetTokenStallTimer()
                 buffer += chunk.toString()
                 const lines = buffer.split('\n')
                 buffer = lines.pop() || ''
@@ -115,21 +149,20 @@ export class AgentStreamTransport {
                 }
               })
 
-              res.on('end', () => resolve(fullText))
+              res.on('end', () => {
+                cleanupTimers()
+                resolve(fullText)
+              })
             }
           )
 
           req.on('error', (err: any) => {
+            cleanupTimers()
             if (err.code === 'ECONNREFUSED') {
               reject(new Error(`Ollama service is not reachable at ${hostStr}. Please ensure Ollama is running.`))
             } else {
               reject(err)
             }
-          })
-
-          req.setTimeout(300000, () => {
-            req.destroy()
-            reject(new Error('LLM request timed out (300s)'))
           })
 
           if (onHttpRequestCreated) {

@@ -79,6 +79,8 @@ export function matchSkillsForTask(
   const scoredSkills: { skill: SkillDefinition; score: number }[] = []
 
   for (const skill of availableSkills) {
+    if (skill.isActive === false) continue
+
     let promptScore = 0
     let projectScore = 0
 
@@ -157,7 +159,7 @@ export function matchSkillsForTask(
     }
 
     // Baseline active preference
-    if (skill.isActive) {
+    if (totalScore > 0 && skill.isActive) {
       totalScore += 1.0
     }
 

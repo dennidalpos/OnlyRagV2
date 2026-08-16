@@ -92,6 +92,12 @@ export class GoalDecompositionPlanner {
       lines.push(line)
     }
 
+    if (progress.completed === progress.total && progress.total > 0) {
+      lines.push(
+        '\n[ALL CHECKLIST MILESTONES COMPLETED - ACTION REQUIRED]\nAll operational checklist tasks are 100% completed and verified. DO NOT execute any more file edits or commands.\nIMMEDIATELY invoke the "finish" tool and provide a comprehensive final summary report (resoconto finale in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion'
+      )
+    }
+
     return lines.join('\n')
   }
 

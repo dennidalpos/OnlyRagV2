@@ -107,6 +107,11 @@ export class SkillHubClient {
         return { success: false, error: res.error || 'Failed to fetch skill content from URL' }
       }
 
+      const trimmedContent = res.content.trim()
+      if (trimmedContent === '404: Not Found' || trimmedContent.startsWith('404: ') || trimmedContent.includes('404 Not Found')) {
+        return { success: false, error: 'Skill file not found on remote server (HTTP 404)' }
+      }
+
       return { success: true, content: res.content }
     } catch (err: any) {
       logger.log('ERROR', 'SkillHubClient', `Exception fetching skill from ${url}: ${err.message}`)

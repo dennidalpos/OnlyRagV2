@@ -33,11 +33,11 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
 
 ## 4. Local AI Coding Agent Studio
 
-- **Autonomous Tool Loop**: Orchestrated by `agentOrchestratorAppService.ts`:
-  - **Inspection**: `read_file` (with optional `startLine`/`endLine` slicing), `list_dir`, `grep_search`.
-  - **Modification**: `replace_file_content`, `multi_replace_file_content` (CRLF/LF line-ending preservation & fuzzy chunk matching), `write_file`, `delete_file`.
+- **Autonomous Tool Loop (19 Tools)**: Orchestrated by `agentOrchestratorAppService.ts`:
+  - **Inspection**: `read_file` (with line slicing), `extract_code_symbols` (AST/Regex parser), `list_dir`, `list_files_recursive` (`tree` scanner), `grep_search`.
+  - **Modification**: `write_file`, `create_directory` (`mkdir`), `copy_file` (`cp`), `move_file` (`mv`/rename), `replace_file_content`, `multi_replace_file_content` (CRLF/LF line-ending preservation & fuzzy chunk matching), `delete_file`.
   - **Research**: `web_search` (DuckDuckGo queries), `fetch_web_content` (HTML-to-Markdown scraper), `download_file` (sandboxed HTTP/HTTPS download).
-  - **Execution**: `run_command` (PowerShell command execution for dependency installation, testing, and builds), `inspect_os_env`, `finish`.
+  - **Execution**: `run_command` (PowerShell command execution for dependency installation, testing, and builds), `inspect_os_env`, `ask` (clarification), `finish`.
 - **Policy Modes**:
   - **Plan Mode**: Generates structured technical implementation plans without applying filesystem changes.
   - **Ask Mode**: Read-only research runs autonomously; file edits and shell commands require explicit user approval.

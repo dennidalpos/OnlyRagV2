@@ -94,6 +94,16 @@ const api: IElectronAPI = {
     ipcRenderer.on('agent:skills-matched', subscription)
     return () => ipcRenderer.removeListener('agent:skills-matched', subscription)
   },
+  onWorkspaceFileDeleted: (callback: (data: { filePath: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('workspace:file-deleted', subscription)
+    return () => ipcRenderer.removeListener('workspace:file-deleted', subscription)
+  },
+  onIngestDocumentDeleted: (callback: (data: { docId: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('ingest:document-deleted', subscription)
+    return () => ipcRenderer.removeListener('ingest:document-deleted', subscription)
+  },
   onIngestStreamProgress: (callback: (data: any) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('ingest:stream-progress', subscription)

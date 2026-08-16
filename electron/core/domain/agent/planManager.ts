@@ -16,6 +16,16 @@ export interface PlanDocument {
   globalVerificationCommand?: string
 }
 
+export interface CompactPlanState {
+  objective: string
+  restorePoint: string
+  activeMicroTask: string
+  pendingMicroTasks: string[]
+  completedCount: number
+  totalCount: number
+  isCompleted: boolean
+}
+
 export class PlanManager {
   /**
    * Parses markdown text in .assistant/plan.md format into a structured PlanDocument.
@@ -159,6 +169,71 @@ export class PlanManager {
     }
 
     return lines.join('\n')
+  }
+
+  /**
+   * Generates formatted markdown for .assistant/SESSION_TRACKER.md adhering to compaction rules.
+   */
+  public static generateSessionTrackerMarkdown(state: CompactPlanState): string {
+    const lines: string[] = [
+      '# SESSION TRACKER',
+      '',
+      '## Objective',
+      state.objective || 'General Execution Objective',
+      '',
+      '## Restore Point',
+      state.restorePoint || 'None (Session Initialized)',
+      '',
+      '## Active Micro-Task',
+      state.activeMicroTask || 'None (Plan Completed)',
+      '',
+      '## Remaining Micro-Tasks',
+    ]
+
+    if (state.pendingMicroTasks.length === 0) {
+      lines.push('- None')
+    } else {
+      for (const task of state.pendingMicroTasks) {
+        lines.push(`- [ ] ${task}`)
+      }
+    }
+
+    lines.push(
+      '',
+      '---',
+      "[STOP DIRECTIVE]: Upon completing the last micro-task, write the final summary into the .assistant\\SESSION_TRACKER.md file, clearing out the pending task list. Immediately after, halt any automatic execution and write in the chat: 'WAITING FOR COMMAND: Plan completed. State saved and compacted. Awaiting instructions.'. Stop strictly here."
+    )
+
+    return lines.join('\n')
+  }
+
+  /**
+   * Computes a compact plan state representation from a PlanDocument.
+   */
+  public static getCompactState(plan: PlanDocument, customObjective?: string, overrideRestorePoint?: string): CompactPlanState {
+    const totalCount = plan.tasks.length
+    const completedTasks = plan.tasks.filter((t) => t.completed)
+    const pendingTasks = plan.tasks.filter((t) => !t.completed)
+    const completedCount = completedTasks.length
+    const isCompleted = totalCount > 0 && pendingTasks.length === 0
+
+    const lastCompletedTask = completedTasks.length > 0 ? completedTasks[completedTasks.length - 1] : null
+    const restorePoint = overrideRestorePoint || (lastCompletedTask ? `Task ${lastCompletedTask.id}: ${lastCompletedTask.title}` : 'None (Session Initialized)')
+
+    const activeTask = pendingTasks.length > 0 ? pendingTasks[0] : null
+    const activeMicroTask = activeTask ? `Task ${activeTask.id}: ${activeTask.title}` : 'None (Plan Completed)'
+
+    const pendingMicroTasks = pendingTasks.map((t) => `Task ${t.id}: ${t.title}`)
+
+    return {
+      objective: customObjective || plan.title || 'Execution Plan',
+      restorePoint,
+      activeMicroTask,
+      pendingMicroTasks,
+      completedCount,
+      totalCount,
+      isCompleted,
+    }
   }
 
   /**

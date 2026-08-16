@@ -82,6 +82,16 @@ export function useCodingAgent(settings?: AppSettings) {
     promptQueueRef.current = promptQueue
   }, [promptQueue])
 
+  // 5-Second Real-Time Shell Command Monitoring Tab State
+  const shellCommandTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const previousTabRef = useRef<string | null>(null)
+  const autoOpenedTerminalRef = useRef<boolean>(false)
+  const activeTabRef = useRef(activeTab)
+
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
+
   // Git Status & Diff State
   const [gitStatusLines, setGitStatusLines] = useState<string[]>([])
   const [gitDiffText, setGitDiffText] = useState<string>('')
@@ -308,6 +318,58 @@ export function useCodingAgent(settings?: AppSettings) {
     }
   }
 
+  const purgeFileReferences = useCallback((deletedPath: string) => {
+    if (!deletedPath) return
+    const normDel = deletedPath.replace(/\\/g, '/').toLowerCase()
+    const isInside = (filePath: string) => {
+      if (!filePath) return false
+      const normFile = filePath.replace(/\\/g, '/').toLowerCase()
+      return normFile === normDel || normFile.startsWith(normDel.endsWith('/') ? normDel : normDel + '/')
+    }
+
+    setOpenFiles((prev) => {
+      const remaining = prev.filter((f) => !isInside(f.path))
+      setSelectedFile((curr) => {
+        if (curr && isInside(curr.path)) {
+          if (remaining.length > 0) {
+            handleOpenFile(remaining[remaining.length - 1])
+          } else {
+            setEditorContent('')
+            setOriginalContent('')
+            return null
+          }
+        }
+        return curr
+      })
+      return remaining
+    })
+
+    setPinnedFiles((prev) => {
+      const next = new Map(prev)
+      for (const [p] of next) {
+        if (isInside(p)) {
+          next.delete(p)
+        }
+      }
+      return next
+    })
+
+    setAttachedDocIds((prev) => {
+      const next = new Set(prev)
+      for (const docId of next) {
+        const doc = ingestedDocs.find((d) => d.id === docId)
+        if (doc && doc.filePath && isInside(doc.filePath)) {
+          next.delete(docId)
+        }
+      }
+      return next
+    })
+
+    if (workspacePath) {
+      loadWorkspaceFiles(workspacePath)
+    }
+  }, [ingestedDocs, workspacePath])
+
   useEffect(() => {
     loadGuestOsInfo()
   }, [])
@@ -476,7 +538,7 @@ export function useCodingAgent(settings?: AppSettings) {
         return [...filtered, log].slice(-500)
       })
 
-      // Real-time synchronization of terminal logs without hijacking user's active tab
+      // Real-time synchronization of terminal logs & 5-second trigger for live shell monitoring tab
       if (log.type === 'terminal' || log.message.includes('run_command') || log.message.startsWith('Ran ') || log.message.includes('Executing terminal command')) {
         if (log.message) {
           setTerminalLogs((prev) => {
@@ -484,17 +546,69 @@ export function useCodingAgent(settings?: AppSettings) {
             return [...prev, entry].slice(-500)
           })
         }
+
+        // Start 5-second trigger timer for auto-opening terminal monitoring tab
+        if (!shellCommandTimerRef.current) {
+          if (activeTabRef.current !== 'terminal') {
+            previousTabRef.current = activeTabRef.current
+          }
+          shellCommandTimerRef.current = setTimeout(() => {
+            setActiveTab('terminal')
+            autoOpenedTerminalRef.current = true
+            shellCommandTimerRef.current = null
+          }, 5000)
+        }
       }
 
-      // 2. Refresh workspace files on file write/replace/delete operations without opening unwanted tabs
+      // Clear shell command 5s timer if command completes
       if (
+        log.message.includes('Command exited with code') ||
+        log.message.includes('Finished running terminal command')
+      ) {
+        if (shellCommandTimerRef.current) {
+          clearTimeout(shellCommandTimerRef.current)
+          shellCommandTimerRef.current = null
+        }
+        if (autoOpenedTerminalRef.current) {
+          const prevTab = (previousTabRef.current || 'editor') as any
+          setActiveTab(prevTab)
+          autoOpenedTerminalRef.current = false
+          previousTabRef.current = null
+        }
+      }
+
+      // 2. Refresh & purge references on file write/replace/delete operations
+      if (log.message.includes('Successfully deleted')) {
+        const match = log.message.match(/Successfully deleted (?:file|directory)?\s*(.+)/i)
+        const targetPath = match ? match[1].trim() : ''
+        if (targetPath) {
+          purgeFileReferences(targetPath)
+        } else if (workspacePath) {
+          loadWorkspaceFiles(workspacePath)
+        }
+      } else if (
         log.message.includes('Successfully wrote file') ||
-        log.message.includes('Successfully replaced') ||
-        log.message.includes('Successfully deleted')
+        log.message.includes('Successfully replaced')
       ) {
         if (workspacePath) {
           loadWorkspaceFiles(workspacePath)
         }
+      }
+    })
+
+    const unsubFileDeleted = window.electronAPI.onWorkspaceFileDeleted?.((data: { filePath: string }) => {
+      if (data?.filePath) {
+        purgeFileReferences(data.filePath)
+      }
+    })
+
+    const unsubDocDeleted = window.electronAPI.onIngestDocumentDeleted?.((data: { docId: string }) => {
+      if (data?.docId) {
+        setAttachedDocIds((prev) => {
+          const next = new Set(prev)
+          next.delete(data.docId)
+          return next
+        })
       }
     })
 
@@ -520,6 +634,18 @@ export function useCodingAgent(settings?: AppSettings) {
     const unsubDone = window.electronAPI.onAgentDone?.(() => {
       setIsExecuting(false)
       setStreamingText('')
+
+      // Clear 5-second timer & automatically restore tab on task completion
+      if (shellCommandTimerRef.current) {
+        clearTimeout(shellCommandTimerRef.current)
+        shellCommandTimerRef.current = null
+      }
+      if (autoOpenedTerminalRef.current) {
+        const prevTab = (previousTabRef.current || 'editor') as any
+        setActiveTab(prevTab)
+        autoOpenedTerminalRef.current = false
+        previousTabRef.current = null
+      }
       if (promptQueueRef.current.length > 0) {
         const [nextItem, ...remaining] = promptQueueRef.current
         setPromptQueue(remaining)
@@ -532,6 +658,8 @@ export function useCodingAgent(settings?: AppSettings) {
 
     return () => {
       unsubLog?.()
+      unsubFileDeleted?.()
+      unsubDocDeleted?.()
       unsubStreamToken?.()
       unsubStep?.()
       unsubApproval?.()
@@ -690,7 +818,7 @@ export function useCodingAgent(settings?: AppSettings) {
       const initialLog = actionLogs.find((l) => l.message.startsWith('User Prompt: '))
       const initialUserTask = initialLog ? initialLog.message.replace(/^User Prompt:\s*/, '') : taskPrompt
 
-      await window.electronAPI.startAgentTask({
+      const res = await window.electronAPI.startAgentTask({
         sessionId: activeSessionId || activeSession?.id,
         userTask: taskPrompt,
         initialUserTask,
@@ -704,8 +832,12 @@ export function useCodingAgent(settings?: AppSettings) {
         activeFile: selectedFile ? { name: selectedFile.name, path: selectedFile.path, content: editorContent } : null,
         settings,
       })
+      if (res && res.success === false) {
+        addActionLog('info', `Agent Scheduling Error: ${res.summary || res.error || 'Failed scheduling task'}`)
+        setIsExecuting(false)
+      }
     } catch (err: any) {
-      addActionLog('info', `Agent Execution Error: ${err.message}`)
+      addActionLog('info', `Agent Scheduling Error: ${err.message}`)
       setIsExecuting(false)
     }
   }
@@ -782,7 +914,7 @@ export function useCodingAgent(settings?: AppSettings) {
     } else if (current.type === 'delete_file' && window.electronAPI) {
       addActionLog('tool_call', `User approved file deletion: ${current.target}`)
       await window.electronAPI.deleteWorkspaceFile(current.target)
-      if (workspacePath) loadWorkspaceFiles(workspacePath)
+      purgeFileReferences(current.target)
     } else if (current.type === 'download_file' && window.electronAPI) {
       addActionLog('tool_call', `User approved file download from ${current.contentOrCmd} to ${current.target}`)
       const dlRes = await window.electronAPI.downloadFile(current.contentOrCmd, current.target)

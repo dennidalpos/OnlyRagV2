@@ -394,6 +394,8 @@ export interface IElectronAPI {
   onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
   onAgentApprovalRequest: (callback: (req: any) => void) => () => void
   onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void
+  onWorkspaceFileDeleted?: (callback: (data: { filePath: string }) => void) => () => void
+  onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
   benchmarkModel: (modelName: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
   listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>

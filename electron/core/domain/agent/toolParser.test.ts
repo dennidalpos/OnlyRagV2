@@ -546,6 +546,17 @@ package.json
     expect(res?.parameters.content).toContain('"name": "my-app"')
   })
 
+  it('should auto-recover raw bash code blocks into run_command tool calls', () => {
+    const raw = `Here is the terminal command:
+\`\`\`bash
+npm create vite@latest ./ -- --template react-ts
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('run_command')
+    expect(result?.parameters.command).toBe('npm create vite@latest ./ -- --template react-ts')
+  })
+
   it('should return null when text does not contain valid tool call', () => {
     const raw = 'Just a normal text response without any tool invocations.'
     const result = parseAgentToolCall(raw)

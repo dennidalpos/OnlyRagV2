@@ -64,7 +64,6 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   const [isEditing, setIsEditing] = useState<boolean>(false)
   const [editedText, setEditedText] = useState<string>('')
   const [viewMode, setViewMode] = useState<'checklist' | 'document'>('checklist')
-  const [manualCompletedIds, setManualCompletedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (plan?.planText) {
@@ -146,15 +145,6 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
     return items
   }, [plan?.planText])
 
-  const toggleItemCompletion = (id: string) => {
-    setManualCompletedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   // Calculate items completed and active item status
   const totalItems = parsedChecklist.length
 
@@ -163,7 +153,6 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   const stepsForThisPlan = Math.max(0, completedStepCount - baseOffset)
 
   // Determine auto-step completed index based on execution state.
-  // During active execution or paused state (e.g. Circuit Breaker), items track actual progress without falsely marking 100% completion.
   let autoStepCompletedIndex = 0
   if (isExecuting && stepsForThisPlan > 0) {
     autoStepCompletedIndex = Math.min(totalItems, stepsForThisPlan - 1)
@@ -172,8 +161,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   }
 
   const completedItemsCount = parsedChecklist.reduce((acc, item, idx) => {
-    const isManuallyChecked = manualCompletedIds.has(item.id)
-    if (item.completed || isManuallyChecked || idx < autoStepCompletedIndex) return acc + 1
+    if (item.completed || idx < autoStepCompletedIndex) return acc + 1
     return acc
   }, 0)
 
@@ -354,27 +342,21 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                   />
                 </div>
 
-                {/* Checklist Items List */}
+                {/* Checklist Items List (Read-Only driven by Agent Execution) */}
                 <div className="space-y-2 pt-1">
                   {parsedChecklist.map((item, idx) => {
-                    const isManuallyChecked = manualCompletedIds.has(item.id)
-                    const isChecked =
-                      item.completed ||
-                      isManuallyChecked ||
-                      idx < autoStepCompletedIndex
-
+                    const isChecked = item.completed || idx < autoStepCompletedIndex
                     const isActive = isExecuting && !isChecked && idx === activeIndex
 
                     return (
                       <div
                         key={item.id}
-                        onClick={() => toggleItemCompletion(item.id)}
-                        className={`p-2.5 rounded-xl border text-xs flex items-start gap-2.5 cursor-pointer transition-all ${
+                        className={`p-2.5 rounded-xl border text-xs flex items-start gap-2.5 transition-all select-text ${
                           isChecked
                             ? 'bg-emerald-950/20 border-emerald-800/50 text-slate-300'
                             : isActive
                               ? 'bg-amber-950/30 border-amber-800/80 text-amber-200 shadow-sm'
-                              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 text-slate-200'
+                              : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
                         }`}
                       >
                         <div className="mt-0.5 shrink-0">

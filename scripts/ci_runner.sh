@@ -18,10 +18,11 @@ echo "[2/3] Running Vitest Unit Tests..."
 npm run test:fast
 
 echo "[3/3] Running Python Sidecar Syntax Check..."
-if [ -f "sidecar/main.py" ]; then
-    python -m py_compile sidecar/main.py
+if [ -d "sidecar" ]; then
+    find sidecar -name "*.py" -exec python -m py_compile {} +
+    echo "[PASS] Python sidecar syntax clean."
 else
-    echo "[SKIP] sidecar/main.py not found, skipping syntax check."
+    echo "[SKIP] sidecar directory not found, skipping syntax check."
 fi
 
 echo "====================================================="

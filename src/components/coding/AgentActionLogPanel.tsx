@@ -33,6 +33,32 @@ import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
 
+export function getStepModelName(message: string, fallbackModelName?: string): string {
+  if (!message) return fallbackModelName || 'LLM'
+
+  const consultingMatch = message.match(/Consulting LLM \(([^)]+)\)/i)
+  if (consultingMatch && consultingMatch[1]) {
+    return consultingMatch[1].trim()
+  }
+
+  const complexityMatch = message.match(/(?:Complexity Escalated|Escalation a Deep Reasoning|Escalated to|Escalating to):\s*([a-zA-Z0-9._:\-]+)/i)
+  if (complexityMatch && complexityMatch[1]) {
+    return complexityMatch[1].trim()
+  }
+
+  const bracketMatch =
+    message.match(/fallback to \[([^\]]+)\]/i) ||
+    message.match(/Escalating to heavy tier \[([^\]]+)\]/i) ||
+    message.match(/Primary model \[([^\]]+)\]/i) ||
+    message.match(/Intermediate model \[([^\]]+)\]/i)
+
+  if (bracketMatch && bracketMatch[1]) {
+    return bracketMatch[1].trim()
+  }
+
+  return fallbackModelName || 'LLM'
+}
+
 interface AgentActionLogPanelProps {
   actionLogs: AgentActionLog[]
   agentMode: AgentMode
@@ -657,8 +683,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                       <Bot className="w-3 h-3" />
                     </div>
                     <span className="font-bold text-xs text-emerald-400">{t('coding.agentRole')}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono">
-                      {activeModelName || 'LLM'}
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold">
+                      {getStepModelName(log.message, activeModelName)}
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">{log.timestamp}</span>
@@ -691,22 +717,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
               <span className="font-semibold text-slate-200">{t('coding.runTask')}...</span>
             </div>
-            {activeSkills.length > 0 && (
-              <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-300">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="text-slate-400">{t('coding.skillsInUse')}</span>
-                <div className="flex flex-wrap gap-1">
-                  {activeSkills.map((sk) => (
-                    <span
-                      key={sk}
-                      className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold border border-cyan-500/30"
-                    >
-                      {sk}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
             {streamingText && (
               <div className="mt-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed shadow-inner">
                 {streamingText}

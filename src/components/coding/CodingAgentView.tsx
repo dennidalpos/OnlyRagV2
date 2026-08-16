@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useMemo } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import {
   FileCode2,
@@ -33,6 +33,7 @@ import { usePlanApproval, AgentPlan } from '../../hooks/usePlanApproval'
 import { CodingHeader } from './CodingHeader'
 import { PendingApprovalModal } from './PendingApprovalModal'
 import { SkillHubModal } from './SkillHubModal'
+import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
@@ -47,9 +48,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const { t } = useTranslation()
   const c = useCodingAgent(settings)
 
-  // Plan Hook Integration
+  // Plan Hook Integration with Session Isolation
   const planApproval = usePlanApproval({
     settings,
+    activeSessionId: c.activeSessionId,
     onPlanApproved: (_approvedPlan) => {
       c.handleAgentExecute()
     },
@@ -61,6 +63,18 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [copiedPath, setCopiedPath] = useState<boolean>(false)
   const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
+
+  const activeModelName = useMemo(() => {
+    if (settings?.useComplexityRouting) {
+      return evaluateTaskComplexity(c.agentPrompt, {
+        attachedFilesCount: c.pinnedFiles.size,
+        contextSizeChars: c.editorContent.length,
+        settings,
+        availableModels: diagnostics?.ollama?.models,
+      }).modelName
+    }
+    return settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+  }, [settings, c.agentPrompt, c.pinnedFiles.size, c.editorContent.length, diagnostics?.ollama?.models])
 
   const isDraggingRef = useRef(false)
   const startXRef = useRef(0)
@@ -211,7 +225,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               attachedDocIds={c.attachedDocIds}
               onToggleAttachDoc={c.toggleAttachDoc}
               selectedFile={c.selectedFile}
-              activeModelName={settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'}
+              activeModelName={activeModelName}
               settings={settings}
               availableModels={diagnostics?.ollama.models}
               onOpenFile={c.handleOpenFile}
@@ -492,9 +506,12 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               <ActivitiesPanel
                 actionLogs={c.actionLogs}
                 isExecuting={c.isExecuting}
-                streamingText={c.streamingText}
                 activeSkills={c.activeSkills}
                 agentPrompt={c.agentPrompt}
+                activeModelName={activeModelName}
+                openFilesCount={c.openFiles.length}
+                pinnedFilesCount={c.pinnedFiles.size}
+                attachedDocsCount={c.attachedDocIds.size}
               />
             )}
 

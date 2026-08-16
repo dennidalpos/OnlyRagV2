@@ -94,4 +94,29 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(await agentSessionStateRepository.loadSessionState('session-1', tempDir)).toBeNull()
     expect(await agentSessionStateRepository.loadSessionState('session-2', tempDir)).toBeNull()
   })
+
+  it('should save SESSION_TRACKER.md in .assistant directory', async () => {
+    const compactState = {
+      objective: 'Refactor Authentication',
+      restorePoint: 'Task 1: Setup types',
+      activeMicroTask: 'Task 2: Add middleware',
+      pendingMicroTasks: ['Task 2: Add middleware', 'Task 3: Unit tests'],
+      completedCount: 1,
+      totalCount: 3,
+      isCompleted: false,
+    }
+
+    const savedTracker = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, compactState)
+    expect(savedTracker).toBe(true)
+
+    const trackerPath = path.join(tempDir, '.assistant', 'SESSION_TRACKER.md')
+    expect(fs.existsSync(trackerPath)).toBe(true)
+
+    const content = fs.readFileSync(trackerPath, 'utf-8')
+    expect(content).toContain('# SESSION TRACKER')
+    expect(content).toContain('Refactor Authentication')
+    expect(content).toContain('Task 1: Setup types')
+    expect(content).toContain('Task 2: Add middleware')
+    expect(content).toContain('[STOP DIRECTIVE]')
+  })
 })

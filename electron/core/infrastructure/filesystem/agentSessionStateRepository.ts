@@ -5,6 +5,7 @@ import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../domain/agent/planAndSolveGraph'
+import { PlanManager, type CompactPlanState } from '../../domain/agent/planManager'
 
 export interface SavedAgentSessionState {
   sessionId: string
@@ -18,6 +19,11 @@ export interface SavedAgentSessionState {
   userTask: string
   initialUserTask?: string
   updatedAt: string
+  objective?: string
+  restorePoint?: string
+  activeMicroTask?: string
+  pendingMicroTasks?: string[]
+  status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
 }
 
 export class AgentSessionStateRepository {
@@ -65,11 +71,32 @@ export class AgentSessionStateRepository {
     }
   }
 
+  public async saveSessionTrackerMarkdown(
+    workspacePath: string | null,
+    compactState: CompactPlanState
+  ): Promise<boolean> {
+    if (!workspacePath || !fs.existsSync(workspacePath)) return false
+    try {
+      const assistantDir = path.join(workspacePath, '.assistant')
+      if (!fs.existsSync(assistantDir)) {
+        await fs.promises.mkdir(assistantDir, { recursive: true })
+      }
+      const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
+      const markdown = PlanManager.generateSessionTrackerMarkdown(compactState)
+      const tempPath = `${trackerPath}.tmp`
+      await fs.promises.writeFile(tempPath, markdown, 'utf-8')
+      await fs.promises.rename(tempPath, trackerPath)
+      return true
+    } catch (err: any) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed saving SESSION_TRACKER.md: ${err.message}`)
+      return false
+    }
+  }
+
   public async loadSessionState(sessionId: string, workspacePath?: string | null): Promise<SavedAgentSessionState | null> {
     try {
       const filePath = this.getStateFilePath(sessionId, workspacePath)
       if (!fs.existsSync(filePath)) {
-        // Also check fallback homedir location if workspace location not found
         const fallbackPath = path.join(os.homedir(), '.onlyrag_v2', 'sessions', `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
         if (!fs.existsSync(fallbackPath)) return null
         const rawFallback = await fs.promises.readFile(fallbackPath, 'utf-8')

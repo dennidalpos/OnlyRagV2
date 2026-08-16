@@ -55,7 +55,9 @@ function sanitizeAndParseJson(raw: string): any {
 
     return JSON.parse(clean)
   } catch (err: any) {
-    logger.log('WARN', 'ToolParser', `Sanitized JSON parse failed: ${err.message}`)
+    if (raw.trim().startsWith('{') || raw.trim().startsWith('[')) {
+      logger.log('WARN', 'ToolParser', `Sanitized JSON parse failed: ${err.message}`)
+    }
     return null
   }
 }
@@ -82,6 +84,25 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       const lastBrace = cleanText.lastIndexOf('}')
       if (firstBrace !== -1 && lastBrace > firstBrace) {
         jsonStr = cleanText.slice(firstBrace, lastBrace + 1).trim()
+      }
+    }
+  }
+
+  // Auto-recover raw markdown shell code blocks (e.g. ```bash ... ``` or ```powershell ... ```)
+  if (!jsonStr.startsWith('{')) {
+    const bashMatch = cleanText.match(/```(?:bash|sh|powershell|cmd|shell|zsh)\s*([\s\S]*?)\s*```/i)
+    if (bashMatch) {
+      const rawCmd = bashMatch[1]
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith('#'))
+        .join('; ')
+      if (rawCmd) {
+        return {
+          tool: 'run_command',
+          parameters: { command: rawCmd },
+          explanation: 'Extracted shell command from markdown code block',
+        }
       }
     }
   }

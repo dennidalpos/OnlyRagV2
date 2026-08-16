@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
+import { sidecarAppService } from './sidecarAppService'
 import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
 
 export class WorkspaceAppService {
@@ -25,8 +26,27 @@ export class WorkspaceAppService {
     return this.repo.writeFile(filePath, content)
   }
 
-  deleteFile(filePath: string) {
-    return this.repo.deleteFile(filePath)
+  async deleteFile(filePath: string) {
+    const res = await this.repo.deleteFile(filePath)
+    if (res.success) {
+      try {
+        await sidecarAppService.deleteDocument(filePath)
+      } catch (err: any) {
+        // Ignore sidecar purge error if file was not indexed
+      }
+
+      try {
+        const { BrowserWindow } = await import('electron')
+        BrowserWindow.getAllWindows().forEach((win) => {
+          if (!win.isDestroyed()) {
+            win.webContents.send('workspace:file-deleted', { filePath })
+          }
+        })
+      } catch (broadcastErr: any) {
+        // Ignore window broadcast failure during headless testing
+      }
+    }
+    return res
   }
 
   replaceChunk(filePath: string, targetContent: string, replacementContent: string) {

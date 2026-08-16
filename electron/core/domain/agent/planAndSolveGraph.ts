@@ -64,6 +64,16 @@ export class GoalDecompositionPlanner {
     }
   }
 
+  public getPlanMarkdown(): string {
+    if (this.milestones.length === 0) return ''
+    const lines: string[] = ['# Execution Plan', '', '## Execution Checklist']
+    for (const m of this.milestones) {
+      const mark = m.status === 'verified' ? 'x' : ' '
+      lines.push(`- [${mark}] **Task ${m.id}: ${m.title}**`)
+    }
+    return lines.join('\n')
+  }
+
   public compileProgressPrompt(): string {
     if (this.milestones.length === 0) return ''
 

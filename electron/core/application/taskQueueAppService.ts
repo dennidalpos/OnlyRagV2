@@ -47,38 +47,38 @@ export class TaskQueueAppService {
 
     const taskId = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
 
-    return new Promise<AgentTaskResult>((resolve, reject) => {
-      const taskData: QueuedAgentTask = {
-        id: taskId,
-        payload,
-        winGetter,
-        resolve,
-        reject,
+    const taskData: QueuedAgentTask = {
+      id: taskId,
+      payload,
+      winGetter,
+      resolve: () => {},
+      reject: () => {},
+    }
+
+    this.queue.enqueue(taskId, 'agent_task', taskData)
+
+    const win = winGetter()
+    const runningCount = this.queue.getRunningCount()
+    const queuedCount = this.queue.getQueuedCount()
+
+    if (runningCount >= this.queue.getMaxConcurrency()) {
+      logger.log('INFO', 'TaskQueueAppService', `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`)
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('agent:log', {
+          id: `${Date.now()}-queued`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          type: 'info',
+          message: `Task aggiunto alla coda (#${queuedCount}) - Slot attivi: ${runningCount}/${this.queue.getMaxConcurrency()}`,
+          detail: `Il task verrà avviato automaticamente non appena si libererà uno slot di esecuzione.`,
+        })
       }
+    }
 
-      this.queue.enqueue(taskId, 'agent_task', taskData)
-
-      const win = winGetter()
-      const runningCount = this.queue.getRunningCount()
-      const queuedCount = this.queue.getQueuedCount()
-
-      if (runningCount >= this.queue.getMaxConcurrency()) {
-        logger.log('INFO', 'TaskQueueAppService', `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`)
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('agent:log', {
-            id: `${Date.now()}-queued`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            type: 'info',
-            message: `Task aggiunto alla coda (#${queuedCount}) - Slot attivi: ${runningCount}/${this.queue.getMaxConcurrency()}`,
-            detail: `Il task verrà avviato automaticamente non appena si libererà uno slot di esecuzione.`,
-          })
-        }
-      }
-
-      this.processQueue().catch((err) => {
-        logger.log('ERROR', 'TaskQueueAppService', `Process queue error: ${err.message}`)
-      })
+    this.processQueue().catch((err) => {
+      logger.log('ERROR', 'TaskQueueAppService', `Process queue error: ${err.message}`)
     })
+
+    return { success: true, summary: 'Task scheduled successfully' }
   }
 
   public cancelTask(taskId?: string): { success: boolean; message: string } {

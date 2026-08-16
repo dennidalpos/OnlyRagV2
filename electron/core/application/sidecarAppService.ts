@@ -312,8 +312,10 @@ export class SidecarAppService {
           }
         })
       })
-      req.on('error', (err) => {
-        logger.log('WARN', 'SidecarApp', `Failed requesting /documents: ${err.message}`)
+      req.on('error', (err: any) => {
+        if (err?.message && !err.message.includes('ECONNREFUSED')) {
+          logger.log('WARN', 'SidecarApp', `Failed requesting /documents: ${err.message}`)
+        }
         resolve([])
       })
       req.setTimeout(5000, () => {
@@ -331,7 +333,20 @@ export class SidecarAppService {
         `http://127.0.0.1:8000/documents/${encodeURIComponent(docId)}`,
         { method: 'DELETE', agent: httpAgent, timeout: 5000 },
         (res) => {
-          resolve({ success: res.statusCode === 200 })
+          const isSuccess = res.statusCode === 200
+          if (isSuccess) {
+            try {
+              const { BrowserWindow } = require('electron')
+              BrowserWindow.getAllWindows().forEach((win: any) => {
+                if (!win.isDestroyed()) {
+                  win.webContents.send('ingest:document-deleted', { docId })
+                }
+              })
+            } catch (err: any) {
+              logger.log('DEBUG', 'SidecarApp', `Failed broadcasting document deletion event: ${err?.message}`)
+            }
+          }
+          resolve({ success: isSuccess })
         }
       )
       req.on('error', (err) => {

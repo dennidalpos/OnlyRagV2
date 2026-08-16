@@ -1,7 +1,29 @@
 import { describe, it, expect } from 'vitest'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
+import { getStepModelName } from './AgentActionLogPanel'
 
-describe('Coding Agent Prompt Queue & Terminal Logic Unit Tests', () => {
+describe('Coding Agent Prompt Queue & Active Model Extraction Unit Tests', () => {
+  it('should accurately extract active model name from step logs or fallback to default', () => {
+    // 1. Step consulting model
+    const log1 = '[Step 4/∞] Consulting LLM (deepseek-r1:7b-qwen-distill-q4_k_m) [ctx:8192]…'
+    expect(getStepModelName(log1, 'qwen2.5-coder:7b')).toBe('deepseek-r1:7b-qwen-distill-q4_k_m')
+
+    // 2. Heavy tier escalation
+    const log2 = 'Escalating to heavy tier [qwen2.5-coder:14b] — triggering VRAM eviction first.'
+    expect(getStepModelName(log2, 'qwen2.5-coder:7b')).toBe('qwen2.5-coder:14b')
+
+    // 3. Fallback notice
+    const log3 = 'Initiating fallback to [llama3.2:3b] ctx:4096'
+    expect(getStepModelName(log3, 'qwen2.5-coder:7b')).toBe('llama3.2:3b')
+
+    // 4. Complexity Escalated notice
+    const log4 = '⚡ Complexity Escalated: deepseek-r1:7b-qwen-distill-q4_k_m'
+    expect(getStepModelName(log4, 'qwen2.5-coder:7b')).toBe('deepseek-r1:7b-qwen-distill-q4_k_m')
+
+    // 5. Default fallback when no model in log message
+    const log5 = 'Successfully wrote file src/app.ts'
+    expect(getStepModelName(log5, 'qwen2.5-coder:7b')).toBe('qwen2.5-coder:7b')
+  })
   it('should correctly enqueue, edit, reorder, and remove prompt queue items', () => {
     let queue: QueuedPrompt[] = []
 

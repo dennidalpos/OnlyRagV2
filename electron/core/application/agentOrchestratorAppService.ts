@@ -32,6 +32,7 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { skillAppService } from './skillAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { PlanManager } from '../domain/agent/planManager'
 import type { AppSettings } from '../../../src/types'
 
 interface AgentSession {
@@ -295,6 +296,17 @@ export async function runAgentOrchestratorLoop(
   }
 
   const persistCurrentState = async () => {
+    const activePlan = goalPlanner.hasPlan() ? PlanManager.parsePlanMarkdown(goalPlanner.getPlanMarkdown()) : null
+    const compactState = activePlan ? PlanManager.getCompactState(activePlan, userTask) : {
+      objective: userTask,
+      restorePoint: 'None (Session Initialized)',
+      activeMicroTask: 'Initializing execution context...',
+      pendingMicroTasks: [userTask],
+      completedCount: 0,
+      totalCount: 1,
+      isCompleted: false,
+    }
+
     await agentSessionStateRepository.saveSessionState({
       sessionId,
       workspacePath,
@@ -307,7 +319,16 @@ export async function runAgentOrchestratorLoop(
       userTask,
       initialUserTask,
       updatedAt: new Date().toISOString(),
+      objective: compactState.objective,
+      restorePoint: compactState.restorePoint,
+      activeMicroTask: compactState.activeMicroTask,
+      pendingMicroTasks: compactState.pendingMicroTasks,
+      status: compactState.isCompleted ? 'COMPLETED' : 'IN_PROGRESS',
     })
+
+    if (workspacePath) {
+      await agentSessionStateRepository.saveSessionTrackerMarkdown(workspacePath, compactState)
+    }
   }
 
   let currentOverriddenModel: string | null = null

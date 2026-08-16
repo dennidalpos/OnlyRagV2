@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
   Activity,
   CheckCircle2,
@@ -7,9 +7,10 @@ import {
   Sparkles,
   Terminal,
   FileCode,
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
+  Cpu,
+  Folder,
+  Layers,
+  Zap,
 } from 'lucide-react'
 import { AgentActionLog } from '../../types'
 import { useTranslation } from '../../i18n'
@@ -17,202 +18,227 @@ import { useTranslation } from '../../i18n'
 interface ActivitiesPanelProps {
   actionLogs: AgentActionLog[]
   isExecuting: boolean
-  streamingText?: string
   activeSkills?: string[]
   agentPrompt?: string
+  activeModelName?: string
+  openFilesCount?: number
+  pinnedFilesCount?: number
+  attachedDocsCount?: number
 }
 
 export const ActivitiesPanel: React.FC<ActivitiesPanelProps> = ({
-  actionLogs,
+  actionLogs = [],
   isExecuting,
-  streamingText = '',
   activeSkills = [],
   agentPrompt = '',
+  activeModelName = 'qwen2.5-coder:7b',
+  openFilesCount = 0,
+  pinnedFilesCount = 0,
+  attachedDocsCount = 0,
 }) => {
   const { t } = useTranslation()
-  const [filter, setFilter] = useState<'all' | 'tools' | 'terminal'>('all')
-  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
 
-  const toggleExpand = (id: string) => {
-    setExpandedLogIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  // Filter non-user action logs
+  // Calculate telemetry metrics from action logs without duplicating full chat text
   const agentLogs = actionLogs.filter((log) => !log.message.startsWith('User Prompt: '))
 
-  const filteredLogs = agentLogs.filter((log) => {
-    if (filter === 'tools') return log.type === 'tool_call' || log.message.includes('replace_chunk') || log.message.includes('write_file') || log.message.includes('read_file')
-    if (filter === 'terminal') return log.type === 'terminal' || log.message.includes('run_command') || log.message.startsWith('Ran ')
-    return true
-  })
+  const totalSteps = agentLogs.length
+  const fileOperationsCount = agentLogs.filter(
+    (l) =>
+      l.message.includes('write_file') ||
+      l.message.includes('replace_chunk') ||
+      l.message.includes('multi_replace') ||
+      l.message.includes('delete_file') ||
+      l.message.includes('Successfully wrote')
+  ).length
 
-  const completedCount = agentLogs.length
-  const toolCallsCount = agentLogs.filter((l) => l.type === 'tool_call' || l.message.includes('replace_chunk') || l.message.includes('write_file')).length
+  const terminalCommandsCount = agentLogs.filter(
+    (l) =>
+      l.type === 'terminal' ||
+      l.message.includes('run_command') ||
+      l.message.startsWith('Ran ') ||
+      l.message.includes('Executing terminal command')
+  ).length
+
+  const readOperationsCount = agentLogs.filter(
+    (l) => l.message.includes('read_file') || l.message.includes('grep_search') || l.message.includes('list_dir')
+  ).length
+
+  const lastLog = agentLogs[agentLogs.length - 1]
+  const lastActivityTime = lastLog ? lastLog.timestamp : 'N/A'
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[#0b0f17] select-text font-sans text-slate-200 overflow-hidden">
-      {/* Panel Top Header */}
-      <div className="p-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0">
+    <div className="flex-1 h-full flex flex-col bg-[#0b0f17] select-text font-sans text-slate-200 overflow-y-auto">
+      {/* Uniform Panel Top Header */}
+      <div className="p-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-10 backdrop-blur-md">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-          <Activity className="w-4 h-4 text-cyan-400" />
-          <span>Attività &amp; Telemetria Agent</span>
+          <Activity className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>Telemetria &amp; Overview Agent</span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-bold">
-            {completedCount} Completate
-          </span>
-          <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-bold">
-            {toolCallsCount} Tool Calls
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider ${
+              isExecuting
+                ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 animate-pulse'
+                : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+            }`}
+          >
+            {isExecuting ? 'Esecuzione in corso...' : 'In attesa (Idle)'}
           </span>
         </div>
       </div>
 
-      {/* Live Active Execution Box (if running) */}
-      {isExecuting && (
-        <div className="m-3 p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/70 via-slate-900 to-indigo-950/70 border border-cyan-500/40 space-y-2 shadow-lg animate-in fade-in shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-cyan-300">
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-              <span>Attività in Corso...</span>
-            </div>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold animate-pulse">
-              RUNNING
-            </span>
-          </div>
-
-          {agentPrompt && (
-            <div className="text-xs text-slate-300 font-mono line-clamp-2 bg-slate-950/80 p-2 rounded-lg border border-slate-800">
-              <span className="text-cyan-400 font-bold">Prompt: </span>
-              {agentPrompt}
-            </div>
-          )}
-
-          {activeSkills.length > 0 && (
-            <div className="flex items-center gap-1.5 pt-1 text-[11px] text-slate-300">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span className="text-slate-400">Skills in uso:</span>
-              <div className="flex flex-wrap gap-1">
-                {activeSkills.map((sk) => (
-                  <span
-                    key={sk}
-                    className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[9px] font-bold border border-cyan-500/30"
-                  >
-                    {sk}
-                  </span>
-                ))}
+      <div className="p-4 space-y-4 max-w-4xl w-full mx-auto">
+        {/* Live Active Execution Box (when running) */}
+        {isExecuting && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-indigo-950/80 border border-cyan-500/50 space-y-2.5 shadow-xl animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-300">
+                <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
+                <span>Task in Esecuzione Real-Time</span>
               </div>
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono font-bold border border-cyan-500/40 animate-pulse">
+                ACTIVE TURN
+              </span>
             </div>
-          )}
 
-          {streamingText && (
-            <div className="mt-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-36 leading-relaxed">
-              {streamingText}
-            </div>
-          )}
-        </div>
-      )}
+            {agentPrompt && (
+              <div className="text-xs text-slate-300 font-mono bg-slate-950/90 p-2.5 rounded-xl border border-slate-800 leading-relaxed line-clamp-2">
+                <span className="text-cyan-400 font-bold">Prompt in corso: </span>
+                {agentPrompt}
+              </div>
+            )}
 
-      {/* Filter Tabs */}
-      <div className="px-3 py-2 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs shrink-0">
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-          Storico Operazioni
-        </span>
-
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-              filter === 'all'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Tutte ({agentLogs.length})
-          </button>
-          <button
-            onClick={() => setFilter('tools')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-              filter === 'tools'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Tool Calls ({toolCallsCount})
-          </button>
-          <button
-            onClick={() => setFilter('terminal')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-              filter === 'terminal'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Terminal Commands
-          </button>
-        </div>
-      </div>
-
-      {/* Log Feed */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 font-mono text-xs">
-        {filteredLogs.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-500 font-sans">
-            <Clock className="w-8 h-8 text-cyan-500/30" />
-            <div className="font-semibold text-slate-400 text-xs">Nessuna attività registrata</div>
-            <p className="text-[11px] max-w-xs text-slate-500">
-              Le operazioni eseguite dall'AI Agent appariranno in questo registro in tempo reale.
-            </p>
-          </div>
-        ) : (
-          filteredLogs.map((log) => {
-            const isExpanded = expandedLogIds.has(log.id)
-            const isTerminal = log.type === 'terminal' || log.message.includes('run_command')
-            const isTool = log.type === 'tool_call' || log.message.includes('replace_chunk') || log.message.includes('write_file')
-
-            return (
-              <div
-                key={log.id}
-                className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1.5 hover:border-slate-700 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 truncate">
-                    {isTerminal ? (
-                      <Terminal className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    ) : isTool ? (
-                      <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                    ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    )}
-                    <span className="font-bold text-slate-200 truncate">{log.message}</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 shrink-0 ml-2">{log.timestamp}</span>
-                </div>
-
-                {log.detail && (
-                  <div>
-                    <button
-                      onClick={() => toggleExpand(log.id)}
-                      className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono font-semibold"
+            {activeSkills.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 text-xs text-slate-300">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="text-slate-400 text-[11px]">Skills attive:</span>
+                <div className="flex flex-wrap gap-1">
+                  {activeSkills.map((sk) => (
+                    <span
+                      key={sk}
+                      className="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold border border-cyan-500/30"
                     >
-                      {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                      {isExpanded ? t('common.close') : 'Visualizza Dettaglio'}
-                    </button>
-                    {isExpanded && (
-                      <pre className="mt-1.5 p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-[10px] text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-52 leading-relaxed">
-                        {log.detail}
-                      </pre>
-                    )}
-                  </div>
-                )}
+                      {sk}
+                    </span>
+                  ))}
+                </div>
               </div>
-            )
-          })
+            )}
+          </div>
         )}
+
+        {/* 4-Grid Telemetry Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Tool Calls & Operations */}
+          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="font-bold flex items-center gap-1.5 text-slate-200">
+                <FileCode className="w-4 h-4 text-cyan-400" /> Operazioni File
+              </span>
+              <span className="font-mono text-cyan-400 font-bold">{fileOperationsCount}</span>
+            </div>
+            <div className="text-[11px] text-slate-400 space-y-1 font-mono pt-1 border-t border-slate-800/80">
+              <div className="flex justify-between">
+                <span>Scritture / Modifiche:</span>
+                <span className="text-slate-200 font-bold">{fileOperationsCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Letture / Search:</span>
+                <span className="text-slate-200 font-bold">{readOperationsCount}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Shell / Terminal Commands */}
+          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="font-bold flex items-center gap-1.5 text-slate-200">
+                <Terminal className="w-4 h-4 text-amber-400" /> Comandi Shell
+              </span>
+              <span className="font-mono text-amber-400 font-bold">{terminalCommandsCount}</span>
+            </div>
+            <div className="text-[11px] text-slate-400 space-y-1 font-mono pt-1 border-t border-slate-800/80">
+              <div className="flex justify-between">
+                <span>Lanciati in Shell:</span>
+                <span className="text-slate-200 font-bold">{terminalCommandsCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Monitoraggio 5s:</span>
+                <span className="text-emerald-400 font-bold">Attivo</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Model & Router Telemetry */}
+          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="font-bold flex items-center gap-1.5 text-slate-200">
+                <Cpu className="w-4 h-4 text-indigo-400" /> Modello LLM
+              </span>
+              <span className="font-mono text-indigo-300 text-[10px] font-bold truncate max-w-[100px]">
+                {activeModelName}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-400 space-y-1 font-mono pt-1 border-t border-slate-800/80">
+              <div className="flex justify-between">
+                <span>Routing Dinamico:</span>
+                <span className="text-emerald-400 font-bold">Attivo</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Passi Totali:</span>
+                <span className="text-slate-200 font-bold">{totalSteps}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Workspace Resource Telemetry */}
+          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2 shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="font-bold flex items-center gap-1.5 text-slate-200">
+                <Folder className="w-4 h-4 text-emerald-400" /> Risorse Context
+              </span>
+              <span className="font-mono text-emerald-400 font-bold">{openFilesCount + pinnedFilesCount + attachedDocsCount}</span>
+            </div>
+            <div className="text-[11px] text-slate-400 space-y-1 font-mono pt-1 border-t border-slate-800/80">
+              <div className="flex justify-between">
+                <span>File Aperti:</span>
+                <span className="text-slate-200 font-bold">{openFilesCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Pinned / RAG Docs:</span>
+                <span className="text-slate-200 font-bold">{pinnedFilesCount + attachedDocsCount}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* System & Architecture Overview Card */}
+        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 shadow-xl">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80 text-xs font-bold text-slate-200">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-cyan-400" />
+              <span>Ambiente &amp; Telemetria Sistema</span>
+            </div>
+            <span className="text-[10px] font-mono text-slate-400">Ultimo Aggiornamento: {lastActivityTime}</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">Sistema Operativo Target</span>
+              <div className="text-slate-200 font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Windows / PowerShell (UTF-8)
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Real-time Shell Monitor</span>
+              <div className="text-slate-200 font-bold flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" /> Auto-open tab dopo 5s di esecuzione shell
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

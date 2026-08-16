@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AppSettings } from '../types'
 import { logger } from '../lib/logger'
 
@@ -12,13 +12,62 @@ export interface AgentPlan {
   baseStepOffset?: number
 }
 
+const PLANS_STORAGE_KEY = 'onlyrag_session_plans_v1'
+
+function loadSavedSessionPlans(): Record<string, AgentPlan[]> {
+  try {
+    const raw = localStorage.getItem(PLANS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch (err: any) {
+    logger.warn('usePlanApproval', `Could not parse saved session plans: ${err?.message}`)
+    return {}
+  }
+}
+
+function saveSavedSessionPlans(plansMap: Record<string, AgentPlan[]>) {
+  try {
+    localStorage.setItem(PLANS_STORAGE_KEY, JSON.stringify(plansMap))
+  } catch (err: any) {
+    logger.warn('usePlanApproval', `Could not save session plans: ${err?.message}`)
+  }
+}
+
+export const MANDATORY_PLAN_STOP_ITEM = '🛑 Completamento dell\'ultimo task, riepilogo finale e arresto dell\'agente (invoke "finish")'
+
+export function ensureMandatoryStopDirective(planText: string): string {
+  if (!planText || typeof planText !== 'string') return planText
+  if (
+    planText.includes('Completamento dell\'ultimo task') ||
+    planText.includes('arresto dell\'agente') ||
+    planText.includes('invoke "finish"')
+  ) {
+    return planText
+  }
+
+  const lines = planText.split(/\r?\n/)
+  const matches = planText.match(/^(\d+)[\.\)]/gm)
+  let nextNum = 1
+  if (matches && matches.length > 0) {
+    const lastNumStr = matches[matches.length - 1].replace(/[^\d]/g, '')
+    const parsed = parseInt(lastNumStr, 10)
+    if (!isNaN(parsed)) nextNum = parsed + 1
+  } else {
+    nextNum = lines.filter((l) => l.trim().length > 0).length + 1
+  }
+
+  const stopDirective = `${nextNum}. ${MANDATORY_PLAN_STOP_ITEM}`
+  return `${planText.trim()}\n${stopDirective}`
+}
+
 interface UsePlanApprovalOptions {
   settings?: AppSettings
+  activeSessionId?: string
   onPlanApproved: (plan: AgentPlan) => void
 }
 
-export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOptions) {
-  const [planHistory, setPlanHistory] = useState<AgentPlan[]>([])
+export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: UsePlanApprovalOptions) {
+  const sessionKey = activeSessionId || 'default_session'
+  const [plansBySession, setPlansBySession] = useState<Record<string, AgentPlan[]>>(() => loadSavedSessionPlans())
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
   const [countdownSeconds, setCountdownSeconds] = useState<number>(15)
@@ -29,7 +78,31 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
   const autoProceed = settings?.autoProceedPlan ?? true
   const autoProceedDelay = settings?.autoProceedDelaySeconds ?? 15
 
-  const currentPlan = planHistory[activePlanIndex] || null
+  const planHistory = plansBySession[sessionKey] || []
+  const currentPlan = planHistory[activePlanIndex] || (planHistory.length > 0 ? planHistory[planHistory.length - 1] : null)
+
+  const updateCurrentSessionPlans = useCallback(
+    (updater: (prev: AgentPlan[]) => AgentPlan[]) => {
+      setPlansBySession((prev) => {
+        const currentList = prev[sessionKey] || []
+        const updatedList = updater(currentList)
+        const nextMap = { ...prev, [sessionKey]: updatedList }
+        saveSavedSessionPlans(nextMap)
+        return nextMap
+      })
+    },
+    [sessionKey]
+  )
+
+  useEffect(() => {
+    // When session changes, set active plan index to latest version in that session
+    const list = plansBySession[sessionKey] || []
+    if (list.length > 0) {
+      setActivePlanIndex(list.length - 1)
+    } else {
+      setActivePlanIndex(0)
+    }
+  }, [sessionKey])
 
   const clearPlanTimer = useCallback(() => {
     if (timerRef.current) {
@@ -71,7 +144,8 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
       setIsGeneratingPlan(true)
 
       const planId = `plan_${Date.now()}`
-      const newVersion = planHistory.length + 1
+      const existingHistory = plansBySession[sessionKey] || []
+      const newVersion = existingHistory.length + 1
 
       const initialPlan: AgentPlan = {
         id: planId,
@@ -83,8 +157,8 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
         baseStepOffset: currentStep,
       }
 
-      setPlanHistory((prev) => [...prev, initialPlan])
-      const newIdx = planHistory.length
+      updateCurrentSessionPlans((prev) => [...prev, initialPlan])
+      const newIdx = existingHistory.length
       setActivePlanIndex(newIdx)
 
       try {
@@ -117,6 +191,9 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
           accumulatedPlan = `🎯 Piano di Esecuzione (v${newVersion}) per: ${prompt}\n\n1. 🔍 Analisi del contesto del progetto e identificazione dei file rilevanti\n2. ✏️ Implementazione delle modifiche richieste e refactoring atomico\n3. 🧪 Verifica di correttezza tramite build e controlli di tipo`
         }
 
+        // Ensure mandatory final stop directive
+        accumulatedPlan = ensureMandatoryStopDirective(accumulatedPlan)
+
         const finalPlan: AgentPlan = {
           id: planId,
           version: newVersion,
@@ -127,7 +204,7 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
           baseStepOffset: currentStep,
         }
 
-        setPlanHistory((prev) => {
+        updateCurrentSessionPlans((prev) => {
           const copy = [...prev]
           copy[newIdx] = finalPlan
           return copy
@@ -136,16 +213,17 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
         return finalPlan
       } catch (err: any) {
         logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
+        const fallbackRaw = `🎯 Piano di Esecuzione (v${newVersion}) per: ${prompt}\n1. 🔍 Analisi del contesto e dei file del workspace\n2. ✏️ Esecuzione delle modifiche richieste\n3. 🧪 Verifica dei risultati`
         const fallbackPlan: AgentPlan = {
           id: planId,
           version: newVersion,
           prompt,
-          planText: `🎯 Piano di Esecuzione (v${newVersion}) per: ${prompt}\n1. 🔍 Analisi del contesto e dei file del workspace\n2. ✏️ Esecuzione delle modifiche richieste\n3. 🧪 Verifica dei risultati`,
+          planText: ensureMandatoryStopDirective(fallbackRaw),
           status: 'ready',
           createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           baseStepOffset: currentStep,
         }
-        setPlanHistory((prev) => {
+        updateCurrentSessionPlans((prev) => {
           const copy = [...prev]
           copy[newIdx] = fallbackPlan
           return copy
@@ -154,44 +232,49 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
         return fallbackPlan
       }
     },
-    [planHistory.length, settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer]
+    [sessionKey, plansBySession, settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans]
   )
 
   const handleApprovePlan = useCallback(() => {
     clearPlanTimer()
     if (!currentPlan) return
     const approved: AgentPlan = { ...currentPlan, status: 'approved' }
-    setPlanHistory((prev) => {
+    updateCurrentSessionPlans((prev) => {
       const copy = [...prev]
-      if (copy[activePlanIndex]) {
-        copy[activePlanIndex] = approved
+      const idx = copy.findIndex((p) => p.id === currentPlan.id)
+      if (idx >= 0) {
+        copy[idx] = approved
       }
       return copy
     })
     onPlanApproved(approved)
-  }, [currentPlan, activePlanIndex, clearPlanTimer, onPlanApproved])
+  }, [currentPlan, clearPlanTimer, onPlanApproved, updateCurrentSessionPlans])
 
   const handleRejectPlan = useCallback(() => {
     clearPlanTimer()
     if (!currentPlan) return
-    setPlanHistory((prev) => {
+    updateCurrentSessionPlans((prev) => {
       const copy = [...prev]
-      if (copy[activePlanIndex]) {
-        copy[activePlanIndex] = { ...copy[activePlanIndex], status: 'rejected' }
+      const idx = copy.findIndex((p) => p.id === currentPlan.id)
+      if (idx >= 0) {
+        copy[idx] = { ...copy[idx], status: 'rejected' }
       }
       return copy
     })
-  }, [activePlanIndex, clearPlanTimer])
+  }, [currentPlan, clearPlanTimer, updateCurrentSessionPlans])
 
   const handleUpdatePlanText = useCallback((newText: string) => {
-    setPlanHistory((prev) => {
+    if (!currentPlan) return
+    const formatted = ensureMandatoryStopDirective(newText)
+    updateCurrentSessionPlans((prev) => {
       const copy = [...prev]
-      if (copy[activePlanIndex]) {
-        copy[activePlanIndex] = { ...copy[activePlanIndex], planText: newText }
+      const idx = copy.findIndex((p) => p.id === currentPlan.id)
+      if (idx >= 0) {
+        copy[idx] = { ...copy[idx], planText: formatted }
       }
       return copy
     })
-  }, [activePlanIndex])
+  }, [currentPlan, updateCurrentSessionPlans])
 
   const selectPlanVersion = useCallback((idx: number) => {
     if (idx >= 0 && idx < planHistory.length) {
@@ -201,14 +284,21 @@ export function usePlanApproval({ settings, onPlanApproved }: UsePlanApprovalOpt
 
   const resetPlanHistory = useCallback(() => {
     clearPlanTimer()
-    setPlanHistory([])
+    updateCurrentSessionPlans(() => [])
     setActivePlanIndex(0)
-  }, [clearPlanTimer])
+  }, [clearPlanTimer, updateCurrentSessionPlans])
+
+  const latestActivePlan = useMemo(() => {
+    if (planHistory.length === 0) return null
+    const approved = [...planHistory].reverse().find((p) => p.status === 'approved')
+    return approved || planHistory[planHistory.length - 1] || null
+  }, [planHistory])
 
   const hasApprovedPlan = planHistory.some((p) => p.status === 'approved')
 
   return {
     currentPlan,
+    latestActivePlan,
     planHistory,
     activePlanIndex,
     hasApprovedPlan,

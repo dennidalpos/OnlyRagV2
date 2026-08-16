@@ -1,8 +1,8 @@
 # Riferimento API & Contratti di Comunicazione — OnlyRag V2
 
 OnlyRag V2 implementa due livelli di interfaccia:
-1. **REST API (FastAPI Sidecar)** per l'elaborazione dei documenti, l'ingestione, l'export e la ricerca ibrida su LanceDB.
-2. **IPC API (Electron Main/Renderer)** per l'esecuzione dei tool agentici, la diagnostica hardware e la gestione dei modelli Ollama.
+1. **REST API (FastAPI Sidecar)** per l'elaborazione dei documenti, l'ingestione, l'export, la ricerca ibrida su LanceDB e l'orchestrazione SLM Agent Studio.
+2. **IPC API (Electron Main/Renderer)** per l'esecuzione dei tool agentici, la diagnostica hardware, la gestione dei modelli Ollama e i canali SLM Agent Studio.
 
 ---
 
@@ -10,14 +10,18 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ### 1.1. Health Check
 * **Endpoint:** `GET /health`
-* **Descrizione:** Verifica lo stato operativo del sidecar e la connessione al database LanceDB.
+* **Descrizione:** Verifica lo stato operativo del sidecar, la connessione al database LanceDB e l'accelerazione GPU.
 * **Risposta (200 OK):**
 ```json
 {
-  "status": "healthy",
-  "version": "2.0.0",
-  "lancedb": "connected",
-  "total_documents": 12
+  "status": "online",
+  "engine": "FastAPI Python Sidecar + LanceDB OCR Engine V2",
+  "version": "2.3.0",
+  "vector_db": "LanceDB Embedded",
+  "gpu": { "has_nvidia_gpu": true, "gpu_name": "RTX 4070", "vram_total_mb": 12288 },
+  "documents_count": 12,
+  "chunks_count": 340,
+  "python_version": "3.11.x"
 }
 ```
 
@@ -28,23 +32,38 @@ OnlyRag V2 implementa due livelli di interfaccia:
 * **Content-Type:** `multipart/form-data`
 * **Parametri:**
   * `file`: File binario (`PDF`, `DOCX`, `TXT`, `MD`, `PNG`, `JPG`).
-  * `embedding_model` *(opzionale)*: Modello di embedding (default: `nomic-embed-text`).
 * **Risposta (200 OK):**
 ```json
 {
-  "status": "success",
-  "doc_id": "doc_a1b2c3d4",
+  "id": "doc_a1b2c3d4",
   "filename": "Contratto_Fornitura.pdf",
-  "chunks_created": 18,
-  "embedding_model": "nomic-embed-text",
-  "extracted_preview": "# Contratto di Fornitura..."
+  "file_size": 204800,
+  "num_pages": 12,
+  "num_chunks": 18,
+  "extracted_markdown": "# Contratto di Fornitura...",
+  "status": "indexed",
+  "ingested_at": "2026-08-17T01:00:00Z"
 }
 ```
 
 ---
 
-### 1.3. Ricerca Vettoriale Ibrida & Re-Ranking
-* **Endpoint:** `POST /search`
+### 1.3. Ingestione da Path (con Streaming)
+* **`POST /ingest-path`** — Ingestione sincrona da percorso file locale. Corpo: `{ "file_path": "C:/docs/report.pdf" }`. Risposta: stessa struttura di `IngestResponse`.
+* **`POST /ingest-path-stream`** — Ingestione con streaming NDJSON progressivo. `Content-Type: application/x-ndjson`. Ogni riga è un evento `{ "type": "progress" | "done", "percent": 0-100, "step": "...", "data"?: IngestResponse }`.
+
+---
+
+### 1.4. Gestione Documenti Memorizzati
+* **`GET /documents`**: Lista tutti i documenti indicizzati in LanceDB con metadati completi.
+* **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali.
+* **`PUT /documents/{doc_id}`**: Aggiorna il contenuto Markdown e re-indicizza i chunk vettoriali. Corpo: `{ "markdown_content": "..." }`.
+* **`GET /documents/{doc_id}/page-preview/{page_num}`**: Genera anteprima PNG di una pagina specifica. Risposta: `{ "doc_id", "page_number", "total_pages", "image_base64", "mime_type" }`.
+
+---
+
+### 1.5. Ricerca Vettoriale Ibrida
+* **Endpoint:** `POST /vector/search`
 * **Content-Type:** `application/json`
 * **Request Body:**
 ```json
@@ -52,7 +71,7 @@ OnlyRag V2 implementa due livelli di interfaccia:
   "query": "Quali sono le penali per recesso anticipato secondo art. 1341?",
   "top_k": 5,
   "embedding_model": "nomic-embed-text",
-  "allowed_doc_ids": ["doc_a1b2c3d4"]
+  "doc_ids": ["doc_a1b2c3d4"]
 }
 ```
 * **Risposta (200 OK):**
@@ -71,21 +90,28 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
-### 1.4. Gestione Documenti Memorizzati
-* **`GET /documents`**: Restituisce la lista di tutti i documenti indicizzati in LanceDB con metadati (`id`, `filename`, `file_size`, `num_pages`, `num_chunks`, `status`, `ingested_at`).
-* **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali associati da LanceDB.
+### 1.6. Ispezione Immagine (Vision OCR)
+* **Endpoint:** `POST /inspect-image`
+* **Request Body:**
+```json
+{
+  "image_base64": "<base64_string>",
+  "question": "Describe the diagram in detail.",
+  "vision_model": "llama3.2-vision"
+}
+```
+* **Risposta (200 OK):** `{ "status": "success", "analysis": "..." }`
 
 ---
 
-### 1.5. Esportazione Documento Formattato
+### 1.7. Esportazione Documento Formattato
 * **Endpoint:** `POST /export`
 * **Content-Type:** `application/json`
 * **Request Body:**
 ```json
 {
-  "title": "Relazione_Tradotta",
-  "content": "# Relazione Clinica\n\nTesto tradotto...",
-  "format": "pdf"
+  "markdown_content": "# Relazione Clinica\n\nTesto...",
+  "export_format": "pdf"
 }
 ```
 * **Formati Supportati:** `pdf`, `md`, `docx`.
@@ -93,9 +119,167 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
+### 1.8. Gestione Task & Pulizia
+* **`POST /tasks/cancel?task_id={id}`**: Segnala la cancellazione di un task attivo. Risposta: `{ "status": "success", "message": "..." }`.
+* **`POST /cleanup/temp`**: Rimuove tutti i file temporanei nella directory di export. Risposta: `{ "status": "success", "cleaned_files": 3 }`.
+
+---
+
+### 1.9. SLM Agent Studio — Endpoint Orchestrazione
+
+#### `POST /agent/orchestrate`
+
+Esegue un singolo turno dell'agente SLM con una macchina a stati di retry a 3 livelli di escalation.
+
+**Comportamento `use_default_registry`:**
+- `true` (raccomandato): il sidecar ignora il campo `tools` del client e popola automaticamente tutti i 19 Agent Studio tools + few-shot examples dal registro server-side (`slm_tool_registry`). Il client fornisce solo `model` e `user_message`.
+- `false` (default): il client DEVE fornire almeno un tool nella lista `tools`; in caso contrario l'endpoint restituisce `422 Unprocessable Entity`.
+
+**Request Body:**
+```json
+{
+  "model": "qwen2.5:7b",
+  "user_message": "Read /src/main.py and summarize its exports.",
+  "use_default_registry": true,
+  "tools": [],
+  "history": [
+    { "role": "user", "content": "Previous message" },
+    { "role": "assistant", "content": "Previous response" }
+  ],
+  "rag_context": "Relevant RAG snippets injected here...",
+  "max_context_tokens": 4096,
+  "max_retries": 3,
+  "few_shot_examples": {}
+}
+```
+
+| Campo | Tipo | Default | Descrizione |
+| :--- | :--- | :--- | :--- |
+| `model` | `string` | — | Tag del modello Ollama (es. `qwen2.5:7b`, `llama3:8b`). Obbligatorio. |
+| `user_message` | `string` | — | Istruzione/task per l'agente. Obbligatorio. |
+| `use_default_registry` | `boolean` | `false` | Se `true`, ignora `tools` e usa i 19 tool Agent Studio del registro. |
+| `tools` | `ToolDefinition[]` | `[]` | Lista tool custom. Ignorata se `use_default_registry=true`. |
+| `history` | `ContextMessage[]` | `[]` | Storico messaggi (role: `system`/`user`/`assistant`). Cappato a 8 turn dal budgeter. |
+| `rag_context` | `string \| null` | `null` | Contesto RAG da iniettare nel prompt. Troncato automaticamente se supera il budget token. |
+| `max_context_tokens` | `integer` | `4096` | Budget token totale per la finestra di contesto. |
+| `max_retries` | `integer` | `3` | Numero massimo di tentativi prima dell'escalation L3. |
+| `few_shot_examples` | `dict` | `{}` | Esempi few-shot custom (mappa `tool_name → arguments_dict`). Ignorati se `use_default_registry=true`. |
+
+**Response Body (200 OK):**
+```json
+{
+  "success": true,
+  "tool_name": "read_file",
+  "arguments": { "path": "/src/main.py", "startLine": null, "endLine": null },
+  "text_response": null,
+  "escalation_level": "NONE",
+  "error_detail": null,
+  "attempts": 1
+}
+```
+
+| Campo | Tipo | Descrizione |
+| :--- | :--- | :--- |
+| `success` | `boolean` | `true` se l'agente ha prodotto una tool call valida. `false` su L3 degradation. |
+| `tool_name` | `string \| null` | Nome del tool chiamato. `null` in caso di L3 degradation. |
+| `arguments` | `dict \| null` | Argomenti del tool call (con default auto-riempiti). `null` in caso di L3 degradation. |
+| `text_response` | `string \| null` | Risposta testuale libera. Valorizzata solo su `escalation_level: "L3_DEGRADED"`. |
+| `escalation_level` | `string` | Livello di escalation raggiunto: `"NONE"` / `"L1"` / `"L2"` / `"L3_DEGRADED"`. |
+| `error_detail` | `string \| null` | Dettaglio tecnico dell'errore (es. `"MISSING_REQUIRED_PARAMS: path"`). |
+| `attempts` | `integer` | Numero totale di chiamate Ollama effettuate nel turno. |
+
+**Macchina a stati di escalation:**
+
+| Livello | Trigger | Azione |
+| :--- | :--- | :--- |
+| `NONE` | Parse JSON valido + tool call validata al primo tentativo. | Restituisce risultato direttamente. |
+| `L1` | Failure di parse o validazione al tentativo 1. | Reinvia con prompt correttivo che include l'errore specifico (es. `UNKNOWN_TOOL`, `MISSING_REQUIRED_PARAMS`). |
+| `L2` | Failure anche dopo L1. | Reinvia con few-shot examples iniettati nel prompt per guidare il formato JSON atteso. |
+| `L3_DEGRADED` | Failure anche dopo L2 (o errore di rete Ollama). | Esegue una chiamata lineare senza vincoli di tool-calling per ottenere una risposta testuale di fallback. `success=false`. |
+
+**Codici di errore HTTP:**
+
+| Codice | Causa |
+| :--- | :--- |
+| `200 OK` | Successo o degradazione L3 gestita (verificare `success` nel body). |
+| `422 Unprocessable Entity` | `use_default_registry=false` e `tools` è vuota. |
+| `500 Internal Server Error` | Errore imprevisto (Ollama non raggiungibile, eccezione non gestita). |
+
+---
+
+#### `POST /agent/logs/analyze`
+
+Scansiona i file di log di OnlyRag V2 e restituisce un report strutturato di anomalie diagnostiche.
+
+**Anomalie rilevate:**
+- **`TRUNCATED_JSON`** — Tool call JSON troncata (risposta Ollama incompleta per limite token).
+- **`CUDA_OOM`** / **`VRAM_THRASHING`** — Out-of-memory CUDA o thrashing VRAM (severity: `CRITICAL`).
+- **`EMPTY_RESPONSE`** — Risposta vuota da Ollama (possibile VRAM saturation).
+- **`GATEWAY_TIMEOUT`** — Timeout HTTP 504 nella comunicazione con Ollama.
+- **`TOOL_LOOP`** — Stesso tool ripetuto ≥4 volte in una finestra di 30 righe (severity: `CRITICAL`).
+
+**Request Body:**
+```json
+{
+  "extra_paths": ["C:/custom/logs/"]
+}
+```
+
+| Campo | Tipo | Default | Descrizione |
+| :--- | :--- | :--- | :--- |
+| `extra_paths` | `string[] \| null` | `null` | Percorsi aggiuntivi di directory da includere nella scansione. |
+
+**Response Body (200 OK):**
+```json
+{
+  "scanned_files": [
+    "C:/Users/.../AppData/Local/OnlyRagV2/logs/sidecar.log",
+    "C:/Users/.../AppData/Local/OnlyRagV2/logs/app.log"
+  ],
+  "total_lines_scanned": 1842,
+  "anomalies": [
+    {
+      "anomaly_type": "CUDA_OOM",
+      "severity": "CRITICAL",
+      "log_file": "C:/Users/.../sidecar.log",
+      "line_number": 34,
+      "snippet": "[ERROR] CUDA out of memory. Tried to allocate 4.00 GiB",
+      "count": 2
+    },
+    {
+      "anomaly_type": "TOOL_LOOP",
+      "severity": "CRITICAL",
+      "log_file": "C:/Users/.../app.log",
+      "line_number": 112,
+      "snippet": "{\"tool_name\": \"list_dir\", \"arguments\": {}}",
+      "count": 4
+    }
+  ],
+  "has_critical": true,
+  "summary": "Found 2 critical anomalies: CUDA_OOM (x2), TOOL_LOOP (x1)"
+}
+```
+
+| Campo | Tipo | Descrizione |
+| :--- | :--- | :--- |
+| `scanned_files` | `string[]` | Lista completa dei file di log scansionati. |
+| `total_lines_scanned` | `integer` | Numero totale di righe analizzate. |
+| `anomalies` | `AnomalyRecord[]` | Lista ordinata di anomalie rilevate. Vuota se nessuna anomalia. |
+| `has_critical` | `boolean` | `true` se almeno un'anomalia ha severity `CRITICAL`. |
+| `summary` | `string` | Stringa leggibile con conteggio anomalie o `"No anomalies detected"`. |
+
+**Codici di errore HTTP:**
+
+| Codice | Causa |
+| :--- | :--- |
+| `200 OK` | Analisi completata (verificare `has_critical` per anomalie). |
+| `500 Internal Server Error` | Errore imprevisto durante la scansione dei log. |
+
+---
+
 ## 2. Electron IPC API (`window.electronAPI`)
 
-Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/types/index.ts`.
+Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/types/index.ts`. L'interfaccia completa è definita in `IElectronAPI`.
 
 ### 2.1. Canali Modelli Ollama (`ollama:*`)
 
@@ -112,9 +296,69 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
-| `agent:run-turn` | `AgentTurnRequest` | `Async Stream` | Esecuzione di un turno agentico con Tool-Calling (19 strumenti), auto-healing e FSM mode gating. |
-| `agent:stop-generation` | `none` | `void` | Interruzione immediata della generazione del token stream. |
-| `agent:run-benchmark` | `none` | `BenchmarkReport` | Valutazione quantitativa delle prestazioni dei modelli locali. |
+| `agent:start-task` | `AgentTaskPayload` | `{ success: boolean; summary: string }` | Esecuzione di un turno agentico completo con Tool-Calling (19 strumenti), auto-healing e FSM mode gating. |
+| `agent:cancel-task` | `taskId?: string` | `{ success: boolean; message?: string }` | Interruzione di un task specifico o di tutti i task attivi. |
+| `agent:get-queue-status` | `none` | `TaskQueueStatus` | Stato corrente della coda task (running, queued, maxConcurrency). |
+| `agent:set-max-concurrency` | `limit: number` | `{ success: boolean; maxConcurrency: number }` | Imposta il limite di task concorrenti (range: 1-8). |
+| `agent:parse-tool-call` | `rawText: string` | `AgentToolCall \| null` | Parsing difensivo di una tool call grezza (4 stage: JSON, JSON-in-prose, regex, fallback). |
+| `agent:delete-session` | `sessionId: string, workspacePath?: string` | `boolean` | Elimina lo stato persistente di una sessione agente. |
+| `agent:clear-all-sessions` | `workspacePath?: string` | `boolean` | Cancella tutti gli stati di sessione agente. |
+| `agent:clear-audit-log` | `none` | `boolean` | Azzera il log di audit delle azioni agente. |
+
+#### SLM Agent Studio — Canali IPC dedicati
+
+| Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
+| :--- | :--- | :--- | :--- | :--- |
+| `agent:slm-orchestrate` | `agentSlmOrchestrate(request)` | `SlmOrchestrationRequest` | `SlmOrchestrationResult` | Esegue un turno SLM via sidecar con macchina a stati L1/L2/L3. Esposto in preload come chiamata tipizzata. |
+| `agent:logs-analyze` | `agentLogsAnalyze(extraPaths?)` | `extraPaths?: string[]` | `SlmLogDiagnosticReport \| null` | Avvia la diagnostica anomalie sui log di sistema. Restituisce `null` se il sidecar non è raggiungibile. |
+
+**Tipi TypeScript (da `src/types/index.ts`):**
+```typescript
+// Request verso agent:slm-orchestrate
+interface SlmOrchestrationRequest {
+  model: string
+  user_message: string
+  tools?: SlmToolDefinition[]          // Ignorato se use_default_registry=true
+  history?: SlmContextMessage[]
+  rag_context?: string | null
+  max_context_tokens?: number          // default: 4096
+  max_retries?: number                 // default: 3
+  few_shot_examples?: Record<string, Record<string, unknown>>
+  use_default_registry?: boolean       // default: false
+}
+
+// Risultato da agent:slm-orchestrate
+interface SlmOrchestrationResult {
+  success: boolean
+  tool_name: string | null
+  arguments: Record<string, unknown> | null
+  text_response: string | null
+  escalation_level: 'NONE' | 'L1' | 'L2' | 'L3_DEGRADED'
+  error_detail: string | null
+  attempts: number
+}
+
+// Report da agent:logs-analyze
+interface SlmLogDiagnosticReport {
+  scanned_files: string[]
+  total_lines_scanned: number
+  anomalies: SlmAnomalyRecord[]
+  has_critical: boolean
+  summary: string
+}
+```
+
+**React Hook di utilizzo:** `src/hooks/useSlmOrchestration.ts`
+```typescript
+const { orchestrate, analyzeLogs, isOrchestrating, lastResult, lastReport } =
+  useSlmOrchestration({ defaultModel: 'qwen2.5:7b', useDefaultRegistry: true })
+
+// Esegui un turno
+const result = await orchestrate('Read /src/main.py and list all exports.')
+
+// Analizza i log
+const report = await analyzeLogs()
+```
 
 #### Matrice Completa dei 19 Strumenti Agentici Supportati
 
@@ -137,8 +381,8 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 | `web_search` | `search_web`, `google`, `duckduckgo` | `query` | Ricerca web tramite DuckDuckGo. |
 | `fetch_web_content` | `read_url`, `web_fetch`, `browse` | `url` | Estrazione e conversione in markdown di pagine web remote. |
 | `download_file` | `download`, `fetch_file`, `save_url` | `url`, `targetPath` | Download di file binari o sorgenti nel workspace. |
-| `ask` | `ask_question`, `clarify`, `question` | `question` | Richiesta di chiarimento all'utente (intercettata in modalita AGENT). |
-| `finish` | `done`, `complete`, `finish_task` | `summary` | Conclusione del turno previo superamento del Pre-Finish Gate. |
+| `ask` | `ask_question`, `clarify`, `question` | `question` | Richiesta di chiarimento all'utente (intercettata in modalità AGENT). |
+| `finish` | `done`, `complete`, `finish_task` | `result` | Conclusione del turno previo superamento del Pre-Finish Gate. `result` è obbligatorio. |
 
 ---
 
@@ -185,4 +429,3 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 | `skills:save-custom` | `input: SkillSaveInput, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Creazione o aggiornamento di una skill locale/personalizzata con rilevamento modifiche. |
 | `skills:reset-original` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Ripristino di una skill modificata al contenuto originale dell'hub. |
 | `skills:uninstall` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, error?: string }` | Disinstallazione ed eliminazione sicura della cartella skill. |
-

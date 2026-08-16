@@ -3,7 +3,9 @@ import { taskQueueAppService } from '../application/taskQueueAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { sidecarSlmBridgeService } from '../application/sidecarSlmBridgeService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
+import type { SlmOrchestrationRequest } from '../../../src/types'
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle('agent:start-task', async (_, payload: AgentTaskPayload) => {
@@ -41,5 +43,23 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
 
   ipcMain.handle('agent:clear-audit-log', async () => {
     return codingAgentLogger.clearAuditLog()
+  })
+
+  /**
+   * SLM Agent Studio: execute one orchestration turn via the Python sidecar.
+   * Receives the full SlmOrchestrationRequest from the renderer and returns
+   * the SlmOrchestrationResult (tool call or L3 degraded text response).
+   */
+  ipcMain.handle('agent:slm-orchestrate', async (_, request: SlmOrchestrationRequest) => {
+    return sidecarSlmBridgeService.orchestrate(request)
+  })
+
+  /**
+   * SLM Agent Studio: trigger log anomaly diagnostics analysis.
+   * Returns SlmLogDiagnosticReport with all detected anomalies
+   * (truncated JSON, VRAM thrashing, tool-calling loops).
+   */
+  ipcMain.handle('agent:logs-analyze', async (_, extraPaths?: string[]) => {
+    return sidecarSlmBridgeService.analyzeLogs(extraPaths)
   })
 }

@@ -129,6 +129,10 @@ const api: IElectronAPI = {
   saveCustomSkill: (input: any, workspaceRoot?: string) => ipcRenderer.invoke('skills:save-custom', input, workspaceRoot),
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:reset-original', skillId, workspaceRoot),
   uninstallSkill: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:uninstall', skillId, workspaceRoot),
+  /** SLM Agent Studio: execute one orchestration turn through the Python sidecar state machine. */
+  agentSlmOrchestrate: (request: any) => ipcRenderer.invoke('agent:slm-orchestrate', request),
+  /** SLM Agent Studio: trigger log anomaly scan; returns structured diagnostic report. */
+  agentLogsAnalyze: (extraPaths?: string[]) => ipcRenderer.invoke('agent:logs-analyze', extraPaths),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

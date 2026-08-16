@@ -413,6 +413,10 @@ export interface IElectronAPI {
   onOllamaPullProgress?: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => () => void
   getRunningModels: (host?: string) => Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }>
   unloadModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
+  /** SLM Agent Studio: execute one orchestration turn via the Python sidecar state machine. */
+  agentSlmOrchestrate?: (request: SlmOrchestrationRequest) => Promise<SlmOrchestrationResult>
+  /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
+  agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
 }
 
 export interface RunningModelDetails {
@@ -440,5 +444,66 @@ declare global {
   }
 }
 
+// ---------------------------------------------------------------------------
+// SLM Agent Studio — Orchestration & Diagnostics Types
+// ---------------------------------------------------------------------------
 
+export interface SlmToolDefinition {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+  required: string[]
+  defaults: Record<string, unknown>
+}
 
+export interface SlmContextMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface SlmOrchestrationRequest {
+  model: string
+  user_message: string
+  /** Optional when use_default_registry=true; the server populates all 19 tools automatically. */
+  tools?: SlmToolDefinition[]
+  history?: SlmContextMessage[]
+  rag_context?: string | null
+  max_context_tokens?: number
+  max_retries?: number
+  few_shot_examples?: Record<string, Record<string, unknown>>
+  /**
+   * When true, the Python sidecar ignores `tools` and auto-populates all 19
+   * Agent Studio tools + few-shot examples from the server-side registry.
+   * Set to false (default) to supply a custom tool subset from the client.
+   */
+  use_default_registry?: boolean
+}
+
+export type SlmEscalationLevel = 'NONE' | 'L1' | 'L2' | 'L3_DEGRADED'
+
+export interface SlmOrchestrationResult {
+  success: boolean
+  tool_name: string | null
+  arguments: Record<string, unknown> | null
+  text_response: string | null
+  escalation_level: SlmEscalationLevel
+  error_detail: string | null
+  attempts: number
+}
+
+export interface SlmAnomalyRecord {
+  anomaly_type: string
+  severity: 'WARNING' | 'ERROR' | 'CRITICAL'
+  log_file: string
+  line_number: number
+  snippet: string
+  count: number
+}
+
+export interface SlmLogDiagnosticReport {
+  scanned_files: string[]
+  total_lines_scanned: number
+  anomalies: SlmAnomalyRecord[]
+  has_critical: boolean
+  summary: string
+}

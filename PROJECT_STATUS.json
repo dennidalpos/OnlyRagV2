@@ -1,3 +1,17 @@
 {
-  "todos": []
+  "todos": [
+    "[P1/ALTA] Shell-Tool Confusion Guard in agentToolExecutorService.ts (run_command handler, riga ~526-534): prima di eseguire il comando, verificare che `cmd` non inizi con un nome di tool registrato (write_file, read_file, list_dir, replace_file_content, multi_replace_file_content, delete_file, list_files_recursive, grep_search, create_directory, copy_file, move_file). Se positivo, bloccare con feedback strutturato 'TOOL_AS_SHELL_BLOCK: usa il tool JSON invece di eseguirlo come comando shell'. Anchor: dopo il checkCommandSecurity (riga 530), prima di execCmd.",
+
+    "[P2/ALTA] Loop-breaker per tool+contenuto identico in agentOrchestratorAppService.ts: il loopDetector esistente (riga 257, soglia 2) confronta tool+target (filePath/command/url). Il gap audit è che write_file via shell arriva come run_command con command diverso ogni iterazione → non rilevato. Aggiungere una seconda finestra di rilevamento in AgentActionLoopDetector (electron/core/domain/agent/loopDetector.ts): se lo stesso `command` contiene lo stesso tool-name keyword nelle ultime N run_command consecutive, emettere isLooping=true. Soglia: 3 run_command consecutivi con keyword di tool nel campo command.",
+
+    "[P3/ALTA] Session timeout forzato con SESSION END in agentOrchestratorAppService.ts: aggiungere un AbortSignal o setTimeout globale di 45 minuti (configurabile in AppSettings). Alla scadenza: emitDone con status ABORTED + codingAgentLogger.logSessionEnd(sessionId, stepCount, false, 'Session timeout'). Garantisce che ogni sessione abbia sempre un SESSION END nel log audit.",
+
+    "[P4/MEDIA] SlmDiagnosticsPanel integrazione in CodingAgentView.tsx: il componente SlmDiagnosticsPanel (src/components/coding/SlmDiagnosticsPanel.tsx) è stato creato ma non montato nell'UI. Integrarlo come tab aggiuntivo nel pannello destro di CodingAgentView accanto ad ActivitiesPanel. Richiedere decisione UX al PM sul punto esatto di inserimento prima di procedere.",
+
+    "[P5/MEDIA] Contesto auto-compressione auto-healing blocks in agentOrchestratorAppService.ts: quando il prompt assemblato supera l'80% di max_context_tokens, troncare i blocchi TERMINAL AUTO-HEALING DIAGNOSTICS LOG più vecchi dall'history lasciandone al massimo 2. Anchor: HeuristicContextCompactor o AgentPromptAssembler — verificare se già gestito o se serve estensione.",
+
+    "[P6/BASSA] Validazione JSON pre-write in agentToolExecutorService.ts handler write_file: se il filePath termina con .json, tentare JSON.parse(content) prima di scrivere su disco. Se fallisce, restituire output strutturato 'JSON_VALIDATION_FAILED: <errore>' senza scrivere il file. Previene EJSONPARSE ciclici come rilevato nell'audit (chiave ' browserslist' con spazio).",
+
+    "[P7/BASSA] Vitest unit test per Shell-Tool Confusion Guard (P1) e Loop-breaker keyword (P2): aggiungere test in agentToolExecutorService.test.ts e loopDetector.test.ts (o nuovo file) che verifichino i nuovi comportamenti. Eseguire dopo implementazione P1 e P2."
+  ]
 }

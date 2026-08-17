@@ -527,6 +527,35 @@ export class AgentToolExecutorService {
         if (!cmd) {
           return { outputForHistory: 'Missing command parameter', logMessage: 'Missing command parameter', isTerminal: true }
         }
+
+        // Shell-Tool Confusion Guard: detect when the model passes a registered
+        // tool name as a shell command (e.g. write_file "path" "content").
+        // This causes guaranteed timeouts since tool names are not OS executables.
+        const TOOL_NAME_PREFIXES = [
+          'write_file', 'read_file', 'replace_file_content', 'multi_replace_file_content',
+          'delete_file', 'list_dir', 'list_files_recursive', 'grep_search',
+          'extract_code_symbols', 'create_directory', 'copy_file', 'move_file',
+          'web_search', 'fetch_web_content', 'download_file', 'inspect_os_env',
+          'ask', 'finish',
+        ]
+        const cmdTrimmed = cmd.trimStart()
+        const confusedToolName = TOOL_NAME_PREFIXES.find((t) => cmdTrimmed.startsWith(t))
+        if (confusedToolName) {
+          const guardFeedback = [
+            `[TOOL_AS_SHELL_BLOCK]`,
+            `Command: "${cmd}"`,
+            `EXECUTION BLOCKED: "${confusedToolName}" is a structured tool, not a shell executable.`,
+            `You MUST invoke it as a JSON tool call, not as a shell command.`,
+            `Correct format:`,
+            `\`\`\`json`,
+            `{ "tool": "${confusedToolName}", "parameters": { ... }, "explanation": "..." }`,
+            `\`\`\``,
+            `Do NOT pass tool names to run_command. Use the tool directly.`,
+          ].join('\n')
+          logger.log('WARN', 'AgentToolExecutor', `[TOOL_AS_SHELL_BLOCK] Model tried to run tool "${confusedToolName}" as shell command`)
+          return { outputForHistory: guardFeedback, logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`, isTerminal: true }
+        }
+
         const secCheck = checkCommandSecurity(cmd)
         if (!secCheck.isAllowed) {
           const blockFeedback = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${cmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason}\nDirective: Refrain from executing dangerous commands.`

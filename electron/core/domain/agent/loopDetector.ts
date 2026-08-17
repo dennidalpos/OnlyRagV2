@@ -58,6 +58,47 @@ export class AgentActionLoopDetector {
     const target = this.extractTarget(toolCall)
     this.targetHistory.push({ tool: toolCall.tool, target })
 
+    // 0.5 Shell-Command Tool-Keyword Loop Check:
+    // Detects when the model repeatedly passes a tool name as a shell command
+    // (e.g. `write_file "path" '...'`) across consecutive run_command calls.
+    // The fingerprint check (section 1) misses this when the JSON payload varies
+    // slightly between iterations. This check operates on the raw command string.
+    const SHELL_TOOL_KEYWORDS = [
+      'write_file', 'read_file', 'replace_file_content', 'multi_replace_file_content',
+      'delete_file', 'list_dir', 'list_files_recursive', 'grep_search',
+      'extract_code_symbols', 'create_directory', 'copy_file', 'move_file',
+      'web_search', 'fetch_web_content', 'download_file', 'inspect_os_env',
+      'ask', 'finish',
+    ]
+    if (toolCall.tool === 'run_command' && toolCall.parameters?.command) {
+      const rawCmd = String(toolCall.parameters.command).trimStart()
+      const matchedKeyword = SHELL_TOOL_KEYWORDS.find((kw) => rawCmd.startsWith(kw))
+      if (matchedKeyword) {
+        const recentRunCmds = this.targetHistory.slice(-5)
+        const consecutiveToolKeywordCmds = recentRunCmds.filter(
+          (rec) => rec.tool === 'run_command' && rec.target?.trimStart().startsWith(matchedKeyword)
+        ).length
+        if (consecutiveToolKeywordCmds >= 2) {
+          return {
+            isLooping: true,
+            consecutiveDuplicateCount: consecutiveToolKeywordCmds + 1,
+            suggestedIntervention: [
+              `[CRITICAL SHELL-TOOL CONFUSION LOOP: "${matchedKeyword}" PASSED AS SHELL COMMAND ${consecutiveToolKeywordCmds + 1} TIMES]`,
+              `"${matchedKeyword}" is a STRUCTURED TOOL — it is NOT a shell executable.`,
+              `You MUST stop passing it to run_command immediately.`,
+              `Directives:`,
+              `1. Invoke "${matchedKeyword}" as a JSON tool call (NOT inside run_command).`,
+              `2. Correct format:`,
+              `\`\`\`json`,
+              `{ "tool": "${matchedKeyword}", "parameters": { ... }, "explanation": "..." }`,
+              `\`\`\``,
+              `3. Do NOT wrap tool calls inside run_command, shell, or any terminal string.`,
+            ].join('\n'),
+          }
+        }
+      }
+    }
+
     // 1. Exact parameter repeat check (last 5 steps)
     const recentSignatures = this.signatureHistory.slice(-5)
     const duplicateCount = recentSignatures.filter((sig) => sig === signature).length

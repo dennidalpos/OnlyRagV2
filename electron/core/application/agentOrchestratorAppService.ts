@@ -333,6 +333,28 @@ export async function runAgentOrchestratorLoop(
 
   let currentOverriddenModel: string | null = null
 
+  // Global session timeout: guarantees SESSION END is always written to the audit log.
+  // Default: 45 minutes. Configurable via settings.agentSessionTimeoutMinutes (if added).
+  const SESSION_TIMEOUT_MS = Math.max(5, (settings as any).agentSessionTimeoutMinutes || 45) * 60 * 1000
+  let sessionTimeoutHandle: NodeJS.Timeout | null = setTimeout(() => {
+    if (isSessionActive()) {
+      const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
+      logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
+      emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
+      session.isCancelled = true
+      codingAgentLogger.logSessionEnd(sessionId, stepCount, false, timeoutSummary)
+      emitDone(false, timeoutSummary)
+      activeAgentSessions.delete(sessionId)
+    }
+  }, SESSION_TIMEOUT_MS)
+
+  const clearSessionTimeout = () => {
+    if (sessionTimeoutHandle !== null) {
+      clearTimeout(sessionTimeoutHandle)
+      sessionTimeoutHandle = null
+    }
+  }
+
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
     emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
@@ -946,6 +968,7 @@ export async function runAgentOrchestratorLoop(
   const endSummary = stepCount >= MAX_STEPS && MAX_STEPS !== Infinity
     ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
     : `Completed ${stepCount} agent steps.`
+  clearSessionTimeout()
   emitDone(true, endSummary)
   if (settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logSessionEnd(sessionId, stepCount, true, endSummary)

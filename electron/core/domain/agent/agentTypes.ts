@@ -63,6 +63,7 @@ export type SupportedToolName =
   | 'inspect_os_env'
   | 'git_diff'
   | 'git_status'
+  | 'git_commit'
   | 'rollback_workspace'
   | 'get_file_info'
   | 'ask'
@@ -91,6 +92,7 @@ export interface AgentToolCall {
     maxResults?: number
     summary?: string
     staged?: boolean
+    commitMessage?: string
     [key: string]: any
   }
   explanation?: string

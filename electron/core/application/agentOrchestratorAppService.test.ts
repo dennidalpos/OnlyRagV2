@@ -193,4 +193,71 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(turn2Res.success).toBe(true)
     expect(turn2Res.summary).toBe('Code executed and verified.')
   })
+
+  it('should submit mutating tool calls for human approval in ASK mode instead of FSM-denying them (regression: the FSM permission gate previously ran before the approval check, silently breaking the ASK-mode approval flow promised by promptPresets.ts and the PendingApprovalModal UI)', async () => {
+    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: writeFileJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Update the entrypoint file',
+        agentMode: 'ask',
+        workspacePath: tempDir,
+      },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Awaiting approval for write_file')
+    expect(res.summary).not.toContain('FSM PERMISSION DENIED')
+    // Must not execute directly: the file is only written after the user approves via the frontend modal
+    expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
+  })
+
+  it('should still allow finish (a non-mutating tool) in ASK mode without triggering the approval flow', async () => {
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Inspection complete." }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: finishJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Inspect the codebase',
+        agentMode: 'ask',
+        workspacePath: tempDir,
+      },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Inspection complete.')
+  })
+
+  it('should always submit git_commit for human approval, even in AGENT mode (unlike other mutating tools which execute autonomously there)', async () => {
+    const commitJson = '```json\n{\n  "tool": "git_commit",\n  "parameters": { "commitMessage": "Add feature X" }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: commitJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Commit the changes',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+      },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Awaiting approval for git_commit')
+    expect(res.summary).not.toContain('FSM PERMISSION DENIED')
+  })
 })

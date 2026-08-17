@@ -39,6 +39,11 @@ lancedb_store/
 export/
 *.lance
 
+# Coding-Agent Runtime State (generated per-session, machine/session specific)
+.assistant/
+.onlyrag/
+userdata_dev/
+
 # Environment & Secrets (Preserve example template)
 .env
 .env.local

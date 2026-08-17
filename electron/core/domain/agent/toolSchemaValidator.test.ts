@@ -53,4 +53,21 @@ describe('ToolSchemaValidator Unit Tests', () => {
     expect(res.valid).toBe(true)
     expect(res.sanitizedToolCall.parameters?.command).toBe('pytest -k test_login -q')
   })
+
+  it('should validate and coerce git_commit parameters correctly', () => {
+    const raw: AgentToolCall = {
+      tool: 'git_commit',
+      parameters: { commitMessage: 'Fix login bug' },
+    }
+    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    expect(res.valid).toBe(true)
+    expect(res.sanitizedToolCall.parameters?.commitMessage).toBe('Fix login bug')
+  })
+
+  it('should detect missing required commitMessage for git_commit', () => {
+    const raw: AgentToolCall = { tool: 'git_commit', parameters: {} }
+    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    expect(res.valid).toBe(false)
+    expect(res.errors[0]).toContain('commitMessage')
+  })
 })

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { execSync } from 'node:child_process'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import type { AppSettings } from '../../../src/types'
 
@@ -384,6 +385,41 @@ async def async_handler():
       settings
     )
     expect(diffRes.outputForHistory).toContain('[GIT DIFF')
+  })
+
+  it('should execute git_commit successfully on an isolated temp git repository', async () => {
+    execSync('git init', { cwd: tempDir })
+    execSync('git config user.email "test@onlyrag.local"', { cwd: tempDir })
+    execSync('git config user.name "OnlyRag Test"', { cwd: tempDir })
+    fs.writeFileSync(path.join(tempDir, 'file.txt'), 'hello')
+
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'git_commit',
+        parameters: { commitMessage: 'Add file.txt' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[GIT COMMIT:')
+    expect(res.logMessage).toContain('Git Commit created')
+    const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
+    expect(log).toContain('Add file.txt')
+  })
+
+  it('should return an error when git_commit is called without a commitMessage', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'git_commit',
+        parameters: {},
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('commitMessage')
+    expect(res.logMessage).toContain('missing commit message')
   })
 })
 

@@ -57,12 +57,13 @@ export const MODE_PERMISSIONS: Record<RuntimeFsmState, ModePermissionConfig> = {
       'download_file',
       'run_command',
       'inspect_os_env',
+      'git_commit',
       'ask',
       'finish',
     ]),
     allowsFileModifications: true,
     allowsTerminalExecution: true,
-    description: 'Autonomous execution mode with full read/write and sandboxed command execution.',
+    description: 'Autonomous execution mode with full read/write and sandboxed command execution. git_commit is always gated behind explicit user approval regardless of mode (see the Always-Confirm Gate in agentOrchestratorAppService.ts).',
   },
 }
 

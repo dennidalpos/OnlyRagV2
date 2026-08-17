@@ -156,7 +156,6 @@ flowchart TD
 - **AST-Aware Compact Repo Mapper (`CompactSemanticRepoMapper`)**:
   - Scansione ad alta densità sintattica della struttura del repository con estrazione dell'albero dei simboli esportati (`class`, `function`, `interface`, `type`) per la generazione di una Repo Map ottimizzata per il budget del contesto.
 - **Optimizations per Hardware Minimo (Previeni Runaway Loops >300 Step)**:
-  - **`VirtualMemorySymbolStore`**: Conservazione cross-step dei simboli dei file già ispezionati per eliminare riletture ridondanti su modelli compatti (3B/7B/8B).
   - **`ASTAwareStackTraceExtractor`**: Estrazione deterministica dei blocchi di errore e numeri di riga dai log di terminale per una diagnostica ad alta precisione.
   - **`StagnationCircuitBreaker`**: Interruttore automatico di blocco sulle streak di inattività o errori ripetuti per prevenire loop infiniti runaway.
 - **Resilient Multi-Tier Model Dispatching (`ResilientModelDispatcher`)**:

@@ -859,37 +859,35 @@ export async function runAgentOrchestratorLoop(
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
 
-    // FSM Tool Permission Gate: block unauthorized tools in current mode
-    if (!fsmMode.isToolAllowed(parsedTool.tool as any)) {
-      const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${[...Array.from(Object.values(fsmMode.filterAllowedTools([parsedTool.tool as any])))].join(', ') || 'read-only tools only'}. Switch to AGENT mode to execute mutating operations.`
-      episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
-      emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
-      continue
-    }
-
-    // Definition of Done (DoD) Execution Guard Gate
-    if ((parsedTool.tool as string) === 'finish') {
-      const pendingMilestonesCount = goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
-      const dodCheck = executionGuard.validateTaskCompletion({
-        requireVerifiedBuild: true,
-        hasVerifiedBuild,
-        pendingMilestonesCount,
-        hasFileMutations,
-      })
-
-      if (!dodCheck.allowed && dodCheck.suggestedAction) {
-        episodicCompactor.recordStep(
-          { step: stepCount, tool: 'finish', status: 'BLOCKED', summary: dodCheck.reason || 'Definition of Done Violation' },
-          dodCheck.suggestedAction
-        )
-        emitLog('info', `🔒 DoD Guard Interception: ${dodCheck.reason}`)
-        if (settings.enableCodingAgentDebugLog) {
-          codingAgentLogger.logToolResult(sessionId, stepCount, 'finish', dodCheck.suggestedAction)
-        }
-        continue
+    // Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action
+    // than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of
+    // agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mode and are
+    // only approval-gated in ASK mode below). PLAN mode never reaches this point for any tool
+    // (handled by the early return above), so no special-casing is needed for it here.
+    if (parsedTool.tool === 'git_commit') {
+      if (session.targetWindow && !session.targetWindow.isDestroyed()) {
+        session.targetWindow.webContents.send('agent:approval-request', {
+          type: 'git_commit',
+          target: parsedTool.parameters.commitMessage || 'Git Commit',
+          contentOrCmd: parsedTool.parameters.commitMessage || '',
+          parameters: parsedTool.parameters,
+        })
       }
+      emitDone(true, `Awaiting user approval for git_commit`)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for git_commit`)
+      }
+      await persistCurrentState()
+      activeAgentSessions.delete(sessionId)
+      return { success: true, summary: `Awaiting approval for git_commit` }
     }
 
+    // ASK Mode Human-Approval Gate: mutating tools are submitted for explicit user approval
+    // instead of being executed or flatly denied. Must run BEFORE the FSM Tool Permission Gate:
+    // ASK mode's allowedTools set deliberately excludes mutating tools (see agentRuntimeMode.ts),
+    // so if this check ran after the FSM gate it would never be reached (FSM would already have
+    // denied the call), silently breaking the approval UI despite the prompt/UI contract promising
+    // it (promptPresets.ts: "modifying actions ... are submitted for user approval").
     if (agentMode === 'ask') {
       const isMutatingTool = ['run_command', 'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool)
       if (isMutatingTool) {
@@ -920,6 +918,37 @@ export async function runAgentOrchestratorLoop(
         await persistCurrentState()
         activeAgentSessions.delete(sessionId)
         return { success: true, summary: `Awaiting approval for ${parsedTool.tool}` }
+      }
+    }
+
+    // FSM Tool Permission Gate: block unauthorized tools in current mode
+    if (!fsmMode.isToolAllowed(parsedTool.tool as any)) {
+      const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${[...Array.from(Object.values(fsmMode.filterAllowedTools([parsedTool.tool as any])))].join(', ') || 'read-only tools only'}. Switch to AGENT mode to execute mutating operations.`
+      episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
+      emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
+      continue
+    }
+
+    // Definition of Done (DoD) Execution Guard Gate
+    if ((parsedTool.tool as string) === 'finish') {
+      const pendingMilestonesCount = goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
+      const dodCheck = executionGuard.validateTaskCompletion({
+        requireVerifiedBuild: true,
+        hasVerifiedBuild,
+        pendingMilestonesCount,
+        hasFileMutations,
+      })
+
+      if (!dodCheck.allowed && dodCheck.suggestedAction) {
+        episodicCompactor.recordStep(
+          { step: stepCount, tool: 'finish', status: 'BLOCKED', summary: dodCheck.reason || 'Definition of Done Violation' },
+          dodCheck.suggestedAction
+        )
+        emitLog('info', `🔒 DoD Guard Interception: ${dodCheck.reason}`)
+        if (settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logToolResult(sessionId, stepCount, 'finish', dodCheck.suggestedAction)
+        }
+        continue
       }
     }
 

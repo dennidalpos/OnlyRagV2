@@ -1,7 +1,7 @@
 import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn, ChildProcess, execSync } from 'node:child_process'
+import { spawn, ChildProcess, execSync, execFileSync } from 'node:child_process'
 import { logger } from '../../diagnostics'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
@@ -813,6 +813,33 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
           return {
             outputForHistory: `Git Diff Error: ${err.message}`,
             logMessage: `Git Diff Error: ${err.message}`,
+          }
+        }
+      }
+
+      case 'git_commit': {
+        const cwd = workspacePath || process.cwd()
+        const commitMessage = (parameters.commitMessage || '').trim()
+        if (!commitMessage) {
+          return {
+            outputForHistory: 'Git Commit Error: commitMessage parameter is required.',
+            logMessage: 'Git Commit Error: missing commit message',
+          }
+        }
+        try {
+          // execFileSync (argv array, no shell) avoids any need to escape the commit
+          // message for a shell string — safe against injection via message content.
+          execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15000 })
+          const stdout = execFileSync('git', ['commit', '-m', commitMessage], { cwd, encoding: 'utf-8', timeout: 15000 })
+          return {
+            outputForHistory: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
+            logMessage: `Git Commit created in ${path.basename(cwd)}`,
+          }
+        } catch (err: any) {
+          const detail = (err.stdout?.toString().trim() || err.stderr?.toString().trim() || err.message) as string
+          return {
+            outputForHistory: `Git Commit Error: ${detail}`,
+            logMessage: `Git Commit Error: ${detail}`,
           }
         }
       }

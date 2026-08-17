@@ -133,6 +133,15 @@ export class ToolSchemaValidator {
         break
       }
 
+      case 'git_commit': {
+        if (!rawParams.commitMessage) {
+          errors.push("Missing required parameter 'commitMessage' for git_commit")
+        } else {
+          rawParams.commitMessage = String(rawParams.commitMessage)
+        }
+        break
+      }
+
       case 'run_tests': {
         if (rawParams.command) {
           rawParams.command = String(rawParams.command)

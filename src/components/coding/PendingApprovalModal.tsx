@@ -4,7 +4,7 @@ import { useTranslation } from '../../i18n'
 
 interface PendingApprovalModalProps {
   pendingApproval: {
-    type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd'
+    type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
     target: string
     contentOrCmd: string
     replacement?: string
@@ -74,6 +74,11 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
             ) : pendingApproval.type === 'delete_file' ? (
               <div className="text-rose-400 font-semibold">
                 {t('ingestion.deleteConfirm')} {pendingApproval.target}
+              </div>
+            ) : pendingApproval.type === 'git_commit' ? (
+              <div>
+                <div className="text-amber-400 text-[10px] uppercase font-bold">Commit Message:</div>
+                <div className="text-slate-200 whitespace-pre-wrap">{pendingApproval.contentOrCmd}</div>
               </div>
             ) : pendingApproval.type === 'multi_replace' && pendingApproval.replacements ? (
               <div className="space-y-3">

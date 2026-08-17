@@ -67,6 +67,23 @@ class TestLogAnalyzerDetectors:
         assert any("VRAM_EXCEEDED" in r.anomaly_type for r in records)
         assert any(r.severity == "CRITICAL" for r in records)
 
+    def test_no_false_positive_on_ollama_env_var_configuration_line(self):
+        # Routine env-var configuration logging (TaskRunner) mentions "OLLAMA_" as an
+        # identifier prefix and "[Timeout: Ns]" as the command's own timeout budget —
+        # neither indicates an actual Ollama request timeout.
+        lines = [
+            "[INFO] [TaskRunner]: Executing PowerShell command: "
+            "[System.Environment]::SetEnvironmentVariable('OLLAMA_FLASH_ATTENTION', '1', 'User'); "
+            "[System.Environment]::SetEnvironmentVariable('OLLAMA_KV_CACHE_TYPE', 'q8_0', 'User') [Timeout: 300s]"
+        ]
+        records = _detect_vram_thrashing(lines, "test.log")
+        assert len(records) == 0
+
+    def test_detects_real_ollama_client_timeout(self):
+        lines = ["[ERROR] [OllamaClient]: Timeout pulling model qwen2.5-coder:7b"]
+        records = _detect_vram_thrashing(lines, "test.log")
+        assert any("OLLAMA_TIMEOUT" in r.anomaly_type for r in records)
+
     def test_detects_tool_calling_loop(self):
         # Repeat the same tool call 4 times in a 30-line window
         lines = [f'Step {i}: {{"tool_name": "list_dir", "arguments": {{}}}}' for i in range(4)]

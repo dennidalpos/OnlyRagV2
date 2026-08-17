@@ -31,7 +31,7 @@
 ## 5. Repository Structure, Skills & Documentation
 
 * **Scripts:** Place scripts in standard locations (default: `scripts/`), returning non-zero exit codes (`exit 1`) on failure and setting Fail-Fast behavior.
-* **Active Tasks:** Maintain a strict active todo list in `PROJECT_STATUS.json`: `{"todos": ["Task"]}`. Add active tasks only; immediately remove completed or obsolete items. No changelogs, blockers, or notes.
+* **Active Tasks:** `PROJECT_STATUS.json` MUST contain exactly one top-level key, `todos` (a string array), and nothing else — no `completed_*`/`blocked_*`/history sections, no changelogs, no notes. Schema is strictly `{"todos": ["Task"]}`. Add active tasks only; the instant a task is completed or becomes obsolete, remove its entry entirely rather than moving it to an archive section. Historical record of finished work belongs in git commit messages, not in this file.
 * **Project Skills:** Generate, maintain, and update project skills/capabilities as the repository grows. Store workspace skills in the root `/skills` directory (`skills/<skill_name>/SKILL.md`).
 * **Documentation Maintenance:** Maintain minimal, concise project documentation. Update documentation immediately with code changes to prevent drift.
 

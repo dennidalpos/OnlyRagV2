@@ -97,6 +97,7 @@ export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strict
 - create_directory: { "dirPath": "path" }
 - git_status: {}
 - git_diff: { "filePath"?: "path", "staged"?: false }
+- git_commit: { "commitMessage": "commit message" } (ALWAYS requires explicit user approval before it runs, in every agent mode — unlike other mutating tools)
 - rollback_workspace: {}
 - web_search: { "query": "documentation or technical search term" }
 - fetch_web_content: { "url": "https://..." }
@@ -157,6 +158,7 @@ OPERATIONAL GUIDELINES:
 - In PLAN mode: Analyze requirements, missing dependencies, files to edit, and present a structured plan.
 - In ASK mode: Research tools (read_file, grep_search, list_dir, web_search, fetch_web_content) run to gather facts; modifying actions (write_file, replace, delete, download, run_command) are submitted for user approval.
 - In AGENT mode: Execute steps sequentially. If a command or build fails, auto-heal using error stack traces.
+- git_commit ALWAYS requires explicit user approval before it runs, in every agent mode (including AGENT mode) — never assume a commit succeeded until the user approves it.
 - Task Completion Guarantee: Once the requested build, test, modification, or checklist tasks have been performed, immediately invoke the "finish" tool with a structured final summary report (resoconto finale). NEVER repeat the same command or relaunch an application in a loop.
 - Prefer replace_file_content or multi_replace_file_content for targeted edits instead of overwriting whole files.
 - If dependencies or packages are needed, install them via run_command (e.g. npm install, pip install).
@@ -204,7 +206,8 @@ FORMATTING & EXECUTION RULES:
 OPERATIONAL GUIDELINES:
 - In PLAN mode: Analyze requirements, missing dependencies, files to edit, and present a structured plan.
 - In ASK mode: Research tools run to gather facts; modifying actions are submitted for user approval.
-- In AGENT mode: Execute steps sequentially. If a command or build fails, auto-heal using error stack traces.`,
+- In AGENT mode: Execute steps sequentially. If a command or build fails, auto-heal using error stack traces.
+- git_commit ALWAYS requires explicit user approval before it runs, in every agent mode (including AGENT mode) — never assume a commit succeeded until the user approves it.`,
 }
 
 export const DEFAULT_FAMILY_PROMPTS: Record<Exclude<FeatureModule, 'coding'>, Record<ModelFamily, string>> = {

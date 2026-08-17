@@ -113,6 +113,9 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     filePath: { type: 'string', description: 'Optional single file to diff.' },
     staged: { type: 'boolean', description: 'Show staged changes instead of unstaged (default false).' },
   }),
+  tool('git_commit', 'Stage all workspace changes and create a git commit. Always requires explicit user approval before it runs, regardless of agent mode.', {
+    commitMessage: { type: 'string', description: 'The commit message to use.' },
+  }, ['commitMessage']),
   tool('rollback_workspace', 'Revert all file modifications made during this session back to their pre-session state.', {}),
   tool('get_file_info', 'Get metadata about a file: existence, size, line count, binary detection.', {
     filePath: { type: 'string', description: 'Path of the file to inspect.' },

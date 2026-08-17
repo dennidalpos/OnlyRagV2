@@ -1,5 +1,6 @@
 import { PromptCompiler } from './promptCompiler'
 import { HardwareProfileResolver, OllamaRuntimeOptions } from './hardwareProfileResolver'
+import type { ComplexityTier } from './complexityEvaluator'
 import type { AppSettings } from '../../../../src/types'
 import type { AgentMode } from './agentTypes'
 
@@ -9,7 +10,8 @@ export interface PromptAssemblerInput {
   agentMode: AgentMode
   stepCount: number
   maxSteps: number
-  targetModel: string
+  /** Drives which of the family-agnostic coding prompts is selected (see promptPresets.ts). */
+  complexityTier: ComplexityTier
   workspacePath?: string | null
   isStandaloneMode?: boolean
   activeFile?: { name: string; path: string; content: string } | null
@@ -34,7 +36,7 @@ export class AgentPromptAssembler {
       agentMode,
       stepCount,
       maxSteps,
-      targetModel,
+      complexityTier,
       workspacePath,
       isStandaloneMode,
       activeFile,
@@ -53,10 +55,10 @@ export class AgentPromptAssembler {
       ? `PRIMARY OVERALL GOAL / PROJECT SPECIFICATION:\n"""\n${initialUserTask.trim()}\n"""\n\nCURRENT TURN INSTRUCTION / FOLLOW-UP ANSWER:\n"""\n${userTask.trim()}\n"""`
       : userTask.trim()
 
-    // Priority 1: Base System Prompt & User Goal Guidelines (Mandatory intact)
-    const { prompt: baseSystemPrompt } = PromptCompiler.compilePrompt(
-      'coding',
-      targetModel,
+    // Priority 1: Base System Prompt & User Goal Guidelines (Mandatory intact).
+    // Family-agnostic: selected by complexity tier, not by model family (see B2).
+    const { prompt: baseSystemPrompt } = PromptCompiler.compileCodingPrompt(
+      complexityTier,
       {
         agentMode: agentMode.toUpperCase(),
         stepCount: String(stepCount),
@@ -116,23 +118,9 @@ export class AgentPromptAssembler {
       mapBlock,
     ].filter((p) => Boolean(p && p.trim()))
 
-    let fullPrompt = promptParts.join('\n\n')
-
-    // Dynamic Compaction if total exceeds hardware profile limit
-    if (fullPrompt.length > runtimeOpts.maxContextChars) {
-      const compactedParts = [
-        baseSystemPrompt,
-        planSection,
-        pinnedBlock ? pinnedBlock.slice(0, 8000) : '',
-        activeFileBlock ? activeFileBlock.slice(0, 4000) : '',
-        skillsSection,
-        historyBlock ? historyBlock.slice(0, 6000) : '',
-        attachedBlock ? attachedBlock.slice(0, 1500) : '',
-        mapBlock ? mapBlock.slice(0, 2000) : '',
-      ].filter(Boolean)
-      fullPrompt = compactedParts.join('\n\n')
-    }
-
-    return fullPrompt
+    // Compaction over the hardware profile limit is handled exclusively by
+    // HeuristicContextCompactor.compile in the orchestrator loop (single
+    // point of truncation — see agentOrchestratorAppService.ts).
+    return promptParts.join('\n\n')
   }
 }

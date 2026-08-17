@@ -188,17 +188,21 @@ describe('ResilientModelDispatcher Unit Tests', () => {
     const fromFast = ResilientModelDispatcher.getNextEscalationModel('llama3.2:3b', plan)
     expect(fromFast?.nextModel).toBe('qwen2.5-coder:7b')
     expect(fromFast?.tierLabel).toContain('Standard Tier')
+    expect(fromFast?.tier).toBe('standard')
 
     const fromStandard = ResilientModelDispatcher.getNextEscalationModel('qwen2.5-coder:7b', plan)
     expect(fromStandard?.nextModel).toBe('deepseek-r1:8b')
     expect(fromStandard?.tierLabel).toContain('Deep Reasoning Tier')
+    expect(fromStandard?.tier).toBe('deep_reasoning')
 
     const fromDeep = ResilientModelDispatcher.getNextEscalationModel('deepseek-r1:8b', plan)
     expect(fromDeep?.nextModel).toBe('qwen2.5-coder:14b')
     expect(fromDeep?.tierLabel).toContain('Heavy Tier')
+    expect(fromDeep?.tier).toBe('heavy')
 
     const fromHeavy = ResilientModelDispatcher.getNextEscalationModel('qwen2.5-coder:14b', plan)
     expect(fromHeavy?.nextModel).toBe('llama3.2:3b')
     expect(fromHeavy?.tierLabel).toContain('Fast Tier')
+    expect(fromHeavy?.tier).toBe('fast')
   })
 })

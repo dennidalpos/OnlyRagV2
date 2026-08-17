@@ -121,9 +121,12 @@ export interface TranslationSchema {
     planModeDesc: string
     askModeDesc: string
     agentModeDesc: string
+    generatePlanFromPrompt: string
+    pendingMilestonesBadge: string
     terminalTab: string
     filesTab: string
     gitDiffTab: string
+    slmDiagnosticsTab: string
     skillsHub: string
     noFilesOpen: string
     dirtyBadge: string
@@ -422,6 +425,8 @@ export interface TranslationSchema {
     activeModel: string
     detectedFamily: string
     familyPreset: string
+    complexityTierPreset: string
+    codingTierNotice: string
     customBadge: string
     promptText: string
     variablesLegend: string

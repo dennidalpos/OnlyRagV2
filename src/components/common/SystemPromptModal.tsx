@@ -5,8 +5,10 @@ import {
   ModelFamily,
   MODEL_FAMILIES,
   DEFAULT_FAMILY_PROMPTS,
+  DEFAULT_CODING_TIER_PROMPTS,
   detectModelFamily,
 } from '../../constants/promptPresets'
+import { type ComplexityTier } from '../../services/complexityRouterService'
 import {
   Sliders,
   RotateCcw,
@@ -91,8 +93,21 @@ export const SAMPLE_PREVIEW_VARS: Record<FeatureModule, Record<string, string>> 
   },
 }
 
+/** Tier picker options for the coding module (family-agnostic — see promptPresets.ts / B2). */
+export const CODING_TIERS: { id: ComplexityTier; name: string; description: string }[] = [
+  { id: 'fast', name: 'Fast Tier', description: 'Terse, action-oriented guidance for small/fast models on simple tasks.' },
+  { id: 'standard', name: 'Standard Tier', description: 'Balanced default guidance for most coding tasks.' },
+  { id: 'deep_reasoning', name: 'Deep Reasoning Tier', description: 'Most explicit guidance with worked examples, for complex multi-step tasks.' },
+]
+
+type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
+
+/**
+ * Effective prompt for family-based modules (chat/translation/vision).
+ * The coding module is family-agnostic — see getEffectiveCodingPrompt.
+ */
 export const getEffectivePrompt = (
-  module: FeatureModule,
+  module: FamilyBasedModule,
   activeModelName: string | undefined,
   settings: AppSettings
 ): { prompt: string; family: ModelFamily; isCustom: boolean } => {
@@ -119,6 +134,21 @@ export const getEffectivePrompt = (
   return { prompt: defaultPrompt, family: activeFamily, isCustom: false }
 }
 
+/** Effective coding prompt, selected by complexity tier instead of model family (see B2). */
+export const getEffectiveCodingPrompt = (
+  tier: ComplexityTier,
+  settings: AppSettings
+): { prompt: string; tier: ComplexityTier; isCustom: boolean } => {
+  const overrideKey = `coding:${tier}`
+  const customOverride = settings.customPromptOverrides?.[overrideKey]
+
+  if (customOverride && customOverride.trim()) {
+    return { prompt: customOverride, tier, isCustom: true }
+  }
+
+  return { prompt: DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard, tier, isCustom: false }
+}
+
 export const compilePromptWithSampleVars = (
   rawTemplate: string,
   module: FeatureModule
@@ -141,11 +171,15 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   onUpdateSettings,
 }) => {
   const { t } = useTranslation()
+  const isCoding = module === 'coding'
   const detectedFamily = detectModelFamily(activeModelName)
-  const currentOverrideFamily = settings.selectedFamilyOverrides?.[module] || 'auto'
+  const currentOverrideVariant = settings.selectedFamilyOverrides?.[module] || (isCoding ? 'standard' : 'auto')
 
-  const [selectedFamily, setSelectedFamily] = useState<ModelFamily | 'auto'>(currentOverrideFamily as any)
-  const effectiveFamily: ModelFamily = selectedFamily === 'auto' ? detectedFamily : selectedFamily
+  // "variant" is a family id for chat/translation/vision, or a ComplexityTier id for coding.
+  const [selectedVariant, setSelectedVariant] = useState<string>(currentOverrideVariant)
+  const effectiveVariant: string = isCoding
+    ? (selectedVariant || 'standard')
+    : (selectedVariant === 'auto' ? detectedFamily : selectedVariant)
 
   const [promptText, setPromptText] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor')
@@ -156,20 +190,22 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Sync state when modal opens or model/family/module changes
+  const defaultTemplateFor = (variant: string): string => {
+    if (isCoding) {
+      return DEFAULT_CODING_TIER_PROMPTS[variant as ComplexityTier] || DEFAULT_CODING_TIER_PROMPTS.standard
+    }
+    return DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.[variant as ModelFamily] || DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.generic || ''
+  }
+
+  // Sync state when modal opens or model/variant/module changes
   useEffect(() => {
     if (isOpen) {
-      const curFam = (settings.selectedFamilyOverrides?.[module] || 'auto') as ModelFamily | 'auto'
-      setSelectedFamily(curFam)
-      const activeFam = curFam === 'auto' ? detectedFamily : curFam
-      const overrideKey = `${module}:${activeFam}`
+      const curVariant = settings.selectedFamilyOverrides?.[module] || (isCoding ? 'standard' : 'auto')
+      setSelectedVariant(curVariant)
+      const activeVar = isCoding ? curVariant : (curVariant === 'auto' ? detectedFamily : curVariant)
+      const overrideKey = `${module}:${activeVar}`
       const customVal = settings.customPromptOverrides?.[overrideKey]
-      if (customVal !== undefined) {
-        setPromptText(customVal)
-      } else {
-        const factoryVal = DEFAULT_FAMILY_PROMPTS[module]?.[activeFam] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
-        setPromptText(factoryVal)
-      }
+      setPromptText(customVal !== undefined ? customVal : defaultTemplateFor(activeVar))
       setActiveTab('editor')
       setImportStatus(null)
     }
@@ -189,29 +225,22 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
 
   if (!isOpen) return null
 
-  const handleFamilyChange = (fam: string) => {
-    const newFam = fam as ModelFamily | 'auto'
-    setSelectedFamily(newFam)
-    const targetFamily: ModelFamily = newFam === 'auto' ? detectedFamily : newFam
-    const overrideKey = `${module}:${targetFamily}`
+  const handleVariantChange = (variant: string) => {
+    setSelectedVariant(variant)
+    const targetVariant = isCoding ? variant : (variant === 'auto' ? detectedFamily : variant)
+    const overrideKey = `${module}:${targetVariant}`
     const customVal = settings.customPromptOverrides?.[overrideKey]
-    if (customVal !== undefined) {
-      setPromptText(customVal)
-    } else {
-      const factoryVal = DEFAULT_FAMILY_PROMPTS[module]?.[targetFamily] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
-      setPromptText(factoryVal)
-    }
+    setPromptText(customVal !== undefined ? customVal : defaultTemplateFor(targetVariant))
 
     const updatedSelectedOverrides = {
       ...(settings.selectedFamilyOverrides || {}),
-      [module]: newFam,
+      [module]: variant,
     }
     onUpdateSettings({ selectedFamilyOverrides: updatedSelectedOverrides })
   }
 
   const handleSavePrompt = () => {
-    const targetFamily: ModelFamily = selectedFamily === 'auto' ? detectedFamily : selectedFamily
-    const overrideKey = `${module}:${targetFamily}`
+    const overrideKey = `${module}:${effectiveVariant}`
     const updatedPromptOverrides = {
       ...(settings.customPromptOverrides || {}),
       [overrideKey]: promptText,
@@ -223,13 +252,11 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   }
 
   const handleResetCurrentPrompt = () => {
-    const targetFamily: ModelFamily = selectedFamily === 'auto' ? detectedFamily : selectedFamily
-    const overrideKey = `${module}:${targetFamily}`
+    const overrideKey = `${module}:${effectiveVariant}`
     const updatedPromptOverrides = { ...(settings.customPromptOverrides || {}) }
     delete updatedPromptOverrides[overrideKey]
 
-    const factoryDefault = DEFAULT_FAMILY_PROMPTS[module]?.[targetFamily] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
-    setPromptText(factoryDefault)
+    setPromptText(defaultTemplateFor(effectiveVariant))
     onUpdateSettings({ customPromptOverrides: updatedPromptOverrides })
 
     setSaveSuccess(true)
@@ -247,9 +274,9 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
     const updatedSelectedOverrides = { ...(settings.selectedFamilyOverrides || {}) }
     delete updatedSelectedOverrides[module]
 
-    setSelectedFamily('auto')
-    const factoryDefault = DEFAULT_FAMILY_PROMPTS[module]?.[detectedFamily] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
-    setPromptText(factoryDefault)
+    const resetVariant = isCoding ? 'standard' : 'auto'
+    setSelectedVariant(resetVariant)
+    setPromptText(defaultTemplateFor(isCoding ? 'standard' : detectedFamily))
 
     onUpdateSettings({
       customPromptOverrides: updatedPromptOverrides,
@@ -332,8 +359,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             selectedFamilyOverrides: mergedFamilyOverrides,
           })
 
-          const targetFamily: ModelFamily = selectedFamily === 'auto' ? detectedFamily : selectedFamily
-          const overrideKey = `${module}:${targetFamily}`
+          const overrideKey = `${module}:${effectiveVariant}`
           if (mergedPromptOverrides[overrideKey] !== undefined) {
             setPromptText(mergedPromptOverrides[overrideKey])
           }
@@ -353,8 +379,9 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
     e.target.value = ''
   }
 
-  const activeFamilyMeta = MODEL_FAMILIES.find((f) => f.id === effectiveFamily)
-  const isCustomized = !!settings.customPromptOverrides?.[`${module}:${effectiveFamily}`]
+  const activeFamilyMeta = MODEL_FAMILIES.find((f) => f.id === effectiveVariant)
+  const activeTierMeta = CODING_TIERS.find((tr) => tr.id === effectiveVariant)
+  const isCustomized = !!settings.customPromptOverrides?.[`${module}:${effectiveVariant}`]
   const moduleVars = MODULE_VARIABLES[module] || []
   const compiledPreviewText = compilePromptWithSampleVars(promptText, module)
 
@@ -393,6 +420,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleExportJson}
               title={t('systemPrompt.exportJson')}
               className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5 focus-ring"
@@ -402,6 +430,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               title={t('systemPrompt.importJson')}
               className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5 focus-ring"
@@ -411,6 +440,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={onClose}
               aria-label={t('common.close')}
               className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95"
@@ -436,7 +466,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </div>
           )}
 
-          {/* Active Model & Detected Family Bar */}
+          {/* Active Model & Detected Family Bar (informational only for coding — see below) */}
           <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -444,19 +474,28 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
               <span className="font-mono text-slate-200 font-semibold">{activeModelName || t('common.none')}</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400">{t('systemPrompt.detectedFamily')}:</span>
-              <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/60 text-[11px]">
-                {MODEL_FAMILIES.find((f) => f.id === detectedFamily)?.name || detectedFamily}
-              </span>
-            </div>
+            {!isCoding && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">{t('systemPrompt.detectedFamily')}:</span>
+                <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/60 text-[11px]">
+                  {MODEL_FAMILIES.find((f) => f.id === detectedFamily)?.name || detectedFamily}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Family Preset Selector Dropdown */}
+          {isCoding && (
+            <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-900/50 text-[11px] text-cyan-300 flex items-center gap-2">
+              <Info className="w-4 h-4 shrink-0 text-cyan-400" />
+              <span>{t('systemPrompt.codingTierNotice')}</span>
+            </div>
+          )}
+
+          {/* Family / Tier Preset Selector Dropdown */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <label htmlFor="system-prompt-family-select" className="font-semibold text-slate-300">
-                {t('systemPrompt.familyPreset')}:
+              <label htmlFor="system-prompt-variant-select" className="font-semibold text-slate-300">
+                {isCoding ? t('systemPrompt.complexityTierPreset') : t('systemPrompt.familyPreset')}:
               </label>
               {isCustomized && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 font-mono font-bold border border-amber-800/50">
@@ -466,47 +505,57 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </div>
 
             <select
-              id="system-prompt-family-select"
-              value={selectedFamily}
-              onChange={(e) => handleFamilyChange(e.target.value)}
+              id="system-prompt-variant-select"
+              value={selectedVariant}
+              onChange={(e) => handleVariantChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus-ring font-mono"
             >
-              <option value="auto">
-                ✨ Auto-Detect ({MODEL_FAMILIES.find((f) => f.id === detectedFamily)?.name})
-              </option>
-
-              <optgroup label="Text & Coding Models">
-                {MODEL_FAMILIES.filter((f) => f.category === 'text_coder').map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
+              {isCoding ? (
+                CODING_TIERS.map((tr) => (
+                  <option key={tr.id} value={tr.id}>
+                    {tr.name}
                   </option>
-                ))}
-              </optgroup>
-
-              <optgroup label="Vision & Multimodal Models">
-                {MODEL_FAMILIES.filter((f) => f.category === 'vision').map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
+                ))
+              ) : (
+                <>
+                  <option value="auto">
+                    ✨ Auto-Detect ({MODEL_FAMILIES.find((f) => f.id === detectedFamily)?.name})
                   </option>
-                ))}
-              </optgroup>
 
-              <optgroup label="Vector Embedding Models">
-                {MODEL_FAMILIES.filter((f) => f.category === 'embedding').map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </optgroup>
+                  <optgroup label="Text & Coding Models">
+                    {MODEL_FAMILIES.filter((f) => f.category === 'text_coder').map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </optgroup>
 
-              <optgroup label="Fallback">
-                <option value="generic">Generic / Fallback</option>
-              </optgroup>
+                  <optgroup label="Vision & Multimodal Models">
+                    {MODEL_FAMILIES.filter((f) => f.category === 'vision').map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </optgroup>
+
+                  <optgroup label="Vector Embedding Models">
+                    {MODEL_FAMILIES.filter((f) => f.category === 'embedding').map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </optgroup>
+
+                  <optgroup label="Fallback">
+                    <option value="generic">Generic / Fallback</option>
+                  </optgroup>
+                </>
+              )}
             </select>
 
-            {activeFamilyMeta && (
-              <p className="text-[11px] text-slate-400 italic px-1">{activeFamilyMeta.description}</p>
-            )}
+            {isCoding
+              ? activeTierMeta && <p className="text-[11px] text-slate-400 italic px-1">{activeTierMeta.description}</p>
+              : activeFamilyMeta && <p className="text-[11px] text-slate-400 italic px-1">{activeFamilyMeta.description}</p>}
           </div>
 
           {/* Mode Switcher Tabs (Editor vs Compiled Preview) */}
@@ -556,7 +605,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
                   </>
                 )}
               </button>
-              <span className="text-[10px] text-slate-500 font-mono">
+              <span className="text-[10px] text-slate-400 font-mono">
                 {activeTab === 'preview' ? `${compiledPreviewText.length} chars (compiled)` : `${promptText.length} chars`}
               </span>
             </div>
@@ -595,7 +644,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
                 <Info className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{t('systemPrompt.variablesLegend')}</span>
               </div>
-              <span className="text-[10px] text-slate-500">{t('systemPrompt.clickToInsert')}</span>
+              <span className="text-[10px] text-slate-400">{t('systemPrompt.clickToInsert')}</span>
             </div>
 
             <div className="flex flex-wrap gap-1.5">
@@ -632,6 +681,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
         <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleResetCurrentPrompt}
               className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-rose-400 hover:text-rose-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
               title={t('systemPrompt.resetFamily')}
@@ -640,6 +690,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={handleResetAllModulePrompts}
               className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-rose-400 text-xs font-medium rounded-xl transition-all"
               title={t('systemPrompt.resetAllModule')}
@@ -656,6 +707,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             )}
 
             <button
+              type="button"
               onClick={onClose}
               className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium rounded-xl transition-all"
             >
@@ -663,6 +715,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={handleSavePrompt}
               className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95"
             >

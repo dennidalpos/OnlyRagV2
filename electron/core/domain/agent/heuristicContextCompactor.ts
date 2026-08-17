@@ -1,4 +1,5 @@
 import { DiagnosticOutputReducer } from './diagnosticOutputReducer'
+import { AutoHealingLogCapper } from './autoHealingLogCapper'
 
 export interface PromptSegment {
   /** Priority 1 — never compacted */
@@ -127,8 +128,14 @@ export class HeuristicContextCompactor {
     }
 
     const tableStr = tableLines.join('\n')
+
+    // Cap retained [TERMINAL AUTO-HEALING DIAGNOSTICS LOG] blocks to the 2 most
+    // recent occurrences before distillation, so repeated build/test failure
+    // diagnostics don't crowd out newer turn context once the watermark is hit.
+    const { text: cappedRawOutput } = AutoHealingLogCapper.capBlocks(rawOutputBuffer.join('\n'), 2)
+
     const distilledRaw = DiagnosticOutputReducer.distillTerminalOutput(
-      rawOutputBuffer.join('\n'),
+      cappedRawOutput,
       Math.max(400, maxChars - tableStr.length - 100)
     )
 

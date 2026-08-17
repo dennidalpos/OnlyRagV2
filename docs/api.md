@@ -125,87 +125,9 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
-### 1.9. SLM Agent Studio — Endpoint Orchestrazione
+### 1.9. SLM Agent Studio — Diagnostica Log
 
-#### `POST /agent/orchestrate`
-
-Esegue un singolo turno dell'agente SLM con una macchina a stati di retry a 3 livelli di escalation.
-
-**Comportamento `use_default_registry`:**
-- `true` (raccomandato): il sidecar ignora il campo `tools` del client e popola automaticamente tutti i 19 Agent Studio tools + few-shot examples dal registro server-side (`slm_tool_registry`). Il client fornisce solo `model` e `user_message`.
-- `false` (default): il client DEVE fornire almeno un tool nella lista `tools`; in caso contrario l'endpoint restituisce `422 Unprocessable Entity`.
-
-**Request Body:**
-```json
-{
-  "model": "qwen2.5:7b",
-  "user_message": "Read /src/main.py and summarize its exports.",
-  "use_default_registry": true,
-  "tools": [],
-  "history": [
-    { "role": "user", "content": "Previous message" },
-    { "role": "assistant", "content": "Previous response" }
-  ],
-  "rag_context": "Relevant RAG snippets injected here...",
-  "max_context_tokens": 4096,
-  "max_retries": 3,
-  "few_shot_examples": {}
-}
-```
-
-| Campo | Tipo | Default | Descrizione |
-| :--- | :--- | :--- | :--- |
-| `model` | `string` | — | Tag del modello Ollama (es. `qwen2.5:7b`, `llama3:8b`). Obbligatorio. |
-| `user_message` | `string` | — | Istruzione/task per l'agente. Obbligatorio. |
-| `use_default_registry` | `boolean` | `false` | Se `true`, ignora `tools` e usa i 19 tool Agent Studio del registro. |
-| `tools` | `ToolDefinition[]` | `[]` | Lista tool custom. Ignorata se `use_default_registry=true`. |
-| `history` | `ContextMessage[]` | `[]` | Storico messaggi (role: `system`/`user`/`assistant`). Cappato a 8 turn dal budgeter. |
-| `rag_context` | `string \| null` | `null` | Contesto RAG da iniettare nel prompt. Troncato automaticamente se supera il budget token. |
-| `max_context_tokens` | `integer` | `4096` | Budget token totale per la finestra di contesto. |
-| `max_retries` | `integer` | `3` | Numero massimo di tentativi prima dell'escalation L3. |
-| `few_shot_examples` | `dict` | `{}` | Esempi few-shot custom (mappa `tool_name → arguments_dict`). Ignorati se `use_default_registry=true`. |
-
-**Response Body (200 OK):**
-```json
-{
-  "success": true,
-  "tool_name": "read_file",
-  "arguments": { "path": "/src/main.py", "startLine": null, "endLine": null },
-  "text_response": null,
-  "escalation_level": "NONE",
-  "error_detail": null,
-  "attempts": 1
-}
-```
-
-| Campo | Tipo | Descrizione |
-| :--- | :--- | :--- |
-| `success` | `boolean` | `true` se l'agente ha prodotto una tool call valida. `false` su L3 degradation. |
-| `tool_name` | `string \| null` | Nome del tool chiamato. `null` in caso di L3 degradation. |
-| `arguments` | `dict \| null` | Argomenti del tool call (con default auto-riempiti). `null` in caso di L3 degradation. |
-| `text_response` | `string \| null` | Risposta testuale libera. Valorizzata solo su `escalation_level: "L3_DEGRADED"`. |
-| `escalation_level` | `string` | Livello di escalation raggiunto: `"NONE"` / `"L1"` / `"L2"` / `"L3_DEGRADED"`. |
-| `error_detail` | `string \| null` | Dettaglio tecnico dell'errore (es. `"MISSING_REQUIRED_PARAMS: path"`). |
-| `attempts` | `integer` | Numero totale di chiamate Ollama effettuate nel turno. |
-
-**Macchina a stati di escalation:**
-
-| Livello | Trigger | Azione |
-| :--- | :--- | :--- |
-| `NONE` | Parse JSON valido + tool call validata al primo tentativo. | Restituisce risultato direttamente. |
-| `L1` | Failure di parse o validazione al tentativo 1. | Reinvia con prompt correttivo che include l'errore specifico (es. `UNKNOWN_TOOL`, `MISSING_REQUIRED_PARAMS`). |
-| `L2` | Failure anche dopo L1. | Reinvia con few-shot examples iniettati nel prompt per guidare il formato JSON atteso. |
-| `L3_DEGRADED` | Failure anche dopo L2 (o errore di rete Ollama). | Esegue una chiamata lineare senza vincoli di tool-calling per ottenere una risposta testuale di fallback. `success=false`. |
-
-**Codici di errore HTTP:**
-
-| Codice | Causa |
-| :--- | :--- |
-| `200 OK` | Successo o degradazione L3 gestita (verificare `success` nel body). |
-| `422 Unprocessable Entity` | `use_default_registry=false` e `tools` è vuota. |
-| `500 Internal Server Error` | Errore imprevisto (Ollama non raggiungibile, eccezione non gestita). |
-
----
+> Lo stack di orchestrazione SLM duplicato (`POST /agent/orchestrate`, `slm_tool_registry`, macchina a stati di retry L1/L2/L3) è stato rimosso: era ridondante rispetto al loop agentico principale (`agent:start-task`, vedi §2.2), che è l'unico percorso di esecuzione tool realmente usato dall'app. Rimane solo l'endpoint di diagnostica log qui sotto, usato da `SlmDiagnosticsPanel.tsx`.
 
 #### `POST /agent/logs/analyze`
 
@@ -305,39 +227,14 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 | `agent:clear-all-sessions` | `workspacePath?: string` | `boolean` | Cancella tutti gli stati di sessione agente. |
 | `agent:clear-audit-log` | `none` | `boolean` | Azzera il log di audit delle azioni agente. |
 
-#### SLM Agent Studio — Canali IPC dedicati
+#### SLM Agent Studio — Canale IPC di Diagnostica
 
 | Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- | :--- |
-| `agent:slm-orchestrate` | `agentSlmOrchestrate(request)` | `SlmOrchestrationRequest` | `SlmOrchestrationResult` | Esegue un turno SLM via sidecar con macchina a stati L1/L2/L3. Esposto in preload come chiamata tipizzata. |
 | `agent:logs-analyze` | `agentLogsAnalyze(extraPaths?)` | `extraPaths?: string[]` | `SlmLogDiagnosticReport \| null` | Avvia la diagnostica anomalie sui log di sistema. Restituisce `null` se il sidecar non è raggiungibile. |
 
 **Tipi TypeScript (da `src/types/index.ts`):**
 ```typescript
-// Request verso agent:slm-orchestrate
-interface SlmOrchestrationRequest {
-  model: string
-  user_message: string
-  tools?: SlmToolDefinition[]          // Ignorato se use_default_registry=true
-  history?: SlmContextMessage[]
-  rag_context?: string | null
-  max_context_tokens?: number          // default: 4096
-  max_retries?: number                 // default: 3
-  few_shot_examples?: Record<string, Record<string, unknown>>
-  use_default_registry?: boolean       // default: false
-}
-
-// Risultato da agent:slm-orchestrate
-interface SlmOrchestrationResult {
-  success: boolean
-  tool_name: string | null
-  arguments: Record<string, unknown> | null
-  text_response: string | null
-  escalation_level: 'NONE' | 'L1' | 'L2' | 'L3_DEGRADED'
-  error_detail: string | null
-  attempts: number
-}
-
 // Report da agent:logs-analyze
 interface SlmLogDiagnosticReport {
   scanned_files: string[]
@@ -350,15 +247,20 @@ interface SlmLogDiagnosticReport {
 
 **React Hook di utilizzo:** `src/hooks/useSlmOrchestration.ts`
 ```typescript
-const { orchestrate, analyzeLogs, isOrchestrating, lastResult, lastReport } =
-  useSlmOrchestration({ defaultModel: 'qwen2.5:7b', useDefaultRegistry: true })
-
-// Esegui un turno
-const result = await orchestrate('Read /src/main.py and list all exports.')
+const { analyzeLogs, isAnalyzingLogs, lastReport } = useSlmOrchestration()
 
 // Analizza i log
 const report = await analyzeLogs()
 ```
+
+#### Plan Approval — Canali IPC dedicati
+
+| Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
+| :--- | :--- | :--- | :--- | :--- |
+| `agent:plan-generate` | `agentPlanGenerate(prompt, model, settings, pendingResidueMilestones?)` | prompt/model/settings + milestone residui opzionali | `{ planText: string; milestones: PlanMilestone[] }` | Genera un piano instradato attraverso le opzioni runtime del profilo hardware, parsato dal parser canonico `GoalDecompositionPlanner`. I milestone residui non verificati del piano precedente vengono inclusi come contesto di riconciliazione. |
+| `agent:plan-parse-text` | `agentPlanParseText(planText)` | `planText: string` | `PlanMilestone[]` | Ri-parsa testo di piano (es. modificato manualmente) con lo stesso parser canonico usato in generazione. |
+| `agent:get-plan-state` | `agentGetPlanState(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `{ planMilestones: PlanMilestone[]; status?; stepCount } \| null` | Legge lo stato dei milestone persistito dal backend (`GoalDecompositionPlanner`, unica fonte di verità) per una sessione. |
+| `agent:plan-seed` | `agentPlanSeed(sessionId, workspacePath, planMilestones, userTask?)` | `sessionId`, `workspacePath`, milestone approvati, `userTask?` | `boolean` | Inietta i milestone di un piano approvato nello stato di sessione persistito prima dell'avvio dell'esecuzione, cosicché il loop agentico li carichi come stato iniziale. |
 
 #### Matrice Completa dei 19 Strumenti Agentici Supportati
 

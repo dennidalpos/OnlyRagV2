@@ -1,6 +1,7 @@
 import { AgentStreamTransport, StreamSession } from '../infrastructure/http/agentStreamTransport'
 import { logger } from '../../diagnostics'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
+import type { ModelTier } from '../domain/agent/complexityEvaluator'
 
 export interface ModelDispatchPlan {
   primaryModel: string
@@ -104,14 +105,14 @@ export class ResilientModelDispatcher {
       deepReasoningModel?: string
       heavyEscalationModel?: string
     }
-  ): { nextModel: string; tierLabel: string } | null {
+  ): { nextModel: string; tierLabel: string; tier: ModelTier } | null {
     const { fastModel, standardModel, deepReasoningModel, heavyEscalationModel } = plan
 
-    const tierList: { model: string; label: string }[] = []
-    if (fastModel) tierList.push({ model: fastModel, label: '🟢 Fast Tier' })
-    if (standardModel) tierList.push({ model: standardModel, label: '🔵 Standard Tier' })
-    if (deepReasoningModel) tierList.push({ model: deepReasoningModel, label: '🟣 Deep Reasoning Tier' })
-    if (heavyEscalationModel) tierList.push({ model: heavyEscalationModel, label: '🔶 Heavy Tier' })
+    const tierList: { model: string; label: string; tier: ModelTier }[] = []
+    if (fastModel) tierList.push({ model: fastModel, label: '🟢 Fast Tier', tier: 'fast' })
+    if (standardModel) tierList.push({ model: standardModel, label: '🔵 Standard Tier', tier: 'standard' })
+    if (deepReasoningModel) tierList.push({ model: deepReasoningModel, label: '🟣 Deep Reasoning Tier', tier: 'deep_reasoning' })
+    if (heavyEscalationModel) tierList.push({ model: heavyEscalationModel, label: '🔶 Heavy Tier', tier: 'heavy' })
 
     const distinctTiers = tierList.filter(
       (item, index, self) => Boolean(item.model) && self.findIndex((t) => t.model === item.model) === index
@@ -122,13 +123,17 @@ export class ResilientModelDispatcher {
     const currentIndex = distinctTiers.findIndex((t) => t.model === currentModel)
     if (currentIndex === -1) {
       const candidate = distinctTiers.find((t) => t.model !== currentModel)
-      return candidate ? { nextModel: candidate.model, tierLabel: candidate.label } : null
+      return candidate ? { nextModel: candidate.model, tierLabel: candidate.label, tier: candidate.tier } : null
     }
 
     const nextIndex = (currentIndex + 1) % distinctTiers.length
     if (nextIndex === currentIndex) return null
 
-    return { nextModel: distinctTiers[nextIndex].model, tierLabel: distinctTiers[nextIndex].label }
+    return {
+      nextModel: distinctTiers[nextIndex].model,
+      tierLabel: distinctTiers[nextIndex].label,
+      tier: distinctTiers[nextIndex].tier,
+    }
   }
 
   /**

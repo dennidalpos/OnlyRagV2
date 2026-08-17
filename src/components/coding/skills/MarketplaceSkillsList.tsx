@@ -81,6 +81,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="https://raw.githubusercontent.com/.../SKILL.md"
+            aria-label={t('skills.importSkillUrlTitle')}
             className="md:col-span-2 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
           />
           <div className="flex gap-2">
@@ -89,6 +90,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
               value={customNameInput}
               onChange={(e) => setCustomNameInput(e.target.value)}
               placeholder="Name"
+              aria-label={t('skills.skillNamePlaceholder')}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
             />
             <button
@@ -105,12 +107,13 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
       {/* Hub Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative w-full sm:w-72">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('skills.searchPlaceholder')}
+            aria-label={t('skills.searchPlaceholder')}
             className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
           />
         </div>
@@ -118,6 +121,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
         <div className="flex flex-wrap gap-1.5 self-start">
           {['all', 'frontend', 'backend', 'database', 'security', 'ai-ml', 'architecture'].map((cat) => (
             <button
+              type="button"
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
@@ -139,7 +143,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
           <p className="text-xs font-semibold text-slate-300">{t('common.loading')}...</p>
         </div>
       ) : filteredSkills.length === 0 ? (
-        <div className="text-center py-10 text-slate-500 space-y-2">
+        <div className="text-center py-10 text-slate-400 space-y-2">
           <Layers className="w-8 h-8 mx-auto text-slate-600" />
           <p className="text-sm">{t('skills.noSkillsFound')}</p>
         </div>
@@ -173,7 +177,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                 </div>
 
                 <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500 font-medium">{hubItem.author}</span>
+                  <span className="text-[11px] text-slate-400 font-medium">{hubItem.author}</span>
                   <button
                     type="button"
                     onClick={() => onInstallSkill(hubItem.id)}

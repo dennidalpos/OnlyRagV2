@@ -113,31 +113,27 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(codingReq.map((v) => v.name)).toContain('{workspacePath}')
   })
 
-  it('should respect selectedFamilyOverrides in PromptCompiler', () => {
-    const settings: AppSettings = {
-      defaultModel: 'deepseek-r1:8b',
-      hardwareProfile: 'Auto',
-      ocrEngine: 'native_cuda',
-      ollamaHost: 'http://127.0.0.1:11434',
-      selectedFamilyOverrides: {
-        coding: 'qwen',
-      },
-    }
+  it('should resolve the coding prompt by complexity tier, family-agnostic (B2)', () => {
+    const compiledFast = PromptCompiler.compileCodingPrompt('fast', {
+      userTask: 'Create a component',
+      workspacePath: 'D:/test',
+      agentMode: 'AGENT',
+      stepCount: '1',
+      MAX_STEPS: '20',
+    })
+    const compiledDeep = PromptCompiler.compileCodingPrompt('deep_reasoning', {
+      userTask: 'Create a component',
+      workspacePath: 'D:/test',
+      agentMode: 'AGENT',
+      stepCount: '1',
+      MAX_STEPS: '20',
+    })
 
-    const compiled = PromptCompiler.compilePrompt(
-      'coding',
-      'deepseek-r1:8b',
-      {
-        userTask: 'Create a component',
-        workspacePath: 'D:/test',
-        agentMode: 'AGENT',
-        stepCount: '1',
-        MAX_STEPS: '20',
-      },
-      settings
-    )
-
-    expect(compiled.family).toBe('qwen')
-    expect(compiled.prompt).toContain('Qwen 2.5')
+    expect(compiledFast.tier).toBe('fast')
+    expect(compiledDeep.tier).toBe('deep_reasoning')
+    // Same model, different tier -> different prompt content (verbosity scales by tier, not family).
+    expect(compiledFast.prompt).not.toBe(compiledDeep.prompt)
+    expect(compiledFast.prompt).toContain('Create a component')
+    expect(compiledDeep.prompt).toContain('Create a component')
   })
 })

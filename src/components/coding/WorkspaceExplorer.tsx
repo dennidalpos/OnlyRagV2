@@ -78,6 +78,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           <FolderOpen className="w-4 h-4" /> Workspace Explorer
         </span>
         <button
+          type="button"
           onClick={onClose}
           aria-label={t('common.close')}
           className="p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition-colors"
@@ -92,11 +93,12 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           <HardDrive className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
           <div className="truncate min-w-0">
             <div className="font-bold text-slate-200 truncate text-[11px]">{activeProjectName}</div>
-            <div className="text-[9px] text-slate-500 font-mono truncate">{activeProjectPath || t('coding.selectFolder')}</div>
+            <div className="text-[9px] text-slate-400 font-mono truncate">{activeProjectPath || t('coding.selectFolder')}</div>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={onAddProject}
           title="Aggiungi cartella progetto"
           className="p-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800/80 text-cyan-300 rounded-lg transition-all active:scale-95 shrink-0"
@@ -108,6 +110,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
       {/* Navigation Sub-tabs */}
       <div className="flex items-center border-b border-slate-800 bg-slate-900/60 text-[11px] font-semibold">
         <button
+          type="button"
           onClick={() => setActiveTab('files')}
           className={`flex-1 py-2 text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'files'
@@ -118,6 +121,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           <FileCode2 className="w-3.5 h-3.5" /> File ({files.length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('projects')}
           className={`flex-1 py-2 text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'projects'
@@ -128,6 +132,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           <Folder className="w-3.5 h-3.5" /> Progetti ({projects.length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('history')}
           className={`flex-1 py-2 text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'history'
@@ -144,9 +149,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
         {/* Tab 1: File Tree */}
         {activeTab === 'files' && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
               <span>Struttura File</span>
               <button
+                type="button"
                 onClick={onRefreshFiles}
                 disabled={!activeProjectPath}
                 title="Aggiorna file"
@@ -157,9 +163,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             </div>
 
             {files.length === 0 ? (
-              <div className="p-4 text-center space-y-2 text-slate-500 text-xs font-sans">
+              <div className="p-4 text-center space-y-2 text-slate-400 text-xs font-sans">
                 <p>Nessun file aperto o cartella non selezionata.</p>
                 <button
+                  type="button"
                   onClick={onAddProject}
                   className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition-all"
                 >
@@ -187,9 +194,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
         {/* Tab 2: Saved Workspace Projects */}
         {activeTab === 'projects' && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
               <span>Cartelle Progetto Salvale</span>
               <button
+                type="button"
                 onClick={onAddProject}
                 title="Aggiungi nuova cartella progetto"
                 className="p-1 hover:bg-slate-800 text-cyan-400 hover:text-cyan-300 rounded transition-colors"
@@ -199,7 +207,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             </div>
 
             {projects.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-500">
+              <div className="p-4 text-center text-xs text-slate-400">
                 Nessun progetto salvato. Aggiungi la tua prima cartella di lavoro.
               </div>
             ) : (
@@ -216,13 +224,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                       }`}
                     >
                       <button
+                        type="button"
                         onClick={() => onSelectProject(proj.path)}
                         className="flex items-center gap-2 text-left truncate flex-1 min-w-0"
                       >
                         <Folder className={`w-4 h-4 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
                         <div className="truncate min-w-0">
                           <div className="font-bold truncate text-[11px]">{proj.name}</div>
-                          <div className="text-[9px] font-mono text-slate-500 truncate">{proj.path}</div>
+                          <div className="text-[9px] font-mono text-slate-400 truncate">{proj.path}</div>
                         </div>
                       </button>
 
@@ -231,9 +240,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" title="Progetto Attivo" />
                         )}
                         <button
+                          type="button"
                           onClick={() => onRemoveProject(proj.path)}
                           title="Rimuovi dalla lista dei progetti"
-                          className="p-1 hover:bg-rose-950 text-slate-500 hover:text-rose-400 rounded transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-1 hover:bg-rose-950 text-slate-400 hover:text-rose-400 rounded transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -249,9 +259,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
         {/* Tab 3: Chat Session History */}
         {activeTab === 'history' && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
               <span>Storico Chat Progetto</span>
               <button
+                type="button"
                 onClick={onCreateSession}
                 title="Crea nuova sessione di chat"
                 className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
@@ -261,7 +272,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             </div>
 
             {workspaceSessions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-500">
+              <div className="p-4 text-center text-xs text-slate-400">
                 Nessuna sessione di chat registrata per questo progetto.
               </div>
             ) : (
@@ -297,6 +308,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                             autoFocus
                           />
                           <button
+                            type="button"
                             onClick={() => {
                               onRenameSession(session.id, editingTitleText)
                               setEditingSessionId(null)
@@ -309,13 +321,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                       ) : (
                         <>
                           <button
+                            type="button"
                             onClick={() => onSwitchSession(session.id)}
                             className="flex items-center gap-2 text-left truncate flex-1 min-w-0"
                           >
-                            <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
+                            <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
                             <div className="truncate min-w-0">
                               <div className="font-semibold truncate text-[11px]">{session.title}</div>
-                              <div className="text-[9px] font-mono text-slate-500">
+                              <div className="text-[9px] font-mono text-slate-400">
                                 {new Date(session.updatedAt || session.createdAt).toLocaleDateString()} • {session.actionLogs.length} step
                               </div>
                             </div>
@@ -323,6 +336,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
 
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
+                              type="button"
                               onClick={() => {
                                 setEditingSessionId(session.id)
                                 setEditingTitleText(session.title)
@@ -334,6 +348,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                             </button>
                             {workspaceSessions.length > 1 && (
                               <button
+                                type="button"
                                 onClick={() => onDeleteSession(session.id)}
                                 title="Elimina"
                                 className="p-1 hover:text-rose-400 rounded"

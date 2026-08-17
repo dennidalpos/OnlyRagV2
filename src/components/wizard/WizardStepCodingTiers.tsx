@@ -76,7 +76,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
             onChange={(e) => onToggleComplexityRouting(e.target.checked)}
             className="rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-emerald-500/20"
           />
-          <span className={useComplexityRouting ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+          <span className={useComplexityRouting ? 'text-emerald-400 font-bold' : 'text-slate-400'}>
             {useComplexityRouting ? t('hardwareWizard.complexityRouterToggle') : t('settings.complexityRouterDisabled')}
           </span>
         </label>
@@ -246,7 +246,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
             </div>
             <div>
               <span className="font-semibold text-slate-400 text-xs">— Disabilitato (Consigliato per &lt;12GB VRAM)</span>
-              <p className="text-[11px] text-slate-500 mt-0.5">Nessun modello heavy assegnato. Il router si ferma al tier Deep.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Nessun modello heavy assegnato. Il router si ferma al tier Deep.</p>
             </div>
           </div>
 

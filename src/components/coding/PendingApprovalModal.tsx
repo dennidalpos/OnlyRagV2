@@ -104,6 +104,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
 
         <div className="flex items-center justify-end gap-3 pt-2">
           <button
+            type="button"
             onClick={onReject}
             aria-label={t('coding.rejectBtn')}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5"
@@ -111,6 +112,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
             <X className="w-4 h-4 text-slate-400" /> {t('coding.rejectBtn')}
           </button>
           <button
+            type="button"
             onClick={onApprove}
             aria-label={t('coding.approveBtn')}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 shadow-md shadow-emerald-950/50"

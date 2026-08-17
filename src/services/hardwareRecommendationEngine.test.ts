@@ -5,6 +5,7 @@ import {
   calculateTotalModelFootprintGB,
   assessModelHardwareCompatibility,
   estimateKvCacheMemoryGB,
+  estimateModelWeightGB,
   getModelFamily,
   getModelApproxSize,
   formatModelDisplayName,
@@ -12,7 +13,7 @@ import {
   findMatchingInstalledModel,
   getRecommendedOllamaEnvVars,
 } from './hardwareRecommendationEngine'
-import { DiagnosticsData } from '../types'
+import { DiagnosticsData, RunningModelDetails } from '../types'
 
 describe('hardwareRecommendationEngine Unit Tests', () => {
   const createMockDiagnostics = (
@@ -76,6 +77,85 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     // 24576 MB (24GB) -> (24 * 0.75) - 1.5 = 16.5 GB
     expect(calculateRealUsableVram(24576)).toBe(16.5)
+  })
+
+  describe('estimateModelWeightGB with real Ollama metadata (B3)', () => {
+    it('should compute weight from parameter_size + quantization_level when details are provided', () => {
+      const details: RunningModelDetails = { parameter_size: '7.6B', quantization_level: 'Q4_K_M' }
+      // 7.6B params * 0.60 bytes/param (Q4_K_M) / 1024^3 ≈ 4.25 GB
+      expect(estimateModelWeightGB('deepseek-r1:7b-qwen-distill-q4_k_m', details)).toBe(4.25)
+    })
+
+    it('should scale weight with quantization level for the same parameter count', () => {
+      const q4: RunningModelDetails = { parameter_size: '8B', quantization_level: 'Q4_K_M' }
+      const q8: RunningModelDetails = { parameter_size: '8B', quantization_level: 'Q8_0' }
+      const f16: RunningModelDetails = { parameter_size: '8B', quantization_level: 'F16' }
+
+      const q4Weight = estimateModelWeightGB('some-model:8b', q4)
+      const q8Weight = estimateModelWeightGB('some-model:8b', q8)
+      const f16Weight = estimateModelWeightGB('some-model:8b', f16)
+
+      expect(q4Weight).toBeLessThan(q8Weight)
+      expect(q8Weight).toBeLessThan(f16Weight)
+    })
+
+    it('should handle parameter_size in millions (M) correctly', () => {
+      const details: RunningModelDetails = { parameter_size: '568M', quantization_level: 'Q8_0' }
+      // 0.568B params * 1.06 bytes/param / 1024^3 ≈ 0.56 GB
+      const weight = estimateModelWeightGB('embed-model:latest', details)
+      expect(weight).toBeGreaterThan(0.4)
+      expect(weight).toBeLessThan(0.7)
+    })
+
+    it('should fall back to the static table when details are unparseable', () => {
+      const badDetails: RunningModelDetails = { parameter_size: 'unknown', quantization_level: 'Q4_K_M' }
+      const withBadDetails = estimateModelWeightGB('qwen2.5-coder:7b', badDetails)
+      const withoutDetails = estimateModelWeightGB('qwen2.5-coder:7b')
+      expect(withBadDetails).toBe(withoutDetails)
+    })
+
+    it('should fall back to the static table / regex heuristic when no details are provided at all (unchanged existing behavior)', () => {
+      expect(estimateModelWeightGB('qwen2.5-coder:7b')).toBe(4.7)
+      expect(estimateModelWeightGB('llama3.1:8b')).toBe(4.9)
+    })
+
+    it('analyzeHardwareAndRecommend should thread diagnostics.ollama.modelDetails into per-model footprintGB', () => {
+      const diagnosticsWithoutDetails = createMockDiagnostics(true, 8192, 16)
+      const withoutDetails = analyzeHardwareAndRecommend(diagnosticsWithoutDetails)
+      const allWithout = [...withoutDetails.standardTierModels, ...withoutDetails.fastTierModels, ...withoutDetails.deepReasoningTierModels]
+      const baselineRec = allWithout.find((m) => m.modelName === 'qwen2.5-coder:7b')
+      expect(baselineRec?.footprintGB).toBeDefined()
+
+      const diagnosticsWithDetails: DiagnosticsData = {
+        ...diagnosticsWithoutDetails,
+        ollama: {
+          ...diagnosticsWithoutDetails.ollama,
+          modelDetails: { 'qwen2.5-coder:7b': { parameter_size: '7.6B', quantization_level: 'F16' } },
+        },
+      }
+      const withDetails = analyzeHardwareAndRecommend(diagnosticsWithDetails)
+      const allWith = [...withDetails.standardTierModels, ...withDetails.fastTierModels, ...withDetails.deepReasoningTierModels]
+      const metadataRec = allWith.find((m) => m.modelName === 'qwen2.5-coder:7b')
+
+      // F16 (2 bytes/param) is much larger than the static table's Q4-class estimate (4.7GB).
+      expect(metadataRec?.footprintGB).toBeGreaterThan(baselineRec!.footprintGB!)
+    })
+  })
+
+  describe('ModelTier consolidation (B4)', () => {
+    it('should tag each complexity-tier recommendation group with its shared ModelTier', () => {
+      const diagnostics = createMockDiagnostics(true, 8192, 16)
+      const recs = analyzeHardwareAndRecommend(diagnostics)
+
+      expect(recs.fastTierModels.every((m) => m.tier === 'fast')).toBe(true)
+      expect(recs.standardTierModels.every((m) => m.tier === 'standard')).toBe(true)
+      expect(recs.deepReasoningTierModels.every((m) => m.tier === 'deep_reasoning')).toBe(true)
+      expect(recs.heavyEscalationTierModels.every((m) => m.tier === 'heavy')).toBe(true)
+
+      // Functional (non-complexity) groups are not part of the ModelTier vocabulary.
+      expect(recs.chatTierModels.every((m) => m.tier === undefined)).toBe(true)
+      expect(recs.visionTierModels.every((m) => m.tier === undefined)).toBe(true)
+    })
   })
 
   it('should calculate KV cache and total model footprint accurately', () => {

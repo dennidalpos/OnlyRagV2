@@ -104,10 +104,10 @@ const AnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, index }) => {
       </div>
 
       {/* File + line number */}
-      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+      <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
         <FileSearch className="w-3 h-3 shrink-0" />
         <span className="truncate" title={anomaly.log_file}>{shortFile}</span>
-        <span className="text-slate-600">:</span>
+        <span className="text-slate-400">:</span>
         <span className="text-slate-400">L{anomaly.line_number}</span>
       </div>
 
@@ -137,7 +137,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, color, icon }) => (
     <div className={`shrink-0 ${color}`}>{icon}</div>
     <div className="min-w-0">
       <div className={`text-sm font-mono font-bold ${color}`}>{value}</div>
-      <div className="text-[10px] text-slate-500 truncate">{label}</div>
+      <div className="text-[10px] text-slate-400 truncate">{label}</div>
     </div>
   </div>
 )
@@ -186,6 +186,7 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
           )}
 
           <button
+            type="button"
             id="slm-diagnostics-scan-btn"
             onClick={handleScan}
             disabled={isAnalyzingLogs}
@@ -222,13 +223,14 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
 
         {/* Empty state (no scan yet) */}
         {!isAnalyzingLogs && !lastReport && !analyzeLogsError && (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500 animate-in fade-in">
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400 animate-in fade-in">
             <ScanLine className="w-10 h-10 text-slate-700" />
             <div className="text-sm font-bold text-slate-400">Nessun report disponibile</div>
-            <div className="text-[11px] text-slate-600 text-center max-w-xs leading-relaxed">
+            <div className="text-[11px] text-slate-400 text-center max-w-xs leading-relaxed">
               Avvia una scansione per rilevare anomalie nei log di OnlyRag V2 (CUDA OOM, tool loop, JSON troncati).
             </div>
             <button
+              type="button"
               id="slm-diagnostics-empty-scan-btn"
               onClick={handleScan}
               className="mt-2 flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-700/50 hover:bg-amber-500/25 hover:border-amber-600 active:scale-95 transition-all duration-150"
@@ -360,7 +362,7 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
                   </div>
                 ))}
                 {lastReport.scanned_files.length === 0 && (
-                  <div className="text-[11px] text-slate-600 font-mono italic">Nessun file di log trovato nei percorsi scansionati.</div>
+                  <div className="text-[11px] text-slate-400 font-mono italic">Nessun file di log trovato nei percorsi scansionati.</div>
                 )}
               </div>
             </div>

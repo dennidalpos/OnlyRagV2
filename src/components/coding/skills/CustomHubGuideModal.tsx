@@ -85,6 +85,7 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Chiudi guida"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
@@ -204,6 +205,7 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
         {/* Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-all"
           >

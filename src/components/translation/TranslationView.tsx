@@ -58,6 +58,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
           />
 
           <button
+            type="button"
             onClick={tr.handleResetTranslation}
             aria-label={t('translation.newTranslation')}
             title={t('translation.newTranslation')}
@@ -68,6 +69,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
           </button>
 
           <button
+            type="button"
             onClick={() => tr.setIsPromptModalOpen(true)}
             aria-label={t('translation.systemPrompt')}
             title={t('translation.systemPrompt')}
@@ -79,6 +81,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
 
           {tr.isTranslating ? (
             <button
+              type="button"
               onClick={() => tr.handleStopTranslation()}
               aria-label={t('common.cancel')}
               title={t('common.cancel')}
@@ -89,6 +92,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => tr.handleStartTranslation()}
               disabled={!tr.selectedDoc}
               aria-label={t('translation.startTranslation')}
@@ -108,7 +112,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             <div className="flex items-center gap-2 text-xs text-slate-200">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
               <span className="font-semibold">{tr.selectedDoc?.filename || 'Documento'}</span>
-              <span className="text-slate-500">•</span>
+              <span className="text-slate-400">•</span>
               <span className="text-sky-300 font-mono">
                 Chunk {tr.currentChunkIndex}/{tr.totalChunks} ({tr.sourceLang} &rarr; {tr.targetLang})
               </span>
@@ -147,6 +151,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
               ))}
             </select>
             <button
+              type="button"
               onClick={tr.fetchDocuments}
               aria-label={t('common.refresh')}
               title={t('common.refresh')}
@@ -162,7 +167,8 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                 <button
                   type="button"
                   onClick={() => tr.setPageViewMode(tr.pageViewMode === 'page' ? 'all' : 'page')}
-                  className={`px-2 py-0.5 rounded-lg font-mono text-[11px] transition-colors ${
+                  aria-pressed={tr.pageViewMode === 'page'}
+                  className={`px-2 py-0.5 rounded-lg font-mono text-[11px] transition-colors focus-ring ${
                     tr.pageViewMode === 'page' ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -225,6 +231,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
         <div className="bg-slate-900/80 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-xs shrink-0">
           <div className="flex items-center gap-2" role="tablist" aria-label={t('translation.title')}>
             <button
+              type="button"
               role="tab"
               aria-selected={tr.viewMode === 'split'}
               onClick={() => tr.setViewMode('split')}
@@ -235,6 +242,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
               {t('translation.splitView')}
             </button>
             <button
+              type="button"
               role="tab"
               aria-selected={tr.viewMode === 'diff'}
               onClick={() => tr.setViewMode('diff')}
@@ -249,6 +257,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
           {tr.translatedMarkdown && (
             <div className="flex items-center gap-1.5 bg-slate-950 rounded-xl border border-slate-800 p-0.5 shadow-sm">
               <button
+                type="button"
                 onClick={async () => {
                   if (tr.translatedMarkdown) {
                     await navigator.clipboard.writeText(tr.translatedMarkdown)
@@ -270,6 +279,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   tr.handleExportTranslation('pdf')
                   toast.info(t('translation.exportPdf'))
@@ -282,6 +292,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                 <span>PDF</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   tr.handleExportTranslation('docx')
                   toast.info(t('translation.exportDocx'))
@@ -294,6 +305,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                 <span>DOCX</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   tr.handleExportTranslation('md')
                   toast.info(t('translation.exportMd'))
@@ -318,10 +330,10 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
 
         <div className="flex-1 overflow-hidden bg-slate-950 min-h-[300px]">
           {!tr.selectedDoc ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3 text-slate-500">
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3 text-slate-400">
               <FileText className="w-10 h-10 text-sky-500/40" />
               <div className="font-semibold text-slate-400 text-sm">{t('translation.selectDocPrompt')}</div>
-              <p className="text-xs max-w-sm text-slate-500">
+              <p className="text-xs max-w-sm text-slate-400">
                 {t('translation.subtitle')}
               </p>
             </div>

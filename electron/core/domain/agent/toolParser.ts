@@ -74,11 +74,17 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
   let jsonStr = toolCallMatch ? toolCallMatch[1].trim() : ''
 
   if (!jsonStr) {
-    // Try finding raw JSON object containing "tool" or 'tool' key
-    const toolIdx =
-      cleanText.toLowerCase().indexOf('"tool"') !== -1
-        ? cleanText.toLowerCase().indexOf('"tool"')
-        : cleanText.toLowerCase().indexOf("'tool'")
+    // Try finding raw JSON object containing "tool"/'tool' (prompt-engineered format)
+    // or "name"+"arguments" together (native tool-calling / OpenAI function-call
+    // format, e.g. Ollama /api/chat models that echo their call as
+    // {"name": ..., "arguments": ...} text instead of populating message.tool_calls).
+    // "name" alone is NOT sufficient — it's a common key in incidental JSON content
+    // (e.g. package.json's "name" field shown inside a diff block) that isn't a tool call.
+    const lowerText = cleanText.toLowerCase()
+    const hasNativeCallShape = /"name"|'name'/.test(lowerText) && /"arguments"|'arguments'/.test(lowerText)
+    const toolIdx = ['"tool"', "'tool'", ...(hasNativeCallShape ? ['"name"', "'name'"] : [])]
+      .map((key) => lowerText.indexOf(key))
+      .find((idx) => idx !== -1) ?? -1
     if (toolIdx !== -1) {
       const firstBrace = cleanText.lastIndexOf('{', toolIdx)
       const lastBrace = cleanText.lastIndexOf('}')
@@ -109,8 +115,14 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
 
   if (jsonStr) {
     const parsed = sanitizeAndParseJson(jsonStr)
-    if (parsed && typeof parsed.tool === 'string') {
-      let toolName = parsed.tool.toLowerCase().trim()
+    // Accept both the prompt-engineered "tool" key and the native / OpenAI-style
+    // "name" key (used by tool-calling-capable models that echo their function
+    // call as JSON text instead of populating the API's structured tool_calls).
+    // "name" is only trusted alongside a sibling "arguments" object — "name" alone
+    // is too common in incidental JSON (e.g. a package.json snippet) to signal a tool call.
+    const rawToolName = parsed?.tool ?? (parsed?.arguments && typeof parsed?.name === 'string' ? parsed.name : undefined)
+    if (parsed && typeof rawToolName === 'string') {
+      let toolName = rawToolName.toLowerCase().trim()
 
       if (toolName === 'readfile' || toolName === 'read' || toolName === 'view_file' || toolName === 'view_file_slice' || toolName === 'open_file' || toolName === 'cat') toolName = 'read_file'
       if (toolName === 'extract_code_symbols' || toolName === 'extract_symbols' || toolName === 'code_symbols' || toolName === 'symbols' || toolName === 'find_symbols' || toolName === 'get_symbols' || toolName === 'list_symbols') toolName = 'extract_code_symbols'
@@ -138,7 +150,7 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
 
       const rawParams: Record<string, any> = {
         ...parsed,
-        ...(parsed.parameters || parsed.args || parsed.params || {}),
+        ...(parsed.parameters || parsed.arguments || parsed.args || parsed.params || {}),
       }
       const parameters: Record<string, any> = { ...rawParams }
 

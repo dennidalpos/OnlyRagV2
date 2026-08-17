@@ -173,6 +173,7 @@ export const AppLayout: React.FC = () => {
 
             {/* Language Switcher Badge */}
             <button
+              type="button"
               onClick={toggleLanguage}
               title={t('sidebar.switchLanguage')}
               aria-label={t('sidebar.switchLanguage')}
@@ -205,6 +206,7 @@ export const AppLayout: React.FC = () => {
             }}
           >
             <button
+              type="button"
               role="tab"
               tabIndex={activeTab === 'ingestion' ? 0 : -1}
               aria-selected={activeTab === 'ingestion'}
@@ -221,6 +223,7 @@ export const AppLayout: React.FC = () => {
             </button>
 
             <button
+              type="button"
               role="tab"
               tabIndex={activeTab === 'chat' ? 0 : -1}
               aria-selected={activeTab === 'chat'}
@@ -237,6 +240,7 @@ export const AppLayout: React.FC = () => {
             </button>
 
             <button
+              type="button"
               role="tab"
               tabIndex={activeTab === 'translation' ? 0 : -1}
               aria-selected={activeTab === 'translation'}
@@ -253,6 +257,7 @@ export const AppLayout: React.FC = () => {
             </button>
 
             <button
+              type="button"
               role="tab"
               tabIndex={activeTab === 'coding' ? 0 : -1}
               aria-selected={activeTab === 'coding'}
@@ -269,6 +274,7 @@ export const AppLayout: React.FC = () => {
             </button>
 
             <button
+              type="button"
               role="tab"
               tabIndex={activeTab === 'settings' ? 0 : -1}
               aria-selected={activeTab === 'settings'}
@@ -326,6 +332,7 @@ export const AppLayout: React.FC = () => {
 
           {diagnostics?.ollama.status !== 'online' && (
             <button
+              type="button"
               onClick={async () => {
                 if (window.electronAPI?.installOrLaunchOllama) {
                   await window.electronAPI.installOrLaunchOllama()
@@ -341,6 +348,7 @@ export const AppLayout: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsWizardOpen(true)}
               aria-label={t('settings.hardwareWizard')}
               title={t('settings.hardwareWizard')}
@@ -350,6 +358,7 @@ export const AppLayout: React.FC = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setIsDiagnosticsDrawerOpen(true)}
               aria-label={t('sidebar.logsConsole')}
               className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
@@ -359,6 +368,7 @@ export const AppLayout: React.FC = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setIsAboutModalOpen(true)}
               aria-label={t('sidebar.contributionsAndInfo')}
               title={t('sidebar.contributionsAndInfo')}

@@ -110,6 +110,39 @@ export class AgentSessionStateRepository {
     }
   }
 
+  /**
+   * Seeds (or merges into existing) persisted session state with the
+   * user-approved plan milestones, so that runAgentOrchestratorLoop's
+   * restore-from-savedState path (see agentOrchestratorAppService.ts,
+   * `goalPlanner.loadMilestones(savedState.planMilestones)`) picks up the
+   * approved plan as GoalDecompositionPlanner's starting state instead of
+   * only auto-detecting a (possibly different) plan from the model's first
+   * turn. Called from the Plan Approval UI right before task execution starts.
+   */
+  public async seedPlanMilestones(
+    sessionId: string,
+    workspacePath: string | null,
+    planMilestones: PlanMilestone[],
+    userTask?: string
+  ): Promise<boolean> {
+    const existing = await this.loadSessionState(sessionId, workspacePath)
+    const state: SavedAgentSessionState = existing
+      ? { ...existing, planMilestones, updatedAt: new Date().toISOString() }
+      : {
+          sessionId,
+          workspacePath,
+          agentMode: 'agent',
+          stepCount: 0,
+          maxSteps: 50,
+          episodes: [],
+          recentFullLogs: [],
+          planMilestones,
+          userTask: userTask || '',
+          updatedAt: new Date().toISOString(),
+        }
+    return this.saveSessionState(state)
+  }
+
   public async clearSessionState(sessionId: string, workspacePath?: string | null): Promise<boolean> {
     try {
       const filePath = this.getStateFilePath(sessionId, workspacePath)

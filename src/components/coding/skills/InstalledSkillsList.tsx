@@ -54,20 +54,22 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
 
   if (skills.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500 space-y-4">
+      <div className="text-center py-12 text-slate-400 space-y-4">
         <Layers className="w-10 h-10 mx-auto text-slate-600" />
         <div>
           <p className="text-sm font-medium text-slate-300">{t('skills.noSkills')}</p>
-          <p className="text-xs text-slate-500">{t('skills.hubSubtitle')}</p>
+          <p className="text-xs text-slate-400">{t('skills.hubSubtitle')}</p>
         </div>
         <div className="flex items-center justify-center gap-3">
           <button
+            type="button"
             onClick={onOpenCreateModal}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl transition-all inline-flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5 text-cyan-400" /> {t('skills.createSkillBtn')}
           </button>
           <button
+            type="button"
             onClick={onSwitchToHub}
             className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition-all inline-flex items-center gap-1.5"
           >
@@ -82,12 +84,13 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('skills.searchPlaceholder')}
+            aria-label={t('skills.searchPlaceholder')}
             className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
           />
         </div>
@@ -101,6 +104,7 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
               { id: 'local_custom', label: 'Local' },
             ].map((f) => (
               <button
+                type="button"
                 key={f.id}
                 onClick={() => setOriginFilter(f.id as any)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
@@ -115,6 +119,7 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
           </div>
 
           <button
+            type="button"
             onClick={onOpenCreateModal}
             className="px-3 py-1.5 bg-cyan-600/20 border border-cyan-500/30 hover:bg-cyan-600/30 text-cyan-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shrink-0"
           >
@@ -125,7 +130,7 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
 
       <div className="space-y-3">
         {filteredSkills.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 text-xs">
+          <div className="text-center py-8 text-slate-400 text-xs">
             {t('common.none')}
           </div>
         ) : (
@@ -225,12 +230,13 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
             {/* Expandable Preview */}
             <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
               <button
+                type="button"
                 onClick={() => setExpandedSkillId(expandedSkillId === skill.id ? null : skill.id)}
                 className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
               >
                 {expandedSkillId === skill.id ? t('common.close') : t('common.viewDetails')}
               </button>
-              <span className="text-[10px] text-slate-500 font-mono truncate max-w-xs">{skill.filePath}</span>
+              <span className="text-[10px] text-slate-400 font-mono truncate max-w-xs">{skill.filePath}</span>
             </div>
 
             {expandedSkillId === skill.id && (

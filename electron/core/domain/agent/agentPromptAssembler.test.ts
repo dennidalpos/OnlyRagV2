@@ -30,7 +30,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 1,
       maxSteps: 50,
-      targetModel: 'qwen2.5-coder:7b',
+      complexityTier: 'standard',
       workspacePath: 'D:/project',
       toolOutputHistory: [],
       settings: defaultSettings,
@@ -48,7 +48,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 2,
       maxSteps: 50,
-      targetModel: 'qwen2.5-coder:7b',
+      complexityTier: 'standard',
       workspacePath: 'D:/project',
       activeFile: { name: 'calc.ts', path: 'D:/project/calc.ts', content: 'export function calculateTotal() {}' },
       pinnedFilesContextStr: '[EXPLICIT REFERENCED FILE: helper.ts]\n```\nconst tax = 0.22;\n```',
@@ -64,14 +64,18 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     expect(prompt).toContain('Ran command: npm test')
   })
 
-  it('should compact large prompt to fit within maxContextChars when needed', () => {
+  it('should cap the project map block per its own hardware-tiered budget, without applying a second full-prompt truncation pass', () => {
+    // AgentPromptAssembler no longer re-truncates the assembled prompt against
+    // maxContextChars — that watermark-based compaction is HeuristicContextCompactor's
+    // sole responsibility in the orchestrator loop (see agentOrchestratorAppService.ts).
+    // Here only the per-segment maxMapChars budget (4000 for maxContextChars<=16000) applies.
     const hugeMap = 'a'.repeat(25000)
     const prompt = AgentPromptAssembler.assembleTurnPrompt({
       userTask: 'Optimize database queries',
       agentMode: 'agent',
       stepCount: 3,
       maxSteps: 50,
-      targetModel: 'deepseek-r1:8b',
+      complexityTier: 'deep_reasoning',
       workspacePath: 'D:/project',
       projectContextMapStr: hugeMap,
       toolOutputHistory: [],
@@ -79,7 +83,8 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       runtimeOpts: { ...runtimeOpts, maxContextChars: 16000 },
     })
 
-    expect(prompt.length).toBeLessThanOrEqual(20000)
+    expect(prompt).not.toContain('a'.repeat(4001))
+    expect(prompt).toContain('a'.repeat(4000))
   })
 
   it('should render ∞ when maxSteps is Infinity or 0', () => {
@@ -88,7 +93,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 1,
       maxSteps: Infinity,
-      targetModel: 'qwen2.5-coder:7b',
+      complexityTier: 'standard',
       workspacePath: 'D:/project',
       toolOutputHistory: [],
       settings: defaultSettings,

@@ -2,6 +2,17 @@ import type { AppSettings } from '../../../../src/types'
 
 export type ComplexityTier = 'fast' | 'standard' | 'deep_reasoning'
 
+/**
+ * The full model-routing tier vocabulary, including the optional "heavy"
+ * escalation tier (14B+ models, only reached via circuit-breaker escalation —
+ * see resilientModelDispatcher.ts). Single source of truth for the tier
+ * concept shared across complexityEvaluator.ts (task routing),
+ * hardwareRecommendationEngine.ts (wizard model recommendations grouped by
+ * tier), and resilientModelDispatcher.ts (fallback/escalation cascade),
+ * instead of each independently hardcoding the same four tier names.
+ */
+export type ModelTier = ComplexityTier | 'heavy'
+
 export interface ComplexityRouteResult {
   tier: ComplexityTier
   tierName: string

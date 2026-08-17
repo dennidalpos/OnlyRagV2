@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PromptCompiler } from './promptCompiler'
-import { detectModelFamily, MODEL_FAMILIES } from './promptPresets'
+import { detectModelFamily } from './promptPresets'
 
 describe('PromptCompiler & Model Family Resolution Tests', () => {
   it('should detect model families accurately from model names', () => {
@@ -18,52 +18,57 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
     expect(detectModelFamily('custom-unknown-model')).toBe('generic')
   })
 
-  it('should compile specialized system prompts for each model family', () => {
-    const modelsToTest = [
-      { name: 'qwen2.5-coder:7b', expectedSnippet: 'Lead Software Architect' },
-      { name: 'deepseek-coder:6.7b', expectedSnippet: 'DeepSeek' },
-      { name: 'llama3.2:3b', expectedSnippet: 'Llama 3' },
-      { name: 'codestral:22b', expectedSnippet: 'Codestral/Mistral' },
-      { name: 'codegemma:7b', expectedSnippet: 'CodeGemma' },
-      { name: 'phi4:14b', expectedSnippet: 'Phi-4' },
-      { name: 'codellama:7b', expectedSnippet: 'CodeLlama' },
-      { name: 'command-r', expectedSnippet: 'Command R+' },
-      { name: 'yi-coder:9b', expectedSnippet: 'Yi-Coder' },
-      { name: 'starcoder2:7b', expectedSnippet: 'StarCoder2' },
-      { name: 'unknown-llm', expectedSnippet: 'expert AI Coding Agent' },
-    ]
+  it('should compile the SAME family-agnostic coding prompt for a given tier regardless of model name/family (B2)', () => {
+    const modelsToTest = ['qwen2.5-coder:7b', 'deepseek-coder:6.7b', 'llama3.2:3b', 'codestral:22b', 'unknown-llm']
 
-    for (const { name, expectedSnippet } of modelsToTest) {
-      const { prompt, family } = PromptCompiler.compilePrompt('coding', name, {
+    const prompts = modelsToTest.map((_name) =>
+      PromptCompiler.compileCodingPrompt('standard', {
         userTask: 'Build dashboard',
         workspacePath: 'D:/app',
         agentMode: 'AGENT',
         stepCount: '1',
         MAX_STEPS: '∞',
-      })
+      }).prompt
+    )
 
-      expect(prompt).toContain(expectedSnippet)
-      expect(prompt).toContain('Build dashboard')
-      expect(prompt).toContain('D:/app')
-      expect(prompt).toContain('AGENT')
-      expect(family).toBeDefined()
-    }
+    // Every model resolves to the identical standard-tier template — no per-family branching.
+    expect(new Set(prompts).size).toBe(1)
+    expect(prompts[0]).toContain('Build dashboard')
+    expect(prompts[0]).toContain('D:/app')
+    expect(prompts[0]).toContain('AGENT')
   })
 
-  it('should support custom user prompt overrides if configured in settings', () => {
+  it('should scale verbosity/guidance by complexity tier (fast < standard < deep_reasoning)', () => {
+    const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
+    const fast = PromptCompiler.compileCodingPrompt('fast', vars).prompt
+    const standard = PromptCompiler.compileCodingPrompt('standard', vars).prompt
+    const deep = PromptCompiler.compileCodingPrompt('deep_reasoning', vars).prompt
+
+    expect(fast.length).toBeLessThan(standard.length)
+    expect(standard.length).toBeLessThan(deep.length)
+    expect(deep).toContain('FEW-SHOT EXAMPLES')
+    expect(deep).toContain('DEEP REASONING')
+  })
+
+  it('should support custom user prompt overrides keyed by tier if configured in settings', () => {
     const customPrompt = 'CUSTOM OVERRIDE: {userTask} in mode {agentMode}'
-    const { prompt, isCustom } = PromptCompiler.compilePrompt(
-      'coding',
-      'qwen2.5-coder:7b',
+    const { prompt, isCustom } = PromptCompiler.compileCodingPrompt(
+      'standard',
       { userTask: 'Test task', agentMode: 'PLAN' },
       {
         customPromptOverrides: {
-          'coding:qwen': customPrompt,
+          'coding:standard': customPrompt,
         },
       } as any
     )
 
     expect(isCustom).toBe(true)
     expect(prompt).toBe('CUSTOM OVERRIDE: Test task in mode PLAN')
+  })
+
+  it('should still resolve family-based prompts (chat) unaffected by the coding tier change', () => {
+    const { prompt, family } = PromptCompiler.compilePrompt('chat', 'qwen2.5-coder:7b', {})
+    expect(family).toBe('qwen')
+    expect(prompt).toContain('Qwen 2.5')
   })
 })

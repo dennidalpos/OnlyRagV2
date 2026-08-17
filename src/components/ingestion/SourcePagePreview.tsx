@@ -74,7 +74,7 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
         {/* Content View: Raster image preview or structured layout */}
         <div className="flex-1 flex flex-col justify-start">
           {isLoading ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-3 text-slate-500 min-h-[400px]">
+            <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-3 text-slate-400 min-h-[400px]">
               <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
               <span className="text-xs text-slate-400 font-medium">Caricamento anteprima sorgente...</span>
             </div>

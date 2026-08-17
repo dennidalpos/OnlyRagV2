@@ -509,6 +509,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCloseWithSave}
               className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-xl transition-colors focus-ring cursor-pointer"
               title="Salva le impostazioni configurate ed esci dal Wizard"
@@ -516,6 +517,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               Salva & Esci
             </button>
             <button
+              type="button"
               onClick={handleCloseWithSave}
               aria-label={t('common.close')}
               className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95 cursor-pointer"
@@ -687,6 +689,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         {/* Wizard Footer Navigation */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between gap-3">
           <button
+            type="button"
             onClick={() => setStep((s) => Math.max(1, s - 1))}
             disabled={step === 1 || isPullingModels}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 disabled:opacity-40 text-slate-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 focus-ring"
@@ -697,6 +700,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           {step < 6 ? (
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleCloseWithSave}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
                 title="Salva le impostazioni configurate finora ed esci"
@@ -704,6 +708,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 <Check className="w-3.5 h-3.5 text-emerald-400" /> Salva ed Esci
               </button>
               <button
+                type="button"
                 onClick={() => setStep((s) => Math.min(6, s + 1))}
                 className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-md shadow-cyan-950/40 active:scale-95"
               >
@@ -714,6 +719,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <div className="flex items-center gap-2">
               {missingModels.length > 0 && !isPullingModels && (
                 <button
+                  type="button"
                   onClick={handleFinalSave}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-medium rounded-xl transition-all focus-ring"
                   title="Save configuration and skip download"
@@ -722,6 +728,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => handleStartBulkPull()}
                 disabled={
                   !isAllSlotsPopulated ||

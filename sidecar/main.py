@@ -20,14 +20,9 @@ from sidecar.config import ALLOWED_ORIGINS, EXPORT_DIR, logger
 from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult,
     ExportRequest, InspectImageRequest, UpdateDocumentRequest, PagePreviewResponse,
-    AgentOrchestrateRequest, AgentOrchestrateResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
 )
-from sidecar.services.agent_orchestration_service import AgentOrchestrationService, OllamaAdapter
-from sidecar.domain.slm_agent import ToolDefinition, ContextMessage
 from sidecar.domain.log_analyzer import LogAnalyzer
-
-_agent_service = AgentOrchestrationService(ollama=OllamaAdapter())
 from sidecar.infrastructure.db import lance_db, get_existing_tables
 from sidecar.infrastructure.ocr import run_vision_ocr, run_layout_ocr, detect_gpu_acceleration
 from sidecar.domain.exporter import export_markdown_to_file
@@ -209,86 +204,6 @@ async def cleanup_sidecar_temp():
 # ---------------------------------------------------------------------------
 # Agent Studio Endpoints
 # ---------------------------------------------------------------------------
-
-@app.post("/agent/orchestrate", response_model=AgentOrchestrateResponse)
-async def agent_orchestrate(req: AgentOrchestrateRequest):
-    """
-    Execute one SLM agent turn with 3-level stratified retry escalation.
-
-    When `use_default_registry=True` the endpoint ignores the client-supplied
-    `tools` list and auto-populates all 19 Agent Studio tools + few-shot examples
-    from the server-side slm_tool_registry. The client only needs to provide
-    `model` and `user_message`.
-
-    Returns tool call result or gracefully degraded text response.
-    """
-    from sidecar.domain.slm_tool_registry import (
-        get_all_tool_definitions as _get_tools,
-        get_few_shot_examples as _get_few_shots,
-    )
-    from sidecar.services.agent_orchestration_service import OrchestrationRequest
-
-    if req.use_default_registry:
-        domain_tools = _get_tools()
-        few_shot_examples = _get_few_shots()
-        logger.info(
-            "Agent orchestrate: model='%s' registry=DEFAULT (%d tools)",
-            req.model, len(domain_tools),
-        )
-    else:
-        if not req.tools:
-            raise HTTPException(
-                status_code=422,
-                detail="tools list is empty and use_default_registry is False. "
-                       "Provide at least one tool or set use_default_registry=true.",
-            )
-        domain_tools = [
-            ToolDefinition(
-                name=t.name,
-                description=t.description,
-                parameters=t.parameters,
-                required=t.required,
-                defaults=t.defaults,
-            )
-            for t in req.tools
-        ]
-        few_shot_examples = req.few_shot_examples
-        logger.info(
-            "Agent orchestrate: model='%s' registry=CLIENT (%d tools)",
-            req.model, len(domain_tools),
-        )
-
-    try:
-        domain_history = [
-            ContextMessage(role=m.role, content=m.content)
-            for m in req.history
-        ]
-        orch_req = OrchestrationRequest(
-            model=req.model,
-            user_message=req.user_message,
-            tools=domain_tools,
-            history=domain_history,
-            rag_context=req.rag_context,
-            max_context_tokens=req.max_context_tokens,
-            max_retries=req.max_retries,
-            few_shot_examples=few_shot_examples,
-        )
-        result = await asyncio.to_thread(_agent_service.run, orch_req)
-        return AgentOrchestrateResponse(
-            success=result.success,
-            tool_name=result.tool_name,
-            arguments=result.arguments,
-            text_response=result.text_response,
-            escalation_level=result.escalation_level,
-            error_detail=result.error_detail,
-            attempts=result.attempts,
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Agent orchestrate error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
-
 
 @app.post("/agent/logs/analyze", response_model=LogDiagnosticReportSchema)
 async def agent_logs_analyze(req: LogDiagnosticQuery):

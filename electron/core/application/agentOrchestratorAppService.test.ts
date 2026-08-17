@@ -16,6 +16,7 @@ vi.mock('./resilientModelDispatcher', () => ({
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {
     getInstalledModels: vi.fn().mockResolvedValue(['llama3.2:3b', 'qwen2.5-coder:7b', 'deepseek-r1:8b']),
+    getModelCapabilities: vi.fn().mockResolvedValue({}),
   },
 }))
 
@@ -121,6 +122,36 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.summary).toContain('Proposed tool call: write_file')
     // Workspace must not have index.ts created in plan mode
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
+  })
+
+  it('should persist a plan initialized during a PLAN-mode step before the step returns (regression: plan was lost because it was only ever persisted at the top of the NEXT step)', async () => {
+    const planWithChecklistJson =
+      '- [ ] Design database schema\n- [ ] Implement API endpoints\n\n' +
+      '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: planWithChecklistJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const sessionId = 'test-plan-persist-session'
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Plan the architecture',
+        agentMode: 'plan',
+        workspacePath: tempDir,
+      },
+      null,
+      sessionId
+    )
+
+    expect(res.success).toBe(true)
+
+    const statePath = path.join(tempDir, '.onlyrag', `.agent_state_${sessionId}.json`)
+    expect(fs.existsSync(statePath)).toBe(true)
+    const savedState = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
+    expect(savedState.planMilestones.length).toBe(2)
+    expect(savedState.planMilestones[0].title).toContain('Design database schema')
   })
 
   it('should hot-swap from plan to agent mode smoothly on consecutive turns', async () => {

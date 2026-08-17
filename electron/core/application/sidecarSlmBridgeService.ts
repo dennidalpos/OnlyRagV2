@@ -3,8 +3,7 @@
  *
  * Application Layer — Sidecar SLM Bridge Service
  *
- * Provides typed wrappers around the Python Sidecar's two SLM endpoints:
- *   POST /agent/orchestrate   → 3-level retry state machine execution
+ * Provides a typed wrapper around the Python Sidecar's SLM log diagnostics endpoint:
  *   POST /agent/logs/analyze  → Log anomaly diagnostics with disk export
  *
  * All HTTP communication uses Node.js native `http` module (no external deps)
@@ -16,11 +15,7 @@
 
 import http from 'node:http'
 import { logger } from '../../diagnostics'
-import type {
-  SlmOrchestrationRequest,
-  SlmOrchestrationResult,
-  SlmLogDiagnosticReport,
-} from '../../../src/types'
+import type { SlmLogDiagnosticReport } from '../../../src/types'
 
 const SIDECAR_BASE = 'http://127.0.0.1:8000'
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 4 })
@@ -85,43 +80,6 @@ function postJson<T>(
 // ---------------------------------------------------------------------------
 
 export class SidecarSlmBridgeService {
-  /**
-   * Execute one SLM agent turn via the Python Sidecar state machine.
-   *
-   * Sends the full OrchestrationRequest (tools, history, RAG context, model)
-   * to POST /agent/orchestrate and returns the typed result including:
-   *   - Parsed tool call (success=true)
-   *   - Level of escalation used (NONE | L1 | L2 | L3_DEGRADED)
-   *   - Degraded text response on L3 fallback (success=false)
-   */
-  async orchestrate(request: SlmOrchestrationRequest): Promise<SlmOrchestrationResult> {
-    logger.log(
-      'INFO', 'SidecarSlmBridge',
-      `SLM orchestrate: model=${request.model} tools=${request.tools?.length ?? 0} history=${request.history?.length ?? 0}`
-    )
-
-    const res = await postJson<SlmOrchestrationResult>('/agent/orchestrate', request, 120_000)
-
-    if (!res.success) {
-      logger.log('ERROR', 'SidecarSlmBridge', `Orchestrate failed: ${res.error}`)
-      return {
-        success: false,
-        tool_name: null,
-        arguments: null,
-        text_response: `[Sidecar unreachable] ${res.error}`,
-        escalation_level: 'L3_DEGRADED',
-        error_detail: res.error,
-        attempts: 0,
-      }
-    }
-
-    logger.log(
-      'INFO', 'SidecarSlmBridge',
-      `Orchestrate result: success=${res.data.success} escalation=${res.data.escalation_level} attempts=${res.data.attempts}`
-    )
-    return res.data
-  }
-
   /**
    * Trigger log diagnostics analysis on the Python Sidecar.
    *

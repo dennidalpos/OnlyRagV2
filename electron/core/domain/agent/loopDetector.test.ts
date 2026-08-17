@@ -164,4 +164,29 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     detector.reset()
     expect(detector.historyLength).toBe(0)
   })
+
+  it('should detect the Shell-Tool Confusion Loop when a tool name is repeatedly passed to run_command', () => {
+    const call: AgentToolCall = {
+      tool: 'run_command',
+      parameters: { command: 'write_file "src/App.tsx" "content"' },
+    }
+
+    const res1 = detector.recordAndCheck(call)
+    expect(res1.isLooping).toBe(false)
+
+    const res2 = detector.recordAndCheck(call)
+    expect(res2.isLooping).toBe(true)
+    expect(res2.suggestedIntervention).toContain('[CRITICAL SHELL-TOOL CONFUSION LOOP: "write_file" PASSED AS SHELL COMMAND')
+    expect(res2.suggestedIntervention).toContain('"write_file" is a STRUCTURED TOOL')
+  })
+
+  it('should not trigger the Shell-Tool Confusion Loop for legitimate run_command calls', () => {
+    const call: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run typecheck' } }
+
+    const res1 = detector.recordAndCheck(call)
+    expect(res1.isLooping).toBe(false)
+
+    const res2 = detector.recordAndCheck(call)
+    expect(res2.isLooping).toBe(false)
+  })
 })

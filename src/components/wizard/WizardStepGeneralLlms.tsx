@@ -244,7 +244,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                 <XCircle className="w-4 h-4 text-slate-400" />
                 <div>
                   <span className="text-xs font-bold block">Nessun Modello Medico Dedicato</span>
-                  <span className="text-[10px] text-slate-500">Usa il modello Chat RAG standard per le query mediche</span>
+                  <span className="text-[10px] text-slate-400">Usa il modello Chat RAG standard per le query mediche</span>
                 </div>
               </div>
               {!selectedMedical && <span className="text-[10px] font-bold text-rose-400">Predefinito</span>}
@@ -315,7 +315,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
                 <XCircle className="w-4 h-4 text-slate-400" />
                 <div>
                   <span className="text-xs font-bold block">Nessun Modello Legale Dedicato</span>
-                  <span className="text-[10px] text-slate-500">Usa il modello Chat RAG standard per le clausole e contratti</span>
+                  <span className="text-[10px] text-slate-400">Usa il modello Chat RAG standard per le clausole e contratti</span>
                 </div>
               </div>
               {!selectedLegal && <span className="text-[10px] font-bold text-amber-400">Predefinito</span>}

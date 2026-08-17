@@ -83,7 +83,7 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
               <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">{p.desc}</p>
             </div>
             <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono">
-              <span className="text-slate-500">Target:</span>
+              <span className="text-slate-400">Target:</span>
               <span className="text-cyan-300 font-semibold">{p.vram}</span>
             </div>
           </button>

@@ -165,8 +165,15 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
                   key={s.id}
                   role="option"
                   aria-selected={isSelected}
+                  tabIndex={0}
                   onClick={() => handleSelect(s.id)}
-                  className={`px-3.5 py-2.5 flex items-start justify-between gap-3 cursor-pointer transition-colors ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleSelect(s.id)
+                    }
+                  }}
+                  className={`px-3.5 py-2.5 flex items-start justify-between gap-3 cursor-pointer transition-colors focus-ring ${
                     isSelected
                       ? 'bg-cyan-950/60 text-cyan-200'
                       : 'hover:bg-slate-800/80 text-slate-300'
@@ -192,7 +199,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
                       {s.description && (
                         <p className="text-[11px] text-slate-400 line-clamp-1">{s.description}</p>
                       )}
-                      <p className="text-[10px] font-mono text-slate-500 truncate">{s.url}</p>
+                      <p className="text-[10px] font-mono text-slate-400 truncate">{s.url}</p>
                     </div>
                   </div>
 
@@ -209,7 +216,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
       {selectedSource && (
         <div className="text-[11px] text-slate-400 flex items-center justify-between pt-0.5">
           <span className="truncate mr-2">{selectedSource.description}</span>
-          <span className="font-mono text-slate-500 text-[10px] truncate max-w-xs shrink-0">{selectedSource.url}</span>
+          <span className="font-mono text-slate-400 text-[10px] truncate max-w-xs shrink-0">{selectedSource.url}</span>
         </div>
       )}
     </div>

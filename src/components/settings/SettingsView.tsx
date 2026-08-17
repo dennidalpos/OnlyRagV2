@@ -58,6 +58,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={handleOpenWizard}
             aria-label={t('settings.hardwareWizard')}
             className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95"
@@ -66,6 +67,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={onRefreshDiagnostics}
             aria-label={t('settings.hardwareScan')}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors focus-ring flex items-center gap-2 active:scale-95"
@@ -89,6 +91,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button
+              type="button"
               onClick={() => handleLanguageChange('it')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all focus-ring ${
                 language === 'it'
@@ -99,6 +102,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               🇮🇹 Italiano
             </button>
             <button
+              type="button"
               onClick={() => handleLanguageChange('en')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all focus-ring ${
                 language === 'en'
@@ -145,6 +149,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="flex items-center gap-3 shrink-0">
             <button
+              type="button"
               onClick={async () => {
                 await apiService.openLogsFolder()
               }}
@@ -225,12 +230,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {deletingModel === modelName ? (
                     <div className="flex items-center gap-1">
                       <button
+                        type="button"
                         onClick={() => { s.handleDeleteModel(modelName); setDeletingModel(null) }}
                         className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] rounded-lg transition-colors focus-ring"
                       >
                         {t('settings.confirmDelete')}
                       </button>
                       <button
+                        type="button"
                         onClick={() => setDeletingModel(null)}
                         className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded-lg transition-colors focus-ring"
                       >
@@ -239,6 +246,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </div>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => setDeletingModel(modelName)}
                       className="p-1.5 text-slate-400 hover:text-red-400 transition-colors focus-ring rounded-lg"
                       title={t('settings.deleteModel')}
@@ -251,7 +259,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">{t('settings.noModelsDetected')}</p>
+            <p className="text-xs text-slate-400">{t('settings.noModelsDetected')}</p>
           )}
         </div>
       </div>
@@ -268,6 +276,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={onOpenAboutModal}
           className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-slate-200 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-2 shrink-0 active:scale-95 shadow-sm"
         >

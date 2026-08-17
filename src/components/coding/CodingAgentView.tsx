@@ -19,6 +19,7 @@ import {
   PanelLeft,
   Activity,
   FileText,
+  ScanLine,
 } from 'lucide-react'
 import { AppSettings, WorkspaceFile, DiagnosticsData } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -27,6 +28,7 @@ import { AgentActionLogPanel } from './AgentActionLogPanel'
 import { GitDiffPanel } from './GitDiffPanel'
 import { CodingTerminal } from './CodingTerminal'
 import { ActivitiesPanel } from './ActivitiesPanel'
+import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { PlanPanel } from './PlanPanel'
 import { useCodingAgent } from '../../hooks/useCodingAgent'
 import { usePlanApproval, AgentPlan } from '../../hooks/usePlanApproval'
@@ -52,6 +54,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const planApproval = usePlanApproval({
     settings,
     activeSessionId: c.activeSessionId,
+    workspacePath: c.workspacePath,
     onPlanApproved: (_approvedPlan) => {
       c.handleAgentExecute()
     },
@@ -75,6 +78,16 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     }
     return settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
   }, [settings, c.agentPrompt, c.pinnedFiles.size, c.editorContent.length, diagnostics?.ollama?.models])
+
+  // True when the most recent approved plan still has non-verified milestones
+  // left over from an interrupted/finished run, i.e. residue a new plan should
+  // consolidate (see handleGeneratePlanFromPrompt / C7 reconciliation context).
+  const hasPendingUnconsolidatedMilestones = useMemo(() => {
+    if (c.isExecuting) return false
+    const plan = planApproval.currentPlan
+    if (!plan || plan.status !== 'approved' || !plan.milestones) return false
+    return plan.milestones.some((m) => m.status !== 'verified')
+  }, [c.isExecuting, planApproval.currentPlan])
 
   const isDraggingRef = useRef(false)
   const startXRef = useRef(0)
@@ -131,16 +144,18 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     return parts.length > 5 ? ['...', ...parts.slice(-4)] : parts
   }
 
-  // Wrapped execute to trigger Plan Generation first if required
-  const handleInitiateTaskExecution = async () => {
+  // Sending a prompt always executes directly. Plan drafting is a separate,
+  // explicit action (see the dedicated "Genera piano" composer icon in
+  // CodingHeader), decoupled from every-send plan generation.
+  const handleInitiateTaskExecution = () => {
     if (!c.agentPrompt.trim()) return
+    c.handleAgentExecute()
+  }
 
-    if (settings?.requirePlanApproval !== false) {
-      c.setActiveTab('plan')
-      await planApproval.generatePlan(c.agentPrompt, undefined, c.currentStep)
-    } else {
-      c.handleAgentExecute()
-    }
+  const handleGeneratePlanFromPrompt = async () => {
+    if (!c.agentPrompt.trim()) return
+    c.setActiveTab('plan')
+    await planApproval.generatePlan(c.agentPrompt, undefined, c.currentStep)
   }
 
   return (
@@ -188,6 +203,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           {/* Sub-toolbar: Workspace trigger & conversation status */}
           <div className="px-3 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs shrink-0">
             <button
+              type="button"
               onClick={() => setShowWorkspaceSidebar(!showWorkspaceSidebar)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors focus-ring ${
                 showWorkspaceSidebar
@@ -219,6 +235,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               activeSkills={c.activeSkills}
               streamingText={c.streamingText}
               onExecute={handleInitiateTaskExecution}
+              onGeneratePlan={handleGeneratePlanFromPrompt}
+              hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
               onCancel={c.handleCancelAgent}
               pinnedFiles={c.pinnedFiles}
               ingestedDocs={c.ingestedDocs}
@@ -291,17 +309,27 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                 return (
                   <div
                     key={file.path}
+                    role="tab"
+                    aria-selected={isActive}
+                    tabIndex={0}
                     onClick={() => c.handleOpenFile(file)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg font-mono text-xs cursor-pointer transition-all border-x border-slate-800 ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        c.handleOpenFile(file)
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg font-mono text-xs cursor-pointer transition-all border-x border-slate-800 focus-ring ${
                       isActive
                         ? 'bg-slate-950 border-t-2 border-t-cyan-400 text-slate-100 font-bold shadow-md'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-t-2 border-transparent'
                     }`}
                   >
-                    <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
+                    <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
                     <span className="truncate max-w-[140px]">{file.name}</span>
                     {isDirty && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={t('coding.dirtyBadge')} />}
                     <button
+                      type="button"
                       onClick={(e) => c.handleCloseFile(file, e)}
                       className="p-0.5 hover:bg-slate-800 hover:text-slate-100 text-slate-400 rounded transition-colors focus-ring"
                       title={t('common.close')}
@@ -321,6 +349,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
               {/* Utility Tabs: Plan, Activities, Terminal & Git Diff */}
               <button
+                type="button"
                 onClick={() => c.setActiveTab('plan')}
                 className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring relative ${
                   c.activeTab === 'plan'
@@ -335,6 +364,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               </button>
 
               <button
+                type="button"
                 onClick={() => c.setActiveTab('activities')}
                 className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
                   c.activeTab === 'activities'
@@ -346,6 +376,19 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               </button>
 
               <button
+                type="button"
+                onClick={() => c.setActiveTab('slm_diagnostics')}
+                className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
+                  c.activeTab === 'slm_diagnostics'
+                    ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
+                }`}
+              >
+                <ScanLine className="w-3.5 h-3.5 text-fuchsia-400" /> {t('coding.slmDiagnosticsTab')}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => c.setActiveTab('terminal')}
                 className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
                   c.activeTab === 'terminal'
@@ -357,6 +400,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   c.setActiveTab('git_diff')
                   c.fetchGitStatusAndDiff()
@@ -376,6 +420,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               {c.selectedFile && c.activeTab === 'editor' && (
                 <>
                   <button
+                    type="button"
                     onClick={() => setIsDiffMode(!isDiffMode)}
                     aria-label={t('coding.diffToggleTitle')}
                     className={`p-1.5 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1 ${
@@ -389,6 +434,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                   </button>
 
                   <button
+                    type="button"
                     onClick={c.handleSaveFile}
                     disabled={c.isSaved}
                     aria-label={t('coding.saveButton')}
@@ -407,7 +453,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               <div className="flex items-center gap-1 truncate">
                 {getBreadcrumbParts(c.selectedFile.path).map((part, idx, arr) => (
                   <React.Fragment key={idx}>
-                    <span className={idx === arr.length - 1 ? 'text-slate-200 font-semibold' : 'text-slate-500'}>
+                    <span className={idx === arr.length - 1 ? 'text-slate-200 font-semibold' : 'text-slate-400'}>
                       {part}
                     </span>
                     {idx < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-700 shrink-0" />}
@@ -416,9 +462,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               </div>
 
               <button
+                type="button"
                 onClick={handleCopyPath}
                 aria-label={t('coding.copyPath')}
-                className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
                 title={t('coding.copyPath')}
               >
                 {copiedPath ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -467,13 +514,14 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                   />
                 )
               ) : (
-                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-3 text-slate-500 font-sans">
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-3 text-slate-400 font-sans">
                   <FileCode2 className="w-10 h-10 text-cyan-500/40" />
                   <div className="text-slate-300 font-semibold text-sm">{t('coding.noFilesOpen')}</div>
                   <p className="text-xs text-slate-400 max-w-sm">
                     {t('coding.emptyLogs')}
                   </p>
                   <button
+                    type="button"
                     onClick={() => setShowWorkspaceSidebar(true)}
                     className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs transition-colors"
                   >
@@ -514,6 +562,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                 attachedDocsCount={c.attachedDocIds.size}
               />
             )}
+
+            {c.activeTab === 'slm_diagnostics' && <SlmDiagnosticsPanel />}
 
             {c.activeTab === 'terminal' && (
               <CodingTerminal

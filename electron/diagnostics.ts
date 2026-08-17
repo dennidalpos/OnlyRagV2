@@ -30,6 +30,8 @@ export interface DiagnosticsData {
     url: string
     modelsCount: number
     models: string[]
+    /** Per-model metadata from /api/tags' `details` field (parameter_size, quantization_level, ...), when available. */
+    modelDetails?: Record<string, { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }>
     error?: string
   }
   gpu: {
@@ -285,12 +287,21 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
   }
 
   const modelSet = new Set<string>()
+  const modelDetails: Record<string, { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }> = {}
 
-  // 1. Ingest models from /api/tags
+  // 1. Ingest models from /api/tags (also captures per-model `details` — parameter_size,
+  // quantization_level — used by hardwareRecommendationEngine.estimateModelWeightGB for
+  // accurate VRAM/disk footprint estimates instead of relying solely on the static table)
   if (tagsRes.status === 'fulfilled' && tagsRes.value?.models && Array.isArray(tagsRes.value.models)) {
     for (const m of tagsRes.value.models) {
       const name = m.name || m.model
-      if (name && typeof name === 'string') modelSet.add(name.trim())
+      if (name && typeof name === 'string') {
+        const trimmed = name.trim()
+        modelSet.add(trimmed)
+        if (m.details && typeof m.details === 'object') {
+          modelDetails[trimmed] = m.details
+        }
+      }
     }
   }
 
@@ -319,6 +330,7 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
     url: hostUrl,
     modelsCount: models.length,
     models,
+    modelDetails: Object.keys(modelDetails).length > 0 ? modelDetails : undefined,
   }
 }
 

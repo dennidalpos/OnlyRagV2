@@ -61,7 +61,7 @@ function saveSavedSessions(sessions: CodingSession[]) {
 
 export function useCodingAgent(settings?: AppSettings) {
   const [agentMode, setAgentMode] = useState<AgentMode>('plan')
-  const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan'>('editor')
+  const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan' | 'slm_diagnostics'>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 
   // Workspace & Projects State

@@ -1,4 +1,45 @@
-import { DiagnosticsData } from '../types'
+import { DiagnosticsData, RunningModelDetails } from '../types'
+import type { ModelTier } from './complexityRouterService'
+
+// Approximate bytes-per-parameter for common GGUF quantization levels, used to compute
+// a model's weight directly from real Ollama metadata (parameter_size, quantization_level)
+// when available — see estimateModelWeightGB.
+const QUANT_BYTES_PER_PARAM: Record<string, number> = {
+  f32: 4, fp32: 4,
+  f16: 2, fp16: 2,
+  q8_0: 1.06,
+  q6_k: 0.82,
+  q5_k_m: 0.69, q5_k_s: 0.69, q5_1: 0.69, q5_0: 0.69,
+  q4_k_m: 0.60, q4_k_s: 0.60, q4_1: 0.60, q4_0: 0.60,
+  q3_k_m: 0.43, q3_k_s: 0.43, q3_k_l: 0.43,
+  q2_k: 0.31,
+}
+
+const BYTES_PER_GIB = 1024 ** 3
+const PARAMS_PER_BILLION = 1_000_000_000
+
+/**
+ * Computes a model's weight in GB directly from Ollama-reported metadata
+ * (parameter_size e.g. "7.6B", quantization_level e.g. "Q4_K_M"), instead of
+ * the static lookup table. Returns null when the metadata is missing or unparseable.
+ */
+function estimateWeightFromMetadata(details: RunningModelDetails): number | null {
+  if (!details.parameter_size) return null
+  const paramMatch = details.parameter_size.match(/^([\d.]+)\s*([BMK])$/i)
+  if (!paramMatch) return null
+
+  const num = parseFloat(paramMatch[1])
+  if (isNaN(num) || num <= 0) return null
+
+  const unit = paramMatch[2].toUpperCase()
+  const paramCountBillions = unit === 'B' ? num : unit === 'M' ? num / 1000 : num / 1_000_000
+
+  const quantKey = (details.quantization_level || '').toLowerCase()
+  const bytesPerParam = QUANT_BYTES_PER_PARAM[quantKey] ?? 0.60 // default: assume ~Q4-class quantization
+
+  const weightGB = (paramCountBillions * PARAMS_PER_BILLION * bytesPerParam) / BYTES_PER_GIB
+  return Math.round(weightGB * 100) / 100
+}
 
 export type HardwareProfileTier = 'legacy' | 'entry' | 'midrange' | 'highend' | 'extreme'
 
@@ -9,6 +50,13 @@ export interface ModelRecommendation {
   sizeBytesApprox: string
   description: string
   isRecommended: boolean
+  /**
+   * Model-routing tier this recommendation belongs to (see ModelTier in
+   * complexityEvaluator.ts) — set for the fast/standard/deep_reasoning/heavy
+   * groups. Undefined for functional (non-complexity) groups like chat,
+   * translation, medical, legal, vision, and embedding.
+   */
+  tier?: ModelTier
   footprintGB?: number
   isHardwareCompatible?: boolean
   compatibilityStatus?: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
@@ -99,10 +147,17 @@ export function getModelFamily(modelName: string): string {
 /**
  * Returns estimated model weight in GB based on exact tag catalog or parameter heuristics.
  */
-export function estimateModelWeightGB(modelName: string): number {
+export function estimateModelWeightGB(modelName: string, details?: RunningModelDetails): number {
   if (!modelName) return 4.5
   const lower = modelName.toLowerCase().trim()
   if (lower === 'local' || lower === 'none') return 4.5
+
+  // Prefer real Ollama-reported metadata (parameter_size, quantization_level) when available.
+  // The static table below remains as a fallback for models that haven't been queried yet.
+  if (details) {
+    const fromMetadata = estimateWeightFromMetadata(details)
+    if (fromMetadata !== null && fromMetadata > 0) return fromMetadata
+  }
 
   const knownWeightsGB: Record<string, number> = {
     'all-minilm:latest': 0.12,
@@ -230,12 +285,12 @@ export function estimateModelWeightGB(modelName: string): number {
 /**
  * Returns an approximate memory/disk footprint string based on known model tags and parameter counts.
  */
-export function getModelApproxSize(modelName: string): string | undefined {
+export function getModelApproxSize(modelName: string, details?: RunningModelDetails): string | undefined {
   if (!modelName) return undefined
   const lower = modelName.toLowerCase().trim()
   if (lower === 'local' || lower === 'none') return undefined
 
-  const weightGB = estimateModelWeightGB(modelName)
+  const weightGB = estimateModelWeightGB(modelName, details)
   if (weightGB < 1.0) {
     return `${Math.round(weightGB * 1024)} MB`
   }
@@ -262,9 +317,10 @@ export function estimateKvCacheMemoryGB(contextTokens: number = 4096, isQuantize
 export function calculateTotalModelFootprintGB(
   modelName: string,
   contextTargetTokens: number = 4096,
-  isQuantizedQ8: boolean = true
+  isQuantizedQ8: boolean = true,
+  details?: RunningModelDetails
 ): number {
-  const weightGB = estimateModelWeightGB(modelName)
+  const weightGB = estimateModelWeightGB(modelName, details)
   const kvCacheGB = estimateKvCacheMemoryGB(contextTargetTokens, isQuantizedQ8)
   const cudaRuntimeOverheadGB = 0.25
   const total = weightGB + kvCacheGB + cudaRuntimeOverheadGB
@@ -278,7 +334,8 @@ export function assessModelHardwareCompatibility(
   modelName: string,
   vramTotalMB: number,
   totalRamGB: number,
-  contextTargetTokens: number = 4096
+  contextTargetTokens: number = 4096,
+  details?: RunningModelDetails
 ): {
   isCompatible: boolean
   footprintGB: number
@@ -286,7 +343,7 @@ export function assessModelHardwareCompatibility(
   compatibilityStatus: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
   warning?: string
 } {
-  const footprintGB = calculateTotalModelFootprintGB(modelName, contextTargetTokens, true)
+  const footprintGB = calculateTotalModelFootprintGB(modelName, contextTargetTokens, true, details)
   const safeVramBudgetGB = calculateRealUsableVram(vramTotalMB)
   const hasGpu = vramTotalMB > 0
 
@@ -470,17 +527,27 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     : 'No Dedicated GPU Detected (CPU Execution)'
   const ramSummary = `${systemRamGB} GB System RAM`
 
-  const enrich = (item: {
-    modelName: string
-    displayName: string
-    family: string
-    sizeBytesApprox: string
-    description: string
-    isRecommended: boolean
-  }): ModelRecommendation => {
-    const assessment = assessModelHardwareCompatibility(item.modelName, vramTotalMB, systemRamGB)
+  const enrich = (
+    item: {
+      modelName: string
+      displayName: string
+      family: string
+      sizeBytesApprox: string
+      description: string
+      isRecommended: boolean
+    },
+    tier?: ModelTier
+  ): ModelRecommendation => {
+    const assessment = assessModelHardwareCompatibility(
+      item.modelName,
+      vramTotalMB,
+      systemRamGB,
+      4096,
+      diagnostics?.ollama.modelDetails?.[item.modelName]
+    )
     return {
       ...item,
+      tier,
       footprintGB: assessment.footprintGB,
       isHardwareCompatible: assessment.isCompatible,
       compatibilityStatus: assessment.compatibilityStatus,
@@ -1118,16 +1185,16 @@ export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null)
     gpuSummary,
     ramSummary,
     safeVramBudgetGB,
-    fastTierModels: rawFastTierModels.map(enrich),
-    standardTierModels: rawStandardTierModels.map(enrich),
-    deepReasoningTierModels: rawDeepReasoningTierModels.map(enrich),
-    heavyEscalationTierModels: rawHeavyEscalationTierModels.map(enrich),
-    chatTierModels: rawChatTierModels.map(enrich),
-    translationTierModels: rawTranslationTierModels.map(enrich),
-    medicalTierModels: rawMedicalTierModels.map(enrich),
-    legalTierModels: rawLegalTierModels.map(enrich),
-    visionTierModels: rawVisionTierModels.map(enrich),
-    embeddingTierModels: rawEmbeddingTierModels.map(enrich),
+    fastTierModels: rawFastTierModels.map((item) => enrich(item, 'fast')),
+    standardTierModels: rawStandardTierModels.map((item) => enrich(item, 'standard')),
+    deepReasoningTierModels: rawDeepReasoningTierModels.map((item) => enrich(item, 'deep_reasoning')),
+    heavyEscalationTierModels: rawHeavyEscalationTierModels.map((item) => enrich(item, 'heavy')),
+    chatTierModels: rawChatTierModels.map((item) => enrich(item)),
+    translationTierModels: rawTranslationTierModels.map((item) => enrich(item)),
+    medicalTierModels: rawMedicalTierModels.map((item) => enrich(item)),
+    legalTierModels: rawLegalTierModels.map((item) => enrich(item)),
+    visionTierModels: rawVisionTierModels.map((item) => enrich(item)),
+    embeddingTierModels: rawEmbeddingTierModels.map((item) => enrich(item)),
   }
 }
 

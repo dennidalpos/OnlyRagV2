@@ -234,6 +234,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
               </span>
             )}
             <button
+              type="button"
               onClick={handleCopyReport}
               aria-label={t('diagnostics.copyReport')}
               className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
@@ -245,6 +246,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
 
             <div className="group relative flex items-center">
               <button
+                type="button"
                 onClick={handleCleanResiduals}
                 aria-label={t('diagnostics.cleanWorkspace')}
                 className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
@@ -258,6 +260,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             </div>
 
             <button
+              type="button"
               onClick={onClose}
               aria-label={t('common.close')}
               className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors focus-ring active:scale-95 cursor-pointer"
@@ -280,9 +283,10 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 <span className="font-medium text-sm text-slate-200 capitalize">{diagnostics.sidecar?.status || 'offline'}</span>
                 {diagnostics.sidecar?.status !== 'online' ? (
                   <button
+                    type="button"
                     onClick={handleRestartSidecar}
                     disabled={isRestartingSidecar}
-                    className="text-[10px] px-2 py-0.5 rounded bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition-colors"
+                    className="text-[10px] px-2 py-0.5 rounded bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3 h-3 ${isRestartingSidecar ? 'animate-spin' : ''}`} />
                     {isRestartingSidecar ? 'Starting...' : t('diagnostics.restartSidecar')}
@@ -310,7 +314,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 <span className={`w-2 h-2 rounded-full ${diagnostics.ollama.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
                 <span className="font-medium text-sm text-slate-200 capitalize">{diagnostics.ollama.status}</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 truncate font-mono">
+              <span className="text-[11px] text-slate-400 mt-1 truncate font-mono">
                 {diagnostics.ollama.modelsCount} {t('settings.ollamaSection')}
               </span>
             </div>
@@ -466,16 +470,18 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
           </label>
 
           <button
+            type="button"
             onClick={fetchLogs}
             disabled={isRefreshingLogs}
             title={t('common.refresh')}
             aria-label={t('common.refresh')}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all focus-ring active:scale-95 flex items-center gap-1"
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all focus-ring active:scale-95 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingLogs ? 'animate-spin' : ''}`} />
           </button>
 
           <button
+            type="button"
             onClick={async () => {
               await apiService.openLogsFolder()
             }}
@@ -487,6 +493,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
           </button>
 
           <button
+            type="button"
             onClick={handleClear}
             title={t('diagnostics.clearLogs')}
             aria-label={t('diagnostics.clearLogs')}
@@ -499,7 +506,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
         {/* Log Viewer Console */}
         <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-2 bg-slate-950/90" tabIndex={0} aria-label="System logs">
           {filteredLogs.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 font-sans text-xs">
+            <div className="text-center py-12 text-slate-400 font-sans text-xs">
               {t('common.none')}
             </div>
           ) : (
@@ -536,7 +543,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
 
         {/* Footer */}
         {logPath && (
-          <div className="p-2 border-t border-slate-800 bg-slate-950 text-[11px] text-slate-500 truncate text-center">
+          <div className="p-2 border-t border-slate-800 bg-slate-950 text-[11px] text-slate-400 truncate text-center">
             {t('diagnostics.logFile')}: <span className="text-slate-400 select-all font-mono">{logPath}</span>
           </div>
         )}
@@ -579,7 +586,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                         {v.value}
                       </span>
                     </div>
-                    <p className="text-slate-400 font-sans text-[10px]">{v.description} — <span className="italic text-slate-500">{v.rationale}</span></p>
+                    <p className="text-slate-400 font-sans text-[10px]">{v.description} — <span className="italic text-slate-400">{v.rationale}</span></p>
                   </div>
                 ))}
               </div>

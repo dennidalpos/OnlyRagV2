@@ -115,6 +115,11 @@ export class OllamaAppService {
     }
   }
 
+  /** Model name -> Ollama-reported capabilities (e.g. ["completion", "tools"]). */
+  getModelCapabilities(host?: string): Promise<Record<string, string[]>> {
+    return ollamaHttpClient.getModelCapabilities(host)
+  }
+
   cancelStream() {
     ollamaHttpClient.cancelStream()
   }

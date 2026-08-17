@@ -118,6 +118,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
               <span>{t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}</span>
             </div>
             <button
+              type="button"
               onClick={c.fetchDocuments}
               aria-label={t('chat.refreshList')}
               title={t('chat.refreshList')}
@@ -137,6 +138,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                 const isSelected = c.selectedDocIds.has(doc.id)
                 return (
                   <button
+                    type="button"
                     key={doc.id}
                     onClick={() => c.toggleDocSelection(doc.id)}
                     aria-pressed={isSelected}
@@ -302,6 +304,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                         <span>{msg.timestamp}</span>
                         {msg.text && (
                           <button
+                            type="button"
                             onClick={() => {
                               c.handleCopyMessage(msg.id, msg.text)
                               toast.success(t('chat.msgCopied'))

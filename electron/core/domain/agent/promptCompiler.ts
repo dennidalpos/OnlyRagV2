@@ -2,18 +2,25 @@ import {
   ModelFamily,
   FeatureModule,
   DEFAULT_FAMILY_PROMPTS,
+  DEFAULT_CODING_TIER_PROMPTS,
   detectModelFamily,
 } from './promptPresets'
+import type { ComplexityTier } from './complexityEvaluator'
 import type { AppSettings } from '../../../../src/types'
 
-export type { ModelFamily, FeatureModule }
+export type { ModelFamily, FeatureModule, ComplexityTier }
+
+type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
 
 export class PromptCompiler {
   /**
-   * Compiles and resolves system prompt template for a specific feature module and model family.
+   * Compiles and resolves the system prompt template for chat/translation/vision —
+   * modules that still vary by model family (see DEFAULT_FAMILY_PROMPTS).
+   * For the coding module, use compileCodingPrompt instead (family-agnostic,
+   * scaled by complexity tier).
    */
   static compilePrompt(
-    module: FeatureModule,
+    module: FamilyBasedModule,
     modelName: string,
     variables: Record<string, string> = {},
     settings?: AppSettings
@@ -37,15 +44,40 @@ export class PromptCompiler {
       template = DEFAULT_FAMILY_PROMPTS[module]?.[activeFamily] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
     }
 
-    let compiled = template
-    for (const [key, value] of Object.entries(variables)) {
-      const placeholder = `{${key}}`
-      compiled = compiled.replaceAll(placeholder, value !== undefined && value !== null ? String(value) : '')
+    return {
+      prompt: substituteVariables(template, variables),
+      family: activeFamily,
+      isCustom,
+    }
+  }
+
+  /**
+   * Compiles the coding-agent system prompt, family-agnostic and scaled by
+   * complexity tier (fast/standard/deep_reasoning) instead of model family —
+   * see DEFAULT_CODING_TIER_PROMPTS. Custom overrides are keyed by tier
+   * ("coding:fast", "coding:standard", "coding:deep_reasoning") the same way
+   * family-based modules key by family.
+   */
+  static compileCodingPrompt(
+    tier: ComplexityTier,
+    variables: Record<string, string> = {},
+    settings?: AppSettings
+  ): { prompt: string; tier: ComplexityTier; isCustom: boolean } {
+    const overrideKey = `coding:${tier}`
+
+    let template = ''
+    let isCustom = false
+
+    if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
+      template = settings.customPromptOverrides[overrideKey]
+      isCustom = true
+    } else {
+      template = DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard
     }
 
     return {
-      prompt: compiled,
-      family: activeFamily,
+      prompt: substituteVariables(template, variables),
+      tier,
       isCustom,
     }
   }
@@ -53,7 +85,23 @@ export class PromptCompiler {
   /**
    * Get default template for a given module and model family without variable substitution.
    */
-  static getDefaultTemplate(module: FeatureModule, family: ModelFamily): string {
+  static getDefaultTemplate(module: FamilyBasedModule, family: ModelFamily): string {
     return DEFAULT_FAMILY_PROMPTS[module]?.[family] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
   }
+
+  /**
+   * Get default coding template for a given complexity tier, without variable substitution.
+   */
+  static getDefaultCodingTemplate(tier: ComplexityTier): string {
+    return DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard
+  }
+}
+
+function substituteVariables(template: string, variables: Record<string, string>): string {
+  let compiled = template
+  for (const [key, value] of Object.entries(variables)) {
+    const placeholder = `{${key}}`
+    compiled = compiled.replaceAll(placeholder, value !== undefined && value !== null ? String(value) : '')
+  }
+  return compiled
 }

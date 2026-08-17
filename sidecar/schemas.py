@@ -50,58 +50,6 @@ class InspectImageRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Agent Orchestration Schemas
-# ---------------------------------------------------------------------------
-
-class ToolParameterSchema(BaseModel):
-    name: str
-    type: str
-    description: str
-    required: bool = True
-    default: Optional[str] = None
-
-
-class ToolDefinitionSchema(BaseModel):
-    name: str
-    description: str
-    parameters: dict
-    required: List[str] = []
-    defaults: dict = {}
-
-
-class ContextMessageSchema(BaseModel):
-    role: str   # "system" | "user" | "assistant"
-    content: str
-
-
-class AgentOrchestrateRequest(BaseModel):
-    model: str
-    user_message: str
-    tools: List[ToolDefinitionSchema] = []
-    history: List[ContextMessageSchema] = []
-    rag_context: Optional[str] = None
-    max_context_tokens: int = 4096
-    max_retries: int = 3
-    few_shot_examples: dict = {}
-    use_default_registry: bool = False
-    """
-    Se True, ignora il campo `tools` del client e usa il registro interno dei
-    19 tool di Agent Studio (slm_tool_registry). I few_shot_examples vengono
-    popolati automaticamente dal registro. Il client non deve serializzare nulla.
-    """
-
-
-class AgentOrchestrateResponse(BaseModel):
-    success: bool
-    tool_name: Optional[str] = None
-    arguments: Optional[dict] = None
-    text_response: Optional[str] = None
-    escalation_level: str               # "NONE" | "L1" | "L2" | "L3_DEGRADED"
-    error_detail: Optional[str] = None
-    attempts: int
-
-
-# ---------------------------------------------------------------------------
 # Log Diagnostics Schemas
 # ---------------------------------------------------------------------------
 

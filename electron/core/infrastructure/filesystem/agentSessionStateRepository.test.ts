@@ -119,4 +119,52 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(content).toContain('Task 2: Add middleware')
     expect(content).toContain('[STOP DIRECTIVE]')
   })
+
+  it('should seed a brand new minimal session state when none exists yet', async () => {
+    const seeded = await agentSessionStateRepository.seedPlanMilestones(
+      'plan-seed-new-session',
+      tempDir,
+      [{ id: 'm-1', title: 'Design schema', status: 'pending' }],
+      'Build the login flow'
+    )
+    expect(seeded).toBe(true)
+
+    const loaded = await agentSessionStateRepository.loadSessionState('plan-seed-new-session', tempDir)
+    expect(loaded).not.toBeNull()
+    expect(loaded?.planMilestones).toHaveLength(1)
+    expect(loaded?.planMilestones[0].title).toBe('Design schema')
+    expect(loaded?.userTask).toBe('Build the login flow')
+    expect(loaded?.stepCount).toBe(0)
+  })
+
+  it('should merge seeded milestones into an existing session state without discarding other fields', async () => {
+    const existing: SavedAgentSessionState = {
+      sessionId: 'plan-seed-existing-session',
+      workspacePath: tempDir,
+      agentMode: 'agent',
+      stepCount: 7,
+      maxSteps: 50,
+      episodes: [{ step: 1, tool: 'read_file', status: 'SUCCESS', summary: 'Read app.ts' }],
+      recentFullLogs: [],
+      planMilestones: [{ id: 'old-m1', title: 'Stale milestone', status: 'verified' }],
+      userTask: 'Original task',
+      updatedAt: new Date().toISOString(),
+    }
+    await agentSessionStateRepository.saveSessionState(existing)
+
+    const seeded = await agentSessionStateRepository.seedPlanMilestones(
+      'plan-seed-existing-session',
+      tempDir,
+      [{ id: 'm-1', title: 'New approved milestone', status: 'pending' }],
+      'Original task'
+    )
+    expect(seeded).toBe(true)
+
+    const loaded = await agentSessionStateRepository.loadSessionState('plan-seed-existing-session', tempDir)
+    expect(loaded?.planMilestones).toHaveLength(1)
+    expect(loaded?.planMilestones[0].title).toBe('New approved milestone')
+    // Other fields (step count, episodes) must survive the seed merge.
+    expect(loaded?.stepCount).toBe(7)
+    expect(loaded?.episodes).toHaveLength(1)
+  })
 })

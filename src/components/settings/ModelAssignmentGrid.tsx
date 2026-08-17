@@ -90,7 +90,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               className={
                 settings.useComplexityRouting !== false
                   ? 'text-emerald-400 font-bold'
-                  : 'text-slate-500'
+                  : 'text-slate-400'
               }
             >
               {settings.useComplexityRouting !== false
@@ -448,10 +448,11 @@ const ModelPerformanceProfiler: React.FC<{ models: string[] }> = ({ models }) =>
                     ⚡ {stats.tokensPerSec} {isEmbedModel ? 'vec/s' : 't/s'} ({stats.evalDurationMs}ms)
                   </span>
                 ) : (
-                  <span className="text-[10px] text-slate-500 block mt-0.5">Not tested</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">Not tested</span>
                 )}
               </div>
               <button
+                type="button"
                 onClick={() => handleRunBenchmark(m)}
                 disabled={stats?.isRunning}
                 aria-label={`Benchmark ${m}`}

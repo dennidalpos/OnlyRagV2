@@ -221,6 +221,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
           </div>
 
           <button
+            type="button"
             onClick={onClose}
             aria-label={t('common.close')}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus-ring"
@@ -270,12 +271,14 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={() => handleOpenExternal(repoUrl)}
                   className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 focus-ring"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> {t('about.openRepo')}
                 </button>
                 <button
+                  type="button"
                   onClick={handleCopyRepo}
                   className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors focus-ring"
                   title={t('about.copyUrl')}
@@ -322,6 +325,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               {/* Category Filter Tabs */}
               <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]" role="tablist" aria-label="Filtro categorie moduli">
                 <button
+                  type="button"
                   role="tab"
                   aria-selected={selectedCategory === 'all'}
                   onClick={() => setSelectedCategory('all')}
@@ -334,6 +338,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   Tutti
                 </button>
                 <button
+                  type="button"
                   role="tab"
                   aria-selected={selectedCategory === 'core'}
                   onClick={() => setSelectedCategory('core')}
@@ -346,6 +351,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   Core
                 </button>
                 <button
+                  type="button"
                   role="tab"
                   aria-selected={selectedCategory === 'aiAndVector'}
                   onClick={() => setSelectedCategory('aiAndVector')}
@@ -358,6 +364,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   AI &amp; DB
                 </button>
                 <button
+                  type="button"
                   role="tab"
                   aria-selected={selectedCategory === 'uiAndEditor'}
                   onClick={() => setSelectedCategory('uiAndEditor')}
@@ -370,6 +377,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   UI &amp; Monaco
                 </button>
                 <button
+                  type="button"
                   role="tab"
                   aria-selected={selectedCategory === 'skillsAndEcosystem'}
                   onClick={() => setSelectedCategory('skillsAndEcosystem')}
@@ -415,6 +423,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                       {t(`about.categories.${item.category}` as any)}
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleOpenExternal(item.url)}
                       aria-label={`Open website for ${item.name}`}
                       className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity focus-ring rounded px-1"
@@ -446,6 +455,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => handleOpenExternal(`${repoUrl}/issues`)}
                 className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 focus-ring active:scale-95 shadow-sm"
               >
@@ -461,6 +471,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             <Code2 className="w-3.5 h-3.5 text-cyan-400" /> Built with Clean Architecture &amp; 100% Local AI
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors focus-ring active:scale-95"
           >

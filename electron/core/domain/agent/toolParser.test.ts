@@ -466,6 +466,23 @@ console.log("App initialized");
     expect(resReplace?.parameters.filePath).toBe('package.json')
   })
 
+  it('should parse the OpenAI/native-tool-calling {"name","arguments"} shape (captured live from qwen2.5-coder via Ollama /api/chat with tools, which echoes the call as plain-text JSON instead of populating message.tool_calls)', () => {
+    const raw = '{"name": "read_file", "arguments": {"filePath": "app.py"}}'
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('read_file')
+    expect(result?.parameters.filePath).toBe('app.py')
+  })
+
+  it('should parse a fenced {"name","arguments"} tool call and normalize aliased tool names', () => {
+    const raw = '```json\n{"name": "writefile", "arguments": {"filePath": "src/App.tsx", "content": "export default App;"}}\n```'
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toBe('src/App.tsx')
+    expect(result?.parameters.content).toContain('export default App')
+  })
+
   it('should auto-repair run_command when parameters or command is passed as an array of strings', () => {
     const rawArrayParams = `\`\`\`json
 {

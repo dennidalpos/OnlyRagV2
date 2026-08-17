@@ -28,7 +28,7 @@ export const RenderedPagePreview: React.FC<RenderedPagePreviewProps> = ({
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-b border-slate-800/60 pb-2 text-[11px] font-mono text-slate-400">
             <span className="text-cyan-400/90 font-semibold">Pagina {pageNumber} di {totalPages}</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-500">
+            <span className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
               P.{pageNumber}
             </span>
           </div>

@@ -71,8 +71,20 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
     }
   }, [plan?.planText])
 
-  // Parse plan text into structured checklist items
+  // Prefer the backend's canonical milestones (GoalDecompositionPlanner parser,
+  // the single source of truth also used by the orchestrator loop) over local
+  // regex parsing. The local parser below only runs as a defensive fallback
+  // when canonical milestones are unavailable (e.g. IPC not ready, or a plan
+  // cached in localStorage from before this field existed).
   const parsedChecklist = useMemo<PlanChecklistItem[]>(() => {
+    if (plan?.milestones && plan.milestones.length > 0) {
+      return plan.milestones.map((m) => ({
+        id: m.id,
+        title: m.title,
+        completed: m.status === 'verified',
+      }))
+    }
+
     if (!plan?.planText) return []
 
     const lines = plan.planText.split(/\r?\n/)
@@ -143,7 +155,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
     }
 
     return items
-  }, [plan?.planText])
+  }, [plan?.planText, plan?.milestones])
 
   // Calculate items completed and active item status
   const totalItems = parsedChecklist.length
@@ -297,15 +309,15 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
             <div className="font-bold text-slate-200 text-xs">Generazione del Piano (v{planHistory.length + 1}) in corso...</div>
-            <p className="text-[11px] text-slate-500 max-w-xs">
+            <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI Agent sta analizzando il prompt per delineare la strategia di esecuzione passo-passo.
             </p>
           </div>
         ) : !plan ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-500">
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Sparkles className="w-8 h-8 text-cyan-500/30" />
             <div className="font-semibold text-slate-400 text-xs">Nessun Piano Generato</div>
-            <p className="text-[11px] text-slate-500 max-w-xs">
+            <p className="text-[11px] text-slate-400 max-w-xs">
               Invia un prompt dall'editor per generare un piano d'azione e approvarlo prima dell'esecuzione.
             </p>
           </div>
@@ -365,7 +377,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                           ) : isActive ? (
                             <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
                           ) : (
-                            <Circle className="w-4 h-4 text-slate-500 hover:text-cyan-400 transition-colors" />
+                            <Circle className="w-4 h-4 text-slate-400 hover:text-cyan-400 transition-colors" />
                           )}
                         </div>
 
@@ -399,6 +411,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
 
                   {!isEditing && plan.status === 'ready' && (
                     <button
+                      type="button"
                       onClick={() => setIsEditing(true)}
                       className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-medium rounded-lg flex items-center gap-1 transition-colors"
                     >
@@ -413,16 +426,19 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                       value={editedText}
                       onChange={(e) => setEditedText(e.target.value)}
                       rows={10}
+                      aria-label="Testo del piano"
                       className="w-full bg-slate-900 border border-cyan-500/60 rounded-xl p-3 text-xs font-mono text-slate-100 outline-none leading-relaxed resize-y"
                     />
                     <div className="flex justify-end gap-2">
                       <button
+                        type="button"
                         onClick={() => setIsEditing(false)}
                         className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold rounded-lg"
                       >
                         Annulla
                       </button>
                       <button
+                        type="button"
                         onClick={handleSaveEdit}
                         className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-lg"
                       >

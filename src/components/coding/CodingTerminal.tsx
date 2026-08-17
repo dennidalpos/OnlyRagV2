@@ -120,6 +120,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
 
         <div className="flex items-center gap-1.5 font-sans">
           <button
+            type="button"
             onClick={handleCopyLogs}
             disabled={terminalLogs.length === 0}
             aria-label={t('common.copy')}
@@ -131,6 +132,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
 
           {onClearTerminal && (
             <button
+              type="button"
               onClick={onClearTerminal}
               disabled={terminalLogs.length === 0 || isExecuting}
               aria-label={t('coding.clearTerminal')}
@@ -187,9 +189,10 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
             if (e.key === 'Enter') onRunCommand()
           }}
           placeholder={t('coding.terminalInputPlaceholder')}
-          className="flex-1 bg-[#030712] border border-slate-700 focus:border-cyan-500 rounded-xl px-3 py-1.5 text-slate-100 placeholder:text-slate-500 outline-none font-mono text-xs focus-ring"
+          className="flex-1 bg-[#030712] border border-slate-700 focus:border-cyan-500 rounded-xl px-3 py-1.5 text-slate-100 placeholder:text-slate-400 outline-none font-mono text-xs focus-ring"
         />
         <button
+          type="button"
           onClick={onRunCommand}
           disabled={isExecuting || !terminalInput.trim()}
           aria-label={t('coding.runCommand')}

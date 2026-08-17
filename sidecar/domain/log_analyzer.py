@@ -69,7 +69,7 @@ _VRAM_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r'CUDA out of memory|RuntimeError.*CUDA', re.IGNORECASE), "CUDA_OOM"),
     (re.compile(r'HTTP 504|Gateway Timeout|timed out', re.IGNORECASE), "GATEWAY_TIMEOUT"),
     (re.compile(r'"response"\s*:\s*""', re.IGNORECASE), "EMPTY_RESPONSE"),
-    (re.compile(r'VRAM|vram.*exceeded|gpu.*memory.*full', re.IGNORECASE), "VRAM_EXCEEDED"),
+    (re.compile(r'vram.{0,20}(exceeded|full)|out of vram|gpu.*memory.*full', re.IGNORECASE), "VRAM_EXCEEDED"),
     (re.compile(r'Ollama.*timeout|connect.*refused.*11434', re.IGNORECASE), "OLLAMA_TIMEOUT"),
 ]
 

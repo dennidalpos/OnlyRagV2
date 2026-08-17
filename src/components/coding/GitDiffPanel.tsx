@@ -42,6 +42,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
           <span>Git Status &amp; Working Tree Diff</span>
         </div>
         <button
+          type="button"
           onClick={onRefreshGit}
           aria-label="Aggiorna stato Git e visualizzazione diff"
           disabled={isFetchingGit}
@@ -78,7 +79,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
               )}
             </div>
             {isWorkingTreeClean ? (
-              <div className="text-slate-500 italic text-[11px] py-1">
+              <div className="text-slate-400 italic text-[11px] py-1">
                 Nessuna modifica non committata rilevata nel workspace.
               </div>
             ) : (
@@ -109,10 +110,10 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
           {/* Git Diff Content View */}
           <div className="flex-1 overflow-hidden p-3 bg-slate-950">
             {!cleanDiffText ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-500">
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-400">
                 <FileCode className="w-8 h-8 text-cyan-500/30" />
                 <div className="font-semibold text-slate-400 text-xs">Nessun Diff Attivo</div>
-                <p className="text-[11px] max-w-xs text-slate-500">
+                <p className="text-[11px] max-w-xs text-slate-400">
                   I file modificati dall'AI Coding Agent o dall'editor appariranno qui sotto forma di diff unificato.
                 </p>
               </div>

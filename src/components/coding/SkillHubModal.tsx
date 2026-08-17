@@ -249,6 +249,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label={t('common.close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
@@ -261,6 +262,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         <div className="flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/30" role="tablist" aria-label={t('skills.hubTitle')}>
           <div className="flex gap-4">
             <button
+              type="button"
               role="tab"
               aria-selected={activeTab === 'installed'}
               id="skill-tab-installed"
@@ -275,6 +277,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
               <CheckCircle className="w-3.5 h-3.5" /> {t('skills.installedTab')} ({installedSkills.length})
             </button>
             <button
+              type="button"
               role="tab"
               aria-selected={activeTab === 'hub'}
               id="skill-tab-hub"

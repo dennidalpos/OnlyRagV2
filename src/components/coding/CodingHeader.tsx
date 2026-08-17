@@ -64,6 +64,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
       <div className="flex items-center gap-2.5 text-xs">
         {/* Quick Toggle for Auto-Discovery Skill Hub */}
         <button
+          type="button"
           onClick={toggleAutoHub}
           className={`flex items-center gap-1.5 px-2 py-1 rounded-xl text-[10px] font-sans font-bold border transition-all cursor-pointer shadow-sm ${
             isAutoHubEnabled
@@ -76,7 +77,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
               : 'Auto-Discovery Skill Hub: DISATTIVATO (Clicca per attivare l auto-installazione automatica da Store)'
           }
         >
-          <Compass className={`w-3 h-3 ${isAutoHubEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
+          <Compass className={`w-3 h-3 ${isAutoHubEnabled ? 'text-emerald-400' : 'text-slate-400'}`} />
           <span>Auto-Hub: {isAutoHubEnabled ? 'ON' : 'OFF'}</span>
         </button>
 
@@ -104,18 +105,18 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         {/* Active Tools Badges */}
         {(guestOsInfo?.tools || guestOsInfo?.hasGit !== undefined) && (
           <div className="hidden sm:flex items-center gap-1 font-mono bg-slate-900/80 px-2.5 py-1 rounded-xl border border-slate-800 text-[9px] font-bold">
-            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.git ?? guestOsInfo.hasGit) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>GIT</span>
-            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.node ?? guestOsInfo.hasNode) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>NODE</span>
-            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.python ?? guestOsInfo.hasPython) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>PY</span>
-            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.ollama ?? guestOsInfo.hasOllama) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>OLLAMA</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.git ?? guestOsInfo.hasGit) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>GIT</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.node ?? guestOsInfo.hasNode) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>NODE</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.python ?? guestOsInfo.hasPython) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>PY</span>
+            <span className={`px-1.5 py-0.2 rounded ${(guestOsInfo.tools?.ollama ?? guestOsInfo.hasOllama) ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>OLLAMA</span>
             {guestOsInfo.tools?.docker !== undefined && (
-              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.docker ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>DOCKER</span>
+              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.docker ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>DOCKER</span>
             )}
             {guestOsInfo.tools?.uv !== undefined && (
-              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.uv ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>UV</span>
+              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.uv ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>UV</span>
             )}
             {guestOsInfo.tools?.bun !== undefined && (
-              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.bun ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-500'}`}>BUN</span>
+              <span className={`px-1.5 py-0.2 rounded ${guestOsInfo.tools.bun ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400'}`}>BUN</span>
             )}
           </div>
         )}

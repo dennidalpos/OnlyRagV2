@@ -23,6 +23,8 @@ export interface DiagnosticsData {
     url: string
     modelsCount: number
     models: string[]
+    /** Per-model metadata from /api/tags' `details` field (parameter_size, quantization_level, ...), when available. */
+    modelDetails?: Record<string, RunningModelDetails>
     error?: string
   }
   gpu: {
@@ -413,10 +415,40 @@ export interface IElectronAPI {
   onOllamaPullProgress?: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => () => void
   getRunningModels: (host?: string) => Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }>
   unloadModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
-  /** SLM Agent Studio: execute one orchestration turn via the Python sidecar state machine. */
-  agentSlmOrchestrate?: (request: SlmOrchestrationRequest) => Promise<SlmOrchestrationResult>
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
   agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
+  /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
+  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[]) => Promise<PlanGenerationResult>
+  /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
+  agentPlanParseText?: (planText: string) => Promise<PlanMilestone[]>
+  /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
+  agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
+  /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
+  agentPlanSeed?: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string) => Promise<boolean>
+}
+
+// ---------------------------------------------------------------------------
+// Agent Plan — Canonical Milestone Types
+// ---------------------------------------------------------------------------
+
+export interface PlanMilestone {
+  id: string
+  title: string
+  status: 'pending' | 'in_progress' | 'verified' | 'failed'
+  falsifiableHypothesis?: string
+  verificationCommand?: string
+  notes?: string
+}
+
+export interface PlanGenerationResult {
+  planText: string
+  milestones: PlanMilestone[]
+}
+
+export interface AgentPlanState {
+  planMilestones: PlanMilestone[]
+  status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  stepCount: number
 }
 
 export interface RunningModelDetails {
@@ -445,51 +477,8 @@ declare global {
 }
 
 // ---------------------------------------------------------------------------
-// SLM Agent Studio — Orchestration & Diagnostics Types
+// SLM Agent Studio — Log Diagnostics Types
 // ---------------------------------------------------------------------------
-
-export interface SlmToolDefinition {
-  name: string
-  description: string
-  parameters: Record<string, unknown>
-  required: string[]
-  defaults: Record<string, unknown>
-}
-
-export interface SlmContextMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
-
-export interface SlmOrchestrationRequest {
-  model: string
-  user_message: string
-  /** Optional when use_default_registry=true; the server populates all 19 tools automatically. */
-  tools?: SlmToolDefinition[]
-  history?: SlmContextMessage[]
-  rag_context?: string | null
-  max_context_tokens?: number
-  max_retries?: number
-  few_shot_examples?: Record<string, Record<string, unknown>>
-  /**
-   * When true, the Python sidecar ignores `tools` and auto-populates all 19
-   * Agent Studio tools + few-shot examples from the server-side registry.
-   * Set to false (default) to supply a custom tool subset from the client.
-   */
-  use_default_registry?: boolean
-}
-
-export type SlmEscalationLevel = 'NONE' | 'L1' | 'L2' | 'L3_DEGRADED'
-
-export interface SlmOrchestrationResult {
-  success: boolean
-  tool_name: string | null
-  arguments: Record<string, unknown> | null
-  text_response: string | null
-  escalation_level: SlmEscalationLevel
-  error_detail: string | null
-  attempts: number
-}
 
 export interface SlmAnomalyRecord {
   anomaly_type: string

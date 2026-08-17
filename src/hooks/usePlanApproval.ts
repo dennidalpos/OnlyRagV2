@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { AppSettings } from '../types'
+import { AppSettings, PlanMilestone } from '../types'
 import { logger } from '../lib/logger'
 
 export interface AgentPlan {
@@ -10,6 +10,8 @@ export interface AgentPlan {
   status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected'
   createdAt: string
   baseStepOffset?: number
+  /** Canonical milestones parsed by the backend's GoalDecompositionPlanner parser (single source of truth — see PlanPanel). */
+  milestones?: PlanMilestone[]
 }
 
 const PLANS_STORAGE_KEY = 'onlyrag_session_plans_v1'
@@ -59,13 +61,32 @@ export function ensureMandatoryStopDirective(planText: string): string {
   return `${planText.trim()}\n${stopDirective}`
 }
 
+/**
+ * Parses plan text into canonical milestones via the backend's
+ * GoalDecompositionPlanner parser (the same one the orchestrator loop uses),
+ * instead of re-implementing checklist/numbered-list regex parsing here.
+ * Returns undefined (not an empty array) when the IPC is unavailable, so
+ * callers can distinguish "no canonical data" from "parsed to zero items"
+ * and fall back to local heuristics accordingly.
+ */
+async function parsePlanTextToMilestones(planText: string): Promise<PlanMilestone[] | undefined> {
+  if (!window.electronAPI?.agentPlanParseText) return undefined
+  try {
+    return await window.electronAPI.agentPlanParseText(planText)
+  } catch (err: any) {
+    logger.warn('usePlanApproval', `agentPlanParseText IPC failed: ${err?.message}`)
+    return undefined
+  }
+}
+
 interface UsePlanApprovalOptions {
   settings?: AppSettings
   activeSessionId?: string
+  workspacePath?: string | null
   onPlanApproved: (plan: AgentPlan) => void
 }
 
-export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: UsePlanApprovalOptions) {
+export function usePlanApproval({ settings, activeSessionId, workspacePath, onPlanApproved }: UsePlanApprovalOptions) {
   const sessionKey = activeSessionId || 'default_session'
   const [plansBySession, setPlansBySession] = useState<Record<string, AgentPlan[]>>(() => loadSavedSessionPlans())
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
@@ -147,6 +168,12 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
       const existingHistory = plansBySession[sessionKey] || []
       const newVersion = existingHistory.length + 1
 
+      // C7: fold non-verified milestones from the most recent approved plan into
+      // the generation request as reconciliation context, so the new plan absorbs
+      // prior residual work instead of restarting from zero.
+      const lastApprovedPlan = [...existingHistory].reverse().find((p) => p.status === 'approved' && p.milestones && p.milestones.length > 0)
+      const pendingResidueMilestones = lastApprovedPlan?.milestones?.filter((m) => m.status !== 'verified')
+
       const initialPlan: AgentPlan = {
         id: planId,
         version: newVersion,
@@ -163,28 +190,17 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
 
       try {
         const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-        const systemPrompt = `Sei un AI Coding Assistant. Analizza la richiesta dell'utente e genera un Piano di Implementazione breve, strutturato e chiaro (max 4-6 punti). Usa emoji per demarcare le fasi (es. 🎯 Obiettivo, 🔍 Analisi, ✏️ Modifiche, 🧪 Verifica).`
-
-        const host = settings?.ollamaHost || 'http://127.0.0.1:11434'
         let accumulatedPlan = ''
 
-        try {
-          const response = await fetch(`${host}/api/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: modelToUse,
-              system: systemPrompt,
-              prompt: `Genera un piano d'azione sintetico per il seguente task:\n\n${prompt}`,
-              stream: false,
-            }),
-          })
-          if (response.ok) {
-            const data = await response.json()
-            accumulatedPlan = data.response?.trim() || ''
+        if (window.electronAPI?.agentPlanGenerate && settings) {
+          try {
+            const genRes = await window.electronAPI.agentPlanGenerate(prompt, modelToUse, settings, pendingResidueMilestones)
+            accumulatedPlan = genRes?.planText?.trim() || ''
+          } catch (ipcErr: any) {
+            logger.warn('usePlanApproval', `agentPlanGenerate IPC failed: ${ipcErr?.message}`)
           }
-        } catch (fetchErr: any) {
-          logger.warn('usePlanApproval', `Ollama generate fetch failed: ${fetchErr?.message}`)
+        } else {
+          logger.warn('usePlanApproval', 'agentPlanGenerate not available: ensure Electron preload is loaded and settings are set.')
         }
 
         if (!accumulatedPlan) {
@@ -194,6 +210,10 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
         // Ensure mandatory final stop directive
         accumulatedPlan = ensureMandatoryStopDirective(accumulatedPlan)
 
+        // Re-parse the FINAL text (including the appended stop directive) through the
+        // same canonical backend parser, so milestones match exactly what is displayed.
+        const milestones = await parsePlanTextToMilestones(accumulatedPlan)
+
         const finalPlan: AgentPlan = {
           id: planId,
           version: newVersion,
@@ -202,6 +222,7 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
           status: 'ready',
           createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           baseStepOffset: currentStep,
+          milestones,
         }
 
         updateCurrentSessionPlans((prev) => {
@@ -214,14 +235,16 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
       } catch (err: any) {
         logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
         const fallbackRaw = `🎯 Piano di Esecuzione (v${newVersion}) per: ${prompt}\n1. 🔍 Analisi del contesto e dei file del workspace\n2. ✏️ Esecuzione delle modifiche richieste\n3. 🧪 Verifica dei risultati`
+        const fallbackText = ensureMandatoryStopDirective(fallbackRaw)
         const fallbackPlan: AgentPlan = {
           id: planId,
           version: newVersion,
           prompt,
-          planText: ensureMandatoryStopDirective(fallbackRaw),
+          planText: fallbackText,
           status: 'ready',
           createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           baseStepOffset: currentStep,
+          milestones: await parsePlanTextToMilestones(fallbackText),
         }
         updateCurrentSessionPlans((prev) => {
           const copy = [...prev]
@@ -235,7 +258,7 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
     [sessionKey, plansBySession, settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans]
   )
 
-  const handleApprovePlan = useCallback(() => {
+  const handleApprovePlan = useCallback(async () => {
     clearPlanTimer()
     if (!currentPlan) return
     const approved: AgentPlan = { ...currentPlan, status: 'approved' }
@@ -247,8 +270,21 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
       }
       return copy
     })
+
+    // Seed the approved milestones into backend session state BEFORE execution
+    // starts, so GoalDecompositionPlanner restores them as its starting state
+    // instead of only auto-detecting a (possibly different) plan from the
+    // model's first turn (see agentSessionStateRepository.seedPlanMilestones).
+    if (activeSessionId && approved.milestones && approved.milestones.length > 0 && window.electronAPI?.agentPlanSeed) {
+      try {
+        await window.electronAPI.agentPlanSeed(activeSessionId, workspacePath ?? null, approved.milestones, approved.prompt)
+      } catch (err: any) {
+        logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${err?.message}`)
+      }
+    }
+
     onPlanApproved(approved)
-  }, [currentPlan, clearPlanTimer, onPlanApproved, updateCurrentSessionPlans])
+  }, [currentPlan, clearPlanTimer, onPlanApproved, updateCurrentSessionPlans, activeSessionId, workspacePath])
 
   const handleRejectPlan = useCallback(() => {
     clearPlanTimer()
@@ -263,14 +299,17 @@ export function usePlanApproval({ settings, activeSessionId, onPlanApproved }: U
     })
   }, [currentPlan, clearPlanTimer, updateCurrentSessionPlans])
 
-  const handleUpdatePlanText = useCallback((newText: string) => {
+  const handleUpdatePlanText = useCallback(async (newText: string) => {
     if (!currentPlan) return
     const formatted = ensureMandatoryStopDirective(newText)
+    // Re-derive canonical milestones so a manual edit doesn't leave stale
+    // milestones behind (see parsePlanTextToMilestones / C4 unified parser).
+    const milestones = await parsePlanTextToMilestones(formatted)
     updateCurrentSessionPlans((prev) => {
       const copy = [...prev]
       const idx = copy.findIndex((p) => p.id === currentPlan.id)
       if (idx >= 0) {
-        copy[idx] = { ...copy[idx], planText: formatted }
+        copy[idx] = { ...copy[idx], planText: formatted, milestones }
       }
       return copy
     })

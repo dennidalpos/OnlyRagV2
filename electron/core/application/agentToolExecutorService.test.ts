@@ -61,6 +61,39 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('should block write_file for a .json path with syntactically invalid JSON content via AST pre-commit validation', async () => {
+    const filePath = path.join(tempDir, 'package.json')
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        // Malformed key (leading space) mirrors the real EJSONPARSE case this guard prevents.
+        parameters: { filePath, content: '{\n  " browserslist": []\n' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('PRE-COMMIT AST VALIDATION ERROR')
+    expect(res.outputForHistory).toContain('JSON Syntax Error')
+    expect(res.logMessage).toContain('Write File Rejected (AST Syntax Error)')
+    expect(fs.existsSync(filePath)).toBe(false)
+  })
+
+  it('should allow write_file for a .json path with valid JSON content', async () => {
+    const filePath = path.join(tempDir, 'valid.json')
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        parameters: { filePath, content: '{"name": "onlyrag"}' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('Successfully wrote file')
+    expect(fs.existsSync(filePath)).toBe(true)
+  })
+
   it('should extract code symbols from TypeScript file', async () => {
     const filePath = path.join(tempDir, 'symbols.ts')
     const codeContent = `
@@ -173,6 +206,38 @@ async def async_handler():
 
     expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
+  })
+
+  it('should block run_command via Shell-Tool Confusion Guard when a registered tool name is passed as a shell command', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'run_command',
+        parameters: { command: 'write_file "src/App.tsx" "content"' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[TOOL_AS_SHELL_BLOCK]')
+    expect(res.outputForHistory).toContain('EXECUTION BLOCKED: "write_file" is a structured tool, not a shell executable.')
+    expect(res.logMessage).toContain('[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "write_file"')
+    expect(res.isTerminal).toBe(true)
+  })
+
+  it('should not trigger the Shell-Tool Confusion Guard for commands that do not start with a registered tool name', async () => {
+    // "git reset --hard HEAD" does not start with any registered tool name, so it must fall
+    // through the guard untouched and be handled by the command security guardrail instead.
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'run_command',
+        parameters: { command: 'git reset --hard HEAD' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).not.toContain('[TOOL_AS_SHELL_BLOCK]')
+    expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
   })
 
   it('should execute get_file_info and return correct file metadata', async () => {

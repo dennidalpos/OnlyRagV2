@@ -2,48 +2,26 @@
  * electron/core/application/sidecarSlmBridgeService.test.ts
  *
  * Integration tests for SidecarSlmBridgeService — the Application Layer
- * HTTP bridge between Electron main process and the Python sidecar SLM endpoints.
+ * HTTP bridge between Electron main process and the Python sidecar SLM endpoint.
  *
  * Tests verify the full roundtrip behaviour of:
- *   - orchestrate()  → POST /agent/orchestrate  (IPC channel: agent:slm-orchestrate)
  *   - analyzeLogs()  → POST /agent/logs/analyze (IPC channel: agent:logs-analyze)
  *
- * Strategy: spawn a lightweight Node.js HTTP server on port 8001 (non-conflicting)
- * that simulates the sidecar responses, then temporarily redirect the service
- * base URL to this mock server via module-level patching.
+ * Strategy: spawn a lightweight Node.js HTTP server on an ephemeral port
+ * that simulates the sidecar responses, then hit it with the same raw
+ * request shape the service sends.
  *
  * No real Ollama, no real Python process, no Electron IPC machinery required.
  * All network I/O uses the real Node.js http module (same as production code).
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
-import type { SlmOrchestrationRequest } from '../../../src/types'
 
 // ---------------------------------------------------------------------------
 // Minimal mock sidecar HTTP server
 // ---------------------------------------------------------------------------
-
-const MOCK_ORCHESTRATE_SUCCESS = {
-  success: true,
-  tool_name: 'read_file',
-  arguments: { path: '/src/main.py', startLine: null, endLine: null },
-  text_response: null,
-  escalation_level: 'NONE',
-  error_detail: null,
-  attempts: 1,
-}
-
-const MOCK_ORCHESTRATE_L3 = {
-  success: false,
-  tool_name: null,
-  arguments: null,
-  text_response: 'Based on the context, here is what I know about the file.',
-  escalation_level: 'L3_DEGRADED',
-  error_detail: 'All retries exhausted',
-  attempts: 3,
-}
 
 const MOCK_LOG_REPORT_CLEAN = {
   scanned_files: ['/tmp/test/sidecar.log'],
@@ -111,41 +89,9 @@ function createMockSidecar(routes: MockRoute[]): Promise<{ server: http.Server; 
 }
 
 // ---------------------------------------------------------------------------
-// Helper: invoke the bridge service methods with a patched base URL
+// Helper: invoke /agent/logs/analyze with the same raw request shape the
+// service sends (mirrors SidecarSlmBridgeService.analyzeLogs()).
 // ---------------------------------------------------------------------------
-
-/**
- * Dynamically patches SIDECAR_BASE inside the bridge service module
- * by re-importing it after vi.mock replaces the http module's request target.
- *
- * Since the service uses a module-level constant, we use a thin wrapper
- * that calls postJson directly via the re-exported internals.
- *
- * Simpler approach: use a fresh SidecarSlmBridgeService instance and
- * monkey-patch its private postJson by wrapping it with a test-local proxy.
- */
-
-async function callOrchestrate(
-  baseUrl: string,
-  request: SlmOrchestrationRequest
-): Promise<unknown> {
-  return new Promise((resolve) => {
-    const body = JSON.stringify(request)
-    const url = new URL('/agent/orchestrate', baseUrl)
-    const req = http.request(
-      { hostname: url.hostname, port: Number(url.port), path: url.pathname, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
-      (res) => {
-        let raw = ''
-        res.on('data', (c) => { raw += c })
-        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(raw) }))
-      }
-    )
-    req.on('error', (e) => resolve({ status: 0, error: e.message }))
-    req.write(body)
-    req.end()
-  })
-}
 
 async function callAnalyzeLogs(
   baseUrl: string,
@@ -175,121 +121,7 @@ async function callAnalyzeLogs(
 
 describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
 
-  // ── 1. /agent/orchestrate — success path ──────────────────────────────────
-
-  describe('POST /agent/orchestrate — success L0 (NONE escalation)', () => {
-    let server: http.Server
-    let baseUrl: string
-
-    beforeAll(async () => {
-      const mock = await createMockSidecar([
-        { method: 'POST', path: '/agent/orchestrate', status: 200, body: MOCK_ORCHESTRATE_SUCCESS },
-      ])
-      server = mock.server
-      baseUrl = mock.baseUrl
-    })
-
-    afterAll(() => { server.close() })
-
-    it('returns HTTP 200 with success=true and tool_name on valid request', async () => {
-      const request: SlmOrchestrationRequest = {
-        model: 'qwen2.5:7b',
-        user_message: 'Read /src/main.py and summarize its exports.',
-        use_default_registry: true,
-        tools: [],
-      }
-      const res = await callOrchestrate(baseUrl, request) as any
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-      expect(res.body.tool_name).toBe('read_file')
-      expect(res.body.arguments).toMatchObject({ path: '/src/main.py' })
-      expect(res.body.escalation_level).toBe('NONE')
-      expect(res.body.attempts).toBe(1)
-    })
-
-    it('response body matches SlmOrchestrationResult schema shape', async () => {
-      const request: SlmOrchestrationRequest = {
-        model: 'llama3:8b',
-        user_message: 'List /src/',
-        use_default_registry: true,
-      }
-      const res = await callOrchestrate(baseUrl, request) as any
-      expect(res.body).toHaveProperty('success')
-      expect(res.body).toHaveProperty('tool_name')
-      expect(res.body).toHaveProperty('arguments')
-      expect(res.body).toHaveProperty('text_response')
-      expect(res.body).toHaveProperty('escalation_level')
-      expect(res.body).toHaveProperty('error_detail')
-      expect(res.body).toHaveProperty('attempts')
-    })
-  })
-
-  // ── 2. /agent/orchestrate — L3 degraded path ─────────────────────────────
-
-  describe('POST /agent/orchestrate — L3_DEGRADED escalation', () => {
-    let server: http.Server
-    let baseUrl: string
-
-    beforeAll(async () => {
-      const mock = await createMockSidecar([
-        { method: 'POST', path: '/agent/orchestrate', status: 200, body: MOCK_ORCHESTRATE_L3 },
-      ])
-      server = mock.server
-      baseUrl = mock.baseUrl
-    })
-
-    afterAll(() => { server.close() })
-
-    it('returns success=false with text_response and L3_DEGRADED level', async () => {
-      const request: SlmOrchestrationRequest = {
-        model: 'qwen2.5:7b',
-        user_message: 'Complex multi-file refactor task.',
-        use_default_registry: true,
-      }
-      const res = await callOrchestrate(baseUrl, request) as any
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(false)
-      expect(res.body.tool_name).toBeNull()
-      expect(res.body.arguments).toBeNull()
-      expect(res.body.text_response).toBeTruthy()
-      expect(res.body.escalation_level).toBe('L3_DEGRADED')
-      expect(res.body.attempts).toBe(3)
-    })
-  })
-
-  // ── 3. /agent/orchestrate — empty tools without registry flag → 422 ───────
-
-  describe('POST /agent/orchestrate — 422 on empty tools without registry', () => {
-    let server: http.Server
-    let baseUrl: string
-
-    beforeAll(async () => {
-      const mock = await createMockSidecar([
-        {
-          method: 'POST', path: '/agent/orchestrate', status: 422,
-          body: { detail: 'tools list is empty and use_default_registry is False.' },
-        },
-      ])
-      server = mock.server
-      baseUrl = mock.baseUrl
-    })
-
-    afterAll(() => { server.close() })
-
-    it('returns HTTP 422 when tools is empty and use_default_registry is false', async () => {
-      const request: SlmOrchestrationRequest = {
-        model: 'qwen2.5:7b',
-        user_message: 'Test',
-        use_default_registry: false,
-        tools: [],
-      }
-      const res = await callOrchestrate(baseUrl, request) as any
-      expect(res.status).toBe(422)
-      expect(res.body.detail).toContain('use_default_registry')
-    })
-  })
-
-  // ── 4. /agent/logs/analyze — clean log (no anomalies) ───────────────────
+  // ── 1. /agent/logs/analyze — clean log (no anomalies) ───────────────────
 
   describe('POST /agent/logs/analyze — clean log report', () => {
     let server: http.Server
@@ -333,7 +165,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
   })
 
-  // ── 5. /agent/logs/analyze — critical anomalies ──────────────────────────
+  // ── 2. /agent/logs/analyze — critical anomalies ──────────────────────────
 
   describe('POST /agent/logs/analyze — critical anomalies report', () => {
     let server: http.Server
@@ -381,23 +213,11 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
   })
 
-  // ── 6. Sidecar unreachable — connection error handling ───────────────────
+  // ── 3. Sidecar unreachable — connection error handling ───────────────────
 
   describe('Sidecar unreachable — connection refused handling', () => {
     // Use a port that is certainly not listening (closed immediately after bind)
     const deadPort = 19999
-
-    it('orchestrate() returns a response (error surfaced, not thrown) when sidecar is down', async () => {
-      const request: SlmOrchestrationRequest = {
-        model: 'qwen2.5:7b',
-        user_message: 'Does not matter.',
-        use_default_registry: true,
-      }
-      const res = await callOrchestrate(`http://127.0.0.1:${deadPort}`, request) as any
-      // callOrchestrate wraps errors — status 0 means connection error surfaced cleanly
-      expect(res).toBeDefined()
-      expect(res.status === 0 || res.error).toBeTruthy()
-    })
 
     it('analyzeLogs() returns a response (error surfaced, not thrown) when sidecar is down', async () => {
       const res = await callAnalyzeLogs(`http://127.0.0.1:${deadPort}`) as any

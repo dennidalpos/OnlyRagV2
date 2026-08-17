@@ -23,9 +23,10 @@ import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer
 import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
 import { RoleBasedAgentGraphOrchestrator } from '../domain/agent/roleAgentGraph'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
-import { CycleOscillationDetectorAndReproOracle } from '../domain/agent/cycleOscillationDetector'
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import { ASTAwareStackTraceExtractor } from '../domain/agent/astStackTraceExtractor'
+import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
+import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -217,6 +218,9 @@ export async function runAgentOrchestratorLoop(
   }
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
+  // Native tool-calling capability map (see ollamaToolCallingCapability.ts). Fetched once
+  // per session; failures resolve to an empty map, which falls back to the family allow-list.
+  const modelCapabilities = await ollamaAppService.getModelCapabilities(settings.ollamaHost)
 
   const skillMatchContext = {
     userTask,
@@ -248,6 +252,8 @@ export async function runAgentOrchestratorLoop(
   const isUnlimitedSteps = settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
   const MAX_STEPS = isUnlimitedSteps ? Infinity : Math.max(10, Math.min(200, settings.maxToolCallSteps || 50))
   const maxStepsLabel = MAX_STEPS === Infinity ? '∞' : String(MAX_STEPS)
+  // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
+  const PERSIST_EVERY_N_STEPS = 5
   let stepCount = 0
   let noToolStreak = 0
   let stagnationStreak = 0
@@ -255,7 +261,6 @@ export async function runAgentOrchestratorLoop(
   let hasVerifiedBuild = false
   let hasPromptedVerification = false
   const loopDetector = new AgentActionLoopDetector(2)
-  const cycleDetector = new CycleOscillationDetectorAndReproOracle()
   const circuitBreaker = new StagnationCircuitBreaker(10, 5)
   const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
   let consecutiveTaskFailures = 0
@@ -296,16 +301,17 @@ export async function runAgentOrchestratorLoop(
   }
 
   const persistCurrentState = async () => {
-    const activePlan = goalPlanner.hasPlan() ? PlanManager.parsePlanMarkdown(goalPlanner.getPlanMarkdown()) : null
-    const compactState = activePlan ? PlanManager.getCompactState(activePlan, userTask) : {
-      objective: userTask,
-      restorePoint: 'None (Session Initialized)',
-      activeMicroTask: 'Initializing execution context...',
-      pendingMicroTasks: [userTask],
-      completedCount: 0,
-      totalCount: 1,
-      isCompleted: false,
-    }
+    const compactState = goalPlanner.hasPlan()
+      ? PlanManager.getCompactStateFromMilestones(goalPlanner.getMilestones(), userTask)
+      : {
+          objective: userTask,
+          restorePoint: 'None (Session Initialized)',
+          activeMicroTask: 'Initializing execution context...',
+          pendingMicroTasks: [userTask],
+          completedCount: 0,
+          totalCount: 1,
+          isCompleted: false,
+        }
 
     await agentSessionStateRepository.saveSessionState({
       sessionId,
@@ -336,7 +342,7 @@ export async function runAgentOrchestratorLoop(
   // Global session timeout: guarantees SESSION END is always written to the audit log.
   // Default: 45 minutes. Configurable via settings.agentSessionTimeoutMinutes (if added).
   const SESSION_TIMEOUT_MS = Math.max(5, (settings as any).agentSessionTimeoutMinutes || 45) * 60 * 1000
-  let sessionTimeoutHandle: NodeJS.Timeout | null = setTimeout(() => {
+  let sessionTimeoutHandle: NodeJS.Timeout | null = setTimeout(async () => {
     if (isSessionActive()) {
       const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
       logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
@@ -344,6 +350,7 @@ export async function runAgentOrchestratorLoop(
       session.isCancelled = true
       codingAgentLogger.logSessionEnd(sessionId, stepCount, false, timeoutSummary)
       emitDone(false, timeoutSummary)
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
     }
   }, SESSION_TIMEOUT_MS)
@@ -358,7 +365,13 @@ export async function runAgentOrchestratorLoop(
   while (stepCount < MAX_STEPS && isSessionActive()) {
     stepCount++
     emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
-    await persistCurrentState()
+    // Periodic checkpoint: persisting on every single step is unnecessary I/O churn.
+    // The first step and every Nth step get a checkpoint; mutating tool calls also
+    // trigger an immediate persist (see hasFileMutations below). All session-ending
+    // exit paths (finish/cancel/error/timeout/circuit-breaker) persist unconditionally.
+    if (stepCount === 1 || stepCount % PERSIST_EVERY_N_STEPS === 0) {
+      await persistCurrentState()
+    }
 
     const hasRecentToolFailure = episodicCompactor.failureCount > 0
     const errorCountInHistory = episodicCompactor.failureCount
@@ -423,7 +436,7 @@ export async function runAgentOrchestratorLoop(
       agentMode,
       stepCount,
       maxSteps: MAX_STEPS,
-      targetModel,
+      complexityTier: routedComplexity.tier,
       workspacePath,
       isStandaloneMode,
       activeFile: payload.activeFile,
@@ -463,6 +476,14 @@ export async function runAgentOrchestratorLoop(
       codingAgentLogger.logTurnPrompt(sessionId, stepCount, targetModel, runtimeOpts.num_ctx, turnPrompt)
     }
 
+    // Native tool-calling routing: when the primary model is detected as tool-calling
+    // capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the
+    // structured tool catalog instead of relying solely on the prompt-engineered JSON
+    // convention. toolParser.ts still parses the result either way (see
+    // agentStreamTransport.ts's serializeNativeToolCall), so downstream tool execution
+    // is unaffected by which path produced the output.
+    const targetModelToolCallingCapable = supportsNativeToolCalling(targetModel, modelCapabilities)
+
     let streamedOutput = ''
     let lastDispatchEscalated = false
     try {
@@ -478,6 +499,8 @@ export async function runAgentOrchestratorLoop(
           prompt: turnPrompt,
           keepAlive: '30m',
           ollamaEndpoint: settings.ollamaHost,
+          toolCallingCapable: targetModelToolCallingCapable,
+          toolCatalog: targetModelToolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
           onTokenChunk: (chunk) => {
             if (session.targetWindow && !session.targetWindow.isDestroyed()) {
               session.targetWindow.webContents.send('agent:stream-token', { step: stepCount, chunk })
@@ -512,6 +535,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, false, `LLM Error: ${err.message}`)
       }
       agentToolExecutorService.rollbackJournal()
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
       return { success: false, summary: `LLM Error: ${err.message}` }
     }
@@ -523,6 +547,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, false, 'Task cancelled by user.')
       }
       agentToolExecutorService.rollbackJournal()
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
       return { success: false, summary: 'Task cancelled' }
     }
@@ -595,6 +620,7 @@ export async function runAgentOrchestratorLoop(
       if (settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, summary)
       }
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
       return { success: true, summary }
     }
@@ -642,6 +668,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logToolCall(sessionId, stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, summary)
       }
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
       return { success: true, summary }
     }
@@ -682,29 +709,12 @@ export async function runAgentOrchestratorLoop(
         const stagSummary = `Pausa per stagnazione: raggiunti ${stagnationStreak} step consecutivi senza progresso.`
         emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
         emitDone(true, stagSummary)
+        await persistCurrentState()
         activeAgentSessions.delete(sessionId)
         return { success: true, summary: stagSummary }
       }
 
       loopDetector.resetTarget(loopTarget)
-      continue
-    }
-
-    const cycleCheck = cycleDetector.recordAndDetectCycle(parsedTool.tool, parsedTool.parameters)
-    if (cycleCheck.isOscillating && cycleCheck.suggestedDirective) {
-      stagnationStreak++
-      const targetStr = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url || ''
-      episodicCompactor.recordStep(
-        {
-          step: stepCount,
-          tool: parsedTool.tool,
-          target: targetStr,
-          status: 'BLOCKED',
-          summary: `Multi-Step Cycle Oscillation Trap Detected (cycle length ${cycleCheck.cycleLength})`,
-        },
-        cycleCheck.suggestedDirective
-      )
-      emitLog('info', `🔁 Cycle Oscillation Prevented: ${parsedTool.tool} (length ${cycleCheck.cycleLength})`)
       continue
     }
 
@@ -762,6 +772,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logToolCall(sessionId, stepCount, 'ask', parsedTool.parameters, parsedTool.explanation)
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, question)
       }
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
       return { success: true, summary: question }
     }
@@ -777,6 +788,7 @@ export async function runAgentOrchestratorLoop(
       if (settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Proposed tool call: ${parsedTool.tool}`)
       }
+      await persistCurrentState()
       activeAgentSessions.delete(sessionId)
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
@@ -839,6 +851,7 @@ export async function runAgentOrchestratorLoop(
         if (settings.enableCodingAgentDebugLog) {
           codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for ${parsedTool.tool}`)
         }
+        await persistCurrentState()
         activeAgentSessions.delete(sessionId)
         return { success: true, summary: `Awaiting approval for ${parsedTool.tool}` }
       }
@@ -900,6 +913,7 @@ export async function runAgentOrchestratorLoop(
         const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
         emitLog('info', cbMsg)
         emitDone(true, cbRes.suggestedAction || cbMsg)
+        await persistCurrentState()
         activeAgentSessions.delete(sessionId)
         return { success: true, summary: cbRes.suggestedAction || cbMsg }
       }
@@ -919,6 +933,10 @@ export async function runAgentOrchestratorLoop(
     if (isMutating) {
       if (!isToolFailure) {
         hasFileMutations = true
+        // Checkpoint immediately after a successful file mutation, independent of
+        // the periodic PERSIST_EVERY_N_STEPS cadence above, so a crash right after
+        // a write never loses track of what was actually changed on disk.
+        await persistCurrentState()
         if (targetParam) {
           const snap = executionGuard.captureWorkspaceSnapshot([targetParam])
           const stagCheck = executionGuard.detectStateStagnation(snap)
@@ -973,6 +991,7 @@ export async function runAgentOrchestratorLoop(
   if (settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logSessionEnd(sessionId, stepCount, true, endSummary)
   }
+  await persistCurrentState()
   activeAgentSessions.delete(sessionId)
   return { success: true, summary: endSummary }
 }

@@ -207,13 +207,14 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           />
 
           <button
+            type="button"
             onClick={() => ing.setIsPromptModalOpen(true)}
-            aria-label="Configura System Prompt"
-            title="System Prompt"
+            aria-label={t('chat.configurePrompt')}
+            title={t('chat.configurePrompt')}
             className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">System Prompt</span>
+            <span className="hidden sm:inline">{t('chat.configurePrompt')}</span>
           </button>
 
           <input
@@ -228,6 +229,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           />
 
           <button
+            type="button"
             onClick={ing.handleSelectFileNative}
             disabled={ing.isUploading}
             aria-label={ing.isUploading ? t('common.loading') : t('ingestion.uploadButton')}
@@ -291,6 +293,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
             </div>
 
             <button
+              type="button"
               onClick={ing.handleCancelIngestion}
               aria-label={t('ingestion.cancelOperation')}
               className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/50 text-rose-300 text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 focus-ring active:scale-95"
@@ -380,6 +383,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
               </span>
             </div>
             <button
+              type="button"
               onClick={ing.fetchDocuments}
               aria-label={t('common.refresh')}
               title={t('common.refresh')}
@@ -433,6 +437,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
             {ing.selectedDoc && (
               <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl p-1 shadow-inner">
                 <button
+                  type="button"
                   onClick={handlePrevPage}
                   disabled={ing.currentPage <= 1 || ing.viewMode === 'all'}
                   aria-label={t('common.back')}
@@ -464,6 +469,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 )}
 
                 <button
+                  type="button"
                   onClick={handleNextPage}
                   disabled={ing.currentPage >= totalPages || ing.viewMode === 'all'}
                   aria-label={t('common.next')}
@@ -478,6 +484,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 {/* Single Page vs Continuous Mode Toggle */}
                 <div className="flex items-center gap-1" role="group" aria-label={t('ingestion.ocrMode')}>
                   <button
+                    type="button"
                     onClick={() => ing.setViewMode('page')}
                     aria-pressed={ing.viewMode === 'page'}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
@@ -489,6 +496,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     {t('ingestion.singlePage')}
                   </button>
                   <button
+                    type="button"
                     onClick={() => ing.setViewMode('all')}
                     aria-pressed={ing.viewMode === 'all'}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
@@ -508,6 +516,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
               <div className="flex items-center gap-2">
                 {/* Dynamic Save Button */}
                 <button
+                  type="button"
                   onClick={ing.handleSaveDocument}
                   disabled={!ing.isDirty || ing.isSaving}
                   aria-label={t('ingestion.saveChanges')}
@@ -515,7 +524,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all focus-ring active:scale-95 shadow-md ${
                     ing.isDirty
                       ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-950/40 cursor-pointer'
-                      : 'bg-slate-900 border border-slate-800 text-slate-500 opacity-60 cursor-not-allowed'
+                      : 'bg-slate-900 border border-slate-800 text-slate-400 opacity-60 cursor-not-allowed'
                   }`}
                 >
                   {ing.isSaving ? (
@@ -534,6 +543,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 {/* Zoom Controls */}
                 <div className="flex items-center bg-slate-950 rounded-xl border border-slate-800 p-0.5 text-slate-300">
                   <button
+                    type="button"
                     onClick={handleZoomOut}
                     aria-label={t('translation.zoomOut')}
                     title={t('translation.zoomOut')}
@@ -542,6 +552,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    type="button"
                     onClick={handleZoomReset}
                     aria-label={t('translation.resetZoom')}
                     title={t('translation.resetZoom')}
@@ -550,6 +561,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     {ing.zoomLevel}%
                   </button>
                   <button
+                    type="button"
                     onClick={handleZoomIn}
                     aria-label={t('translation.zoomIn')}
                     title={t('translation.zoomIn')}
@@ -560,6 +572,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => ing.setSyncScroll(!ing.syncScroll)}
                   aria-pressed={ing.syncScroll}
                   aria-label={t('translation.syncScroll')}
@@ -573,6 +586,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 </button>
 
                 <button
+                  type="button"
                   onClick={async () => {
                     if (ing.markdownContent) {
                       await navigator.clipboard.writeText(ing.markdownContent)
@@ -595,6 +609,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
 
                 <div className="flex items-center gap-1 bg-slate-950 rounded-xl border border-slate-800 p-0.5 shadow-sm">
                   <button
+                    type="button"
                     onClick={() => {
                       ing.handleExportMarkdown('pdf')
                       toast.info(t('translation.exportPdf'))
@@ -607,6 +622,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     <span>PDF</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       ing.handleExportMarkdown('md')
                       toast.info(t('translation.exportMd'))

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IElectronAPI } from '../src/types'
+import type { IElectronAPI, AppSettings, PlanMilestone } from '../src/types'
 
 const api: IElectronAPI = {
   runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),
@@ -129,10 +129,19 @@ const api: IElectronAPI = {
   saveCustomSkill: (input: any, workspaceRoot?: string) => ipcRenderer.invoke('skills:save-custom', input, workspaceRoot),
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:reset-original', skillId, workspaceRoot),
   uninstallSkill: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:uninstall', skillId, workspaceRoot),
-  /** SLM Agent Studio: execute one orchestration turn through the Python sidecar state machine. */
-  agentSlmOrchestrate: (request: any) => ipcRenderer.invoke('agent:slm-orchestrate', request),
   /** SLM Agent Studio: trigger log anomaly scan; returns structured diagnostic report. */
   agentLogsAnalyze: (extraPaths?: string[]) => ipcRenderer.invoke('agent:logs-analyze', extraPaths),
+  /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
+  agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[]) =>
+    ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, pendingResidueMilestones),
+  /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
+  agentPlanParseText: (planText: string) => ipcRenderer.invoke('agent:plan-parse-text', planText),
+  /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
+  agentGetPlanState: (sessionId: string, workspacePath?: string | null) =>
+    ipcRenderer.invoke('agent:get-plan-state', sessionId, workspacePath),
+  /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
+  agentPlanSeed: (sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string) =>
+    ipcRenderer.invoke('agent:plan-seed', sessionId, workspacePath, planMilestones, userTask),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

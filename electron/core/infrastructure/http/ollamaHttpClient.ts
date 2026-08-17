@@ -63,6 +63,63 @@ export class OllamaHttpClient {
     })
   }
 
+  /**
+   * Fetches /api/tags and extracts the `capabilities` array Ollama reports
+   * per installed model (e.g. ["completion", "tools"]) — the authoritative
+   * signal for native tool-calling support (see ollamaToolCallingCapability.ts).
+   * Returns an empty map (not a rejection) on any failure, so callers fall
+   * back to the family allow-list heuristic transparently.
+   */
+  getModelCapabilities(customHost?: string): Promise<Record<string, string[]>> {
+    if (customHost) this.setBaseHost(customHost)
+    const urlOpts = this.resolveUrl('/api/tags')
+
+    return new Promise((resolve) => {
+      const req = http.request(
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'GET',
+          agent: httpAgent,
+        },
+        (res) => {
+          let data = ''
+          res.on('data', (chunk) => { data += chunk })
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              resolve({})
+              return
+            }
+            try {
+              const parsed = JSON.parse(data)
+              const map: Record<string, string[]> = {}
+              if (Array.isArray(parsed.models)) {
+                for (const m of parsed.models) {
+                  const name = m?.name || m?.model
+                  if (name && Array.isArray(m?.capabilities)) {
+                    map[name] = m.capabilities
+                  }
+                }
+              }
+              resolve(map)
+            } catch (err: any) {
+              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags capabilities: ${err.message}`)
+              resolve({})
+            }
+          })
+        }
+      )
+
+      req.on('error', () => resolve({}))
+      req.setTimeout(5000, () => {
+        req.destroy()
+        resolve({})
+      })
+      req.end()
+    })
+  }
+
   unloadModel(modelName: string, customHost?: string): Promise<{ success: boolean; error?: string }> {
     if (customHost) this.setBaseHost(customHost)
     if (!modelName || !modelName.trim()) {

@@ -58,6 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
 
             <button
+              type="button"
               onClick={this.handleReload}
               className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-md focus-ring active:scale-95"
             >

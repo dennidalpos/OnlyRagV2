@@ -39,7 +39,12 @@ try {
     $venvPyInstaller = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\pyinstaller.exe"
 
     if (-not $SkipSidecar -and (Test-Path $venvPyInstaller)) {
-        & $venvPyInstaller --noconfirm "$rootDir\sidecar.spec"
+        # --distpath must point to sidecar_dist (not PyInstaller's default ./dist), which is what
+        # package.json's electron-builder extraResources actually reads from. Without this flag,
+        # PyInstaller wrote to ./dist/sidecar, colliding with -- and getting wiped by -- the
+        # subsequent "vite build" step's emptyOutDir, so the installer silently shipped without
+        # the bundled sidecar executable despite the script reporting success.
+        & $venvPyInstaller --noconfirm --distpath "$rootDir\sidecar_dist" "$rootDir\sidecar.spec"
         if ($LASTEXITCODE -ne 0) {
             throw "[ERRORE] Compilazione PyInstaller Sidecar fallita con codice $LASTEXITCODE."
         }

@@ -196,10 +196,11 @@ function matchesKeyword(text: string, keyword: string): boolean {
 }
 
 export function findMatchingInstalledModel(target: string, available: string[]): string | null {
-  if (!available || available.length === 0) return null
+  if (!target || !available || available.length === 0) return null
   const clean = target.toLowerCase().trim()
   const cleanBase = clean.split(':')[0]
   const cleanTag = clean.includes(':') ? clean.split(':')[1] : ''
+  const cleanWithoutNamespace = clean.includes('/') ? clean.split('/')[1] : clean
 
   // 1. Exact case-insensitive match
   for (const m of available) {
@@ -211,9 +212,17 @@ export function findMatchingInstalledModel(target: string, available: string[]):
   for (const m of available) {
     const mClean = m.toLowerCase().trim()
     if (mClean === `${clean}:latest` || `${mClean}:latest` === clean) return m
+    if (!cleanTag && mClean.split(':')[0] === cleanBase && mClean.endsWith(':latest')) return m
   }
 
-  // 3. Base model match with compatible quant/instruction tag
+  // 3. Namespace strip match (e.g. "adrienbrault/biomistral-7b" vs a bare "biomistral-7b" tag)
+  for (const m of available) {
+    const mClean = m.toLowerCase().trim()
+    const mWithoutNamespace = mClean.includes('/') ? mClean.split('/')[1] : mClean
+    if (mWithoutNamespace === cleanWithoutNamespace) return m
+  }
+
+  // 4. Base model match with compatible quant/instruction tag
   for (const m of available) {
     const mClean = m.toLowerCase().trim()
     const mBase = mClean.split(':')[0]
@@ -224,7 +233,7 @@ export function findMatchingInstalledModel(target: string, available: string[]):
     }
   }
 
-  // 4. Substring base model match (e.g. qwen2.5-coder matching qwen2.5-coder:7b-instruct-q4_k_m)
+  // 5. Substring base model match (e.g. qwen2.5-coder matching qwen2.5-coder:7b-instruct-q4_k_m)
   for (const m of available) {
     const mClean = m.toLowerCase().trim()
     if (mClean.includes(cleanBase) || cleanBase.includes(mClean.split(':')[0])) {
@@ -263,35 +272,18 @@ function resolveModelWithFallback(
 
 export function evaluateTaskComplexity(
   userPrompt: string,
-  attachedFilesOrContext: number | ComplexityEvaluationContext = 0,
-  contextSizeChars: number = 0,
-  settings?: AppSettings
+  context: ComplexityEvaluationContext = {}
 ): ComplexityRouteResult {
-  let attachedFilesCount = 0
-  let totalChars = contextSizeChars
-  let activeSettings = settings
-  let availableModels: string[] | undefined = undefined
-  let hasRecentToolFailure = false
-  let errorCountInHistory = 0
-  let consecutiveSuccessCount = 0
-  let safeVramBudgetGB: number | undefined = undefined
-  let vramTotalMB: number | undefined = undefined
-  let hardwareProfile: 'Low' | 'Medium' | 'High' | 'Auto' = 'Auto'
-
-  if (typeof attachedFilesOrContext === 'object' && attachedFilesOrContext !== null) {
-    attachedFilesCount = attachedFilesOrContext.attachedFilesCount || 0
-    totalChars = attachedFilesOrContext.contextSizeChars || 0
-    activeSettings = attachedFilesOrContext.settings || settings
-    availableModels = attachedFilesOrContext.availableModels
-    hasRecentToolFailure = !!attachedFilesOrContext.hasRecentToolFailure
-    errorCountInHistory = attachedFilesOrContext.errorCountInHistory || 0
-    consecutiveSuccessCount = attachedFilesOrContext.consecutiveSuccessCount || 0
-    safeVramBudgetGB = attachedFilesOrContext.safeVramBudgetGB
-    vramTotalMB = attachedFilesOrContext.vramTotalMB
-    hardwareProfile = attachedFilesOrContext.hardwareProfile || activeSettings?.hardwareProfile || 'Auto'
-  } else if (typeof attachedFilesOrContext === 'number') {
-    attachedFilesCount = attachedFilesOrContext
-  }
+  const attachedFilesCount = context.attachedFilesCount || 0
+  const totalChars = context.contextSizeChars || 0
+  const activeSettings = context.settings
+  const availableModels = context.availableModels
+  const hasRecentToolFailure = !!context.hasRecentToolFailure
+  const errorCountInHistory = context.errorCountInHistory || 0
+  const consecutiveSuccessCount = context.consecutiveSuccessCount || 0
+  let safeVramBudgetGB = context.safeVramBudgetGB
+  const vramTotalMB = context.vramTotalMB
+  const hardwareProfile: 'Low' | 'Medium' | 'High' | 'Auto' = context.hardwareProfile || activeSettings?.hardwareProfile || 'Auto'
 
   // If safeVramBudgetGB not explicitly passed, derive from vramTotalMB or hardwareProfile
   if (safeVramBudgetGB === undefined) {

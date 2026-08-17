@@ -21,11 +21,11 @@ import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
-import { RoleBasedAgentGraphOrchestrator } from '../domain/agent/roleAgentGraph'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import { ASTAwareStackTraceExtractor } from '../domain/agent/astStackTraceExtractor'
 import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
+import { resolveOllamaContextReuse } from '../domain/agent/ollamaContextCacheManager'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -42,6 +42,17 @@ interface AgentSession {
   targetWindow: BrowserWindow | null
   activeHttpRequest?: http.ClientRequest | null
   activeChildProcess?: any | null
+  /**
+   * Ollama `context` continuation cache (AGT1): the token array + the exact
+   * stable/history baseline it corresponds to, so the next turn can detect
+   * whether a tail-append delta can be sent instead of the full prompt. See
+   * ollamaContextCacheManager.ts. Scoped to this single agent run — cleared
+   * implicitly whenever a new AgentSession is created.
+   */
+  ollamaContextTokens?: number[]
+  ollamaContextModel?: string
+  ollamaContextStableSection?: string
+  ollamaContextHistoryBlock?: string
 }
 
 const activeAgentSessions = new Map<string, AgentSession>()
@@ -395,6 +406,22 @@ export async function runAgentOrchestratorLoop(
       ? routedComplexity.modelName
       : (settings.codingModel || settings.defaultModel || 'llama3.2')
 
+    // Native tool-calling routing: when the primary model is detected as tool-calling
+    // capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the
+    // structured tool catalog instead of relying solely on the prompt-engineered JSON
+    // convention. toolParser.ts still parses the result either way (see
+    // agentStreamTransport.ts's serializeNativeToolCall), so downstream tool execution
+    // is unaffected by which path produced the output. Computed here (before prompt
+    // assembly) so AgentPromptAssembler can omit the redundant prose tool block (AGT2).
+    const targetModelToolCallingCapable = supportsNativeToolCalling(targetModel, modelCapabilities)
+    if (targetModelToolCallingCapable) {
+      // The native tool-calling /api/chat path doesn't populate `context` (see
+      // agentStreamTransport.ts), so any cached baseline from an earlier
+      // /api/generate turn would be stale. Clear it so a later turn that
+      // returns to the /api/generate path always starts from a full resend.
+      session.ollamaContextModel = undefined
+    }
+
     const intermediateModel = settings.complexityStandardModel || settings.codingModel || settings.defaultModel || 'llama3.2'
     const fallbackModel = settings.complexityFastModel || settings.defaultModel || 'llama3.2'
     const heavyEscalationModel = settings.complexityHeavyModel || undefined
@@ -430,7 +457,7 @@ export async function runAgentOrchestratorLoop(
     const effectiveAttachedContext = [debtTrackerBlock, attachedContext].filter(Boolean).join('\n\n')
 
     // Assemble base prompt segments, then apply heuristic compaction at 75% watermark
-    const basePrompt = AgentPromptAssembler.assembleTurnPrompt({
+    const assembled = AgentPromptAssembler.assembleTurnPrompt({
       userTask,
       initialUserTask,
       agentMode,
@@ -448,7 +475,9 @@ export async function runAgentOrchestratorLoop(
       projectContextMapStr,
       settings,
       runtimeOpts,
+      toolCallingCapable: targetModelToolCallingCapable,
     })
+    const basePrompt = assembled.prompt
 
     const compactionResult = HeuristicContextCompactor.compile(
       {
@@ -476,13 +505,37 @@ export async function runAgentOrchestratorLoop(
       codingAgentLogger.logTurnPrompt(sessionId, stepCount, targetModel, runtimeOpts.num_ctx, turnPrompt)
     }
 
-    // Native tool-calling routing: when the primary model is detected as tool-calling
-    // capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the
-    // structured tool catalog instead of relying solely on the prompt-engineered JSON
-    // convention. toolParser.ts still parses the result either way (see
-    // agentStreamTransport.ts's serializeNativeToolCall), so downstream tool execution
-    // is unaffected by which path produced the output.
-    const targetModelToolCallingCapable = supportsNativeToolCalling(targetModel, modelCapabilities)
+    // AGT1: reuse Ollama's `context` continuation instead of resending the full
+    // prompt whenever this turn's stable section + history are a byte-exact
+    // continuation of the prior turn's on the SAME model (see
+    // ollamaContextCacheManager.ts). Native tool-calling turns never qualify
+    // (the /api/chat path doesn't populate `context`).
+    const contextReuseDecision = targetModelToolCallingCapable
+      ? { reusedContext: false as const, promptToSend: turnPrompt }
+      : resolveOllamaContextReuse({
+          targetModel,
+          stableSection: assembled.stableSection,
+          historyBlock: assembled.historyBlock,
+          turnSuffix: assembled.turnSuffix,
+          fullPrompt: turnPrompt,
+          wasCompacted: compactionResult.wasCompacted,
+          baseline:
+            session.ollamaContextModel === targetModel && session.ollamaContextStableSection !== undefined
+              ? {
+                  model: session.ollamaContextModel,
+                  stableSection: session.ollamaContextStableSection,
+                  historyBlock: session.ollamaContextHistoryBlock || '',
+                  contextTokens: session.ollamaContextTokens || [],
+                }
+              : null,
+        })
+
+    if (contextReuseDecision.reusedContext) {
+      emitLog(
+        'info',
+        `⚡ Ollama Context Reuse: sending ${contextReuseDecision.promptToSend.length} chars instead of the full ${turnPrompt.length}-char prompt (KV-cache continuation).`
+      )
+    }
 
     let streamedOutput = ''
     let lastDispatchEscalated = false
@@ -510,13 +563,26 @@ export async function runAgentOrchestratorLoop(
           onHttpRequestCreated: (req) => {
             session.activeHttpRequest = req
           },
+          onContextReceived: (contextTokens, respondingModel) => {
+            // Only cache when this turn's prompt matched assembled.stableSection/historyBlock
+            // exactly — HeuristicContextCompactor rewrites that structure on compaction, so
+            // the returned tokens wouldn't correspond to the cached baseline shape (AGT1).
+            if (compactionResult.wasCompacted) return
+            session.ollamaContextTokens = contextTokens
+            session.ollamaContextModel = respondingModel
+            session.ollamaContextStableSection = assembled.stableSection
+            session.ollamaContextHistoryBlock = assembled.historyBlock
+          },
         },
         (fromModel, toModel, reason) => {
           const isHeavy = toModel === heavyEscalationModel
           lastDispatchEscalated = isHeavy
           const label = isHeavy ? '🔺 Heavy Tier Escalation' : '⚡ Resilient Fallback'
           emitLog('info', `${label}: ${fromModel} → ${toModel}`, `Triggered: ${reason}`)
-        }
+        },
+        contextReuseDecision.reusedContext
+          ? { prompt: contextReuseDecision.promptToSend, previousContext: contextReuseDecision.contextTokens! }
+          : undefined
       )
       streamedOutput = dispatchRes.output
       if (dispatchRes.isFallback) {

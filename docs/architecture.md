@@ -144,7 +144,7 @@ flowchart TD
 - **Autonomous Tool Calling Loop**:
   - **Ispezione & Navigazione**: `read_file` (con line slicing), `list_dir`, `grep_search`, `extract_code_symbols` (estrazione AST dei simboli esportati).
   - **Modifica & Patching**: `replace_file_content` (fuzzy matching con tolleranza Levenshtein $\ge 82\%$ e AST pre-commit validation via `FuzzyPatchEngineWithASTValidator`), `multi_replace_file_content`, `write_file` (con validazione AST sintattica in-flight), `delete_file`.
-  - **Esecuzione & Diagnostica**: `run_command` (PowerShell non-interattivo supervised da `NonInteractiveStreamSessionGuard` con cattura prompt interattivi ed enviroment CI=true), `inspect_os_env`, `finish`.
+  - **Esecuzione & Diagnostica**: `run_command` (PowerShell non-interattivo supervised da `NonInteractiveStreamSessionGuard` con cattura prompt interattivi ed enviroment CI=true), `run_tests` (rileva ed esegue il test runner del workspace — script `test:fast`/`test` in package.json o pytest — e ritorna un esito pass/fail strutturato via `testResultParser.ts` invece di testo grezzo), `inspect_os_env`, `finish`.
   - **Web & Risorse**: `web_search`, `fetch_web_content`, `download_file`.
   - **Interazione Utente**: `ask` (alias `ask_question`) per chiarimenti diretti.
 - **Native Tool-Calling Routing (`ollamaToolCallingCapability.ts` & `ollamaToolSchemaCatalog.ts`)**:
@@ -153,8 +153,6 @@ flowchart TD
 - **Action Loop Fingerprinting & Multi-State Oscillation Prevention (`AgentActionLoopDetector`, incorpora internamente `CycleOscillationDetectorAndReproOracle`)**:
   - Ogni invocazione di tool viene tracciata tramite hash crittografico deterministico SHA-256 (`tool:parameters`) da un'unica istanza per sessione.
   - Rilevamento avanzato di cicli alternati di oscillazione a $k$-Stati ($k \in [2, 4]$, es. $A \rightarrow B \rightarrow A \rightarrow B$). Se l'agente instaura un ciclo alternato o ripete la stessa azione $\ge 2$ volte, il runtime inietta una direttiva correttiva forzata (`[CRITICAL LOOP INTERVENTION]`) ed uno script di riproduzione TDD.
-- **Role-Based Agent Graph (`RoleBasedAgentGraphOrchestrator`)**:
-  - Macchina a stati finiti con separazione dei ruoli agentici (`PLANNER`, `EXPLORER`, `CODER`, `VERIFIER`) e matrice di autorizzazione ad accesso ristretto per ruolo per prevenire il goal drift nei task complessi.
 - **AST-Aware Compact Repo Mapper (`CompactSemanticRepoMapper`)**:
   - Scansione ad alta densità sintattica della struttura del repository con estrazione dell'albero dei simboli esportati (`class`, `function`, `interface`, `type`) per la generazione di una Repo Map ottimizzata per il budget del contesto.
 - **Optimizations per Hardware Minimo (Previeni Runaway Loops >300 Step)**:

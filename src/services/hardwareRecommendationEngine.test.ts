@@ -10,9 +10,9 @@ import {
   getModelApproxSize,
   formatModelDisplayName,
   isOllamaModelInstalled,
-  findMatchingInstalledModel,
   getRecommendedOllamaEnvVars,
 } from './hardwareRecommendationEngine'
+import { findMatchingInstalledModel } from './complexityRouterService'
 import { DiagnosticsData, RunningModelDetails } from '../types'
 
 describe('hardwareRecommendationEngine Unit Tests', () => {
@@ -403,6 +403,14 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(findMatchingInstalledModel('llama3.2', installed)).toBe('llama3.2:latest')
     expect(findMatchingInstalledModel('bge-m3', installed)).toBe('bge-m3:latest')
     expect(findMatchingInstalledModel('nonexistent-model', installed)).toBeNull()
+  })
+
+  it('should resolve fuzzy quant-tag and loose substring base matches via the consolidated matcher (AGT4: previously only available in complexityEvaluator.ts, now shared via complexityRouterService)', () => {
+    const installed = ['qwen2.5-coder:7b-instruct-q4_k_m']
+    // Compatible quant/instruction tag fuzzy match
+    expect(findMatchingInstalledModel('qwen2.5-coder:7b', installed)).toBe('qwen2.5-coder:7b-instruct-q4_k_m')
+    // Loose substring base match (target base is a substring of the installed base)
+    expect(findMatchingInstalledModel('qwen2.5', installed)).toBe('qwen2.5-coder:7b-instruct-q4_k_m')
   })
 
   it('should generate correct OS environment variables and scripts based on hardware', () => {

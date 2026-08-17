@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import {
   X,
-  Github,
   Award,
   BookOpen,
   Code2,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { OnlyRagLogo } from './OnlyRagLogo'
+import { GithubIcon } from './GithubIcon'
 import { logger } from '../../lib/logger'
 
 interface AboutModalProps {
@@ -104,7 +104,7 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Lucide React',
-    version: 'v0.475.0',
+    version: 'v1.31.0',
     description: 'Clean, beautiful and consistent iconography system.',
     license: 'ISC',
     category: 'uiAndEditor',
@@ -258,7 +258,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/90 flex flex-col justify-between space-y-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                  <Github className="w-4 h-4" />
+                  <GithubIcon className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
@@ -459,7 +459,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 onClick={() => handleOpenExternal(`${repoUrl}/issues`)}
                 className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 focus-ring active:scale-95 shadow-sm"
               >
-                <Github className="w-3.5 h-3.5" /> Issues &amp; Support
+                <GithubIcon className="w-3.5 h-3.5" /> Issues &amp; Support
               </button>
             </div>
           </div>

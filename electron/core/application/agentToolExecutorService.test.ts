@@ -289,6 +289,81 @@ async def async_handler():
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('Original State')
   })
 
+  it('should run an explicit run_tests command override and return a structured pass/fail summary (AGT8)', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'run_tests',
+        parameters: { command: 'node -e "console.log(\'Tests  5 passed (5)\')"' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[TEST RUN RESULT]')
+    expect(res.outputForHistory).toContain('5/5 tests passed (vitest)')
+    expect(res.logMessage).toContain('Test Run:')
+  }, 15000)
+
+  it('should auto-detect the test command from package.json scripts.test when no explicit command is given', async () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'package.json'),
+      JSON.stringify({ name: 'fixture', scripts: { test: 'node -e "console.log(\'Tests  2 passed (2)\')"' } })
+    )
+
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'run_tests', parameters: {} },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('auto-detected: package.json scripts.test')
+    expect(res.outputForHistory).toContain('2/2 tests passed (vitest)')
+  }, 15000)
+
+  it('should prefer package.json scripts["test:fast"] over scripts.test when both are present', async () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'package.json'),
+      JSON.stringify({
+        name: 'fixture',
+        scripts: {
+          test: 'node -e "process.exit(1)"',
+          'test:fast': 'node -e "console.log(\'Tests  1 passed (1)\')"',
+        },
+      })
+    )
+
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'run_tests', parameters: {} },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('auto-detected: package.json scripts["test:fast"]')
+    expect(res.outputForHistory).toContain('1/1 tests passed (vitest)')
+  }, 15000)
+
+  it('should return a graceful message when run_tests has no explicit command and no recognized test runner is found', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'run_tests', parameters: {} },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('No test command specified and no recognized test runner')
+    expect(res.logMessage).toBe('run_tests: no test runner detected')
+  })
+
+  it('should block a destructive run_tests command override via the security guardrail', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'run_tests', parameters: { command: 'git reset --hard HEAD' } },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
+    expect(res.logMessage).toContain('[SECURITY BLOCK]')
+  })
+
   it('should execute git_status and git_diff without errors', async () => {
     const statusRes = await agentToolExecutorService.executeTool(
       {

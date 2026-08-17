@@ -133,6 +133,13 @@ export class ToolSchemaValidator {
         break
       }
 
+      case 'run_tests': {
+        if (rawParams.command) {
+          rawParams.command = String(rawParams.command)
+        }
+        break
+      }
+
       case 'git_diff': {
         if (rawParams.filePath) {
           rawParams.filePath = String(rawParams.filePath)

@@ -139,11 +139,18 @@ export class ResilientModelDispatcher {
   /**
    * Executes streaming with primary model, progressively degrading across intermediate and fallback tiers.
    * If a heavyEscalationModel is configured and all primary tiers fail, escalates to it after VRAM eviction.
+   *
+   * `primaryFastPath`, when provided, overrides `prompt`/`previousContext` for the PRIMARY
+   * model attempt ONLY (see ollamaContextCacheManager.ts / AGT1) — a cached Ollama `context`
+   * token array and the corresponding delta-only prompt are valid solely for the exact model
+   * that produced them, so every fallback/escalation tier below always uses the full prompt
+   * from `sessionOpts` regardless of this override.
    */
   public static async executeWithFallback(
     plan: ModelDispatchPlan,
     sessionOpts: Omit<StreamSession, 'targetModel' | 'runtimeOpts'>,
-    onFallbackTriggered?: (fromModel: string, toModel: string, reason: string) => void
+    onFallbackTriggered?: (fromModel: string, toModel: string, reason: string) => void,
+    primaryFastPath?: { prompt: string; previousContext: number[] }
   ): Promise<DispatchedCompletionResult> {
     const { primaryModel, intermediateModel, fallbackModel, heavyEscalationModel, runtimeOpts } = plan
 
@@ -153,6 +160,7 @@ export class ResilientModelDispatcher {
         ...sessionOpts,
         targetModel: primaryModel,
         runtimeOpts,
+        ...(primaryFastPath ? { prompt: primaryFastPath.prompt, previousContext: primaryFastPath.previousContext } : {}),
       })
       return { output, usedModel: primaryModel, isFallback: false }
     } catch (primaryErr: any) {

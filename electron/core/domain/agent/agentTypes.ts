@@ -59,6 +59,7 @@ export type SupportedToolName =
   | 'fetch_web_content'
   | 'download_file'
   | 'run_command'
+  | 'run_tests'
   | 'inspect_os_env'
   | 'git_diff'
   | 'git_status'

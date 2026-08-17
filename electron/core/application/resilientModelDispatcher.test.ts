@@ -177,6 +177,53 @@ describe('ResilientModelDispatcher Unit Tests', () => {
     expect(mockFetch).toHaveBeenCalled()
   })
 
+  it('should apply primaryFastPath (delta prompt + Ollama context) ONLY to the primary model attempt (AGT1)', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce('Primary fast-path output')
+
+    const plan = {
+      primaryModel: 'deepseek-r1:8b',
+      fallbackModel: 'llama3.2:3b',
+      runtimeOpts: baseRuntimeOpts,
+    }
+
+    const sessionOpts = { prompt: 'FULL rebuilt prompt (unused when fast path applies)', isCancelled: () => false }
+
+    const res = await ResilientModelDispatcher.executeWithFallback(plan, sessionOpts, undefined, {
+      prompt: 'DELTA ONLY',
+      previousContext: [1, 2, 3],
+    })
+
+    expect(res.output).toBe('Primary fast-path output')
+    const call = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0]
+    expect(call.prompt).toBe('DELTA ONLY')
+    expect(call.previousContext).toEqual([1, 2, 3])
+  })
+
+  it('should ignore primaryFastPath and use the full sessionOpts prompt for the fallback tier when the primary attempt fails (a cached context is only valid for the model that produced it)', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockRejectedValueOnce(new Error('Primary OOM'))
+      .mockResolvedValueOnce('Fallback output')
+
+    const plan = {
+      primaryModel: 'deepseek-r1:8b',
+      fallbackModel: 'llama3.2:3b',
+      runtimeOpts: baseRuntimeOpts,
+    }
+
+    const sessionOpts = { prompt: 'FULL rebuilt prompt', isCancelled: () => false }
+
+    const res = await ResilientModelDispatcher.executeWithFallback(plan, sessionOpts, undefined, {
+      prompt: 'DELTA ONLY (valid for primary model only)',
+      previousContext: [1, 2, 3],
+    })
+
+    expect(res.output).toBe('Fallback output')
+    const calls = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls
+    expect(calls[0][0].prompt).toBe('DELTA ONLY (valid for primary model only)')
+    expect(calls[1][0].prompt).toBe('FULL rebuilt prompt')
+    expect(calls[1][0].previousContext).toBeUndefined()
+  })
+
   it('should evaluate getNextEscalationModel in order: Fast -> Standard -> Deep Reasoning -> Heavy', () => {
     const plan = {
       fastModel: 'llama3.2:3b',

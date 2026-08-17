@@ -12,6 +12,7 @@ import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRep
 import { NonInteractiveStreamSessionGuard } from '../domain/agent/shellStreamGuard'
 import { webClient } from '../infrastructure/http/webClient'
 import { FuzzyPatchEngineWithASTValidator } from '../domain/agent/fuzzyPatchEngine'
+import { parseTestRunOutput } from '../domain/agent/testResultParser'
 import type { AppSettings } from '../../../src/types'
 
 export interface ToolExecutionResult {
@@ -53,6 +54,113 @@ export class AgentToolExecutorService {
       session.dispose()
     }
     this.shellSessions.clear()
+  }
+
+  /**
+   * Detects the workspace's test command when run_tests is called with no
+   * explicit override: an npm script (preferring a "test:fast" CI/summarized
+   * variant per AGENTS.md's fast-mode agent testing rule) or a Python pytest
+   * config file. Returns null when no recognized test runner is found.
+   */
+  private detectTestCommand(workspacePath?: string | null): { command: string; source: string } | null {
+    const cwd = workspacePath || process.cwd()
+
+    const pkgJsonPath = path.join(cwd, 'package.json')
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
+        const scripts = pkg.scripts || {}
+        if (scripts['test:fast']) return { command: 'npm run test:fast', source: 'package.json scripts["test:fast"]' }
+        if (scripts['test']) return { command: 'npm test', source: 'package.json scripts.test' }
+      } catch {
+        // Malformed package.json — fall through to other detectors.
+      }
+    }
+
+    const hasPytestConfig = ['pytest.ini', 'pyproject.toml', 'setup.cfg'].some((f) => fs.existsSync(path.join(cwd, f)))
+    if (hasPytestConfig) {
+      return { command: 'pytest -q', source: 'pytest config file detected' }
+    }
+
+    return null
+  }
+
+  /**
+   * Executes the workspace's test suite (or an explicit command override)
+   * and returns a structured pass/fail summary via testResultParser.ts,
+   * instead of leaving the model to interpret raw terminal output through
+   * run_command + DiagnosticOutputReducer heuristics (AGT8).
+   */
+  private async executeRunTests(
+    explicitCommand: string | undefined,
+    workspacePath: string | null | undefined,
+    onTerminalOutput?: (data: string) => void,
+    onProcessSpawned?: (proc: ChildProcess) => void
+  ): Promise<ToolExecutionResult> {
+    let execCmd = explicitCommand
+    let detectionNote = ''
+    if (!execCmd) {
+      const detected = this.detectTestCommand(workspacePath)
+      if (!detected) {
+        return {
+          outputForHistory:
+            'No test command specified and no recognized test runner (package.json "test" script, or pytest.ini/pyproject.toml/setup.cfg) was found in the workspace. Provide an explicit "command" parameter.',
+          logMessage: 'run_tests: no test runner detected',
+          isTerminal: true,
+        }
+      }
+      execCmd = detected.command
+      detectionNote = ` (auto-detected: ${detected.source})`
+    }
+
+    const secCheck = checkCommandSecurity(execCmd)
+    if (!secCheck.isAllowed) {
+      return {
+        outputForHistory: `[SECURITY GUARDRAIL BLOCK]\nCommand: "${execCmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason}`,
+        logMessage: `[SECURITY BLOCK] Forbidden test command: "${execCmd}"`,
+        isTerminal: true,
+      }
+    }
+
+    let sanitizedCmd = secCheck.sanitizedCommand
+    if (process.platform === 'win32') {
+      sanitizedCmd = NonInteractiveStreamSessionGuard.sanitizePowerShellCommand(sanitizedCmd)
+    }
+
+    const TEST_TIMEOUT_MS = 180000
+
+    try {
+      const shell = this.getOrCreateShellSession(workspacePath)
+      const res = await shell.execute(
+        sanitizedCmd,
+        (chunk) => {
+          if (onTerminalOutput) onTerminalOutput(chunk.trim())
+        },
+        onProcessSpawned,
+        TEST_TIMEOUT_MS
+      )
+
+      const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
+      const parsed = parseTestRunOutput(rawOutput, res.timedOut ? 1 : res.code ?? 1)
+      const statusLine = parsed.framework === 'unknown' ? parsed.summary : `${parsed.success ? '✅' : '❌'} ${parsed.summary}`
+
+      const outputForHistory = res.timedOut
+        ? `[TEST RUN TIMED OUT]\nCommand: "${sanitizedCmd}"${detectionNote}\nTest command exceeded ${TEST_TIMEOUT_MS / 1000}s and was terminated.\nPartial output:\n${rawOutput.slice(0, 3000)}`
+        : `[TEST RUN RESULT]\nCommand: "${sanitizedCmd}"${detectionNote}\n${statusLine}\n\nOutput:\n${rawOutput.slice(0, 4000)}`
+
+      return {
+        outputForHistory,
+        logMessage: `Test Run: ${statusLine}`,
+        logDetail: rawOutput.slice(0, 1000),
+        isTerminal: true,
+      }
+    } catch (err: any) {
+      return {
+        outputForHistory: `[TEST RUN ERROR]\nFailed executing test command "${sanitizedCmd}": ${err.message}`,
+        logMessage: `Test Run Exception: ${err.message}`,
+        isTerminal: true,
+      }
+    }
   }
 
   async executeTool(
@@ -647,6 +755,13 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
             isTerminal: true,
           }
         }
+      }
+
+      case 'run_tests': {
+        if (settings.allowTerminalExecution === false) {
+          return { outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true }
+        }
+        return this.executeRunTests(parameters.command, workspacePath, onTerminalOutput, onProcessSpawned)
       }
 
       case 'git_status': {

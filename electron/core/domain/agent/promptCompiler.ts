@@ -3,6 +3,7 @@ import {
   FeatureModule,
   DEFAULT_FAMILY_PROMPTS,
   DEFAULT_CODING_TIER_PROMPTS,
+  CODING_TOOLS_BLOCK,
   detectModelFamily,
 } from './promptPresets'
 import type { ComplexityTier } from './complexityEvaluator'
@@ -57,11 +58,17 @@ export class PromptCompiler {
    * see DEFAULT_CODING_TIER_PROMPTS. Custom overrides are keyed by tier
    * ("coding:fast", "coding:standard", "coding:deep_reasoning") the same way
    * family-based modules key by family.
+   *
+   * When `toolCallingCapable` is true, the prose AVAILABLE AGENT TOOLS block
+   * is omitted: the model already receives the structured tool schema via
+   * the native `tools` API parameter (see ollamaToolSchemaCatalog.ts), so
+   * repeating it in text would double-send the same schema (AGT2).
    */
   static compileCodingPrompt(
     tier: ComplexityTier,
     variables: Record<string, string> = {},
-    settings?: AppSettings
+    settings?: AppSettings,
+    toolCallingCapable = false
   ): { prompt: string; tier: ComplexityTier; isCustom: boolean } {
     const overrideKey = `coding:${tier}`
 
@@ -75,8 +82,13 @@ export class PromptCompiler {
       template = DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard
     }
 
+    const effectiveVariables = {
+      ...variables,
+      CODING_TOOLS_BLOCK: toolCallingCapable ? '' : CODING_TOOLS_BLOCK,
+    }
+
     return {
-      prompt: substituteVariables(template, variables),
+      prompt: substituteVariables(template, effectiveVariables).replace(/\n{3,}/g, '\n\n'),
       tier,
       isCustom,
     }

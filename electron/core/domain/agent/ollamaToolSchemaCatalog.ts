@@ -104,6 +104,9 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   tool('run_command', 'Execute a shell/terminal command in the workspace.', {
     command: { type: 'string', description: 'The shell command to execute.' },
   }, ['command']),
+  tool('run_tests', 'Run the workspace test suite and return a structured pass/fail summary instead of raw terminal output.', {
+    command: { type: 'string', description: 'Optional explicit test command override (e.g. "pytest -k test_login"). If omitted, auto-detected from the workspace (package.json test script or pytest config).' },
+  }),
   tool('inspect_os_env', 'Inspect the host OS environment (platform, CPU, memory).', {}),
   tool('git_status', 'Show the working tree status (git status --short) of the workspace.', {}),
   tool('git_diff', 'Show the diff of unstaged or staged changes, optionally for a single file.', {

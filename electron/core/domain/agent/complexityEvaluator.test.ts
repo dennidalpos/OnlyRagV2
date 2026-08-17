@@ -96,4 +96,9 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     expect(findMatchingInstalledModel('deepseek-r1:8b', available)).toBe('deepseek-r1:8b')
     expect(findMatchingInstalledModel('unknown-model:latest', available)).toBe(null)
   })
+
+  it('should match models across a namespace prefix (AGT4: consolidated with hardwareRecommendationEngine.ts, which previously had this namespace-strip step and complexityEvaluator.ts did not)', () => {
+    const available = ['adrienbrault/biomistral-7b:q4_k_m', 'llama3.2:3b']
+    expect(findMatchingInstalledModel('biomistral-7b:q4_k_m', available)).toBe('adrienbrault/biomistral-7b:q4_k_m')
+  })
 })

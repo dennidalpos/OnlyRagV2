@@ -71,4 +71,21 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
     expect(family).toBe('qwen')
     expect(prompt).toContain('Qwen 2.5')
   })
+
+  it('should include the prose AVAILABLE AGENT TOOLS block by default (prompt-engineered path)', () => {
+    const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
+    const prompt = PromptCompiler.compileCodingPrompt('standard', vars).prompt
+    expect(prompt).toContain('AVAILABLE AGENT TOOLS')
+    expect(prompt).toContain('extract_code_symbols')
+  })
+
+  it('should omit the prose AVAILABLE AGENT TOOLS block when toolCallingCapable=true (AGT2: avoid double-sending the tool schema)', () => {
+    const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
+    for (const tier of ['fast', 'standard', 'deep_reasoning'] as const) {
+      const prompt = PromptCompiler.compileCodingPrompt(tier, vars, undefined, true).prompt
+      expect(prompt).not.toContain('AVAILABLE AGENT TOOLS')
+      expect(prompt).not.toContain('extract_code_symbols')
+      expect(prompt).toContain('Task')
+    }
+  })
 })

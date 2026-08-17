@@ -36,4 +36,21 @@ describe('ToolSchemaValidator Unit Tests', () => {
     expect(res.sanitizedToolCall.parameters?.command).toBe('npm test')
     expect(res.sanitizedToolCall.parameters?.timeoutMs).toBe(120000)
   })
+
+  it('should validate run_tests with no parameters (command is optional — auto-detected when omitted)', () => {
+    const raw: AgentToolCall = { tool: 'run_tests', parameters: {} }
+    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    expect(res.valid).toBe(true)
+    expect(res.sanitizedToolCall.parameters?.command).toBeUndefined()
+  })
+
+  it('should coerce an explicit run_tests command override to a string', () => {
+    const raw: AgentToolCall = {
+      tool: 'run_tests',
+      parameters: { command: 'pytest -k test_login -q' },
+    }
+    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    expect(res.valid).toBe(true)
+    expect(res.sanitizedToolCall.parameters?.command).toBe('pytest -k test_login -q')
+  })
 })

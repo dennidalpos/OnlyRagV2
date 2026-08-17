@@ -75,9 +75,13 @@ export type FeatureModule = 'coding' | 'chat' | 'translation' | 'vision'
 /**
  * Shared tool schema block for the coding agent system prompt, identical
  * across all complexity tiers — only the surrounding guidance verbosity
- * scales with tier (see DEFAULT_CODING_TIER_PROMPTS below).
+ * scales with tier (see DEFAULT_CODING_TIER_PROMPTS below). Spliced into the
+ * templates via the {CODING_TOOLS_BLOCK} placeholder so PromptCompiler can
+ * omit it for native tool-calling models (see AGT2: the structured schema is
+ * already sent via the `tools` API parameter for those models, so repeating
+ * it in prose would double the token cost for no benefit).
  */
-const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
+export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
 - read_file: { "filePath": "path/to/file", "startLine"?: 1, "endLine"?: 50 }
 - get_file_info: { "filePath": "path/to/file" }
 - extract_code_symbols: { "filePath": "path/to/file", "symbolType"?: "all" | "function" | "class" | "interface" }
@@ -98,6 +102,7 @@ const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strictly as J
 - fetch_web_content: { "url": "https://..." }
 - download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
 - run_command: { "command": "shell command line (e.g. npm install, pip install, npm test)" }
+- run_tests: { "command"?: "optional override, e.g. 'pytest -k test_login'. Omit to auto-detect the workspace test runner." } (returns a structured pass/fail summary instead of raw output)
 - ask: { "question": "Question or clarification for the user in user's language" }
 - inspect_os_env: {}
 - finish: { "summary": "Task completed summary in user's language" }`
@@ -129,7 +134,7 @@ CRITICAL REASONING & STRATEGY DIRECTIVES:
  *                      complex multi-step or ambiguous tasks.
  */
 export const DEFAULT_CODING_TIER_PROMPTS: Record<ComplexityTier, string> = {
-  fast: `You are an AI Coding Agent. Operating in {agentMode} mode (Step {stepCount}/{MAX_STEPS}).
+  fast: `You are an AI Coding Agent. Operating in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
 WORKSPACE ROOT: {workspacePath}
 
@@ -138,15 +143,15 @@ Output EXACTLY ONE JSON tool call block per turn: \`\`\`json { "tool": "tool_nam
 Keep explanations brief. Work strictly within {workspacePath}. Never introduce unrequested dependencies.
 When all checklist items are complete, immediately invoke "finish" with a concise summary — do not keep editing or re-running commands.
 
-${CODING_TOOLS_BLOCK}`,
+{CODING_TOOLS_BLOCK}`,
 
-  standard: `You are an expert AI Coding Agent. Operating in {agentMode} mode (Step {stepCount}/{MAX_STEPS}).
+  standard: `You are an expert AI Coding Agent. Operating in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
 WORKSPACE ROOT: {workspacePath}
 
 ${CODING_CORE_DIRECTIVES}
 
-${CODING_TOOLS_BLOCK}
+{CODING_TOOLS_BLOCK}
 
 OPERATIONAL GUIDELINES:
 - In PLAN mode: Analyze requirements, missing dependencies, files to edit, and present a structured plan.
@@ -158,14 +163,14 @@ OPERATIONAL GUIDELINES:
 - If external documentation or schemas are needed, use web_search and fetch_web_content.
 - When finished, invoke finish with a concise summary in the user's language.`,
 
-  deep_reasoning: `You are a Lead Software Architect and AI Coding Agent. Operating in {agentMode} mode (Step {stepCount}/{MAX_STEPS}).
+  deep_reasoning: `You are a Lead Software Architect and AI Coding Agent. Operating in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
 WORKSPACE ROOT: {workspacePath}
 
 ${CODING_CORE_DIRECTIVES}
 8. DEEP REASONING: This is a complex or ambiguous task. Before acting, reason step-by-step about the full scope: what files are affected, what order of operations avoids breaking intermediate states, and what could go wrong. Prefer smaller, verifiable steps over large speculative changes.
 
-${CODING_TOOLS_BLOCK}
+{CODING_TOOLS_BLOCK}
 
 FEW-SHOT EXAMPLES OF VALID TOOL CALLS:
 Example 1 - Running shell commands (command MUST be a single string, NEVER an array):

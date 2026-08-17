@@ -3,14 +3,12 @@ import { Code2, Hash } from 'lucide-react'
 
 interface RenderedPagePreviewProps {
   pageNumber: number
-  totalPages: number
   pageContent: string
   zoomLevel?: number
 }
 
 export const RenderedPagePreview: React.FC<RenderedPagePreviewProps> = ({
   pageNumber,
-  totalPages,
   pageContent,
   zoomLevel = 100,
 }) => {
@@ -25,15 +23,10 @@ export const RenderedPagePreview: React.FC<RenderedPagePreviewProps> = ({
       style={{ transform: `scale(${scale})`, transformOrigin: 'top center', transition: 'transform 0.15s ease-out' }}
     >
       <div className="w-full max-w-2xl bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-lg min-h-[540px] flex flex-col space-y-3">
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-b border-slate-800/60 pb-2 text-[11px] font-mono text-slate-400">
-            <span className="text-cyan-400/90 font-semibold">Pagina {pageNumber} di {totalPages}</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
-              P.{pageNumber}
-            </span>
-          </div>
-        )}
-
+        {/* No per-page header here: the parent SourcePagePreview card (and the pane toolbar above
+            it) already display the current page position -- repeating it here duplicated the same
+            text twice, stacked directly on top of each other, whenever a page has no scanned image
+            and falls back to this text-only renderer. */}
         <div className="space-y-3 text-xs leading-relaxed text-slate-200 font-sans flex-1">
           {lines.map((line, idx) => {
             const trimmed = line.trim()

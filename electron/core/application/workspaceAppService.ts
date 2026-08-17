@@ -3,6 +3,7 @@ import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRep
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
 import { sidecarAppService } from './sidecarAppService'
+import { agentToolExecutorService } from './agentToolExecutorService'
 import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
 
 export class WorkspaceAppService {
@@ -71,6 +72,11 @@ export class WorkspaceAppService {
 
   downloadFile(url: string, targetFilePath: string, workspaceRoot?: string) {
     return webClient.downloadFile(url, targetFilePath, workspaceRoot)
+  }
+
+  gitCommit(workspaceRoot: string | undefined, commitMessage: string) {
+    const result = agentToolExecutorService.performGitCommit(workspaceRoot || process.cwd(), commitMessage)
+    return { success: result.success, output: result.output, error: result.success ? undefined : result.output }
   }
 
   async inspectGuestOsEnvironment(): Promise<GuestOsInfo> {

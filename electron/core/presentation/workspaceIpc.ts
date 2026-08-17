@@ -50,6 +50,10 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.downloadFile(url, targetFilePath, workspaceRoot)
   })
 
+  ipcMain.handle('workspace:git-commit', async (_event: unknown, commitMessage: string, workspaceRoot?: string) => {
+    return workspaceAppService.gitCommit(workspaceRoot, commitMessage)
+  })
+
   ipcMain.handle('workspace:execute-powershell', async (_event: unknown, command: string, targetCwd?: string, timeoutMs?: number) => {
     return workspaceAppService.executePowerShellCommand(command, targetCwd, timeoutMs)
   })

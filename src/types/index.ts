@@ -377,6 +377,7 @@ export interface IElectronAPI {
   searchWeb: (query: string, maxResults?: number) => Promise<{ success: boolean; results: { title: string; url: string; snippet: string }[]; error?: string }>
   fetchWebContent: (url: string, maxChars?: number) => Promise<{ success: boolean; content?: string; title?: string; error?: string }>
   downloadFile: (url: string, targetFilePath: string) => Promise<{ success: boolean; downloadedBytes?: number; error?: string }>
+  gitCommit: (commitMessage: string, workspaceRoot?: string) => Promise<{ success: boolean; output?: string; error?: string }>
   inspectGuestOsEnvironment: () => Promise<GuestOsInfo>
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>

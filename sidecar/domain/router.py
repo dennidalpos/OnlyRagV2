@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 import pymupdf
 from sidecar.config import logger
 
@@ -58,42 +58,4 @@ def analyze_pdf_page_structure(page: pymupdf.Page, min_char_threshold: int = 40)
         "image_count": image_count,
         "drawing_count": drawing_count,
         "has_native_text": char_count >= min_char_threshold
-    }
-
-def route_document_ingestion(
-    filename: str,
-    content: bytes,
-    file_path: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Fast-Router: inspects the document in memory or on disk to determine processing plan.
-    """
-    category = classify_file_type(filename)
-    page_plans: List[Dict[str, Any]] = []
-    total_pages = 1
-
-    if category == DocumentCategory.PDF:
-        try:
-            if file_path and os.path.exists(file_path):
-                doc = pymupdf.open(file_path)
-            else:
-                doc = pymupdf.open(stream=content, filetype="pdf")
-            try:
-                total_pages = len(doc)
-                for page_idx in range(total_pages):
-                    page = doc.load_page(page_idx)
-                    plan = analyze_pdf_page_structure(page)
-                    plan["page_number"] = page_idx + 1
-                    page_plans.append(plan)
-            finally:
-                doc.close()
-        except Exception as e:
-            logger.warning(f"Fast-Router failed to pre-analyze PDF {filename}: {e}")
-            category = DocumentCategory.UNKNOWN
-
-    return {
-        "filename": filename,
-        "category": category,
-        "total_pages": total_pages,
-        "page_plans": page_plans
     }

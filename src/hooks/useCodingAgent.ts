@@ -901,12 +901,13 @@ export function useCodingAgent(settings?: AppSettings) {
       await handleRunTerminalCommand(current.contentOrCmd)
     } else if (current.type === 'git_commit' && window.electronAPI) {
       const rawMessage = current.contentOrCmd || ''
-      // Reuses the generic PowerShell execution channel (same as terminal_cmd approval)
-      // rather than a dedicated IPC path — single-quoted with doubled embedded quotes
-      // is PowerShell's standard literal-string escaping.
-      const escapedMessage = rawMessage.replace(/'/g, "''")
       addActionLog('tool_call', `User approved git commit: ${rawMessage}`)
-      await handleRunTerminalCommand(`git add -A; git commit -m '${escapedMessage}'`)
+      const commitRes = await window.electronAPI.gitCommit(rawMessage, workspacePath || undefined)
+      if (commitRes.success) {
+        addActionLog('terminal', 'Git commit completed', commitRes.output)
+      } else {
+        addActionLog('terminal', `Git commit failed: ${commitRes.error || 'Unknown error'}`)
+      }
     } else if (current.type === 'replace_chunk' && current.replacement && window.electronAPI) {
       addActionLog('tool_call', `User approved chunk replacement in: ${current.target}`)
       await window.electronAPI.replaceWorkspaceFileChunk(current.target, current.contentOrCmd, current.replacement)

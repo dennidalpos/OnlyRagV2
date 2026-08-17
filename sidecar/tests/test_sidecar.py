@@ -133,6 +133,215 @@ def test_ocr_prepare_image_resizing():
         dummy_bytes = b"non-image-binary-payload"
         assert _prepare_image_for_ocr(dummy_bytes, max_dim=1500) == dummy_bytes
 
+def test_rapid_ocr_extracts_text_from_image():
+    """RapidOCR (Tier 1, fast local GPU-capable engine) must actually recognize rendered text."""
+    from sidecar.infrastructure.ocr import run_rapid_ocr
+    from PIL import Image, ImageDraw
+    import io
+
+    img = Image.new("RGB", (400, 100), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 10), "ONLYRAG INVOICE TOTAL 4200", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    text_out = run_rapid_ocr(buf.getvalue())
+    assert "ONLYRAG" in text_out.upper()
+    assert "4200" in text_out
+
+def test_run_layout_ocr_prefers_rapidocr_and_skips_vision_fallback(monkeypatch):
+    """run_layout_ocr must not fall back to the (slower) Ollama Vision tier when RapidOCR already
+    produced usable text -- the vision tier exists for layout-heavy content and RapidOCR failures."""
+    from sidecar.infrastructure import ocr as ocr_module
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("run_vision_ocr should not be called when RapidOCR succeeds")
+
+    monkeypatch.setattr(ocr_module, "run_vision_ocr", fail_if_called)
+
+    from PIL import Image, ImageDraw
+    import io
+    img = Image.new("RGB", (400, 100), color="white")
+    ImageDraw.Draw(img).text((10, 10), "Fast tier only please", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    result = ocr_module.run_layout_ocr(buf.getvalue())
+    assert "Fast tier only please".lower().split()[0] in result.lower()
+
+def test_ocr_vision_fallback_sets_keep_alive_zero():
+    """run_vision_ocr must evict the vision model immediately after use (keep_alive: 0),
+    per the documented Ephemeral Eviction policy for OCR support models, to avoid VRAM
+    thrashing against the pinned primary model."""
+    from sidecar.infrastructure import ocr as ocr_module
+
+    captured_payloads = []
+
+    class FakeResponse:
+        status_code = 200
+        def json(self):
+            return {"response": "Extracted text"}
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            captured_payloads.append(json)
+            return FakeResponse()
+
+    original_client = ocr_module.httpx_client
+    ocr_module.httpx_client = FakeHttpxClient()
+    try:
+        result = ocr_module.run_vision_ocr(b"fake-image-bytes", model="llama3.2-vision")
+    finally:
+        ocr_module.httpx_client = original_client
+
+    assert result == "Extracted text"
+    assert captured_payloads, "Expected at least one call to the Ollama /api/generate endpoint"
+    assert captured_payloads[0]["keep_alive"] == 0
+
+def test_extract_pdf_document_native_text_page():
+    """extract_pdf_document (shared by the plain and NDJSON-streaming ingestion entry points via
+    render_pdf_page_content) must still extract native page text and report the correct page number."""
+    import pymupdf
+    from sidecar.domain.ingestion import extract_pdf_document
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=595, height=842)
+        # Kept above the 40-char OCR_REQUIRED threshold (analyze_pdf_page_structure) so this
+        # exercises the native-text path deterministically, without depending on a running
+        # OCR/vision backend for the OCR_REQUIRED branch (covered separately, with a mock, below).
+        page.insert_text((50, 72), "Hello OnlyRag native text extraction page content", fontsize=12)
+
+        pages = extract_pdf_document(doc)
+        assert len(pages) == 1
+        page_num, page_text = pages[0]
+        assert page_num == 1
+        assert "Hello OnlyRag native text extraction page content" in page_text
+    finally:
+        doc.close()
+
+def test_extract_pdf_document_parallelizes_ocr_pages(monkeypatch):
+    """extract_pdf_document must run the OCR rendering phase concurrently (bounded by
+    PDF_PAGE_RENDER_CONCURRENCY) instead of one page at a time, and still return pages in the
+    correct order despite the underlying work overlapping. Proven by wall clock: 6 pages each with
+    a fixed 0.3s OCR delay must finish well under 6*0.3s=1.8s (fully sequential) -- with the default
+    concurrency of 3, two overlapped rounds should land near ~0.6s."""
+    import time
+    import pymupdf
+    from sidecar.domain import ingestion as ingestion_module
+
+    def slow_ocr(image_bytes):
+        time.sleep(0.3)
+        return "OCR page text"
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", slow_ocr)
+
+    doc = pymupdf.open()
+    try:
+        for _ in range(6):
+            doc.new_page(width=200, height=200)  # blank page -> under the 40-char threshold -> OCR_REQUIRED
+
+        start = time.monotonic()
+        pages = ingestion_module.extract_pdf_document(doc)
+        elapsed = time.monotonic() - start
+
+        assert [p[0] for p in pages] == [1, 2, 3, 4, 5, 6], "Page order must be preserved despite concurrent rendering"
+        assert all("OCR page text" in p[1] for p in pages)
+        assert elapsed < 1.2, f"Expected concurrent OCR rendering to overlap, but took {elapsed:.2f}s (sequential would be ~1.8s)"
+    finally:
+        doc.close()
+
+def test_render_pdf_page_content_ocr_path(monkeypatch):
+    """render_pdf_page_content must route to run_layout_ocr (rather than raw_text/md_tables)
+    when used_ocr=True, matching the OCR_REQUIRED routing decision made by callers."""
+    import pymupdf
+    from sidecar.domain import ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", lambda img_bytes: "OCR-extracted markdown")
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=595, height=842)
+        result = ingestion_module.render_pdf_page_content(
+            doc, page, page_num=1, raw_text="", md_tables=[], used_ocr=True
+        )
+        assert "OCR-extracted markdown" in result
+    finally:
+        doc.close()
+
+def _new_pdf_page_with_embedded_image(doc):
+    """Test helper: a page with >=40 chars of native text plus one significant embedded image,
+    which analyze_pdf_page_structure classifies as HYBRID_VISION (native text + real image)."""
+    from PIL import Image
+    import pymupdf
+    import io
+
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((50, 72), "Report narrative text long enough to skip the OCR threshold", fontsize=10)
+
+    img = Image.new("RGB", (200, 200), color="red")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    page.insert_image(pymupdf.Rect(50, 100, 250, 300), stream=buf.getvalue())
+    return page
+
+def test_analyze_pdf_page_structure_classifies_text_plus_image_as_hybrid_vision():
+    """Router precondition for the two tests below: a page with native text AND a significant
+    embedded image must be classified HYBRID_VISION, not NATIVE_TEXT."""
+    import pymupdf
+    from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
+
+    doc = pymupdf.open()
+    try:
+        page = _new_pdf_page_with_embedded_image(doc)
+        struct_info = analyze_pdf_page_structure(page)
+        assert struct_info["strategy"] == PageRoutingStrategy.HYBRID_VISION
+    finally:
+        doc.close()
+
+def test_render_pdf_page_content_describes_figures_with_vision_when_hybrid(monkeypatch):
+    """render_pdf_page_content(describe_figures_with_vision=True) must call the Vision model on
+    each significant embedded image and fold its description into the figure caption, so diagram
+    content becomes part of the searchable chunk instead of only a resolution placeholder."""
+    import pymupdf
+    from sidecar.domain import ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module, "run_vision_ocr", lambda image_bytes, prompt="": "Bar chart showing Q1-Q4 revenue growth")
+
+    doc = pymupdf.open()
+    try:
+        page = _new_pdf_page_with_embedded_image(doc)
+        raw_text = page.get_text("text").strip()
+        result = ingestion_module.render_pdf_page_content(
+            doc, page, page_num=1, raw_text=raw_text, md_tables=[], used_ocr=False,
+            describe_figures_with_vision=True
+        )
+        assert "Report narrative text" in result
+        assert "Bar chart showing Q1-Q4 revenue growth" in result
+    finally:
+        doc.close()
+
+def test_render_pdf_page_content_skips_vision_description_when_not_hybrid(monkeypatch):
+    """Without describe_figures_with_vision, figures must stay as the plain placeholder caption --
+    the Vision model must not be called at all (avoids the extra latency for ordinary NATIVE_TEXT pages)."""
+    import pymupdf
+    from sidecar.domain import ingestion as ingestion_module
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("run_vision_ocr should not be called when describe_figures_with_vision=False")
+    monkeypatch.setattr(ingestion_module, "run_vision_ocr", fail_if_called)
+
+    doc = pymupdf.open()
+    try:
+        page = _new_pdf_page_with_embedded_image(doc)
+        raw_text = page.get_text("text").strip()
+        result = ingestion_module.render_pdf_page_content(
+            doc, page, page_num=1, raw_text=raw_text, md_tables=[], used_ocr=False,
+            describe_figures_with_vision=False
+        )
+        assert "Figura / Diagramma" in result
+    finally:
+        doc.close()
+
 def test_extract_tabular_document_csv_and_json():
     from sidecar.domain.ingestion import extract_tabular_document
     csv_bytes = b"ColA,ColB,ColC\nVal1,Val2,Val3\nVal4,Val5|Pipe,Val6"

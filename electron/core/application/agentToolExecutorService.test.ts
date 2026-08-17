@@ -421,5 +421,26 @@ async def async_handler():
     expect(res.outputForHistory).toContain('commitMessage')
     expect(res.logMessage).toContain('missing commit message')
   })
+
+  it('performGitCommit (called directly, as workspaceAppService.gitCommit does from the approval-flow IPC handler) commits successfully', () => {
+    execSync('git init', { cwd: tempDir })
+    execSync('git config user.email "test@onlyrag.local"', { cwd: tempDir })
+    execSync('git config user.name "OnlyRag Test"', { cwd: tempDir })
+    fs.writeFileSync(path.join(tempDir, 'direct.txt'), 'hello')
+
+    const res = agentToolExecutorService.performGitCommit(tempDir, 'Add direct.txt')
+
+    expect(res.success).toBe(true)
+    expect(res.output).toContain('[GIT COMMIT:')
+    expect(res.logMessage).toContain('Git Commit created')
+    const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
+    expect(log).toContain('Add direct.txt')
+  })
+
+  it('performGitCommit returns success: false with no commitMessage, without touching git', () => {
+    const res = agentToolExecutorService.performGitCommit(tempDir, '')
+    expect(res.success).toBe(false)
+    expect(res.logMessage).toContain('missing commit message')
+  })
 })
 

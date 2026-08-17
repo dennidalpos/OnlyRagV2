@@ -17,10 +17,11 @@ from sidecar.domain.ingestion import (
     extract_document_markdown,
     create_semantic_chunks,
     extract_tables_from_page,
-    extract_images_and_diagrams_from_page
+    prepare_pdf_page_work_item,
+    render_prepared_pdf_page,
+    PDF_PAGE_RENDER_CONCURRENCY
 )
-from sidecar.domain.router import classify_file_type, DocumentCategory
-from sidecar.infrastructure.ocr import run_layout_ocr
+from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
 
 def process_and_index_document(filename: str, content: bytes, file_path: Optional[str] = None) -> IngestResponse:
     """Orchestrates document extraction, semantic chunking, embedding generation, and LanceDB indexing."""
@@ -180,59 +181,64 @@ def process_and_index_document_generator(
                     "fileName": filename
                 }) + "\n"
 
+                # Phase 1 (sequential, PyMuPDF-bound): routing analysis + raw byte extraction for
+                # every page. PyMuPDF Document/Page objects are not safe to share across threads,
+                # so all page/doc access happens here, on this single thread.
+                work_items: List[Dict[str, Any]] = []
+                page_render_meta: Dict[int, Dict[str, Any]] = {}
                 for page_idx in range(num_pages):
                     page_num = page_idx + 1
                     page = pdf_doc.load_page(page_idx)
-                    page_md_parts: List[str] = []
 
-                    # 1. Native table extraction
+                    struct_info = analyze_pdf_page_structure(page)
+                    strategy = struct_info.get("strategy")
                     md_tables, _ = extract_tables_from_page(page)
                     table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
-
-                    # 2. Text extraction
                     raw_text = page.get_text("text").strip()
-                    if len(raw_text) < 40:
+                    used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED or len(raw_text) < 40
+                    describe_figures_with_vision = strategy == PageRoutingStrategy.HYBRID_VISION
+
+                    work_items.append(prepare_pdf_page_work_item(
+                        pdf_doc, page, page_num, raw_text, md_tables, used_ocr,
+                        describe_figures_with_vision=describe_figures_with_vision
+                    ))
+                    page_render_meta[page_num] = {
+                        "table_info": table_info,
+                        "used_ocr": used_ocr,
+                        "describe_figures_with_vision": describe_figures_with_vision,
+                    }
+
+                # Phase 2 (concurrent, bytes-only): the actual OCR/Vision calls, which dominate
+                # wall-clock time on scanned/hybrid documents. Bounded via PDF_PAGE_RENDER_CONCURRENCY
+                # to avoid overloading the shared local Ollama daemon when several pages fall back to
+                # Vision at once. executor.map submits every item up front but yields results in
+                # input (page) order, so progress events below stay monotonic even though the
+                # underlying work overlaps.
+                render_concurrency = min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))
+                with ThreadPoolExecutor(max_workers=render_concurrency) as executor:
+                    for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
+                        meta = page_render_meta[result_page_num]
+                        if meta["used_ocr"]:
+                            step_msg = f"Pagina {result_page_num}/{num_pages}: OCR Layout completato."
+                            pipeline_label = "OCR Layout (Scansione)"
+                        elif meta["describe_figures_with_vision"]:
+                            step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} e analisi Vision completate."
+                            pipeline_label = "Hybrid Vision Figure Analysis"
+                        else:
+                            step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} completata."
+                            pipeline_label = "PDF Stream & Table Finder"
+
                         yield json.dumps({
                             "type": "progress",
-                            "percent": int(10 + (page_num / num_pages) * 55),
-                            "step": f"Pagina {page_num}/{num_pages}: Esecuzione OCR Layout su pagina scansionata...",
-                            "pipeline": "OCR Layout (Scansione)",
-                            "page": page_num,
+                            "percent": int(10 + (result_page_num / num_pages) * 55),
+                            "step": step_msg,
+                            "pipeline": pipeline_label,
+                            "page": result_page_num,
                             "total_pages": num_pages,
                             "fileName": filename
                         }) + "\n"
 
-                        pix = page.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("png")
-                        ocr_result = run_layout_ocr(img_bytes)
-                        if ocr_result.strip():
-                            page_md_parts.append(ocr_result.strip())
-                        else:
-                            page_md_parts.append("[Scanned page - No readable text extracted]")
-                    else:
-                        yield json.dumps({
-                            "type": "progress",
-                            "percent": int(10 + (page_num / num_pages) * 55),
-                            "step": f"Pagina {page_num}/{num_pages}: Estrazione testo{table_info}...",
-                            "pipeline": "PDF Stream & Table Finder",
-                            "page": page_num,
-                            "total_pages": num_pages,
-                            "fileName": filename
-                        }) + "\n"
-
-                        if md_tables:
-                            page_md_parts.append(raw_text)
-                            page_md_parts.extend(md_tables)
-                        else:
-                            page_md_parts.append(raw_text)
-
-                    # 3. Figure / Diagram annotations
-                    diagrams = extract_images_and_diagrams_from_page(pdf_doc, page, page_num)
-                    if diagrams:
-                        page_md_parts.extend(diagrams)
-
-                    page_content = "\n\n".join(page_md_parts).strip() or "[Empty Page Content]"
-                    page_blocks.append((page_num, sanitize_extracted_text(page_content)))
+                        page_blocks.append((result_page_num, page_content))
             finally:
                 pdf_doc.close()
 

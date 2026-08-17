@@ -4,13 +4,6 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
 
-export interface InspectorMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-}
-
 export interface IngestionProgressState {
   active: boolean
   fileName: string
@@ -57,7 +50,6 @@ export function useIngestion(settings?: AppSettings) {
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [markdownContent, setMarkdownContent] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState<string>('')
   const [isUploading, setIsUploading] = useState<boolean>(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
@@ -98,7 +90,6 @@ export function useIngestion(settings?: AppSettings) {
 
   const {
     documents,
-    isLoading: isDocsLoading,
     refetchDocuments: fetchDocuments,
   } = useIngestedDocuments({
     onDocsUpdated: handleDocUpdateCallback,
@@ -149,19 +140,11 @@ export function useIngestion(settings?: AppSettings) {
     }
   }, [])
 
-  const [docSearchQuery, setDocSearchQuery] = useState<string>('')
-  const [activeMatchIndex, setActiveMatchIndex] = useState<number>(0)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [viewMode, setViewMode] = useState<'page' | 'all'>('page')
   const [zoomLevel, setZoomLevel] = useState<number>(100)
 
-  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false)
-  const [inspectorMessages, setInspectorMessages] = useState<InspectorMessage[]>([])
-  const [inspectorInput, setInspectorInput] = useState<string>('')
-  const [isAnalyzingDiagram, setIsAnalyzingDiagram] = useState<boolean>(false)
-  const [streamingText, setStreamingText] = useState<string>('')
   const [exportStatus, setExportStatus] = useState<{ active: boolean; message: string; isError?: boolean } | null>(null)
-  const chatBottomRef = useRef<HTMLDivElement>(null)
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<any>(null)
   const isSyncingScrollRef = useRef<boolean>(false)
@@ -289,10 +272,6 @@ export function useIngestion(settings?: AppSettings) {
     setMarkdownContent(doc.extractedMarkdown)
     setCurrentPage(1)
     setExportStatus(null)
-    setDocSearchQuery('')
-    setActiveMatchIndex(0)
-    setInspectorMessages([])
-    setIsInspectorOpen(false)
   }
 
   const handleDeleteDoc = async (id: string, filename?: string) => {
@@ -309,7 +288,7 @@ export function useIngestion(settings?: AppSettings) {
         }
       }
     } catch (err: any) {
-      logger.error('IngestionView', `Error deleting document ${id}: ${err.message}`)
+      logger.error('IngestionView', `Error deleting document ${filename || id}: ${err.message}`)
     }
   }
 
@@ -324,16 +303,16 @@ export function useIngestion(settings?: AppSettings) {
 
     let detectedCategory = 'Documento Testo'
     let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
-    let ocrTech = 'Docling Layout / PyMuPDF OCR'
+    let ocrTech = 'PyMuPDF Text Extraction'
 
     if (ext === 'pdf') {
       detectedCategory = 'PDF (Ibrido / Scansione / Testo)'
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
-      ocrTech = `PyMuPDF / Docling Layout + VLM (${settings?.visionModel || 'llama3.2-vision'})`
+      ocrTech = `PyMuPDF / RapidOCR + VLM Fallback (${settings?.visionModel || 'llama3.2-vision'})`
     } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
       detectedCategory = 'Immagine Raster'
       initialPipeline = 'Pipeline: Multimodal Vision & OCR'
-      ocrTech = `Ollama Vision (${settings?.visionModel || 'llama3.2-vision'}) / EasyOCR`
+      ocrTech = `RapidOCR + Ollama Vision Fallback (${settings?.visionModel || 'llama3.2-vision'})`
     } else if (ext === 'docx') {
       detectedCategory = 'Microsoft Word'
       initialPipeline = 'Pipeline: DOCX Structured XML Parser'
@@ -473,40 +452,20 @@ export function useIngestion(settings?: AppSettings) {
     isSaving,
     saveStatus,
     handleSaveDocument,
-    searchQuery,
-    setSearchQuery,
     isUploading,
-    isDocsLoading,
     uploadError,
     syncScroll,
     setSyncScroll,
     ingestionProgress,
     handleCancelIngestion,
-    docSearchQuery,
-    setDocSearchQuery,
-    activeMatchIndex,
-    setActiveMatchIndex,
     currentPage,
-    setCurrentPage,
     scrollToPage,
     viewMode,
     setViewMode,
     zoomLevel,
     setZoomLevel,
-    isInspectorOpen,
-    setIsInspectorOpen,
-    inspectorMessages,
-    setInspectorMessages,
-    inspectorInput,
-    setInspectorInput,
-    isAnalyzingDiagram,
-    setIsAnalyzingDiagram,
-    streamingText,
-    setStreamingText,
-    chatBottomRef,
     exportStatus,
     leftPaneRef,
-    editorRef,
     handleLeftPaneScroll,
     handleEditorDidMount,
     fetchDocuments,

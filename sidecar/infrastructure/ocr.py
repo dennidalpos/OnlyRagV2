@@ -6,9 +6,7 @@ from sidecar.config import httpx_client, logger
 
 # OCR Engine Singleton Caches
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
-_EASYOCR_READER: Any = None
-_PADDLEOCR_READER: Any = None
-_DOCLING_CONVERTER: Any = None
+_RAPIDOCR_ENGINE: Any = None
 
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
     """Downscales oversized images to max_dim on the longest edge to prevent OOM/timeouts."""
@@ -32,86 +30,56 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
         logger.debug(f"Image preprocessing skipped: {e}")
     return image_bytes
 
+def _rapidocr_cuda_available() -> bool:
+    """Checks whether onnxruntime itself (not just the system GPU) exposes CUDAExecutionProvider.
+    RapidOCR runs on onnxruntime, so this is the accurate signal for its GPU path -- a CUDA GPU
+    detected via PyTorch elsewhere doesn't guarantee onnxruntime-gpu is the installed variant."""
+    try:
+        import onnxruntime as ort
+        return "CUDAExecutionProvider" in ort.get_available_providers()
+    except ImportError:
+        return False
+
+def run_rapid_ocr(image_bytes: bytes) -> str:
+    """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX), with CUDA
+    execution when onnxruntime-gpu is installed and a CUDA device is available. No layout/table
+    understanding -- that class of page is routed to run_vision_ocr by the caller instead."""
+    global _RAPIDOCR_ENGINE
+    from rapidocr_onnxruntime import RapidOCR
+
+    if _RAPIDOCR_ENGINE is None:
+        use_cuda = _rapidocr_cuda_available()
+        _RAPIDOCR_ENGINE = RapidOCR(det_use_cuda=use_cuda, cls_use_cuda=use_cuda, rec_use_cuda=use_cuda)
+
+    result, _elapse = _RAPIDOCR_ENGINE(image_bytes)
+    if not result:
+        return ""
+    lines = [line[1] for line in result if line and len(line) > 1 and line[1]]
+    return "\n".join(lines).strip()
+
 def run_layout_ocr(
     image_bytes: bytes,
     prompt: str = "Extract all text, tables, and key structure from this document image in clean Markdown format.",
     ollama_url: str = "http://127.0.0.1:11434",
     model: str = "llama3.2-vision"
 ) -> str:
-    """Multi-tiered Document Layout OCR Engine with lazy singleton caches (Docling/Surya/PaddleOCR/Tesseract/Ollama Vision)."""
-    global _DOCLING_CONVERTER, _EASYOCR_READER, _PADDLEOCR_READER
-    
+    """Two-tiered Document OCR Engine: RapidOCR (fast, GPU-capable local text recognition) first,
+    falling back to the Ollama Vision model for layout-heavy content (tables, diagrams, complex
+    scans) or when RapidOCR is unavailable / yields no text."""
     prepared_bytes = _prepare_image_for_ocr(image_bytes)
-    gpu_info = detect_gpu_acceleration()
 
-    # Tier 1: Try Docling Layout Parsing if available
+    # Tier 1: RapidOCR (local, fast, GPU-capable via onnxruntime)
     try:
-        import io
-        from docling.document_converter import DocumentConverter
-        if _DOCLING_CONVERTER is None:
-            _DOCLING_CONVERTER = DocumentConverter()
-        doc_stream = io.BytesIO(prepared_bytes)
-        result = _DOCLING_CONVERTER.convert_single(doc_stream)
-        exported_md = result.document.export_to_markdown().strip()
-        if exported_md:
-            logger.info("Layout OCR successfully performed via Docling engine.")
-            return exported_md
+        text_out = run_rapid_ocr(prepared_bytes)
+        if text_out:
+            logger.info("OCR successfully performed via RapidOCR.")
+            return text_out
     except ImportError:
         pass
-    except Exception as docling_err:
-        logger.warning(f"Docling OCR processing failed: {docling_err}")
+    except Exception as rapid_err:
+        logger.warning(f"RapidOCR processing failed: {rapid_err}")
 
-    # Tier 2: Try EasyOCR / PaddleOCR / Pytesseract if available
-    try:
-        import numpy as np
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(prepared_bytes)).convert("RGB")
-
-        # Try EasyOCR
-        try:
-            import easyocr
-            if _EASYOCR_READER is None:
-                _EASYOCR_READER = easyocr.Reader(['en', 'it'], gpu=gpu_info["has_cuda"])
-            ocr_results = _EASYOCR_READER.readtext(np.array(img), detail=0)
-            if ocr_results:
-                text_out = "\n\n".join(ocr_results).strip()
-                logger.info("OCR successfully performed via EasyOCR.")
-                return text_out
-        except ImportError:
-            pass
-
-        # Try PaddleOCR
-        try:
-            from paddleocr import PaddleOCR
-            if _PADDLEOCR_READER is None:
-                _PADDLEOCR_READER = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=gpu_info["has_cuda"])
-            res = _PADDLEOCR_READER.ocr(np.array(img), cls=True)
-            lines = []
-            if res and res[0]:
-                for line in res[0]:
-                    if line and len(line) > 1 and line[1]:
-                        lines.append(line[1][0])
-            if lines:
-                text_out = "\n".join(lines).strip()
-                logger.info("OCR successfully performed via PaddleOCR.")
-                return text_out
-        except ImportError:
-            pass
-
-        # Try Pytesseract
-        try:
-            import pytesseract
-            text_out = pytesseract.image_to_string(img).strip()
-            if text_out:
-                logger.info("OCR successfully performed via Pytesseract.")
-                return text_out
-        except ImportError:
-            pass
-    except Exception as ocr_lib_err:
-        logger.warning(f"Local OCR engine attempt failed: {ocr_lib_err}")
-
-    # Tier 3: Ollama Vision Model Fallback
+    # Tier 2: Ollama Vision Model Fallback
     return run_vision_ocr(prepared_bytes, prompt, ollama_url, model=model)
 
 def run_vision_ocr(
@@ -130,7 +98,8 @@ def run_vision_ocr(
                 "model": v_model,
                 "prompt": prompt,
                 "images": [b64_img],
-                "stream": False
+                "stream": False,
+                "keep_alive": 0
             }
             try:
                 res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)

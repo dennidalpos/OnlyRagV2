@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { FileText, Loader2, Image as ImageIcon, Sparkles } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { apiService } from '../../services/api'
 import { RenderedPagePreview } from './RenderedPagePreview'
+import { useTranslation } from '../../i18n'
 
 interface SourcePagePreviewProps {
   docId: string
@@ -18,6 +19,7 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
   pageContent,
   zoomLevel = 100,
 }) => {
+  const { t } = useTranslation()
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
 
@@ -61,14 +63,11 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5 text-[11px] font-mono text-slate-400">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span className="text-cyan-300 font-semibold">Documento Sorgente (Originale)</span>
+            <span className="text-cyan-300 font-semibold">{t('ingestion.sourceLabel')}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Pagina {pageNumber} di {totalPages}</span>
-            <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-cyan-400 font-mono">
-              P.{pageNumber}
-            </span>
-          </div>
+          <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-cyan-400 font-mono">
+            {t('ingestion.pagePosition', { current: pageNumber, total: totalPages })}
+          </span>
         </div>
 
         {/* Content View: Raster image preview or structured layout */}
@@ -76,20 +75,19 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-3 text-slate-400 min-h-[400px]">
               <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-              <span className="text-xs text-slate-400 font-medium">Caricamento anteprima sorgente...</span>
+              <span className="text-xs text-slate-400 font-medium">{t('ingestion.loadingSourcePreview')}</span>
             </div>
           ) : imageBase64 ? (
             <div className="flex justify-center items-center bg-slate-950/80 border border-slate-800 rounded-lg p-2 overflow-hidden shadow-inner">
               <img
                 src={`data:image/png;base64,${imageBase64}`}
-                alt={`Pagina ${pageNumber} originale`}
+                alt={t('ingestion.sourcePageAlt', { current: pageNumber })}
                 className="w-full h-auto object-contain max-h-[750px] rounded shadow-md"
               />
             </div>
           ) : (
             <RenderedPagePreview
               pageNumber={pageNumber}
-              totalPages={totalPages}
               pageContent={pageContent}
               zoomLevel={100}
             />

@@ -68,17 +68,21 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
     }
   }
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     dragCounterRef.current = 0
     setIsDraggingOver(false)
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      if (e.dataTransfer.files.length > 1) {
-        toast.info(`Caricamento di ${e.dataTransfer.files[0].name} (1 di ${e.dataTransfer.files.length} file)`)
-      }
-      const file = e.dataTransfer.files[0]
-      ing.handleFileUpload(file)
+    const files = e.dataTransfer.files
+    if (!files || files.length === 0) return
+
+    if (files.length > 1) {
+      toast.info(`Caricamento di ${files.length} file in sequenza...`)
+    }
+    // Sequential, matching handleSelectFileNative: ingestion isn't safe to run concurrently
+    // for multiple files (shared upload/progress state in useIngestion).
+    for (let i = 0; i < files.length; i++) {
+      await ing.handleFileUpload(files[i])
     }
   }
 
@@ -298,7 +302,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
               aria-label={t('ingestion.cancelOperation')}
               className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/50 text-rose-300 text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 focus-ring active:scale-95"
             >
-              <AlertTriangle className="w-3 h-3" /> {t('common.cancel')}
+              <AlertTriangle className="w-3.5 h-3.5" /> {t('common.cancel')}
             </button>
           </div>
 
@@ -482,7 +486,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <div className="w-[1px] h-4 bg-slate-800 mx-1" />
 
                 {/* Single Page vs Continuous Mode Toggle */}
-                <div className="flex items-center gap-1" role="group" aria-label={t('ingestion.ocrMode')}>
+                <div className="flex items-center gap-1" role="group" aria-label={t('ingestion.pageViewMode')}>
                   <button
                     type="button"
                     onClick={() => ing.setViewMode('page')}

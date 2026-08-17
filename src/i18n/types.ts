@@ -259,10 +259,6 @@ export interface TranslationSchema {
     selectDocPrompt: string
   }
   ingestion: {
-    title: string
-    subtitle: string
-    dropzone: string
-    dropzoneActive: string
     uploadButton: string
     indexedDocuments: string
     pages: string
@@ -272,14 +268,10 @@ export interface TranslationSchema {
     deleteConfirm: string
     searchPlaceholder: string
     noDocuments: string
-    preview: string
-    rawMarkdown: string
     vectorSearch: string
-    ocrMode: string
-    standardMode: string
-    visionMode: string
-    deleteDoc: string
-    viewDoc: string
+    vectorSearchDescription: string
+    openVectorInspector: string
+    pageViewMode: string
     pageNavigation: string
     dropzoneRelease: string
     dropzoneSupportedFormats: string
@@ -289,6 +281,10 @@ export interface TranslationSchema {
     copyMarkdown: string
     markdownCopied: string
     sourcePreview: string
+    sourceLabel: string
+    pagePosition: string
+    loadingSourcePreview: string
+    sourcePageAlt: string
     markdownEditor: string
     unsavedChanges: string
     synchronized: string

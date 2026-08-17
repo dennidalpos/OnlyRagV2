@@ -39,6 +39,41 @@ export class AgentToolExecutorService {
     return this.journal.commit()
   }
 
+  /**
+   * Stages and commits all changes in `cwd` via execFileSync (argv array, no shell) -- safe
+   * against injection via the commit message without needing to escape it for a shell string.
+   * Shared by the git_commit tool-call case below and by the workspace:git-commit IPC handler
+   * (workspaceAppService.gitCommit), which is what the Coding Agent Studio approval flow actually
+   * calls once the user approves a git_commit tool call -- see the Always-Confirm Gate in
+   * agentOrchestratorAppService.ts.
+   */
+  public performGitCommit(cwd: string, commitMessage: string): { success: boolean; output: string; logMessage: string } {
+    const trimmedMessage = (commitMessage || '').trim()
+    if (!trimmedMessage) {
+      return {
+        success: false,
+        output: 'Git Commit Error: commitMessage parameter is required.',
+        logMessage: 'Git Commit Error: missing commit message',
+      }
+    }
+    try {
+      execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15000 })
+      const stdout = execFileSync('git', ['commit', '-m', trimmedMessage], { cwd, encoding: 'utf-8', timeout: 15000 })
+      return {
+        success: true,
+        output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
+        logMessage: `Git Commit created in ${path.basename(cwd)}`,
+      }
+    } catch (err: any) {
+      const detail = (err.stdout?.toString().trim() || err.stderr?.toString().trim() || err.message) as string
+      return {
+        success: false,
+        output: `Git Commit Error: ${detail}`,
+        logMessage: `Git Commit Error: ${detail}`,
+      }
+    }
+  }
+
   public getOrCreateShellSession(workspacePath?: string | null): PersistentPowerShellSession {
     const key = workspacePath || process.cwd()
     let session = this.shellSessions.get(key)
@@ -819,28 +854,10 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
 
       case 'git_commit': {
         const cwd = workspacePath || process.cwd()
-        const commitMessage = (parameters.commitMessage || '').trim()
-        if (!commitMessage) {
-          return {
-            outputForHistory: 'Git Commit Error: commitMessage parameter is required.',
-            logMessage: 'Git Commit Error: missing commit message',
-          }
-        }
-        try {
-          // execFileSync (argv array, no shell) avoids any need to escape the commit
-          // message for a shell string — safe against injection via message content.
-          execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15000 })
-          const stdout = execFileSync('git', ['commit', '-m', commitMessage], { cwd, encoding: 'utf-8', timeout: 15000 })
-          return {
-            outputForHistory: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
-            logMessage: `Git Commit created in ${path.basename(cwd)}`,
-          }
-        } catch (err: any) {
-          const detail = (err.stdout?.toString().trim() || err.stderr?.toString().trim() || err.message) as string
-          return {
-            outputForHistory: `Git Commit Error: ${detail}`,
-            logMessage: `Git Commit Error: ${detail}`,
-          }
+        const result = this.performGitCommit(cwd, parameters.commitMessage || '')
+        return {
+          outputForHistory: result.output,
+          logMessage: result.logMessage,
         }
       }
 

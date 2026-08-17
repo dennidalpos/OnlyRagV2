@@ -50,6 +50,7 @@ const api: IElectronAPI = {
   searchWeb: (query: string, maxResults?: number) => ipcRenderer.invoke('workspace:search-web', query, maxResults),
   fetchWebContent: (url: string, maxChars?: number) => ipcRenderer.invoke('workspace:fetch-web', url, maxChars),
   downloadFile: (url: string, targetFilePath: string) => ipcRenderer.invoke('workspace:download-file', url, targetFilePath),
+  gitCommit: (commitMessage: string, workspaceRoot?: string) => ipcRenderer.invoke('workspace:git-commit', commitMessage, workspaceRoot),
   inspectGuestOsEnvironment: () => ipcRenderer.invoke('workspace:inspect-guest-os'),
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => ipcRenderer.invoke('workspace:execute-powershell', command, cwd, timeoutMs),
   parseAgentToolCall: (rawText: string) => ipcRenderer.invoke('agent:parse-tool-call', rawText),

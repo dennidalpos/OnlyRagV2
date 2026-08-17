@@ -102,7 +102,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                         }}
                         title={t('common.confirm')}
                         aria-label={t('common.confirm')}
-                        className="p-1 bg-rose-600 hover:bg-rose-500 text-white rounded transition-colors focus-ring active:scale-95"
+                        className="p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors focus-ring active:scale-95"
                       >
                         <Check className="w-3 h-3" />
                       </button>
@@ -111,7 +111,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                         onClick={() => setDeletingId(null)}
                         title={t('common.cancel')}
                         aria-label={t('common.cancel')}
-                        className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors focus-ring"
+                        className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors focus-ring"
                       >
                         <X className="w-3 h-3" />
                       </button>

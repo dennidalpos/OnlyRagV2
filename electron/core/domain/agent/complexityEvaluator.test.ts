@@ -86,7 +86,36 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     }
     const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxExtreme)
     expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('qwen2.5-coder:32b')
+    // A 32B-class reasoning model, i.e. far above what the mid-range profile is offered.
+    // Which 32B tag wins is decided by findMatchingInstalledModel's loose base match, not by
+    // the cascade order — the cascade's own budget ordering is covered directly in
+    // hardwareModelCatalog.test.ts (buildFallbackChain).
+    expect(res.modelName).toBe('deepseek-r1:32b')
+  })
+
+  it('should prefer the curated head of the catalog cascade when it is installed', () => {
+    const ctxExtreme: ComplexityEvaluationContext = {
+      safeVramBudgetGB: 16.5,
+      vramTotalMB: 24576,
+      availableModels: ['gpt-oss:20b', 'qwen2.5-coder:14b'],
+    }
+    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxExtreme)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('gpt-oss:20b')
+    expect(res.isFallback).toBe(false)
+  })
+
+  it('should keep a CPU-only host on models it can actually run, not merely hold in RAM', () => {
+    // 32GB of system RAM would "fit" a 14B model, but a CPU-only tool loop needs the
+    // CPU throughput budget instead (CPU_INFERENCE_WEIGHT_BUDGET_GB).
+    const ctxCpu: ComplexityEvaluationContext = {
+      hardwareProfile: 'Auto',
+      vramTotalMB: 0,
+      availableModels: ['qwen2.5-coder:14b', 'qwen2.5-coder:3b'],
+    }
+    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxCpu)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('qwen2.5-coder:3b')
   })
 
   it('should find matching installed models accurately with fuzzy tags', () => {

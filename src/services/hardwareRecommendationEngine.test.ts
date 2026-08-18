@@ -13,6 +13,19 @@ import {
   getRecommendedOllamaEnvVars,
 } from './hardwareRecommendationEngine'
 import { findMatchingInstalledModel } from './complexityRouterService'
+import {
+  FAST_TIER_CATALOG,
+  STANDARD_TIER_CATALOG,
+  DEEP_REASONING_TIER_CATALOG,
+  HEAVY_ESCALATION_TIER_CATALOG,
+  CHAT_TIER_CATALOG,
+  TRANSLATION_TIER_CATALOG,
+  MEDICAL_TIER_CATALOG,
+  LEGAL_TIER_CATALOG,
+  VISION_TIER_CATALOG,
+  EMBEDDING_TIER_CATALOG,
+  type RawModelCatalogEntry,
+} from './hardwareModelCatalog'
 import { DiagnosticsData, RunningModelDetails } from '../types'
 
 describe('hardwareRecommendationEngine Unit Tests', () => {
@@ -215,7 +228,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-coder:6.7b')
+    expect(recDeep?.modelName).toBe('qwen3:4b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -248,7 +261,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-coder:6.7b')
+    expect(recDeep?.modelName).toBe('qwen3:4b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -335,7 +348,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recStd?.modelName).toBe('qwen2.5-coder:14b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen2.5-coder:32b')
+    expect(recDeep?.modelName).toBe('gpt-oss:20b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llama3.2-vision:11b')
@@ -344,10 +357,10 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recTrans?.modelName).toBe('aya-expanse:8b')
 
     const recMed = recs.medicalTierModels.find((m) => m.isRecommended)
-    expect(recMed?.modelName).toBe('meditron:70b')
+    expect(recMed?.modelName).toBe('adrienbrault/biomistral-7b:Q4_K_M')
 
     const recLaw = recs.legalTierModels.find((m) => m.isRecommended)
-    expect(recLaw?.modelName).toBe('command-r:35b')
+    expect(recLaw?.modelName).toBe('mistral-small3.2:24b')
   })
 
   it('should format model display names and compute sizes and families correctly', () => {
@@ -436,5 +449,166 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(extEnv.profileTier).toBe('extreme')
     expect(extEnv.variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('4')
     expect(extEnv.variables.find((v) => v.name === 'OLLAMA_MAX_LOADED_MODELS')?.value).toBe('3')
+  })
+
+  describe('recommendation/hardware coherence invariant', () => {
+    const REPRESENTATIVE_HOSTS: {
+      tier: string
+      diagnostics: DiagnosticsData
+    }[] = [
+      { tier: 'legacy', diagnostics: createMockDiagnostics(false, 0, 8, 'CPU') },
+      { tier: 'entry', diagnostics: createMockDiagnostics(true, 6144, 16, 'NVIDIA GeForce RTX 3050') },
+      { tier: 'midrange', diagnostics: createMockDiagnostics(true, 8192, 16, 'NVIDIA GeForce RTX 4060') },
+      { tier: 'highend', diagnostics: createMockDiagnostics(true, 16384, 32, 'NVIDIA GeForce RTX 4080') },
+      { tier: 'extreme', diagnostics: createMockDiagnostics(true, 24576, 64, 'NVIDIA GeForce RTX 4090') },
+    ]
+
+    it('must never pre-select a model its own compatibility assessment flags as exceeding memory', () => {
+      // The wizard defaults to `isRecommended` entries, so an over-ambitious catalog row used
+      // to hand minimum-spec hosts (and even 24GB cards) a model the engine itself rated
+      // exceeds_vram. Every recommended model must be at worst `tight_vram` on its profile.
+      for (const host of REPRESENTATIVE_HOSTS) {
+        const recs = analyzeHardwareAndRecommend(host.diagnostics)
+        expect(recs.profileTier).toBe(host.tier)
+
+        const allGroups = [
+          recs.fastTierModels,
+          recs.standardTierModels,
+          recs.deepReasoningTierModels,
+          recs.heavyEscalationTierModels,
+          recs.chatTierModels,
+          recs.translationTierModels,
+          recs.medicalTierModels,
+          recs.legalTierModels,
+          recs.visionTierModels,
+          recs.embeddingTierModels,
+        ]
+
+        for (const group of allGroups) {
+          for (const rec of group.filter((m) => m.isRecommended)) {
+            expect(
+              rec.compatibilityStatus,
+              `${host.tier}: recommended ${rec.modelName} is ${rec.compatibilityStatus} (${rec.footprintGB}GB vs budget ${recs.safeVramBudgetGB}GB)`
+            ).not.toBe('exceeds_vram')
+            expect(rec.isHardwareCompatible).toBe(true)
+          }
+        }
+      }
+    })
+
+    it('must expose exactly one recommended model per complexity tier for every profile', () => {
+      for (const host of REPRESENTATIVE_HOSTS) {
+        const recs = analyzeHardwareAndRecommend(host.diagnostics)
+        expect(recs.fastTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
+        expect(recs.standardTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
+        expect(recs.deepReasoningTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
+      }
+    })
+  })
+
+  describe('refreshed model matrix', () => {
+    it('should price the current-generation tags added to the catalog instead of falling back to the 4.5GB default', () => {
+      expect(estimateModelWeightGB('qwen3:4b')).toBe(2.6)
+      expect(estimateModelWeightGB('qwen3:8b')).toBe(5.2)
+      expect(estimateModelWeightGB('qwen3:14b')).toBe(9.3)
+      expect(estimateModelWeightGB('qwen3-coder:30b')).toBe(18.6)
+      expect(estimateModelWeightGB('gpt-oss:20b')).toBe(13.5)
+      expect(estimateModelWeightGB('devstral:24b')).toBe(14.0)
+      expect(estimateModelWeightGB('mistral-small3.2:24b')).toBe(14.0)
+      expect(estimateModelWeightGB('granite3.3:8b')).toBe(4.9)
+      expect(estimateModelWeightGB('gemma3:1b')).toBe(0.82)
+      expect(estimateModelWeightGB('gemma3:12b')).toBe(8.1)
+      expect(estimateModelWeightGB('embeddinggemma:300m')).toBe(0.62)
+    })
+
+    it('should assign the new tags to the correct family badge', () => {
+      expect(getModelFamily('qwen3-coder:30b')).toBe('qwen-coder')
+      expect(getModelFamily('qwen3:8b')).toBe('qwen')
+      expect(getModelFamily('qwen2.5vl:7b')).toBe('qwen-vl')
+      expect(getModelFamily('gpt-oss:20b')).toBe('gpt-oss')
+      expect(getModelFamily('granite3.3:8b')).toBe('granite')
+      expect(getModelFamily('granite-embedding:278m')).toBe('granite')
+      expect(getModelFamily('devstral:24b')).toBe('mistral')
+      expect(getModelFamily('gemma3:4b')).toBe('gemma')
+    })
+
+    it('should keep every catalog entry priced consistently with its advertised size', () => {
+      // Guards against a new catalog row silently falling through to the 4.5GB "unknown
+      // model" default: the size string shown in the wizard and the weight the VRAM
+      // budgeting math uses must describe the same model.
+      const ALL_CATALOGS: RawModelCatalogEntry[] = [
+        ...FAST_TIER_CATALOG,
+        ...STANDARD_TIER_CATALOG,
+        ...DEEP_REASONING_TIER_CATALOG,
+        ...HEAVY_ESCALATION_TIER_CATALOG,
+        ...CHAT_TIER_CATALOG,
+        ...TRANSLATION_TIER_CATALOG,
+        ...MEDICAL_TIER_CATALOG,
+        ...LEGAL_TIER_CATALOG,
+        ...VISION_TIER_CATALOG,
+        ...EMBEDDING_TIER_CATALOG,
+      ]
+
+      const parseAdvertisedGB = (label: string): number => {
+        const match = label.match(/^([\d.]+)\s*(GB|MB)$/i)
+        if (!match) throw new Error(`Unparseable sizeBytesApprox: ${label}`)
+        const value = parseFloat(match[1])
+        return match[2].toUpperCase() === 'MB' ? value / 1024 : value
+      }
+
+      for (const entry of ALL_CATALOGS) {
+        const advertised = parseAdvertisedGB(entry.sizeBytesApprox)
+        const priced = estimateModelWeightGB(entry.modelName)
+        const drift = Math.abs(priced - advertised) / advertised
+        expect(
+          drift,
+          `${entry.modelName}: catalog says ${entry.sizeBytesApprox} but the weight table says ${priced} GB`
+        ).toBeLessThan(0.2)
+      }
+    })
+  })
+
+  describe('Ollama OS parameters from full hardware facts', () => {
+    it('should not emit an inert KV-cache type on a CPU-only host where flash attention is off', () => {
+      const cpuEnv = getRecommendedOllamaEnvVars(createMockDiagnostics(false, 0, 8))
+      expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_FLASH_ATTENTION')?.value).toBe('0')
+      // OLLAMA_KV_CACHE_TYPE is only honoured by Ollama when flash attention is enabled.
+      expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_KV_CACHE_TYPE')).toBeUndefined()
+      expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_GPU_OVERHEAD')).toBeUndefined()
+    })
+
+    it('should clamp concurrency by physical core count, not by VRAM alone', () => {
+      // 24GB GPU but only 4 cores -> 1 concurrent slot (4 cores budgeted per slot).
+      const fewCores = createMockDiagnostics(true, 24576, 64)
+      fewCores.system.cpusCount = 4
+      expect(getRecommendedOllamaEnvVars(fewCores).variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('1')
+
+      const manyCores = createMockDiagnostics(true, 24576, 64)
+      manyCores.system.cpusCount = 16
+      expect(getRecommendedOllamaEnvVars(manyCores).variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value).toBe('4')
+    })
+
+    it('should keep only one model resident when RAM cannot host a second hot model', () => {
+      const lowRamWorkstation = createMockDiagnostics(true, 24576, 16)
+      const env = getRecommendedOllamaEnvVars(lowRamWorkstation)
+      expect(env.profileTier).toBe('extreme')
+      expect(env.variables.find((v) => v.name === 'OLLAMA_MAX_LOADED_MODELS')?.value).toBe('2')
+    })
+
+    it('should pin the smallest default context window and shortest residency on minimum hardware', () => {
+      const minimal = createMockDiagnostics(false, 0, 8, 'CPU')
+      minimal.system.cpusCount = 4
+      const env = getRecommendedOllamaEnvVars(minimal)
+      expect(env.variables.find((v) => v.name === 'OLLAMA_CONTEXT_LENGTH')?.value).toBe('4096')
+      expect(env.variables.find((v) => v.name === 'OLLAMA_KEEP_ALIVE')?.value).toBe('5m')
+      expect(env.variables.find((v) => v.name === 'OLLAMA_MAX_LOADED_MODELS')?.value).toBe('1')
+    })
+
+    it('should reserve the same OS VRAM overhead Ollama plans around as the safe-budget formula', () => {
+      const env = getRecommendedOllamaEnvVars(createMockDiagnostics(true, 12288, 32))
+      const overhead = env.variables.find((v) => v.name === 'OLLAMA_GPU_OVERHEAD')
+      expect(overhead?.value).toBe(String(Math.round(1.5 * 1024 * 1024 * 1024)))
+      expect(env.variables.find((v) => v.name === 'OLLAMA_CONTEXT_LENGTH')?.value).toBe('16384')
+    })
   })
 })

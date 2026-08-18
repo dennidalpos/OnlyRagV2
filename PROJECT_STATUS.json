@@ -1,10 +1,3 @@
 {
-  "todos": [
-    "Unificare la classificazione hardware in un modulo puro condiviso (hardwareProfileTiers) ed eliminare le 4 soglie VRAM divergenti in hardwareRecommendationEngine, hardwareProfileResolver, complexityEvaluator e getRecommendedOllamaEnvVars",
-    "Aggiornare la matrice modelli (hardwareModelCatalog) con la generazione corrente di modelli locali Ollama e ricalibrare i profili consigliati per hardware minimo (legacy/entry)",
-    "Derivare le catene di fallback del Routing di Complessita dal catalogo modelli invece di liste hardcoded in complexityEvaluator",
-    "Introdurre un budget di contesto chat hardware-aware (chatContextBudget) e collegarlo a useChatEngine, passando num_ctx/num_thread/keep_alive a generateOllamaStream invece del default fisso 16384",
-    "Ottimizzare i parametri OS del client Ollama in base a VRAM + CPU + RAM rilevate, correggendo l'incoerenza OLLAMA_KV_CACHE_TYPE senza OLLAMA_FLASH_ATTENTION su CPU",
-    "Aggiornare la scheda Informazioni/Contributi: versione e autore reali, versioni dipendenze allineate a package.json, rimozione import morti e localizzazione dei filtri categoria"
-  ]
+  "todos": []
 }

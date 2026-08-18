@@ -2,23 +2,20 @@ import React, { useState } from 'react'
 import {
   X,
   Award,
-  BookOpen,
   Code2,
-  Cpu,
-  Layers,
-  Sparkles,
   ExternalLink,
   Copy,
   Check,
   Heart,
-  FileText,
   ShieldCheck,
   Package,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import type { TranslationKey } from '../../i18n'
 import { OnlyRagLogo } from './OnlyRagLogo'
 import { GithubIcon } from './GithubIcon'
 import { logger } from '../../lib/logger'
+import { APP_AUTHOR, APP_REPOSITORY_SLUG, APP_REPOSITORY_URL, APP_VERSION } from '../../constants/appMetadata'
 
 interface AboutModalProps {
   isOpen: boolean
@@ -38,23 +35,23 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   // Core
   {
     name: 'Electron',
-    version: 'v43.4.0',
+    version: 'v43.4',
     description: 'Cross-platform native desktop application shell and IPC runtime.',
     license: 'MIT',
     category: 'core',
     url: 'https://www.electronjs.org',
   },
   {
-    name: 'React 19 & TypeScript',
-    version: 'v19.0.0 / v6.0',
+    name: 'React & TypeScript',
+    version: 'v19.0 / v6.0',
     description: 'Modern component-driven presentation layer with strict compile-time types.',
     license: 'MIT',
     category: 'core',
     url: 'https://react.dev',
   },
   {
-    name: 'Vite & Tailwind CSS v4',
-    version: 'v7.3 / v4.0',
+    name: 'Vite & Tailwind CSS',
+    version: 'v8.2 / v4.0',
     description: 'Ultra-fast HMR frontend bundling and high-performance design tokens.',
     license: 'MIT',
     category: 'core',
@@ -63,7 +60,7 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   // AI & Vector
   {
     name: 'LanceDB',
-    version: 'v0.25.0',
+    version: '>= v0.6',
     description: 'Serverless embedded vector database with hybrid vector + FTS search.',
     license: 'Apache-2.0',
     category: 'aiAndVector',
@@ -79,7 +76,7 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'FastAPI & Uvicorn',
-    version: 'v0.115.0',
+    version: '>= v0.110 / v0.28',
     description: 'High-performance asynchronous Python sidecar service for ingestion and parsing.',
     license: 'MIT',
     category: 'aiAndVector',
@@ -87,7 +84,7 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'PyMuPDF (fitz)',
-    version: 'v1.25.0',
+    version: '>= v1.24',
     description: 'High-speed document layout parsing and multi-format PDF compiler.',
     license: 'AGPL-3.0 / Commercial',
     category: 'aiAndVector',
@@ -96,7 +93,7 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   // UI & Editor
   {
     name: 'Monaco Editor',
-    version: 'v4.7.0',
+    version: 'v4.7',
     description: 'VS Code editor engine for dual-pane Markdown review and DiffEditor translation.',
     license: 'MIT',
     category: 'uiAndEditor',
@@ -104,15 +101,31 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   },
   {
     name: 'Lucide React',
-    version: 'v1.31.0',
+    version: 'v1.31',
     description: 'Clean, beautiful and consistent iconography system.',
     license: 'ISC',
     category: 'uiAndEditor',
     url: 'https://lucide.dev',
   },
   {
+    name: 'Vitest',
+    version: 'v4.1',
+    description: 'Vite-native unit test runner for the domain, application and hook layers.',
+    license: 'MIT',
+    category: 'core',
+    url: 'https://vitest.dev',
+  },
+  {
+    name: 'RapidOCR (ONNX Runtime)',
+    version: '>= v1.4',
+    description: 'Native CPU/CUDA OCR engine for scanned document ingestion.',
+    license: 'Apache-2.0',
+    category: 'aiAndVector',
+    url: 'https://github.com/RapidAI/RapidOCR',
+  },
+  {
     name: 'node-pty',
-    version: 'v1.1.0',
+    version: 'v1.1',
     description: 'Interactive pseudo-terminal integration for native PowerShell session execution.',
     license: 'MIT',
     category: 'uiAndEditor',
@@ -145,6 +158,15 @@ const UPSTREAM_MODULES: DependencyItem[] = [
   },
 ]
 
+/** Filter tabs for the credits list. Short labels, localized like the rest of the dialog. */
+const CATEGORY_TABS: { id: string; labelKey: TranslationKey }[] = [
+  { id: 'all', labelKey: 'about.tabAll' },
+  { id: 'core', labelKey: 'about.tabCore' },
+  { id: 'aiAndVector', labelKey: 'about.tabAiAndVector' },
+  { id: 'uiAndEditor', labelKey: 'about.tabUiAndEditor' },
+  { id: 'skillsAndEcosystem', labelKey: 'about.tabSkills' },
+]
+
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation()
   const [copiedUrl, setCopiedUrl] = useState(false)
@@ -163,7 +185,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null
 
-  const repoUrl = 'https://github.com/dennidalpos/OnlyRagV2'
+  const repoUrl = APP_REPOSITORY_URL
 
   const handleCopyRepo = async () => {
     try {
@@ -207,8 +229,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 <h2 id="about-modal-title" className="text-2xl font-black tracking-tight text-white">
                   {t('about.title')}
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-mono">
-                  {t('common.version')}
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-mono"
+                  title={t('common.version')}
+                >
+                  v{APP_VERSION}
                 </span>
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   {t('about.licenseType')}
@@ -245,7 +270,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                     {t('about.authorTitle')}
                   </div>
                   <div className="text-sm font-bold text-slate-100">
-                    {t('common.author')}
+                    {APP_AUTHOR}
                   </div>
                 </div>
               </div>
@@ -265,7 +290,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                     {t('about.repositoryTitle')}
                   </div>
                   <div className="text-xs font-mono font-semibold text-slate-200 truncate max-w-[160px]">
-                    dennidalpos/OnlyRagV2
+                    {APP_REPOSITORY_SLUG}
                   </div>
                 </div>
               </div>
@@ -323,72 +348,27 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Category Filter Tabs */}
-              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]" role="tablist" aria-label="Filtro categorie moduli">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'all'}
-                  onClick={() => setSelectedCategory('all')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
-                    selectedCategory === 'all'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Tutti
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'core'}
-                  onClick={() => setSelectedCategory('core')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
-                    selectedCategory === 'core'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Core
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'aiAndVector'}
-                  onClick={() => setSelectedCategory('aiAndVector')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
-                    selectedCategory === 'aiAndVector'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  AI &amp; DB
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'uiAndEditor'}
-                  onClick={() => setSelectedCategory('uiAndEditor')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
-                    selectedCategory === 'uiAndEditor'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  UI &amp; Monaco
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedCategory === 'skillsAndEcosystem'}
-                  onClick={() => setSelectedCategory('skillsAndEcosystem')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
-                    selectedCategory === 'skillsAndEcosystem'
-                      ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Skills
-                </button>
+              <div
+                className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]"
+                role="tablist"
+                aria-label={t('about.categoryFilterLabel')}
+              >
+                {CATEGORY_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedCategory === tab.id}
+                    onClick={() => setSelectedCategory(tab.id)}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
+                      selectedCategory === tab.id
+                        ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {t(tab.labelKey)}
+                  </button>
+                ))}
               </div>
             </div>
 

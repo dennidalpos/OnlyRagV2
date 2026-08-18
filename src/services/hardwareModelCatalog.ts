@@ -7,6 +7,13 @@ import type { HardwareProfileTier } from './hardwareProfileTiers'
  * all, so each tier below is plain data instead of a function body (see AGT6:
  * analyzeHardwareAndRecommend in hardwareRecommendationEngine.ts used to embed all
  * of this directly, ~700 lines in a single function).
+ *
+ * INVARIANT (enforced by hardwareRecommendationEngine.test.ts): a model may only be
+ * listed in `recommendedForProfiles` for a profile whose safe VRAM/RAM budget can
+ * actually host it — `assessModelHardwareCompatibility` must not return
+ * `exceeds_vram` for that pairing. The wizard pre-selects these entries, so an
+ * over-ambitious recommendation used to hand minimum-spec and even 24GB machines a
+ * default model the engine itself flagged as an OOM risk.
  */
 export interface RawModelCatalogEntry {
   modelName: string
@@ -17,7 +24,7 @@ export interface RawModelCatalogEntry {
   recommendedForProfiles: HardwareProfileTier[]
 }
 
-// 🟢 Fast Tier Recommendations (Lightweight models: 1B - 3B)
+// 🟢 Fast Tier Recommendations (Lightweight models: 0.5B - 4B)
 export const FAST_TIER_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:1.5b',
@@ -60,6 +67,38 @@ export const FAST_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: [],
   },
   {
+    modelName: 'qwen3:1.7b',
+    displayName: 'Qwen 3 (1.7B)',
+    family: 'qwen',
+    sizeBytesApprox: '1.4 GB',
+    description: 'Current-generation compact instruct model with native tool calling and toggleable thinking',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:0.6b',
+    displayName: 'Qwen 3 (0.6B)',
+    family: 'qwen',
+    sizeBytesApprox: '520 MB',
+    description: 'Smallest current-generation model for routing and helper turns on minimum hardware',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'granite3.3:2b',
+    displayName: 'IBM Granite 3.3 (2B)',
+    family: 'granite',
+    sizeBytesApprox: '1.5 GB',
+    description: 'IBM compact enterprise model with reliable structured JSON and tool-call output',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gemma3:1b',
+    displayName: 'Google Gemma 3 (1B)',
+    family: 'gemma',
+    sizeBytesApprox: '820 MB',
+    description: 'Google ultra-light model for conceptual lookups on CPU-only and low-RAM systems',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'llama3.2:1b',
     displayName: 'Llama 3.2 (1B)',
     family: 'llama',
@@ -85,7 +124,7 @@ export const FAST_TIER_CATALOG: RawModelCatalogEntry[] = [
   },
 ]
 
-// 🔵 Standard Tier Recommendations (Balanced workhorse models: 3B - 14B)
+// 🔵 Standard Tier Recommendations (Balanced workhorse models: 3B - 30B)
 export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:7b',
@@ -120,6 +159,30 @@ export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['legacy', 'entry'],
   },
   {
+    modelName: 'qwen3:4b',
+    displayName: 'Qwen 3 (4B)',
+    family: 'qwen',
+    sizeBytesApprox: '2.6 GB',
+    description: 'Current-generation 4B with native tool calling — best accuracy per GB on minimum hardware',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:8b',
+    displayName: 'Qwen 3 (8B)',
+    family: 'qwen',
+    sizeBytesApprox: '5.2 GB',
+    description: 'Current-generation 8B general/coding hybrid with strong multi-step tool use',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'granite3.3:8b',
+    displayName: 'IBM Granite 3.3 (8B)',
+    family: 'granite',
+    sizeBytesApprox: '4.9 GB',
+    description: 'IBM enterprise 8B model tuned for long-context RAG and disciplined tool calling',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'qwen2.5-coder:14b',
     displayName: 'Qwen 2.5 Coder (14B)',
     family: 'qwen-coder',
@@ -133,6 +196,22 @@ export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '8.9 GB',
     description: 'Quantized 14B coding model for high-end GPUs',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3-coder:30b',
+    displayName: 'Qwen 3 Coder (30B A3B MoE)',
+    family: 'qwen-coder',
+    sizeBytesApprox: '18.6 GB',
+    description: 'Mixture-of-Experts coding model: 30B knowledge at ~3B active-parameter inference speed',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'devstral:24b',
+    displayName: 'Mistral Devstral (24B)',
+    family: 'mistral',
+    sizeBytesApprox: '14.0 GB',
+    description: 'Mistral agentic coding model purpose-built for multi-file tool loops',
     recommendedForProfiles: [],
   },
   {
@@ -165,6 +244,14 @@ export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'mistral',
     sizeBytesApprox: '13.0 GB',
     description: 'Mistral enterprise code intelligence model (32k context)',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'codegemma:7b',
+    displayName: 'Google CodeGemma (7B)',
+    family: 'gemma',
+    sizeBytesApprox: '5.0 GB',
+    description: 'Google code-specialized model for fill-in-the-middle completion and generation',
     recommendedForProfiles: [],
   },
   {
@@ -204,6 +291,30 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['midrange'],
   },
   {
+    modelName: 'qwen3:4b',
+    displayName: 'Qwen 3 (4B)',
+    family: 'qwen',
+    sizeBytesApprox: '2.6 GB',
+    description: 'Reasoning-capable 4B that fits a CPU-only or 4-6GB GPU budget — deep tier for minimum hardware',
+    recommendedForProfiles: ['legacy', 'entry'],
+  },
+  {
+    modelName: 'qwen3:8b',
+    displayName: 'Qwen 3 (8B)',
+    family: 'qwen',
+    sizeBytesApprox: '5.2 GB',
+    description: 'Current-generation 8B reasoning model for stack-trace analysis on 8GB GPUs',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:14b',
+    displayName: 'Qwen 3 (14B)',
+    family: 'qwen',
+    sizeBytesApprox: '9.3 GB',
+    description: 'Current-generation 14B reasoning engine for multi-file architecture work on 12GB+ GPUs',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'deepseek-r1:7b',
     displayName: 'DeepSeek R1 Distill Qwen (7B)',
     family: 'deepseek-r1',
@@ -217,6 +328,14 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'deepseek-r1',
     sizeBytesApprox: '4.4 GB',
     description: 'Quantized Qwen-distilled reasoning model with low VRAM footprint',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'deepseek-r1:1.5b',
+    displayName: 'DeepSeek R1 Distill Qwen (1.5B)',
+    family: 'deepseek-r1',
+    sizeBytesApprox: '1.1 GB',
+    description: 'Smallest distilled reasoning model — last-resort deep tier for CPU-only hosts',
     recommendedForProfiles: [],
   },
   {
@@ -244,12 +363,28 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: [],
   },
   {
+    modelName: 'gpt-oss:20b',
+    displayName: 'GPT-OSS (20B)',
+    family: 'gpt-oss',
+    sizeBytesApprox: '13.5 GB',
+    description: 'Open-weight reasoning model with adjustable effort and native tool use — fits a 24GB safe budget',
+    recommendedForProfiles: ['extreme'],
+  },
+  {
+    modelName: 'qwen3-coder:30b',
+    displayName: 'Qwen 3 Coder (30B A3B MoE)',
+    family: 'qwen-coder',
+    sizeBytesApprox: '18.6 GB',
+    description: 'MoE coding specialist for exhaustive repository-wide reasoning at 3B active-parameter speed',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'qwen2.5-coder:32b',
     displayName: 'Qwen 2.5 Coder (32B)',
     family: 'qwen-coder',
     sizeBytesApprox: '20.0 GB',
-    description: 'Premier 32B coding model rivaling proprietary models on complex codebases',
-    recommendedForProfiles: ['extreme'],
+    description: 'Premier 32B coding model rivaling proprietary models — requires 32GB+ VRAM for a safe budget',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'deepseek-r1:32b',
@@ -272,8 +407,8 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     displayName: 'DeepSeek Coder (6.7B)',
     family: 'deepseek',
     sizeBytesApprox: '3.8 GB',
-    description: 'Specialized coding model for entry-level and legacy GPU hardware',
-    recommendedForProfiles: ['legacy', 'entry'],
+    description: 'Specialized coding model for entry-level GPU hardware with 8GB or more VRAM',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'qwen2.5-coder:3b',
@@ -285,10 +420,10 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
   },
   {
     modelName: 'deepseek-r1:8b',
-    displayName: 'DeepSeek R1 Distill Llama (8B)',
+    displayName: 'DeepSeek R1 Distill (8B)',
     family: 'deepseek-r1',
     sizeBytesApprox: '4.9 GB',
-    description: 'Llama 3.1-8B distilled reasoning model for 12GB+ GPUs',
+    description: 'Distilled 8B reasoning model for 12GB+ GPUs',
     recommendedForProfiles: [],
   },
   {
@@ -297,6 +432,14 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'phi',
     sizeBytesApprox: '9.1 GB',
     description: 'Microsoft state-of-the-art synthetic reasoning & algorithmic assistant',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'phi4-mini:3.8b',
+    displayName: 'Microsoft Phi-4 Mini (3.8B)',
+    family: 'phi',
+    sizeBytesApprox: '2.5 GB',
+    description: 'Compact Microsoft reasoning model with function calling for low-VRAM hosts',
     recommendedForProfiles: [],
   },
   {
@@ -328,6 +471,14 @@ export const HEAVY_ESCALATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: [],
   },
   {
+    modelName: 'qwen3:14b',
+    displayName: 'Qwen 3 (14B)',
+    family: 'qwen',
+    sizeBytesApprox: '9.3 GB',
+    description: 'Current-generation 14B escalation target with explicit thinking mode for failed tool loops',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'deepseek-r1:14b',
     displayName: 'DeepSeek R1 Distill Qwen (14B)',
     family: 'deepseek-r1',
@@ -352,11 +503,35 @@ export const HEAVY_ESCALATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['extreme'],
   },
   {
+    modelName: 'devstral:24b',
+    displayName: 'Mistral Devstral (24B)',
+    family: 'mistral',
+    sizeBytesApprox: '14.0 GB',
+    description: 'Agentic coding model built for long tool-calling trajectories over large codebases',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gpt-oss:20b',
+    displayName: 'GPT-OSS (20B)',
+    family: 'gpt-oss',
+    sizeBytesApprox: '13.5 GB',
+    description: 'Open-weight reasoning model with configurable effort for escalated auto-healing turns',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3-coder:30b',
+    displayName: 'Qwen 3 Coder (30B A3B MoE)',
+    family: 'qwen-coder',
+    sizeBytesApprox: '18.6 GB',
+    description: 'MoE escalation target: 30B-class coding accuracy at 3B active-parameter throughput',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'qwen2.5-coder:32b',
     displayName: 'Qwen 2.5 Coder (32B)',
     family: 'qwen-coder',
     sizeBytesApprox: '20.0 GB',
-    description: 'Premier 32B coding model rivaling proprietary models — requires 24GB+ VRAM workstation',
+    description: 'Premier 32B coding model rivaling proprietary models — requires 32GB+ VRAM workstation',
     recommendedForProfiles: [],
   },
   {
@@ -380,12 +555,44 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['legacy', 'entry', 'midrange'],
   },
   {
+    modelName: 'llama3.2:1b',
+    displayName: 'Llama 3.2 (1B)',
+    family: 'llama',
+    sizeBytesApprox: '1.3 GB',
+    description: 'Smallest conversational model for minimum hardware with 8GB RAM or less',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'llama3.1:8b',
     displayName: 'Llama 3.1 (8B)',
     family: 'llama',
     sizeBytesApprox: '4.9 GB',
     description: 'Meta 8B balanced conversational assistant for 12GB+ GPUs and multi-document RAG',
     recommendedForProfiles: ['highend', 'extreme'],
+  },
+  {
+    modelName: 'qwen3:4b',
+    displayName: 'Qwen 3 (4B)',
+    family: 'qwen',
+    sizeBytesApprox: '2.6 GB',
+    description: 'Current-generation compact assistant with strong multilingual factual recall',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:8b',
+    displayName: 'Qwen 3 (8B)',
+    family: 'qwen',
+    sizeBytesApprox: '5.2 GB',
+    description: 'Current-generation 8B conversational model for grounded multi-document RAG',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'granite3.3:2b',
+    displayName: 'IBM Granite 3.3 (2B)',
+    family: 'granite',
+    sizeBytesApprox: '1.5 GB',
+    description: 'IBM compact long-context model well suited to citation-faithful RAG answers',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'qwen2.5:7b',
@@ -401,6 +608,22 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'mistral',
     sizeBytesApprox: '4.1 GB',
     description: 'High-speed instruction model for RAG and factual Q&A',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gemma3:4b',
+    displayName: 'Google Gemma 3 (4B)',
+    family: 'gemma',
+    sizeBytesApprox: '3.3 GB',
+    description: 'Google Gemma 3 compact assistant with 128k context and broad language coverage',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gemma3:12b',
+    displayName: 'Google Gemma 3 (12B)',
+    family: 'gemma',
+    sizeBytesApprox: '8.1 GB',
+    description: 'Google Gemma 3 high-precision conversational assistant for 12GB+ GPUs',
     recommendedForProfiles: [],
   },
   {
@@ -440,12 +663,28 @@ export const TRANSLATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['highend'],
   },
   {
+    modelName: 'qwen3:4b',
+    displayName: 'Qwen 3 (4B)',
+    family: 'qwen',
+    sizeBytesApprox: '2.6 GB',
+    description: 'Current-generation compact translator with wide language coverage for low-VRAM hosts',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'aya-expanse:8b',
     displayName: 'Aya Expanse (8B)',
     family: 'cohere',
     sizeBytesApprox: '5.1 GB',
     description: 'Cohere highly-aligned multilingual translation and cross-lingual model',
     recommendedForProfiles: ['extreme'],
+  },
+  {
+    modelName: 'gemma3:4b',
+    displayName: 'Google Gemma 3 (4B)',
+    family: 'gemma',
+    sizeBytesApprox: '3.3 GB',
+    description: 'Google Gemma 3 multilingual model covering 140+ languages for document translation',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'gemma2:2b',
@@ -500,6 +739,30 @@ export const VISION_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['extreme'],
   },
   {
+    modelName: 'qwen2.5vl:3b',
+    displayName: 'Qwen 2.5 VL (3B)',
+    family: 'qwen-vl',
+    sizeBytesApprox: '3.2 GB',
+    description: 'Compact current-generation vision model with strong document and table OCR accuracy',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen2.5vl:7b',
+    displayName: 'Qwen 2.5 VL (7B)',
+    family: 'qwen-vl',
+    sizeBytesApprox: '6.0 GB',
+    description: 'Current-generation vision model for dense page layout, chart and handwriting extraction',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gemma3:4b',
+    displayName: 'Google Gemma 3 (4B Vision)',
+    family: 'gemma',
+    sizeBytesApprox: '3.3 GB',
+    description: 'Google Gemma 3 multimodal variant for combined image understanding and text extraction',
+    recommendedForProfiles: [],
+  },
+  {
     modelName: 'minicpm-v:8b',
     displayName: 'MiniCPM-V (8B)',
     family: 'minicpm',
@@ -526,6 +789,22 @@ export const EMBEDDING_TIER_CATALOG: RawModelCatalogEntry[] = [
     sizeBytesApprox: '1.1 GB',
     description: 'Multilingual dense & sparse embedding model for enterprise search',
     recommendedForProfiles: ['highend', 'extreme'],
+  },
+  {
+    modelName: 'embeddinggemma:300m',
+    displayName: 'Google EmbeddingGemma (768d)',
+    family: 'gemma',
+    sizeBytesApprox: '620 MB',
+    description: 'Google compact multilingual embedding model tuned for on-device retrieval',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'granite-embedding:278m',
+    displayName: 'IBM Granite Embedding (768d)',
+    family: 'granite',
+    sizeBytesApprox: '560 MB',
+    description: 'IBM multilingual retrieval embedding model with permissive enterprise licensing',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'snowflake-arctic-embed:latest',
@@ -569,7 +848,7 @@ export const MEDICAL_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'biomistral',
     sizeBytesApprox: '4.1 GB',
     description: 'Specialized biomedical QA, clinical pharmacology & PubMed evidence for 12GB+ GPUs',
-    recommendedForProfiles: ['highend'],
+    recommendedForProfiles: ['highend', 'extreme'],
   },
   {
     modelName: 'meditron:7b',
@@ -584,8 +863,8 @@ export const MEDICAL_TIER_CATALOG: RawModelCatalogEntry[] = [
     displayName: 'Meditron (70B)',
     family: 'meditron',
     sizeBytesApprox: '40.0 GB',
-    description: 'Enterprise-grade clinical decision support and nosology consultation',
-    recommendedForProfiles: ['extreme'],
+    description: 'Enterprise clinical decision support — requires a 48GB+ multi-GPU workstation',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'llama3.1:8b',
@@ -616,6 +895,14 @@ export const LEGAL_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: ['highend'],
   },
   {
+    modelName: 'mistral-small3.2:24b',
+    displayName: 'Mistral Small 3.2 (24B)',
+    family: 'mistral',
+    sizeBytesApprox: '14.0 GB',
+    description: 'Long-context 24B model for statutory synthesis and contract risk review on 24GB GPUs',
+    recommendedForProfiles: ['extreme'],
+  },
+  {
     modelName: 'mistral:7b',
     displayName: 'Mistral (7B)',
     family: 'mistral',
@@ -628,8 +915,8 @@ export const LEGAL_TIER_CATALOG: RawModelCatalogEntry[] = [
     displayName: 'Cohere Command R (35B)',
     family: 'cohere',
     sizeBytesApprox: '20.0 GB',
-    description: 'Grounded RAG with strict citations, compliance policies & legal synthesis',
-    recommendedForProfiles: ['extreme'],
+    description: 'Grounded RAG with strict citations — requires 32GB+ VRAM for a safe budget',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'command-r-plus:104b',
@@ -640,3 +927,65 @@ export const LEGAL_TIER_CATALOG: RawModelCatalogEntry[] = [
     recommendedForProfiles: [],
   },
 ]
+
+/**
+ * Parses the human-readable `sizeBytesApprox` label into GB. The catalog is deliberately
+ * self-describing so this module stays dependency-free: importing `estimateModelWeightGB`
+ * from hardwareRecommendationEngine.ts would create a cycle, since that module consumes
+ * every catalog above. The engine test asserts the two never drift apart.
+ */
+export function parseCatalogSizeGB(sizeBytesApprox: string): number {
+  const match = (sizeBytesApprox || '').trim().match(/^([\d.]+)\s*(GB|MB)$/i)
+  if (!match) return Number.POSITIVE_INFINITY
+  const value = parseFloat(match[1])
+  if (!isFinite(value) || value <= 0) return Number.POSITIVE_INFINITY
+  return match[2].toUpperCase() === 'MB' ? value / 1024 : value
+}
+
+export interface FallbackChainTarget {
+  /** Detected (or user-declared) host tier — selects the curated first choice. */
+  profileTier: HardwareProfileTier
+  /** Weight in GB a candidate must fit into: safe VRAM budget, or the CPU throughput bound. */
+  budgetGB: number
+}
+
+/**
+ * Builds the ordered candidate cascade for one routing tier on one host, derived entirely
+ * from catalog data.
+ *
+ * complexityEvaluator.ts previously hardcoded six literal arrays of model tags alongside
+ * its own VRAM thresholds, so every catalog change had to be mirrored by hand in a second
+ * place — and had not been: the router still cascaded onto tags the matrix no longer
+ * recommended, and onto sizes the host could not hold.
+ *
+ * Ordering:
+ *   1. the model curated for this exact profile (the same pick the setup wizard defaults to)
+ *   2. everything that fits the budget, largest first — the most capable model that is safe
+ *   3. everything that exceeds the budget, smallest first — least-worst overflow, so a host
+ *      with only oversized models installed still gets the cheapest of them
+ */
+export function buildFallbackChain(
+  catalog: RawModelCatalogEntry[],
+  target: FallbackChainTarget
+): string[] {
+  const indexed = catalog.map((entry, index) => ({
+    entry,
+    index,
+    sizeGB: parseCatalogSizeGB(entry.sizeBytesApprox),
+  }))
+
+  const curated = indexed.filter((c) => c.entry.recommendedForProfiles.includes(target.profileTier))
+  const curatedNames = new Set(curated.map((c) => c.entry.modelName))
+  const rest = indexed.filter((c) => !curatedNames.has(c.entry.modelName))
+
+  const withinBudget = rest
+    .filter((c) => c.sizeGB <= target.budgetGB)
+    .sort((a, b) => b.sizeGB - a.sizeGB || a.index - b.index)
+
+  const overBudget = rest
+    .filter((c) => c.sizeGB > target.budgetGB)
+    .sort((a, b) => a.sizeGB - b.sizeGB || a.index - b.index)
+
+  const ordered = [...curated, ...withinBudget, ...overBudget].map((c) => c.entry.modelName)
+  return Array.from(new Set(ordered))
+}

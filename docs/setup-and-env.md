@@ -16,15 +16,21 @@ Questo documento costituisce la guida operativa e tecnica di riferimento per l'i
 
 ## 2. Matrice dei Profili Hardware Host (Presets P1 – P5)
 
-OnlyRag V2 include un motore deterministico di calcolo delle risorse ([`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts)) che assegna automaticamente la suite di modelli ottimali prevenendo il blocco del driver grafico di Windows (DWM) e l'esaurimento della memoria:
+OnlyRag V2 include un motore deterministico di calcolo delle risorse ([`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts)) che assegna automaticamente la suite di modelli ottimali prevenendo il blocco del driver grafico di Windows (DWM) e l'esaurimento della memoria.
+
+La classificazione dell'host e' unificata in [`hardwareProfileTiers.ts`](../src/services/hardwareProfileTiers.ts): la stessa scala di soglie e' condivisa da matrice modelli, Routing di Complessita, opzioni di runtime dell'agente, budget di contesto della chat e parametri OS di Ollama. Un modello puo' comparire come consigliato per un profilo solo se `assessModelHardwareCompatibility` non lo classifica `exceeds_vram` su quel profilo (invariante verificata dai test).
 
 | Profilo | Target Hardware Host | VRAM Dedicata | Safe Budget Pesi ($W_{\text{mem}}$) | RAM di Sistema | Suite Modelli Consigliata (Coding & Multi-Tier) | Storage SSD Richiesto |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **P1: Ultra-Light** | Solo CPU (AVX2), iGPU Intel/AMD | 0 GB (Integrata) | Offload RAM completo | 8 – 16 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `deepseek-coder:6.7b`, `moondream:latest`, `nomic-embed-text:latest` | 15 – 20 GB |
-| **P2: Entry-Level** | GPU NVIDIA GTX 1660 / RTX 3050, Laptop 4–6GB | 4 – 6 GB | $\le 3.0\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `deepseek-coder:6.7b`, `moondream:latest`, `nomic-embed-text:latest` | 20 – 30 GB |
+| **P1: Ultra-Light** | Solo CPU (AVX2), iGPU Intel/AMD | 0 GB (Integrata) | Offload RAM completo, tetto CPU $\le 3.0\text{ GB}$ | 8 – 16 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `qwen3:4b`, `moondream:latest`, `nomic-embed-text:latest` | 15 – 20 GB |
+| **P2: Entry-Level** | GPU NVIDIA GTX 1660 / RTX 3050, Laptop 4–6GB | 4 – 6 GB | $\le 3.0\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `qwen3:4b`, `moondream:latest`, `nomic-embed-text:latest` | 20 – 30 GB |
 | **P3: Mid-Tier** | GPU NVIDIA RTX 2070, RTX 3070, RTX 4060 8GB | 8 – 11 GB | $\le 4.5\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:7b` *(o Q4_K_M)*, `deepseek-r1:7b` *(distill Qwen)*, `moondream:latest`, `nomic-embed-text:latest` | 35 – 50 GB |
 | **P4: High-End Pro**| GPU NVIDIA RTX 3060 12GB, RTX 4070 12GB, RTX 4080 16GB | 12 – 16 GB | $\le 10.5\text{ GB}$ | 32 – 64 GB | `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `qwen2.5-coder:14b` / `deepseek-r1:14b`, `llava:7b`, `bge-m3:latest` | 60 – 90 GB |
-| **P5: Enterprise** | GPU NVIDIA RTX 3090 / 4090 (24GB), Multi-GPU, A100/H100 | 24 – 48+ GB | $\ge 16.5\text{ GB}$ | 64 – 128 GB | `qwen2.5-coder:14b`, `qwen2.5-coder:32b`, `deepseek-r1:32b`, `codestral:22b`, `llama3.2-vision:11b` | 120 – 250 GB |
+| **P5: Enterprise** | GPU NVIDIA RTX 3090 / 4090 (24GB), Multi-GPU, A100/H100 | 24 – 48+ GB | $\ge 16.5\text{ GB}$ | 64 – 128 GB | `qwen2.5-coder:14b`, `gpt-oss:20b`, `codestral:22b`, `qwen3-coder:30b` *(48GB+)*, `llama3.2-vision:11b` | 120 – 250 GB |
+
+> [!NOTE]
+> **Perche' P5 non consiglia piu' un 32B su una scheda da 24GB:**
+> Con budget netto sicuro di $16.5\text{ GB}$, un modello Q4 da 32B (~20 GB di soli pesi) supera la soglia e verrebbe marcato `exceeds_vram` dallo stesso motore che lo proponeva. La scelta predefinita passa a **`gpt-oss:20b`** (~13.5 GB), che resta interamente in VRAM; i 32B restano selezionabili e diventano il primo candidato della cascata su schede da 32GB+.
 
 > [!IMPORTANT]
 > **Ottimizzazione GPU da 8GB (es. RTX 2070 / RTX 3070 / RTX 4060):**
@@ -71,7 +77,13 @@ Per massimizzare il throughput (token/s) ed eliminare i freeze su Windows, confi
 | `OLLAMA_NUM_PARALLEL` | `1` | P1, P2, P3 | Elabora 1 richiesta alla volta per prevenire picchi improvvisi e Out-Of-Memory. |
 | `OLLAMA_NUM_PARALLEL` | `2` – `4` | P4, P5 | Consente stream paralleli concorrenti per tool calling ed embedding. |
 | `OLLAMA_KEEP_ALIVE` | `30m` | P2, P3, P4 | Mantiene il modello principale in VRAM per 30 minuti evitando frequenti ricaricamenti. |
+| `OLLAMA_KEEP_ALIVE` | `5m` | P1 / hardware minimo | Libera rapidamente la RAM di sistema dopo brevi sessioni di inattivita'. |
+| `OLLAMA_CONTEXT_LENGTH` | `4096` – `32768` | Tutti (scala per profilo) | Finestra di contesto predefinita lato server. Senza questa variabile un host minimo alloca una KV-Cache molto piu' grande del necessario ad ogni richiesta che non specifica `num_ctx`. |
+| `OLLAMA_GPU_OVERHEAD` | `1610612736` (1.5 GB) | P2 – P5 (NVIDIA GPU) | Riserva a Ollama lo stesso margine DWM usato da `calculateRealUsableVram`, allineando il pianificatore di offload dei layer al budget calcolato dall'app. |
 | `OLLAMA_HOST` | `127.0.0.1:11434` | Tutti | Ascolto su interfaccia di loopback locale protetta da accessi di rete esterni. |
+
+> [!WARNING]
+> `OLLAMA_KV_CACHE_TYPE` viene onorato da Ollama **solo** con `OLLAMA_FLASH_ATTENTION=1`. Sui profili senza GPU la variabile non viene piu' generata, perche' sarebbe inerte.
 
 ### Script di Configurazione Rapida 1-Click (PowerShell)
 

@@ -141,3 +141,12 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
   if (!systemRamGB || systemRamGB <= 0) return SYSTEM_RAM_MIN_BUDGET_GB
   return Math.max(SYSTEM_RAM_MIN_BUDGET_GB, Math.round(systemRamGB * SYSTEM_RAM_USABLE_RATIO * 100) / 100)
 }
+
+/**
+ * Weight ceiling for a model that must run on CPU. This is a *throughput* bound, not a
+ * memory bound: an 8GB CPU-only host can technically hold a 4.7GB model inside its
+ * `calculateUsableSystemRamGB` budget, but it will emit a couple of tokens per second,
+ * which makes an autonomous multi-turn tool loop unusable. Candidates above this size are
+ * therefore ranked last on `legacy` hosts even when memory alone would allow them.
+ */
+export const CPU_INFERENCE_WEIGHT_BUDGET_GB = 3.0

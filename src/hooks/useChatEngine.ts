@@ -1,19 +1,25 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AppSettings, DiagnosticsData, IngestedDocument, ChatMessage, CitationSource } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
-
-// Max characters of retrieved vector-search text folded into the prompt. Kept below the overall
-// CONTEXT_CHAR_BUDGET so directDocsText (selected full-document previews) still has room, and so
-// the final CONTEXT_CHAR_BUDGET slice practically never needs to cut into vectorContextText itself.
-const VECTOR_CONTEXT_CHAR_BUDGET = 4000
-// Total combined context budget (vector search results + selected full-document previews).
-const CONTEXT_CHAR_BUDGET = 5500
+import { resolveChatContextBudget, resolveChatThreadCount } from '../services/chatContextBudget'
+import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
 
 export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsData | null) {
+  // Retrieval context, replayed history and the generation window are all sized from the
+  // detected host instead of a single hardcoded budget — see chatContextBudget.ts.
+  const hardwareFacts = useMemo(() => extractHardwareFacts(diagnostics), [diagnostics])
+  const contextBudget = useMemo(
+    () => resolveChatContextBudget(hardwareFacts, settings.hardwareProfile || 'Auto'),
+    [hardwareFacts, settings.hardwareProfile]
+  )
+  const budgetRef = useRef(contextBudget)
+  budgetRef.current = contextBudget
+
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set())
 
@@ -195,13 +201,20 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
-    // Capture recent history before adding the new user message
-    const previousTurns = messages
+    // Capture recent history before adding the new user message. Both the turn count and the
+    // total size are budgeted: on minimum hardware a long transcript is the single largest
+    // avoidable contributor to prompt-eval time on every subsequent message.
+    const budget = budgetRef.current
+    const previousTurnsRaw = messages
       .slice(1) // skip generic greeting
       .filter((m) => m.text && m.text.trim())
-      .slice(-6) // keep last 6 turns
+      .slice(-budget.historyTurns)
       .map((m) => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
       .join('\n\n')
+    // Trim from the front so the most recent exchanges always survive the cap.
+    const previousTurns = previousTurnsRaw.length > budget.historyChars
+      ? previousTurnsRaw.slice(-budget.historyChars)
+      : previousTurnsRaw
 
     setMessages((prev) => [...prev, userMsg, botMsg])
     setIsGenerating(true)
@@ -225,7 +238,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         try {
           const searchResults = await apiService.searchVectorDb(
             userText,
-            5,
+            budget.vectorTopK,
             settings.embeddingModel || 'nomic-embed-text',
             scopedDocIds
           )
@@ -242,7 +255,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
             for (let idx = 0; idx < validResults.length; idx++) {
               const res = validResults[idx]
               const block = `[Fonte ${idx + 1}: ${res.doc_name || 'Documento'} | Sezione: ${res.section_header || 'Generale'}]\n${res.text}`
-              if (includedBlocks.length > 0 && usedChars + block.length > VECTOR_CONTEXT_CHAR_BUDGET) break
+              if (includedBlocks.length > 0 && usedChars + block.length > budget.vectorContextChars) break
               includedBlocks.push(block)
               usedChars += block.length
               includedSources.push({
@@ -270,12 +283,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const activeDocs = documents.filter((d) => selectedDocIds.has(d.id))
       const directDocsText = activeDocs
-        .map((d) => `[Documento Completo: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, 1500)}...`)
+        .map((d) => `[Documento Completo: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, budget.perDocumentPreviewChars)}...`)
         .join('\n\n---\n\n')
 
       const combinedRawContext = [vectorContextText, directDocsText].filter(Boolean).join('\n\n=== ULTERIORE CONTESTO ===\n\n')
       // Budget context to prevent context window overflow
-      const boundedContext = combinedRawContext.slice(0, CONTEXT_CHAR_BUDGET)
+      const boundedContext = combinedRawContext.slice(0, budget.totalContextChars)
 
       const modelToUse = routingResult.modelName
       const effectivePromptObj = getEffectivePrompt('chat', modelToUse, settings)
@@ -313,12 +326,26 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         streamThrottleTimer.current = intervalId
 
         try {
+          // Size num_ctx from the prompt actually assembled, capped by what this host can
+          // afford. Without these options the transport defaulted to num_ctx: 16384 for
+          // every chat turn on every machine.
+          const dynamicNumCtx = calculateDynamicContextWindow(finalPrompt.length, budget.maxNumCtx)
+          logger.info(
+            'ChatEngine',
+            `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: prompt ${finalPrompt.length} chars -> num_ctx ${dynamicNumCtx} (max ${budget.maxNumCtx})`
+          )
+
           await window.electronAPI.generateOllamaStream(
             modelToUse,
             finalPrompt,
             (chunk: string) => {
               accumulated += chunk
               pendingChunk = true
+            },
+            {
+              num_ctx: dynamicNumCtx,
+              num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
+              keep_alive: budget.keepAlive,
             }
           )
         } finally {
@@ -412,6 +439,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     handleSendMessage,
     handleStopGeneration,
     handleNewChat,
+    contextBudget,
   }
 }
 

@@ -490,6 +490,12 @@ export interface TranslationSchema {
       uiAndEditor: string
       skillsAndEcosystem: string
     }
+    categoryFilterLabel: string
+    tabAll: string
+    tabCore: string
+    tabAiAndVector: string
+    tabUiAndEditor: string
+    tabSkills: string
     contactsTitle: string
     contactsSubtitle: string
     githubIssues: string
@@ -685,6 +691,14 @@ export interface TranslationSchema {
     envKeepAliveMidRationale: string
     envKeepAliveHighDesc: string
     envKeepAliveHighRationale: string
+    envGpuOverheadDesc: string
+    envGpuOverheadRationale: string
+    envContextLenLowDesc: string
+    envContextLenLowRationale: string
+    envContextLenMidDesc: string
+    envContextLenMidRationale: string
+    envContextLenHighDesc: string
+    envContextLenHighRationale: string
     envHostDesc: string
     envHostRationale: string
   }

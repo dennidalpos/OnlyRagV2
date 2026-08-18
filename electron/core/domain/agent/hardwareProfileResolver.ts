@@ -1,7 +1,7 @@
 import os from 'node:os'
 import type { HardwareProfile } from '../../../../src/types'
 import type { ComplexityTier } from './complexityEvaluator'
-import { calculateRealUsableVram } from '../../../../src/services/hardwareRecommendationEngine'
+import { resolveEffectiveTier } from '../../../../src/services/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
   num_ctx: number
@@ -55,30 +55,18 @@ export class HardwareProfileResolver {
     const cpuCores = env?.cpuCount || os.cpus()?.length || 4
     const safeCpuThreads = Math.max(1, cpuCores - 1)
 
-    let effectiveTier: 'Low' | 'Medium' | 'High' = 'Medium'
-
-    if (profile === 'Low') {
-      effectiveTier = 'Low'
-    } else if (profile === 'Medium') {
-      effectiveTier = 'Medium'
-    } else if (profile === 'High') {
-      effectiveTier = 'High'
-    } else {
-      // 'Auto' mode: dynamically adapt based on detected GPU / VRAM / RAM.
-      // Shares the exact safe-VRAM formula with the model-recommendation engine
-      // (calculateRealUsableVram) so the two hardware matrices can't drift apart.
-      const hasGpu = !!env?.hasGpu
-      const vramMB = env?.vramTotalMB || 0
-      const safeBudgetGB = hasGpu ? calculateRealUsableVram(vramMB) : 0
-
-      if (hasGpu && safeBudgetGB >= 7.5) {
-        effectiveTier = 'High'
-      } else if (hasGpu && safeBudgetGB >= 3.0) {
-        effectiveTier = 'Medium'
-      } else {
-        effectiveTier = 'Low'
-      }
-    }
+    // Hardware classification is delegated to the shared 5-tier ladder in
+    // hardwareProfileTiers.ts, so the runtime options, the model matrix, the complexity
+    // router and the Ollama OS parameters all agree on what a given machine is. This file
+    // used to carry its own thresholds (safe budget >= 7.5 / >= 3.0), which is why a 6GB
+    // laptop GPU was `entry` for the model recommendations but `Medium` here.
+    const hardwareTier = resolveEffectiveTier(profile, env)
+    const effectiveTier: 'Low' | 'Medium' | 'High' =
+      hardwareTier === 'legacy' || hardwareTier === 'entry'
+        ? 'Low'
+        : hardwareTier === 'midrange'
+          ? 'Medium'
+          : 'High'
 
     // Generation cap scales with the tier's expected answer size, not with the hardware:
     // a small model on a fast task still only has to emit one compact tool call.

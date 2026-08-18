@@ -1,4 +1,18 @@
 import type { AppSettings } from '../../../../src/types'
+import {
+  calculateRealUsableVram,
+  classifyTierFromSafeBudget,
+  resolveEffectiveTier,
+  CPU_INFERENCE_WEIGHT_BUDGET_GB,
+  TIER_NOMINAL_SAFE_BUDGET_GB,
+  type HardwareProfileTier,
+} from '../../../../src/services/hardwareProfileTiers'
+import {
+  buildFallbackChain,
+  FAST_TIER_CATALOG,
+  STANDARD_TIER_CATALOG,
+  DEEP_REASONING_TIER_CATALOG,
+} from '../../../../src/services/hardwareModelCatalog'
 
 export type ComplexityTier = 'fast' | 'standard' | 'deep_reasoning'
 
@@ -279,37 +293,39 @@ export function evaluateTaskComplexity(
   const hasRecentToolFailure = !!context.hasRecentToolFailure
   const errorCountInHistory = context.errorCountInHistory || 0
   const consecutiveSuccessCount = context.consecutiveSuccessCount || 0
-  let safeVramBudgetGB = context.safeVramBudgetGB
   const vramTotalMB = context.vramTotalMB
   const hardwareProfile: 'Low' | 'Medium' | 'High' | 'Auto' = context.hardwareProfile || activeSettings?.hardwareProfile || 'Auto'
 
-  // If safeVramBudgetGB not explicitly passed, derive from vramTotalMB or hardwareProfile
-  if (safeVramBudgetGB === undefined) {
-    if (vramTotalMB !== undefined && vramTotalMB > 0) {
-      const vramGB = vramTotalMB / 1024
-      safeVramBudgetGB = Math.max(0, vramGB * 0.75 - 1.5)
-    } else if (hardwareProfile === 'Low') {
-      safeVramBudgetGB = 1.5
-    } else if (hardwareProfile === 'Medium') {
-      safeVramBudgetGB = 4.5
-    } else if (hardwareProfile === 'High') {
-      safeVramBudgetGB = 9.0
-    } else {
-      safeVramBudgetGB = 4.5
-    }
-  }
+  // Hardware classification is delegated to the shared ladder in hardwareProfileTiers.ts,
+  // so the router, the model matrix, the agent runtime options and the Ollama OS parameters
+  // all place a given machine in the same tier (they used to use four different ladders).
+  const hasGpu = vramTotalMB !== undefined && vramTotalMB > 0
+  const safeVramBudgetGB: number = context.safeVramBudgetGB !== undefined
+    ? context.safeVramBudgetGB
+    : hasGpu
+      ? calculateRealUsableVram(vramTotalMB as number)
+      : TIER_NOMINAL_SAFE_BUDGET_GB[resolveEffectiveTier(hardwareProfile)]
+
+  const profileTier: HardwareProfileTier = hardwareProfile !== 'Auto'
+    ? resolveEffectiveTier(hardwareProfile)
+    : classifyTierFromSafeBudget(safeVramBudgetGB, hasGpu)
+
+  // Weight ceiling a fallback candidate must respect. On `legacy` the binding constraint is
+  // CPU throughput, not memory: an 8GB CPU-only host can *hold* a 7B model but cannot run a
+  // multi-turn tool loop with it (see CPU_INFERENCE_WEIGHT_BUDGET_GB).
+  const modelBudgetGB = profileTier === 'legacy'
+    ? CPU_INFERENCE_WEIGHT_BUDGET_GB
+    : safeVramBudgetGB > 0
+      ? safeVramBudgetGB
+      : TIER_NOMINAL_SAFE_BUDGET_GB[profileTier]
+  const chainTarget = { profileTier, budgetGB: modelBudgetGB }
 
   const defaultStandard = activeSettings?.complexityStandardModel || activeSettings?.codingModel || activeSettings?.defaultModel || 'qwen2.5-coder:7b'
 
   if (!userPrompt || typeof userPrompt !== 'string' || !userPrompt.trim()) {
-    const standardFallbacks =
-      safeVramBudgetGB !== undefined && safeVramBudgetGB < 4.0
-        ? ['qwen2.5-coder:3b', 'llama3.2:3b', 'qwen2.5-coder:1.5b']
-        : ['qwen2.5-coder:7b', 'llama3.1:8b', 'mistral:7b', 'llama3.2:3b']
-
     const { model, isFallback } = resolveModelWithFallback(
       defaultStandard,
-      standardFallbacks,
+      buildFallbackChain(STANDARD_TIER_CATALOG, chainTarget),
       availableModels
     )
     return {
@@ -361,101 +377,24 @@ export function evaluateTaskComplexity(
     reasoning = 'Rilevata domanda concettuale rapida o lookup a bassa complessità'
   }
 
-  let preferredModel = ''
-  let candidateFallbacks: string[] = []
+  // Candidate cascades are derived from the model matrix (hardwareModelCatalog.ts) for the
+  // resolved profile, instead of six literal tag arrays that had to be hand-mirrored on
+  // every catalog change — and had silently drifted out of sync with it.
+  const tierCatalog = tier === 'fast'
+    ? FAST_TIER_CATALOG
+    : tier === 'deep_reasoning'
+      ? DEEP_REASONING_TIER_CATALOG
+      : STANDARD_TIER_CATALOG
+  const candidateFallbacks = [...buildFallbackChain(tierCatalog, chainTarget), defaultStandard]
 
-  if (tier === 'fast') {
-    preferredModel = activeSettings?.complexityFastModel || 'qwen2.5-coder:1.5b'
-    candidateFallbacks = [
-      'qwen2.5-coder:1.5b',
-      'qwen2.5-coder:1.5b-instruct-q8_0',
-      'qwen2.5-coder:3b',
-      'qwen2.5-coder:0.5b',
-      'llama3.2:1b',
-      'qwen2.5:1.5b',
-      'llama3.2:3b',
-    ]
-  } else if (tier === 'deep_reasoning') {
-    // Hardware-bound Deep Reasoning candidate selection strictly tuned for code architecture and refactoring
-    const isLegacyOrEntry = safeVramBudgetGB !== undefined && safeVramBudgetGB < 3.0
-    const isMidRange = safeVramBudgetGB !== undefined && safeVramBudgetGB >= 3.0 && safeVramBudgetGB < 7.0
-    const isExtremeVram = safeVramBudgetGB !== undefined && safeVramBudgetGB >= 12.0
-
-    if (isLegacyOrEntry) {
-      // On CPU or low VRAM (< 6GB GPU)
-      preferredModel = activeSettings?.complexityDeepModel || 'deepseek-coder:6.7b'
-      candidateFallbacks = [
-        'deepseek-coder:6.7b',
-        'deepseek-coder:6.7b-instruct-q4_k_m',
-        'qwen2.5-coder:3b',
-        'deepseek-r1:1.5b',
-        defaultStandard,
-      ]
-    } else if (isMidRange) {
-      // On 8GB GPUs (Safe Net Budget ~4.5 GB): Qwen2.5-Coder 7B or DeepSeek R1 Distill Qwen 7B
-      preferredModel = activeSettings?.complexityDeepModel || 'qwen2.5-coder:7b'
-      candidateFallbacks = [
-        'qwen2.5-coder:7b',
-        'qwen2.5-coder:7b-instruct-q4_k_m',
-        'deepseek-r1:7b',
-        'deepseek-r1:7b-qwen-distill-q4_k_m',
-        'deepseek-coder:6.7b',
-        'qwen2.5-coder:3b',
-        defaultStandard,
-      ]
-    } else if (isExtremeVram) {
-      // On 24GB+ GPUs: 32B models
-      preferredModel = activeSettings?.complexityDeepModel || 'qwen2.5-coder:32b'
-      candidateFallbacks = [
-        'qwen2.5-coder:32b',
-        'deepseek-r1:32b',
-        'qwen2.5-coder:14b',
-        'deepseek-r1:14b',
-        'codestral:22b-v0.1-q4_k_m',
-        defaultStandard,
-      ]
-    } else {
-      // High-End 12-16GB VRAM: 14B models
-      preferredModel = activeSettings?.complexityDeepModel || 'qwen2.5-coder:14b'
-      candidateFallbacks = [
-        'qwen2.5-coder:14b',
-        'qwen2.5-coder:14b-instruct-q4_k_m',
-        'deepseek-r1:14b',
-        'deepseek-coder-v2:16b-lite-instruct-q4_k_m',
-        'deepseek-r1:8b',
-        'qwen2.5-coder:7b',
-        defaultStandard,
-      ]
-    }
-  } else {
-    // Standard tier
-    preferredModel = defaultStandard
-    if (safeVramBudgetGB !== undefined && safeVramBudgetGB < 3.0) {
-      candidateFallbacks = [
-        'qwen2.5-coder:3b',
-        'deepseek-coder:6.7b',
-        'qwen2.5-coder:1.5b',
-        'llama3.2:3b',
-        defaultStandard,
-      ]
-    } else if (safeVramBudgetGB !== undefined && safeVramBudgetGB >= 12.0) {
-      candidateFallbacks = [
-        'qwen2.5-coder:14b',
-        'qwen2.5-coder:7b',
-        'codestral:22b-v0.1-q4_k_m',
-        defaultStandard,
-      ]
-    } else {
-      candidateFallbacks = [
-        'qwen2.5-coder:7b',
-        'qwen2.5-coder:7b-instruct-q4_k_m',
-        'deepseek-coder:6.7b',
-        'qwen2.5-coder:3b',
-        'deepseek-coder-v2:16b-lite-instruct-q4_k_m',
-        defaultStandard,
-      ]
-    }
-  }
+  // An explicit per-tier user assignment always wins; otherwise take the curated head of
+  // the cascade (the same model the setup wizard pre-selects for this hardware).
+  const configuredModel = tier === 'fast'
+    ? activeSettings?.complexityFastModel
+    : tier === 'deep_reasoning'
+      ? activeSettings?.complexityDeepModel
+      : defaultStandard
+  const preferredModel = configuredModel || candidateFallbacks[0]
 
   const { model: selectedModel, isFallback } = resolveModelWithFallback(preferredModel, candidateFallbacks, availableModels)
 

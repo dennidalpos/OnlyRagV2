@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IElectronAPI, AppSettings, PlanMilestone } from '../src/types'
+import type { IElectronAPI, AppSettings, CodingSession, PlanMilestone, SkillInstallApprovalRequest } from '../src/types'
 
 const api: IElectronAPI = {
   runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),
@@ -61,9 +61,13 @@ const api: IElectronAPI = {
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
   getAgentQueueStatus: () => ipcRenderer.invoke('agent:get-queue-status'),
-  deleteAgentSession: (sessionId: string, workspacePath?: string | null) => ipcRenderer.invoke('agent:delete-session', sessionId, workspacePath),
-  clearAllAgentSessions: (workspacePath?: string | null) => ipcRenderer.invoke('agent:clear-all-sessions', workspacePath),
-  clearCodingAgentAuditLog: () => ipcRenderer.invoke('agent:clear-audit-log'),
+  /** Session history CRUD (filesystem store, single source of truth). */
+  listCodingSessions: (workspacePath?: string | null) => ipcRenderer.invoke('sessions:list', workspacePath),
+  saveCodingSession: (session: CodingSession) => ipcRenderer.invoke('sessions:save', session),
+  deleteCodingSession: (sessionId: string, workspacePath?: string | null) => ipcRenderer.invoke('sessions:delete', sessionId, workspacePath),
+  clearCodingSessions: (workspacePath?: string | null) => ipcRenderer.invoke('sessions:clear', workspacePath),
+  /** One-shot import of the legacy localStorage session history. */
+  migrateLegacyCodingSessions: (sessions: unknown) => ipcRenderer.invoke('sessions:migrate-legacy', sessions),
   onAgentLog: (callback: (log: any) => void) => {
     const subscription = (_: any, log: any) => callback(log)
     ipcRenderer.on('agent:log', subscription)
@@ -94,6 +98,16 @@ const api: IElectronAPI = {
     const subscription = (_: any, req: any) => callback(req)
     ipcRenderer.on('agent:approval-request', subscription)
     return () => ipcRenderer.removeListener('agent:approval-request', subscription)
+  },
+  /** Skill Hub 'prompt' policy: install request raised while the turn prompt is assembled. */
+  onAgentSkillInstallRequest: (callback: (req: SkillInstallApprovalRequest) => void) => {
+    const subscription = (_: any, req: SkillInstallApprovalRequest) => callback(req)
+    ipcRenderer.on('agent:skill-install-request', subscription)
+    return () => ipcRenderer.removeListener('agent:skill-install-request', subscription)
+  },
+  /** Skill Hub 'prompt' policy: user's answer to a pending install request. */
+  respondAgentSkillInstall: (requestId: string, approved: boolean) => {
+    ipcRenderer.send('agent:skill-install-response', { requestId, approved })
   },
   onAgentSkillsMatched: (callback: (data: { skills: string[] }) => void) => {
     const subscription = (_: any, data: any) => callback(data)

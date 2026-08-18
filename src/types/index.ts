@@ -116,6 +116,8 @@ export interface AgentActionLog {
   detail?: string
 }
 
+import type { ExecutedPrompt, QueuedPromptRecord } from './workspace'
+
 export * from './workspace'
 
 export interface AppSettings {
@@ -246,11 +248,26 @@ export interface CodingSession {
   id: string
   workspacePath: string | null
   title: string
+  /** ISO 8601 timestamp. */
   createdAt: string
+  /** ISO 8601 timestamp. */
   updatedAt: string
   actionLogs: AgentActionLog[]
-  promptQueue?: { id: string; prompt: string; createdAt: string }[]
+  /** Prompts executed in this session, oldest first (see ExecutedPrompt). */
+  executedPrompts: ExecutedPrompt[]
+  /** Plan versions drafted in this session, oldest first (see AgentPlan). */
+  plans?: AgentPlan[]
+  promptQueue?: QueuedPromptRecord[]
   pinnedFilePaths?: string[]
+}
+
+/** Hub skill the router wants to install while autoInstallHubSkills is set to 'prompt'. */
+export interface SkillInstallApprovalRequest {
+  requestId: string
+  skillName: string
+  skillDescription: string
+  hubName: string
+  score: number
 }
 
 export type SkillOriginType = 'local_custom' | 'hub_original' | 'hub_modified'
@@ -393,15 +410,23 @@ export interface IElectronAPI {
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
-  deleteAgentSession?: (sessionId: string, workspacePath?: string | null) => Promise<boolean>
-  clearAllAgentSessions?: (workspacePath?: string | null) => Promise<boolean>
-  clearCodingAgentAuditLog?: () => Promise<boolean>
+  /** Session history CRUD backed by the filesystem store (see sessionHistoryRepository). */
+  listCodingSessions?: (workspacePath?: string | null) => Promise<CodingSession[]>
+  saveCodingSession?: (session: CodingSession) => Promise<CodingSession | null>
+  deleteCodingSession?: (sessionId: string, workspacePath?: string | null) => Promise<boolean>
+  clearCodingSessions?: (workspacePath?: string | null) => Promise<boolean>
+  /** One-shot import of sessions previously persisted in localStorage. */
+  migrateLegacyCodingSessions?: (sessions: unknown) => Promise<{ migrated: number }>
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
   onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
   onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
   onAgentApprovalRequest: (callback: (req: any) => void) => () => void
   onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void
+  /** Skill Hub 'prompt' policy: subscribe to the auto-install confirmation requests. */
+  onAgentSkillInstallRequest?: (callback: (req: SkillInstallApprovalRequest) => void) => () => void
+  /** Skill Hub 'prompt' policy: answer a pending auto-install confirmation request. */
+  respondAgentSkillInstall?: (requestId: string, approved: boolean) => void
   onAgentChangeMetrics?: (callback: (data: AgentChangeMetrics) => void) => () => void
   onWorkspaceFileDeleted?: (callback: (data: { filePath: string }) => void) => () => void
   onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
@@ -436,6 +461,23 @@ export interface IElectronAPI {
 // ---------------------------------------------------------------------------
 // Agent Plan — Canonical Milestone Types
 // ---------------------------------------------------------------------------
+
+/**
+ * A drafted (and possibly approved) execution plan, versioned per coding session.
+ * Persisted inside its CodingSession by the session history store.
+ */
+export interface AgentPlan {
+  id: string
+  version: number
+  prompt: string
+  planText: string
+  status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected'
+  /** ISO 8601 timestamp. */
+  createdAt: string
+  baseStepOffset?: number
+  /** Canonical milestones parsed by the backend's GoalDecompositionPlanner parser (single source of truth — see PlanPanel). */
+  milestones?: PlanMilestone[]
+}
 
 export interface PlanMilestone {
   id: string

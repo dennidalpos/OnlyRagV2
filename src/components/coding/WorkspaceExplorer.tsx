@@ -1,21 +1,8 @@
 import React, { useState } from 'react'
-import {
-  FolderOpen,
-  Plus,
-  Trash2,
-  Folder,
-  ChevronDown,
-  ChevronRight,
-  MessageSquare,
-  RefreshCw,
-  X,
-  Edit2,
-  Check,
-  HardDrive,
-  FileCode2,
-} from 'lucide-react'
+import { FolderOpen, Plus, Trash2, Folder, MessageSquare, RefreshCw, X, HardDrive, FileCode2, Eraser } from 'lucide-react'
 import { WorkspaceFile, CodingSession, WorkspaceProject } from '../../types'
 import { FileTreeNode } from './FileExplorerTree'
+import { SessionHistoryTree } from './SessionHistoryTree'
 import { useTranslation } from '../../i18n'
 
 interface WorkspaceExplorerProps {
@@ -37,6 +24,7 @@ interface WorkspaceExplorerProps {
   onCreateSession: () => void
   onSwitchSession: (id: string) => void
   onDeleteSession: (id: string) => void
+  onClearSessions: () => void
   onRenameSession: (id: string, title: string) => void
   onClose: () => void
 }
@@ -58,13 +46,12 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   onCreateSession,
   onSwitchSession,
   onDeleteSession,
+  onClearSessions,
   onRenameSession,
   onClose,
 }) => {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'files' | 'projects' | 'history'>('files')
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
-  const [editingTitleText, setEditingTitleText] = useState<string>('')
 
   const activeProjectName = activeProjectPath
     ? activeProjectPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
@@ -256,113 +243,44 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           </div>
         )}
 
-        {/* Tab 3: Chat Session History */}
+        {/* Tab 3: Session History Tree (project > session > executed prompts) */}
         {activeTab === 'history' && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-2 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-              <span>Storico Chat Progetto</span>
-              <button
-                type="button"
-                onClick={onCreateSession}
-                title="Crea nuova sessione di chat"
-                className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+              <span>{t('coding.historyTitle')}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(t('coding.historyClearConfirm'))) onClearSessions()
+                  }}
+                  title={t('coding.historyClear')}
+                  className="p-1 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded transition-colors"
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onCreateSession}
+                  title={t('coding.newProjectSession')}
+                  className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {workspaceSessions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400">
-                Nessuna sessione di chat registrata per questo progetto.
-              </div>
+              <div className="p-4 text-center text-xs text-slate-400">{t('coding.historyEmpty')}</div>
             ) : (
-              <div className="space-y-1.5">
-                {workspaceSessions.map((session) => {
-                  const isActive = session.id === activeSessionId
-                  const isEditing = editingSessionId === session.id
-
-                  return (
-                    <div
-                      key={session.id}
-                      className={`p-2 rounded-xl border text-xs flex items-center justify-between transition-all group ${
-                        isActive
-                          ? 'bg-indigo-950/70 border-indigo-500/50 text-indigo-200'
-                          : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 text-slate-300'
-                      }`}
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5 w-full">
-                          <input
-                            type="text"
-                            value={editingTitleText}
-                            onChange={(e) => setEditingTitleText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                onRenameSession(session.id, editingTitleText)
-                                setEditingSessionId(null)
-                              } else if (e.key === 'Escape') {
-                                setEditingSessionId(null)
-                              }
-                            }}
-                            className="flex-1 bg-slate-950 border border-indigo-500 rounded px-2 py-0.5 text-xs text-slate-100 outline-none"
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onRenameSession(session.id, editingTitleText)
-                              setEditingSessionId(null)
-                            }}
-                            className="p-1 text-emerald-400 hover:bg-slate-800 rounded"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => onSwitchSession(session.id)}
-                            className="flex items-center gap-2 text-left truncate flex-1 min-w-0"
-                          >
-                            <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
-                            <div className="truncate min-w-0">
-                              <div className="font-semibold truncate text-[11px]">{session.title}</div>
-                              <div className="text-[9px] font-mono text-slate-400">
-                                {new Date(session.updatedAt || session.createdAt).toLocaleDateString()} • {session.actionLogs.length} step
-                              </div>
-                            </div>
-                          </button>
-
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingSessionId(session.id)
-                                setEditingTitleText(session.title)
-                              }}
-                              title="Rinomina"
-                              className="p-1 hover:text-cyan-300 rounded"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                            {workspaceSessions.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => onDeleteSession(session.id)}
-                                title="Elimina"
-                                className="p-1 hover:text-rose-400 rounded"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+              <SessionHistoryTree
+                projectName={activeProjectName}
+                sessions={workspaceSessions}
+                activeSessionId={activeSessionId}
+                onSwitchSession={onSwitchSession}
+                onDeleteSession={onDeleteSession}
+                onRenameSession={onRenameSession}
+              />
             )}
           </div>
         )}

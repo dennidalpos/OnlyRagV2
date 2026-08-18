@@ -116,6 +116,53 @@ describe('SkillAppService Unit Tests', () => {
     expect(installed.some((s) => s.name === 'bigquery-sql')).toBe(false)
   })
 
+  it('should install an auto-discovered hub skill in prompt mode only after the user confirms', async () => {
+    const candidates: { skillName: string; hubName: string; score: number }[] = []
+    const matched = await skillAppService.getMatchedSkills(
+      'Refactor the module following typescript clean code guidelines',
+      tempDir,
+      3,
+      {
+        autoInstallHubSkills: 'prompt',
+        onConfirmInstall: async (candidate) => {
+          candidates.push({ skillName: candidate.skillName, hubName: candidate.hubName, score: candidate.score })
+          return true
+        },
+      }
+    )
+
+    expect(candidates.length).toBe(1)
+    expect(candidates[0].skillName).toBe('typescript-clean-code')
+    expect(candidates[0].hubName.length).toBeGreaterThan(0)
+    expect(candidates[0].score).toBeGreaterThan(0)
+    expect(matched.some((s) => s.name === 'typescript-clean-code')).toBe(true)
+
+    const installed = await skillAppService.listInstalledSkills(tempDir)
+    expect(installed.some((s) => s.name === 'typescript-clean-code')).toBe(true)
+  })
+
+  it('should skip the install in prompt mode when the user rejects it', async () => {
+    const matched = await skillAppService.getMatchedSkills(
+      'Refactor the module following typescript clean code guidelines',
+      tempDir,
+      3,
+      { autoInstallHubSkills: 'prompt', onConfirmInstall: async () => false }
+    )
+
+    expect(matched.some((s) => s.name === 'typescript-clean-code')).toBe(false)
+    const installed = await skillAppService.listInstalledSkills(tempDir)
+    expect(installed.some((s) => s.name === 'typescript-clean-code')).toBe(false)
+  })
+
+  it('should never install without confirmation in prompt mode (regression: prompt behaved like auto)', async () => {
+    await skillAppService.getMatchedSkills('Refactor the module following typescript clean code guidelines', tempDir, 3, {
+      autoInstallHubSkills: 'prompt',
+    })
+
+    const installed = await skillAppService.listInstalledSkills(tempDir)
+    expect(installed.some((s) => s.name === 'typescript-clean-code')).toBe(false)
+  })
+
   it('should return empty skills when enableSkillRouter is false', async () => {
     await skillAppService.installFromHub('react19-modern-patterns', tempDir, 'official-core')
     const matched = await skillAppService.getMatchedSkills('Create a React 19 component', tempDir, 3, {

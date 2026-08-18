@@ -1,121 +1,65 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument, CodingSession, WorkspaceProject, AgentChangeMetrics } from '../types'
+import { AgentActionLog, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, QueuedPromptRecord, AgentChangeMetrics } from '../types'
 import { AgentMode } from '../components/coding/CodingAgentView'
 import { useIngestedDocuments } from './useIngestedDocuments'
+import { useSessionHistory } from './useSessionHistory'
+import { useWorkspaceProjects } from './useWorkspaceProjects'
+import { useWorkspaceFiles } from './useWorkspaceFiles'
+import { useAgentTerminal } from './useAgentTerminal'
+import { useGitStatus } from './useGitStatus'
+import { useGrepSearch } from './useGrepSearch'
+import { useGuestOsDiagnostics } from './useGuestOsDiagnostics'
 import { logger } from '../lib/logger'
 
-export interface QueuedPrompt {
-  id: string
-  prompt: string
-  createdAt: string
-}
+export type QueuedPrompt = QueuedPromptRecord
 
-const SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
-const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
-const PROJECTS_STORAGE_KEY = 'onlyrag_workspace_projects'
+/** Stable empty plan list, so a session without plans never re-triggers plan effects. */
+const EMPTY_PLANS: AgentPlan[] = []
 
-function loadSavedProjects(): WorkspaceProject[] {
-  try {
-    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
-    }
-  } catch (err: any) {
-    logger.warn('useCodingAgent', `Could not parse saved projects: ${err?.message}`)
-  }
-  return []
-}
-
-function saveSavedProjects(projects: WorkspaceProject[]) {
-  try {
-    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects))
-  } catch (err: any) {
-    logger.warn('useCodingAgent', `Could not save projects: ${err?.message}`)
-  }
-}
-
-function loadSavedSessions(): CodingSession[] {
-  try {
-    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
-    }
-  } catch (err: any) {
-    logger.warn('useCodingAgent', `Could not parse saved sessions from localStorage: ${err?.message}`)
-  }
-  return []
-}
-
-function saveSavedSessions(sessions: CodingSession[]) {
-  try {
-    const valid = sessions.filter(
-      (s) => (s.actionLogs && s.actionLogs.length > 0) || (s.promptQueue && s.promptQueue.length > 0)
-    )
-    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(valid))
-  } catch (err: any) {
-    logger.warn('useCodingAgent', `Could not persist sessions to localStorage: ${err?.message}`)
-  }
-}
-
+/**
+ * Composition root of the Coding Agent Studio: owns the agent turn loop (prompt, action
+ * log, approvals, metrics) and wires together the workspace, editor, terminal, git, grep
+ * and session-history hooks that back the rest of the view.
+ */
 export function useCodingAgent(settings?: AppSettings) {
   const [agentMode, setAgentMode] = useState<AgentMode>('plan')
   const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan' | 'slm_diagnostics'>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 
-  // Workspace & Projects State
-  const [projects, setProjects] = useState<WorkspaceProject[]>(() => loadSavedProjects())
-  const [workspacePath, setWorkspacePath] = useState<string | null>(() => {
-    return settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null
-  })
-  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(settings?.noWorkspaceMode || false)
+  // Agent Execution State. Declared first: the workspace hooks below report their events
+  // into the same action log through addActionLog.
+  const [agentPrompt, setAgentPrompt] = useState<string>('')
+  const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
+  const [isExecuting, setIsExecuting] = useState<boolean>(false)
+  const [activeSkills, setActiveSkills] = useState<string[]>([])
+  const [streamingText, setStreamingText] = useState<string>('')
+  const [currentStep, setCurrentStep] = useState<number>(0)
+  const [maxSteps, setMaxSteps] = useState<number | string>(50)
+  /** Aggregate +/- size of the file changes applied by the running agent session. */
+  const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
+  const [pendingApproval, setPendingApproval] = useState<{
+    type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
+    target: string
+    contentOrCmd: string
+    replacement?: string
+    replacements?: { targetContent: string; replacementContent: string }[]
+    parameters?: Record<string, any>
+  } | null>(null)
 
-  // Sessions State
-  const [allSessions, setAllSessions] = useState<CodingSession[]>(() => loadSavedSessions())
-  const [activeSessionId, setActiveSessionId] = useState<string>('')
+  const addActionLog = useCallback((type: AgentActionLog['type'], message: string, detail?: string) => {
+    setActionLogs((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        type,
+        message,
+        detail,
+      },
+    ])
+  }, [])
 
-  // Prompt Queue State
-  const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([])
-  const promptQueueRef = useRef<QueuedPrompt[]>([])
-  useEffect(() => {
-    promptQueueRef.current = promptQueue
-  }, [promptQueue])
-
-  // 5-Second Real-Time Shell Command Monitoring Tab State
-  const shellCommandTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const previousTabRef = useRef<string | null>(null)
-  const autoOpenedTerminalRef = useRef<boolean>(false)
-  const activeTabRef = useRef(activeTab)
-
-  useEffect(() => {
-    activeTabRef.current = activeTab
-  }, [activeTab])
-
-  // Git Status & Diff State
-  const [gitStatusLines, setGitStatusLines] = useState<string[]>([])
-  const [gitDiffText, setGitDiffText] = useState<string>('')
-  const [isFetchingGit, setIsFetchingGit] = useState<boolean>(false)
-
-  // Guest OS Diagnostics State
-  const [guestOsInfo, setGuestOsInfo] = useState<any>(null)
-  const [isInspectingOs, setIsInspectingOs] = useState<boolean>(false)
-
-  // Grep Search State
-  const [grepQuery, setGrepQuery] = useState<string>('')
-  const [grepIsRegex, setGrepIsRegex] = useState<boolean>(false)
-  const [grepCaseInsensitive, setGrepCaseInsensitive] = useState<boolean>(true)
-  const [grepResults, setGrepResults] = useState<any[]>([])
-  const [isSearchingGrep, setIsSearchingGrep] = useState<boolean>(false)
-
-  // File Tree State
-  const [files, setFiles] = useState<WorkspaceFile[]>([])
-  const [openFiles, setOpenFiles] = useState<WorkspaceFile[]>([])
-  const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
-  const [editorContent, setEditorContent] = useState<string>('// Select a workspace file on the left to edit and inspect code.')
-  const [originalContent, setOriginalContent] = useState<string>('')
-  const [isSaved, setIsSaved] = useState<boolean>(true)
-
+  // Attached RAG documents
   const [attachedDocIds, setAttachedDocIds] = useState<Set<string>>(new Set())
   const [showDocPicker, setShowDocPicker] = useState<boolean>(false)
 
@@ -135,344 +79,147 @@ export function useCodingAgent(settings?: AppSettings) {
     autoRetryIntervalMs: 3000,
   })
 
-  // Terminal State
-  const [terminalInput, setTerminalInput] = useState<string>('')
-  const [terminalLogs, setTerminalLogs] = useState<string[]>([
-    'Windows PowerShell v7.4.1 (UTF-8)',
-    'OnlyRag V2 AI Coding Agent Terminal Ready.',
-    'Type command or ask AI Agent to run PowerShell tasks.',
-    '',
-  ])
-
-  // Pinned Files State
-  const [pinnedFiles, setPinnedFiles] = useState<Map<string, WorkspaceFile>>(new Map())
-
-  // Agent Execution State
-  const [agentPrompt, setAgentPrompt] = useState<string>('')
-  const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
-  const [isExecuting, setIsExecuting] = useState<boolean>(false)
-  const [activeSkills, setActiveSkills] = useState<string[]>([])
-  const [streamingText, setStreamingText] = useState<string>('')
-  const [currentStep, setCurrentStep] = useState<number>(0)
-  const [maxSteps, setMaxSteps] = useState<number | string>(50)
-
-  // Pending Approval State
-  /** Aggregate +/- size of the file changes applied by the running agent session. */
-  const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
-  const [pendingApproval, setPendingApproval] = useState<{
-    type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
-    target: string
-    contentOrCmd: string
-    replacement?: string
-    replacements?: { targetContent: string; replacementContent: string }[]
-    parameters?: Record<string, any>
-  } | null>(null)
-
-  // Initialize or restore session for active workspace
+  const ingestedDocsRef = useRef(ingestedDocs)
   useEffect(() => {
-    const currentWorkspaceSessions = allSessions.filter(
-      (s) => (s.workspacePath || '') === (workspacePath || '')
-    )
-    if (currentWorkspaceSessions.length === 0) {
-      const newSession: CodingSession = {
-        id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        workspacePath,
-        title: 'Nuova Sessione',
-        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        actionLogs: [],
-        promptQueue: [],
-      }
-      setAllSessions((prev) => {
-        const next = [newSession, ...prev]
-        saveSavedSessions(next)
-        return next
-      })
-      setActiveSessionId(newSession.id)
-      setActionLogs([])
-      setPromptQueue([])
-    } else {
-      const active = currentWorkspaceSessions.find((s) => s.id === activeSessionId) || currentWorkspaceSessions[0]
-      setActiveSessionId(active.id)
-      setActionLogs(active.actionLogs || [])
-      setPromptQueue(active.promptQueue || [])
-    }
-  }, [workspacePath])
+    ingestedDocsRef.current = ingestedDocs
+  }, [ingestedDocs])
 
-  // Sync actionLogs and promptQueue changes to active session in storage
-  useEffect(() => {
-    if (!activeSessionId) return
-    setAllSessions((prev) => {
-      const next = prev.map((s) => {
-        if (s.id === activeSessionId) {
-          return {
-            ...s,
-            actionLogs,
-            promptQueue,
-            updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }
-        }
-        return s
-      })
-      saveSavedSessions(next)
-      return next
-    })
-  }, [actionLogs, promptQueue, activeSessionId])
+  // Workspace projects, file tree/editor, terminal, git, grep and host diagnostics
+  const {
+    projects,
+    workspacePath,
+    isStandaloneMode,
+    handleSelectProject,
+    handleAddProject,
+    handleRemoveProject,
+    handleSelectWorkspaceFolder,
+    handleToggleStandalone,
+  } = useWorkspaceProjects(settings)
 
-  const addActionLog = (type: AgentActionLog['type'], message: string, detail?: string) => {
-    setActionLogs((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        type,
-        message,
-        detail,
-      },
-    ])
-  }
-
-  const loadGuestOsInfo = async () => {
-    if (window.electronAPI?.inspectGuestOsEnvironment) {
-      setIsInspectingOs(true)
-      try {
-        const info = await window.electronAPI.inspectGuestOsEnvironment()
-        setGuestOsInfo(info)
-      } catch (err) {
-        console.error('Failed inspecting guest OS:', err)
-      } finally {
-        setIsInspectingOs(false)
-      }
-    }
-  }
-
-  const handleRunGrepSearch = async () => {
-    if (!grepQuery.trim() || !workspacePath || isStandaloneMode || !window.electronAPI?.grepWorkspaceFiles) return
-    setIsSearchingGrep(true)
-    try {
-      const matches = await window.electronAPI.grepWorkspaceFiles(workspacePath, grepQuery, grepIsRegex, grepCaseInsensitive)
-      setGrepResults(matches)
-    } catch (err: any) {
-      console.error('Grep search failed:', err)
-    } finally {
-      setIsSearchingGrep(false)
-    }
-  }
-
-  const handleOpenFile = async (file: WorkspaceFile) => {
-    if (file.isDir) return
-    setSelectedFile(file)
-    setActiveTab('editor')
-    setOpenFiles((prev) => {
-      if (prev.some((f) => f.path === file.path)) return prev
-      return [...prev, file]
-    })
-    if (window.electronAPI) {
-      try {
-        const res = await window.electronAPI.readWorkspaceFile(file.path)
-        if (res.success && res.content !== undefined) {
-          setEditorContent(res.content)
-          setOriginalContent(res.content)
-          setIsSaved(true)
-        } else if (res.error) {
-          setEditorContent(`// Errore durante la lettura del file: ${res.error}`)
-          setOriginalContent('')
-        }
-      } catch (err: any) {
-        setEditorContent(`// Errore lettura file: ${err.message}`)
-        setOriginalContent('')
-      }
-    }
-  }
-
-  const handleCloseFile = (fileToClose: WorkspaceFile, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation()
-    setOpenFiles((prev) => {
-      const next = prev.filter((f) => f.path !== fileToClose.path)
-      if (selectedFile?.path === fileToClose.path) {
-        if (next.length > 0) {
-          const fallback = next[next.length - 1]
-          handleOpenFile(fallback)
-        } else {
-          setSelectedFile(null)
-          setEditorContent('')
-          setOriginalContent('')
-        }
-      }
-      return next
-    })
-  }
-
-  const loadWorkspaceFiles = async (targetPath?: string | null) => {
-    if (isStandaloneMode || !targetPath) {
-      setFiles([])
-      setOpenFiles([])
-      setSelectedFile(null)
-      return
-    }
-    if (window.electronAPI) {
-      try {
-        const fileList = await window.electronAPI.listWorkspaceFiles(targetPath)
-        setFiles(fileList)
-      } catch (err) {
-        console.error('Error loading workspace files:', err)
-      }
-    }
-  }
-
-  const purgeFileReferences = useCallback((deletedPath: string) => {
-    if (!deletedPath) return
-    const normDel = deletedPath.replace(/\\/g, '/').toLowerCase()
-    const isInside = (filePath: string) => {
-      if (!filePath) return false
-      const normFile = filePath.replace(/\\/g, '/').toLowerCase()
-      return normFile === normDel || normFile.startsWith(normDel.endsWith('/') ? normDel : normDel + '/')
-    }
-
-    setOpenFiles((prev) => {
-      const remaining = prev.filter((f) => !isInside(f.path))
-      setSelectedFile((curr) => {
-        if (curr && isInside(curr.path)) {
-          if (remaining.length > 0) {
-            handleOpenFile(remaining[remaining.length - 1])
-          } else {
-            setEditorContent('')
-            setOriginalContent('')
-            return null
-          }
-        }
-        return curr
-      })
-      return remaining
-    })
-
-    setPinnedFiles((prev) => {
-      const next = new Map(prev)
-      for (const [p] of next) {
-        if (isInside(p)) {
-          next.delete(p)
-        }
-      }
-      return next
-    })
-
+  /** A path deleted from the workspace must also drop the documents ingested from it. */
+  const handlePathPurged = useCallback((isInsideDeletedPath: (filePath: string) => boolean) => {
     setAttachedDocIds((prev) => {
       const next = new Set(prev)
       for (const docId of next) {
-        const doc = ingestedDocs.find((d) => d.id === docId)
-        if (doc && doc.filePath && isInside(doc.filePath)) {
-          next.delete(docId)
-        }
+        const doc = ingestedDocsRef.current.find((d) => d.id === docId)
+        if (doc?.filePath && isInsideDeletedPath(doc.filePath)) next.delete(docId)
       }
       return next
     })
+  }, [])
 
-    if (workspacePath) {
-      loadWorkspaceFiles(workspacePath)
-    }
-  }, [ingestedDocs, workspacePath])
+  const handleFileNotice = useCallback((message: string) => addActionLog('info', message), [addActionLog])
+
+  const {
+    files,
+    openFiles,
+    selectedFile,
+    editorContent,
+    setEditorContent,
+    originalContent,
+    isSaved,
+    setIsSaved,
+    pinnedFiles,
+    loadWorkspaceFiles,
+    handleOpenFile,
+    handleCloseFile,
+    handleSaveFile,
+    handleTogglePinFile,
+    purgeFileReferences,
+    setPinnedFiles,
+  } = useWorkspaceFiles({
+    workspacePath,
+    isStandaloneMode,
+    onFileNotice: handleFileNotice,
+    onPathPurged: handlePathPurged,
+  })
+
+  const handleCommandNotice = useCallback(
+    (command: string, output: string) => {
+      addActionLog(
+        'terminal',
+        `Command execution notice for "${command}":`,
+        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.
+${output.slice(0, 300)}`
+      )
+    },
+    [addActionLog]
+  )
+
+  const {
+    terminalInput,
+    setTerminalInput,
+    terminalLogs,
+    appendTerminalLogs,
+    handleRunTerminalCommand,
+    handleClearTerminal,
+  } = useAgentTerminal({ workspacePath, onCommandNotice: handleCommandNotice })
+
+  const { gitStatusLines, gitDiffText, isFetchingGit, fetchGitStatusAndDiff } = useGitStatus(workspacePath)
+  const {
+    grepQuery,
+    setGrepQuery,
+    grepIsRegex,
+    setGrepIsRegex,
+    grepCaseInsensitive,
+    setGrepCaseInsensitive,
+    grepResults,
+    isSearchingGrep,
+    handleRunGrepSearch,
+  } = useGrepSearch(workspacePath, isStandaloneMode)
+  const { guestOsInfo, isInspectingOs, loadGuestOsInfo } = useGuestOsDiagnostics()
+
+  // Session History (filesystem-backed, see useSessionHistory)
+  const {
+    sessions: workspaceSessions,
+    activeSession,
+    activeSessionId,
+    createSession,
+    switchSession,
+    deleteSession,
+    clearSessions,
+    renameSession,
+    updateSessionContent,
+    updateSessionPlans,
+    beginExecutedPrompt,
+    completeExecutedPrompt,
+  } = useSessionHistory(workspacePath)
+
+  // The agent:done / agent:log listeners are registered once, so they reach the current
+  // history callback through a ref instead of re-subscribing on every render.
+  const completeExecutedPromptRef = useRef(completeExecutedPrompt)
+  useEffect(() => {
+    completeExecutedPromptRef.current = completeExecutedPrompt
+  }, [completeExecutedPrompt])
+
+  // Prompt Queue State
+  const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([])
+  const promptQueueRef = useRef<QueuedPrompt[]>([])
+  useEffect(() => {
+    promptQueueRef.current = promptQueue
+  }, [promptQueue])
+
+  /** Session whose transcript is currently loaded in the view (guards restore vs mirror). */
+  const [loadedSessionId, setLoadedSessionId] = useState<string>('')
+  /** ExecutedPrompt record open for the running agent task, closed by the agent:done handler. */
+  const runningExecutedPromptRef = useRef<{ sessionId: string; promptId: string } | null>(null)
+  /** Live step count and change metrics, readable from the IPC listeners registered once. */
+  const currentStepRef = useRef<number>(0)
+  const changeMetricsRef = useRef<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
+
+  // 5-Second Real-Time Shell Command Monitoring Tab State
+  const shellCommandTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const previousTabRef = useRef<string | null>(null)
+  const autoOpenedTerminalRef = useRef<boolean>(false)
+  const activeTabRef = useRef(activeTab)
+
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
 
   useEffect(() => {
     loadGuestOsInfo()
   }, [])
-
-  useEffect(() => {
-    loadWorkspaceFiles(workspacePath)
-  }, [workspacePath, isStandaloneMode])
-
-  const fetchGitStatusAndDiff = async () => {
-    if (!window.electronAPI) return
-    setIsFetchingGit(true)
-    try {
-      const res = await window.electronAPI.executePowerShellCommand(
-        'git status --short; Write-Host "---GIT_DIFF_SPLIT---"; git diff -U3',
-        workspacePath || undefined
-      )
-      const output = res.output || ''
-      const parts = output.split('---GIT_DIFF_SPLIT---')
-      const statusRaw = (parts[0] || '').trim()
-      const diffRaw = (parts[1] || '').trim()
-
-      setGitStatusLines(statusRaw ? statusRaw.split('\n') : ['No modified files detected in Git working tree.'])
-      setGitDiffText(diffRaw || 'No uncommitted changes in Git working tree.')
-    } catch (err: any) {
-      setGitStatusLines(['Git command failed or not a Git repository.'])
-      setGitDiffText(`Git error: ${err.message}`)
-    } finally {
-      setIsFetchingGit(false)
-    }
-  }
-
-  const handleSelectProject = useCallback((pathStr: string) => {
-    setWorkspacePath(pathStr)
-    try {
-      localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, pathStr)
-    } catch (err: any) {
-      logger.warn('useCodingAgent', `Failed saving last workspace: ${err?.message}`)
-    }
-    setProjects((prev) => {
-      const folderName = pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
-      const existing = prev.filter((p) => p.path !== pathStr)
-      const updated: WorkspaceProject[] = [
-        { path: pathStr, name: folderName, addedAt: new Date().toISOString(), lastOpenedAt: new Date().toISOString() },
-        ...existing,
-      ]
-      saveSavedProjects(updated)
-      return updated
-    })
-    setIsStandaloneMode(false)
-    setSelectedFile(null)
-    loadWorkspaceFiles(pathStr)
-  }, [loadWorkspaceFiles])
-
-  const handleAddProject = useCallback(async () => {
-    if (!window.electronAPI?.openDirectoryDialog) return
-    const chosen = await window.electronAPI.openDirectoryDialog({ title: 'Aggiungi Cartella Progetto per Coding Agent Studio' })
-    if (chosen) {
-      handleSelectProject(chosen)
-    }
-  }, [handleSelectProject])
-
-  const handleRemoveProject = useCallback((pathStr: string) => {
-    setProjects((prev) => {
-      const updated = prev.filter((p) => p.path !== pathStr)
-      saveSavedProjects(updated)
-
-      if (pathStr === workspacePath) {
-        if (updated.length > 0) {
-          handleSelectProject(updated[0].path)
-        } else {
-          setWorkspacePath(null)
-          try {
-            localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
-          } catch (err: any) {
-            logger.warn('useCodingAgent', `Could not clear last workspace: ${err?.message}`)
-          }
-          setFiles([])
-          setOpenFiles([])
-          setSelectedFile(null)
-          setEditorContent('')
-          setPinnedFiles(new Map())
-        }
-      }
-
-      return updated
-    })
-  }, [workspacePath, handleSelectProject])
-
-  const handleSelectWorkspaceFolder = async () => {
-    await handleAddProject()
-  }
-
-  const handleToggleStandalone = () => {
-    setIsStandaloneMode(!isStandaloneMode)
-    if (!isStandaloneMode) {
-      setSelectedFile(null)
-      setFiles([])
-    } else if (workspacePath) {
-      loadWorkspaceFiles(workspacePath)
-    }
-  }
 
   const toggleAttachDoc = (docId: string) => {
     setAttachedDocIds((prev) => {
@@ -481,53 +228,6 @@ export function useCodingAgent(settings?: AppSettings) {
       else next.add(docId)
       return next
     })
-  }
-
-  const handleTogglePinFile = (file: WorkspaceFile) => {
-    if (file.isDir) return
-    setPinnedFiles((prev) => {
-      const next = new Map(prev)
-      if (next.has(file.path)) {
-        next.delete(file.path)
-        addActionLog('info', `Unpinned referenced file: ${file.name}`)
-      } else {
-        next.set(file.path, file)
-        addActionLog('info', `Pinned referenced file to chat context: ${file.name}`)
-      }
-      return next
-    })
-  }
-
-  const handleSaveFile = async () => {
-    if (!selectedFile || !window.electronAPI) return
-    const res = await window.electronAPI.writeWorkspaceFile(selectedFile.path, editorContent)
-    if (res.success) {
-      setOriginalContent(editorContent)
-      setIsSaved(true)
-      addActionLog('info', `Saved changes to ${selectedFile.name}`)
-    }
-  }
-
-  const handleRunTerminalCommand = async (cmdToRun?: string, timeoutMs: number = 120000) => {
-    const cmd = cmdToRun || terminalInput
-    if (!cmd.trim() || !window.electronAPI) return
-
-    setTerminalLogs((prev) => [...prev, `PS> ${cmd} (Executing... timeout: ${timeoutMs / 1000}s)`].slice(-500))
-    if (!cmdToRun) setTerminalInput('')
-
-    const res = await window.electronAPI.executePowerShellCommand(cmd, workspacePath || undefined, timeoutMs)
-    const outStr = res.output || ''
-    setTerminalLogs((prev) => [...prev, outStr, ''].slice(-500))
-
-    if (!res.success || outStr.includes('non è stato possibile trovare') || outStr.includes('is not recognized') || outStr.includes('CommandNotFoundException')) {
-      addActionLog(
-        'terminal',
-        `Command execution notice for "${cmd}":`,
-        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.\n${outStr.slice(0, 300)}`
-      )
-    }
-
-    return res
   }
 
   useEffect(() => {
@@ -543,10 +243,7 @@ export function useCodingAgent(settings?: AppSettings) {
       // Real-time synchronization of terminal logs & 5-second trigger for live shell monitoring tab
       if (log.type === 'terminal' || log.message.includes('run_command') || log.message.startsWith('Ran ') || log.message.includes('Executing terminal command')) {
         if (log.message) {
-          setTerminalLogs((prev) => {
-            const entry = log.detail ? `${log.message}\n${log.detail}` : log.message
-            return [...prev, entry].slice(-500)
-          })
+          appendTerminalLogs(log.detail ? `${log.message}\n${log.detail}` : log.message)
         }
 
         // Start 5-second trigger timer for auto-opening terminal monitoring tab
@@ -620,7 +317,10 @@ export function useCodingAgent(settings?: AppSettings) {
     })
 
     const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps: number; maxStepsLabel: string }) => {
-      if (data?.step !== undefined) setCurrentStep(data.step)
+      if (data?.step !== undefined) {
+        currentStepRef.current = data.step
+        setCurrentStep(data.step)
+      }
       if (data?.maxStepsLabel !== undefined) setMaxSteps(data.maxStepsLabel)
       else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
     })
@@ -634,10 +334,14 @@ export function useCodingAgent(settings?: AppSettings) {
     })
 
     const unsubChangeMetrics = window.electronAPI.onAgentChangeMetrics?.((data: AgentChangeMetrics) => {
-      if (data) setChangeMetrics(data)
+      if (data) {
+        changeMetricsRef.current = data
+        setChangeMetrics(data)
+      }
     })
 
-    const unsubDone = window.electronAPI.onAgentDone?.(() => {
+    const unsubDone = window.electronAPI.onAgentDone?.((res: { success: boolean; summary: string }) => {
+      closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
       setIsExecuting(false)
       setStreamingText('')
 
@@ -681,108 +385,104 @@ export function useCodingAgent(settings?: AppSettings) {
       if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
+    closeRunningExecutedPrompt('cancelled')
     addActionLog('info', 'Esecuzione interrotta dall\'utente.')
   }
 
-  const workspaceSessions = allSessions.filter(
-    (s) => (s.workspacePath || '') === (workspacePath || '')
-  )
-  const activeSession = allSessions.find((s) => s.id === activeSessionId) || workspaceSessions[0] || null
-
-  const handleCreateSession = () => {
+  /** Stops the running task and resets the per-session view state before switching context. */
+  const resetSessionViewState = () => {
     if (isExecuting && window.electronAPI) {
       if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
-    const newSession: CodingSession = {
-      id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      workspacePath,
-      title: 'Nuova Sessione',
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      actionLogs: [],
-      promptQueue: [],
-    }
-    setAllSessions((prev) => {
-      const next = [newSession, ...prev]
-      saveSavedSessions(next)
-      return next
-    })
-    setActiveSessionId(newSession.id)
+    runningExecutedPromptRef.current = null
     setIsExecuting(false)
     setAgentPrompt('')
     setActiveSkills([])
     setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
+    setPendingApproval(null)
+  }
+
+  const handleCreateSession = () => {
+    resetSessionViewState()
+    const created = createSession()
+    setLoadedSessionId(created.id)
+    setActionLogs([])
     setPromptQueue([])
     promptQueueRef.current = []
     setAttachedDocIds(new Set())
     setPinnedFiles(new Map())
-    setPendingApproval(null)
-    setActionLogs([])
   }
 
   const handleSwitchSession = (sessionId: string) => {
     if (sessionId === activeSessionId) return
-    if (isExecuting && window.electronAPI) {
-      if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
-      if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
-    }
-    const target = allSessions.find((s) => s.id === sessionId)
-    if (target) {
-      setActiveSessionId(target.id)
-      setActionLogs(target.actionLogs || [])
-      setPromptQueue(target.promptQueue || [])
-      promptQueueRef.current = target.promptQueue || []
-      setIsExecuting(false)
-      setAgentPrompt('')
+    resetSessionViewState()
+    switchSession(sessionId)
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (sessionId === activeSessionId) resetSessionViewState()
+    const nextActive = await deleteSession(sessionId)
+    if (nextActive) {
+      setLoadedSessionId('')
     }
   }
 
-  const handleDeleteSession = (sessionId: string) => {
-    const remaining = allSessions.filter((s) => s.id !== sessionId)
-    setAllSessions(remaining)
-    saveSavedSessions(remaining)
-
-    if (window.electronAPI?.deleteAgentSession) {
-      window.electronAPI.deleteAgentSession(sessionId, workspacePath)
-    }
-
-    if (remaining.length === 0 && window.electronAPI?.clearCodingAgentAuditLog) {
-      window.electronAPI.clearCodingAgentAuditLog()
-    }
-
-    if (activeSessionId === sessionId) {
-      const nextInWorkspace = remaining.filter((s) => (s.workspacePath || '') === (workspacePath || ''))
-      if (nextInWorkspace.length > 0) {
-        handleSwitchSession(nextInWorkspace[0].id)
-      } else {
-        handleCreateSession()
-      }
-    }
+  const handleClearSessionHistory = async () => {
+    resetSessionViewState()
+    const fresh = await clearSessions()
+    setLoadedSessionId(fresh.id)
+    setActionLogs([])
+    setPromptQueue([])
+    promptQueueRef.current = []
   }
 
   const handleRenameSession = (sessionId: string, newTitle: string) => {
-    if (!newTitle.trim()) return
-    setAllSessions((prev) => {
-      const next = prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle.trim() } : s))
-      saveSavedSessions(next)
-      return next
-    })
+    renameSession(sessionId, newTitle)
   }
 
   const handleNewSession = handleCreateSession
+
+  /** Plan history of the active session, persisted with the session itself. */
+  const activeSessionPlans = activeSession?.plans || EMPTY_PLANS
+  const updateActiveSessionPlans = useCallback(
+    (updater: (prev: AgentPlan[]) => AgentPlan[]) => {
+      if (!activeSessionId) return
+      updateSessionPlans(activeSessionId, updater)
+    },
+    [activeSessionId, updateSessionPlans]
+  )
+
+  /** Closes the ExecutedPrompt record of the running task with its final outcome and metrics. */
+  const closeRunningExecutedPrompt = (outcome: ExecutedPromptOutcome, summary?: string) => {
+    const running = runningExecutedPromptRef.current
+    if (!running) return
+    runningExecutedPromptRef.current = null
+    completeExecutedPromptRef.current(running.sessionId, running.promptId, {
+      outcome,
+      totalSteps: currentStepRef.current,
+      metrics: changeMetricsRef.current,
+      summary,
+    })
+  }
 
   const executeTask = async (taskPrompt: string) => {
     if (!taskPrompt.trim() || !window.electronAPI) return
     setIsExecuting(true)
     setActiveSkills([])
     setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
+    changeMetricsRef.current = { filesTouched: 0, additions: 0, deletions: 0 }
+    currentStepRef.current = 0
     addActionLog('info', `User Prompt: ${taskPrompt}`)
 
-    // Auto-update session title if it is default
-    if (activeSession && (activeSession.title === 'Nuova Sessione' || activeSession.title === 'New Session' || activeSession.title.startsWith('Session '))) {
-      const autoTitle = taskPrompt.slice(0, 32).trim() + (taskPrompt.length > 32 ? '...' : '')
-      handleRenameSession(activeSession.id, autoTitle)
+    // Open the ExecutedPrompt record for this run; the session title is derived from
+    // the first one by the history store, and `agent:done` closes it with its metrics.
+    const runSessionId = activeSessionId || activeSession?.id || ''
+    if (runSessionId) {
+      runningExecutedPromptRef.current = {
+        sessionId: runSessionId,
+        promptId: beginExecutedPrompt(runSessionId, taskPrompt, agentMode),
+      }
     }
 
     try {
@@ -828,7 +528,7 @@ export function useCodingAgent(settings?: AppSettings) {
       const initialUserTask = initialLog ? initialLog.message.replace(/^User Prompt:\s*/, '') : taskPrompt
 
       const res = await window.electronAPI.startAgentTask({
-        sessionId: activeSessionId || activeSession?.id,
+        sessionId: runSessionId,
         userTask: taskPrompt,
         initialUserTask,
         agentMode,
@@ -842,11 +542,14 @@ export function useCodingAgent(settings?: AppSettings) {
         settings,
       })
       if (res && res.success === false) {
-        addActionLog('info', `Agent Scheduling Error: ${res.summary || res.error || 'Failed scheduling task'}`)
+        const reason = res.summary || res.error || 'Failed scheduling task'
+        addActionLog('info', `Agent Scheduling Error: ${reason}`)
+        closeRunningExecutedPrompt('failed', reason)
         setIsExecuting(false)
       }
     } catch (err: any) {
       addActionLog('info', `Agent Scheduling Error: ${err.message}`)
+      closeRunningExecutedPrompt('failed', err.message)
       setIsExecuting(false)
     }
   }
@@ -873,7 +576,7 @@ export function useCodingAgent(settings?: AppSettings) {
     const item: QueuedPrompt = {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       prompt: trimmed,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: new Date().toISOString(),
     }
     setPromptQueue((prev) => [...prev, item])
     addActionLog('info', `Nuovo prompt aggiunto alla coda (#${promptQueueRef.current.length + 1}): "${trimmed.slice(0, 80)}..."`)
@@ -957,7 +660,7 @@ export function useCodingAgent(settings?: AppSettings) {
     const recentLogs = actionLogs.slice(-6)
     const summaryLog: AgentActionLog = {
       id: `compacted-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString(),
       type: 'info',
       message: `🧹 Session Context Compacted: Pruned older action steps (${actionLogs.length - recentLogs.length} entries removed) to optimize context window headroom.`,
     }
@@ -1033,16 +736,18 @@ export function useCodingAgent(settings?: AppSettings) {
     handleCloseFile,
     handleSaveFile,
     handleRunTerminalCommand,
-    handleClearTerminal: () => setTerminalLogs(['Windows PowerShell (Terminal Svuotato)', '']),
+    handleClearTerminal,
     handleAgentExecute,
     handleCancelAgent,
-    allSessions,
     workspaceSessions,
     activeSessionId,
     activeSession,
+    activeSessionPlans,
+    updateActiveSessionPlans,
     handleCreateSession,
     handleSwitchSession,
     handleDeleteSession,
+    handleClearSessionHistory,
     handleRenameSession,
     handleNewSession,
     handleApproveAction,

@@ -5,7 +5,6 @@ import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../domain/agent/planAndSolveGraph'
-import { type CompactPlanState } from '../../domain/agent/planManager'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 
 export interface SavedAgentSessionState {
@@ -20,10 +19,6 @@ export interface SavedAgentSessionState {
   userTask: string
   initialUserTask?: string
   updatedAt: string
-  objective?: string
-  restorePoint?: string
-  activeMicroTask?: string
-  pendingMicroTasks?: string[]
   status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
 }
 

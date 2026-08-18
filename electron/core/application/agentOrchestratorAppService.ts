@@ -32,6 +32,7 @@ import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { skillAppService } from './skillAppService'
+import { skillInstallApprovalService, type SkillInstallCandidate } from './skillInstallApprovalService'
 import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { PlanManager } from '../domain/agent/planManager'
@@ -94,7 +95,7 @@ function cleanupSession(session: AgentSession) {
   if (session.targetWindow && !session.targetWindow.isDestroyed()) {
     session.targetWindow.webContents.send('agent:log', {
       id: `${Date.now()}-cancelled`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      timestamp: new Date().toISOString(),
       type: 'info',
       message: "Task interrotto dall'utente.",
     })
@@ -155,7 +156,7 @@ export async function runAgentOrchestratorLoop(
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
       session.targetWindow.webContents.send('agent:log', {
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        timestamp: new Date().toISOString(),
         type,
         message,
         detail,
@@ -266,11 +267,19 @@ export async function runAgentOrchestratorLoop(
     workspacePath: workspacePath || undefined,
   }
 
-  const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath, 3, {
+  // In 'prompt' mode the auto-install of a hub skill is submitted to the user and awaited
+  // here, because the decision happens while this loop assembles the turn prompt.
+  const skillMatchingOptions = {
     enableSkillRouter: settings.enableSkillRouter !== false && settings.autoInstallHubSkills !== 'disabled',
     autoInstallHubSkills: settings.autoInstallHubSkills,
     autoInstallMinScore: settings.autoInstallMinScore,
-  })
+    onConfirmInstall: (candidate: SkillInstallCandidate) => {
+      emitLog('info', `🧩 Skill Hub: richiesta conferma installazione '${candidate.skillName}' da ${candidate.hubName} (score ${candidate.score.toFixed(1)})`)
+      return skillInstallApprovalService.requestApproval(session.targetWindow, candidate)
+    },
+  }
+
+  const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath, 3, skillMatchingOptions)
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
     if (session.targetWindow && !session.targetWindow.isDestroyed()) {
@@ -338,17 +347,11 @@ export async function runAgentOrchestratorLoop(
   }
 
   const persistCurrentState = async () => {
-    const compactState = goalPlanner.hasPlan()
-      ? PlanManager.getCompactStateFromMilestones(goalPlanner.getMilestones(), userTask)
-      : {
-          objective: userTask,
-          restorePoint: 'None (Session Initialized)',
-          activeMicroTask: 'Initializing execution context...',
-          pendingMicroTasks: [userTask],
-          completedCount: 0,
-          totalCount: 1,
-          isCompleted: false,
-        }
+    // Only the plan's completion flag is persisted: every other field of the compact
+    // state is a projection of planMilestones, which is already stored below.
+    const isPlanCompleted = goalPlanner.hasPlan()
+      ? PlanManager.getCompactStateFromMilestones(goalPlanner.getMilestones(), userTask).isCompleted
+      : false
 
     await agentSessionStateRepository.saveSessionState({
       sessionId,
@@ -362,11 +365,7 @@ export async function runAgentOrchestratorLoop(
       userTask,
       initialUserTask,
       updatedAt: new Date().toISOString(),
-      objective: compactState.objective,
-      restorePoint: compactState.restorePoint,
-      activeMicroTask: compactState.activeMicroTask,
-      pendingMicroTasks: compactState.pendingMicroTasks,
-      status: compactState.isCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+      status: isPlanCompleted ? 'COMPLETED' : 'IN_PROGRESS',
     })
 
     if (workspacePath) {
@@ -503,11 +502,7 @@ export async function runAgentOrchestratorLoop(
       },
       routedComplexity.tier
     )
-    const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath, 3, {
-      enableSkillRouter: settings.enableSkillRouter !== false && settings.autoInstallHubSkills !== 'disabled',
-      autoInstallHubSkills: settings.autoInstallHubSkills,
-      autoInstallMinScore: settings.autoInstallMinScore,
-    })
+    const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath, 3, skillMatchingOptions)
 
     const compiledHistoryBlock = episodicCompactor.compilePromptHistoryBlock(10000)
     const planBlock = goalPlanner.compileProgressPrompt()

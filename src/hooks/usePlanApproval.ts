@@ -1,38 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { AppSettings, PlanMilestone } from '../types'
+import { AgentPlan, AppSettings, PlanMilestone } from '../types'
 import { logger } from '../lib/logger'
 
-export interface AgentPlan {
-  id: string
-  version: number
-  prompt: string
-  planText: string
-  status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected'
-  createdAt: string
-  baseStepOffset?: number
-  /** Canonical milestones parsed by the backend's GoalDecompositionPlanner parser (single source of truth — see PlanPanel). */
-  milestones?: PlanMilestone[]
-}
-
-const PLANS_STORAGE_KEY = 'onlyrag_session_plans_v1'
-
-function loadSavedSessionPlans(): Record<string, AgentPlan[]> {
-  try {
-    const raw = localStorage.getItem(PLANS_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch (err: any) {
-    logger.warn('usePlanApproval', `Could not parse saved session plans: ${err?.message}`)
-    return {}
-  }
-}
-
-function saveSavedSessionPlans(plansMap: Record<string, AgentPlan[]>) {
-  try {
-    localStorage.setItem(PLANS_STORAGE_KEY, JSON.stringify(plansMap))
-  } catch (err: any) {
-    logger.warn('usePlanApproval', `Could not save session plans: ${err?.message}`)
-  }
-}
+export type { AgentPlan } from '../types'
 
 export const MANDATORY_PLAN_STOP_ITEM = '🛑 Completamento dell\'ultimo task, riepilogo finale e arresto dell\'agente (invoke "finish")'
 
@@ -83,12 +53,21 @@ interface UsePlanApprovalOptions {
   settings?: AppSettings
   activeSessionId?: string
   workspacePath?: string | null
+  /** Plan history of the active session, owned by the session history store. */
+  sessionPlans: AgentPlan[]
+  /** Applies an update to the active session's plan history (persisted with the session). */
+  onSessionPlansChange: (updater: (prev: AgentPlan[]) => AgentPlan[]) => void
   onPlanApproved: (plan: AgentPlan) => void
 }
 
-export function usePlanApproval({ settings, activeSessionId, workspacePath, onPlanApproved }: UsePlanApprovalOptions) {
-  const sessionKey = activeSessionId || 'default_session'
-  const [plansBySession, setPlansBySession] = useState<Record<string, AgentPlan[]>>(() => loadSavedSessionPlans())
+export function usePlanApproval({
+  settings,
+  activeSessionId,
+  workspacePath,
+  sessionPlans,
+  onSessionPlansChange,
+  onPlanApproved,
+}: UsePlanApprovalOptions) {
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
   const [countdownSeconds, setCountdownSeconds] = useState<number>(15)
@@ -99,31 +78,23 @@ export function usePlanApproval({ settings, activeSessionId, workspacePath, onPl
   const autoProceed = settings?.autoProceedPlan ?? true
   const autoProceedDelay = settings?.autoProceedDelaySeconds ?? 15
 
-  const planHistory = plansBySession[sessionKey] || []
+  const planHistory = sessionPlans
   const currentPlan = planHistory[activePlanIndex] || (planHistory.length > 0 ? planHistory[planHistory.length - 1] : null)
 
-  const updateCurrentSessionPlans = useCallback(
-    (updater: (prev: AgentPlan[]) => AgentPlan[]) => {
-      setPlansBySession((prev) => {
-        const currentList = prev[sessionKey] || []
-        const updatedList = updater(currentList)
-        const nextMap = { ...prev, [sessionKey]: updatedList }
-        saveSavedSessionPlans(nextMap)
-        return nextMap
-      })
-    },
-    [sessionKey]
-  )
+  const updateCurrentSessionPlans = onSessionPlansChange
+
+  // Read by generatePlan and by the session-change effect, which must see the history of
+  // the session being left/entered without re-running on every plan mutation.
+  const planHistoryRef = useRef<AgentPlan[]>(planHistory)
+  useEffect(() => {
+    planHistoryRef.current = planHistory
+  }, [planHistory])
 
   useEffect(() => {
-    // When session changes, set active plan index to latest version in that session
-    const list = plansBySession[sessionKey] || []
-    if (list.length > 0) {
-      setActivePlanIndex(list.length - 1)
-    } else {
-      setActivePlanIndex(0)
-    }
-  }, [sessionKey])
+    // When the session changes, point at the latest plan version of that session.
+    const list = planHistoryRef.current
+    setActivePlanIndex(list.length > 0 ? list.length - 1 : 0)
+  }, [activeSessionId])
 
   const clearPlanTimer = useCallback(() => {
     if (timerRef.current) {
@@ -165,7 +136,7 @@ export function usePlanApproval({ settings, activeSessionId, workspacePath, onPl
       setIsGeneratingPlan(true)
 
       const planId = `plan_${Date.now()}`
-      const existingHistory = plansBySession[sessionKey] || []
+      const existingHistory = planHistoryRef.current
       const newVersion = existingHistory.length + 1
 
       // C7: fold non-verified milestones from the most recent approved plan into
@@ -180,7 +151,7 @@ export function usePlanApproval({ settings, activeSessionId, workspacePath, onPl
         prompt,
         planText: 'Generazione piano in corso...',
         status: 'generating',
-        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: new Date().toISOString(),
         baseStepOffset: currentStep,
       }
 
@@ -220,7 +191,7 @@ export function usePlanApproval({ settings, activeSessionId, workspacePath, onPl
           prompt,
           planText: accumulatedPlan,
           status: 'ready',
-          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
           milestones,
         }
@@ -242,7 +213,7 @@ export function usePlanApproval({ settings, activeSessionId, workspacePath, onPl
           prompt,
           planText: fallbackText,
           status: 'ready',
-          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
           milestones: await parsePlanTextToMilestones(fallbackText),
         }
@@ -255,7 +226,7 @@ export function usePlanApproval({ settings, activeSessionId, workspacePath, onPl
         return fallbackPlan
       }
     },
-    [sessionKey, plansBySession, settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans]
+    [settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans]
   )
 
   const handleApprovePlan = useCallback(async () => {

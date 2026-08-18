@@ -12,6 +12,16 @@ import {
   SkillSaveInput,
 } from '../domain/skills/skillTypes'
 import { logger } from '../../diagnostics'
+import type { SkillInstallCandidate } from './skillInstallApprovalService'
+
+/** Options driving the contextual skill router and the hub auto-install policy. */
+export interface SkillMatchingOptions {
+  enableSkillRouter?: boolean
+  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  autoInstallMinScore?: number
+  /** Asks the user to confirm an install; required by the 'prompt' policy. */
+  onConfirmInstall?: (candidate: SkillInstallCandidate) => Promise<boolean>
+}
 
 function extractProjectStack(workspacePath?: string | null): string[] {
   if (!workspacePath || !fs.existsSync(workspacePath)) return []
@@ -327,11 +337,34 @@ export class SkillAppService {
     return skillRepository.deleteSkill(skillId, workspaceRoot)
   }
 
+  /**
+   * Decides whether an auto-discovered hub skill may be installed. In 'prompt' mode the
+   * decision belongs to the user: without a confirmation channel the install is skipped
+   * rather than silently performed as if the mode were 'auto'.
+   */
+  private async confirmHubInstall(
+    hubMatch: { item: HubSkillItem; score: number },
+    autoInstallMode: 'disabled' | 'prompt' | 'auto',
+    onConfirmInstall?: SkillMatchingOptions['onConfirmInstall']
+  ): Promise<boolean> {
+    if (autoInstallMode !== 'prompt') return true
+    if (!onConfirmInstall) {
+      logger.log('WARN', 'SkillAppService', `Install of '${hubMatch.item.name}' skipped: no confirmation channel available in 'prompt' mode.`)
+      return false
+    }
+    return onConfirmInstall({
+      skillName: hubMatch.item.name,
+      skillDescription: hubMatch.item.description,
+      hubName: hubMatch.item.hubName || hubMatch.item.hubId || 'Hub sconosciuto',
+      score: hubMatch.score,
+    })
+  }
+
   async getMatchedSkills(
     userTaskOrContext: string | SkillMatchContext,
     workspaceRoot?: string | null,
     maxSkills: number = 3,
-    options?: { enableSkillRouter?: boolean; autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
+    options?: SkillMatchingOptions
   ): Promise<SkillDefinition[]> {
     try {
       if (options?.enableSkillRouter === false || options?.autoInstallHubSkills === 'disabled') {
@@ -367,12 +400,15 @@ export class SkillAppService {
               logger.log(
                 'INFO',
                 'SkillAppService',
-                `Auto-discovered high confidence hub skill '${topHubMatch.item.name}' (score: ${topHubMatch.score}). Auto-installing...`
+                `Auto-discovered high confidence hub skill '${topHubMatch.item.name}' (score: ${topHubMatch.score}).`
               )
-              const installRes = await this.installFromHub(topHubMatch.item.id, workspaceRoot, topHubMatch.item.hubId)
-              if (installRes.success) {
-                availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
-                matched = matchSkillsForTask(ctx, availableSkills, maxSkills)
+              const isInstallAllowed = await this.confirmHubInstall(topHubMatch, autoInstallMode, options?.onConfirmInstall)
+              if (isInstallAllowed) {
+                const installRes = await this.installFromHub(topHubMatch.item.id, workspaceRoot, topHubMatch.item.hubId)
+                if (installRes.success) {
+                  availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
+                  matched = matchSkillsForTask(ctx, availableSkills, maxSkills)
+                }
               }
             }
           }
@@ -392,7 +428,7 @@ export class SkillAppService {
     userTaskOrContext: string | SkillMatchContext,
     workspaceRoot?: string | null,
     maxSkills: number = 3,
-    options?: { enableSkillRouter?: boolean; autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'; autoInstallMinScore?: number }
+    options?: SkillMatchingOptions
   ): Promise<string> {
     try {
       const matched = await this.getMatchedSkills(userTaskOrContext, workspaceRoot, maxSkills, options)

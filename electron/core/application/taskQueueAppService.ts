@@ -63,7 +63,7 @@ export class TaskQueueAppService {
       if (win && !win.isDestroyed()) {
         win.webContents.send('agent:log', {
           id: `${Date.now()}-queued`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          timestamp: new Date().toISOString(),
           type: 'info',
           message: `Task aggiunto alla coda (#${queuedCount}) - Slot attivi: ${runningCount}/${this.queue.getMaxConcurrency()}`,
           detail: `Il task verrà avviato automaticamente non appena si libererà uno slot di esecuzione.`,

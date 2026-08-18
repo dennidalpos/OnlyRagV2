@@ -54,6 +54,7 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
 - **Auto-Healing Diagnostics Loop**: Captures terminal stdout/stderr on test/build failures and feeds stack traces back to Ollama for self-correction.
 - **Definition of Done Gate**: `TransactionalExecutionGuard.validateTaskCompletion` intercepts `finish` when milestones are unverified or code changed without a verification run. Each distinct reason intercepts at most once, so the gate can advise but never deadlock a session.
 - **Small-Model Runtime Tuning**: `num_ctx` is frozen per session (grow-only) to preserve Ollama KV-cache reuse, `num_predict` is capped per complexity tier, and stop sequences cut generation when the model starts hallucinating the next turn history block. `num_thread` is pinned on every hardware profile; the first-turn model is pre-loaded so the cold load overlaps prompt assembly.
+- **Session History**: `sessionHistoryRepository.ts` is the single store for the coding session history (`<workspace>/.onlyrag/session_history.json`, home fallback for standalone runs), exposed through the `sessions:*` CRUD channels. Each session owns its `ExecutedPrompt` records (ISO 8601 timestamps, mode, outcome, steps, files touched, +/- lines); `.onlyrag/.agent_state_*.json` stays limited to the runtime state needed to resume the loop.
 - **Diff Surfaces**: `diffEngine.ts` powers the coloured line-by-line Git diff panel and the before/after approval modal, with +/- counts per file and aggregate session change metrics.
 - **Serial Execution**: agent tasks always run one at a time (`taskQueueAppService`), because the tool executor owns a single workspace journal and shared persistent shells.
 
@@ -68,6 +69,10 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
   - Stores `origin_hub`, `origin_hub_id`, `origin_checksum`, and `is_modified` in `SKILL.md` YAML frontmatter.
   - Visual status badges: 🟢 `Hub Originale`, 🟠 `Modificata`, 🔵 `Locale Personalizzata`.
   - 1-click restore to reset modified skills to original versions.
+- **Auto-Install Policy (`autoInstallHubSkills`)**:
+  - `auto`: installs the top hub match above the score threshold without asking.
+  - `prompt`: the install is submitted to the user (`agent:skill-install-request` / `agent:skill-install-response`, bridged by `skillInstallApprovalService`) and awaited during prompt assembly; an unanswered request (120s) resolves as denied, and a missing confirmation channel skips the install instead of falling back to `auto`.
+  - `disabled`: hub discovery and the skill router are both off.
 - **Contextual Skill Router (`skillMatcher.ts`)**:
   - Evaluates user prompts against installed active skills using weighted scoring: Trigger Match (3.0), Tag Match (1.5), Keyword in Description (1.0), Category Match (0.5).
   - Dynamically injects top 3 matched skills into the turn prompt within an 8k characters budget (`[DOMAIN EXPERT SKILL GUIDELINES]`).

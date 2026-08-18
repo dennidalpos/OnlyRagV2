@@ -35,6 +35,8 @@ import { usePlanApproval, AgentPlan } from '../../hooks/usePlanApproval'
 import { CodingHeader } from './CodingHeader'
 import { PendingApprovalModal } from './PendingApprovalModal'
 import { SkillHubModal } from './SkillHubModal'
+import { SkillInstallApprovalModal } from './skills/SkillInstallApprovalModal'
+import { useSkillInstallApproval } from '../../hooks/useSkillInstallApproval'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
 
@@ -66,6 +68,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     settings,
     activeSessionId: c.activeSessionId,
     workspacePath: c.workspacePath,
+    sessionPlans: c.activeSessionPlans,
+    onSessionPlansChange: c.updateActiveSessionPlans,
     onPlanApproved: (_approvedPlan) => {
       setLastExecutedPrompt(c.agentPrompt)
       c.handleAgentExecute()
@@ -77,6 +81,11 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [isDiffMode, setIsDiffMode] = useState<boolean>(false)
   const [copiedPath, setCopiedPath] = useState<boolean>(false)
   const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
+  const {
+    activeRequest: activeSkillInstallRequest,
+    approveInstall: approveSkillInstall,
+    rejectInstall: rejectSkillInstall,
+  } = useSkillInstallApproval()
   const [isResizing, setIsResizing] = useState<boolean>(false)
 
   const routedComplexity = useMemo(() => {
@@ -206,6 +215,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
             onCreateSession={c.handleCreateSession}
             onSwitchSession={c.handleSwitchSession}
             onDeleteSession={c.handleDeleteSession}
+            onClearSessions={c.handleClearSessionHistory}
             onRenameSession={c.handleRenameSession}
             onClose={() => setShowWorkspaceSidebar(false)}
           />
@@ -630,6 +640,13 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         isOpen={isSkillHubOpen}
         onClose={() => setIsSkillHubOpen(false)}
         workspacePath={c.workspacePath}
+      />
+
+      {/* Hub Skill Auto-Install Confirmation (autoInstallHubSkills: 'prompt') */}
+      <SkillInstallApprovalModal
+        request={activeSkillInstallRequest}
+        onApprove={approveSkillInstall}
+        onReject={rejectSkillInstall}
       />
     </div>
   )

@@ -10,6 +10,7 @@ import { registerSidecarIpcHandlers } from './core/presentation/sidecarIpc'
 import { registerOllamaIpcHandlers } from './core/presentation/ollamaIpc'
 import { registerSystemIpcHandlers } from './core/presentation/systemIpc'
 import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
+import { registerSessionHistoryIpcHandlers } from './core/presentation/sessionHistoryIpc'
 import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
 
 process.env.DIST = path.join(__dirname, '../dist')
@@ -108,5 +109,6 @@ app.whenReady().then(() => {
   registerSidecarIpcHandlers()
   registerAgentIpcHandlers(() => win)
   registerSkillIpcHandlers()
+  registerSessionHistoryIpcHandlers()
   registerDiagnosticsIpcHandlers()
 })

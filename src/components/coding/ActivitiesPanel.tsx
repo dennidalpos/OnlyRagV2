@@ -13,6 +13,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { AgentActionLog } from '../../types'
+import { formatClockTime } from '../../lib/timeFormat'
 import { useTranslation } from '../../i18n'
 
 interface ActivitiesPanelProps {
@@ -64,7 +65,7 @@ export const ActivitiesPanel: React.FC<ActivitiesPanelProps> = ({
   ).length
 
   const lastLog = agentLogs[agentLogs.length - 1]
-  const lastActivityTime = lastLog ? lastLog.timestamp : 'N/A'
+  const lastActivityTime = lastLog ? formatClockTime(lastLog.timestamp) : 'N/A'
 
   return (
     <div className="flex-1 h-full flex flex-col bg-[#0b0f17] select-text font-sans text-slate-200 overflow-y-auto">

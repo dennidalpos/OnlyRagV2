@@ -1,8 +1,3 @@
 {
-  "todos": [
-    "F5.1 - Nuovo repository filesystem per la cronologia sessioni + canale IPC CRUD; migrazione one-shot delle sessioni presenti in localStorage ('onlyrag_coding_sessions_v2') al primo avvio; rimozione della doppia persistenza con .onlyrag/.agent_state_*.json.",
-    "F5.2 - Nuova entita' ExecutedPrompt (prompt, timestamp ISO, modalita', esito, step totali, file toccati, righe +/-) collegata a CodingSession; correzione dei timestamp da toLocaleTimeString a ISO 8601 (oggi WorkspaceExplorer.tsx:332 mostra 'Invalid Date').",
-    "F5.3 - WorkspaceExplorer.tsx: ristrutturazione ad albero progetto > sessione > prompt eseguiti, con titolo sessione derivato dal primo prompt e stato/metriche per ogni prompt.",
-    "F6.2 - Implementare il canale di conferma per autoInstallHubSkills='prompt': modale con nome skill, hub di origine e score di match, oggi bypassato perche' trattato come 'auto'. Richiede un IPC richiesta/risposta perche' l'auto-install avviene durante l'assemblaggio del prompt lato main."
-  ]
+  "todos": []
 }

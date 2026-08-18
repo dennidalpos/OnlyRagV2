@@ -223,9 +223,56 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 | `agent:get-queue-status` | `none` | `TaskQueueStatus` | Stato corrente della coda task (running, queued, maxConcurrency). |
 | `agent:set-max-concurrency` | `limit: number` | `{ success: boolean; maxConcurrency: number }` | Imposta il limite di task concorrenti (range: 1-8). |
 | `agent:parse-tool-call` | `rawText: string` | `AgentToolCall \| null` | Parsing difensivo di una tool call grezza (4 stage: JSON, JSON-in-prose, regex, fallback). |
-| `agent:delete-session` | `sessionId: string, workspacePath?: string` | `boolean` | Elimina lo stato persistente di una sessione agente. |
-| `agent:clear-all-sessions` | `workspacePath?: string` | `boolean` | Cancella tutti gli stati di sessione agente. |
 | `agent:clear-audit-log` | `none` | `boolean` | Azzera il log di audit delle azioni agente. |
+
+#### Cronologia Sessioni — Canali IPC CRUD
+
+Store filesystem unico (`sessionHistoryRepository`): `<workspace>/.onlyrag/session_history.json`, con fallback `~/.onlyrag_v2/sessions/session_history.json` per le sessioni standalone. Il renderer non persiste piu' nulla in `localStorage`.
+
+| Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
+| :--- | :--- | :--- | :--- | :--- |
+| `sessions:list` | `listCodingSessions(workspacePath?)` | `workspacePath?` | `CodingSession[]` | Sessioni del progetto, ordinate dalla piu' recente, con i relativi `ExecutedPrompt`. |
+| `sessions:save` | `saveCodingSession(session)` | `CodingSession` | `CodingSession \| null` | Upsert della sessione. Normalizza i timestamp in ISO 8601 e deriva il titolo dal primo prompt eseguito. |
+| `sessions:delete` | `deleteCodingSession(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `boolean` | Elimina la sessione, il relativo `.onlyrag/.agent_state_*.json` e le sue voci nell'audit log. |
+| `sessions:clear` | `clearCodingSessions(workspacePath?)` | `workspacePath?` | `boolean` | Svuota la cronologia del progetto e i relativi stati agente (azione "Svuota storico progetto" nel tab Storico). |
+| `sessions:migrate-legacy` | `migrateLegacyCodingSessions(sessions)` | array grezzo da `localStorage` | `{ migrated: number }` | Import one-shot delle sessioni legacy (`onlyrag_coding_sessions_v2`); le sessioni gia' presenti su disco non vengono sovrascritte. |
+
+**Tipi TypeScript (da `src/types/`):**
+```typescript
+interface ExecutedPrompt {
+  id: string
+  sessionId: string
+  prompt: string
+  startedAt: string            // ISO 8601
+  completedAt?: string         // ISO 8601
+  agentMode: 'plan' | 'ask' | 'agent'
+  outcome: 'running' | 'success' | 'failed' | 'cancelled' | 'unknown'
+  totalSteps: number
+  filesTouched: number
+  additions: number
+  deletions: number
+  summary?: string
+}
+
+// Storico piani della sessione (CodingSession.plans)
+interface AgentPlan {
+  id: string
+  version: number
+  prompt: string
+  planText: string
+  status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected'
+  createdAt: string            // ISO 8601
+  baseStepOffset?: number
+  milestones?: PlanMilestone[]
+}
+```
+
+#### Conferma Installazione Skill dall'Hub (`autoInstallHubSkills: 'prompt'`)
+
+| Canale IPC | `electronAPI` Method | Direzione | Payload | Descrizione |
+| :--- | :--- | :--- | :--- | :--- |
+| `agent:skill-install-request` | `onAgentSkillInstallRequest(cb)` | main → renderer | `{ requestId, skillName, skillDescription, hubName, score }` | Richiesta di conferma emessa durante l'assemblaggio del prompt, prima di installare una skill scoperta su un hub. |
+| `agent:skill-install-response` | `respondAgentSkillInstall(requestId, approved)` | renderer → main | `{ requestId, approved }` | Risposta dell'utente. In assenza di risposta entro 120s la richiesta si risolve come rifiutata. |
 
 #### SLM Agent Studio — Canale IPC di Diagnostica
 

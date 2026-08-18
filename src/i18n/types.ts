@@ -174,6 +174,26 @@ export interface TranslationSchema {
     sessionTitleDefault: string
     autoHubOnTitle: string
     autoHubOffTitle: string
+    historyTitle: string
+    historyEmpty: string
+    historyClear: string
+    historyClearConfirm: string
+    historySessionsCount: string
+    historyPromptsCount: string
+    historyNoPrompts: string
+    historyExpandSession: string
+    historyStepsLabel: string
+    historyFilesLabel: string
+    outcomeRunning: string
+    outcomeSuccess: string
+    outcomeFailed: string
+    outcomeCancelled: string
+    outcomeUnknown: string
+    skillInstallTitle: string
+    skillInstallQuestion: string
+    skillInstallScore: string
+    skillInstallApprove: string
+    skillInstallReject: string
   }
   skills: {
     hubTitle: string

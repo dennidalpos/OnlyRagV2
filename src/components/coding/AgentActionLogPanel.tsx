@@ -31,6 +31,7 @@ import {
 import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics } from '../../types'
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
+import { formatClockTime } from '../../lib/timeFormat'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
 
@@ -584,7 +585,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                       </div>
                       <span className="font-bold text-xs text-indigo-300">{t('coding.userRole')}</span>
                     </div>
-                    <span className="text-[10px] text-indigo-400/70 font-mono">{log.timestamp}</span>
+                    <span className="text-[10px] text-indigo-400/70 font-mono">{formatClockTime(log.timestamp)}</span>
                   </div>
                   <div className="whitespace-pre-wrap leading-relaxed text-slate-100 font-medium">{text}</div>
                 </div>
@@ -606,7 +607,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                       </div>
                       <span className="font-bold text-xs text-amber-300">{t('coding.agentQuestion')}</span>
                     </div>
-                    <span className="text-[10px] text-amber-400/80 font-mono">{log.timestamp}</span>
+                    <span className="text-[10px] text-amber-400/80 font-mono">{formatClockTime(log.timestamp)}</span>
                   </div>
                   <div className="whitespace-pre-wrap leading-relaxed font-semibold text-amber-200">{qText}</div>
                 </div>
@@ -709,7 +710,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
                       {getStepModelName(log.message, activeModelName)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">{log.timestamp}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">{formatClockTime(log.timestamp)}</span>
                 </div>
                 <div className="whitespace-pre-wrap leading-relaxed">{log.message}</div>
                 {log.detail && (

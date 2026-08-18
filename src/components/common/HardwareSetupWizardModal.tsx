@@ -24,6 +24,7 @@ import { WizardStepGeneralLlms } from '../wizard/WizardStepGeneralLlms'
 import { WizardStepMultimodal } from '../wizard/WizardStepMultimodal'
 import { WizardStepPreferences } from '../wizard/WizardStepPreferences'
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
+import { logger } from '../../lib/logger'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -286,7 +287,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           setIsCheckingDisk(false)
         })
         .catch((err) => {
-          console.error('Disk space check failed:', err)
+          logger.error('HardwareWizard', `Disk space check failed: ${err?.message || err}`)
           setIsCheckingDisk(false)
         })
     }
@@ -310,7 +311,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       await window.electronAPI.installOrLaunchOllama()
       onRefreshDiagnostics()
     } catch (err) {
-      console.error('Failed launching/installing Ollama:', err)
+      logger.error('HardwareWizard', `Failed launching/installing Ollama: ${(err as any)?.message || err}`)
     } finally {
       setIsInstallingOllama(false)
     }
@@ -324,7 +325,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       try {
         await window.electronAPI.cancelPullOllamaModel()
       } catch (err) {
-        console.error('Error cancelling Ollama pull:', err)
+        logger.error('HardwareWizard', `Error cancelling Ollama pull: ${(err as any)?.message || err}`)
       }
     }
   }
@@ -381,7 +382,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           setFailedModelIndex(i)
           setPullErrorDetail(t('hardwareWizard.downloadErrorForModel', { model: modelToPull, detail: errDetail }))
           setPullingStatusText(t('hardwareWizard.downloadErrorStatus', { model: modelToPull, detail: errDetail }))
-          console.error(`Failed pulling ${modelToPull}:`, errDetail)
+          logger.error('HardwareWizard', `Failed pulling ${modelToPull}: ${errDetail}`)
           break
         }
       } catch (err: any) {
@@ -394,7 +395,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         setFailedModelIndex(i)
         setPullErrorDetail(t('hardwareWizard.unexpectedErrorForModel', { model: modelToPull, detail: errMsg }))
         setPullingStatusText(t('hardwareWizard.downloadErrorStatus', { model: modelToPull, detail: errMsg }))
-        console.error(`Failed pulling ${modelToPull}:`, err)
+        logger.error('HardwareWizard', `Failed pulling ${modelToPull}: ${errMsg}`)
         break
       }
     }

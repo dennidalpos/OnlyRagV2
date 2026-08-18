@@ -24,23 +24,23 @@ export const OnlyRagLogo: React.FC<OnlyRagLogoProps> = ({
       <defs>
         {/* Background Gradient */}
         <radialGradient id="onlyragBgGrad" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
-          <stop offset="0%" stop-color="#1e293b" />
-          <stop offset="60%" stop-color="#0f172a" />
-          <stop offset="100%" stop-color="#020617" />
+          <stop offset="0%" stopColor="#1e293b" />
+          <stop offset="60%" stopColor="#0f172a" />
+          <stop offset="100%" stopColor="#020617" />
         </radialGradient>
 
         {/* Outer Border Glow Gradient */}
         <linearGradient id="onlyragBadgeBorder" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6" />
-          <stop offset="50%" stop-color="#06b6d4" stop-opacity="0.2" />
-          <stop offset="100%" stop-color="#0284c7" stop-opacity="0.5" />
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.6" />
+          <stop offset="50%" stopColor="#06b6d4" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#0284c7" stopOpacity="0.5" />
         </linearGradient>
 
         {/* Neon Cyan Stroke Gradient */}
         <linearGradient id="onlyragNeonCyan" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#67e8f9" />
-          <stop offset="50%" stop-color="#22d3ee" />
-          <stop offset="100%" stop-color="#06b6d4" />
+          <stop offset="0%" stopColor="#67e8f9" />
+          <stop offset="50%" stopColor="#22d3ee" />
+          <stop offset="100%" stopColor="#06b6d4" />
         </linearGradient>
 
         {/* Glow Filter */}
@@ -55,9 +55,9 @@ export const OnlyRagLogo: React.FC<OnlyRagLogoProps> = ({
         </filter>
 
         <radialGradient id="onlyragNucleusGrad" cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stop-color="#ffffff" />
-          <stop offset="40%" stop-color="#67e8f9" />
-          <stop offset="100%" stop-color="#06b6d4" />
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="40%" stopColor="#67e8f9" />
+          <stop offset="100%" stopColor="#06b6d4" />
         </radialGradient>
       </defs>
 

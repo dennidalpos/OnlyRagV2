@@ -68,23 +68,8 @@ export function isModelLoaded(targetModel: string, loadedModels: RunningModelInf
   })
 }
 
-/**
- * Computes memory allocation strategy based on VRAM capacity and unified memory flags.
- */
-export function calculateVramAllocationRatio(
-  modelSizeBytes: number,
-  vramTotalBytes: number,
-  isUnifiedMemory: boolean = false
-): { fitsInVram: boolean; utilizationPercent: number; suggestedNgl: number } {
-  if (vramTotalBytes <= 0) {
-    return { fitsInVram: false, utilizationPercent: 100, suggestedNgl: 0 }
-  }
-
-  // Unified memory (Apple Silicon / APU) allows higher headroom (~80%) vs discrete GPU (~90%)
-  const maxUsableVram = vramTotalBytes * (isUnifiedMemory ? 0.75 : 0.88)
-  const fitsInVram = modelSizeBytes <= maxUsableVram
-  const utilizationPercent = Math.min(100, Math.round((modelSizeBytes / vramTotalBytes) * 100))
-  const suggestedNgl = fitsInVram ? 99 : Math.max(1, Math.floor((maxUsableVram / modelSizeBytes) * 33))
-
-  return { fitsInVram, utilizationPercent, suggestedNgl }
-}
+// NOTE: `calculateVramAllocationRatio` was removed here. It had no callers and no tests, and
+// it carried a competing VRAM headroom heuristic (0.88 discrete / 0.75 unified) that
+// contradicted the single ladder now defined in src/services/hardwareProfileTiers.ts
+// (25% safety margin minus a 1.5GB OS reserve). Model fit is decided by
+// `assessModelHardwareCompatibility`; do not reintroduce a second formula here.

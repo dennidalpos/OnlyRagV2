@@ -45,7 +45,8 @@ export interface HardwareEnvironment {
 export class HardwareProfileResolver {
   /**
    * Resolves effective hardware tier and optimal Ollama runtime options based on user settings, hardware diagnostics, and complexity tier.
-   * Uses safe VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
+   * Classification (and the safe-VRAM formula behind it) is owned by hardwareProfileTiers.ts;
+   * this method only maps the resolved tier onto runtime options.
    */
   static resolveOllamaOptions(
     profile: HardwareProfile = 'Auto',

@@ -26,6 +26,7 @@ import {
   Plus,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { logger } from '../../lib/logger'
 
 interface SystemPromptModalProps {
   isOpen: boolean
@@ -296,7 +297,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
       setCopySuccess(true)
       setTimeout(() => setCopySuccess(false), 2000)
     } catch (err) {
-      console.error('Failed copying prompt to clipboard:', err)
+      logger.error('SystemPromptModal', `Failed copying prompt to clipboard: ${(err as any)?.message || err}`)
     }
   }
 

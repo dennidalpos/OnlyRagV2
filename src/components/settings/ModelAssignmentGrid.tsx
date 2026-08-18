@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
+import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
+import { logger } from '../../lib/logger'
 
 interface ModelAssignmentGridProps {
   diagnostics: DiagnosticsData | null
@@ -27,20 +29,11 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
   const { t } = useTranslation()
   const models = diagnostics?.ollama.models || []
 
-  const isModelInstalled = (name: string) => {
-    if (!name) return false
-    const clean = name.trim().toLowerCase()
-    const base = clean.split(':')[0]
-    return models.some((d) => {
-      const dClean = d.toLowerCase().trim()
-      return (
-        dClean === clean ||
-        dClean === `${clean}:latest` ||
-        `${dClean}:latest` === clean ||
-        dClean.split(':')[0] === base
-      )
-    })
-  }
+  // Shared, tag-exact matcher. The local copy this replaced ended with a
+  // `installed.split(':')[0] === base` branch that ignored the parameter tag entirely, so a
+  // single installed `qwen2.5-coder:7b` made the grid label 1.5b / 3b / 14b / 32b as
+  // "Pronto" too — while the setup wizard, already using this helper, said the opposite.
+  const isModelInstalled = (name: string) => isOllamaModelInstalled(name, models)
 
   const buildModelOptions = (currentValue: string, presetOptions: string[]) => {
     const all = [
@@ -404,7 +397,7 @@ const ModelPerformanceProfiler: React.FC<{ models: string[] }> = ({ models }) =>
         setBenchmarks((prev) => ({ ...prev, [modelName]: { tokensPerSec: 0, evalDurationMs: 0, isRunning: false } }))
       }
     } catch (err: any) {
-      console.warn('Benchmark model failed:', err)
+      logger.warn('ModelAssignmentGrid', `Benchmark model failed: ${err?.message || err}`)
       setBenchmarks((prev) => ({ ...prev, [modelName]: { tokensPerSec: 0, evalDurationMs: 0, isRunning: false } }))
     }
   }

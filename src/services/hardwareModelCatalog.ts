@@ -1,4 +1,4 @@
-import type { HardwareProfileTier } from './hardwareRecommendationEngine'
+import type { HardwareProfileTier } from './hardwareProfileTiers'
 
 /**
  * Static model catalog entry, independent of any runtime hardware detection.

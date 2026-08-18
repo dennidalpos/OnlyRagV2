@@ -1,7 +1,8 @@
 import React from 'react'
 import { Cpu, Check } from 'lucide-react'
-import { HardwareProfile, AppSettings } from '../../types'
+import { AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
+import { getHardwareProfileDefs } from '../../constants/hardwareProfiles'
 
 interface HardwareProfileSelectorProps {
   settings: AppSettings
@@ -13,32 +14,7 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
   onUpdateSettings,
 }) => {
   const { t } = useTranslation()
-  const profiles: { id: HardwareProfile; name: string; desc: string; vram: string }[] = [
-    {
-      id: 'Auto',
-      name: 'Auto',
-      desc: t('settings.autoScaleDesc'),
-      vram: 'Dynamic',
-    },
-    {
-      id: 'Low',
-      name: 'Low (CPU)',
-      desc: 'Optimized for systems without GPU (4-8GB context).',
-      vram: 'CPU RAM',
-    },
-    {
-      id: 'Medium',
-      name: 'Medium (Balanced)',
-      desc: 'Balanced VRAM allocation (8GB VRAM / 16GB RAM).',
-      vram: '8 GB',
-    },
-    {
-      id: 'High',
-      name: 'High (Performance)',
-      desc: 'Maximum context window and concurrency (12GB+ VRAM).',
-      vram: '12+ GB',
-    },
-  ]
+  const profiles = getHardwareProfileDefs(t)
 
   return (
     <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-3">
@@ -83,7 +59,7 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
               <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">{p.desc}</p>
             </div>
             <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono">
-              <span className="text-slate-400">Target:</span>
+              <span className="text-slate-400">{t('settings.hardwareProfileTargetLabel')}:</span>
               <span className="text-cyan-300 font-semibold">{p.vram}</span>
             </div>
           </button>

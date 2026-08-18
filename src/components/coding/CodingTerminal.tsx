@@ -10,6 +10,8 @@ interface CodingTerminalProps {
   onRunCommand: () => void
   onClearTerminal?: () => void
   isExecuting: boolean
+  /** Shared with AgentActionLogPanel so the single autoscroll toggle governs every agent-opened panel. */
+  autoScroll: boolean
 }
 
 export const CodingTerminal: React.FC<CodingTerminalProps> = ({
@@ -19,6 +21,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
   onRunCommand,
   onClearTerminal,
   isExecuting,
+  autoScroll,
 }) => {
   const { t } = useTranslation()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -96,7 +99,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
   }, [isExecuting])
 
   useEffect(() => {
-    if (!isUserScrolledUp && scrollContainerRef.current) {
+    if (autoScroll && !isUserScrolledUp && scrollContainerRef.current) {
       isProgrammaticScrollRef.current = true
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
       const rafId = requestAnimationFrame(() => {
@@ -107,7 +110,7 @@ export const CodingTerminal: React.FC<CodingTerminalProps> = ({
       })
       return () => cancelAnimationFrame(rafId)
     }
-  }, [terminalLogs, isExecuting, isUserScrolledUp])
+  }, [terminalLogs, isExecuting, isUserScrolledUp, autoScroll])
 
   return (
     <div className="h-full flex flex-col p-3.5 font-mono text-xs bg-[#0b0f17] relative">

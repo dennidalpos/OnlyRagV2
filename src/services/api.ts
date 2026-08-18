@@ -71,11 +71,11 @@ export const apiService = {
     }
   },
 
-  async ingestFile(filePath: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async ingestFile(filePath: string, visionModel?: string, visionPrompt?: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Initiating ingestion for file: ${filePath}`)
-      const res = await window.electronAPI.ingestFile(filePath)
+      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Ingestion warning/error: ${res.error}`)
       } else {
@@ -292,16 +292,6 @@ export const apiService = {
       return await window.electronAPI.listInstalledSkills(workspaceRoot)
     } catch (err: any) {
       logger.error('ApiService:Skills', `Failed listing installed skills: ${err.message}`)
-      return []
-    }
-  },
-
-  async listHubSkills(workspaceRoot?: string): Promise<HubSkillItem[]> {
-    if (!window.electronAPI?.listHubSkills) return []
-    try {
-      return await window.electronAPI.listHubSkills(workspaceRoot)
-    } catch (err: any) {
-      logger.error('ApiService:Skills', `Failed listing hub skills: ${err.message}`)
       return []
     }
   },

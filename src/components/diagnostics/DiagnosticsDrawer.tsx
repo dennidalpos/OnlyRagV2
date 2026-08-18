@@ -11,19 +11,13 @@ import {
   X,
   Copy,
   Check,
-  Filter,
   FolderOpen,
-  ShieldCheck,
-  AlertTriangle,
-  CheckCircle2,
   Sliders,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import {
-  getRecommendedOllamaEnvVars,
-  OllamaEnvConfig,
-} from '../../services/hardwareRecommendationEngine'
 import { OllamaEnvParamsModal } from './OllamaEnvParamsModal'
+import { OllamaEnvApprovalModal } from './OllamaEnvApprovalModal'
+import { useOllamaEnvParams } from '../../hooks/useOllamaEnvParams'
 
 interface DiagnosticsDrawerProps {
   isOpen: boolean
@@ -46,17 +40,21 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isRefreshingLogs, setIsRefreshingLogs] = useState<boolean>(false)
   const [copiedReport, setCopiedReport] = useState<boolean>(false)
-  const [copiedEnvScript, setCopiedEnvScript] = useState<string | null>(null)
-  const [showEnvConfig, setShowEnvConfig] = useState<boolean>(false)
-  const [showEnvParamsModal, setShowEnvParamsModal] = useState<boolean>(false)
-  const [showApprovalModal, setShowApprovalModal] = useState<boolean>(false)
-  const [isApplyingEnvVars, setIsApplyingEnvVars] = useState<boolean>(false)
-  const [restartOllamaAfterApply, setRestartOllamaAfterApply] = useState<boolean>(true)
-  const [applyEnvFeedback, setApplyEnvFeedback] = useState<{ success: boolean; message: string } | null>(null)
   const [autoScroll, setAutoScroll] = useState<boolean>(false)
   const consoleBottomRef = useRef<HTMLDivElement | null>(null)
 
-  const envConfig: OllamaEnvConfig | null = diagnostics ? getRecommendedOllamaEnvVars(diagnostics) : null
+  const {
+    envConfig,
+    showEnvParamsModal,
+    setShowEnvParamsModal,
+    showApprovalModal,
+    setShowApprovalModal,
+    isApplyingEnvVars,
+    restartOllamaAfterApply,
+    setRestartOllamaAfterApply,
+    applyEnvFeedback,
+    handleApplyEnvVars,
+  } = useOllamaEnvParams(diagnostics, onRefreshDiagnostics)
 
   const fetchLogs = async () => {
     setIsRefreshingLogs(true)
@@ -109,30 +107,6 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
     if (window.electronAPI) {
       await window.electronAPI.clearLogs()
       setLogs([])
-    }
-  }
-
-  const handleApplyEnvVars = async () => {
-    if (!envConfig || envConfig.variables.length === 0) return
-    setIsApplyingEnvVars(true)
-    try {
-      const res = await apiService.applyOllamaEnvironmentVariables(
-        envConfig.variables.map((v) => ({ name: v.name, value: v.value })),
-        restartOllamaAfterApply
-      )
-      setApplyEnvFeedback({
-        success: res.success,
-        message: res.message || (res.success ? 'Variabili applicate con successo!' : "Errore durante l'applicazione"),
-      })
-      setShowApprovalModal(false)
-      onRefreshDiagnostics()
-    } catch (err: any) {
-      setApplyEnvFeedback({
-        success: false,
-        message: `Errore: ${err.message}`,
-      })
-    } finally {
-      setIsApplyingEnvVars(false)
     }
   }
 
@@ -385,11 +359,22 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Zap className="w-4 h-4 text-amber-400 shrink-0" />
               <span className="text-slate-200 font-semibold text-xs">
-                Parametri OS Client Ollama ({envConfig.profileTier.toUpperCase()}):
+                {t('ollamaEnvParams.title')} ({envConfig.profileTier.toUpperCase()}):
               </span>
               <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-amber-300 text-[10px] font-mono font-bold">
-                {envConfig.variables.length} variabili attive
+                {t('ollamaEnvParams.varCount', { count: envConfig.variables.length })}
               </span>
+              {applyEnvFeedback && (
+                <span
+                  className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
+                    applyEnvFeedback.success
+                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                      : 'bg-rose-950/60 text-rose-300 border-rose-800/60'
+                  }`}
+                >
+                  {applyEnvFeedback.message}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
@@ -397,20 +382,10 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 type="button"
                 onClick={() => setShowEnvParamsModal(true)}
                 className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                title="Visualizza i dettagli completi dei parametri OS Ollama"
+                title={t('ollamaEnvParams.viewBtnAria')}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>{t('diagnostics.seeOsParameters') || 'Vedi Parametri'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowApprovalModal(true)}
-                className="px-3 py-1 bg-gradient-to-r from-amber-500/20 to-cyan-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 border border-amber-500/50 text-xs font-bold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
-                title="Applica le variabili d'ambiente al sistema operativo (richiede conferma)"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>Applica all'OS...</span>
+                <span>{t('ollamaEnvParams.viewBtn')}</span>
               </button>
             </div>
           </div>
@@ -549,100 +524,24 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
         )}
       </div>
 
-      {/* User Approval Modal for Environment Variables */}
-      {showApprovalModal && envConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-100 text-sm">Richiesta di Approvazione Utente</h3>
-                  <p className="text-[11px] text-slate-400">Applicazione Variabili d'Ambiente Ollama OS</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowApprovalModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
-              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-800/40 text-amber-200/90 leading-relaxed text-[11px]">
-                Le seguenti variabili d'ambiente verranno impostate in modo persistente nel profilo utente del sistema operativo (Windows User Environment) per ottimizzare l'allocazione VRAM, la velocità di inferenza (Flash Attention) e la concorrenza di Ollama per il profilo hardware <strong>{envConfig.profileTier.toUpperCase()}</strong>:
-              </div>
-
-              <div className="space-y-2 font-mono">
-                {envConfig.variables.map((v) => (
-                  <div key={v.name} className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-cyan-300 text-[11px]">{v.name}</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-900 text-amber-300 font-bold border border-slate-700 text-[10px]">
-                        {v.value}
-                      </span>
-                    </div>
-                    <p className="text-slate-400 font-sans text-[10px]">{v.description} — <span className="italic text-slate-400">{v.rationale}</span></p>
-                  </div>
-                ))}
-              </div>
-
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={restartOllamaAfterApply}
-                  onChange={(e) => setRestartOllamaAfterApply(e.target.checked)}
-                  className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4 bg-slate-900"
-                />
-                <span className="text-[11px] text-slate-300">
-                  Riavvia automaticamente l'applicazione Ollama per rendere attive le modifiche immediatamente
-                </span>
-              </label>
-            </div>
-
-            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowApprovalModal(false)}
-                disabled={isApplyingEnvVars}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                onClick={handleApplyEnvVars}
-                disabled={isApplyingEnvVars}
-                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-              >
-                {isApplyingEnvVars ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Applicazione in corso...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Approva e Applica</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {envConfig && (
-        <OllamaEnvParamsModal
-          isOpen={showEnvParamsModal}
-          onClose={() => setShowEnvParamsModal(false)}
-          envConfig={envConfig}
-          onOpenApprovalModal={() => setShowApprovalModal(true)}
-        />
+        <>
+          <OllamaEnvParamsModal
+            isOpen={showEnvParamsModal}
+            onClose={() => setShowEnvParamsModal(false)}
+            envConfig={envConfig}
+            onOpenApprovalModal={() => setShowApprovalModal(true)}
+          />
+          <OllamaEnvApprovalModal
+            isOpen={showApprovalModal}
+            onClose={() => setShowApprovalModal(false)}
+            envConfig={envConfig}
+            restartOllamaAfterApply={restartOllamaAfterApply}
+            onChangeRestartOllamaAfterApply={setRestartOllamaAfterApply}
+            isApplyingEnvVars={isApplyingEnvVars}
+            onApply={handleApplyEnvVars}
+          />
+        </>
       )}
     </div>
   )

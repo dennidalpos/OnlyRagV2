@@ -79,7 +79,7 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider">{t('hardwareWizard.step5Vision')}</h4>
             </div>
             <span className="text-[11px] font-mono text-slate-400">
-              Selezionato: <strong className="text-amber-300">{selectedVision || 'Nessuno'}</strong>
+              {t('hardwareWizard.selectedLabel')}: <strong className="text-amber-300">{selectedVision || t('common.none')}</strong>
             </span>
           </div>
 
@@ -135,7 +135,7 @@ export const WizardStepMultimodal: React.FC<WizardStepMultimodalProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider">{t('hardwareWizard.step5Embedding')}</h4>
             </div>
             <span className="text-[11px] font-mono text-slate-400">
-              Selezionato: <strong className="text-purple-300">{selectedEmbedding || 'Nessuno'}</strong>
+              {t('hardwareWizard.selectedLabel')}: <strong className="text-purple-300">{selectedEmbedding || t('common.none')}</strong>
             </span>
           </div>
 

@@ -89,8 +89,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             type="button"
             onClick={() => c.setAutoScroll(!c.autoScroll)}
             aria-pressed={c.autoScroll}
-            aria-label={c.autoScroll ? 'Autoscroll attivo' : 'Autoscroll disattivato'}
-            title={c.autoScroll ? 'Autoscroll attivo (clicca per disattivare)' : 'Autoscroll disattivato (clicca per attivare)'}
+            aria-label={c.autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
+            title={c.autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
             className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
               c.autoScroll
                 ? 'bg-cyan-950/90 text-cyan-300 border border-cyan-500/60 shadow-sm'
@@ -243,7 +243,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                       >
                         <div className={`flex items-center justify-between border-b pb-1.5 text-[10px] font-mono ${isUser ? 'border-indigo-500/30 text-indigo-300' : 'border-slate-800 text-slate-400'}`}>
                           <span className="font-bold">{isUser ? t('coding.userRole') : t('coding.agentRole')}</span>
-                          <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {/* msg.timestamp is already pre-formatted as a locale time string (see
+                              useChatEngine.ts) -- wrapping it in `new Date(...)` here parsed a
+                              string like "14:32" as an invalid date and rendered "Invalid Date". */}
+                          <span>{msg.timestamp}</span>
                         </div>
                         {isPendingBot ? (
                           <div className="flex items-center gap-2 text-cyan-300 py-0.5">
@@ -407,48 +410,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                           </button>
                         </div>
 
-                        {/* RAG Context Documents */}
-                        <div className="space-y-1.5">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                            <span>{t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}</span>
-                            <button
-                              type="button"
-                              onClick={c.fetchDocuments}
-                              title={t('chat.refreshList')}
-                              className="text-[9px] text-cyan-400 hover:underline focus-ring rounded"
-                            >
-                              {t('common.refresh')}
-                            </button>
-                          </div>
-                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
-                            {c.documents.length === 0 ? (
-                              <div className="text-[11px] text-slate-400 italic p-1">{t('chat.noDocsIndexed')}</div>
-                            ) : (
-                              c.documents.map((doc) => {
-                                const isSelected = c.selectedDocIds.has(doc.id)
-                                return (
-                                  <button
-                                    key={doc.id}
-                                    type="button"
-                                    onClick={() => c.toggleDocSelection(doc.id)}
-                                    className={`w-full text-left p-1.5 rounded-lg text-xs flex items-center justify-between transition-colors focus-ring ${
-                                      isSelected ? 'bg-cyan-950 text-cyan-200 border border-cyan-800/60' : 'hover:bg-slate-800 text-slate-300'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-1.5 truncate">
-                                      <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                                      <span className="truncate text-[11px]">{doc.filename}</span>
-                                    </div>
-                                    <span className="text-[9px] font-mono shrink-0">{isSelected ? '✓' : '+'}</span>
-                                  </button>
-                                )
-                              })
-                            )}
-                          </div>
+                        {/* Selected context documents are managed in the always-visible left
+                            sidebar list -- this popover only surfaces actions that have no other
+                            entry point, so it no longer repeats that same document list here. */}
+                        <div className="text-[11px] text-slate-400">
+                          {c.documents.length > 0
+                            ? t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })
+                            : t('chat.noDocsHint')}
                         </div>
 
                         {/* System Prompt Trigger */}
-                        <div className="pt-2 border-t border-slate-800/80">
+                        <div>
                           <button
                             type="button"
                             onClick={() => {
@@ -562,7 +534,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
           isOpen={c.isPromptModalOpen}
           onClose={() => c.setIsPromptModalOpen(false)}
           module="chat"
-          moduleTitle="RAG Chat"
+          moduleTitle={t('chat.title')}
           activeModelName={settings.chatModel || settings.defaultModel || 'llama3.2'}
           settings={settings}
           onUpdateSettings={onUpdateSettings}

@@ -17,8 +17,6 @@ export interface ComplexityRouteResult {
   tier: ComplexityTier
   tierName: string
   modelName: string
-  badgeLabel: string
-  badgeColorClass: string
   reasoning: string
   isEscalated?: boolean
   isFallback?: boolean
@@ -318,8 +316,6 @@ export function evaluateTaskComplexity(
       tier: 'standard',
       tierName: 'Standard Tier',
       modelName: model,
-      badgeLabel: `🔵 Standard (${model})`,
-      badgeColorClass: 'bg-cyan-950 text-cyan-300 border-cyan-800/80',
       reasoning: 'Prompt predefinito o non specificato',
       isFallback,
     }
@@ -463,27 +459,10 @@ export function evaluateTaskComplexity(
 
   const { model: selectedModel, isFallback } = resolveModelWithFallback(preferredModel, candidateFallbacks, availableModels)
 
-  const badgeMap: Record<ComplexityTier, { label: string; class: string }> = {
-    fast: {
-      label: '🟢 Fast',
-      class: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80',
-    },
-    standard: {
-      label: '🔵 Standard',
-      class: 'bg-cyan-950/80 text-cyan-300 border-cyan-800/80',
-    },
-    deep_reasoning: {
-      label: isEscalated ? '⚡ Escalated Reasoning' : '🟣 Deep Reasoning',
-      class: 'bg-purple-950/80 text-purple-300 border-purple-800/80',
-    },
-  }
-
   return {
     tier,
     tierName: tier === 'fast' ? 'Fast Tier' : tier === 'deep_reasoning' ? (isEscalated ? 'Escalated Deep Reasoning Tier' : 'Deep Reasoning Tier') : 'Standard Tier',
     modelName: selectedModel,
-    badgeLabel: badgeMap[tier].label,
-    badgeColorClass: badgeMap[tier].class,
     reasoning,
     isEscalated,
     isFallback,

@@ -1,5 +1,6 @@
 import { DiagnosticsData, RunningModelDetails } from '../types'
 import type { ModelTier } from './complexityRouterService'
+import type { TranslationKey } from '../i18n'
 import {
   FAST_TIER_CATALOG,
   STANDARD_TIER_CATALOG,
@@ -593,9 +594,13 @@ function buildModelEnricher(
 
 /**
  * Calculates optimal client OS environment variables and setup scripts for Ollama
- * based on declared or detected hardware (GPU VRAM, CPU, RAM).
+ * based on declared or detected hardware (GPU VRAM, CPU, RAM). `t` defaults to an
+ * identity passthrough so non-UI callers (tests, scripts) don't need an i18n context.
  */
-export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null): OllamaEnvConfig {
+export function getRecommendedOllamaEnvVars(
+  diagnostics: DiagnosticsData | null,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string = (key) => key
+): OllamaEnvConfig {
   const hasGpu = !!diagnostics?.gpu?.hasNvidiaGpu
   const vramMB = diagnostics?.gpu?.vramTotalMB || 0
   const vramGB = Math.floor(vramMB / 1024)
@@ -614,15 +619,15 @@ export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null)
     variables.push({
       name: 'OLLAMA_FLASH_ATTENTION',
       value: '1',
-      description: 'Abilita Flash Attention per accelerazione hardware GPU',
-      rationale: 'Raddoppia il throughput token/s e riduce il consumo di VRAM durante il calcolo dell\'attenzione.',
+      description: t('ollamaEnvParams.envFlashOnDesc'),
+      rationale: t('ollamaEnvParams.envFlashOnRationale'),
     })
   } else {
     variables.push({
       name: 'OLLAMA_FLASH_ATTENTION',
       value: '0',
-      description: 'Disabilita Flash Attention per esecuzione su sola CPU',
-      rationale: 'Ottimizza la pipeline di inferenza standard per processori senza kernel CUDA.',
+      description: t('ollamaEnvParams.envFlashOffDesc'),
+      rationale: t('ollamaEnvParams.envFlashOffRationale'),
     })
   }
 
@@ -631,22 +636,22 @@ export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null)
     variables.push({
       name: 'OLLAMA_KV_CACHE_TYPE',
       value: 'q8_0',
-      description: 'Quantizzazione KV-Cache a 8-bit',
-      rationale: 'Dimezza l\'impronta di memoria della cache di contesto (50% risparmio VRAM/RAM).',
+      description: t('ollamaEnvParams.envKvLowDesc'),
+      rationale: t('ollamaEnvParams.envKvLowRationale'),
     })
   } else if (profileTier === 'midrange') {
     variables.push({
       name: 'OLLAMA_KV_CACHE_TYPE',
       value: 'q8_0',
-      description: 'Quantizzazione KV-Cache a 8-bit ottimizzata',
-      rationale: 'Garantisce ampio buffer di contesto fino a 16k token senza saturare gli 8GB-12GB di VRAM.',
+      description: t('ollamaEnvParams.envKvMidDesc'),
+      rationale: t('ollamaEnvParams.envKvMidRationale'),
     })
   } else {
     variables.push({
       name: 'OLLAMA_KV_CACHE_TYPE',
       value: 'f16',
-      description: 'KV-Cache in precisione Float16',
-      rationale: 'Massima fedeltà e precisione per schede grafiche con 16GB-24GB+ VRAM.',
+      description: t('ollamaEnvParams.envKvHighDesc'),
+      rationale: t('ollamaEnvParams.envKvHighRationale'),
     })
   }
 
@@ -655,22 +660,22 @@ export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null)
     variables.push({
       name: 'OLLAMA_NUM_PARALLEL',
       value: '1',
-      description: '1 richiesta di inferenza alla volta',
-      rationale: 'Previene picchi improvvisi di memoria e Out-Of-Memory su sistemi con VRAM/RAM contenuta.',
+      description: t('ollamaEnvParams.envParallelLowDesc'),
+      rationale: t('ollamaEnvParams.envParallelLowRationale'),
     })
   } else if (profileTier === 'midrange') {
     variables.push({
       name: 'OLLAMA_NUM_PARALLEL',
       value: '2',
-      description: '2 richieste concorrenti simultanee',
-      rationale: 'Consente esecuzione parallela di embedding/RAG e chat generativa senza rallentamenti.',
+      description: t('ollamaEnvParams.envParallelMidDesc'),
+      rationale: t('ollamaEnvParams.envParallelMidRationale'),
     })
   } else {
     variables.push({
       name: 'OLLAMA_NUM_PARALLEL',
       value: '4',
-      description: '4 richieste concorrenti simultanee',
-      rationale: 'Supporta flussi multi-agente intensivi e tool loop ad alta concorrenza.',
+      description: t('ollamaEnvParams.envParallelHighDesc'),
+      rationale: t('ollamaEnvParams.envParallelHighRationale'),
     })
   }
 
@@ -679,22 +684,22 @@ export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null)
     variables.push({
       name: 'OLLAMA_MAX_LOADED_MODELS',
       value: '1',
-      description: '1 modello caricato contemporaneamente in memoria',
-      rationale: 'Scarica automaticamente il modello precedente per riservare il 100% della VRAM al modello attivo.',
+      description: t('ollamaEnvParams.envMaxLoadedLowDesc'),
+      rationale: t('ollamaEnvParams.envMaxLoadedLowRationale'),
     })
   } else if (profileTier === 'highend') {
     variables.push({
       name: 'OLLAMA_MAX_LOADED_MODELS',
       value: '2',
-      description: '2 modelli caricati in VRAM (es. Embedding + LLM)',
-      rationale: 'Commutazione istantanea senza latenza di ricaricamento tra embedding e modello di ragionamento.',
+      description: t('ollamaEnvParams.envMaxLoadedHighDesc'),
+      rationale: t('ollamaEnvParams.envMaxLoadedHighRationale'),
     })
   } else {
     variables.push({
       name: 'OLLAMA_MAX_LOADED_MODELS',
       value: '3',
-      description: 'Fino a 3 modelli caldi in VRAM',
-      rationale: 'Consente l\'orchestrazione simultanea di Fast, Deep e Embedding model su workstation da 24GB+.',
+      description: t('ollamaEnvParams.envMaxLoadedExtremeDesc'),
+      rationale: t('ollamaEnvParams.envMaxLoadedExtremeRationale'),
     })
   }
 
@@ -703,22 +708,22 @@ export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null)
     variables.push({
       name: 'OLLAMA_KEEP_ALIVE',
       value: '5m',
-      description: 'Timeout di scaricamento modello: 5 minuti',
-      rationale: 'Libera prontamente la memoria RAM di sistema dopo brevi sessioni di inattività.',
+      description: t('ollamaEnvParams.envKeepAliveLowDesc'),
+      rationale: t('ollamaEnvParams.envKeepAliveLowRationale'),
     })
   } else if (profileTier === 'entry' || profileTier === 'midrange') {
     variables.push({
       name: 'OLLAMA_KEEP_ALIVE',
       value: '30m',
-      description: 'Timeout di permanenza in VRAM: 30 minuti',
-      rationale: 'Evita continue riallocazioni del modello durante le normali sessioni di chat e coding.',
+      description: t('ollamaEnvParams.envKeepAliveMidDesc'),
+      rationale: t('ollamaEnvParams.envKeepAliveMidRationale'),
     })
   } else {
     variables.push({
       name: 'OLLAMA_KEEP_ALIVE',
       value: '2h',
-      description: 'Timeout prolungato in VRAM: 2 ore',
-      rationale: 'Mantiene i modelli caldi e pronti per risposte istantanee.',
+      description: t('ollamaEnvParams.envKeepAliveHighDesc'),
+      rationale: t('ollamaEnvParams.envKeepAliveHighRationale'),
     })
   }
 
@@ -726,8 +731,8 @@ export function getRecommendedOllamaEnvVars(diagnostics: DiagnosticsData | null)
   variables.push({
     name: 'OLLAMA_HOST',
     value: '127.0.0.1:11434',
-    description: 'Interfaccia di ascolto protetta su localhost',
-    rationale: 'Garantisce isolamento di rete e previene esposizioni accidentali su reti locali.',
+    description: t('ollamaEnvParams.envHostDesc'),
+    rationale: t('ollamaEnvParams.envHostRationale'),
   })
 
   // Generate scripts

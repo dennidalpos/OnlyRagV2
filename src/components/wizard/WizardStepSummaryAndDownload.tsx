@@ -142,7 +142,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           <div className="flex items-center gap-2 font-bold text-sm">
             <AlertTriangle className="w-4.5 h-4.5 text-rose-400" /> {t('common.warning')}
           </div>
-          <p>{t('hardwareWizard.step6Summary')}</p>
+          <p>{t('hardwareWizard.incompleteSlotsWarning')}</p>
         </div>
       ) : missingModels.length > 0 ? (
         <div className="space-y-3">
@@ -213,7 +213,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
         <div className="p-4 bg-rose-950/50 border border-rose-800/80 rounded-xl space-y-3">
           <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
             <AlertTriangle className="w-4 h-4 text-rose-400" />
-            <span>Errore durante il download del modello</span>
+            <span>{t('hardwareWizard.pullErrorTitle')}</span>
           </div>
           <div className="text-xs text-rose-200 font-mono bg-slate-950/80 p-2.5 rounded-lg border border-rose-900/60 break-all">
             {pullErrorDetail}

@@ -339,6 +339,17 @@ let cachedGpuTimestamp = 0
 let lastGpuSignature: string | null = null
 const GPU_CACHE_TTL_MS = 30000 // 30 seconds TTL cache for GPU process execution
 
+/**
+ * Synchronous access to the last GPU snapshot captured by detectNvidiaGpu(), regardless
+ * of TTL freshness. VRAM capacity doesn't change at runtime, so a slightly stale reading
+ * is still correct for hardware-tier decisions — unlike detectNvidiaGpu() itself, this
+ * never shells out, so callers on the hot agent-loop path (see HardwareProfileResolver)
+ * can use it without an async round-trip or spawning nvidia-smi per step.
+ */
+export function getCachedGpuInfo(): DiagnosticsData['gpu'] | null {
+  return cachedGpuResult
+}
+
 export async function detectNvidiaGpu(): Promise<DiagnosticsData['gpu']> {
   const now = Date.now()
   if (cachedGpuResult && now - cachedGpuTimestamp < GPU_CACHE_TTL_MS) {

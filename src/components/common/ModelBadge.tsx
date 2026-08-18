@@ -1,10 +1,10 @@
 import React from 'react'
-import { Zap, Cpu, Sparkles, Bot } from 'lucide-react'
-import { ComplexityTier } from '../../services/complexityRouterService'
+import { Zap, Cpu, Sparkles, Bot, Flame } from 'lucide-react'
+import { ModelTier } from '../../services/complexityRouterService'
 
 interface ModelBadgeProps {
   modelName: string
-  tier?: ComplexityTier
+  tier?: ModelTier
   tierName?: string
   tooltip?: string
   className?: string
@@ -32,6 +32,9 @@ export const ModelBadge: React.FC<ModelBadgeProps> = ({
   } else if (tier === 'standard') {
     IconComponent = Cpu
     badgeStyle = 'bg-cyan-950/70 text-cyan-300 border-cyan-800/80 shadow-sm'
+  } else if (tier === 'heavy') {
+    IconComponent = Flame
+    badgeStyle = 'bg-amber-950/70 text-amber-300 border-amber-800/80 shadow-sm'
   }
 
   const titleText = tooltip || (tier && tierName ? `${tierName}: ${modelName}` : `Modello: ${modelName}`)

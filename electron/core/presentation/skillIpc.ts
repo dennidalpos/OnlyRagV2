@@ -7,10 +7,6 @@ export function registerSkillIpcHandlers() {
     return skillAppService.listInstalledSkills(workspaceRoot)
   })
 
-  ipcMain.handle('skills:list-hub', async (_event, workspaceRoot?: string) => {
-    return skillAppService.listHubSkills(workspaceRoot)
-  })
-
   ipcMain.handle('skills:list-sources', async () => {
     return skillAppService.listHubSources()
   })

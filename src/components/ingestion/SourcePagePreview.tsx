@@ -89,7 +89,6 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
             <RenderedPagePreview
               pageNumber={pageNumber}
               pageContent={pageContent}
-              zoomLevel={100}
             />
           )}
         </div>

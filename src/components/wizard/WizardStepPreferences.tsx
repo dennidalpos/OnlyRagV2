@@ -1,7 +1,8 @@
 import React from 'react'
-import { Sliders, Cpu, Scan, Check } from 'lucide-react'
+import { Sliders, Cpu, Scan, Check, Layers } from 'lucide-react'
 import { HardwareProfile } from '../../types'
 import { useTranslation } from '../../i18n'
+import { getHardwareProfileDefs } from '../../constants/hardwareProfiles'
 
 export interface WizardStepPreferencesProps {
   hardwareProfile: HardwareProfile
@@ -10,6 +11,8 @@ export interface WizardStepPreferencesProps {
   onSelectOcrEngine: (engine: 'native_cuda' | 'vision_model') => void
   maxConcurrentTasks: number
   onChangeMaxConcurrentTasks: (tasks: number) => void
+  maxToolCallSteps: number
+  onChangeMaxToolCallSteps: (steps: number) => void
 }
 
 export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
@@ -19,28 +22,27 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
   onSelectOcrEngine,
   maxConcurrentTasks,
   onChangeMaxConcurrentTasks,
+  maxToolCallSteps,
+  onChangeMaxToolCallSteps,
 }) => {
   const { t } = useTranslation()
 
-  const profiles: { id: HardwareProfile; title: string; desc: string }[] = [
-    { id: 'Auto', title: 'Auto (Consigliato)', desc: 'Adatta dinamicamente il contesto e i thread alle risorse CPU, RAM e GPU VRAM rilevate.' },
-    { id: 'Low', title: 'Low Spec (CPU / <4GB)', desc: 'Ottimizzato per laptop senza GPU dedicata o con memoria limitata (4-8GB RAM).' },
-    { id: 'Medium', title: 'Mid-Range (6-8GB VRAM)', desc: 'Bilanciamento ideale per GPU gaming (RTX 3060/4060 o 16GB RAM).' },
-    { id: 'High', title: 'High-End (12GB+ VRAM)', desc: 'Massima ampiezza di contesto e concorrenza per GPU dedicate (RTX 3080/4070/4080/4090).' },
-  ]
+  const profiles = getHardwareProfileDefs(t)
+
+  const concurrencyPresets = [1, 2, 4, 8]
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-          <Sliders className="w-4 h-4 text-cyan-400" /> Runtime Preferences & Performance Engine
+          <Sliders className="w-4 h-4 text-cyan-400" /> {t('hardwareWizard.runtimePrefsTitle')}
         </h3>
         <p className="text-xs text-slate-400 mt-1">
-          Fine-tune hardware memory profiles, parallel concurrency limits, and OCR parsing behavior.
+          {t('hardwareWizard.runtimePrefsDesc')}
         </p>
       </div>
 
-      {/* Hardware Profile Selector */}
+      {/* Hardware Profile Selector — shares copy with Settings > HardwareProfileSelector */}
       <div className="space-y-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
         <div className="flex items-center gap-2 text-cyan-300">
           <Cpu className="w-4 h-4" />
@@ -77,13 +79,73 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
                     >
                       {isSelected && <Check className="w-2.5 h-2.5 text-slate-950 font-bold" />}
                     </div>
-                    <span>{p.title}</span>
+                    <span>{p.name}</span>
                   </div>
+                  <span className="text-[10px] font-mono text-cyan-300/90">{p.vram}</span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1 pl-5.5">{p.desc}</p>
               </div>
             )
           })}
+        </div>
+      </div>
+
+      {/* Task Concurrency — shares the same setting as Settings > TaskConcurrencyConfig */}
+      <div className="space-y-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+        <div className="flex items-center gap-2 text-cyan-300">
+          <Layers className="w-4 h-4" />
+          <h4 className="text-xs font-bold uppercase tracking-wider">{t('settings.concurrencySection')}</h4>
+        </div>
+        <p className="text-[11px] text-slate-400 -mt-1.5">{t('settings.concurrencyDesc')}</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5" role="radiogroup" aria-label={t('settings.concurrencySection')}>
+          {concurrencyPresets.map((val) => {
+            const isSelected = maxConcurrentTasks === val
+            return (
+              <button
+                key={val}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => onChangeMaxConcurrentTasks(val)}
+                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer focus-ring active:scale-[0.98] ${
+                  isSelected
+                    ? 'bg-cyan-950/40 border-cyan-400 shadow-md text-cyan-200'
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <span className="text-xs font-bold block">{val}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Max Tool Call Steps — shares the same setting as Settings > TaskConcurrencyConfig */}
+        <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <span className="text-xs font-bold text-slate-200">{t('settings.toolCallStepsTitle')}</span>
+            <p className="text-[11px] text-slate-400 leading-relaxed">{t('settings.toolCallStepsDesc')}</p>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
+            <input
+              type="range"
+              min={10}
+              max={200}
+              step={5}
+              value={maxToolCallSteps === 0 || maxToolCallSteps >= 200 ? 200 : maxToolCallSteps || 50}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10)
+                onChangeMaxToolCallSteps(val >= 200 ? 0 : val)
+              }}
+              className="w-32 accent-cyan-400 bg-slate-900 cursor-pointer"
+              aria-label={t('settings.toolCallStepsTitle')}
+            />
+            <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[70px] text-center shadow-inner">
+              {maxToolCallSteps === 0 || maxToolCallSteps >= 200
+                ? t('settings.toolCallStepsUnlimited')
+                : t('settings.toolCallStepsValue', { steps: maxToolCallSteps || 50 })}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -122,7 +184,7 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
               <span>⚡ {t('hardwareWizard.nativeCudaOcr')}</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1 pl-5.5">
-              PyMuPDF direct stream text extraction & layout vector bounding boxes. Ultra-fast and lightweight.
+              {t('hardwareWizard.nativeCudaOcrDesc')}
             </p>
           </div>
 
@@ -153,7 +215,7 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
               <span>👁️ {t('hardwareWizard.visionModelOcr')}</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1 pl-5.5">
-              Deep multimodal visual analysis for complex scanned PDFs, handwritten notes, charts, and diagrams.
+              {t('hardwareWizard.visionModelOcrDesc')}
             </p>
           </div>
         </div>

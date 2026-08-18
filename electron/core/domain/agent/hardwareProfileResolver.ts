@@ -1,6 +1,7 @@
 import os from 'node:os'
 import type { HardwareProfile } from '../../../../src/types'
 import type { ComplexityTier } from './complexityEvaluator'
+import { calculateRealUsableVram } from '../../../../src/services/hardwareRecommendationEngine'
 
 export interface OllamaRuntimeOptions {
   num_ctx: number
@@ -40,11 +41,12 @@ export class HardwareProfileResolver {
     } else if (profile === 'High') {
       effectiveTier = 'High'
     } else {
-      // 'Auto' mode: dynamically adapt based on detected GPU / VRAM / RAM
+      // 'Auto' mode: dynamically adapt based on detected GPU / VRAM / RAM.
+      // Shares the exact safe-VRAM formula with the model-recommendation engine
+      // (calculateRealUsableVram) so the two hardware matrices can't drift apart.
       const hasGpu = !!env?.hasGpu
       const vramMB = env?.vramTotalMB || 0
-      const vramGB = Math.floor(vramMB / 1024)
-      const safeBudgetGB = hasGpu ? Math.max(0, vramGB * 0.75 - 1.5) : 0
+      const safeBudgetGB = hasGpu ? calculateRealUsableVram(vramMB) : 0
 
       if (hasGpu && safeBudgetGB >= 7.5) {
         effectiveTier = 'High'

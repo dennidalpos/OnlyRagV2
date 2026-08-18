@@ -4,7 +4,9 @@ import { Settings, RefreshCw, Download, Trash2, Zap, Loader2, Globe, Heart, Awar
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
+import { OcrEngineSelector } from './OcrEngineSelector'
 import { TaskConcurrencyConfig } from './TaskConcurrencyConfig'
+import { OllamaEnvParamsCard } from './OllamaEnvParamsCard'
 import { useSettingsManager } from '../../hooks/useSettingsManager'
 import { useTranslation, Language } from '../../i18n'
 import { apiService } from '../../services/api'
@@ -78,7 +80,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Language Preference Card */}
-      <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-3">
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-3">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -129,14 +131,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onUpdateSettings={onUpdateSettings}
       />
 
-      {/* Task Concurrency & Queue Configuration */}
-      <TaskConcurrencyConfig
+      {/* OCR Engine Selector */}
+      <OcrEngineSelector
         settings={settings}
         onUpdateSettings={onUpdateSettings}
       />
 
+      {/* Ollama Client OS Parameters (recommended OLLAMA_* env vars for detected hardware) */}
+      <OllamaEnvParamsCard
+        diagnostics={diagnostics}
+        onRefreshDiagnostics={onRefreshDiagnostics}
+      />
+
+      {/* Task Concurrency & Queue Configuration */}
+      <TaskConcurrencyConfig
+        settings={settings}
+        onUpdateSettings={onUpdateSettings}
+        diagnostics={diagnostics}
+      />
+
       {/* Coding Agent Studio Audit & Debug Logging */}
-      <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-4">
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -179,8 +194,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Ollama Model Management Panel */}
-      <div className="glass-panel rounded-xl p-6 border border-slate-800 space-y-4">
-        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
+        <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
           <Download className="w-5 h-5 text-cyan-400" /> {t('settings.ollamaManagement')}
         </h2>
 
@@ -265,7 +280,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* About & Contributions Section Card */}
-      <div className="glass-panel rounded-xl p-6 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Heart className="w-5 h-5 text-rose-400 fill-rose-400/20" /> {t('settings.aboutSectionTitle')}

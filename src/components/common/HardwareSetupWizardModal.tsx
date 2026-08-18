@@ -233,16 +233,22 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         const mbCompleted = (data.completed / (1024 * 1024)).toFixed(0)
         const mbTotal = (data.total / (1024 * 1024)).toFixed(0)
         setPullingStatusText(
-          `Scaricamento [${data.modelName}]: ${data.status} (${mbCompleted}/${mbTotal} MB - ${pct}%)`
+          t('hardwareWizard.pullingProgressStatus', {
+            model: data.modelName,
+            status: data.status,
+            completed: mbCompleted,
+            total: mbTotal,
+            percent: pct,
+          })
         )
       } else if (data.status) {
-        setPullingStatusText(`[${data.modelName}]: ${data.status}`)
+        setPullingStatusText(t('hardwareWizard.pullingModelStatus', { model: data.modelName, status: data.status }))
       }
     })
     return () => {
       unsub()
     }
-  }, [])
+  }, [t])
 
   const isModelDownloaded = (modelName: string): boolean => {
     return isOllamaModelInstalled(modelName, downloadedModels)
@@ -331,7 +337,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 
     if (diskCheck && !diskCheck.allowed) {
       alert(
-        `Spazio su disco insufficiente per avviare il download dei modelli!\n\nSpazio Libero su Disco: ${diskCheck.freeGB} GB\nSpazio Stimato Richiesto: ${diskCheck.requiredGB} GB\nSpazio Mancante: ${diskCheck.missingGB} GB\n\nLibera spazio su disco o deseleziona alcuni modelli prima di proseguire.`
+        t('hardwareWizard.insufficientDiskSpaceAlert', {
+          free: diskCheck.freeGB,
+          required: diskCheck.requiredGB,
+          missing: diskCheck.missingGB,
+        })
       )
       return
     }
@@ -349,7 +359,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       }
       const modelToPull = missingModels[i]
       setPullingStatusText(
-        `Connessione e download [${i + 1}/${missingModels.length}]: ${modelToPull}...`
+        t('hardwareWizard.connectingAndDownloadingStatus', {
+          current: i + 1,
+          total: missingModels.length,
+          model: modelToPull,
+        })
       )
       setPullProgressPercent(0)
 
@@ -363,11 +377,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           onRefreshDiagnostics()
         } else {
           hasError = true
-          const errDetail =
-            res?.error || 'Download non completato. Verifica che Ollama sia attivo.'
+          const errDetail = res?.error || t('hardwareWizard.downloadFailedGeneric')
           setFailedModelIndex(i)
-          setPullErrorDetail(`Errore download per ${modelToPull}: ${errDetail}`)
-          setPullingStatusText(`Errore [${modelToPull}]: ${errDetail}`)
+          setPullErrorDetail(t('hardwareWizard.downloadErrorForModel', { model: modelToPull, detail: errDetail }))
+          setPullingStatusText(t('hardwareWizard.downloadErrorStatus', { model: modelToPull, detail: errDetail }))
           console.error(`Failed pulling ${modelToPull}:`, errDetail)
           break
         }
@@ -377,10 +390,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           break
         }
         hasError = true
-        const errMsg = err?.message || 'Eccezione imprevista durante il download'
+        const errMsg = err?.message || t('hardwareWizard.unexpectedDownloadError')
         setFailedModelIndex(i)
-        setPullErrorDetail(`Errore imprevisto per ${modelToPull}: ${errMsg}`)
-        setPullingStatusText(`Errore [${modelToPull}]: ${errMsg}`)
+        setPullErrorDetail(t('hardwareWizard.unexpectedErrorForModel', { model: modelToPull, detail: errMsg }))
+        setPullingStatusText(t('hardwareWizard.downloadErrorStatus', { model: modelToPull, detail: errMsg }))
         console.error(`Failed pulling ${modelToPull}:`, err)
         break
       }
@@ -494,7 +507,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 className="text-base font-bold text-slate-100 flex items-center gap-2"
               >
                 {t('hardwareWizard.title')}{' '}
-                <span className="text-cyan-400">— Step {step}/6</span>
+                <span className="text-cyan-400">— {t('hardwareWizard.stepIndicator', { step })}</span>
               </h2>
               <p className="text-xs text-slate-400">
                 {step === 1 && t('hardwareWizard.step1Subtitle')}
@@ -511,15 +524,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <button
               type="button"
               onClick={handleCloseWithSave}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-xl transition-colors focus-ring cursor-pointer"
-              title="Salva le impostazioni configurate ed esci dal Wizard"
-            >
-              Salva & Esci
-            </button>
-            <button
-              type="button"
-              onClick={handleCloseWithSave}
-              aria-label={t('common.close')}
+              aria-label={t('hardwareWizard.saveAndExit')}
+              title={t('hardwareWizard.saveAndExitTooltip')}
               className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95 cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -531,12 +537,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
         <div className="bg-slate-950/90 border-b border-slate-800 px-4 py-2.5">
           <nav aria-label="Wizard Steps" className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
             {[
-              { id: 1, label: '1. Hardware', icon: Cpu, desc: 'Rilevamento Hardware' },
-              { id: 2, label: '2. Coding', icon: Code, desc: 'AI Coding Agent' },
-              { id: 3, label: '3. Chat & LLM', icon: MessageSquare, desc: 'RAG & Traduzione' },
-              { id: 4, label: '4. Multimodale', icon: Eye, desc: 'Vision OCR & Embedding' },
-              { id: 5, label: '5. Preferenze', icon: Sliders, desc: 'Profilo & Runtime' },
-              { id: 6, label: '6. Download', icon: Download, desc: 'Riepilogo & Pull' },
+              { id: 1, label: t('hardwareWizard.navHardware'), icon: Cpu, desc: t('hardwareWizard.step1Subtitle') },
+              { id: 2, label: t('hardwareWizard.navCoding'), icon: Code, desc: t('hardwareWizard.step2Subtitle') },
+              { id: 3, label: t('hardwareWizard.navChatLlm'), icon: MessageSquare, desc: t('hardwareWizard.step3Subtitle') },
+              { id: 4, label: t('hardwareWizard.navMultimodal'), icon: Eye, desc: t('hardwareWizard.step4Subtitle') },
+              { id: 5, label: t('hardwareWizard.navPreferences'), icon: Sliders, desc: t('hardwareWizard.step5Subtitle') },
+              { id: 6, label: t('hardwareWizard.navDownload'), icon: Download, desc: t('hardwareWizard.step6Subtitle') },
             ].map((st) => {
               const isCurrent = step === st.id
               const isCompleted = step > st.id
@@ -557,7 +563,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                       ? 'bg-slate-900/80 text-emerald-300/90 border-emerald-800/40 hover:bg-slate-850 hover:text-emerald-200'
                       : 'bg-slate-900/40 text-slate-400 border-slate-800/80 hover:bg-slate-800/70 hover:text-slate-200 hover:border-slate-700'
                   }`}
-                  title={`${st.desc} — Clicca per andare allo step ${st.id}`}
+                  title={t('hardwareWizard.goToStepTooltip', { desc: st.desc, step: st.id })}
                 >
                   <div
                     className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
@@ -652,6 +658,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               onSelectOcrEngine={setOcrEngine}
               maxConcurrentTasks={settings.maxConcurrentTasks || 1}
               onChangeMaxConcurrentTasks={(val) => onUpdateSettings({ maxConcurrentTasks: val })}
+              maxToolCallSteps={settings.maxToolCallSteps ?? 50}
+              onChangeMaxToolCallSteps={(val) => onUpdateSettings({ maxToolCallSteps: val })}
             />
           )}
 
@@ -703,9 +711,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 type="button"
                 onClick={handleCloseWithSave}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
-                title="Salva le impostazioni configurate finora ed esci"
+                title={t('hardwareWizard.saveAndExitTooltip')}
               >
-                <Check className="w-3.5 h-3.5 text-emerald-400" /> Salva ed Esci
+                <Check className="w-3.5 h-3.5 text-emerald-400" /> {t('hardwareWizard.saveAndExit')}
               </button>
               <button
                 type="button"
@@ -722,7 +730,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                   type="button"
                   onClick={handleFinalSave}
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-medium rounded-xl transition-all focus-ring"
-                  title="Save configuration and skip download"
                 >
                   {t('hardwareWizard.skipDownloadBtn')}
                 </button>

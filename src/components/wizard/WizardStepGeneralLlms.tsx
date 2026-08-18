@@ -63,10 +63,10 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               ? 'bg-cyan-950/90 text-cyan-300 border border-cyan-500/60 shadow-sm shadow-cyan-950/40 ring-1 ring-cyan-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
-          title="1. Modello RAG Chat & Q&A Documentale"
+          title={t('hardwareWizard.chatModelTitle')}
         >
           <MessageSquare className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
-          <span>1. Chat RAG</span>
+          <span>{t('hardwareWizard.chatTabLabel')}</span>
         </button>
 
         <button
@@ -77,10 +77,10 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               ? 'bg-sky-950/90 text-sky-300 border border-sky-500/60 shadow-sm shadow-sky-950/40 ring-1 ring-sky-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
-          title="2. Modello Traduzione Documenti"
+          title={t('hardwareWizard.translationModelTitle')}
         >
           <Languages className="w-3.5 h-3.5 shrink-0 text-sky-400" />
-          <span>2. Traduzione</span>
+          <span>{t('hardwareWizard.translationTabLabel')}</span>
         </button>
 
         <button
@@ -91,10 +91,10 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               ? 'bg-rose-950/90 text-rose-300 border border-rose-500/60 shadow-sm shadow-rose-950/40 ring-1 ring-rose-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
-          title="3. Modello Medico & Sanitario"
+          title={t('hardwareWizard.medicalModelTitle')}
         >
           <Activity className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-          <span>3. Medico</span>
+          <span>{t('hardwareWizard.medicalTabLabel')}</span>
         </button>
 
         <button
@@ -105,10 +105,10 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               ? 'bg-amber-950/90 text-amber-300 border border-amber-500/60 shadow-sm shadow-amber-950/40 ring-1 ring-amber-400/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
           }`}
-          title="4. Modello Legale & Normativo"
+          title={t('hardwareWizard.legalModelTitle')}
         >
           <Scale className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-          <span>4. Legale</span>
+          <span>{t('hardwareWizard.legalTabLabel')}</span>
         </button>
       </div>
 
@@ -121,7 +121,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider">{t('hardwareWizard.chatModelTitle')}</h4>
             </div>
             <span className="text-[11px] font-mono text-slate-400">
-              Selezionato: <strong className="text-cyan-300">{selectedChat || 'Nessuno'}</strong>
+              {t('hardwareWizard.selectedLabel')}: <strong className="text-cyan-300">{selectedChat || t('common.none')}</strong>
             </span>
           </div>
           <p className="text-[11px] text-slate-400">{t('hardwareWizard.chatModelDesc')}</p>
@@ -173,7 +173,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider">{t('hardwareWizard.translationModelTitle')}</h4>
             </div>
             <span className="text-[11px] font-mono text-slate-400">
-              Selezionato: <strong className="text-sky-300">{selectedTranslation || 'Nessuno'}</strong>
+              {t('hardwareWizard.selectedLabel')}: <strong className="text-sky-300">{selectedTranslation || t('common.none')}</strong>
             </span>
           </div>
           <p className="text-[11px] text-slate-400">{t('hardwareWizard.translationModelDesc')}</p>
@@ -225,7 +225,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider">{t('hardwareWizard.medicalModelTitle')}</h4>
             </div>
             <span className="text-[11px] font-mono text-slate-400">
-              Selezionato: <strong className="text-rose-300">{selectedMedical || 'Nessuno (Opzionale)'}</strong>
+              {t('hardwareWizard.selectedLabel')}: <strong className="text-rose-300">{selectedMedical || t('hardwareWizard.noneOptionalLabel')}</strong>
             </span>
           </div>
           <p className="text-[11px] text-slate-400">{t('hardwareWizard.medicalModelDesc')} <span className="text-rose-400/80 font-medium">({t('hardwareWizard.optionalDomainModel')})</span></p>
@@ -243,11 +243,11 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               <div className="flex items-center gap-2.5">
                 <XCircle className="w-4 h-4 text-slate-400" />
                 <div>
-                  <span className="text-xs font-bold block">Nessun Modello Medico Dedicato</span>
-                  <span className="text-[10px] text-slate-400">Usa il modello Chat RAG standard per le query mediche</span>
+                  <span className="text-xs font-bold block">{t('hardwareWizard.noMedicalModelTitle')}</span>
+                  <span className="text-[10px] text-slate-400">{t('hardwareWizard.noMedicalModelDesc')}</span>
                 </div>
               </div>
-              {!selectedMedical && <span className="text-[10px] font-bold text-rose-400">Predefinito</span>}
+              {!selectedMedical && <span className="text-[10px] font-bold text-rose-400">{t('hardwareWizard.defaultBadge')}</span>}
             </div>
 
             {medicalTierModels.map((m) => (
@@ -296,7 +296,7 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               <h4 className="text-xs font-bold uppercase tracking-wider">{t('hardwareWizard.legalModelTitle')}</h4>
             </div>
             <span className="text-[11px] font-mono text-slate-400">
-              Selezionato: <strong className="text-amber-300">{selectedLegal || 'Nessuno (Opzionale)'}</strong>
+              {t('hardwareWizard.selectedLabel')}: <strong className="text-amber-300">{selectedLegal || t('hardwareWizard.noneOptionalLabel')}</strong>
             </span>
           </div>
           <p className="text-[11px] text-slate-400">{t('hardwareWizard.legalModelDesc')} <span className="text-amber-400/80 font-medium">({t('hardwareWizard.optionalDomainModel')})</span></p>
@@ -314,11 +314,11 @@ export const WizardStepGeneralLlms: React.FC<WizardStepGeneralLlmsProps> = ({
               <div className="flex items-center gap-2.5">
                 <XCircle className="w-4 h-4 text-slate-400" />
                 <div>
-                  <span className="text-xs font-bold block">Nessun Modello Legale Dedicato</span>
-                  <span className="text-[10px] text-slate-400">Usa il modello Chat RAG standard per le clausole e contratti</span>
+                  <span className="text-xs font-bold block">{t('hardwareWizard.noLegalModelTitle')}</span>
+                  <span className="text-[10px] text-slate-400">{t('hardwareWizard.noLegalModelDesc')}</span>
                 </div>
               </div>
-              {!selectedLegal && <span className="text-[10px] font-bold text-amber-400">Predefinito</span>}
+              {!selectedLegal && <span className="text-[10px] font-bold text-amber-400">{t('hardwareWizard.defaultBadge')}</span>}
             </div>
 
             {legalTierModels.map((m) => (

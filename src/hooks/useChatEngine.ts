@@ -6,6 +6,13 @@ import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
 
+// Max characters of retrieved vector-search text folded into the prompt. Kept below the overall
+// CONTEXT_CHAR_BUDGET so directDocsText (selected full-document previews) still has room, and so
+// the final CONTEXT_CHAR_BUDGET slice practically never needs to cut into vectorContextText itself.
+const VECTOR_CONTEXT_CHAR_BUDGET = 4000
+// Total combined context budget (vector search results + selected full-document previews).
+const CONTEXT_CHAR_BUDGET = 5500
+
 export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsData | null) {
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set())
@@ -211,7 +218,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       let citationSources: CitationSource[] = []
       const scopedDocIds = selectedDocIds.size > 0 ? Array.from(selectedDocIds) : undefined
 
-      if (routingResult.requiresRetrieval || (scopedDocIds && scopedDocIds.length > 0)) {
+      // Retrieval requires BOTH an explicit document selection AND a non-chitchat message
+      // (routingResult.requiresRetrieval) — otherwise a "grazie"/"ciao" follow-up while docs
+      // are still selected would run a pointless vector search and surface irrelevant citations.
+      if (scopedDocIds && scopedDocIds.length > 0 && routingResult.requiresRetrieval) {
         try {
           const searchResults = await apiService.searchVectorDb(
             userText,
@@ -221,19 +231,30 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           )
 
           if (Array.isArray(searchResults) && searchResults.length > 0) {
-            vectorContextText = searchResults
-              .filter((res: any) => res && res.text)
-              .map((res: any, idx: number) => `[Fonte ${idx + 1}: ${res.doc_name || 'Documento'} | Sezione: ${res.section_header || 'Generale'}]\n${res.text}`)
-              .join('\n\n---\n\n')
+            // Build the context blocks and citation cards together, stopping once the vector
+            // context budget is reached, so a citation is never shown for a source whose text
+            // was actually cut out of what gets sent to the model (see VECTOR_CONTEXT_CHAR_BUDGET).
+            const validResults = searchResults.filter((res: any) => res && res.text)
+            const includedBlocks: string[] = []
+            const includedSources: CitationSource[] = []
+            let usedChars = 0
 
-            citationSources = searchResults
-              .filter((res: any) => res && res.text)
-              .map((res: any) => ({
+            for (let idx = 0; idx < validResults.length; idx++) {
+              const res = validResults[idx]
+              const block = `[Fonte ${idx + 1}: ${res.doc_name || 'Documento'} | Sezione: ${res.section_header || 'Generale'}]\n${res.text}`
+              if (includedBlocks.length > 0 && usedChars + block.length > VECTOR_CONTEXT_CHAR_BUDGET) break
+              includedBlocks.push(block)
+              usedChars += block.length
+              includedSources.push({
                 chunkId: res.chunk_id || '',
                 docName: res.doc_name || 'Document',
                 snippet: (res.text || '').slice(0, 150) + (res.text?.length > 150 ? '...' : ''),
                 score: res.score || 0,
-              }))
+              })
+            }
+
+            vectorContextText = includedBlocks.join('\n\n---\n\n')
+            citationSources = includedSources
           }
         } catch (err: any) {
           logger.warn('ChatView', `Vector search non-blocking notice: ${err.message}`)
@@ -253,8 +274,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         .join('\n\n---\n\n')
 
       const combinedRawContext = [vectorContextText, directDocsText].filter(Boolean).join('\n\n=== ULTERIORE CONTESTO ===\n\n')
-      // Budget context to max 5500 characters to prevent context window overflow
-      const boundedContext = combinedRawContext.slice(0, 5500)
+      // Budget context to prevent context window overflow
+      const boundedContext = combinedRawContext.slice(0, CONTEXT_CHAR_BUDGET)
 
       const modelToUse = routingResult.modelName
       const effectivePromptObj = getEffectivePrompt('chat', modelToUse, settings)

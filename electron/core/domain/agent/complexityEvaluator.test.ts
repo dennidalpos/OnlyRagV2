@@ -16,7 +16,7 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
   it('should route Italian quick questions to fast tier', () => {
     const res = evaluateTaskComplexity('spiegami come si usa useState')
     expect(res.tier).toBe('fast')
-    expect(res.badgeLabel).toContain('Fast')
+    expect(res.tierName).toContain('Fast')
   })
 
   it('should route standard coding instructions to standard tier', () => {

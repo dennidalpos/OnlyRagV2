@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import {
   Languages,
-  ArrowRight,
   ArrowLeftRight,
   Download,
   Play,
@@ -14,6 +13,7 @@ import {
   RotateCcw,
   Copy,
   Check,
+  Link,
 } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -111,7 +111,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-xs text-slate-200">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
-              <span className="font-semibold">{tr.selectedDoc?.filename || 'Documento'}</span>
+              <span className="font-semibold">{tr.selectedDoc?.filename || t('common.document')}</span>
               <span className="text-slate-400">•</span>
               <span className="text-sky-300 font-mono">
                 Chunk {tr.currentChunkIndex}/{tr.totalChunks} ({tr.sourceLang} &rarr; {tr.targetLang})
@@ -137,11 +137,12 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             <select
               aria-label={t('translation.selectDocPlaceholder')}
               value={tr.selectedDoc?.id || ''}
+              disabled={tr.isTranslating}
               onChange={(e) => {
                 const found = tr.documents.find((d) => d.id === e.target.value)
                 tr.setSelectedDoc(found || null)
               }}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs flex-1 max-w-md focus-ring font-mono"
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs flex-1 max-w-md focus-ring font-mono disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">-- {t('translation.selectDocPlaceholder')} --</option>
               {tr.documents.map((doc) => (
@@ -153,9 +154,10 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             <button
               type="button"
               onClick={tr.fetchDocuments}
+              disabled={tr.isTranslating}
               aria-label={t('common.refresh')}
               title={t('common.refresh')}
-              className="p-2 text-slate-400 hover:text-sky-400 transition-colors focus-ring rounded-lg active:scale-95 bg-slate-900 border border-slate-800"
+              className="p-2 text-slate-400 hover:text-sky-400 transition-colors focus-ring rounded-lg active:scale-95 bg-slate-900 border border-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -167,19 +169,21 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                 <button
                   type="button"
                   onClick={() => tr.setPageViewMode(tr.pageViewMode === 'page' ? 'all' : 'page')}
+                  disabled={tr.isTranslating}
                   aria-pressed={tr.pageViewMode === 'page'}
-                  className={`px-2 py-0.5 rounded-lg font-mono text-[11px] transition-colors focus-ring ${
+                  className={`px-2 py-0.5 rounded-lg font-mono text-[11px] transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
                     tr.pageViewMode === 'page' ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {tr.pageViewMode === 'page' ? `${t('translation.pageView')} ${tr.currentPage}` : t('translation.allView')}
+                  {tr.pageViewMode === 'page' ? t('translation.pageOf', { current: tr.currentPage, total: tr.selectedDoc.numPages }) : t('translation.allView')}
                 </button>
                 {tr.pageViewMode === 'page' && (
                   <select
                     value={tr.currentPage}
                     onChange={(e) => tr.setCurrentPage(Number(e.target.value))}
+                    disabled={tr.isTranslating}
                     aria-label={t('translation.pageView')}
-                    className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-0.5 font-mono outline-none"
+                    className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-0.5 font-mono outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {Array.from({ length: tr.selectedDoc.numPages }, (_, i) => i + 1).map((p) => (
                       <option key={p} value={p}>{p}</option>
@@ -194,8 +198,9 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
               id="source-lang-select"
               aria-label={t('translation.sourceLang')}
               value={tr.sourceLang}
+              disabled={tr.isTranslating}
               onChange={(e) => tr.setSourceLang(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono font-semibold"
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang} value={lang}>{lang}</option>
@@ -205,9 +210,10 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             <button
               type="button"
               onClick={tr.handleSwapLanguages}
+              disabled={tr.isTranslating}
               title={t('translation.swapLanguages')}
               aria-label={t('translation.swapLanguages')}
-              className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 rounded-xl transition-all active:scale-90"
+              className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 rounded-xl transition-all active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
             </button>
@@ -217,8 +223,9 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
               id="target-lang-select"
               aria-label={t('translation.targetLang')}
               value={tr.targetLang}
+              disabled={tr.isTranslating}
               onChange={(e) => tr.setTargetLang(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono font-semibold"
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang} value={lang}>{lang}</option>
@@ -252,6 +259,22 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             >
               {t('translation.diffView')}
             </button>
+
+            {tr.viewMode === 'split' && (
+              <button
+                type="button"
+                onClick={() => tr.setSyncScroll(!tr.syncScroll)}
+                aria-pressed={tr.syncScroll}
+                aria-label={t('translation.syncScroll')}
+                title={t('translation.syncScroll')}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
+                  tr.syncScroll ? 'bg-sky-950 text-sky-300 border border-sky-800/80 shadow-sm' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Link className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t('translation.syncScroll')}</span>
+              </button>
+            )}
           </div>
 
           {tr.translatedMarkdown && (
@@ -332,10 +355,16 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
           {!tr.selectedDoc ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3 text-slate-400">
               <FileText className="w-10 h-10 text-sky-500/40" />
-              <div className="font-semibold text-slate-400 text-sm">{t('translation.selectDocPrompt')}</div>
-              <p className="text-xs max-w-sm text-slate-400">
-                {t('translation.subtitle')}
-              </p>
+              {tr.documents.length === 0 ? (
+                <div className="font-semibold text-slate-400 text-sm max-w-sm">{t('translation.noDocs')}</div>
+              ) : (
+                <>
+                  <div className="font-semibold text-slate-400 text-sm">{t('translation.selectDocPrompt')}</div>
+                  <p className="text-xs max-w-sm text-slate-400">
+                    {t('translation.subtitle')}
+                  </p>
+                </>
+              )}
             </div>
           ) : tr.viewMode === 'diff' ? (
             <DiffEditor
@@ -392,9 +421,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                     }}
                     language="markdown"
                     value={tr.selectedDoc?.extractedMarkdown || ''}
-                    onMount={(editor) => {
-                      tr.leftPaneRef.current = editor.getDomNode() as HTMLDivElement | null
-                    }}
+                    onMount={tr.handleLeftEditorDidMount}
                     options={{ fontSize: 13, readOnly: true, automaticLayout: true, minimap: { enabled: false } }}
                   />
                 </div>
@@ -406,7 +433,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                     <span>{t('translation.translatedText')} ({tr.targetLang})</span>
                   </div>
                   <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                    {tr.translatedMarkdown ? `${tr.translatedMarkdown.length} chars` : t('common.loading')}
+                    {tr.translatedMarkdown ? `${tr.translatedMarkdown.length} chars` : tr.isTranslating ? t('translation.translating') : '—'}
                   </span>
                 </div>
                 <div className="flex-1">

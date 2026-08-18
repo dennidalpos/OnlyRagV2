@@ -1,19 +1,48 @@
-import React from 'react'
-import { AppSettings } from '../../types'
-import { Cpu, Layers, ShieldCheck } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { AppSettings, DiagnosticsData, TaskQueueStatus } from '../../types'
+import { Cpu, Layers, ShieldCheck, Activity, AlertTriangle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { getRecommendedOllamaEnvVars } from '../../services/hardwareRecommendationEngine'
 
 interface TaskConcurrencyConfigProps {
   settings: AppSettings
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
+  diagnostics?: DiagnosticsData | null
 }
+
+const QUEUE_STATUS_POLL_MS = 3000
 
 export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
   settings,
   onUpdateSettings,
+  diagnostics = null,
 }) => {
   const { t } = useTranslation()
   const currentConcurrency = settings.maxConcurrentTasks || 1
+  const [queueStatus, setQueueStatus] = useState<TaskQueueStatus | null>(null)
+
+  const recommendedParallel = parseInt(
+    getRecommendedOllamaEnvVars(diagnostics, t).variables.find((v) => v.name === 'OLLAMA_NUM_PARALLEL')?.value || '1',
+    10
+  )
+  const exceedsRecommendedParallel = currentConcurrency > recommendedParallel
+
+  useEffect(() => {
+    if (!window.electronAPI?.getAgentQueueStatus) return
+    let cancelled = false
+
+    const poll = async () => {
+      const status = await window.electronAPI!.getAgentQueueStatus()
+      if (!cancelled) setQueueStatus(status)
+    }
+
+    poll()
+    const interval = setInterval(poll, QUEUE_STATUS_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
 
   const handleSelectConcurrency = (val: number) => {
     onUpdateSettings({ maxConcurrentTasks: val })
@@ -23,10 +52,10 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
   }
 
   const presets = [
-    { value: 1, label: '1 (Sequential)', desc: '1 task at a time. Zero VRAM/GPU conflicts.', tag: 'Recommended' },
-    { value: 2, label: '2 (Balanced)', desc: '2 simultaneous tasks. Ideal for 8-12GB VRAM.', tag: 'Fast' },
-    { value: 4, label: '4 (Multi-Task)', desc: '4 concurrent tasks for 16GB+ VRAM or powerful CPU.', tag: 'Advanced' },
-    { value: 8, label: '8 (Maximum)', desc: '8 parallel tasks. Maximum throughput.', tag: 'Extreme' },
+    { value: 1, label: '1 (Sequential)', desc: t('settings.concurrencyPreset1Desc'), tag: 'Recommended' },
+    { value: 2, label: '2 (Balanced)', desc: t('settings.concurrencyPreset2Desc'), tag: 'Fast' },
+    { value: 4, label: '4 (Multi-Task)', desc: t('settings.concurrencyPreset4Desc'), tag: 'Advanced' },
+    { value: 8, label: '8 (Maximum)', desc: t('settings.concurrencyPreset8Desc'), tag: 'Extreme' },
   ]
 
   return (
@@ -41,11 +70,26 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl">
-          <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-xs font-mono text-slate-200">
-            Max: <strong className="text-cyan-300">{currentConcurrency}</strong> {currentConcurrency === 1 ? 'task' : 'tasks'}
-          </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl">
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-xs font-mono text-slate-200">
+              {t('settings.concurrencyMaxTasksLabel', { count: currentConcurrency })}
+            </span>
+          </div>
+          {queueStatus && (
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl"
+              title={`${t('settings.concurrencyLiveStatusRunning')}: ${queueStatus.runningCount} · ${t('settings.concurrencyLiveStatusQueued')}: ${queueStatus.queuedCount}`}
+            >
+              <Activity className={`w-3.5 h-3.5 ${queueStatus.runningCount > 0 ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
+              <span className="text-xs font-mono text-slate-200">
+                {t('settings.concurrencyLiveStatusRunning')}: <strong className="text-emerald-300">{queueStatus.runningCount}</strong>
+                {' · '}
+                {t('settings.concurrencyLiveStatusQueued')}: <strong className="text-amber-300">{queueStatus.queuedCount}</strong>
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -94,18 +138,27 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
       <div className="flex items-center gap-2 p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-xl text-xs text-slate-400">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
         <span>
-          <strong>Task Queue Protection:</strong> Excess requests queue cleanly and execute in serial order.
+          <strong>{t('settings.concurrencyQueueProtectionTitle')}</strong> {t('settings.concurrencyQueueProtectionDesc')}
         </span>
       </div>
+
+      {exceedsRecommendedParallel && (
+        <div className="flex items-center gap-2 p-2.5 bg-amber-950/30 border border-amber-800/40 rounded-xl text-xs text-amber-200/90">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>
+            {t('settings.concurrencyExceedsParallelWarning', { count: currentConcurrency, parallel: recommendedParallel })}
+          </span>
+        </div>
+      )}
 
       {/* Max Tool Call Steps Slider / Selector */}
       <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="space-y-0.5">
           <span className="text-xs font-bold text-slate-200">
-            Limite Passaggi Tool Call (Agent Loops)
+            {t('settings.toolCallStepsTitle')}
           </span>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Numero massimo di passaggi consecutivi di tool (lettura, refactoring, comandi) consentiti all'agente prima di richiedere conferma.
+            {t('settings.toolCallStepsDesc')}
           </p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
@@ -120,12 +173,12 @@ export const TaskConcurrencyConfig: React.FC<TaskConcurrencyConfigProps> = ({
               onUpdateSettings({ maxToolCallSteps: val >= 200 ? 0 : val })
             }}
             className="w-32 accent-cyan-400 bg-slate-900 cursor-pointer"
-            aria-label="Limite massimo passaggi tool call"
+            aria-label={t('settings.toolCallStepsTitle')}
           />
           <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[70px] text-center shadow-inner">
             {settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200)
-              ? '∞ Illimitato'
-              : `${settings.maxToolCallSteps || 50} step`}
+              ? t('settings.toolCallStepsUnlimited')
+              : t('settings.toolCallStepsValue', { steps: settings.maxToolCallSteps || 50 })}
           </span>
         </div>
       </div>

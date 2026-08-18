@@ -6,10 +6,13 @@ import { runAgentOrchestratorLoop, cancelActiveAgentTask } from './agentOrchestr
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { ollamaAppService } from './ollamaAppService'
 import { skillAppService } from './skillAppService'
+import type { AppSettings } from '../../../src/types'
 
 vi.mock('./resilientModelDispatcher', () => ({
   ResilientModelDispatcher: {
     executeWithFallback: vi.fn(),
+    getNextEscalationModel: vi.fn().mockReturnValue(null),
+    evictVram: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
@@ -99,6 +102,56 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.success).toBe(true)
     expect(res.summary).toBe('Pivoted and completed.')
     expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(4)
+  })
+
+  it('should offer the configured Deep Reasoning Tier model (not the Standard Tier model) as an escalation candidate when the stagnation circuit breaker trips (regression: deepReasoningModel was wired to the Standard Tier model, so the Deep Reasoning Tier was unreachable via this escalation path)', async () => {
+    // Distinct commands each turn (rather than one repeated command) so the loop-detector's
+    // exact-duplicate guard doesn't block re-execution and mask the circuit breaker's own
+    // repeated-failure counter (each command still fails: "pytest" isn't on PATH in the test env).
+    const failingCommandJson = (n: number) =>
+      `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test_${n}.py" }\n}\n\`\`\``
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: failingCommandJson(1), usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: failingCommandJson(2), usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: failingCommandJson(3), usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: failingCommandJson(4), usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: failingCommandJson(5), usedModel: 'llama3.2', isFallback: false })
+
+    const settings: AppSettings = {
+      defaultModel: 'llama3.2',
+      hardwareProfile: 'Auto',
+      ocrEngine: 'native_cuda',
+      ollamaHost: '',
+      codingModel: 'qwen2.5-coder:7b',
+      translationModel: 'llama3.2',
+      visionModel: 'llama3.2-vision',
+      embeddingModel: 'nomic-embed-text',
+      complexityFastModel: 'llama3.2:3b',
+      complexityStandardModel: 'qwen2.5-coder:7b',
+      complexityDeepModel: 'deepseek-r1:14b',
+      useComplexityRouting: true,
+      allowTerminalExecution: true,
+      allowFileModifications: true,
+      customPromptOverrides: {},
+      maxToolCallSteps: 0,
+    }
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Fix the failing test suite',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+        settings,
+      },
+      null
+    )
+
+    expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(5)
+    expect(ResilientModelDispatcher.getNextEscalationModel).toHaveBeenCalled()
+    const escalationArgs = vi.mocked(ResilientModelDispatcher.getNextEscalationModel).mock.calls[0][1]
+    expect(escalationArgs.deepReasoningModel).toBe('deepseek-r1:14b')
+    expect(escalationArgs.deepReasoningModel).not.toBe(escalationArgs.standardModel)
+    expect(res.success).toBe(true)
   })
 
   it('should execute in plan mode and complete with step proposal without mutating files', async () => {

@@ -16,7 +16,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from sidecar.config import ALLOWED_ORIGINS, EXPORT_DIR, logger
+from sidecar.config import ALLOWED_ORIGINS, EXPORT_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult,
     ExportRequest, InspectImageRequest, UpdateDocumentRequest, PagePreviewResponse,
@@ -56,10 +56,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 def health_check():
     doc_count, chunk_count = 0, 0
     try:
-        if "documents" in get_existing_tables():
-            doc_count = lance_db.open_table("documents").count_rows()
-        if "chunks" in get_existing_tables():
-            chunk_count = lance_db.open_table("chunks").count_rows()
+        if DOCS_TABLE_NAME in get_existing_tables():
+            doc_count = lance_db.open_table(DOCS_TABLE_NAME).count_rows()
+        if CHUNKS_TABLE_NAME in get_existing_tables():
+            chunk_count = lance_db.open_table(CHUNKS_TABLE_NAME).count_rows()
     except Exception as e:
         logger.error(f"Error checking LanceDB status: {e}")
 
@@ -94,7 +94,10 @@ async def ingest_document_by_path(req: IngestPathRequest):
         raise HTTPException(status_code=400, detail="Invalid or non-existent file path")
     try:
         filename = os.path.basename(resolved_path)
-        return await asyncio.to_thread(process_and_index_document, filename, b"", resolved_path)
+        return await asyncio.to_thread(
+            process_and_index_document, filename, b"", resolved_path,
+            req.vision_model, req.vision_prompt
+        )
     except Exception as e:
         logger.error(f"Error ingesting document path {req.file_path}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -108,7 +111,10 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
     try:
         filename = os.path.basename(resolved_path)
         return StreamingResponse(
-            process_and_index_document_generator(filename, b"", resolved_path),
+            process_and_index_document_generator(
+                filename, b"", resolved_path,
+                vision_model=req.vision_model, vision_prompt=req.vision_prompt
+            ),
             media_type="application/x-ndjson"
         )
     except Exception as e:

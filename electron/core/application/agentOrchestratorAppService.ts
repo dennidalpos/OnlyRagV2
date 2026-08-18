@@ -3,7 +3,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { logger } from '../../diagnostics'
+import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
@@ -426,9 +426,15 @@ export async function runAgentOrchestratorLoop(
     const fallbackModel = settings.complexityFastModel || settings.defaultModel || 'llama3.2'
     const heavyEscalationModel = settings.complexityHeavyModel || undefined
 
+    const cachedGpu = getCachedGpuInfo()
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
       settings.hardwareProfile,
-      undefined,
+      {
+        hasGpu: cachedGpu?.hasNvidiaGpu,
+        vramTotalMB: cachedGpu?.vramTotalMB,
+        systemRamGB: getMemoryInfo().totalRAMGB,
+        cpuCount: os.cpus()?.length,
+      },
       routedComplexity.tier
     )
     const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath, 3, {
@@ -991,8 +997,8 @@ export async function runAgentOrchestratorLoop(
     if (cbRes.shouldBreak && isUnlimitedSteps) {
       const escalation = ResilientModelDispatcher.getNextEscalationModel(targetModel, {
         fastModel: fallbackModel,
-        standardModel: settings.codingModel || settings.defaultModel || 'llama3.2',
-        deepReasoningModel: intermediateModel,
+        standardModel: intermediateModel,
+        deepReasoningModel: settings.complexityDeepModel || intermediateModel,
         heavyEscalationModel,
       })
 

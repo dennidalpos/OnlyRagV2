@@ -355,7 +355,7 @@ export interface IElectronAPI {
   restartSidecar: () => Promise<{ success: boolean; message?: string; error?: string }>
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string[]>
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
-  ingestFile: (filePath: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
@@ -402,7 +402,6 @@ export interface IElectronAPI {
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
   benchmarkModel: (modelName: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
   listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>
-  listHubSkills: (workspaceRoot?: string) => Promise<HubSkillItem[]>
   listHubSources: () => Promise<SkillHubSource[]>
   addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>
   removeCustomHubSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>

@@ -102,6 +102,9 @@ interface AgentActionLogPanelProps {
   onDeleteSession?: (id: string) => void
   onRenameSession?: (id: string, title: string) => void
   onSelectWorkspaceFolder?: () => void
+  /** Shared with other agent-opened panels (e.g. CodingTerminal) so one toggle governs autoscroll everywhere. */
+  autoScroll: boolean
+  onToggleAutoScroll: () => void
 }
 
 export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
@@ -142,6 +145,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onDeleteSession,
   onRenameSession,
   onSelectWorkspaceFolder,
+  autoScroll,
+  onToggleAutoScroll,
 }) => {
   const { t } = useTranslation()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -158,7 +163,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const isUserScrolledUpRef = useRef<boolean>(false)
   const isUserInteractingRef = useRef<boolean>(false)
   const userInteractionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const [isScrolledUp, setIsScrolledUp] = useState<boolean>(false)
 
   // Context window tracking (reflecting actual turn prompt assembly: max 8 steps + system + prompt)
@@ -236,7 +240,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
 
   const handleToggleAutoScroll = () => {
     const next = !autoScroll
-    setAutoScroll(next)
+    onToggleAutoScroll()
     if (next) {
       setIsScrolledUp(false)
       isUserScrolledUpRef.current = false
@@ -1001,8 +1005,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               <button
                 type="button"
                 onClick={handleToggleAutoScroll}
-                aria-label={autoScroll ? 'Autoscroll attivo' : 'Autoscroll disattivato'}
-                title={autoScroll ? 'Autoscroll attivo (clicca per disattivare)' : 'Autoscroll disattivato (clicca per attivare)'}
+                aria-label={autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
+                title={autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
                 className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-all focus-ring text-[10px] font-mono font-bold cursor-pointer border ${
                   autoScroll
                     ? 'text-cyan-300 bg-cyan-950/80 border-cyan-800/80 shadow-sm'

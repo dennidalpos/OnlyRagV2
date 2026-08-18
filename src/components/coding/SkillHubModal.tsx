@@ -124,7 +124,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     try {
       const res = await apiService.installSkillFromHub(hubSkillId, workspacePath || undefined, selectedSourceId)
       if (res.success) {
-        setActionMessage({ type: 'success', text: `Skill '${hubSkillId}' installed!` })
+        setActionMessage({ type: 'success', text: t('skills.msgInstalled', { name: hubSkillId }) })
         // Mark as installed in local hubSkills state immediately
         setHubSkills((prev) =>
           prev.map((s) => (s.id === hubSkillId ? { ...s, isInstalled: true } : s))
@@ -147,7 +147,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setActionMessage(null)
     const res = await apiService.installSkillFromUrl(url, workspacePath || undefined, customName)
     if (res.success) {
-      setActionMessage({ type: 'success', text: 'Skill URL imported!' })
+      setActionMessage({ type: 'success', text: t('skills.msgUrlImported') })
       await loadSourcesAndSkills(selectedSourceId)
       setActiveTab('installed')
     } else {
@@ -160,7 +160,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.saveCustomSkill(input, workspacePath || undefined)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${input.name}' saved!` })
+      setActionMessage({ type: 'success', text: t('skills.msgSaved', { name: input.name }) })
       setIsEditorOpen(false)
       setEditingSkill(null)
       await loadSourcesAndSkills(selectedSourceId)
@@ -176,7 +176,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.resetSkillToOriginal(skillId, workspacePath || undefined)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${skillId}' reset!` })
+      setActionMessage({ type: 'success', text: t('skills.msgReset', { name: skillId }) })
       await loadSourcesAndSkills(selectedSourceId)
     } else {
       setActionMessage({ type: 'error', text: res.error || t('common.error') })
@@ -189,7 +189,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.uninstallSkill(skillId, workspacePath || undefined)
     if (res.success) {
-      setActionMessage({ type: 'success', text: `Skill '${skillId}' deleted.` })
+      setActionMessage({ type: 'success', text: t('skills.msgDeleted', { name: skillId }) })
       await loadSourcesAndSkills(selectedSourceId)
     } else {
       setActionMessage({ type: 'error', text: res.error || t('common.error') })
@@ -201,7 +201,7 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.addCustomHubSource(input)
     if (res.success && res.source) {
-      setActionMessage({ type: 'success', text: `Hub '${input.name}' added!` })
+      setActionMessage({ type: 'success', text: t('skills.msgHubAdded', { name: input.name }) })
       setIsAddHubOpen(false)
       await loadSourcesAndSkills(res.source.id)
     } else {
@@ -215,8 +215,9 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
     setIsLoading(true)
     const res = await apiService.removeCustomHubSource(sourceId)
     if (res.success) {
-      setActionMessage({ type: 'success', text: 'Hub source removed.' })
-      await loadSourcesAndSkills('official-core')
+      setActionMessage({ type: 'success', text: t('skills.msgHubRemoved') })
+      const nextSourceId = selectedSourceId === sourceId ? 'official-core' : selectedSourceId
+      await loadSourcesAndSkills(nextSourceId)
     } else {
       setActionMessage({ type: 'error', text: res.error || t('common.error') })
     }

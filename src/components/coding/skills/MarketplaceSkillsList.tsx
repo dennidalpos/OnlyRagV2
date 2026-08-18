@@ -14,7 +14,16 @@ import {
   Loader2,
 } from 'lucide-react'
 import { HubSkillItem } from '../../../types'
-import { useTranslation } from '../../../i18n'
+import { useTranslation, TranslationKey } from '../../../i18n'
+
+const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
+  frontend: 'skills.category.frontend',
+  backend: 'skills.category.backend',
+  database: 'skills.category.database',
+  security: 'skills.category.security',
+  'ai-ml': 'skills.category.aiMl',
+  architecture: 'skills.category.architecture',
+}
 
 interface MarketplaceSkillsListProps {
   hubSkills: HubSkillItem[]
@@ -130,7 +139,7 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                   : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-300'
               }`}
             >
-              {cat === 'all' ? t('common.all').toUpperCase() : cat.toUpperCase()}
+              {cat === 'all' ? t('common.all').toUpperCase() : t(CATEGORY_LABEL_KEYS[cat]).toUpperCase()}
             </button>
           ))}
         </div>

@@ -85,7 +85,9 @@ def prepare_pdf_page_work_item(
     raw_text: str,
     md_tables: List[str],
     used_ocr: bool,
-    describe_figures_with_vision: bool = False
+    describe_figures_with_vision: bool = False,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Sequential, PyMuPDF-bound preparation step for a single PDF page: renders the page image for
@@ -122,6 +124,8 @@ def prepare_pdf_page_work_item(
         "used_ocr": used_ocr,
         "ocr_image_bytes": ocr_image_bytes,
         "figures": figures,
+        "vision_model": vision_model,
+        "vision_prompt": vision_prompt,
     }
 
 def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
@@ -135,7 +139,12 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     page_md_parts: List[str] = []
 
     if work_item["used_ocr"]:
-        ocr_result = run_layout_ocr(work_item["ocr_image_bytes"])
+        ocr_kwargs: Dict[str, Any] = {}
+        if work_item.get("vision_model"):
+            ocr_kwargs["model"] = work_item["vision_model"]
+        if work_item.get("vision_prompt"):
+            ocr_kwargs["prompt"] = work_item["vision_prompt"]
+        ocr_result = run_layout_ocr(work_item["ocr_image_bytes"], **ocr_kwargs)
         if ocr_result.strip():
             page_md_parts.append(ocr_result.strip())
         else:
@@ -165,21 +174,27 @@ def render_pdf_page_content(
     raw_text: str,
     md_tables: List[str],
     used_ocr: bool,
-    describe_figures_with_vision: bool = False
+    describe_figures_with_vision: bool = False,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None
 ) -> str:
     """Single-page convenience wrapper around prepare_pdf_page_work_item + render_prepared_pdf_page
     for non-batched callers (e.g. the NDJSON streaming path, which renders one page at a time
     between progress yields)."""
     work_item = prepare_pdf_page_work_item(
         doc, page, page_num, raw_text, md_tables, used_ocr,
-        describe_figures_with_vision=describe_figures_with_vision
+        describe_figures_with_vision=describe_figures_with_vision,
+        vision_model=vision_model,
+        vision_prompt=vision_prompt
     )
     _, page_content = render_prepared_pdf_page(work_item)
     return page_content
 
 def extract_pdf_document(
     doc: pymupdf.Document,
-    progress_callback: Optional[Callable[[int, int, str], None]] = None
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None
 ) -> List[Tuple[int, str]]:
     """
     Extracts markdown per page preserving layout, native tables, OCR, and figure captions.
@@ -219,7 +234,9 @@ def extract_pdf_document(
 
         work_items.append(prepare_pdf_page_work_item(
             doc, page, page_num, raw_text, md_tables, used_ocr,
-            describe_figures_with_vision=describe_figures_with_vision
+            describe_figures_with_vision=describe_figures_with_vision,
+            vision_model=vision_model,
+            vision_prompt=vision_prompt
         ))
 
     with ThreadPoolExecutor(max_workers=min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))) as executor:
@@ -314,7 +331,9 @@ def extract_document_markdown(
     filename: str,
     content: bytes,
     file_path: Optional[str] = None,
-    progress_callback: Optional[Callable[[int, int, str], None]] = None
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None
 ) -> Tuple[str, int]:
     """Fast-routed, sanitized, and pagination-preserving document markdown extractor with progress callback."""
     category = classify_file_type(filename)
@@ -329,7 +348,12 @@ def extract_document_markdown(
                 pdf_doc = pymupdf.open(stream=content, filetype="pdf")
             try:
                 num_pages = len(pdf_doc)
-                page_blocks = extract_pdf_document(pdf_doc, progress_callback=progress_callback)
+                page_blocks = extract_pdf_document(
+                    pdf_doc,
+                    progress_callback=progress_callback,
+                    vision_model=vision_model,
+                    vision_prompt=vision_prompt
+                )
             finally:
                 pdf_doc.close()
         except Exception as pdf_err:
@@ -342,7 +366,12 @@ def extract_document_markdown(
         if file_path and os.path.exists(file_path):
             with open(file_path, "rb") as f:
                 img_bytes = f.read()
-        ocr_text = run_layout_ocr(img_bytes)
+        image_ocr_kwargs: Dict[str, Any] = {}
+        if vision_model:
+            image_ocr_kwargs["model"] = vision_model
+        if vision_prompt:
+            image_ocr_kwargs["prompt"] = vision_prompt
+        ocr_text = run_layout_ocr(img_bytes, **image_ocr_kwargs)
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if sanitized_ocr:
             page_blocks.append((1, sanitized_ocr))

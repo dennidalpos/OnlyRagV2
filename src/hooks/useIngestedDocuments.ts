@@ -44,6 +44,11 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
     onDocsUpdatedRef.current = onDocsUpdated
   }, [onDocsUpdated])
 
+  const isLoadedRef = useRef(false)
+  useEffect(() => {
+    isLoadedRef.current = isLoaded
+  }, [isLoaded])
+
   const isFetchingRef = useRef(false)
 
   const fetchDocuments = useCallback(async () => {
@@ -77,9 +82,12 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
     window.addEventListener(TAB_CHANGED_EVENT, handleSyncEvent)
     window.addEventListener('focus', handleSyncEvent)
 
-    // Auto-retry polling until initial documents are loaded or if sidecar was starting up
+    // Auto-retry polling only until the first fetch resolves (bridges the sidecar startup delay).
+    // Gated on isLoadedRef rather than document count, so polling stops for good once the initial
+    // load succeeds -- even if the resulting list is legitimately empty -- instead of continuing
+    // to hit the sidecar every autoRetryIntervalMs for the entire session.
     const timer = setInterval(() => {
-      if (documents.length === 0) {
+      if (!isLoadedRef.current) {
         fetchDocuments()
       }
     }, autoRetryIntervalMs)
@@ -90,7 +98,7 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
       window.removeEventListener('focus', handleSyncEvent)
       clearInterval(timer)
     }
-  }, [fetchDocuments, documents.length, autoRetryIntervalMs])
+  }, [fetchDocuments, autoRetryIntervalMs])
 
   return {
     documents,

@@ -10,8 +10,8 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.restartSidecar()
   })
 
-  ipcMain.handle('ingest:file', async (_, filePath: string) => {
-    return sidecarAppService.ingestFile(filePath)
+  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string) => {
+    return sidecarAppService.ingestFile(filePath, visionModel, visionPrompt)
   })
 
   ipcMain.handle('ingest:update', async (_, docId: string, markdownContent: string) => {

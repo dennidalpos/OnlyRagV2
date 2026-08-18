@@ -199,7 +199,7 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({
               <Search className="w-10 h-10 text-slate-600" />
               <div className="font-semibold text-slate-400 text-sm">{t('vectorSearch.noResults')}</div>
               <p className="text-xs max-w-md text-slate-400">
-                {t('vectorSearch.noResults')}
+                {t('vectorSearch.noResultsHint')}
               </p>
             </div>
           )}

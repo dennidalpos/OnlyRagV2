@@ -4,24 +4,19 @@ import { Code2, Hash } from 'lucide-react'
 interface RenderedPagePreviewProps {
   pageNumber: number
   pageContent: string
-  zoomLevel?: number
 }
 
+// Always rendered nested inside SourcePagePreview's own page card, which already owns the
+// per-page id, data-page-number and zoom scale transform used for page navigation/sync -- this
+// component only renders the text-fallback content itself, it does not repeat that plumbing.
 export const RenderedPagePreview: React.FC<RenderedPagePreviewProps> = ({
   pageNumber,
   pageContent,
-  zoomLevel = 100,
 }) => {
-  const scale = zoomLevel / 100
   const lines = pageContent.split('\n')
 
   return (
-    <div
-      id={`rendered-page-${pageNumber}`}
-      data-page-number={pageNumber}
-      className="w-full flex justify-center py-2 select-text"
-      style={{ transform: `scale(${scale})`, transformOrigin: 'top center', transition: 'transform 0.15s ease-out' }}
-    >
+    <div className="w-full flex justify-center py-2 select-text">
       <div className="w-full max-w-2xl bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-lg min-h-[540px] flex flex-col space-y-3">
         {/* No per-page header here: the parent SourcePagePreview card (and the pane toolbar above
             it) already display the current page position -- repeating it here duplicated the same

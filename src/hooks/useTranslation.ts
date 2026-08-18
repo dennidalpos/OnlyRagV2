@@ -4,6 +4,7 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { useIngestedDocuments } from './useIngestedDocuments'
+import { useTranslation as useI18n } from '../i18n'
 
 export const LANGUAGES = [
   'English',
@@ -81,6 +82,7 @@ export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): s
 }
 
 export function useDocumentTranslation(settings?: AppSettings) {
+  const { t } = useI18n()
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [sourceLang, setSourceLang] = useState('Italian')
@@ -95,59 +97,47 @@ export function useDocumentTranslation(settings?: AppSettings) {
 
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageViewMode, setPageViewMode] = useState<'page' | 'all'>('all')
-  const [zoomLevel, setZoomLevel] = useState<number>(100)
 
-  const [docSearchQuery, setDocSearchQuery] = useState<string>('')
-  const [activeMatchIndex, setActiveMatchIndex] = useState<number>(0)
-
-  const leftPaneRef = useRef<HTMLDivElement>(null)
+  const leftEditorRef = useRef<any>(null)
   const editorRef = useRef<any>(null)
   const isSyncingScrollRef = useRef<boolean>(false)
   const abortTranslationRef = useRef<boolean>(false)
 
-  const handleLeftPaneScroll = () => {
-    if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current || !editorRef.current) return
-    isSyncingScrollRef.current = true
-
-    const { scrollTop, scrollHeight, clientHeight } = leftPaneRef.current
+  const syncEditorScroll = (source: any, target: any) => {
+    const scrollHeight = source.getScrollHeight()
+    const layout = source.getLayoutInfo()
+    const clientHeight = layout ? layout.height : 0
     const maxScroll = scrollHeight - clientHeight
-    if (maxScroll > 0) {
-      const scrollPercent = scrollTop / maxScroll
-      const editorScrollHeight = editorRef.current.getScrollHeight()
-      const editorLayout = editorRef.current.getLayoutInfo()
-      const editorClientHeight = editorLayout ? editorLayout.height : 0
-      const maxEditorScroll = editorScrollHeight - editorClientHeight
-      if (maxEditorScroll > 0) {
-        editorRef.current.setScrollTop(scrollPercent * maxEditorScroll)
-      }
-    }
+    if (maxScroll <= 0) return
 
-    requestAnimationFrame(() => {
-      isSyncingScrollRef.current = false
+    const scrollPercent = source.getScrollTop() / maxScroll
+    const targetScrollHeight = target.getScrollHeight()
+    const targetLayout = target.getLayoutInfo()
+    const targetClientHeight = targetLayout ? targetLayout.height : 0
+    const maxTargetScroll = targetScrollHeight - targetClientHeight
+    if (maxTargetScroll > 0) {
+      target.setScrollTop(scrollPercent * maxTargetScroll)
+    }
+  }
+
+  const handleLeftEditorDidMount = (editor: any) => {
+    leftEditorRef.current = editor
+    editor.onDidScrollChange((e: any) => {
+      if (!syncScroll || isSyncingScrollRef.current || !editorRef.current || !e.scrollTopChanged) return
+      isSyncingScrollRef.current = true
+      syncEditorScroll(editor, editorRef.current)
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
     })
   }
 
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor
     editor.onDidScrollChange((e: any) => {
-      if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current) return
-      if (!e.scrollTopChanged) return
-
+      if (!syncScroll || isSyncingScrollRef.current || !leftEditorRef.current || !e.scrollTopChanged) return
       isSyncingScrollRef.current = true
-      const editorScrollHeight = editor.getScrollHeight()
-      const editorLayout = editor.getLayoutInfo()
-      const editorClientHeight = editorLayout ? editorLayout.height : 0
-      const maxEditorScroll = editorScrollHeight - editorClientHeight
-
-      if (maxEditorScroll > 0) {
-        const scrollPercent = e.scrollTop / maxEditorScroll
-        const { scrollHeight, clientHeight } = leftPaneRef.current
-        const maxScroll = scrollHeight - clientHeight
-        if (maxScroll > 0) {
-          leftPaneRef.current.scrollTop = scrollPercent * maxScroll
-        }
-      }
-
+      syncEditorScroll(editor, leftEditorRef.current)
       requestAnimationFrame(() => {
         isSyncingScrollRef.current = false
       })
@@ -244,16 +234,16 @@ export function useDocumentTranslation(settings?: AppSettings) {
 
   const handleExportTranslation = async (format: 'pdf' | 'docx' | 'md' = 'pdf') => {
     if (!translatedMarkdown.trim()) return
-    setExportMessage(`Preparazione esportazione ${format.toUpperCase()}...`)
+    setExportMessage(t('translation.exportPreparing', { format: format.toUpperCase() }))
     try {
       const res = await apiService.exportDocument(translatedMarkdown, format)
       if (res.success) {
-        setExportMessage(res.message || `Traduzione ${format.toUpperCase()} esportata con successo!`)
+        setExportMessage(res.message || t('translation.exportSuccess', { format: format.toUpperCase() }))
       } else {
-        setExportMessage(res.error || res.message || 'Esportazione annullata.')
+        setExportMessage(res.error || res.message || t('translation.exportCancelled'))
       }
     } catch (err: any) {
-      setExportMessage(`Errore esportazione: ${err.message}`)
+      setExportMessage(t('translation.exportError', { message: err.message }))
     } finally {
       setTimeout(() => setExportMessage(null), 5000)
     }
@@ -296,15 +286,8 @@ export function useDocumentTranslation(settings?: AppSettings) {
     setCurrentPage,
     pageViewMode,
     setPageViewMode,
-    zoomLevel,
-    setZoomLevel,
-    docSearchQuery,
-    setDocSearchQuery,
-    activeMatchIndex,
-    setActiveMatchIndex,
-    leftPaneRef,
     editorRef,
-    handleLeftPaneScroll,
+    handleLeftEditorDidMount,
     handleEditorDidMount,
     fetchDocuments,
     handleSwapLanguages,

@@ -50,12 +50,24 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const { t } = useTranslation()
   const c = useCodingAgent(settings)
 
+  // Single autoscroll toggle shared by every agent-opened panel (action log, terminal, ...)
+  // so disabling it stops auto-scrolling everywhere in the Coding Agent Studio, not just one panel.
+  const [autoScroll, setAutoScroll] = useState<boolean>(true)
+
+  // The prompt textarea is cleared the instant a task is submitted (see useCodingAgent's
+  // handleAgentExecute), so re-evaluating complexity from the live draft while a task is
+  // executing would show a meaningless "empty prompt" tier for the entire run. Freeze the
+  // routed complexity on the prompt that was actually sent once execution starts, and only
+  // go back to previewing the live draft once idle again.
+  const [lastExecutedPrompt, setLastExecutedPrompt] = useState<string>('')
+
   // Plan Hook Integration with Session Isolation
   const planApproval = usePlanApproval({
     settings,
     activeSessionId: c.activeSessionId,
     workspacePath: c.workspacePath,
     onPlanApproved: (_approvedPlan) => {
+      setLastExecutedPrompt(c.agentPrompt)
       c.handleAgentExecute()
     },
   })
@@ -67,17 +79,19 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
 
-  const activeModelName = useMemo(() => {
-    if (settings?.useComplexityRouting) {
-      return evaluateTaskComplexity(c.agentPrompt, {
-        attachedFilesCount: c.pinnedFiles.size,
-        contextSizeChars: c.editorContent.length,
-        settings,
-        availableModels: diagnostics?.ollama?.models,
-      }).modelName
-    }
-    return settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-  }, [settings, c.agentPrompt, c.pinnedFiles.size, c.editorContent.length, diagnostics?.ollama?.models])
+  const routedComplexity = useMemo(() => {
+    const promptForRouting = c.isExecuting ? lastExecutedPrompt : c.agentPrompt
+    return evaluateTaskComplexity(promptForRouting, {
+      attachedFilesCount: c.pinnedFiles.size,
+      contextSizeChars: c.editorContent.length,
+      settings,
+      availableModels: diagnostics?.ollama?.models,
+    })
+  }, [settings, c.isExecuting, lastExecutedPrompt, c.agentPrompt, c.pinnedFiles.size, c.editorContent.length, diagnostics?.ollama?.models])
+
+  const activeModelName = settings?.useComplexityRouting
+    ? routedComplexity.modelName
+    : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
 
   // True when the most recent approved plan still has non-verified milestones
   // left over from an interrupted/finished run, i.e. residue a new plan should
@@ -149,6 +163,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   // CodingHeader), decoupled from every-send plan generation.
   const handleInitiateTaskExecution = () => {
     if (!c.agentPrompt.trim()) return
+    setLastExecutedPrompt(c.agentPrompt)
     c.handleAgentExecute()
   }
 
@@ -165,11 +180,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         guestOsInfo={c.guestOsInfo}
         settings={settings}
         onUpdateSettings={onUpdateSettings}
-        agentPrompt={c.agentPrompt}
-        pinnedFilesCount={c.pinnedFiles.size}
-        editorContentLength={c.editorContent.length}
         activeSkills={c.activeSkills}
-        availableModels={diagnostics?.ollama.models}
+        complexity={routedComplexity}
+        activeModel={activeModelName}
       />
 
       {/* Main Workspace Split Layout */}
@@ -266,6 +279,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               onDeleteSession={c.handleDeleteSession}
               onRenameSession={c.handleRenameSession}
               onSelectWorkspaceFolder={c.handleSelectWorkspaceFolder}
+              autoScroll={autoScroll}
+              onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
             />
           </div>
         </div>
@@ -573,6 +588,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                 onRunCommand={c.handleRunTerminalCommand}
                 onClearTerminal={c.handleClearTerminal}
                 isExecuting={c.isExecuting}
+                autoScroll={autoScroll}
               />
             )}
 

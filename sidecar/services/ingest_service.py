@@ -5,12 +5,12 @@ import json
 import uuid
 import base64
 import datetime
-from typing import Optional, List, Dict, Any, Generator
+from typing import Optional, List, Dict, Any, Generator, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, EXPORT_DIR, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
-from sidecar.infrastructure.db import lance_db, get_existing_tables
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
 from sidecar.infrastructure.embeddings import generate_embedding
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.ingestion import (
@@ -23,7 +23,13 @@ from sidecar.domain.ingestion import (
 )
 from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
 
-def process_and_index_document(filename: str, content: bytes, file_path: Optional[str] = None) -> IngestResponse:
+def process_and_index_document(
+    filename: str,
+    content: bytes,
+    file_path: Optional[str] = None,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None
+) -> IngestResponse:
     """Orchestrates document extraction, semantic chunking, embedding generation, and LanceDB indexing."""
     doc_id = str(uuid.uuid4())
 
@@ -39,7 +45,10 @@ def process_and_index_document(filename: str, content: bytes, file_path: Optiona
             except Exception as save_err:
                 logger.warning(f"Could not cache source file to disk: {save_err}")
 
-    full_markdown, num_pages = extract_document_markdown(filename, content, persisted_path or file_path)
+    full_markdown, num_pages = extract_document_markdown(
+        filename, content, persisted_path or file_path,
+        vision_model=vision_model, vision_prompt=vision_prompt
+    )
     full_markdown = sanitize_extracted_text(full_markdown)
     raw_chunks = create_semantic_chunks(filename, full_markdown)
 
@@ -131,7 +140,9 @@ def process_and_index_document(filename: str, content: bytes, file_path: Optiona
 def process_and_index_document_generator(
     filename: str,
     content: bytes,
-    file_path: Optional[str] = None
+    file_path: Optional[str] = None,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None
 ) -> Generator[str, None, None]:
     """
     Streaming NDJSON generator for real-time progress reporting during document extraction and LanceDB vectorization.
@@ -200,7 +211,9 @@ def process_and_index_document_generator(
 
                     work_items.append(prepare_pdf_page_work_item(
                         pdf_doc, page, page_num, raw_text, md_tables, used_ocr,
-                        describe_figures_with_vision=describe_figures_with_vision
+                        describe_figures_with_vision=describe_figures_with_vision,
+                        vision_model=vision_model,
+                        vision_prompt=vision_prompt
                     ))
                     page_render_meta[page_num] = {
                         "table_info": table_info,
@@ -257,7 +270,10 @@ def process_and_index_document_generator(
             "pipeline": "Structured Document Extractor",
             "fileName": filename
         }) + "\n"
-        full_markdown, num_pages = extract_document_markdown(filename, content, persisted_path or file_path)
+        full_markdown, num_pages = extract_document_markdown(
+            filename, content, persisted_path or file_path,
+            vision_model=vision_model, vision_prompt=vision_prompt
+        )
 
     full_markdown = sanitize_extracted_text(full_markdown)
 
@@ -384,8 +400,7 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
     3. Re-chunks semantic markdown and re-computes embeddings
     4. Updates document record in LanceDB
     """
-    if not doc_id or not re.match(r'^[a-zA-Z0-9_\-]+$', doc_id):
-        raise ValueError("Invalid document ID format")
+    validate_doc_id(doc_id)
 
     clean_markdown = sanitize_extracted_text(new_markdown)
     existing_tables = get_existing_tables()
@@ -409,11 +424,10 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
     num_pages = max(1, len(page_matches)) if page_matches else int(old_doc.get("num_pages", 1))
 
     # 1. Delete old chunks from LanceDB
-    safe_id = doc_id.replace('"', '\\"')
     if CHUNKS_TABLE_NAME in existing_tables:
         try:
             ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-            ctbl.delete(f'doc_id = "{safe_id}"')
+            ctbl.delete(f'doc_id = "{doc_id}"')
         except Exception as e:
             logger.warning(f"Error removing old chunks for {doc_id}: {e}")
 
@@ -449,7 +463,7 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
             pass
 
     # 3. Update doc record in LanceDB
-    dtbl.delete(f'id = "{safe_id}"')
+    dtbl.delete(f'id = "{doc_id}"')
     new_doc_record = [{
         "id": doc_id,
         "filename": filename,
@@ -481,6 +495,8 @@ def render_document_page_preview(doc_id: str, page_num: int) -> PagePreviewRespo
     """
     Renders high-fidelity real page preview image (PNG base64) directly from original source file on disk.
     """
+    validate_doc_id(doc_id)
+
     if DOCS_TABLE_NAME not in get_existing_tables():
         raise ValueError("Documents table not initialized")
 

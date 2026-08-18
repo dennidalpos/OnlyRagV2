@@ -744,7 +744,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           isOpen={ing.isPromptModalOpen}
           onClose={() => ing.setIsPromptModalOpen(false)}
           module="vision"
-          moduleTitle="Ingestione & OCR"
+          moduleTitle={t('ingestion.title')}
           activeModelName={settings?.visionModel || 'llama3.2-vision'}
           settings={settings}
           onUpdateSettings={onUpdateSettings}

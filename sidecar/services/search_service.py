@@ -2,7 +2,7 @@ import re
 from typing import List, Dict, Any
 from sidecar.config import CHUNKS_TABLE_NAME, DOCS_TABLE_NAME, logger
 from sidecar.schemas import SearchRequest, SearchResult
-from sidecar.infrastructure.db import lance_db, get_existing_tables
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
 from sidecar.infrastructure.embeddings import generate_embedding
 from sidecar.infrastructure.reranker import rerank_candidates
 
@@ -52,19 +52,22 @@ def perform_vector_search(req: SearchRequest) -> List[SearchResult]:
         search_builder = ctbl.search(query_vec)
 
         # Multi-document filtering support
-        allowed_doc_ids = set()
+        raw_doc_ids = set()
         if req.doc_id:
-            allowed_doc_ids.add(req.doc_id)
+            raw_doc_ids.add(req.doc_id)
         if req.doc_ids:
-            allowed_doc_ids.update(req.doc_ids)
+            raw_doc_ids.update(req.doc_ids)
+
+        allowed_doc_ids = set()
+        for d_id in raw_doc_ids:
+            try:
+                allowed_doc_ids.add(validate_doc_id(d_id))
+            except ValueError as invalid_id_err:
+                logger.warning(f"Rejected malformed doc_id in search request: {invalid_id_err}")
 
         if allowed_doc_ids:
-            try:
-                where_clause = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids if d_id])
-                if where_clause:
-                    search_builder = search_builder.where(where_clause, prefilter=True)
-            except Exception as filter_err:
-                logger.warning(f"Where clause filter error in LanceDB search: {filter_err}")
+            where_clause = " OR ".join([f'doc_id = "{d_id}"' for d_id in allowed_doc_ids])
+            search_builder = search_builder.where(where_clause, prefilter=True)
 
         # 1. Dense retrieval
         dense_results = search_builder.limit(fetch_limit).to_list()
@@ -186,10 +189,7 @@ def list_stored_documents() -> List[Dict[str, Any]]:
 
 def delete_stored_document(doc_id: str) -> Dict[str, str]:
     """Deletes document record and associated vector chunks from LanceDB tables."""
-    if not doc_id or not re.match(r'^[a-zA-Z0-9_\-]+$', doc_id):
-        raise ValueError("Invalid document ID format")
-
-    safe_id = doc_id.replace('"', '\\"')
+    safe_id = validate_doc_id(doc_id)
     existing_tables = get_existing_tables()
     
     if DOCS_TABLE_NAME in existing_tables:

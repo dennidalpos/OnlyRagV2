@@ -111,13 +111,13 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             </div>
             <select
               aria-label="Select Coding Fast Tier Model"
-              value={settings.complexityFastModel || 'llama3.2:3b'}
+              value={settings.complexityFastModel || 'qwen2.5-coder:1.5b'}
               onChange={(e) => onUpdateSettings({ complexityFastModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
               {buildModelOptions(
                 settings.complexityFastModel || '',
-                ['llama3.2:3b', 'qwen2.5-coder:1.5b', 'qwen2.5-coder:3b', 'llama3.2:1b', 'qwen2.5:1.5b']
+                ['qwen2.5-coder:1.5b', 'llama3.2:3b', 'qwen2.5-coder:3b', 'llama3.2:1b', 'qwen2.5:1.5b']
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -158,13 +158,13 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             </div>
             <select
               aria-label="Select Coding Deep Reasoning Model"
-              value={settings.complexityDeepModel || 'deepseek-r1:8b'}
+              value={settings.complexityDeepModel || 'qwen2.5-coder:7b'}
               onChange={(e) => onUpdateSettings({ complexityDeepModel: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
               {buildModelOptions(
                 settings.complexityDeepModel || '',
-                ['deepseek-r1:8b', 'deepseek-r1:14b', 'deepseek-r1:1.5b', 'qwen2.5-coder:14b', 'phi4:14b', 'deepseek-r1:32b']
+                ['qwen2.5-coder:7b', 'deepseek-r1:8b', 'deepseek-r1:14b', 'qwen2.5-coder:14b', 'phi4:14b', 'deepseek-r1:32b']
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -173,7 +173,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-amber-900/40 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                🔶 Heavy Tier
+                {t('hardwareWizard.heavyTierBadge')}
               </span>
               <span className="text-[10px] text-slate-400 font-mono">Escalation</span>
             </div>
@@ -183,14 +183,14 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               onChange={(e) => onUpdateSettings({ complexityHeavyModel: e.target.value || undefined })}
               className="w-full bg-slate-950 border border-amber-900/40 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"
             >
-              <option value="">— Disabled —</option>
+              <option value="">{t('settings.heavyTierDisabledOption')}</option>
               {buildModelOptions(
                 settings.complexityHeavyModel || '',
                 ['qwen2.5-coder:14b', 'deepseek-r1:14b', 'phi4:14b', 'codestral:22b', 'deepseek-r1:32b', 'qwen2.5-coder:32b']
               ).map((m) => renderOption(m, m))}
             </select>
             <p className="text-[10px] text-amber-500/70 leading-tight">
-              On-demand 14B+ model. Activates only when all lighter tiers fail. Triggers VRAM eviction before loading.
+              {t('settings.heavyTierDesc')}
             </p>
           </div>
         </div>
@@ -419,8 +419,8 @@ const ModelPerformanceProfiler: React.FC<{ models: string[] }> = ({ models }) =>
             <Zap className="w-4 h-4 text-cyan-400" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-slate-100">Model Performance Profiler</h3>
-            <p className="text-[11px] text-slate-400">Tokens/sec LLM &amp; Embedding Latency</p>
+            <h3 className="text-xs font-bold text-slate-100">{t('settings.perfProfilerTitle')}</h3>
+            <p className="text-[11px] text-slate-400">{t('settings.perfProfilerDesc')}</p>
           </div>
         </div>
         <span className="text-[10px] font-mono text-slate-400">
@@ -448,17 +448,17 @@ const ModelPerformanceProfiler: React.FC<{ models: string[] }> = ({ models }) =>
                     ⚡ {stats.tokensPerSec} {isEmbedModel ? 'vec/s' : 't/s'} ({stats.evalDurationMs}ms)
                   </span>
                 ) : (
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Not tested</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">{t('settings.perfProfilerNotTested')}</span>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => handleRunBenchmark(m)}
                 disabled={stats?.isRunning}
-                aria-label={`Benchmark ${m}`}
+                aria-label={t('settings.perfProfilerBenchmarkAria', { model: m })}
                 className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-[11px] rounded-lg font-semibold shrink-0 transition-colors focus-ring active:scale-95"
               >
-                {stats?.isRunning ? t('common.loading') : 'Test'}
+                {stats?.isRunning ? t('common.loading') : t('settings.perfProfilerTestBtn')}
               </button>
             </div>
           )

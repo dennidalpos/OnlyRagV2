@@ -77,7 +77,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
             className="rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-emerald-500/20"
           />
           <span className={useComplexityRouting ? 'text-emerald-400 font-bold' : 'text-slate-400'}>
-            {useComplexityRouting ? t('hardwareWizard.complexityRouterToggle') : t('settings.complexityRouterDisabled')}
+            {useComplexityRouting ? t('settings.complexityRouterActive') : t('settings.complexityRouterDisabled')}
           </span>
         </label>
       </div>
@@ -130,7 +130,7 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>⚡ Heavy</span>
+            <span>{t('hardwareWizard.heavyTierBadge')}</span>
           </button>
         )}
       </div>
@@ -218,11 +218,10 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
         <div className="space-y-2">
           <div className="p-2.5 rounded-xl bg-amber-950/20 border border-amber-800/40 space-y-0.5">
             <p className="text-[11px] font-semibold text-amber-300">
-              ⚡ Heavy Escalation — Auto-healing Fallback Tier
+              {t('hardwareWizard.heavyEscalationSectionTitle')}
             </p>
             <p className="text-[11px] text-slate-400">
-              Modello opzionale 14B+ attivato automaticamente dal router quando i tier Fast/Standard/Deep falliscono ripetutamente.
-              Richiede <strong className="text-amber-400">12GB+ VRAM</strong>. Lasciare disabilitato su hardware con meno VRAM.
+              {t('hardwareWizard.heavyEscalationSectionDescPre')} <strong className="text-amber-400">12GB+ VRAM</strong>. {t('hardwareWizard.heavyEscalationSectionDescPost')}
             </p>
           </div>
 
@@ -245,8 +244,8 @@ export const WizardStepCodingTiers: React.FC<WizardStepCodingTiersProps> = ({
               {selectedHeavy === '' && <span className="w-2 h-2 rounded-full bg-slate-200 block" />}
             </div>
             <div>
-              <span className="font-semibold text-slate-400 text-xs">— Disabilitato (Consigliato per &lt;12GB VRAM)</span>
-              <p className="text-[11px] text-slate-400 mt-0.5">Nessun modello heavy assegnato. Il router si ferma al tier Deep.</p>
+              <span className="font-semibold text-slate-400 text-xs">{t('hardwareWizard.heavyDisabledLabel')}</span>
+              <p className="text-[11px] text-slate-400 mt-0.5">{t('hardwareWizard.heavyDisabledDesc')}</p>
             </div>
           </div>
 

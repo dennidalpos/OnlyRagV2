@@ -1,7 +1,7 @@
 import React from 'react'
 import { Code, ChevronRight, Cpu, Sparkles, Compass } from 'lucide-react'
 import { AppSettings } from '../../types'
-import { evaluateTaskComplexity } from '../../services/complexityRouterService'
+import { ComplexityRouteResult } from '../../services/complexityRouterService'
 import { ModelBadge } from '../common/ModelBadge'
 import { useTranslation } from '../../i18n'
 
@@ -9,33 +9,22 @@ interface CodingHeaderProps {
   guestOsInfo: any
   settings?: AppSettings
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
-  agentPrompt: string
-  pinnedFilesCount: number
-  editorContentLength: number
   activeSkills?: string[]
-  availableModels?: string[]
+  /** Routed complexity for the last submitted (or, while idle, currently drafted) prompt — computed once by the parent. */
+  complexity: ComplexityRouteResult
+  /** Model actually driving the agent: complexity.modelName when routing is on, otherwise the fixed coding model. */
+  activeModel: string
 }
 
 export const CodingHeader: React.FC<CodingHeaderProps> = ({
   guestOsInfo,
   settings,
   onUpdateSettings,
-  agentPrompt,
-  pinnedFilesCount,
-  editorContentLength,
   activeSkills = [],
-  availableModels,
+  complexity,
+  activeModel,
 }) => {
   const { t } = useTranslation()
-  const complexity = evaluateTaskComplexity(agentPrompt, {
-    attachedFilesCount: pinnedFilesCount,
-    contextSizeChars: editorContentLength,
-    settings,
-    availableModels,
-  })
-  const activeModel = settings?.useComplexityRouting
-    ? complexity.modelName
-    : (settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b')
 
   const isAutoHubEnabled = settings?.autoInstallHubSkills !== 'disabled'
 
@@ -71,11 +60,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
               ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
               : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:bg-slate-800/80'
           }`}
-          title={
-            isAutoHubEnabled
-              ? 'Auto-Discovery Skill Hub: ATTIVO (Clicca per disattivare l auto-installazione automatica da Store)'
-              : 'Auto-Discovery Skill Hub: DISATTIVATO (Clicca per attivare l auto-installazione automatica da Store)'
-          }
+          title={isAutoHubEnabled ? t('coding.autoHubOnTitle') : t('coding.autoHubOffTitle')}
         >
           <Compass className={`w-3 h-3 ${isAutoHubEnabled ? 'text-emerald-400' : 'text-slate-400'}`} />
           <span>Auto-Hub: {isAutoHubEnabled ? 'ON' : 'OFF'}</span>

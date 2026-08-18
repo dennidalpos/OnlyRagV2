@@ -3,6 +3,7 @@ import { IngestedDocument, AppSettings } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
+import { useTranslation as useI18n } from '../i18n'
 
 export interface IngestionProgressState {
   active: boolean
@@ -47,6 +48,7 @@ export function getTotalLines(content: string): number {
 }
 
 export function useIngestion(settings?: AppSettings) {
+  const { t } = useI18n()
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [markdownContent, setMarkdownContent] = useState<string>('')
@@ -160,9 +162,12 @@ export function useIngestion(settings?: AppSettings) {
 
     if (viewMode === 'page' && leftPaneRef.current) {
       leftPaneRef.current.scrollTop = 0
-    } else if (viewMode === 'all') {
-      const targetElem = document.getElementById(`rendered-page-${targetPage}`)
-      if (targetElem && leftPaneRef.current) {
+    } else if (viewMode === 'all' && leftPaneRef.current) {
+      // Match by data-page-number (set by every page card, image-backed or text-fallback alike)
+      // rather than a fixed id -- SourcePagePreview only renders a `rendered-page-N` id for the
+      // no-scanned-image fallback case, so an id lookup silently no-ops for image-backed pages.
+      const targetElem = leftPaneRef.current.querySelector<HTMLElement>(`[data-page-number="${targetPage}"]`)
+      if (targetElem) {
         const offset = targetElem.offsetTop - leftPaneRef.current.offsetTop
         leftPaneRef.current.scrollTo({ top: Math.max(0, offset - 10), behavior: 'smooth' })
       }
@@ -250,16 +255,16 @@ export function useIngestion(settings?: AppSettings) {
 
   const handleExportMarkdown = async (format: 'pdf' | 'md' = 'pdf') => {
     if (!selectedDoc || !markdownContent) return
-    setExportStatus({ active: true, message: `Preparazione esportazione ${format.toUpperCase()} in corso...` })
+    setExportStatus({ active: true, message: t('ingestion.exportPreparing', { format: format.toUpperCase() }) })
     try {
       const res = await apiService.exportDocument(markdownContent, format)
       if (res.success) {
-        setExportStatus({ active: false, message: res.message || `Documento ${format.toUpperCase()} esportato con successo!` })
+        setExportStatus({ active: false, message: res.message || t('ingestion.exportSuccess', { format: format.toUpperCase() }) })
       } else {
-        setExportStatus({ active: false, message: res.error || res.message || 'Esportazione annullata.', isError: true })
+        setExportStatus({ active: false, message: res.error || res.message || t('ingestion.exportCancelled'), isError: true })
       }
     } catch (err: any) {
-      setExportStatus({ active: false, message: `Errore esportazione: ${err.message}`, isError: true })
+      setExportStatus({ active: false, message: t('ingestion.exportError', { message: err.message }), isError: true })
     } finally {
       setTimeout(() => {
         setExportStatus(null)
@@ -346,7 +351,7 @@ export function useIngestion(settings?: AppSettings) {
         percent: 55,
       }))
 
-      const res = await apiService.ingestFile(targetFilePath)
+      const res = await apiService.ingestFile(targetFilePath, settings?.visionModel)
 
       if (isCancelledRef.current) return
 

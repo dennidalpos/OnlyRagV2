@@ -65,11 +65,11 @@ export const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
-      setValidationError('Skill name is required')
+      setValidationError(t('skills.nameRequired'))
       return
     }
     if (!content.trim()) {
-      setValidationError('Guidelines markdown content cannot be empty')
+      setValidationError(t('skills.contentRequired'))
       return
     }
 

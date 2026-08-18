@@ -87,7 +87,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-cyan-400 hover:bg-slate-800 text-xs font-medium transition-all flex items-center gap-1.5"
             title={t('common.info')}
           >
-            <HelpCircle className="w-3.5 h-3.5" /> Guide
+            <HelpCircle className="w-3.5 h-3.5" /> {t('skills.guideBtn')}
           </button>
           <button
             type="button"

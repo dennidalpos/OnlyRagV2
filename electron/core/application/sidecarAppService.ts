@@ -42,7 +42,7 @@ export class SidecarAppService {
     return { success: isOnline, message: isOnline ? 'Sidecar engine restarted successfully.' : 'Failed to restart Sidecar.' }
   }
 
-  ingestFile(filePath: string) {
+  ingestFile(filePath: string, visionModel?: string, visionPrompt?: string) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid file path' })
     }
@@ -53,7 +53,11 @@ export class SidecarAppService {
         return Promise.resolve({ success: false, error: 'File does not exist on disk' })
       }
 
-      const postData = JSON.stringify({ file_path: resolvedPath })
+      const postData = JSON.stringify({
+        file_path: resolvedPath,
+        vision_model: visionModel || undefined,
+        vision_prompt: visionPrompt || undefined,
+      })
       const taskId = `ingest-${Date.now()}`
 
       return new Promise((resolve) => {

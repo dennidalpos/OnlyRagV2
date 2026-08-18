@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, BookOpen, Copy, Check, Code, FileText, Globe, Sparkles, Cpu, Layers } from 'lucide-react'
+import { useTranslation } from '../../../i18n'
 
 interface CustomHubGuideModalProps {
   isOpen: boolean
@@ -44,6 +45,7 @@ tags: ["backend", "nestjs", "typescript"]
 `
 
 export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation()
   const [copiedType, setCopiedType] = useState<'json' | 'md' | 'anthropic' | 'lobe' | null>(null)
 
   React.useEffect(() => {
@@ -80,14 +82,14 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 id="custom-hub-guide-title" className="text-base font-bold text-slate-100">Guida alla Struttura di Skill Hub &amp; Repository</h2>
-              <p className="text-xs text-slate-400">Come integrare Skills.sh, Anthropic, LobeHub e Hub personalizzati in OnlyRag V2</p>
+              <h2 id="custom-hub-guide-title" className="text-base font-bold text-slate-100">{t('skills.guide.title')}</h2>
+              <p className="text-xs text-slate-400">{t('skills.guide.subtitle')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Chiudi guida"
+            aria-label={t('skills.guide.closeAria')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all focus-ring"
           >
             <X className="w-5 h-5" />
@@ -99,29 +101,29 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
           {/* Overview */}
           <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 space-y-2">
             <h3 className="font-bold text-slate-200 text-sm flex items-center gap-2">
-              <Globe className="w-4 h-4 text-cyan-400" /> Sorgenti Ufficiali e Formati Supportati
+              <Globe className="w-4 h-4 text-cyan-400" /> {t('skills.guide.overviewTitle')}
             </h3>
             <p>
-              OnlyRag V2 supporta nativamente l'interoperabilità con i principali ecosistemi di AI Agent e repository open standard:
+              {t('skills.guide.overviewText')}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
               <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
                 <strong className="text-emerald-300 flex items-center gap-1.5 mb-1">
-                  <Layers className="w-3.5 h-3.5" /> Skills.sh Open Directory
+                  <Layers className="w-3.5 h-3.5" /> {t('skills.guide.skillsShCardTitle')}
                 </strong>
-                <p className="text-slate-400">Registry universale (<code className="text-slate-300 font-mono">skills.sh</code>) con skill comunitarie per ingegneria del software (<code className="text-slate-300 font-mono">grill-me</code>, <code className="text-slate-300 font-mono">tdd</code>, <code className="text-slate-300 font-mono">code-review</code>).</p>
+                <p className="text-slate-400">{t('skills.guide.skillsShCardText')}</p>
               </div>
               <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
                 <strong className="text-cyan-300 flex items-center gap-1.5 mb-1">
-                  <Sparkles className="w-3.5 h-3.5" /> Anthropic Agent Skills
+                  <Sparkles className="w-3.5 h-3.5" /> {t('skills.guide.anthropicCardTitle')}
                 </strong>
-                <p className="text-slate-400">Standard <code className="text-slate-300 font-mono">agentskills.io</code> (repository <code className="text-slate-300 font-mono">github.com/anthropics/skills</code> con cartelle <code className="text-slate-300 font-mono">skills/&lt;nome&gt;/SKILL.md</code>).</p>
+                <p className="text-slate-400">{t('skills.guide.anthropicCardText')}</p>
               </div>
               <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
                 <strong className="text-purple-300 flex items-center gap-1.5 mb-1">
-                  <Cpu className="w-3.5 h-3.5" /> LobeHub Marketplace
+                  <Cpu className="w-3.5 h-3.5" /> {t('skills.guide.lobeHubCardTitle')}
                 </strong>
-                <p className="text-slate-400">Marketplace (<code className="text-slate-300 font-mono">lobehub.com/skills</code>) alimentato da registry JSON live (<code className="text-slate-300 font-mono">chat-plugins.lobehub.com</code>).</p>
+                <p className="text-slate-400">{t('skills.guide.lobeHubCardText')}</p>
               </div>
             </div>
           </div>
@@ -129,32 +131,30 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
           {/* Skills.sh standard */}
           <div className="space-y-2">
             <h4 className="font-bold text-slate-100 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-emerald-400" /> 1. Skills.sh Ecosystem (`https://www.skills.sh/`)
+              <Layers className="w-4 h-4 text-emerald-400" /> {t('skills.guide.skillsShSectionTitle')}
             </h4>
             <p className="text-slate-400">
-              Skills.sh è l'ecosistema aperto per scoprire e installare skill per AI agent (Claude Code, Cursor, Copilot, Antigravity). OnlyRag V2 integra direttamente le skill più popolari della directory come <code className="text-emerald-300 font-mono">grill-me</code> (intervista rigorosa prima del codice), <code className="text-emerald-300 font-mono">grill-with-docs</code>, <code className="text-emerald-300 font-mono">code-review</code>, <code className="text-emerald-300 font-mono">diagnosing-bugs</code> e <code className="text-emerald-300 font-mono">tdd</code>.
+              {t('skills.guide.skillsShSectionText')}
             </p>
           </div>
 
           {/* Anthropic standard */}
           <div className="space-y-2">
             <h4 className="font-bold text-slate-100 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400" /> 2. Standard Anthropic Agent Skills (`agentskills.io`)
+              <Sparkles className="w-4 h-4 text-cyan-400" /> {t('skills.guide.anthropicSectionTitle')}
             </h4>
             <p className="text-slate-400">
-              Anthropic definisce le skill come cartelle contenenti un file <code className="text-cyan-300 font-mono">SKILL.md</code> con frontmatter YAML e istruzioni dettagliate.
-              Per aggiungere un repository simile come Hub personalizzato, inserisci l'URL GitHub (es. <code className="text-slate-300 font-mono">https://github.com/anthropics/skills</code>) e seleziona il tipo <strong>Repository GitHub</strong>.
+              {t('skills.guide.anthropicSectionText')}
             </p>
           </div>
 
           {/* LobeHub standard */}
           <div className="space-y-2">
             <h4 className="font-bold text-slate-100 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-purple-400" /> 3. Standard LobeHub Marketplace (`lobehub.com/skills`)
+              <Cpu className="w-4 h-4 text-purple-400" /> {t('skills.guide.lobeHubSectionTitle')}
             </h4>
             <p className="text-slate-400">
-              LobeHub espone i propri plugin e skill tramite un endpoint JSON con struttura <code className="text-purple-300 font-mono">plugins: [ &#123; identifier, meta, manifest &#125; ]</code>.
-              OnlyRag V2 effettua il parsing automatico di questi manifest e genera al volo le linee guida per l'AI Agent locale.
+              {t('skills.guide.lobeHubSectionText')}
             </p>
           </div>
 
@@ -162,7 +162,7 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
           <div className="space-y-3 pt-2 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-slate-100 flex items-center gap-2">
-                <Code className="w-4 h-4 text-emerald-400" /> 4. Formato Catalogo JSON Personalizzato (`hub.json`)
+                <Code className="w-4 h-4 text-emerald-400" /> {t('skills.guide.jsonFormatTitle')}
               </h4>
               <button
                 type="button"
@@ -170,11 +170,11 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-200 transition-all flex items-center gap-1.5"
               >
                 {copiedType === 'json' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedType === 'json' ? 'Copiato!' : 'Copia Esempio JSON'}
+                {copiedType === 'json' ? t('skills.guide.copiedLabel') : t('skills.guide.copyJsonBtn')}
               </button>
             </div>
             <p className="text-slate-400">
-              Se crei un tuo server HTTP/HTTPS o file statico, puoi esporre un JSON con una lista <code className="text-cyan-300 font-mono">skills</code>:
+              {t('skills.guide.jsonFormatText')}
             </p>
             <pre className="p-3 bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto font-mono text-[11px] text-slate-300">
               {EXAMPLE_JSON_MANIFEST}
@@ -185,7 +185,7 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
           <div className="space-y-3 pt-2 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-slate-100 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-cyan-400" /> 5. Formato Documento Singolo `SKILL.md` (YAML Frontmatter)
+                <FileText className="w-4 h-4 text-cyan-400" /> {t('skills.guide.mdFormatTitle')}
               </h4>
               <button
                 type="button"
@@ -193,7 +193,7 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-200 transition-all flex items-center gap-1.5"
               >
                 {copiedType === 'md' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedType === 'md' ? 'Copiato!' : 'Copia SKILL.md'}
+                {copiedType === 'md' ? t('skills.guide.copiedLabel') : t('skills.guide.copyMdBtn')}
               </button>
             </div>
             <pre className="p-3 bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto font-mono text-[11px] text-slate-300">
@@ -209,7 +209,7 @@ export const CustomHubGuideModal: React.FC<CustomHubGuideModalProps> = ({ isOpen
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-all"
           >
-            Chiudi Guida
+            {t('skills.guide.closeBtn')}
           </button>
         </div>
       </div>

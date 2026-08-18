@@ -320,7 +320,6 @@ const report = await analyzeLogs()
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
 | `skills:list-installed` | `workspaceRoot?: string` | `SkillDefinition[]` | Elenco delle skill installate (globali e di workspace) con stato attivo e provenance. |
-| `skills:list-hub` | `workspaceRoot?: string` | `HubSkillItem[]` | Elenco delle skill del Core Hub ufficiale. |
 | `skills:list-sources` | `none` | `SkillHubSource[]` | Elenco delle sorgenti di hub configurate (builtin e custom). |
 | `skills:add-custom-source` | `input: CustomHubInput` | `{ success: boolean, source?: SkillHubSource, error?: string }` | Aggiunta e persistenza di una sorgente JSON Catalog o GitHub Repository. |
 | `skills:remove-custom-source` | `sourceId: string` | `{ success: boolean, error?: string }` | Rimozione di una sorgente di hub personalizzata. |

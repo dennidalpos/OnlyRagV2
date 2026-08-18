@@ -13,6 +13,8 @@ class IngestResponse(BaseModel):
 
 class IngestPathRequest(BaseModel):
     file_path: str
+    vision_model: Optional[str] = None
+    vision_prompt: Optional[str] = None
 
 class UpdateDocumentRequest(BaseModel):
     markdown_content: str

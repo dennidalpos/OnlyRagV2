@@ -39,11 +39,11 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
-      setError('Hub name is required')
+      setError(t('skills.hubNameRequired'))
       return
     }
     if (!url.trim()) {
-      setError('Hub URL is required')
+      setError(t('skills.hubUrlRequired'))
       return
     }
 

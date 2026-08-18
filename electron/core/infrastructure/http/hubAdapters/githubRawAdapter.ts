@@ -23,8 +23,10 @@ export class GitHubRawAdapter implements ISkillHubAdapter {
         return []
       }
 
-      // If the content is a single markdown skill file with frontmatter
-      if (res.content.startsWith('---') || res.content.includes('# ')) {
+      // Only accept content that is genuinely a SKILL.md file with YAML frontmatter --
+      // a repo-root or webpage URL (HTML) can otherwise be misidentified as valid skill
+      // content just because it happens to contain a '# ' substring somewhere.
+      if (res.content.trim().startsWith('---')) {
         const { metadata, body } = parseSkillFrontmatter(res.content)
         const name = metadata.name || 'imported-skill'
         const id = name.toLowerCase().replace(/[^a-z0-9-_]/g, '-')

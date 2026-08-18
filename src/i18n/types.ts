@@ -7,6 +7,7 @@ export interface TranslationSchema {
     version: string
     author: string
     close: string
+    document: string
     cancel: string
     confirm: string
     save: string
@@ -49,6 +50,10 @@ export interface TranslationSchema {
     filter: string
     none: string
     help: string
+    autoscrollOnAria: string
+    autoscrollOffAria: string
+    autoscrollOnTitle: string
+    autoscrollOffTitle: string
   }
   navigation: {
     ingestion: string
@@ -167,6 +172,8 @@ export interface TranslationSchema {
     agentRole: string
     agentQuestion: string
     sessionTitleDefault: string
+    autoHubOnTitle: string
+    autoHubOffTitle: string
   }
   skills: {
     hubTitle: string
@@ -174,38 +181,24 @@ export interface TranslationSchema {
     installedTab: string
     marketplaceTab: string
     searchPlaceholder: string
-    allCategories: string
-    coreCategory: string
-    codingCategory: string
-    testCategory: string
-    securityCategory: string
-    installSkill: string
     installBtn: string
-    removeSkill: string
-    resetSkill: string
     resetOriginal: string
-    editSkill: string
     createSkillBtn: string
     addCustomHub: string
     addCustomHubTitle: string
     hubName: string
     hubUrl: string
     hubType: string
-    customHubGuide: string
     originalHubBadge: string
     modifiedBadge: string
     customBadge: string
     noSkillsFound: string
     noSkills: string
-    confirmRemove: string
     confirmDelete: string
     confirmRemoveHub: string
     confirmReset: string
-    saveChanges: string
     skillName: string
-    skillDesc: string
     skillDescription: string
-    skillCategory: string
     skillContent: string
     skillTriggers: string
     importSkillUrlTitle: string
@@ -213,7 +206,6 @@ export interface TranslationSchema {
     author: string
     version: string
     tags: string
-    importFromUrl: string
     customHubNamePlaceholder: string
     customHubUrlPlaceholder: string
     customHubDescPlaceholder: string
@@ -223,6 +215,52 @@ export interface TranslationSchema {
     skillTriggersPlaceholder: string
     skillTagsPlaceholder: string
     skillGuidelinesPlaceholder: string
+    guideBtn: string
+    msgInstalled: string
+    msgUrlImported: string
+    msgSaved: string
+    msgReset: string
+    msgDeleted: string
+    msgHubAdded: string
+    msgHubRemoved: string
+    hubNameRequired: string
+    hubUrlRequired: string
+    nameRequired: string
+    contentRequired: string
+    category: {
+      frontend: string
+      backend: string
+      database: string
+      security: string
+      aiMl: string
+      architecture: string
+    }
+    guide: {
+      title: string
+      subtitle: string
+      closeAria: string
+      closeBtn: string
+      overviewTitle: string
+      overviewText: string
+      skillsShCardTitle: string
+      skillsShCardText: string
+      anthropicCardTitle: string
+      anthropicCardText: string
+      lobeHubCardTitle: string
+      lobeHubCardText: string
+      skillsShSectionTitle: string
+      skillsShSectionText: string
+      anthropicSectionTitle: string
+      anthropicSectionText: string
+      lobeHubSectionTitle: string
+      lobeHubSectionText: string
+      jsonFormatTitle: string
+      jsonFormatText: string
+      copyJsonBtn: string
+      mdFormatTitle: string
+      copyMdBtn: string
+      copiedLabel: string
+    }
   }
   translation: {
     title: string
@@ -237,7 +275,6 @@ export interface TranslationSchema {
     translatedText: string
     selectDocPlaceholder: string
     noDocs: string
-    searchDocs: string
     sourceLang: string
     targetLang: string
     swapLanguages: string
@@ -255,10 +292,14 @@ export interface TranslationSchema {
     pageOf: string
     copyTranslation: string
     translationCopied: string
-    progressStatus: string
     selectDocPrompt: string
+    exportPreparing: string
+    exportSuccess: string
+    exportCancelled: string
+    exportError: string
   }
   ingestion: {
+    title: string
     uploadButton: string
     indexedDocuments: string
     pages: string
@@ -294,6 +335,10 @@ export interface TranslationSchema {
     singlePage: string
     ingestionError: string
     cancelOperation: string
+    exportPreparing: string
+    exportSuccess: string
+    exportCancelled: string
+    exportError: string
   }
   diagnostics: {
     title: string
@@ -303,7 +348,6 @@ export interface TranslationSchema {
     exportReport: string
     cleanWorkspace: string
     cleanWorkspaceHelp?: string
-    seeOsParameters?: string
     sidecarTitle: string
     ollamaTitle: string
     gpuTitle: string
@@ -354,19 +398,13 @@ export interface TranslationSchema {
     aboutSectionTitle: string
     aboutSectionDescription: string
     viewAboutButton: string
-    modelAssignments: string
-    hardwareProfiles: string
-    concurrencySettings: string
     maxConcurrentTasks: string
-    maxQueuedTasks: string
     codingAgentDebugLog: string
     codingAgentDebugLogDesc: string
     openLogsFolder: string
-    openLogsFolderDesc: string
     fastTier: string
     standardTier: string
     deepTier: string
-    visionTier: string
     embeddingTier: string
     codingAgentSection: string
     codingAgentSubtitle: string
@@ -384,12 +422,39 @@ export interface TranslationSchema {
     ingestionOcrSubtitle: string
     visionOcrLabel: string
     vectorStoreLabel: string
-    standardWizardOption: string
     pullModelPlaceholder: string
     pullModelAria: string
     hardwareProfileDesc: string
     concurrencyDesc: string
     autoScaleDesc: string
+    hardwareProfileLowName: string
+    hardwareProfileLowDesc: string
+    hardwareProfileMediumName: string
+    hardwareProfileMediumDesc: string
+    hardwareProfileHighName: string
+    hardwareProfileHighDesc: string
+    hardwareProfileTargetLabel: string
+    toolCallStepsTitle: string
+    toolCallStepsDesc: string
+    toolCallStepsUnlimited: string
+    toolCallStepsValue: string
+    heavyTierDisabledOption: string
+    heavyTierDesc: string
+    perfProfilerTitle: string
+    perfProfilerDesc: string
+    perfProfilerNotTested: string
+    perfProfilerTestBtn: string
+    perfProfilerBenchmarkAria: string
+    concurrencyPreset1Desc: string
+    concurrencyPreset2Desc: string
+    concurrencyPreset4Desc: string
+    concurrencyPreset8Desc: string
+    concurrencyQueueProtectionTitle: string
+    concurrencyQueueProtectionDesc: string
+    concurrencyMaxTasksLabel: string
+    concurrencyLiveStatusRunning: string
+    concurrencyLiveStatusQueued: string
+    concurrencyExceedsParallelWarning: string
   }
   about: {
     title: string
@@ -429,21 +494,7 @@ export interface TranslationSchema {
     resetFamily: string
     resetAllModule: string
     savePrompt: string
-    modalTitle: string
-    modalSubtitle: string
-    selectPreset: string
-    defaultPreset: string
-    concisePreset: string
-    detailedPreset: string
-    creativePreset: string
-    customPrompt: string
-    promptPlaceholder: string
-    resetDefault: string
-    promptSaved: string
     systemPromptPlaceholder: string
-    activeModelLabel: string
-    familyLabel: string
-    moduleLabel: string
     editTab: string
     previewTab: string
     previewDescription: string
@@ -451,7 +502,6 @@ export interface TranslationSchema {
     importJson: string
     importSuccess: string
     importError: string
-    missingVarWarning: string
     clickToInsert: string
   }
   vectorSearch: {
@@ -459,19 +509,16 @@ export interface TranslationSchema {
     modalSubtitle: string
     queryPlaceholder: string
     searchBtn: string
-    similarityThreshold: string
     topKResults: string
     searching: string
     noResults: string
+    noResultsHint: string
     resultsFound: string
     docName: string
-    chunkIndex: string
     score: string
-    previewText: string
   }
   hardwareWizard: {
     title: string
-    subtitle: string
     modalTitle: string
     modalSubtitle: string
     detectedProfile: string
@@ -491,20 +538,11 @@ export interface TranslationSchema {
     backBtn: string
     skipDownloadBtn: string
     confirmDownloadBtn: string
-    hardwareSummary: string
-    cpuInfo: string
-    ramInfo: string
-    gpuInfo: string
-    vramInfo: string
-    recommendedProfile: string
     diskSpaceCheck: string
     diskRequired: string
     diskFree: string
     diskAllowed: string
-    diskError: string
     installingOllama: string
-    downloadingModels: string
-    downloadProgress: string
     stepGeneralLlmTitle: string
     stepGeneralLlmDesc: string
     chatModelTitle: string
@@ -516,8 +554,6 @@ export interface TranslationSchema {
     legalModelTitle: string
     legalModelDesc: string
     optionalDomainModel: string
-    complexityRouterSection: string
-    complexityRouterToggle: string
     hardwareProfileSection: string
     ocrEngineSection: string
     nativeCudaOcr: string
@@ -536,10 +572,106 @@ export interface TranslationSchema {
     pullInterrupted: string
     allModelsPulled: string
     finishBtn: string
-    applySettings: string
-    cancelBtn: string
     retryPull: string
     skipModel: string
     saveAndFinishAnyway: string
+    navHardware: string
+    navCoding: string
+    navChatLlm: string
+    navMultimodal: string
+    navPreferences: string
+    navDownload: string
+    goToStepTooltip: string
+    saveAndExit: string
+    saveAndExitTooltip: string
+    stepIndicator: string
+    pullingProgressStatus: string
+    pullingModelStatus: string
+    connectingAndDownloadingStatus: string
+    downloadFailedGeneric: string
+    downloadErrorForModel: string
+    downloadErrorStatus: string
+    unexpectedDownloadError: string
+    unexpectedErrorForModel: string
+    insufficientDiskSpaceAlert: string
+    incompleteSlotsWarning: string
+    pullErrorTitle: string
+    heavyTierBadge: string
+    heavyEscalationSectionTitle: string
+    heavyEscalationSectionDescPre: string
+    heavyEscalationSectionDescPost: string
+    heavyDisabledLabel: string
+    heavyDisabledDesc: string
+    selectedLabel: string
+    noneOptionalLabel: string
+    defaultBadge: string
+    noMedicalModelTitle: string
+    noMedicalModelDesc: string
+    noLegalModelTitle: string
+    noLegalModelDesc: string
+    chatTabLabel: string
+    translationTabLabel: string
+    medicalTabLabel: string
+    legalTabLabel: string
+    runtimePrefsTitle: string
+    runtimePrefsDesc: string
+    nativeCudaOcrDesc: string
+    visionModelOcrDesc: string
+    modelRecommendedBadge: string
+    modelInstalledBadge: string
+    modelExceedsVramBadge: string
+    modelTightVramBadge: string
+  }
+  ollamaEnvParams: {
+    title: string
+    subtitle: string
+    varCount: string
+    viewBtn: string
+    viewBtnAria: string
+    applyBtn: string
+    applyBtnTitle: string
+    close: string
+    copyScript: string
+    copyScriptTitle: string
+    copiedScript: string
+    approvalTitle: string
+    approvalSubtitle: string
+    approvalIntro: string
+    restartOllamaCheckbox: string
+    cancel: string
+    approveAndApply: string
+    applying: string
+    settingsCardTitle: string
+    settingsCardDesc: string
+    envFlashOnDesc: string
+    envFlashOnRationale: string
+    envFlashOffDesc: string
+    envFlashOffRationale: string
+    envKvLowDesc: string
+    envKvLowRationale: string
+    envKvMidDesc: string
+    envKvMidRationale: string
+    envKvHighDesc: string
+    envKvHighRationale: string
+    envParallelLowDesc: string
+    envParallelLowRationale: string
+    envParallelMidDesc: string
+    envParallelMidRationale: string
+    envParallelHighDesc: string
+    envParallelHighRationale: string
+    envMaxLoadedLowDesc: string
+    envMaxLoadedLowRationale: string
+    envMaxLoadedHighDesc: string
+    envMaxLoadedHighRationale: string
+    envMaxLoadedExtremeDesc: string
+    envMaxLoadedExtremeRationale: string
+    envKeepAliveLowDesc: string
+    envKeepAliveLowRationale: string
+    envKeepAliveMidDesc: string
+    envKeepAliveMidRationale: string
+    envKeepAliveHighDesc: string
+    envKeepAliveHighRationale: string
+    envHostDesc: string
+    envHostRationale: string
   }
 }

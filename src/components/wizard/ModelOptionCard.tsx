@@ -1,6 +1,7 @@
 import React from 'react'
 import { Check, Star, CheckCircle2, AlertTriangle, Zap } from 'lucide-react'
 import { getModelFamily, getModelApproxSize } from '../../services/hardwareRecommendationEngine'
+import { useTranslation } from '../../i18n'
 
 export interface ModelOptionCardProps {
   modelName: string
@@ -33,6 +34,7 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
   compatibilityStatus,
   compatibilityWarning,
 }) => {
+  const { t } = useTranslation()
   const colorStyles = {
     emerald: {
       selectedBg: 'bg-emerald-950/50 border-emerald-400 shadow-md shadow-emerald-950/30 ring-1 ring-emerald-500/30',
@@ -104,25 +106,25 @@ export const ModelOptionCard: React.FC<ModelOptionCardProps> = ({
             {isRecommended && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/50 shadow-sm flex items-center gap-1">
                 <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                CONSIGLIATO
+                {t('hardwareWizard.modelRecommendedBadge')}
               </span>
             )}
             {isInstalled && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/50 shadow-sm flex items-center gap-1">
                 <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                INSTALLATO
+                {t('hardwareWizard.modelInstalledBadge')}
               </span>
             )}
             {compatibilityStatus === 'exceeds_vram' && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono font-bold border border-rose-500/50 shadow-sm flex items-center gap-1">
                 <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
-                RISCHIO OOM
+                {t('hardwareWizard.modelExceedsVramBadge')}
               </span>
             )}
             {compatibilityStatus === 'tight_vram' && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/50 shadow-sm flex items-center gap-1">
                 <Zap className="w-2.5 h-2.5 text-amber-400" />
-                VRAM RISICATA
+                {t('hardwareWizard.modelTightVramBadge')}
               </span>
             )}
           </div>

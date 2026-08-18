@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react'
 import { AppSettings } from '../../types'
 import {
   Layers,
@@ -12,11 +12,13 @@ import {
   Info,
   Globe,
 } from 'lucide-react'
-import { SettingsView } from '../settings/SettingsView'
-import { IngestionView } from '../ingestion/IngestionView'
-import { ChatView } from '../chat/ChatView'
-import { TranslationView } from '../translation/TranslationView'
-import { CodingAgentView } from '../coding/CodingAgentView'
+// The five main views are code-split: only the tabs the user actually opens are
+// downloaded, instead of shipping every view inside the initial renderer chunk.
+const SettingsView = lazy(() => import('../settings/SettingsView').then((m) => ({ default: m.SettingsView })))
+const IngestionView = lazy(() => import('../ingestion/IngestionView').then((m) => ({ default: m.IngestionView })))
+const ChatView = lazy(() => import('../chat/ChatView').then((m) => ({ default: m.ChatView })))
+const TranslationView = lazy(() => import('../translation/TranslationView').then((m) => ({ default: m.TranslationView })))
+const CodingAgentView = lazy(() => import('../coding/CodingAgentView').then((m) => ({ default: m.CodingAgentView })))
 import { DiagnosticsDrawer } from '../diagnostics/DiagnosticsDrawer'
 import { AboutModal } from '../common/AboutModal'
 import { OnlyRagLogo } from '../common/OnlyRagLogo'
@@ -27,6 +29,14 @@ import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
 
 export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings'
+
+/** Shown only while a view chunk is being fetched for the first time. */
+const ViewChunkFallback: React.FC = () => (
+  <div className="h-full w-full flex items-center justify-center text-slate-400 text-xs font-sans gap-2">
+    <span className="w-3 h-3 rounded-full border-2 border-cyan-500/60 border-t-transparent animate-spin" />
+    Caricamento vista...
+  </div>
+)
 
 export const AppLayout: React.FC = () => {
   const { t, language, setLanguage } = useTranslation()
@@ -41,6 +51,13 @@ export const AppLayout: React.FC = () => {
     }
     return 'ingestion'
   })
+  // A view is mounted from the first time its tab is opened and stays mounted afterwards,
+  // so switching tabs never discards the state of a view already in use.
+  const [visitedTabs, setVisitedTabs] = useState<Set<NavTab>>(() => new Set<NavTab>([activeTab]))
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)))
+  }, [activeTab])
+
   const [isDiagnosticsDrawerOpen, setIsDiagnosticsDrawerOpen] = useState(false)
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
@@ -73,6 +90,13 @@ export const AppLayout: React.FC = () => {
   }, [settings.hasCompletedInitialSetup, settings.defaultModel])
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
+    // Applied before setSettings: React runs state updaters during the render phase, so
+    // updating another component's state (I18nProvider) from inside one is a render-phase
+    // update and React warns about it.
+    if (newSettings.language && newSettings.language !== language) {
+      setLanguage(newSettings.language)
+    }
+
     setSettings((prev) => {
       let updated = { ...prev, ...newSettings }
 
@@ -119,10 +143,6 @@ export const AppLayout: React.FC = () => {
 
       updated.customPromptOverrides = customOverrides
       updated.selectedFamilyOverrides = familyOverrides
-
-      if (newSettings.language && newSettings.language !== language) {
-        setLanguage(newSettings.language)
-      }
 
       queueMicrotask(() => {
         try {
@@ -383,26 +403,46 @@ export const AppLayout: React.FC = () => {
       {/* Main App Content View */}
       <main className="flex-1 h-full flex flex-col overflow-hidden relative">
         <div id="panel-ingestion" role="tabpanel" aria-labelledby="tab-ingestion" className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}>
-          <IngestionView settings={settings} onUpdateSettings={handleUpdateSettings} />
+          {visitedTabs.has('ingestion') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <IngestionView settings={settings} onUpdateSettings={handleUpdateSettings} />
+            </Suspense>
+          )}
         </div>
         <div id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" className={`h-full w-full flex flex-col ${activeTab === 'chat' ? '' : 'hidden'}`}>
-          <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
+          {visitedTabs.has('chat') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
+            </Suspense>
+          )}
         </div>
         <div id="panel-translation" role="tabpanel" aria-labelledby="tab-translation" className={`h-full w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}>
-          <TranslationView settings={settings} onUpdateSettings={handleUpdateSettings} />
+          {visitedTabs.has('translation') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <TranslationView settings={settings} onUpdateSettings={handleUpdateSettings} />
+            </Suspense>
+          )}
         </div>
         <div id="panel-coding" role="tabpanel" aria-labelledby="tab-coding" className={`h-full w-full flex flex-col ${activeTab === 'coding' ? '' : 'hidden'}`}>
-          <CodingAgentView settings={settings} onUpdateSettings={handleUpdateSettings} diagnostics={diagnostics} />
+          {visitedTabs.has('coding') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <CodingAgentView settings={settings} onUpdateSettings={handleUpdateSettings} diagnostics={diagnostics} />
+            </Suspense>
+          )}
         </div>
         <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" className={`h-full w-full flex flex-col ${activeTab === 'settings' ? '' : 'hidden'}`}>
-          <SettingsView
-            diagnostics={diagnostics}
-            settings={settings}
-            onUpdateSettings={handleUpdateSettings}
-            onRefreshDiagnostics={runDiagnosticsScan}
-            onOpenAboutModal={() => setIsAboutModalOpen(true)}
-            onOpenWizard={() => setIsWizardOpen(true)}
-          />
+          {visitedTabs.has('settings') && (
+            <Suspense fallback={<ViewChunkFallback />}>
+              <SettingsView
+                diagnostics={diagnostics}
+                settings={settings}
+                onUpdateSettings={handleUpdateSettings}
+                onRefreshDiagnostics={runDiagnosticsScan}
+                onOpenAboutModal={() => setIsAboutModalOpen(true)}
+                onOpenWizard={() => setIsWizardOpen(true)}
+              />
+            </Suspense>
+          )}
         </div>
       </main>
 

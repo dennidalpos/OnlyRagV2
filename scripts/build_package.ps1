@@ -7,11 +7,15 @@
     Salta la compilazione PyInstaller per il sidecar Python.
 .PARAMETER Fast
     Modalità sintetica veloce per AI Agent.
+.PARAMETER RequireSignature
+    Fallisce se l'installer prodotto non risulta firmato con un certificato valido
+    (per le build di distribuzione: richiede CSC_LINK/CSC_KEY_PASSWORD nell'ambiente).
 #>
 
 param(
     [switch]$SkipSidecar = $false,
-    [switch]$Fast = $false
+    [switch]$Fast = $false,
+    [switch]$RequireSignature = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,13 +75,28 @@ try {
     }
 
     $sizeMB = [math]::Round($nsisInstaller.Length / 1MB, 2)
+
+    # Firma Authenticode: electron-builder logga l'invocazione di signtool anche quando nessun
+    # certificato e' configurato, quindi l'unico controllo affidabile e' lo stato dell'artifact.
+    $signature = Get-AuthenticodeSignature -FilePath $nsisInstaller.FullName
+    $isSigned = $signature.Status -eq 'Valid'
+    $signatureLabel = if ($isSigned) { "firmato ($($signature.SignerCertificate.Subject))" } else { "NON firmato ($($signature.Status))" }
+
+    if (-not $isSigned) {
+        if ($RequireSignature) {
+            throw "[ERRORE] Installer non firmato (stato: $($signature.Status)). Imposta CSC_LINK e CSC_KEY_PASSWORD con il certificato di code signing e ripeti la build."
+        }
+        Write-Host "[WARN] Installer NON firmato (stato: $($signature.Status)): all'avvio Windows SmartScreen mostrera' l'avviso 'Editore sconosciuto'. Per una build di distribuzione imposta CSC_LINK/CSC_KEY_PASSWORD ed esegui lo script con -RequireSignature." -ForegroundColor Yellow
+    }
+
     if ($Fast) {
-        Write-Host "[PASS] Build & NSIS Packaging Complete: $($nsisInstaller.Name) ($sizeMB MB)" -ForegroundColor Green
+        Write-Host "[PASS] Build & NSIS Packaging Complete: $($nsisInstaller.Name) ($sizeMB MB, $signatureLabel)" -ForegroundColor Green
     } else {
         Write-Host "`n=====================================================" -ForegroundColor Green
         Write-Host " PACKAGING NSIS COMPLETATO CON SUCCESSO!" -ForegroundColor Green
         Write-Host " File: $($nsisInstaller.FullName)" -ForegroundColor White
         Write-Host " Dimensione: $sizeMB MB" -ForegroundColor White
+        Write-Host " Firma: $signatureLabel" -ForegroundColor White
         Write-Host "=====================================================" -ForegroundColor Green
     }
 

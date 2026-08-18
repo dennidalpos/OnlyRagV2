@@ -24,16 +24,13 @@
   "author": "Danny Perondi <https://github.com/dennidalpos>",
   "license": "MIT",
   "dependencies": {
-    "@monaco-editor/react": "^4.7.0",
-    "lucide-react": "^1.31.0",
-    "node-pty": "^1.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "node-pty": "^1.1.0"
   },
   "overrides": {
     "dompurify": "^3.4.13"
   },
   "devDependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.0.7",
     "@types/node": "^26.2.0",
     "@types/react": "^19.0.10",
@@ -42,6 +39,9 @@
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
     "happy-dom": "^20.11.2",
+    "lucide-react": "^1.31.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "tailwindcss": "^4.0.7",
     "typescript": "^6.0.3",
     "vite": "^8.2.1",
@@ -65,7 +65,10 @@
         "from": "sidecar",
         "to": "sidecar",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!tests/**"
         ]
       },
       {

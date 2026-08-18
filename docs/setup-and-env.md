@@ -168,3 +168,22 @@ npm run build
 npm run package:win
 ```
 L'installer compilato verrà generato in `dist/OnlyRag V2 Setup 1.0.0.exe`.
+
+### Dipendenze Runtime vs Build
+`dependencies` contiene solo `node-pty`, l'unico modulo nativo caricato a runtime dal main process (`taskRunner.ts`). Le librerie del renderer (`react`, `react-dom`, `lucide-react`, `@monaco-editor/react`) sono `devDependencies`: vengono incluse nel bundle Vite e non devono finire in `app.asar` come moduli separati.
+
+### Firma Authenticode dell'Installer
+Lo script di packaging verifica sempre lo stato della firma dell'artifact prodotto e, se manca, stampa un warning esplicito: senza firma Windows SmartScreen mostra l'avviso "Editore sconosciuto" alla prima esecuzione.
+
+Per produrre un installer firmato servono un certificato di code signing e due variabili d'ambiente lette da electron-builder — **da non committare mai nel repository**:
+
+```powershell
+# Percorso del certificato .pfx e relativa password (solo nella sessione di build)
+$env:CSC_LINK = "C:\percorso\certificato.pfx"
+$env:CSC_KEY_PASSWORD = "<password del certificato>"
+
+# Build di distribuzione: fallisce se l'installer risulta non firmato
+.\scriptsuild_package.ps1 -RequireSignature
+```
+
+Senza `-RequireSignature` la build resta consentita e produce un installer non firmato, adatto a test locali.

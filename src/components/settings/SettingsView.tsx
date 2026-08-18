@@ -5,7 +5,7 @@ import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
 import { OcrEngineSelector } from './OcrEngineSelector'
-import { TaskConcurrencyConfig } from './TaskConcurrencyConfig'
+import { AgentExecutionLimitsConfig } from './AgentExecutionLimitsConfig'
 import { OllamaEnvParamsCard } from './OllamaEnvParamsCard'
 import { useSettingsManager } from '../../hooks/useSettingsManager'
 import { useTranslation, Language } from '../../i18n'
@@ -143,11 +143,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onRefreshDiagnostics={onRefreshDiagnostics}
       />
 
-      {/* Task Concurrency & Queue Configuration */}
-      <TaskConcurrencyConfig
+      {/* Agent Execution Limits (serial queue + max tool-call steps) */}
+      <AgentExecutionLimitsConfig
         settings={settings}
         onUpdateSettings={onUpdateSettings}
-        diagnostics={diagnostics}
       />
 
       {/* Coding Agent Studio Audit & Debug Logging */}

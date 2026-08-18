@@ -172,6 +172,64 @@ export class OllamaHttpClient {
     })
   }
 
+  /**
+   * Loads a model into memory without generating anything (empty prompt + keep_alive),
+   * the mirror image of unloadModel above. Called at agent-session start so the cold
+   * load overlaps with prompt assembly (repo map scan, skill matching) instead of
+   * racing the first turn's 45s initial-response timeout in agentStreamTransport.ts.
+   * Always resolves — a failed warm-up is a missed optimisation, never a session error.
+   */
+  preloadModel(modelName: string, customHost?: string, keepAlive: string = '30m'): Promise<{ success: boolean; error?: string }> {
+    if (customHost) this.setBaseHost(customHost)
+    if (!modelName || !modelName.trim()) {
+      return Promise.resolve({ success: false, error: 'Invalid model name' })
+    }
+    const cleanModel = modelName.trim()
+
+    const urlOpts = this.resolveUrl('/api/generate')
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({
+        model: cleanModel,
+        prompt: '',
+        keep_alive: keepAlive,
+      })
+
+      const req = http.request(
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'POST',
+          agent: httpAgent,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+        },
+        (res) => {
+          res.resume()
+          res.on('end', () => {
+            logger.log('INFO', 'OllamaClient', `Model ${cleanModel} warm-up completed. Status: HTTP ${res.statusCode}`)
+            resolve({ success: res.statusCode === 200 })
+          })
+        }
+      )
+
+      req.on('error', (err: any) => {
+        logger.log('WARN', 'OllamaClient', `Model warm-up skipped for ${cleanModel}: ${err.message}`)
+        resolve({ success: false, error: err.message })
+      })
+
+      req.setTimeout(120000, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Model warm-up timed out' })
+      })
+
+      req.write(postData)
+      req.end()
+    })
+  }
+
   private resolveUrl(apiPath: string): { hostname: string; port: number | string; path: string } {
     try {
       const u = new URL(apiPath, this.baseHost)

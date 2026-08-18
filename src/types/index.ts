@@ -145,7 +145,6 @@ export interface AppSettings {
   /** Heavy escalation model (14B+) used when all lighter tiers fail on complex tasks */
   complexityHeavyModel?: string
   // Concurrency & Task Queue Settings
-  maxConcurrentTasks?: number // Range: 1-8, default 1
   maxToolCallSteps?: number // Range: 10-200, default 50
   // Coding Agent Audit & Debug Logging
   enableCodingAgentDebugLog?: boolean
@@ -161,6 +160,13 @@ export interface AppSettings {
   autoInstallMinScore?: number
   // Internationalization
   language?: 'it' | 'en'
+}
+
+/** Aggregate size of the file changes an agent session has applied so far. */
+export interface AgentChangeMetrics {
+  filesTouched: number
+  additions: number
+  deletions: number
 }
 
 export interface TaskQueueStatus {
@@ -387,7 +393,6 @@ export interface IElectronAPI {
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
-  setAgentMaxConcurrency: (limit: number) => Promise<{ success: boolean; maxConcurrency: number }>
   deleteAgentSession?: (sessionId: string, workspacePath?: string | null) => Promise<boolean>
   clearAllAgentSessions?: (workspacePath?: string | null) => Promise<boolean>
   clearCodingAgentAuditLog?: () => Promise<boolean>
@@ -397,6 +402,7 @@ export interface IElectronAPI {
   onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
   onAgentApprovalRequest: (callback: (req: any) => void) => () => void
   onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void
+  onAgentChangeMetrics?: (callback: (data: AgentChangeMetrics) => void) => () => void
   onWorkspaceFileDeleted?: (callback: (data: { filePath: string }) => void) => () => void
   onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void

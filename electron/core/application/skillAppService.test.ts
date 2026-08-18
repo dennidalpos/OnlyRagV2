@@ -128,4 +128,19 @@ describe('SkillAppService Unit Tests', () => {
     })
     expect(block).toBe('')
   })
+
+  it('should search every configured hub source during discovery, not just official-core (regression: auto-install only ever looked at the built-in hub, so user-added hubs could never be matched)', async () => {
+    const sources = await skillAppService.listHubSources()
+    const officialOnly = await skillAppService.listHubSkillsBySource('official-core', tempDir)
+    const acrossSources = await skillAppService.listHubSkillsAcrossSources(tempDir)
+
+    expect(acrossSources.length).toBeGreaterThanOrEqual(officialOnly.length)
+
+    // Every returned item carries the hub it came from, which installFromHub needs to
+    // fetch the right content, and names are deduplicated across sources.
+    const names = acrossSources.map((s) => s.name.toLowerCase())
+    expect(new Set(names).size).toBe(names.length)
+    expect(acrossSources.every((s) => Boolean(s.hubId))).toBe(true)
+    expect(sources.some((src) => acrossSources.some((s) => s.hubId === src.id))).toBe(true)
+  })
 })

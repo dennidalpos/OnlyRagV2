@@ -4,9 +4,9 @@ import type { AddressInfo } from 'node:net'
 import { AgentStreamTransport } from './agentStreamTransport'
 import { parseAgentToolCall } from '../../domain/agent/toolParser'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../../domain/agent/ollamaToolSchemaCatalog'
-import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
+import { AGENT_STOP_SEQUENCES, type OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 
-const runtimeOpts: OllamaRuntimeOptions = { num_ctx: 8192, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, maxContextChars: 28000 }
+const runtimeOpts: OllamaRuntimeOptions = { num_ctx: 8192, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, num_predict: 6144, stop: AGENT_STOP_SEQUENCES, maxContextChars: 28000 }
 
 function startMockOllama(handler: (req: http.IncomingMessage, res: http.ServerResponse) => void): Promise<{ server: http.Server; baseUrl: string }> {
   return new Promise((resolve) => {
@@ -301,5 +301,60 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     })
 
     expect(calledCount).toBe(0)
+  })
+
+  it('should forward num_predict and the stop sequences to Ollama on the /api/generate path, so a small model cannot ramble past its tool call', async () => {
+    let capturedBody: any = null
+    const mock = await startMockOllama((req, res) => {
+      let raw = ''
+      req.on('data', (c) => (raw += c))
+      req.on('end', () => {
+        capturedBody = JSON.parse(raw)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write(JSON.stringify({ response: 'ok', done: true }) + '\n')
+        res.end()
+      })
+    })
+    activeServer = mock.server
+
+    await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen2.5-coder:7b',
+      prompt: 'full prompt',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+    })
+
+    expect(capturedBody.options.num_predict).toBe(6144)
+    expect(capturedBody.options.stop).toEqual(AGENT_STOP_SEQUENCES)
+    expect(capturedBody.options.num_ctx).toBe(8192)
+  })
+
+  it('should forward num_predict and the stop sequences on the native tool-calling /api/chat path too', async () => {
+    let capturedBody: any = null
+    const mock = await startMockOllama((req, res) => {
+      let raw = ''
+      req.on('data', (c) => (raw += c))
+      req.on('end', () => {
+        capturedBody = JSON.parse(raw)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write(JSON.stringify({ message: { role: 'assistant', content: 'ok' }, done: true }) + '\n')
+        res.end()
+      })
+    })
+    activeServer = mock.server
+
+    await AgentStreamTransport.streamCompletion({
+      targetModel: 'llama3.1:8b',
+      prompt: 'Read app.py',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      toolCallingCapable: true,
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+    })
+
+    expect(capturedBody.options.num_predict).toBe(6144)
+    expect(capturedBody.options.stop).toEqual(AGENT_STOP_SEQUENCES)
   })
 })

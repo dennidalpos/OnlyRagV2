@@ -66,6 +66,8 @@ export type SupportedToolName =
   | 'git_commit'
   | 'rollback_workspace'
   | 'get_file_info'
+  | 'ensure_tool'
+  | 'update_plan'
   | 'ask'
   | 'finish'
 
@@ -93,6 +95,11 @@ export interface AgentToolCall {
     summary?: string
     staged?: boolean
     commitMessage?: string
+    toolName?: string
+    timeoutSeconds?: number
+    milestoneId?: string
+    status?: string
+    notes?: string
     [key: string]: any
   }
   explanation?: string

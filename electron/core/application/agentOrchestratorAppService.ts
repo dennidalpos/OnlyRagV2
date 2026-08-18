@@ -17,7 +17,7 @@ import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalc
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
-import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
@@ -27,6 +27,7 @@ import { ASTAwareStackTraceExtractor } from '../domain/agent/astStackTraceExtrac
 import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
 import { resolveOllamaContextReuse } from '../domain/agent/ollamaContextCacheManager'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
+import { buildInstallCommand } from '../domain/agent/devToolchain'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -42,6 +43,8 @@ interface AgentSession {
   targetWindow: BrowserWindow | null
   activeHttpRequest?: http.ClientRequest | null
   activeChildProcess?: any | null
+  /** Global session watchdog. Cleared on every exit path so it can never outlive its own run. */
+  timeoutHandle?: NodeJS.Timeout | null
   /**
    * Ollama `context` continuation cache (AGT1): the token array + the exact
    * stable/history baseline it corresponds to, so the next turn can detect
@@ -59,6 +62,10 @@ const activeAgentSessions = new Map<string, AgentSession>()
 
 function cleanupSession(session: AgentSession) {
   session.isCancelled = true
+  if (session.timeoutHandle) {
+    clearTimeout(session.timeoutHandle)
+    session.timeoutHandle = null
+  }
   if (session.activeHttpRequest) {
     try {
       session.activeHttpRequest.destroy()
@@ -140,7 +147,9 @@ export async function runAgentOrchestratorLoop(
   }
   activeAgentSessions.set(sessionId, session)
 
-  const isSessionActive = () => activeAgentSessions.has(sessionId) && !session.isCancelled
+  // Compares by identity, not just by key presence: if a later run registers under the same
+  // reused sessionId, this run must recognise that it is no longer the owner and stand down.
+  const isSessionActive = () => activeAgentSessions.get(sessionId) === session && !session.isCancelled
 
   const emitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
@@ -233,6 +242,22 @@ export async function runAgentOrchestratorLoop(
   // per session; failures resolve to an empty map, which falls back to the family allow-list.
   const modelCapabilities = await ollamaAppService.getModelCapabilities(settings.ollamaHost)
 
+  // Warm-up: start loading the model the first turn will most likely use, without waiting
+  // for it. The load then overlaps with skill matching and prompt assembly below instead of
+  // running down the first turn's 45s initial-response timeout on a cold, CPU-only machine.
+  const firstTurnComplexity = evaluateTaskComplexity(userTask, {
+    attachedFilesCount: payload.pinnedFiles?.length || 0,
+    contextSizeChars: payload.activeFile?.content?.length || 0,
+    settings,
+    availableModels,
+    hasRecentToolFailure: false,
+    errorCountInHistory: 0,
+  })
+  const warmUpModel = settings.useComplexityRouting
+    ? firstTurnComplexity.modelName
+    : settings.codingModel || settings.defaultModel || 'llama3.2'
+  void ollamaAppService.preloadModel(warmUpModel, settings.ollamaHost).catch(() => {})
+
   const skillMatchContext = {
     userTask,
     activeFilePath: payload.activeFile?.path,
@@ -270,7 +295,8 @@ export async function runAgentOrchestratorLoop(
   let stagnationStreak = 0
   let hasFileMutations = false
   let hasVerifiedBuild = false
-  let hasPromptedVerification = false
+  /** DoD violation reasons already surfaced to the model — each intercepts `finish` at most once. */
+  const surfacedDodReasons = new Set<string>()
   const loopDetector = new AgentActionLoopDetector(2)
   const circuitBreaker = new StagnationCircuitBreaker(10, 5)
   const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
@@ -344,16 +370,45 @@ export async function runAgentOrchestratorLoop(
     })
 
     if (workspacePath) {
-      await agentSessionStateRepository.saveSessionTrackerMarkdown(workspacePath, compactState)
+      await agentSessionStateRepository.saveSessionTrackerMarkdown(workspacePath, buildSessionTracker())
     }
   }
 
+  /**
+   * Builds the single SESSION_TRACKER.md payload from live session state: verified milestones
+   * as completed work, failed ones as debt, pending ones as next steps, plus every file this
+   * session actually touched. One format, produced here and parsed back by SessionDebtTracker.
+   */
+  const buildSessionTracker = (summaryText?: string): SessionDebtTracker => {
+    const milestones = goalPlanner.getMilestones()
+    return new SessionDebtTracker({
+      sessionId,
+      completedTasks: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
+      unresolvedIssues: milestones
+        .filter((m) => m.status === 'failed')
+        .map((m) => `${m.id}: ${m.title}${m.notes ? ` (${m.notes})` : ''}`),
+      nextSteps: milestones
+        .filter((m) => m.status === 'pending' || m.status === 'in_progress')
+        .map((m) => `${m.id}: ${m.title}`),
+      modifiedFiles: Array.from(sessionChangedFiles.keys()),
+      summaryText,
+    })
+  }
+
   let currentOverriddenModel: string | null = null
+  /** Frozen per-session Ollama context window — see the num_ctx block inside the loop. */
+  let sessionNumCtx: number | null = null
+  /** Per-file line deltas applied during this session, for the UI's change metrics. */
+  const sessionChangedFiles = new Map<string, { additions: number; deletions: number }>()
 
   // Global session timeout: guarantees SESSION END is always written to the audit log.
   // Default: 45 minutes. Configurable via settings.agentSessionTimeoutMinutes (if added).
   const SESSION_TIMEOUT_MS = Math.max(5, (settings as any).agentSessionTimeoutMinutes || 45) * 60 * 1000
-  let sessionTimeoutHandle: NodeJS.Timeout | null = setTimeout(async () => {
+  session.timeoutHandle = setTimeout(async () => {
+    // Identity guard: sessionIds are reused across consecutive runs of the same UI session
+    // (useCodingAgent.ts passes a stable activeSessionId), so a timer left over from an
+    // earlier run must never act on the run currently registered under that id.
+    if (activeAgentSessions.get(sessionId) !== session) return
     if (isSessionActive()) {
       const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
       logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
@@ -361,16 +416,27 @@ export async function runAgentOrchestratorLoop(
       session.isCancelled = true
       codingAgentLogger.logSessionEnd(sessionId, stepCount, false, timeoutSummary)
       emitDone(false, timeoutSummary)
+      agentToolExecutorService.rollbackJournal()
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
     }
   }, SESSION_TIMEOUT_MS)
 
   const clearSessionTimeout = () => {
-    if (sessionTimeoutHandle !== null) {
-      clearTimeout(sessionTimeoutHandle)
-      sessionTimeoutHandle = null
+    if (session.timeoutHandle) {
+      clearTimeout(session.timeoutHandle)
+      session.timeoutHandle = null
     }
+  }
+
+  /**
+   * Single exit point for the loop: clears the session timeout and deregisters the session.
+   * Every early return path must go through this — a timer left armed on an abandoned session
+   * would later fire against whatever run holds the same sessionId.
+   */
+  const finalizeSession = () => {
+    clearSessionTimeout()
+    activeAgentSessions.delete(sessionId)
   }
 
   while (stepCount < MAX_STEPS && isSessionActive()) {
@@ -503,8 +569,25 @@ export async function runAgentOrchestratorLoop(
       emitLog('info', `🗜️ Context Compacted: ${compactionResult.originalChars} → ${compactionResult.finalChars} chars (heuristic, zero-cost)`)
     }
 
-    const dynamicNumCtx = calculateDynamicContextWindow(turnPrompt.length, runtimeOpts.num_ctx)
-    runtimeOpts.num_ctx = dynamicNumCtx
+    // num_ctx is frozen for the lifetime of the session and only ever allowed to GROW.
+    // Ollama reallocates its KV cache whenever num_ctx changes, which evicts the prompt
+    // cache — recomputing it per step (as this did) silently defeated the `context`
+    // continuation reuse implemented above (AGT1), and on CPU-only machines cost a model
+    // reload almost every turn. Growth is still permitted so a prompt that outgrows the
+    // frozen window is never silently truncated; the cached baseline is dropped in that
+    // case because the tokens it holds no longer correspond to the new window.
+    const requiredNumCtx = calculateDynamicContextWindow(turnPrompt.length, runtimeOpts.num_ctx)
+    if (sessionNumCtx === null) {
+      sessionNumCtx = requiredNumCtx
+    } else if (requiredNumCtx > sessionNumCtx) {
+      emitLog('info', `📐 Context window grown: ${sessionNumCtx} → ${requiredNumCtx} tokens (prompt outgrew the frozen window).`)
+      sessionNumCtx = requiredNumCtx
+      session.ollamaContextModel = undefined
+      session.ollamaContextTokens = undefined
+      session.ollamaContextStableSection = undefined
+      session.ollamaContextHistoryBlock = undefined
+    }
+    runtimeOpts.num_ctx = sessionNumCtx
 
     emitLog('tool_call', `[Step ${stepCount}/${maxStepsLabel}] Consulting LLM (${targetModel}) [ctx:${runtimeOpts.num_ctx}${fsmMode.getMode() !== 'AGENT' ? ` | Mode:${fsmMode.getMode()}` : ''}]...`)
     if (settings.enableCodingAgentDebugLog) {
@@ -608,7 +691,7 @@ export async function runAgentOrchestratorLoop(
       }
       agentToolExecutorService.rollbackJournal()
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: false, summary: `LLM Error: ${err.message}` }
     }
 
@@ -620,7 +703,7 @@ export async function runAgentOrchestratorLoop(
       }
       agentToolExecutorService.rollbackJournal()
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: false, summary: 'Task cancelled' }
     }
 
@@ -629,12 +712,27 @@ export async function runAgentOrchestratorLoop(
       codingAgentLogger.logLlmResponse(sessionId, stepCount, streamedOutput)
     }
 
-    // Try extracting / initializing dynamic execution plan if not yet set
-    if (!goalPlanner.hasPlan() && (streamedOutput.includes('<plan>') || streamedOutput.includes('- [ ]') || streamedOutput.includes('1. '))) {
+    // Plan extraction. Without a plan yet, any checklist-shaped output seeds one. With a
+    // plan already in place, only an explicit <plan> block may replace it — a stray numbered
+    // list in prose must not clobber the active plan — and the replacement carries over the
+    // milestones already verified or failed, so re-planning never resets progress to 0%.
+    const hasExplicitPlanBlock = streamedOutput.includes('<plan>')
+    if (!goalPlanner.hasPlan() && (hasExplicitPlanBlock || streamedOutput.includes('- [ ]') || streamedOutput.includes('1. '))) {
       const extractedMilestones = GoalDecompositionPlanner.parsePlanFromText(streamedOutput)
       if (extractedMilestones.length >= 2) {
         goalPlanner.initializePlan(extractedMilestones)
         emitLog('info', `📋 Execution Plan Initialized (${extractedMilestones.length} milestones)`)
+      }
+    } else if (goalPlanner.hasPlan() && hasExplicitPlanBlock) {
+      const revisedMilestones = GoalDecompositionPlanner.parsePlanFromText(streamedOutput)
+      if (revisedMilestones.length >= 2) {
+        goalPlanner.replacePlanPreservingProgress(revisedMilestones)
+        const progress = goalPlanner.getProgressSummary()
+        emitLog(
+          'info',
+          `📋 Execution Plan Revised (${revisedMilestones.length} milestones, ${progress.completed} already verified carried over)`
+        )
+        await persistCurrentState()
       }
     }
 
@@ -693,44 +791,55 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, summary)
       }
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: true, summary }
     }
 
     noToolStreak = 0
 
     if (parsedTool.tool === 'finish') {
-      if (agentMode === 'agent' && hasFileMutations && !hasVerifiedBuild && !hasPromptedVerification && (settings as any).verifyBeforeFinish !== false) {
-        hasPromptedVerification = true
-        const gateMsg = `[PRE-FINISH VERIFICATION ADVICE]\nYou have made code modifications in the workspace during this task. Before concluding, please execute a verification command via run_command (e.g. npm test, npm run typecheck, or pytest) to verify that no regressions or syntax errors were introduced. If no test/build runner exists in this workspace or verification is not required, invoke finish again.`
-        episodicCompactor.recordStep(
-          {
-            step: stepCount,
-            tool: 'finish',
-            status: 'BLOCKED',
-            summary: 'Verification Gate: Requested test/build run before release',
-          },
-          gateMsg
-        )
-        emitLog('info', '🛡️ Pre-Finish Verification Gate: richiesta validazione test/build prima della conclusione.')
-        continue
+      // Definition of Done (DoD) Execution Guard Gate. Runs here, inside the `finish`
+      // branch, because this branch returns — a gate placed after it would be dead code.
+      // Each distinct violation reason intercepts finish AT MOST ONCE (tracked in
+      // surfacedDodReasons): the guard's job is to make the model aware of the missing
+      // verification, not to deadlock the session when milestone statuses can't advance
+      // (milestone progression is still heuristic — see PROJECT_STATUS.json F2.1/F2.2).
+      if (agentMode === 'agent') {
+        const pendingMilestonesCount = goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
+        const dodCheck = executionGuard.validateTaskCompletion({
+          requireVerifiedBuild: (settings as any).verifyBeforeFinish !== false,
+          hasVerifiedBuild,
+          pendingMilestonesCount,
+          hasFileMutations,
+        })
+
+        const dodReason = dodCheck.reason || 'Definition of Done Violation'
+        if (!dodCheck.allowed && dodCheck.suggestedAction && !surfacedDodReasons.has(dodReason)) {
+          surfacedDodReasons.add(dodReason)
+          episodicCompactor.recordStep(
+            { step: stepCount, tool: 'finish', status: 'BLOCKED', summary: dodReason },
+            dodCheck.suggestedAction
+          )
+          emitLog('info', `🔒 DoD Guard Interception: ${dodReason}`)
+          if (settings.enableCodingAgentDebugLog) {
+            codingAgentLogger.logToolResult(sessionId, stepCount, 'finish', dodCheck.suggestedAction)
+          }
+          continue
+        }
       }
 
       agentToolExecutorService.commitJournal()
       const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'
 
       if (workspacePath) {
-        try {
-          const assistantDir = path.join(workspacePath, '.assistant')
-          if (!fs.existsSync(assistantDir)) {
-            fs.mkdirSync(assistantDir, { recursive: true })
-          }
-          const tracker = SessionDebtTracker.parseTrackerMarkdown(summary)
-          const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
-          fs.writeFileSync(trackerPath, tracker.compileTrackerMarkdown(), 'utf-8')
+        // Same builder and same writer as every checkpoint — the final save only adds the
+        // agent's closing summary on top of the live session state.
+        const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(
+          workspacePath,
+          buildSessionTracker(summary)
+        )
+        if (saved) {
           emitLog('info', '📝 Session Debt Tracker salvato in .assistant/SESSION_TRACKER.md')
-        } catch (trackErr: any) {
-          logger.log('WARN', 'AgentOrchestratorAppService', `Impossibile salvare SESSION_TRACKER.md: ${trackErr.message}`)
         }
       }
 
@@ -741,7 +850,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, summary)
       }
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: true, summary }
     }
 
@@ -782,7 +891,7 @@ export async function runAgentOrchestratorLoop(
         emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
         emitDone(true, stagSummary)
         await persistCurrentState()
-        activeAgentSessions.delete(sessionId)
+        finalizeSession()
         return { success: true, summary: stagSummary }
       }
 
@@ -845,7 +954,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, question)
       }
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: true, summary: question }
     }
 
@@ -861,7 +970,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Proposed tool call: ${parsedTool.tool}`)
       }
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
 
@@ -884,7 +993,7 @@ export async function runAgentOrchestratorLoop(
         codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for git_commit`)
       }
       await persistCurrentState()
-      activeAgentSessions.delete(sessionId)
+      finalizeSession()
       return { success: true, summary: `Awaiting approval for git_commit` }
     }
 
@@ -895,11 +1004,14 @@ export async function runAgentOrchestratorLoop(
     // denied the call), silently breaking the approval UI despite the prompt/UI contract promising
     // it (promptPresets.ts: "modifying actions ... are submitted for user approval").
     if (agentMode === 'ask') {
-      const isMutatingTool = ['run_command', 'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool)
+      const isMutatingTool = ['run_command', 'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file', 'ensure_tool'].includes(parsedTool.tool)
       if (isMutatingTool) {
         if (session.targetWindow && !session.targetWindow.isDestroyed()) {
           session.targetWindow.webContents.send('agent:approval-request', {
-            type: parsedTool.tool === 'run_command'
+            // ensure_tool is surfaced as the literal winget command it would run: approving a
+            // system-level install should show exactly what is about to be executed, and it
+            // reuses the existing terminal approval path end to end.
+            type: parsedTool.tool === 'run_command' || parsedTool.tool === 'ensure_tool'
               ? 'terminal_cmd'
               : parsedTool.tool === 'download_file'
               ? 'download_file'
@@ -911,7 +1023,15 @@ export async function runAgentOrchestratorLoop(
               ? 'replace_chunk'
               : 'write_file',
             target: parsedTool.parameters.filePath || parsedTool.parameters.command || parsedTool.parameters.url || 'Target Action',
-            contentOrCmd: parsedTool.parameters.command || parsedTool.parameters.url || parsedTool.parameters.targetContent || parsedTool.parameters.content || '',
+            contentOrCmd:
+              (parsedTool.tool === 'ensure_tool'
+                ? buildInstallCommand(String(parsedTool.parameters.toolName || ''))
+                : undefined) ||
+              parsedTool.parameters.command ||
+              parsedTool.parameters.url ||
+              parsedTool.parameters.targetContent ||
+              parsedTool.parameters.content ||
+              '',
             replacement: parsedTool.parameters.replacementContent,
             replacements: parsedTool.parameters.replacements,
             parameters: parsedTool.parameters,
@@ -922,7 +1042,7 @@ export async function runAgentOrchestratorLoop(
           codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for ${parsedTool.tool}`)
         }
         await persistCurrentState()
-        activeAgentSessions.delete(sessionId)
+        finalizeSession()
         return { success: true, summary: `Awaiting approval for ${parsedTool.tool}` }
       }
     }
@@ -935,27 +1055,51 @@ export async function runAgentOrchestratorLoop(
       continue
     }
 
-    // Definition of Done (DoD) Execution Guard Gate
-    if ((parsedTool.tool as string) === 'finish') {
-      const pendingMilestonesCount = goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
-      const dodCheck = executionGuard.validateTaskCompletion({
-        requireVerifiedBuild: true,
-        hasVerifiedBuild,
-        pendingMilestonesCount,
-        hasFileMutations,
-      })
+    // Orchestrator-level pseudo-tool: the model's explicit handle on plan progression.
+    // Handled here rather than in agentToolExecutorService because the plan lives in this
+    // loop's GoalDecompositionPlanner, not on disk. Before this tool existed, milestone
+    // status could only ever be inferred heuristically from tool side effects.
+    if ((parsedTool.tool as string) === 'update_plan') {
+      const milestoneRef = String(parsedTool.parameters?.milestoneId || '')
+      const nextStatus = String(parsedTool.parameters?.status || '') as PlanMilestone['status']
+      const notes = parsedTool.parameters?.notes ? String(parsedTool.parameters.notes) : undefined
 
-      if (!dodCheck.allowed && dodCheck.suggestedAction) {
-        episodicCompactor.recordStep(
-          { step: stepCount, tool: 'finish', status: 'BLOCKED', summary: dodCheck.reason || 'Definition of Done Violation' },
-          dodCheck.suggestedAction
-        )
-        emitLog('info', `🔒 DoD Guard Interception: ${dodCheck.reason}`)
-        if (settings.enableCodingAgentDebugLog) {
-          codingAgentLogger.logToolResult(sessionId, stepCount, 'finish', dodCheck.suggestedAction)
-        }
-        continue
+      let planFeedback: string
+      let planLog: string
+      let updateFailed = false
+
+      if (!goalPlanner.hasPlan()) {
+        updateFailed = true
+        planFeedback = `[UPDATE_PLAN REJECTED] There is no execution plan in this session yet, so milestone '${milestoneRef}' cannot be updated. Produce a plan checklist first, or continue executing tools directly.`
+        planLog = 'update_plan rejected: no active execution plan'
+      } else if (goalPlanner.updateMilestone(milestoneRef, nextStatus, notes)) {
+        const progress = goalPlanner.getProgressSummary()
+        planFeedback = `[PLAN UPDATED] Milestone '${milestoneRef}' is now ${nextStatus}. Progress: ${progress.completed}/${progress.total} verified (${progress.percentage}%).`
+        planLog = `📋 Plan updated: ${milestoneRef} → ${nextStatus} (${progress.completed}/${progress.total} verified)`
+      } else {
+        updateFailed = true
+        const known = goalPlanner.getMilestones().map((m) => `${m.id}: ${m.title}`).join(' | ')
+        planFeedback = `[UPDATE_PLAN REJECTED] No milestone matches '${milestoneRef}'. Known milestones: ${known}. Use the exact milestone id.`
+        planLog = `update_plan rejected: unknown milestone '${milestoneRef}'`
       }
+
+      episodicCompactor.recordStep(
+        {
+          step: stepCount,
+          tool: 'update_plan',
+          target: milestoneRef,
+          status: updateFailed ? 'FAILURE' : 'SUCCESS',
+          summary: planLog,
+        },
+        planFeedback
+      )
+      emitLog('info', planLog)
+      emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
+      if (settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logToolResult(sessionId, stepCount, 'update_plan', planFeedback)
+      }
+      await persistCurrentState()
+      continue
     }
 
     // Execute tool through tool executor service
@@ -992,6 +1136,28 @@ export async function runAgentOrchestratorLoop(
       }
     }
 
+    if (toolRes.changeStats) {
+      const previous = sessionChangedFiles.get(toolRes.changeStats.filePath) || { additions: 0, deletions: 0 }
+      sessionChangedFiles.set(toolRes.changeStats.filePath, {
+        additions: previous.additions + toolRes.changeStats.additions,
+        deletions: previous.deletions + toolRes.changeStats.deletions,
+      })
+
+      let totalAdditions = 0
+      let totalDeletions = 0
+      for (const entry of sessionChangedFiles.values()) {
+        totalAdditions += entry.additions
+        totalDeletions += entry.deletions
+      }
+      if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
+        session.targetWindow.webContents.send('agent:change-metrics', {
+          filesTouched: sessionChangedFiles.size,
+          additions: totalAdditions,
+          deletions: totalDeletions,
+        })
+      }
+    }
+
     const isMutating = ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool)
     const cbRes = circuitBreaker.recordStep(isMutating, isToolFailure)
     if (cbRes.shouldBreak && isUnlimitedSteps) {
@@ -1015,7 +1181,7 @@ export async function runAgentOrchestratorLoop(
         emitLog('info', cbMsg)
         emitDone(true, cbRes.suggestedAction || cbMsg)
         await persistCurrentState()
-        activeAgentSessions.delete(sessionId)
+        finalizeSession()
         return { success: true, summary: cbRes.suggestedAction || cbMsg }
       }
     }
@@ -1055,7 +1221,27 @@ export async function runAgentOrchestratorLoop(
         }
       }
     }
-    if (parsedTool.tool === 'run_command') {
+    // Milestone auto-verification is driven ONLY by run_tests' structured pass/fail result.
+    // The plan is otherwise the model's to advance, via the update_plan tool. The old
+    // heuristic — any run_command whose text contained "test"/"build"/"lint" and didn't
+    // visibly fail — closed milestones on unrelated commands (a `git status` under a
+    // tests/ path was enough) and inflated progress towards 100%.
+    if (toolRes.verification?.ran) {
+      if (toolRes.verification.passed) {
+        hasVerifiedBuild = true
+        const activeM = goalPlanner.getActiveMilestone()
+        if (activeM) {
+          goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified by a passing run_tests execution.')
+        }
+      } else {
+        const activeM = goalPlanner.getActiveMilestone()
+        if (activeM) {
+          goalPlanner.updateMilestone(activeM.id, 'failed', 'run_tests reported failures.')
+        }
+      }
+    } else if (parsedTool.tool === 'run_command') {
+      // A successful build/typecheck/lint still satisfies the Definition of Done gate for
+      // workspaces without a test runner — but it no longer touches milestone status.
       const cmdStr = (parsedTool.parameters?.command || '').toLowerCase()
       const isVerificationCmd =
         cmdStr.includes('test') ||
@@ -1066,10 +1252,6 @@ export async function runAgentOrchestratorLoop(
         cmdStr.includes('tsc')
       if (isVerificationCmd && !toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
         hasVerifiedBuild = true
-        const activeM = goalPlanner.getActiveMilestone()
-        if (activeM) {
-          goalPlanner.updateMilestone(activeM.id, 'verified')
-        }
       }
     }
 
@@ -1093,6 +1275,6 @@ export async function runAgentOrchestratorLoop(
     codingAgentLogger.logSessionEnd(sessionId, stepCount, true, endSummary)
   }
   await persistCurrentState()
-  activeAgentSessions.delete(sessionId)
+  finalizeSession()
   return { success: true, summary: endSummary }
 }

@@ -28,7 +28,7 @@ import {
   MessageSquare,
   ClipboardList,
 } from 'lucide-react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession } from '../../types'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics } from '../../types'
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
@@ -102,6 +102,8 @@ interface AgentActionLogPanelProps {
   onDeleteSession?: (id: string) => void
   onRenameSession?: (id: string, title: string) => void
   onSelectWorkspaceFolder?: () => void
+  /** Aggregate size of the file changes applied so far in this session. */
+  changeMetrics?: AgentChangeMetrics
   /** Shared with other agent-opened panels (e.g. CodingTerminal) so one toggle governs autoscroll everywhere. */
   autoScroll: boolean
   onToggleAutoScroll: () => void
@@ -145,6 +147,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onDeleteSession,
   onRenameSession,
   onSelectWorkspaceFolder,
+  changeMetrics,
   autoScroll,
   onToggleAutoScroll,
 }) => {
@@ -832,6 +835,20 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Session Change Metrics: files touched and total lines added/removed by the agent */}
+      {changeMetrics && changeMetrics.filesTouched > 0 && (
+        <div className="mx-3 mb-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
+          <span className="flex items-center gap-1.5 font-sans">
+            <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            {changeMetrics.filesTouched} file modificat{changeMetrics.filesTouched === 1 ? 'o' : 'i'} in questa sessione
+          </span>
+          <span className="flex items-center gap-1.5 font-mono text-[10px] shrink-0">
+            <span className="text-emerald-400">+{changeMetrics.additions}</span>
+            <span className="text-rose-400">-{changeMetrics.deletions}</span>
+          </span>
         </div>
       )}
 

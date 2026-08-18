@@ -33,11 +33,12 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
 
 ## 4. Local AI Coding Agent Studio
 
-- **Autonomous Tool Loop (19 Tools)**: Orchestrated by `agentOrchestratorAppService.ts`:
+- **Autonomous Tool Loop**: Orchestrated by `agentOrchestratorAppService.ts`:
   - **Inspection**: `read_file` (with line slicing), `extract_code_symbols` (AST/Regex parser), `list_dir`, `list_files_recursive` (`tree` scanner), `grep_search`.
   - **Modification**: `write_file`, `create_directory` (`mkdir`), `copy_file` (`cp`), `move_file` (`mv`/rename), `replace_file_content`, `multi_replace_file_content` (CRLF/LF line-ending preservation & fuzzy chunk matching), `delete_file`.
   - **Research**: `web_search` (DuckDuckGo queries), `fetch_web_content` (HTML-to-Markdown scraper), `download_file` (sandboxed HTTP/HTTPS download).
-  - **Execution**: `run_command` (PowerShell command execution for dependency installation, testing, and builds), `inspect_os_env`, `ask` (clarification), `finish`.
+  - **Execution**: `run_command` (PowerShell execution; adaptive timeout, longer for installs and scaffolding, overridable via `timeoutSeconds`; failure decided by exit code, never by scanning output text), `run_tests` (structured pass/fail), `inspect_os_env` (host facts plus the installed dev toolchain and versions), `ensure_tool` (installs a MISSING tool via winget, restricted to the closed allow-list in `devToolchain.ts`: node, npm, pnpm, git, python), `ask` (clarification), `finish`.
+  - **Planning**: `update_plan` lets the model mark a milestone `in_progress`/`verified`/`failed`. Milestone auto-verification otherwise happens ONLY on a passing `run_tests` result — never inferred from the text of a shell command.
 - **Policy Modes**:
   - **Plan Mode**: Generates structured technical implementation plans without applying filesystem changes.
   - **Ask Mode**: Read-only research runs autonomously; file edits and shell commands require explicit user approval.
@@ -51,6 +52,10 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
 - **Context Window Budgeting**: 4-tier token budget allocation (P1: System Prompt & Rules, P2: Active files, P3: Action history [max 8 steps], P4: Workspace map & RAG docs).
 - **Fault-Tolerant Tool Parser**: Pre-strips `<think>` CoT reasoning tags and sanitizes unescaped newlines, trailing commas, and single quotes in JSON tool calls (`toolParser.ts`).
 - **Auto-Healing Diagnostics Loop**: Captures terminal stdout/stderr on test/build failures and feeds stack traces back to Ollama for self-correction.
+- **Definition of Done Gate**: `TransactionalExecutionGuard.validateTaskCompletion` intercepts `finish` when milestones are unverified or code changed without a verification run. Each distinct reason intercepts at most once, so the gate can advise but never deadlock a session.
+- **Small-Model Runtime Tuning**: `num_ctx` is frozen per session (grow-only) to preserve Ollama KV-cache reuse, `num_predict` is capped per complexity tier, and stop sequences cut generation when the model starts hallucinating the next turn history block. `num_thread` is pinned on every hardware profile; the first-turn model is pre-loaded so the cold load overlaps prompt assembly.
+- **Diff Surfaces**: `diffEngine.ts` powers the coloured line-by-line Git diff panel and the before/after approval modal, with +/- counts per file and aggregate session change metrics.
+- **Serial Execution**: agent tasks always run one at a time (`taskQueueAppService`), because the tool executor owns a single workspace journal and shared persistent shells.
 
 ## 5. Skill Hub, Multi-Marketplace & Provenance
 

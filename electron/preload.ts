@@ -61,7 +61,6 @@ const api: IElectronAPI = {
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
   getAgentQueueStatus: () => ipcRenderer.invoke('agent:get-queue-status'),
-  setAgentMaxConcurrency: (limit: number) => ipcRenderer.invoke('agent:set-max-concurrency', limit),
   deleteAgentSession: (sessionId: string, workspacePath?: string | null) => ipcRenderer.invoke('agent:delete-session', sessionId, workspacePath),
   clearAllAgentSessions: (workspacePath?: string | null) => ipcRenderer.invoke('agent:clear-all-sessions', workspacePath),
   clearCodingAgentAuditLog: () => ipcRenderer.invoke('agent:clear-audit-log'),
@@ -74,6 +73,12 @@ const api: IElectronAPI = {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('agent:step-update', subscription)
     return () => ipcRenderer.removeListener('agent:step-update', subscription)
+  },
+  /** Aggregate size of the file changes applied so far in the active agent session. */
+  onAgentChangeMetrics: (callback: (data: { filesTouched: number; additions: number; deletions: number }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('agent:change-metrics', subscription)
+    return () => ipcRenderer.removeListener('agent:change-metrics', subscription)
   },
   onAgentStreamToken: (callback: (data: any) => void) => {
     const subscription = (_: any, data: any) => callback(data)

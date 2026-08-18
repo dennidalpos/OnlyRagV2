@@ -9,8 +9,6 @@ export interface WizardStepPreferencesProps {
   onSelectHardwareProfile: (profile: HardwareProfile) => void
   ocrEngine: 'native_cuda' | 'vision_model'
   onSelectOcrEngine: (engine: 'native_cuda' | 'vision_model') => void
-  maxConcurrentTasks: number
-  onChangeMaxConcurrentTasks: (tasks: number) => void
   maxToolCallSteps: number
   onChangeMaxToolCallSteps: (steps: number) => void
 }
@@ -20,16 +18,12 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
   onSelectHardwareProfile,
   ocrEngine,
   onSelectOcrEngine,
-  maxConcurrentTasks,
-  onChangeMaxConcurrentTasks,
   maxToolCallSteps,
   onChangeMaxToolCallSteps,
 }) => {
   const { t } = useTranslation()
 
   const profiles = getHardwareProfileDefs(t)
-
-  const concurrencyPresets = [1, 2, 4, 8]
 
   return (
     <div className="space-y-6">
@@ -90,37 +84,15 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
         </div>
       </div>
 
-      {/* Task Concurrency — shares the same setting as Settings > TaskConcurrencyConfig */}
+      {/* Agent Execution Limits — shares the same setting as Settings > AgentExecutionLimitsConfig */}
       <div className="space-y-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
         <div className="flex items-center gap-2 text-cyan-300">
           <Layers className="w-4 h-4" />
-          <h4 className="text-xs font-bold uppercase tracking-wider">{t('settings.concurrencySection')}</h4>
+          <h4 className="text-xs font-bold uppercase tracking-wider">{t('settings.executionLimitsSection')}</h4>
         </div>
-        <p className="text-[11px] text-slate-400 -mt-1.5">{t('settings.concurrencyDesc')}</p>
+        <p className="text-[11px] text-slate-400 -mt-1.5">{t('settings.executionLimitsDesc')}</p>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5" role="radiogroup" aria-label={t('settings.concurrencySection')}>
-          {concurrencyPresets.map((val) => {
-            const isSelected = maxConcurrentTasks === val
-            return (
-              <button
-                key={val}
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                onClick={() => onChangeMaxConcurrentTasks(val)}
-                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer focus-ring active:scale-[0.98] ${
-                  isSelected
-                    ? 'bg-cyan-950/40 border-cyan-400 shadow-md text-cyan-200'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-300'
-                }`}
-              >
-                <span className="text-xs font-bold block">{val}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Max Tool Call Steps — shares the same setting as Settings > TaskConcurrencyConfig */}
+        {/* Max Tool Call Steps */}
         <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="space-y-0.5">
             <span className="text-xs font-bold text-slate-200">{t('settings.toolCallStepsTitle')}</span>

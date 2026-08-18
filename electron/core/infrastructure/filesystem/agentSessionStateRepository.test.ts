@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { agentSessionStateRepository, SavedAgentSessionState } from './agentSessionStateRepository'
 
 describe('AgentSessionStateRepository Unit Tests', () => {
@@ -95,29 +96,33 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(await agentSessionStateRepository.loadSessionState('session-2', tempDir)).toBeNull()
   })
 
-  it('should save SESSION_TRACKER.md in .assistant directory', async () => {
-    const compactState = {
-      objective: 'Refactor Authentication',
-      restorePoint: 'Task 1: Setup types',
-      activeMicroTask: 'Task 2: Add middleware',
-      pendingMicroTasks: ['Task 2: Add middleware', 'Task 3: Unit tests'],
-      completedCount: 1,
-      totalCount: 3,
-      isCompleted: false,
-    }
+  it('should save SESSION_TRACKER.md in the format its own parser reads back (regression: a second, plan-shaped format was written on every checkpoint and could not be parsed, leaving the injected debt block empty)', async () => {
+    const tracker = new SessionDebtTracker({
+      sessionId: 'tracker-session',
+      completedTasks: ['m-1: Setup types'],
+      unresolvedIssues: ['m-3: Unit tests failing'],
+      nextSteps: ['m-2: Add middleware'],
+      modifiedFiles: ['src/auth.ts'],
+    })
 
-    const savedTracker = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, compactState)
+    const savedTracker = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, tracker)
     expect(savedTracker).toBe(true)
 
     const trackerPath = path.join(tempDir, '.assistant', 'SESSION_TRACKER.md')
     expect(fs.existsSync(trackerPath)).toBe(true)
 
     const content = fs.readFileSync(trackerPath, 'utf-8')
-    expect(content).toContain('# SESSION TRACKER')
-    expect(content).toContain('Refactor Authentication')
-    expect(content).toContain('Task 1: Setup types')
-    expect(content).toContain('Task 2: Add middleware')
-    expect(content).toContain('[STOP DIRECTIVE]')
+    expect(content).toContain('m-1: Setup types')
+    expect(content).toContain('m-2: Add middleware')
+    expect(content).toContain('src/auth.ts')
+
+    // The round trip is the point: what is written must survive being parsed back.
+    const reparsed = SessionDebtTracker.parseTrackerMarkdown(content)
+    expect(reparsed.getData().completedTasks).toContain('m-1: Setup types')
+    expect(reparsed.getData().unresolvedIssues).toContain('m-3: Unit tests failing')
+    expect(reparsed.getData().nextSteps).toContain('m-2: Add middleware')
+    expect(reparsed.getData().modifiedFiles).toContain('src/auth.ts')
+    expect(reparsed.compilePromptBlock()).toContain('m-3: Unit tests failing')
   })
 
   it('should seed a brand new minimal session state when none exists yet', async () => {

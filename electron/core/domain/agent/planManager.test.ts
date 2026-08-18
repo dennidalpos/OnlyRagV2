@@ -39,26 +39,4 @@ describe('PlanManager', () => {
     expect(compactState.restorePoint).toBe('None (Session Initialized)')
   })
 
-  it('should generate session tracker markdown from compact state', () => {
-    const compactState = PlanManager.getCompactStateFromMilestones(sampleMilestones, 'Add Authentication Feature')
-    const trackerMarkdown = PlanManager.generateSessionTrackerMarkdown(compactState)
-
-    expect(trackerMarkdown).toContain('# SESSION TRACKER')
-    expect(trackerMarkdown).toContain('## Objective')
-    expect(trackerMarkdown).toContain('Add Authentication Feature')
-    expect(trackerMarkdown).toContain('## Restore Point')
-    expect(trackerMarkdown).toContain('m-2: Configure JWT middleware')
-    expect(trackerMarkdown).toContain('## Active Micro-Task')
-    expect(trackerMarkdown).toContain('m-1: Create auth types')
-    expect(trackerMarkdown).toContain('- [ ] m-1: Create auth types')
-    expect(trackerMarkdown).toContain('[STOP DIRECTIVE]')
-  })
-
-  it('should render "- None" for remaining micro-tasks when the plan has no pending milestones', () => {
-    const allVerified: PlanMilestone[] = sampleMilestones.map((m) => ({ ...m, status: 'verified' }))
-    const compactState = PlanManager.getCompactStateFromMilestones(allVerified)
-    const trackerMarkdown = PlanManager.generateSessionTrackerMarkdown(compactState)
-
-    expect(trackerMarkdown).toContain('- None')
-  })
 })

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument, CodingSession, WorkspaceProject } from '../types'
+import { WorkspaceFile, AgentActionLog, AppSettings, IngestedDocument, CodingSession, WorkspaceProject, AgentChangeMetrics } from '../types'
 import { AgentMode } from '../components/coding/CodingAgentView'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { logger } from '../lib/logger'
@@ -157,6 +157,8 @@ export function useCodingAgent(settings?: AppSettings) {
   const [maxSteps, setMaxSteps] = useState<number | string>(50)
 
   // Pending Approval State
+  /** Aggregate +/- size of the file changes applied by the running agent session. */
+  const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
   const [pendingApproval, setPendingApproval] = useState<{
     type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
     target: string
@@ -631,6 +633,10 @@ export function useCodingAgent(settings?: AppSettings) {
       setActiveSkills(data.skills || [])
     })
 
+    const unsubChangeMetrics = window.electronAPI.onAgentChangeMetrics?.((data: AgentChangeMetrics) => {
+      if (data) setChangeMetrics(data)
+    })
+
     const unsubDone = window.electronAPI.onAgentDone?.(() => {
       setIsExecuting(false)
       setStreamingText('')
@@ -664,6 +670,7 @@ export function useCodingAgent(settings?: AppSettings) {
       unsubStep?.()
       unsubApproval?.()
       unsubSkills?.()
+      unsubChangeMetrics?.()
       unsubDone?.()
     }
   }, [])
@@ -705,6 +712,7 @@ export function useCodingAgent(settings?: AppSettings) {
     setIsExecuting(false)
     setAgentPrompt('')
     setActiveSkills([])
+    setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
     setPromptQueue([])
     promptQueueRef.current = []
     setAttachedDocIds(new Set())
@@ -768,6 +776,7 @@ export function useCodingAgent(settings?: AppSettings) {
     if (!taskPrompt.trim() || !window.electronAPI) return
     setIsExecuting(true)
     setActiveSkills([])
+    setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
     addActionLog('info', `User Prompt: ${taskPrompt}`)
 
     // Auto-update session title if it is default
@@ -964,6 +973,7 @@ export function useCodingAgent(settings?: AppSettings) {
     setIsPromptModalOpen,
     gitStatusLines,
     gitDiffText,
+    changeMetrics,
     isFetchingGit,
     guestOsInfo,
     isInspectingOs,

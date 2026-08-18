@@ -13,13 +13,69 @@ import { NonInteractiveStreamSessionGuard } from '../domain/agent/shellStreamGua
 import { webClient } from '../infrastructure/http/webClient'
 import { FuzzyPatchEngineWithASTValidator } from '../domain/agent/fuzzyPatchEngine'
 import { parseTestRunOutput } from '../domain/agent/testResultParser'
+import { computeLineDiff, countDiffLines } from '../domain/agent/diffEngine'
+import {
+  DEV_TOOL_ALLOWLIST,
+  buildInstallCommand,
+  extractVersion,
+  findToolDefinition,
+  formatToolchainInventory,
+  resolveInstallTarget,
+  type DevToolStatus,
+} from '../domain/agent/devToolchain'
 import type { AppSettings } from '../../../src/types'
+
+/** Ordinary shell command ceiling. */
+const DEFAULT_COMMAND_TIMEOUT_MS = 120000
+/** Package installs and scaffolding routinely exceed the ordinary ceiling. */
+const INSTALL_COMMAND_TIMEOUT_MS = 600000
+/** Upper bound for an explicit per-call timeoutSeconds override. */
+const MAX_COMMAND_TIMEOUT_MS = 900000
+
+/** Commands whose normal runtime is measured in minutes, not seconds. */
+function isLongRunningCommand(command: string): boolean {
+  const cmd = command.toLowerCase()
+  return (
+    /\b(npm|pnpm|yarn|bun)\s+(install|ci|add)\b/.test(cmd) ||
+    /\bpip3?\s+install\b/.test(cmd) ||
+    /\bwinget\s+install\b/.test(cmd) ||
+    /\bcargo\s+(build|install)\b/.test(cmd) ||
+    /\bdotnet\s+restore\b/.test(cmd) ||
+    /\bnpx?\s+create-/.test(cmd) ||
+    /\bgit\s+clone\b/.test(cmd)
+  )
+}
+
+/**
+ * Effective timeout for a shell command: an explicit override wins, otherwise installs and
+ * scaffolding get the long ceiling and everything else the default. The old fixed 60s ceiling
+ * meant a cold `npm install` was routinely killed and reported to the model as a failure.
+ */
+function resolveCommandTimeoutMs(command: string, timeoutSecondsParam?: unknown): number {
+  const explicit = Number(timeoutSecondsParam)
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return Math.min(MAX_COMMAND_TIMEOUT_MS, Math.max(5000, Math.floor(explicit) * 1000))
+  }
+  return isLongRunningCommand(command) ? INSTALL_COMMAND_TIMEOUT_MS : DEFAULT_COMMAND_TIMEOUT_MS
+}
 
 export interface ToolExecutionResult {
   outputForHistory: string
   logMessage: string
   logDetail?: string
   isTerminal?: boolean
+  /**
+   * Line-level size of the change this call actually applied to disk, set by the
+   * file-mutating tools. The orchestrator accumulates these into the session's
+   * "files touched / +N -M" metrics shown in the agent panel.
+   */
+  changeStats?: { filePath: string; additions: number; deletions: number }
+  /**
+   * Structured verification outcome, set only by run_tests. The orchestrator uses this to
+   * advance plan milestones instead of guessing from the shape of a command string, which
+   * marked a milestone verified for anything containing "test", "build" or "lint".
+   */
+  verification?: { ran: true; passed: boolean }
 }
 
 export class AgentToolExecutorService {
@@ -72,6 +128,50 @@ export class AgentToolExecutorService {
         logMessage: `Git Commit Error: ${detail}`,
       }
     }
+  }
+
+  /**
+   * Probes one allow-listed tool by running its version command. A non-zero exit, a missing
+   * binary, or a timeout all mean "not installed" — the caller only needs presence and version.
+   */
+  private probeDevTool(toolId: string): DevToolStatus {
+    const definition = DEV_TOOL_ALLOWLIST.find((tool) => tool.id === toolId)
+    if (!definition) return { id: toolId, displayName: toolId, installed: false, probeError: 'Not allow-listed' }
+
+    try {
+      const stdout = execFileSync(definition.binary, definition.versionArgs, {
+        encoding: 'utf-8',
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: process.platform === 'win32',
+      })
+      const version = extractVersion(String(stdout))
+      // The Windows Store python stub exits 0 while printing nothing: no version means no tool.
+      if (!version) return { id: definition.id, displayName: definition.displayName, installed: false }
+      return { id: definition.id, displayName: definition.displayName, installed: true, version }
+    } catch {
+      return { id: definition.id, displayName: definition.displayName, installed: false }
+    }
+  }
+
+  /** Presence and version of every allow-listed development tool. */
+  public probeToolchain(): DevToolStatus[] {
+    return DEV_TOOL_ALLOWLIST.map((tool) => this.probeDevTool(tool.id))
+  }
+
+  /** Current on-disk content, or '' when the file does not exist yet (a pure addition). */
+  private readContentSafely(absolutePath: string): string {
+    try {
+      return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf-8') : ''
+    } catch {
+      return ''
+    }
+  }
+
+  /** Line-level +/- size of a completed mutation, for the session change metrics. */
+  private buildChangeStats(filePath: string, before: string, after: string) {
+    const { additions, deletions } = countDiffLines(computeLineDiff(before, after))
+    return { filePath, additions, deletions }
   }
 
   public getOrCreateShellSession(workspacePath?: string | null): PersistentPowerShellSession {
@@ -188,6 +288,7 @@ export class AgentToolExecutorService {
         logMessage: `Test Run: ${statusLine}`,
         logDetail: rawOutput.slice(0, 1000),
         isTerminal: true,
+        verification: { ran: true, passed: !res.timedOut && parsed.success },
       }
     } catch (err: any) {
       return {
@@ -314,11 +415,114 @@ export class AgentToolExecutorService {
       }
 
       case 'inspect_os_env': {
-        const outStr = `Guest OS Environment: ${os.platform()} ${os.arch()} | CPUs: ${os.cpus().length} (${os.cpus()[0]?.model || ''}) | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB`
+        // Host facts plus the development toolchain inventory: which of node/npm/pnpm/git/
+        // python are actually present and at what version. Without this the model had to
+        // guess, and typically discovered a missing toolchain only by watching a command fail.
+        const hostLine = `Guest OS Environment: ${os.platform()} ${os.arch()} | CPUs: ${os.cpus().length} (${os.cpus()[0]?.model || ''}) | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB`
+        const toolchain = formatToolchainInventory(this.probeToolchain())
+        const outStr = `${hostLine}
+
+${toolchain}`
         return {
           outputForHistory: outStr,
-          logMessage: 'Guest OS Environment Info',
+          logMessage: 'Guest OS Environment & Toolchain Inventory',
           logDetail: outStr,
+        }
+      }
+
+      case 'ensure_tool': {
+        const requested = String(parameters.toolName || parameters.tool || parameters.name || '').trim()
+        const definition = findToolDefinition(requested)
+        if (!definition) {
+          const allowed = DEV_TOOL_ALLOWLIST.map((t) => t.id).join(', ')
+          return {
+            outputForHistory: `[ENSURE_TOOL REJECTED] '${requested || '(empty)'}' is not an installable development tool. Allowed: ${allowed}. Installing anything else is not permitted — ask the user instead.`,
+            logMessage: `ensure_tool rejected: '${requested}' is not allow-listed`,
+            isTerminal: true,
+          }
+        }
+
+        const status = this.probeDevTool(definition.id)
+        if (status.installed) {
+          return {
+            outputForHistory: `${definition.displayName} is already installed (version ${status.version}). No installation performed.`,
+            logMessage: `${definition.displayName} already present (${status.version})`,
+            isTerminal: true,
+          }
+        }
+
+        if (settings.allowTerminalExecution === false) {
+          return {
+            outputForHistory: `${definition.displayName} is missing, but terminal execution is disabled in Settings so it cannot be installed. Ask the user to install it manually.`,
+            logMessage: 'ensure_tool blocked: terminal execution disabled',
+            isTerminal: true,
+          }
+        }
+
+        const installTarget = resolveInstallTarget(definition.id)
+        const installCmd = buildInstallCommand(definition.id)
+        if (!installTarget || !installCmd) {
+          return {
+            outputForHistory: `[ENSURE_TOOL ERROR] No installation package is registered for '${definition.id}'.`,
+            logMessage: `ensure_tool: no package for ${definition.id}`,
+            isTerminal: true,
+          }
+        }
+
+        if (process.platform !== 'win32') {
+          return {
+            outputForHistory: `[ENSURE_TOOL UNSUPPORTED] Automatic installation is only implemented for Windows (winget). Install ${definition.displayName} manually, then continue.`,
+            logMessage: 'ensure_tool: unsupported platform',
+            isTerminal: true,
+          }
+        }
+
+        logger.log('INFO', 'AgentToolExecutor', `[ENSURE_TOOL] Installing ${installTarget.displayName} via winget (${installTarget.wingetId})`)
+        try {
+          const shell = this.getOrCreateShellSession(workspacePath)
+          const res = await shell.execute(
+            installCmd,
+            (chunk) => {
+              if (onTerminalOutput) onTerminalOutput(chunk.trim())
+            },
+            onProcessSpawned,
+            INSTALL_COMMAND_TIMEOUT_MS
+          )
+
+          // A fresh install lands on PATH only for processes started afterwards: without
+          // this refresh the tool stays invisible to the very session that installed it.
+          shell.refreshEnvironmentPath()
+
+          const verified = this.probeDevTool(definition.id)
+          if (verified.installed) {
+            logger.log('INFO', 'AgentToolExecutor', `[ENSURE_TOOL] ${definition.displayName} installed: ${verified.version}`)
+            return {
+              outputForHistory: `Successfully installed ${installTarget.displayName}. ${definition.displayName} is now available (version ${verified.version}). PATH refreshed for this session.`,
+              logMessage: `Installed ${installTarget.displayName} (${definition.id} ${verified.version})`,
+              logDetail: installCmd,
+              isTerminal: true,
+            }
+          }
+
+          const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
+          return {
+            outputForHistory: `[ENSURE_TOOL INSTALL FAILED]
+Command: "${installCmd}"
+${definition.displayName} is still not detectable after installation.
+Output:
+${rawOutput.slice(0, 2000)}
+
+Do not retry the same installation. Continue without this tool or ask the user to install it manually.`,
+            logMessage: `ensure_tool: ${definition.displayName} still missing after install`,
+            logDetail: rawOutput.slice(0, 1000),
+            isTerminal: true,
+          }
+        } catch (err: any) {
+          return {
+            outputForHistory: `[ENSURE_TOOL ERROR] Failed installing ${installTarget.displayName}: ${err.message}`,
+            logMessage: `ensure_tool exception: ${err.message}`,
+            isTerminal: true,
+          }
         }
       }
 
@@ -428,10 +632,15 @@ export class AgentToolExecutorService {
           }
         }
 
+        const beforeContent = this.readContentSafely(pathCheck.safePath)
         this.journal.recordBeforeModification(pathCheck.safePath)
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {
-          return { outputForHistory: `Successfully wrote file ${filePath}`, logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}` }
+          return {
+            outputForHistory: `Successfully wrote file ${filePath}`,
+            logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}`,
+            changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, content),
+          }
         }
         return { outputForHistory: `Error writing file ${filePath}: ${res.error}`, logMessage: `Write file error: ${res.error}` }
       }
@@ -588,6 +797,7 @@ export class AgentToolExecutorService {
               return {
                 outputForHistory: `Successfully replaced content in ${filePath}${confidenceNote}`,
                 logMessage: `Successfully replaced target chunk in ${path.basename(filePath)}${confidenceNote}`,
+                changeStats: this.buildChangeStats(pathCheck.safePath, currentContent, fuzzyRes.updatedContent),
               }
             }
             return { outputForHistory: `Error writing replaced content to ${filePath}: ${writeRes.error}`, logMessage: `Write error in ${path.basename(filePath)}` }
@@ -610,10 +820,15 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Multi Replace Rejected: ${pathCheck.error}` }
         }
         if (filePath && replacements.length > 0) {
+          const beforeContent = this.readContentSafely(pathCheck.safePath)
           this.journal.recordBeforeModification(pathCheck.safePath)
           const res = await this.repo.multiReplaceChunks(pathCheck.safePath, replacements)
           if (res.success) {
-            return { outputForHistory: `Successfully replaced ${res.replacedCount} chunks in ${filePath}`, logMessage: `Successfully applied ${res.replacedCount} replacements in ${path.basename(filePath)}` }
+            return {
+              outputForHistory: `Successfully replaced ${res.replacedCount} chunks in ${filePath}`,
+              logMessage: `Successfully applied ${res.replacedCount} replacements in ${path.basename(filePath)}`,
+              changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, this.readContentSafely(pathCheck.safePath)),
+            }
           }
           const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${res.error}\nTip: Inspect the file with read_file or check exact whitespace before replacing.`
           return { outputForHistory: failureFeedback, logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${res.error}` }
@@ -631,10 +846,15 @@ export class AgentToolExecutorService {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Delete File Rejected: ${pathCheck.error}` }
         }
         if (filePath) {
+          const beforeContent = this.readContentSafely(pathCheck.safePath)
           this.journal.recordBeforeModification(pathCheck.safePath)
           const res = await this.repo.deleteFile(pathCheck.safePath)
           if (res.success) {
-            return { outputForHistory: `Successfully deleted file ${filePath}`, logMessage: `Successfully deleted file ${path.basename(filePath)}` }
+            return {
+              outputForHistory: `Successfully deleted file ${filePath}`,
+              logMessage: `Successfully deleted file ${path.basename(filePath)}`,
+              changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, ''),
+            }
           }
           return { outputForHistory: `Error deleting file ${filePath}: ${res.error}`, logMessage: `Error deleting file: ${res.error}` }
         }
@@ -709,7 +929,7 @@ export class AgentToolExecutorService {
         if (process.platform === 'win32') {
           execCmd = NonInteractiveStreamSessionGuard.sanitizePowerShellCommand(execCmd)
         }
-        const COMMAND_TIMEOUT_MS = 60000
+        const COMMAND_TIMEOUT_MS = resolveCommandTimeoutMs(cmd, parameters.timeoutSeconds)
 
         try {
           const shell = this.getOrCreateShellSession(workspacePath)
@@ -731,17 +951,13 @@ export class AgentToolExecutorService {
             lowerOut.includes('user canceled') ||
             lowerOut.includes('aborted')
 
-          const isFailure =
-            res.code !== 0 ||
-            res.timedOut ||
-            isCancelled ||
-            rawOutput.includes('Error:') ||
-            rawOutput.includes('Exception:') ||
-            rawOutput.includes('Traceback (most recent call last)') ||
-            rawOutput.includes('npm ERR!') ||
-            rawOutput.includes('FAIL') ||
-            rawOutput.includes('is not recognized as an internal or external command') ||
-            rawOutput.includes('CommandNotFoundException')
+          // Failure is decided by the process's own exit status, not by scanning its output
+          // for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and
+          // passing test suites, sending successful commands into the auto-healing loop.
+          // (persistentPowerShellSession combines $LASTEXITCODE with $? so pure-PowerShell
+          // failures are reported too.) Cancellation is kept: an interactive generator that
+          // aborts can still exit 0.
+          const isFailure = res.code !== 0 || Boolean(res.timedOut) || isCancelled
 
           if (isFailure) {
             const isEperm = lowerOut.includes('eperm') || lowerOut.includes('eacces') || lowerOut.includes('operation not permitted') || lowerOut.includes('permission denied')
@@ -951,3 +1167,6 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
 }
 
 export const agentToolExecutorService = new AgentToolExecutorService()
+
+/** Internals exposed for unit testing the command timeout policy. */
+export const __testing = { resolveCommandTimeoutMs, isLongRunningCommand }

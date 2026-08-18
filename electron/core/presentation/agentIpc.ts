@@ -21,11 +21,6 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     return taskQueueAppService.getQueueStatus()
   })
 
-  ipcMain.handle('agent:set-max-concurrency', async (_, limit: number) => {
-    taskQueueAppService.setMaxConcurrency(limit)
-    return { success: true, maxConcurrency: taskQueueAppService.getMaxConcurrency() }
-  })
-
   ipcMain.handle('agent:parse-tool-call', async (_, rawText: string) => {
     return parseAgentToolCall(rawText)
   })

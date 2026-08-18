@@ -442,5 +442,89 @@ async def async_handler():
     expect(res.success).toBe(false)
     expect(res.logMessage).toContain('missing commit message')
   })
+
+  it('should report line-level change stats for write_file, distinguishing a new file from an edit', async () => {
+    const filePath = path.join(tempDir, 'metrics.txt')
+
+    const created = await agentToolExecutorService.executeTool(
+      { tool: 'write_file', parameters: { filePath, content: 'a\nb\nc' } },
+      tempDir,
+      settings
+    )
+    expect(created.changeStats).toEqual({ filePath, additions: 3, deletions: 0 })
+
+    const edited = await agentToolExecutorService.executeTool(
+      { tool: 'write_file', parameters: { filePath, content: 'a\nB\nc' } },
+      tempDir,
+      settings
+    )
+    expect(edited.changeStats).toEqual({ filePath, additions: 1, deletions: 1 })
+  })
+
+  it('should report change stats for replace_file_content and delete_file', async () => {
+    const filePath = path.join(tempDir, 'replace-metrics.txt')
+    fs.writeFileSync(filePath, 'one\ntwo\nthree')
+
+    const replaced = await agentToolExecutorService.executeTool(
+      { tool: 'replace_file_content', parameters: { filePath, targetContent: 'two', replacementContent: 'TWO' } },
+      tempDir,
+      settings
+    )
+    expect(replaced.changeStats).toEqual({ filePath, additions: 1, deletions: 1 })
+
+    const deleted = await agentToolExecutorService.executeTool(
+      { tool: 'delete_file', parameters: { filePath } },
+      tempDir,
+      settings
+    )
+    expect(deleted.changeStats).toEqual({ filePath, additions: 0, deletions: 3 })
+  })
+
+  it('should refuse to install anything outside the toolchain allow-list', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'ensure_tool', parameters: { toolName: 'docker' } } as any,
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('ENSURE_TOOL REJECTED')
+    expect(res.outputForHistory).toContain('not an installable development tool')
+    expect(res.logMessage).toContain('not allow-listed')
+  })
+
+  it('should report an already-installed tool without attempting any installation', async () => {
+    // node is running this very test suite, so it is guaranteed present.
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'ensure_tool', parameters: { toolName: 'node' } } as any,
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('already installed')
+    expect(res.outputForHistory).not.toContain('winget install')
+  })
+
+  it('should include the development toolchain inventory in inspect_os_env', async () => {
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'inspect_os_env', parameters: {} },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('Guest OS Environment')
+    expect(res.outputForHistory).toContain('DEVELOPMENT TOOLCHAIN')
+    expect(res.outputForHistory).toMatch(/- node: OK \(/)
+  })
+
+  it('should not report change stats for a rejected mutation', async () => {
+    const filePath = path.join(tempDir, 'absent.txt')
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'replace_file_content', parameters: { filePath, targetContent: 'x', replacementContent: 'y' } },
+      tempDir,
+      settings
+    )
+
+    expect(res.changeStats).toBeUndefined()
+  })
 })
 

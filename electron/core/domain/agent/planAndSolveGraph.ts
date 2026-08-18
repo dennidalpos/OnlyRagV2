@@ -26,6 +26,33 @@ export class GoalDecompositionPlanner {
     return this.milestones
   }
 
+  /**
+   * Replaces the plan with a newly emitted one while carrying over the progress already
+   * earned: any incoming milestone whose title matches an existing verified/failed one
+   * keeps that status. Lets the agent re-plan mid-session (scope discovered late, a
+   * milestone that turned out to need splitting) without silently resetting to 0%.
+   */
+  public replacePlanPreservingProgress(milestones: PlanMilestone[]): void {
+    const previousByTitle = new Map<string, PlanMilestone>()
+    for (const m of this.milestones) {
+      previousByTitle.set(m.title.trim().toLowerCase(), m)
+    }
+
+    this.milestones = milestones.map((m, idx) => {
+      const previous = previousByTitle.get((m.title || '').trim().toLowerCase())
+      const carriedStatus = previous && (previous.status === 'verified' || previous.status === 'failed')
+        ? previous.status
+        : m.status || 'pending'
+
+      return {
+        ...m,
+        id: m.id || `milestone-${idx + 1}`,
+        status: carriedStatus,
+        notes: m.notes || previous?.notes,
+      }
+    })
+  }
+
   public hasPlan(): boolean {
     return this.milestones.length > 0
   }

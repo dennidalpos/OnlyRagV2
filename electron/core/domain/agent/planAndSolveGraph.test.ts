@@ -70,4 +70,29 @@ Here is my plan to solve the task:
     expect(planner.isAllVerified()).toBe(true)
     expect(planner.getProgressSummary().percentage).toBe(100)
   })
+  it('should carry verified and failed milestones over when the plan is replaced mid-session', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Scaffold project', status: 'pending' },
+      { id: 'm-2', title: 'Add routing', status: 'pending' },
+      { id: 'm-3', title: 'Write tests', status: 'pending' },
+    ])
+    planner.updateMilestone('m-1', 'verified')
+    planner.updateMilestone('m-2', 'failed')
+
+    planner.replacePlanPreservingProgress([
+      { id: 'r-1', title: 'Scaffold project', status: 'pending' },
+      { id: 'r-2', title: 'Add routing', status: 'pending' },
+      { id: 'r-3', title: 'Add state management', status: 'pending' },
+    ])
+
+    const milestones = planner.getMilestones()
+    expect(milestones.length).toBe(3)
+    expect(milestones[0].status).toBe('verified')
+    expect(milestones[1].status).toBe('failed')
+    // A genuinely new milestone starts fresh rather than inheriting anything.
+    expect(milestones[2].title).toBe('Add state management')
+    expect(milestones[2].status).toBe('pending')
+    expect(planner.getProgressSummary().completed).toBe(1)
+  })
 })

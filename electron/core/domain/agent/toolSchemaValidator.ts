@@ -168,6 +168,42 @@ export class ToolSchemaValidator {
         break
       }
 
+      case 'ensure_tool': {
+        const rawTool = rawParams.toolName ?? rawParams.name ?? rawParams.tool
+        if (rawTool === undefined || String(rawTool).trim() === '') {
+          errors.push("Missing required parameter 'toolName' for ensure_tool")
+        } else {
+          rawParams.toolName = String(rawTool).trim()
+        }
+        break
+      }
+
+      case 'update_plan': {
+        // Accept the aliases small models reach for (id / milestone / title) rather than
+        // rejecting an otherwise well-formed plan update over a parameter name.
+        const rawId = rawParams.milestoneId ?? rawParams.id ?? rawParams.milestone ?? rawParams.title
+        if (rawId === undefined || String(rawId).trim() === '') {
+          errors.push("Missing required parameter 'milestoneId' for update_plan")
+        } else {
+          rawParams.milestoneId = String(rawId).trim()
+        }
+
+        const VALID_STATUSES = ['pending', 'in_progress', 'verified', 'failed']
+        const rawStatus = String(rawParams.status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+        if (!rawStatus) {
+          errors.push("Missing required parameter 'status' for update_plan")
+        } else if (!VALID_STATUSES.includes(rawStatus)) {
+          errors.push(`Parameter 'status' must be one of: ${VALID_STATUSES.join(', ')}`)
+        } else {
+          rawParams.status = rawStatus
+        }
+
+        if (rawParams.notes !== undefined) {
+          rawParams.notes = String(rawParams.notes)
+        }
+        break
+      }
+
       case 'ask': {
         if (!rawParams.question && !rawParams.query) {
           errors.push("Missing required parameter 'question' for ask")

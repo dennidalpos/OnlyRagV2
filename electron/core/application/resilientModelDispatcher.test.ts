@@ -19,6 +19,8 @@ const baseRuntimeOpts: OllamaRuntimeOptions = {
   temperature: 0.2,
   top_p: 0.9,
   repeat_penalty: 1.1,
+  num_predict: 6144,
+  stop: [],
   maxContextChars: 48000,
 }
 

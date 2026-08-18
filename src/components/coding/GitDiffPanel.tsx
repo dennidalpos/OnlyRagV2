@@ -1,11 +1,62 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { GitBranch, RefreshCw, CheckCircle2, FileCode } from 'lucide-react'
+import {
+  parseUnifiedDiff,
+  summarizeDiff,
+  type DiffFileChange,
+} from '../../../electron/core/domain/agent/diffEngine'
+import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
 interface GitDiffPanelProps {
   gitStatusLines: string[]
   gitDiffText: string
   isFetchingGit: boolean
   onRefreshGit: () => void
+}
+
+const STATUS_BADGE: Record<DiffFileChange['status'], { label: string; className: string }> = {
+  added: { label: 'added', className: 'bg-emerald-950/60 text-emerald-300 border-emerald-800/70' },
+  deleted: { label: 'deleted', className: 'bg-rose-950/60 text-rose-300 border-rose-800/70' },
+  renamed: { label: 'renamed', className: 'bg-amber-950/60 text-amber-300 border-amber-800/70' },
+  modified: { label: 'modified', className: 'bg-cyan-950/60 text-cyan-300 border-cyan-800/70' },
+}
+
+const DiffFileCard: React.FC<{ file: DiffFileChange }> = ({ file }) => {
+  const badge = STATUS_BADGE[file.status]
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-900/80 border-b border-slate-800">
+        <div className="flex items-center gap-2 min-w-0">
+          <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="font-mono text-[11px] text-slate-200 truncate" title={file.displayPath}>
+            {file.status === 'renamed' ? `${file.oldPath} → ${file.newPath}` : file.displayPath}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <ChangeCounts additions={file.additions} deletions={file.deletions} />
+          <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${badge.className}`}>
+            {badge.label}
+          </span>
+        </div>
+      </div>
+
+      {file.isBinary ? (
+        <div className="px-3 py-2 text-[11px] text-slate-400 italic">File binario — diff non visualizzabile.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          {file.hunks.map((hunk, hunkIdx) => (
+            <div key={`${hunk.header}-${hunkIdx}`}>
+              <div className="px-3 py-1 bg-slate-900/60 text-[10px] font-mono text-cyan-300/80 whitespace-pre">
+                {hunk.header}
+              </div>
+              <DiffLinesView lines={hunk.lines} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
@@ -29,6 +80,10 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
 
   const cleanDiffText = stripAnsi(gitDiffText)
 
+  // Parsed once per diff payload: the panel re-renders on every poll of the git status.
+  const parsedFiles = useMemo(() => parseUnifiedDiff(cleanDiffText), [cleanDiffText])
+  const totals = useMemo(() => summarizeDiff(parsedFiles), [parsedFiles])
+
   const isNotGitRepo = cleanStatusLines.some((l) => l.toLowerCase().includes('not a git repository')) || cleanDiffText.toLowerCase().includes('not a git repository')
 
   const isWorkingTreeClean = !isNotGitRepo && (cleanStatusLines.length === 0 || (cleanStatusLines.length === 1 && !cleanStatusLines[0]))
@@ -40,6 +95,14 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
         <div className="flex items-center gap-2 text-xs text-slate-300 font-semibold">
           <GitBranch className="w-4 h-4 text-cyan-400" />
           <span>Git Status &amp; Working Tree Diff</span>
+          {totals.files > 0 && (
+            <span className="flex items-center gap-2 pl-2 ml-1 border-l border-slate-700">
+              <span className="text-[10px] font-mono text-slate-400">
+                {totals.files} file{totals.files === 1 ? '' : 's'}
+              </span>
+              <ChangeCounts additions={totals.additions} deletions={totals.deletions} />
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -117,10 +180,22 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
                   I file modificati dall'AI Coding Agent o dall'editor appariranno qui sotto forma di diff unificato.
                 </p>
               </div>
+            ) : parsedFiles.length > 0 ? (
+              <div
+                tabIndex={0}
+                aria-label="Diff colorato per file, righe aggiunte in verde e rimosse in rosso"
+                className="h-full overflow-auto space-y-3 focus-ring rounded-xl"
+              >
+                {parsedFiles.map((file, idx) => (
+                  <DiffFileCard key={`${file.displayPath}-${idx}`} file={file} />
+                ))}
+              </div>
             ) : (
+              // Not parseable as a unified diff (e.g. a git error message): show it verbatim
+              // rather than silently rendering nothing.
               <pre
                 tabIndex={0}
-                aria-label="Output git diff dettagliato"
+                aria-label="Output git non riconosciuto come diff unificato"
                 className="h-full w-full bg-slate-950 text-slate-200 font-mono text-xs p-4 overflow-auto rounded-xl border border-slate-800 whitespace-pre leading-relaxed focus-ring"
               >
                 {cleanDiffText}
@@ -132,4 +207,3 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
     </div>
   )
 }
-

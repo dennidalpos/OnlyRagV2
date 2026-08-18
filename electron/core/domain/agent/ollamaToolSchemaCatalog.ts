@@ -103,11 +103,12 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   }, ['url', 'filePath']),
   tool('run_command', 'Execute a shell/terminal command in the workspace.', {
     command: { type: 'string', description: 'The shell command to execute.' },
+    timeoutSeconds: { type: 'integer', description: 'Optional timeout override in seconds (5-900). Installs and scaffolding already get a longer default.' },
   }, ['command']),
   tool('run_tests', 'Run the workspace test suite and return a structured pass/fail summary instead of raw terminal output.', {
     command: { type: 'string', description: 'Optional explicit test command override (e.g. "pytest -k test_login"). If omitted, auto-detected from the workspace (package.json test script or pytest config).' },
   }),
-  tool('inspect_os_env', 'Inspect the host OS environment (platform, CPU, memory).', {}),
+  tool('inspect_os_env', 'Inspect the host OS environment (platform, CPU, memory) and the installed development toolchain (node, npm, pnpm, git, python) with versions.', {}),
   tool('git_status', 'Show the working tree status (git status --short) of the workspace.', {}),
   tool('git_diff', 'Show the diff of unstaged or staged changes, optionally for a single file.', {
     filePath: { type: 'string', description: 'Optional single file to diff.' },
@@ -120,6 +121,14 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   tool('get_file_info', 'Get metadata about a file: existence, size, line count, binary detection.', {
     filePath: { type: 'string', description: 'Path of the file to inspect.' },
   }, ['filePath']),
+  tool('ensure_tool', 'Ensure a development tool is installed on the host, installing it if missing. Only node, npm, pnpm, git and python can be installed.', {
+    toolName: { type: 'string', description: 'One of: node, npm, pnpm, git, python.' },
+  }, ['toolName']),
+  tool('update_plan', 'Update the status of one milestone in the execution plan. Call this as soon as a milestone is started, completed and verified, or found to be blocked.', {
+    milestoneId: { type: 'string', description: 'Milestone id (e.g. "m-2") or a distinctive part of its title.' },
+    status: { type: 'string', description: 'New status: pending, in_progress, verified, or failed.' },
+    notes: { type: 'string', description: 'Optional short note recorded against the milestone.' },
+  }, ['milestoneId', 'status']),
   tool('ask', 'Ask the user a clarifying question and pause execution for their answer.', {
     question: { type: 'string', description: 'The question to ask the user.' },
   }, ['question']),

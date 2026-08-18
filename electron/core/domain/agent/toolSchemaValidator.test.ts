@@ -70,4 +70,31 @@ describe('ToolSchemaValidator Unit Tests', () => {
     expect(res.valid).toBe(false)
     expect(res.errors[0]).toContain('commitMessage')
   })
+
+  it('should accept update_plan with milestoneId aliases and normalise the status casing', () => {
+    const res = ToolSchemaValidator.validateAndSanitize({
+      tool: 'update_plan',
+      parameters: { id: 'm-2', status: 'In Progress' },
+    } as AgentToolCall)
+
+    expect(res.valid).toBe(true)
+    expect(res.sanitizedToolCall.parameters.milestoneId).toBe('m-2')
+    expect(res.sanitizedToolCall.parameters.status).toBe('in_progress')
+  })
+
+  it('should reject update_plan with an unknown status or a missing milestone reference', () => {
+    const badStatus = ToolSchemaValidator.validateAndSanitize({
+      tool: 'update_plan',
+      parameters: { milestoneId: 'm-1', status: 'almost_done' },
+    } as AgentToolCall)
+    expect(badStatus.valid).toBe(false)
+    expect(badStatus.errors.join(' ')).toContain('status')
+
+    const noId = ToolSchemaValidator.validateAndSanitize({
+      tool: 'update_plan',
+      parameters: { status: 'verified' },
+    } as AgentToolCall)
+    expect(noId.valid).toBe(false)
+    expect(noId.errors.join(' ')).toContain('milestoneId')
+  })
 })

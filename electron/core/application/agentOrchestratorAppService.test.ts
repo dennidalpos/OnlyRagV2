@@ -20,6 +20,7 @@ vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {
     getInstalledModels: vi.fn().mockResolvedValue(['llama3.2:3b', 'qwen2.5-coder:7b', 'deepseek-r1:8b']),
     getModelCapabilities: vi.fn().mockResolvedValue({}),
+    preloadModel: vi.fn().mockResolvedValue({ success: true }),
   },
 }))
 
@@ -312,5 +313,145 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.success).toBe(true)
     expect(res.summary).toBe('Awaiting approval for git_commit')
     expect(res.summary).not.toContain('FSM PERMISSION DENIED')
+  })
+
+  it('should let the model advance the plan explicitly through the update_plan tool', async () => {
+    const planJson =
+      '<plan>\n- [ ] Scaffold project\n- [ ] Add tests\n</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
+    const updateJson =
+      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Plan advanced." }\n}\n```'
+
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: planJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: updateJson, usedModel: 'llama3.2', isFallback: false })
+      // Two finish attempts: the first is intercepted once by the DoD guard because a
+      // milestone is still unverified, which is exactly the intended behaviour.
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const res = await runAgentOrchestratorLoop(
+      { userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId: 'plan-tool-session' },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    // The update must be reflected in the persisted plan state the UI reads back.
+    const statePath = path.join(tempDir, '.onlyrag', '.agent_state_plan-tool-session.json')
+    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
+    const verified = saved.planMilestones.filter((m: any) => m.status === 'verified')
+    expect(verified.length).toBe(1)
+    expect(verified[0].id).toBe('m-1')
+  })
+
+  it('should keep num_ctx frozen across turns instead of resizing it per prompt (regression: a per-step num_ctx made Ollama reallocate its KV cache every turn, evicting the prompt cache the context-reuse path depends on)', async () => {
+    const listJson = '```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Listed." }\n}\n```'
+
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: listJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: listJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    await runAgentOrchestratorLoop(
+      { userTask: 'List the workspace', agentMode: 'agent', workspacePath: tempDir },
+      null
+    )
+
+    const ctxPerTurn = vi
+      .mocked(ResilientModelDispatcher.executeWithFallback)
+      .mock.calls.map((call) => (call[0] as any).runtimeOpts.num_ctx as number)
+
+    expect(ctxPerTurn.length).toBeGreaterThanOrEqual(2)
+    // The prompt grows every turn (history accumulates), yet the window must not shrink
+    // back or oscillate: it stays put, and may only ever step upward.
+    for (let i = 1; i < ctxPerTurn.length; i++) {
+      expect(ctxPerTurn[i]).toBeGreaterThanOrEqual(ctxPerTurn[i - 1])
+    }
+    expect(new Set(ctxPerTurn).size).toBe(1)
+  })
+
+  it('should disarm the session watchdog when the loop exits early, so it can never terminate a later run that reuses the same sessionId (regression: clearSessionTimeout ran only on the natural loop exit, leaving a 45-minute timer armed on every finish/ask/cancel path)', async () => {
+    vi.useFakeTimers()
+    try {
+      const sent: Array<{ channel: string; payload: any }> = []
+      const fakeWin: any = {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, payload: any) => sent.push({ channel, payload }) },
+      }
+
+      vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+        output: '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Quick exit." }\n}\n```',
+        usedModel: 'llama3.2',
+        isFallback: false,
+      })
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Do nothing', agentMode: 'agent', workspacePath: tempDir, sessionId: 'reused-session-id' },
+        fakeWin
+      )
+      expect(res.success).toBe(true)
+
+      const doneCountAfterRun = sent.filter((m) => m.channel === 'agent:done').length
+      // Well past the 45-minute watchdog: a leaked timer would emit a second agent:done here.
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+      expect(sent.filter((m) => m.channel === 'agent:done').length).toBe(doneCountAfterRun)
+      expect(sent.some((m) => JSON.stringify(m.payload).includes('Sessione terminata automaticamente'))).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('should intercept finish with the DoD guard after unverified file mutations, then allow it on the next attempt (regression: the DoD gate sat after the finish branch, which returns, so validateTaskCompletion was unreachable dead code)', async () => {
+    const writeJson =
+      '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "app.js", "content": "console.log(1)" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
+
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: writeJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Create app.js',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+      },
+      null
+    )
+
+    // The first finish is intercepted (no verification command was ever run), so the loop
+    // must consume a third turn before completing — proving the guard actually executed.
+    expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(3)
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Done.')
+  })
+
+  it('should not intercept finish a second time for the same DoD reason, so the session can never deadlock on an unverifiable milestone', async () => {
+    const writeJson =
+      '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "b.js", "content": "console.log(2)" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Second attempt." }\n}\n```'
+
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: writeJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Create b.js',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+      },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Second attempt.')
+    // Exactly one interception: turn 1 write, turn 2 blocked finish, turn 3 accepted finish.
+    expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(3)
   })
 })

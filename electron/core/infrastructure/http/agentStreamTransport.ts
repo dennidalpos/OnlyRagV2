@@ -95,6 +95,8 @@ export class AgentStreamTransport {
               top_p: runtimeOpts.top_p,
               repeat_penalty: runtimeOpts.repeat_penalty,
               ...(runtimeOpts.num_thread ? { num_thread: runtimeOpts.num_thread } : {}),
+              ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
+              ...(runtimeOpts.stop?.length ? { stop: runtimeOpts.stop } : {}),
             },
           })
 
@@ -273,6 +275,8 @@ export class AgentStreamTransport {
           top_p: runtimeOpts.top_p,
           repeat_penalty: runtimeOpts.repeat_penalty,
           ...(runtimeOpts.num_thread ? { num_thread: runtimeOpts.num_thread } : {}),
+          ...(runtimeOpts.num_predict ? { num_predict: runtimeOpts.num_predict } : {}),
+          ...(runtimeOpts.stop?.length ? { stop: runtimeOpts.stop } : {}),
         },
       })
 

@@ -9,8 +9,31 @@ export interface OllamaRuntimeOptions {
   top_p: number
   repeat_penalty: number
   num_thread?: number
+  /**
+   * Hard cap on generated tokens per turn. A turn is exactly one tool-call JSON block, so
+   * anything beyond this is the model rambling — on CPU inference that runaway is the single
+   * largest source of wasted wall-clock time. Sized generously enough that a large write_file
+   * payload still fits (a truncated call fails to parse, costing a retry step).
+   */
+  num_predict: number
+  /**
+   * Stop sequences. These are the scaffolding markers of the prompt's own tool-history block
+   * (see agentPromptAssembler.ts / episodicMemoryCompactor.ts): small models routinely carry on
+   * past their tool call and hallucinate the next turn's tool results using this exact layout.
+   * Deliberately NOT the closing ``` fence — file content written through write_file frequently
+   * contains markdown code fences, and stopping there would corrupt every such write.
+   */
+  stop: string[]
   maxContextChars: number
 }
+
+/** Shared across all hardware tiers — see OllamaRuntimeOptions.stop. */
+export const AGENT_STOP_SEQUENCES: string[] = [
+  '\n### COMPLETE EXECUTION TRAJECTORY',
+  '\n### RECENT DETAILED TOOL OUTPUTS',
+  '\n#### [Step ',
+  '\nCURRENT TURN STATUS:',
+]
 
 export interface HardwareEnvironment {
   hasGpu?: boolean
@@ -57,7 +80,13 @@ export class HardwareProfileResolver {
       }
     }
 
-    // Base profile configurations with hardware-constrained context windows
+    // Generation cap scales with the tier's expected answer size, not with the hardware:
+    // a small model on a fast task still only has to emit one compact tool call.
+    const numPredict = tier === 'fast' ? 4096 : tier === 'deep_reasoning' ? 8192 : 6144
+
+    // Base profile configurations with hardware-constrained context windows.
+    // num_thread is set on every tier: a Medium/High profile can still be running on a
+    // CPU-only or low-VRAM machine, where leaving Ollama's thread count unset costs throughput.
     if (effectiveTier === 'Low') {
       const isDeep = tier === 'deep_reasoning'
       return {
@@ -66,6 +95,8 @@ export class HardwareProfileResolver {
         top_p: 0.9,
         repeat_penalty: 1.1,
         num_thread: safeCpuThreads,
+        num_predict: numPredict,
+        stop: [...AGENT_STOP_SEQUENCES],
         maxContextChars: isDeep ? 24000 : 16000,
       }
     }
@@ -78,6 +109,9 @@ export class HardwareProfileResolver {
         temperature: 0.1,
         top_p: 0.9,
         repeat_penalty: 1.1,
+        num_thread: safeCpuThreads,
+        num_predict: numPredict,
+        stop: [...AGENT_STOP_SEQUENCES],
         maxContextChars: isFast ? 16000 : isDeep ? 28000 : 28000,
       }
     }
@@ -90,6 +124,9 @@ export class HardwareProfileResolver {
       temperature: 0.1,
       top_p: 0.9,
       repeat_penalty: 1.1,
+      num_thread: safeCpuThreads,
+      num_predict: numPredict,
+      stop: [...AGENT_STOP_SEQUENCES],
       maxContextChars: isFast ? 24000 : isDeep ? 64000 : 48000,
     }
   }

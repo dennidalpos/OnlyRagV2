@@ -656,8 +656,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               onSelectHardwareProfile={setHardwareProfile}
               ocrEngine={ocrEngine}
               onSelectOcrEngine={setOcrEngine}
-              maxConcurrentTasks={settings.maxConcurrentTasks || 1}
-              onChangeMaxConcurrentTasks={(val) => onUpdateSettings({ maxConcurrentTasks: val })}
               maxToolCallSteps={settings.maxToolCallSteps ?? 50}
               onChangeMaxToolCallSteps={(val) => onUpdateSettings({ maxToolCallSteps: val })}
             />

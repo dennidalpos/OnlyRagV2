@@ -113,6 +113,48 @@ export class SkillAppService {
     return this.listHubSkillsBySource('official-core', workspaceRoot, forceRefresh)
   }
 
+  /**
+   * Every skill offered by EVERY configured hub source, deduplicated by name with the
+   * first source in the user's ordering winning. Used by the auto-discovery path in
+   * getMatchedSkills: restricting that search to 'official-core' meant hubs the user had
+   * deliberately added were never considered for auto-install.
+   * A source that fails to fetch is skipped, never fatal to the others.
+   */
+  async listHubSkillsAcrossSources(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
+    const sources = await customHubRepository.listSources()
+    if (sources.length === 0) return []
+
+    const installed = await skillRepository.listInstalledSkills(workspaceRoot)
+    const installedNames = new Set(installed.map((s) => s.name.toLowerCase()))
+
+    const seenNames = new Set<string>()
+    const merged: HubSkillItem[] = []
+
+    for (const source of sources) {
+      let skills: HubSkillItem[] = []
+      try {
+        skills = await skillHubClient.fetchSkillsFromSource(source, forceRefresh)
+      } catch (err: any) {
+        logger.log('WARN', 'SkillAppService', `Hub source '${source.name}' skipped during discovery: ${err.message}`)
+        continue
+      }
+
+      for (const item of skills) {
+        const key = item.name.toLowerCase()
+        if (seenNames.has(key)) continue
+        seenNames.add(key)
+        merged.push({
+          ...item,
+          hubId: item.hubId || source.id,
+          hubName: item.hubName || source.name,
+          isInstalled: installedNames.has(key) || installedNames.has(item.id.toLowerCase()),
+        })
+      }
+    }
+
+    return merged
+  }
+
   toggleSkillActive(skillId: string, isActive: boolean): boolean {
     skillRepository.setSkillActive(skillId, isActive)
     logger.log('INFO', 'SkillAppService', `Toggled skill '${skillId}' active: ${isActive}`)
@@ -314,7 +356,7 @@ export class SkillAppService {
 
       if (autoInstallMode !== 'disabled' && matched.length < maxSkills) {
         try {
-          const hubItems = await this.listHubSkills(workspaceRoot, false)
+          const hubItems = await this.listHubSkillsAcrossSources(workspaceRoot, false)
           const installedNames = new Set(availableSkills.map((s) => s.name.toLowerCase()))
           const uninstalledHubItems = hubItems.filter((item) => !installedNames.has(item.name.toLowerCase()))
 

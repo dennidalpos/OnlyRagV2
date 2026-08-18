@@ -385,7 +385,7 @@ export interface TranslationSchema {
     chatModel: string
     translationModel: string
     ollamaSection: string
-    concurrencySection: string
+    executionLimitsSection: string
     ollamaManagement: string
     downloadModel: string
     downloading: string
@@ -425,7 +425,7 @@ export interface TranslationSchema {
     pullModelPlaceholder: string
     pullModelAria: string
     hardwareProfileDesc: string
-    concurrencyDesc: string
+    executionLimitsDesc: string
     autoScaleDesc: string
     hardwareProfileLowName: string
     hardwareProfileLowDesc: string
@@ -445,16 +445,10 @@ export interface TranslationSchema {
     perfProfilerNotTested: string
     perfProfilerTestBtn: string
     perfProfilerBenchmarkAria: string
-    concurrencyPreset1Desc: string
-    concurrencyPreset2Desc: string
-    concurrencyPreset4Desc: string
-    concurrencyPreset8Desc: string
-    concurrencyQueueProtectionTitle: string
-    concurrencyQueueProtectionDesc: string
-    concurrencyMaxTasksLabel: string
-    concurrencyLiveStatusRunning: string
-    concurrencyLiveStatusQueued: string
-    concurrencyExceedsParallelWarning: string
+    queueProtectionTitle: string
+    queueProtectionDesc: string
+    queueLiveStatusRunning: string
+    queueLiveStatusQueued: string
   }
   about: {
     title: string

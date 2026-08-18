@@ -120,6 +120,11 @@ export class OllamaAppService {
     return ollamaHttpClient.getModelCapabilities(host)
   }
 
+  /** Warms a model into memory ahead of the first turn. Never throws — see preloadModel. */
+  preloadModel(modelName: string, host?: string): Promise<{ success: boolean; error?: string }> {
+    return ollamaHttpClient.preloadModel(modelName, host)
+  }
+
   cancelStream() {
     ollamaHttpClient.cancelStream()
   }

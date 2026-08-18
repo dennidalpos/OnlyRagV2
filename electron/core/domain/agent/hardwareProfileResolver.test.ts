@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HardwareProfileResolver } from './hardwareProfileResolver'
+import { HardwareProfileResolver, AGENT_STOP_SEQUENCES } from './hardwareProfileResolver'
 
 describe('HardwareProfileResolver Domain Unit Tests', () => {
   it('should resolve Low profile with 4096 context and thread throttling', () => {
@@ -10,18 +10,30 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     expect(opts.temperature).toBe(0.1)
   })
 
-  it('should resolve Medium profile with 8192 context and 28k max context chars', () => {
-    const opts = HardwareProfileResolver.resolveOllamaOptions('Medium')
+  it('should resolve Medium profile with 8192 context and 28k max context chars, and still pin num_thread (a Medium profile can run on a CPU-only machine)', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Medium', { cpuCount: 8 })
     expect(opts.num_ctx).toBe(8192)
     expect(opts.maxContextChars).toBe(28000)
-    expect(opts.num_thread).toBeUndefined()
+    expect(opts.num_thread).toBe(7)
   })
 
-  it('should resolve High profile with 16384 context and 48k max context chars', () => {
-    const opts = HardwareProfileResolver.resolveOllamaOptions('High')
+  it('should resolve High profile with 16384 context and 48k max context chars, and still pin num_thread', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 8 })
     expect(opts.num_ctx).toBe(16384)
     expect(opts.maxContextChars).toBe(48000)
-    expect(opts.num_thread).toBeUndefined()
+    expect(opts.num_thread).toBe(7)
+  })
+
+  it('should cap generation with a tier-scaled num_predict and ship the shared stop sequences on every profile', () => {
+    const low = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 4 }, 'fast')
+    const high = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 4 }, 'deep_reasoning')
+
+    expect(low.num_predict).toBe(4096)
+    expect(high.num_predict).toBe(8192)
+    expect(low.stop).toEqual(AGENT_STOP_SEQUENCES)
+    expect(high.stop).toEqual(AGENT_STOP_SEQUENCES)
+    // Never the closing code fence: write_file payloads routinely contain markdown fences.
+    expect(low.stop.some((s) => s.trim() === '```')).toBe(false)
   })
 
   it('should dynamically resolve Auto profile to High when 16GB VRAM GPU is detected', () => {

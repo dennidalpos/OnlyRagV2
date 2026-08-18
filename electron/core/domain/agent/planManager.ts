@@ -12,42 +12,6 @@ export interface CompactPlanState {
 
 export class PlanManager {
   /**
-   * Generates formatted markdown for .assistant/SESSION_TRACKER.md adhering to compaction rules.
-   */
-  public static generateSessionTrackerMarkdown(state: CompactPlanState): string {
-    const lines: string[] = [
-      '# SESSION TRACKER',
-      '',
-      '## Objective',
-      state.objective || 'General Execution Objective',
-      '',
-      '## Restore Point',
-      state.restorePoint || 'None (Session Initialized)',
-      '',
-      '## Active Micro-Task',
-      state.activeMicroTask || 'None (Plan Completed)',
-      '',
-      '## Remaining Micro-Tasks',
-    ]
-
-    if (state.pendingMicroTasks.length === 0) {
-      lines.push('- None')
-    } else {
-      for (const task of state.pendingMicroTasks) {
-        lines.push(`- [ ] ${task}`)
-      }
-    }
-
-    lines.push(
-      '',
-      '---',
-      "[STOP DIRECTIVE]: Upon completing the last micro-task, write the final summary into the .assistant\\SESSION_TRACKER.md file, clearing out the pending task list. Immediately after, halt any automatic execution and write in the chat: 'WAITING FOR COMMAND: Plan completed. State saved and compacted. Awaiting instructions.'. Stop strictly here."
-    )
-
-    return lines.join('\n')
-  }
-
-  /**
    * Computes a compact plan state representation directly from
    * GoalDecompositionPlanner's PlanMilestone[] — the canonical in-memory plan
    * representation — without round-tripping through markdown serialization

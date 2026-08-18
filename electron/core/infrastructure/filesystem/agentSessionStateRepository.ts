@@ -5,7 +5,8 @@ import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../domain/agent/planAndSolveGraph'
-import { PlanManager, type CompactPlanState } from '../../domain/agent/planManager'
+import { type CompactPlanState } from '../../domain/agent/planManager'
+import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 
 export interface SavedAgentSessionState {
   sessionId: string
@@ -71,9 +72,16 @@ export class AgentSessionStateRepository {
     }
   }
 
+  /**
+   * Writes .assistant/SESSION_TRACKER.md. Single writer, single format: the tracker is read
+   * back with SessionDebtTracker.parseTrackerMarkdown (both by the next turn's prompt assembly
+   * and by a resumed session), so it must be written in exactly that format. A second,
+   * plan-shaped format used to be written here on every checkpoint, which the parser could
+   * not read — the injected "previous turn debt" block was silently empty.
+   */
   public async saveSessionTrackerMarkdown(
     workspacePath: string | null,
-    compactState: CompactPlanState
+    tracker: SessionDebtTracker
   ): Promise<boolean> {
     if (!workspacePath || !fs.existsSync(workspacePath)) return false
     try {
@@ -82,7 +90,7 @@ export class AgentSessionStateRepository {
         await fs.promises.mkdir(assistantDir, { recursive: true })
       }
       const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
-      const markdown = PlanManager.generateSessionTrackerMarkdown(compactState)
+      const markdown = tracker.compileTrackerMarkdown()
       const tempPath = `${trackerPath}.tmp`
       await fs.promises.writeFile(tempPath, markdown, 'utf-8')
       await fs.promises.rename(tempPath, trackerPath)

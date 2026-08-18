@@ -279,6 +279,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               onDeleteSession={c.handleDeleteSession}
               onRenameSession={c.handleRenameSession}
               onSelectWorkspaceFolder={c.handleSelectWorkspaceFolder}
+              changeMetrics={c.changeMetrics}
               autoScroll={autoScroll}
               onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
             />

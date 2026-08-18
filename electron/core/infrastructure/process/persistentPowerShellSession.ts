@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'node:child_process'
+import { spawn, execFileSync, ChildProcess } from 'node:child_process'
 import crypto from 'node:crypto'
 import { logger } from '../../../diagnostics'
 import { normalizePowerShellCommand } from './taskRunner'
@@ -163,11 +163,62 @@ export class PersistentPowerShellSession {
       this.proc?.stdout?.on('data', onStdout)
       this.proc?.stderr?.on('data', onStderr)
 
-      // Wrap command with delimiters and status code capture
+      // Wrap command with delimiters and status capture.
+      // $LASTEXITCODE is reset first: it persists across commands in a long-lived session, so a
+      // native command that failed earlier would otherwise be re-reported against a later cmdlet
+      // that actually succeeded. $? is captured on the very next line (before any Write-Output
+      // can overwrite it) to catch pure-PowerShell failures, which never set $LASTEXITCODE.
       const normalized = normalizePowerShellCommand(command)
-      const wrappedPayload = `Write-Output "${startDelimiter}"\n${normalized}\nWrite-Output "${endDelimiter}"\nWrite-Output "$LASTEXITCODE"\nWrite-Output "${exitDelimiter}"\n`
+      const statusExpression = '$(if ($LASTEXITCODE -ne 0) { $LASTEXITCODE } elseif (-not $__onlyrag_ok) { 1 } else { 0 })'
+      const wrappedPayload =
+        `$global:LASTEXITCODE = 0\n` +
+        `Write-Output "${startDelimiter}"\n` +
+        `${normalized}\n` +
+        `$__onlyrag_ok = $?\n` +
+        `Write-Output "${endDelimiter}"\n` +
+        `Write-Output "${statusExpression}"\n` +
+        `Write-Output "${exitDelimiter}"\n`
       this.proc?.stdin?.write(wrappedPayload)
     })
+  }
+
+  /**
+   * Re-reads the machine and user PATH and applies it to BOTH this shell and the host
+   * process. A freshly installed tool is written to the registry PATH, which already-running
+   * processes never see — without this the very session that ran the installer would keep
+   * reporting the tool as missing. Best-effort: a failure leaves the old PATH in place.
+   */
+  public refreshEnvironmentPath(): boolean {
+    if (process.platform !== 'win32') return false
+    try {
+      const combined = execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          "[System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+        ],
+        { encoding: 'utf-8', timeout: 10000 }
+      )
+        .toString()
+        .trim()
+
+      if (!combined) return false
+
+      process.env.Path = combined
+      process.env.PATH = combined
+
+      if (this.proc?.stdin && !this.proc.killed) {
+        this.proc.stdin.write(`$env:Path = "${combined.replace(/"/g, '""')}"\n`)
+      }
+
+      logger.log('INFO', 'PersistentPowerShell', 'Environment PATH refreshed after toolchain installation.')
+      return true
+    } catch (err: any) {
+      logger.log('WARN', 'PersistentPowerShell', `Could not refresh PATH: ${err.message}`)
+      return false
+    }
   }
 
   /**

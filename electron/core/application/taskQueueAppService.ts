@@ -12,17 +12,17 @@ export interface QueuedAgentTask {
   reject: (err: any) => void
 }
 
-export class TaskQueueAppService {
-  private queue = new TaskQueueDomain<QueuedAgentTask>(1)
-  private isProcessing = false
+/**
+ * Agent tasks run strictly one at a time. Concurrency is not configurable: the tool
+ * executor owns a single workspace journal and a shared pool of persistent shells, so a
+ * second concurrent run would roll back the other run's writes on cancellation. Serial
+ * execution is also the workspace rule (see AGENTS.md, "Strict Serial Execution").
+ */
+const AGENT_TASK_CONCURRENCY = 1
 
-  public setMaxConcurrency(limit: number): void {
-    this.queue.setMaxConcurrency(limit)
-    logger.log('INFO', 'TaskQueueAppService', `Task queue max concurrency updated to: ${this.queue.getMaxConcurrency()}`)
-    this.processQueue().catch((err) => {
-      logger.log('ERROR', 'TaskQueueAppService', `Error processing queue on concurrency update: ${err.message}`)
-    })
-  }
+export class TaskQueueAppService {
+  private queue = new TaskQueueDomain<QueuedAgentTask>(AGENT_TASK_CONCURRENCY)
+  private isProcessing = false
 
   public getMaxConcurrency(): number {
     return this.queue.getMaxConcurrency()
@@ -42,9 +42,6 @@ export class TaskQueueAppService {
     payload: AgentTaskPayload,
     winGetter: () => BrowserWindow | null
   ): Promise<AgentTaskResult> {
-    const maxConcurrency = payload.settings?.maxConcurrentTasks || 1
-    this.queue.setMaxConcurrency(maxConcurrency)
-
     const taskId = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
 
     const taskData: QueuedAgentTask = {

@@ -105,6 +105,23 @@ export const apiService = {
     }
   },
 
+  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+    if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
+    try {
+      logger.info('ApiService:Ingestion', `Translating document in place ${docId} (${sourceLang} -> ${targetLang})`)
+      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model)
+      if (!res.success) {
+        logger.warn('ApiService:Ingestion', `Translate in-place warning/error: ${res.error}`)
+      } else {
+        window.dispatchEvent(new CustomEvent('onlyrag:documents-changed'))
+      }
+      return res
+    } catch (err: any) {
+      logger.error('ApiService:Ingestion', `Exception translating document ${docId} in place: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  },
+
   async getDocumentPagePreview(docId: string, pageNumber: number) {
     if (!window.electronAPI?.getDocumentPagePreview) return null
     try {

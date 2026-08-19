@@ -360,6 +360,14 @@ export interface TranslationSchema {
     exportSuccess: string
     exportCancelled: string
     exportError: string
+    translateInplace: string
+    translateInplaceDocxOnlyHint: string
+    translateInplaceModalTitle: string
+    translateInplaceWarning: string
+    translateInplaceConfirm: string
+    translateInplaceInProgress: string
+    translateInplaceSuccess: string
+    translateInplaceError: string
   }
   diagnostics: {
     title: string

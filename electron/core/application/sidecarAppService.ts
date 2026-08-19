@@ -242,6 +242,76 @@ export class SidecarAppService {
     })
   }
 
+  translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string) {
+    if (!docId || typeof docId !== 'string') {
+      return Promise.resolve({ success: false, error: 'Invalid document ID' })
+    }
+    logger.log('INFO', 'SidecarApp', `Translating document in place: ${docId} (${sourceLang} -> ${targetLang})`)
+    const postData = JSON.stringify({ source_lang: sourceLang, target_lang: targetLang, model: model || undefined })
+
+    return new Promise((resolve) => {
+      const req = http.request(
+        `http://127.0.0.1:8000/documents/${encodeURIComponent(docId)}/translate-inplace`,
+        {
+          method: 'POST',
+          agent: httpAgent,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+        },
+        (res) => {
+          let raw = ''
+          res.on('data', (chunk) => { raw += chunk })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                const data = JSON.parse(raw)
+                resolve({
+                  success: true,
+                  data: {
+                    id: data.id,
+                    filename: data.filename,
+                    fileSize: data.file_size,
+                    numPages: data.num_pages,
+                    numChunks: data.num_chunks,
+                    extractedMarkdown: data.extracted_markdown,
+                    status: data.status,
+                    ingestedAt: data.ingested_at,
+                    fileType: data.filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx',
+                  },
+                })
+              } catch (parseErr: any) {
+                logger.log('ERROR', 'SidecarApp', `Failed parsing translate-inplace response: ${parseErr.message}`)
+                resolve({ success: false, error: 'Failed parsing response from sidecar' })
+              }
+            } else {
+              let detail = `Error HTTP ${res.statusCode}`
+              try {
+                const parsed = JSON.parse(raw)
+                if (parsed.detail) detail = parsed.detail
+              } catch (err: any) {
+                logger.log('DEBUG', 'SidecarApp', `Sidecar error response was not JSON: ${err?.message}`)
+              }
+              resolve({ success: false, error: detail })
+            }
+          })
+        }
+      )
+      req.on('error', (err) => {
+        logger.log('ERROR', 'SidecarApp', `Translate in place HTTP error: ${err.message}`)
+        resolve({ success: false, error: err.message })
+      })
+      req.setTimeout(300000, () => {
+        req.destroy()
+        logger.log('WARN', 'SidecarApp', 'Translate in place timed out (5 min)')
+        resolve({ success: false, error: 'Translation timed out' })
+      })
+      req.write(postData)
+      req.end()
+    })
+  }
+
   getDocumentPagePreview(docId: string, pageNumber: number) {
     if (!docId || typeof docId !== 'string') return Promise.resolve(null)
     const page = Math.max(1, Number(pageNumber) || 1)

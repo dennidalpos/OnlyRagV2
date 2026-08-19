@@ -71,26 +71,82 @@ npm run test:fast
 
 ---
 
-## Task 4 (SESSIONE SEPARATA) — Traduzione in-place PDF/DOCX: solo inquadramento, non istruzioni operative
+## Task 4 — Traduzione in-place PDF/DOCX
 
-Questo task **non è pronto per l'esecuzione**. Quanto segue è lo scope concordato in fase di audit, non un piano dettagliato — richiede una sessione di pianificazione dedicata prima di scrivere codice.
+### Perché è un task a parte (contesto, non più un blocco totale)
+- Tocca contemporaneamente sidecar Python (PyMuPDF, python-docx), frontend, e LanceDB (re-indicizzazione atomica)
+- Rischio concreto di compliance se la redaction non cancella realmente il testo originale sotto il testo tradotto (vale soprattutto per i domini Medical/Legal che il progetto vuole abilitare) — rilevante per le Fasi 2+, non per la Fase 1
+- **Nota di correzione rispetto alla stesura precedente di questo piano**: esiste già una feature "Translation" in [`TranslationView.tsx`](src/components/translation/TranslationView.tsx) / [`useTranslation.ts`](src/hooks/useTranslation.ts), ma è un pipeline diverso e non riusabile per questo task — traduce il markdown estratto a chunk e poi lo ricompila in un **file nuovo** da zero via `export_markdown_to_file` ([`exporter.py`](sidecar/domain/exporter.py), font builtin PyMuPDF `helv`/`hebo`, nessuna preservazione di layout/immagini/stile originali nonostante il docstring dica il contrario). Zero riuso possibile: Task 4 richiede di mutare i byte del file originale mantenendo stile/tabelle/immagini intatti, non di rigenerarlo da markdown.
 
-### Perché è separato dagli altri task
-- Zero codice esistente da estendere (nessun riscontro per `translate-inplace`, redaction, font auto-fit in tutto il repo — verificato via grep)
-- Tocca contemporaneamente sidecar Python (PyMuPDF, python-docx), frontend (sync Editor Monaco/Preview per-pagina), e LanceDB (re-indicizzazione atomica)
-- Rischio concreto di compliance se la redaction non cancella realmente il testo originale sotto il testo tradotto (vale soprattutto per i domini Medical/Legal che il progetto vuole abilitare)
+### Sotto-fasi (ordine invariato dalla stesura precedente)
+1. **DOCX-only**: sostituzione run testuali via `python-docx`, preservando stile/paragrafi/tabelle — **dettagliato sotto, pronto per l'esecuzione**
+2. **PDF fine-mode senza auto-fit**: redaction reale + reinserimento testo nel bbox originale con font fisso, clipping se il testo tradotto eccede lo spazio — richiede ancora una sessione di scoping dedicata
+3. **Auto-fit progressivo** del font size per gestire l'espansione/contrazione del testo tradotto rispetto all'originale — non pronto
+4. **Copertura CJK** e font TrueType universali — non pronto
 
-### Sotto-fasi concordate (l'ordine, non il dettaglio implementativo)
-1. **DOCX-only**: sostituzione run testuali via `python-docx`, preservando stile/paragrafi/tabelle
-2. **PDF fine-mode senza auto-fit**: redaction reale + reinserimento testo nel bbox originale con font fisso, clipping se il testo tradotto eccede lo spazio
-3. **Auto-fit progressivo** del font size per gestire l'espansione/contrazione del testo tradotto rispetto all'originale
-4. **Copertura CJK** e font TrueType universali
+### Le 4 domande aperte della stesura precedente, risolte per la Fase 1
+- **Contratto endpoint**: risolto sotto.
+- **Strategia di redaction PyMuPDF**: non si applica alla Fase 1 (DOCX). La riassegnazione di `run.text` in python-docx è cancellazione reale (il testo originale non sopravvive nell'XML del run), non un overlay visivo — nessuna redaction necessaria. Resta un problema aperto solo per la Fase 2 (PDF), da risolvere quando quella sessione verrà aperta; ipotesi di lavoro corrente: `Page.add_redact_annot()` + `apply_redactions()` è l'API standard PyMuPDF per cancellazione reale del contenuto (non solo visiva), da verificare empiricamente con un test di integrazione che ispezioni lo stream PDF grezzo post-redazione prima di considerarla adottata.
+- **Font TTF universali**: non si applica alla Fase 1. `python-docx` riusa il font già presente nel run — nessun font nuovo da imbarcare finché non si traduce verso lingue CJK (Fase 4).
+- **Debounce/queue salvataggio atomico**: non si applica alla Fase 1, che è una singola richiesta/risposta atomica innescata da un'azione utente esplicita, non un autosave continuo. Rilevante solo se una Fase 2/3 introduce editing live per-pagina sincronizzato con Monaco.
 
-### Domande da sciogliere all'apertura della sessione dedicata (non ora)
-- Contratto esatto di `POST /documents/translate-inplace` (request/response schema)
-- Strategia di redaction PyMuPDF (verificare se `Page.add_redact_annot()` + `apply_redactions()` — l'API standard PyMuPDF per cancellazione reale del contenuto, non solo visiva — copre il caso d'uso)
-- Font TTF universali da imbarcare nell'app: peso pacchetto (famiglie con buona copertura CJK come Noto Sans CJK pesano decine di MB) — imbarcarli o scaricarli on-demand?
-- Debounce/queue per il salvataggio atomico multi-pagina, per evitare re-embedding ripetuti su modifiche ravvicinate dell'utente
+---
+
+### Fase 1 — DOCX-only in-place translation (pronta per l'esecuzione)
+
+#### Endpoint
+`POST /documents/{doc_id}/translate-inplace`
+
+Nuovo schema in `sidecar/schemas.py`:
+```python
+class TranslateInplaceRequest(BaseModel):
+    source_lang: str
+    target_lang: str
+```
+Risposta: riusa `IngestResponse` (stesso contratto di `PUT /documents/{doc_id}`), perché l'operazione termina con lo stesso ciclo re-chunk/re-embed/replace-doc-record già usato da `update_and_reindex_document`.
+
+Guardrail espliciti (mappati sui pattern di errore già in uso in `main.py`, `ValueError` → 404/400):
+- `doc.file_type != "docx"` → 400 ("In-place translation supported for DOCX only in this phase")
+- `file_path` mancante o non più presente su disco → 404
+
+#### Pipeline (nuovo modulo `sidecar/domain/translator.py`, parallelo a `exporter.py`/`ingestion.py` per separation of concerns)
+1. `validate_doc_id(doc_id)`, lookup del record in `DOCS_TABLE_NAME` (stesso pattern di `update_and_reindex_document`/`render_document_page_preview`).
+2. Guardrail sopra.
+3. `doc = docx.Document(file_path)`.
+4. Raccogliere tutti i run non vuoti, in ordine: `doc.paragraphs` + paragrafi di ogni cella di ogni tabella (stessa copertura di `extract_document_markdown` per DOCX in [`ingestion.py`](sidecar/domain/ingestion.py):381-423).
+5. Batch di traduzione: raggruppare run consecutivi in batch (~2500 char), uniti con un delimitatore univoco (es. `\n<<<RUN_SEP>>>\n`); prompt che impone esplicitamente di restituire lo stesso numero di segmenti nello stesso ordine. Chiamata via `httpx_client.post(f"{ollama_url}/api/generate", ...)`, stesso pattern già usato da `run_vision_ocr` in [`ocr.py`](sidecar/infrastructure/ocr.py) — il sidecar chiama Ollama direttamente, nessun routing attraverso il renderer.
+6. **Controllo di correttezza obbligatorio**: se il numero di segmenti restituiti non combacia con l'input, fallback a traduzione run-per-run per quel batch (più lento ma sicuro) invece di disallineare silenziosamente le traduzioni sui run sbagliati.
+7. Riassegnare `run.text` per ciascun run nell'ordine originale. Stile/font/bold/corsivo/tabelle restano quelli del run — non vengono toccati.
+8. `doc.save(file_path)` — sovrascrive il file originale in place.
+9. Re-estrarre il markdown dal file appena tradotto (`extract_document_markdown`) e passarlo direttamente a `update_and_reindex_document(doc_id, new_markdown)` — già fa esattamente cancellazione vecchi chunk, re-chunking, re-embedding e sostituzione doc record. Nessun helper condiviso da estrarre: è già una funzione pubblica riusabile così com'è, chiamata diretta senza duplicare nulla.
+10. Ritorna l'`IngestResponse` di `update_and_reindex_document`.
+
+#### Frontend
+- Nuovo metodo `apiService.translateDocumentInplace(docId, sourceLang, targetLang)` accanto al metodo esistente per `PUT /documents/{doc_id}`.
+- Punto di ingresso UI: azione "Traduci in-place" visibile solo per documenti DOCX (nascosta/disabilitata per altri tipi in questa fase). **Richiede un dialog di conferma esplicito** — l'operazione sovrascrive irreversibilmente il file originale, nessun backup automatico. Non procedere a costruire questa UI senza che l'utente veda e accetti quella conferma a runtime.
+
+#### Test (nuovo `sidecar/tests/test_translator.py`)
+- Round-trip del delimitatore batch (allineamento segmenti in→out)
+- Fallback per mismatch nel conteggio dei segmenti
+- Happy path documento intero con risposta Ollama mockata (`monkeypatch` su `httpx_client.post`)
+- Verifica che stile/bold/tabelle sopravvivano al round-trip (assert su `run.font.bold` ecc. dopo il save)
+
+Nota: `scripts/test_sidecar_health.ps1` punta esplicitamente a `sidecar\tests\test_sidecar.py`; va esteso a tutta la cartella `sidecar\tests\` (o al nuovo file) perché il nuovo test venga effettivamente eseguito.
+
+#### Definition of Done — Fase 1 — COMPLETATO
+- [x] Endpoint `POST /documents/{doc_id}/translate-inplace` implementato e testato ([main.py](sidecar/main.py), [schemas.py](sidecar/schemas.py))
+- [x] `sidecar/domain/translator.py` con pipeline di cui sopra (batch + fallback per-run su mismatch segmenti, riuso diretto di `update_and_reindex_document` per re-indicizzazione, zero duplicazione)
+- [x] Catena IPC Electron completa: `sidecarAppService.ts` → `sidecarIpc.ts` → `preload.ts` → `apiService.ts` → `useIngestion.ts`
+- [x] Azione UI con dialog di conferma esplicito (`TranslateInplaceModal.tsx`), visibile solo per DOCX in `DocumentListTable.tsx`
+- [x] `sidecar/tests/test_translator.py` verde: batch/collect runs, round-trip felice, fallback su mismatch segmenti, end-to-end via TestClient (ingest reale → translate-inplace → verifica file su disco + markdown reindicizzato), guardrail doc-non-trovato e file-non-DOCX
+- [x] `.venv\Scripts\pytest.exe sidecar\tests -q` pulito (51 test, 1 fallimento flaky pre-esistente e scorrelato — `test_history_index_search_and_project_filter`, passa isolato — segnalato a parte, non bloccante per questo task)
+- [x] `npm run typecheck` pulito
+- [x] `npm run test:fast` pulito — 79 file, 550 test invariati
+
+Nota: `scripts/test_sidecar_health.ps1` aggiornato per puntare a tutta la cartella `sidecar\tests\` invece del solo `test_sidecar.py`, altrimenti il nuovo file di test non sarebbe mai stato eseguito da quello script.
+
+### Fasi 2-4
+Restano non pronte per l'esecuzione. Aprire una sessione di scoping dedicata quando la Fase 1 sarà in produzione, riutilizzando le ipotesi di lavoro su redaction/font annotate sopra come punto di partenza, non come decisioni già prese.
 
 ---
 

@@ -18,6 +18,10 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.updateDocument(docId, markdownContent)
   })
 
+  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string) => {
+    return sidecarAppService.translateDocumentInplace(docId, sourceLang, targetLang, model)
+  })
+
   ipcMain.handle('ingest:page-preview', async (_, docId: string, pageNumber: number) => {
     return sidecarAppService.getDocumentPagePreview(docId, pageNumber)
   })

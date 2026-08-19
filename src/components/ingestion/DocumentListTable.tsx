@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { FileText, Trash2, Check, X, Search } from 'lucide-react'
+import { FileText, Trash2, Check, X, Search, Languages } from 'lucide-react'
 import { IngestedDocument } from '../../types'
 import { useTranslation } from '../../i18n'
 
@@ -8,6 +8,7 @@ interface DocumentListTableProps {
   selectedDoc: IngestedDocument | null
   onSelectDoc: (doc: IngestedDocument) => void
   onDeleteDoc: (docId: string, filename: string) => void
+  onTranslateInplace?: (doc: IngestedDocument) => void
 }
 
 export const DocumentListTable: React.FC<DocumentListTableProps> = ({
@@ -15,6 +16,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
   selectedDoc,
   onSelectDoc,
   onDeleteDoc,
+  onTranslateInplace,
 }) => {
   const { t } = useTranslation()
   const [searchFilter, setSearchFilter] = useState('')
@@ -92,6 +94,17 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                 </button>
 
                 <div className="flex items-center gap-1 shrink-0 ml-1.5">
+                  {onTranslateInplace && doc.fileType === 'docx' && (
+                    <button
+                      type="button"
+                      onClick={() => onTranslateInplace(doc)}
+                      aria-label={`${t('ingestion.translateInplace')} ${doc.filename}`}
+                      className="p-1.5 hover:bg-sky-950/80 rounded-lg text-slate-400 hover:text-sky-400 transition-colors focus-ring"
+                      title={t('ingestion.translateInplace')}
+                    >
+                      <Languages className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {deletingId === doc.id ? (
                     <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
                       <button

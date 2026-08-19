@@ -19,6 +19,12 @@ class IngestPathRequest(BaseModel):
 class UpdateDocumentRequest(BaseModel):
     markdown_content: str
 
+
+class TranslateInplaceRequest(BaseModel):
+    source_lang: str
+    target_lang: str
+    model: Optional[str] = None
+
 class PagePreviewResponse(BaseModel):
     doc_id: str
     page_number: int

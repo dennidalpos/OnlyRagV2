@@ -57,6 +57,8 @@ export function useIngestion(settings?: AppSettings) {
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
+  const [isTranslatingInplace, setIsTranslatingInplace] = useState<boolean>(false)
+  const [translateInplaceStatus, setTranslateInplaceStatus] = useState<{ success: boolean; message: string } | null>(null)
 
   const isDirty = selectedDoc !== null && markdownContent !== selectedDoc.extractedMarkdown
 
@@ -297,6 +299,32 @@ export function useIngestion(settings?: AppSettings) {
     }
   }
 
+  const handleTranslateInplace = async (docId: string, sourceLang: string, targetLang: string, model?: string) => {
+    if (!docId || isTranslatingInplace) return
+    setIsTranslatingInplace(true)
+    setTranslateInplaceStatus(null)
+
+    try {
+      const res = await apiService.translateDocumentInplace(docId, sourceLang, targetLang, model)
+      if (res.success && res.data) {
+        if (selectedDoc?.id === docId) {
+          setSelectedDoc(res.data)
+          setMarkdownContent(res.data.extractedMarkdown)
+        }
+        setTranslateInplaceStatus({ success: true, message: t('ingestion.translateInplaceSuccess', { filename: res.data.filename }) })
+        notifyDocumentsChanged()
+        await fetchDocuments()
+      } else {
+        setTranslateInplaceStatus({ success: false, message: res.error || t('ingestion.translateInplaceError', { message: 'unknown error' }) })
+      }
+    } catch (err: any) {
+      setTranslateInplaceStatus({ success: false, message: t('ingestion.translateInplaceError', { message: err.message }) })
+    } finally {
+      setIsTranslatingInplace(false)
+      setTimeout(() => setTranslateInplaceStatus(null), 5000)
+    }
+  }
+
   const handleIngestPath = async (targetFilePath: string, displayName?: string) => {
     if (!targetFilePath || !targetFilePath.trim()) return
     isCancelledRef.current = false
@@ -457,6 +485,9 @@ export function useIngestion(settings?: AppSettings) {
     isSaving,
     saveStatus,
     handleSaveDocument,
+    isTranslatingInplace,
+    translateInplaceStatus,
+    handleTranslateInplace,
     isUploading,
     uploadError,
     syncScroll,

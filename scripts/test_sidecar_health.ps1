@@ -82,13 +82,13 @@ try {
 try {
     # Execute Pytest Test Suite
     if (-not $Fast -or $Full) {
-        Write-Host "`n[4/4] Running Pytest test suite (sidecar/tests/test_sidecar.py)..." -ForegroundColor Yellow
+        Write-Host "`n[4/4] Running Pytest test suite (sidecar/tests/)..." -ForegroundColor Yellow
     }
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
     $pytestBin = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\pytest.exe"
 
     if (Test-Path $pytestBin) {
-        & $pytestBin "$rootDir\sidecar\tests\test_sidecar.py" -q
+        & $pytestBin "$rootDir\sidecar\tests" -q
         if ($LASTEXITCODE -ne 0) {
             throw "[FAIL] Pytest test suite failed with exit code $LASTEXITCODE."
         }
@@ -96,10 +96,10 @@ try {
     } else {
         $appDataPy = "$env:APPDATA\onlyrag-v2\python_venv\Scripts\python.exe"
         $pyCmd = if (Test-Path $appDataPy) { $appDataPy } else { "python" }
-        
-        & $pyCmd -m pytest "$rootDir\sidecar\tests\test_sidecar.py" -q 2>$null
+
+        & $pyCmd -m pytest "$rootDir\sidecar\tests" -q 2>$null
         if ($LASTEXITCODE -ne 0) {
-            & $pyCmd "$rootDir\sidecar\tests\test_sidecar.py"
+            & $pyCmd -m pytest "$rootDir\sidecar\tests"
             if ($LASTEXITCODE -ne 0) {
                 throw "[FAIL] Sidecar test suite failed with exit code $LASTEXITCODE."
             }

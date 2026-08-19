@@ -22,7 +22,7 @@ from sidecar.schemas import (
     ExportRequest, InspectImageRequest, UpdateDocumentRequest, PagePreviewResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
-    PromptHistoryRemoveRequest,
+    PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
 from sidecar.infrastructure.db import lance_db, get_existing_tables
@@ -34,6 +34,7 @@ from sidecar.services.ingest_service import (
     update_and_reindex_document,
     render_document_page_preview
 )
+from sidecar.domain.translator import translate_docx_inplace
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 
@@ -133,6 +134,19 @@ async def update_document(doc_id: str, req: UpdateDocumentRequest):
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error updating document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/documents/{doc_id}/translate-inplace", response_model=IngestResponse)
+async def translate_document_inplace(doc_id: str, req: TranslateInplaceRequest):
+    logger.info(f"In-place translation requested for document {doc_id}: {req.source_lang} -> {req.target_lang}")
+    try:
+        return await asyncio.to_thread(
+            translate_docx_inplace, doc_id, req.source_lang, req.target_lang, req.model or "llama3.2"
+        )
+    except ValueError as val_err:
+        raise HTTPException(status_code=404, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error translating document {doc_id} in place: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/documents/{doc_id}/page-preview/{page_num}", response_model=PagePreviewResponse)

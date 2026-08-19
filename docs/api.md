@@ -214,11 +214,11 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 
 ---
 
-### 2.2. Canali Agente di Sviluppo (`agent:*`) & Tool Set (19 Strumenti)
+### 2.2. Canali Agente di Sviluppo (`agent:*`) & Tool Set (27 Strumenti)
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
-| `agent:start-task` | `AgentTaskPayload` | `{ success: boolean; summary: string }` | Esecuzione di un turno agentico completo con Tool-Calling (19 strumenti), auto-healing e FSM mode gating. |
+| `agent:start-task` | `AgentTaskPayload` | `{ success: boolean; summary: string }` | Esecuzione di un turno agentico completo con Tool-Calling (27 strumenti), auto-healing e FSM mode gating. |
 | `agent:cancel-task` | `taskId?: string` | `{ success: boolean; message?: string }` | Interruzione di un task specifico o di tutti i task attivi. |
 | `agent:get-queue-status` | `none` | `TaskQueueStatus` | Stato corrente della coda task (running, queued, maxConcurrency). |
 | `agent:set-max-concurrency` | `limit: number` | `{ success: boolean; maxConcurrency: number }` | Imposta il limite di task concorrenti (range: 1-8). |
@@ -309,7 +309,7 @@ const report = await analyzeLogs()
 | `agent:get-plan-state` | `agentGetPlanState(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `{ planMilestones: PlanMilestone[]; status?; stepCount } \| null` | Legge lo stato dei milestone persistito dal backend (`GoalDecompositionPlanner`, unica fonte di verità) per una sessione. |
 | `agent:plan-seed` | `agentPlanSeed(sessionId, workspacePath, planMilestones, userTask?)` | `sessionId`, `workspacePath`, milestone approvati, `userTask?` | `boolean` | Inietta i milestone di un piano approvato nello stato di sessione persistito prima dell'avvio dell'esecuzione, cosicché il loop agentico li carichi come stato iniziale. |
 
-#### Matrice Completa dei 19 Strumenti Agentici Supportati
+#### Matrice Completa dei 27 Strumenti Agentici Supportati
 
 | Tool Name | Aliases Supportati | Parametri Principali | Descrizione |
 | :--- | :--- | :--- | :--- |
@@ -326,10 +326,18 @@ const report = await analyzeLogs()
 | `list_dir` | `ls`, `listdir`, `dir` | `dirPath` | Elenco file e cartelle di un singolo livello. |
 | `list_files_recursive` | `tree`, `find_files`, `file_tree` | `dirPath`, `maxDepth` | Scansione ricorsiva della struttura cartelle (escludendo `node_modules`, `.git`). |
 | `run_command` | `terminal`, `exec`, `powershell`, `cmd`, `bash` | `command`, `cwd` | Esecuzione comandi PowerShell non interattivi con diagnostica auto-healing. |
-| `inspect_os_env` | `system_info`, `os_env` | `none` | Ispezione di CPU, RAM, OS platform ed estensione hardware. |
+| `run_tests` | *(nessuno — solo nome canonico)* | `command` | Rileva ed esegue il test runner del workspace (`test:fast`/`test` in `package.json` o pytest) e ritorna un esito pass/fail strutturato. |
+| `inspect_os_env` | `system_info`, `os_env` | `none` | Ispezione di CPU, RAM, OS platform ed estensione hardware, incluso l'inventario toolchain (node/npm/pnpm/git/python con versioni). |
 | `web_search` | `search_web`, `google`, `duckduckgo` | `query` | Ricerca web tramite DuckDuckGo. |
 | `fetch_web_content` | `read_url`, `web_fetch`, `browse` | `url` | Estrazione e conversione in markdown di pagine web remote. |
 | `download_file` | `download`, `fetch_file`, `save_url` | `url`, `targetPath` | Download di file binari o sorgenti nel workspace. |
+| `git_status` | `gitstatus`, `status_git`, `git_state` | `none` | Stato sintetico (`git status --short`) del working tree nella workspace root. |
+| `git_diff` | `gitdiff`, `git_changes`, `diff` | `filePath?`, `staged?` | Diff unificato (troncato a 8000 caratteri) dell'intero working tree o di un singolo file, staged o unstaged. |
+| `git_commit` | *(nessuno — solo nome canonico)* | `commitMessage` | Stage + commit via `execFileSync` (argv-array, nessuna shell string). Sempre sottoposto ad approvazione umana esplicita a monte, in ogni modalità agente. |
+| `rollback_workspace` | `rollback`, `undo`, `undo_changes`, `revert_workspace` | `none` | Ripristina tutti i file al baseline di inizio sessione (`AtomicWorkspaceJournal.rollbackAll()`). |
+| `rollback_last_step` | `undo_last_step`, `undo_step`, `revert_last_step` | `none` | Ripristina solo le modifiche dell'ultimo step concluso, senza toccare gli step precedenti né il baseline di sessione. |
+| `get_file_info` | `file_info`, `stat_file`, `file_stats`, `file_metadata` | `filePath` | Stat del file: dimensione, tipo, flag binario, conteggio righe, data ultima modifica. |
+| `ensure_tool` | *(nessuno — solo nome canonico)* | `toolName` | Installa un tool di sviluppo mancante via winget, limitatamente all'allow-list chiusa di `devToolchain.ts`. |
 | `ask` | `ask_question`, `clarify`, `question` | `question` | Richiesta di chiarimento all'utente (intercettata in modalità AGENT). |
 | `finish` | `done`, `complete`, `finish_task` | `result` | Conclusione del turno previo superamento del Pre-Finish Gate. `result` è obbligatorio. |
 

@@ -33,7 +33,7 @@ All architectural, operational, API and setup specifications reside strictly in 
 - 🏛️ [**Architecture & System Topology**](./docs/architecture.md): Multi-process topology, 4-tier Clean Architecture, Mermaid diagrams, 2-level router, hybrid RAG pipeline, and resilient agent studio.
 - 🧩 [**Modules & Responsibilities**](./docs/modules.md): Complete mapping of Frontend, Electron Main Core, Python Sidecar, and Skill Hub components with input/output contracts.
 - 🔌 [**API Reference & Contracts**](./docs/api.md): REST endpoints (`/health`, `/ingest`, `/search`, `/documents`, `/export`), Electron IPC channels (`window.electronAPI`), TypeScript schemas and error codes.
-- ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware presets (**P1 – P5**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
+- ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware tiers (**legacy / entry / midrange / highend / extreme**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
 - 📖 [**Documentation Index**](./docs/README.md): Navigable master index.
 
 ---

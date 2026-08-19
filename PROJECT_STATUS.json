@@ -1,3 +1,5 @@
 {
-  "todos": []
+  "todos": [
+    "[SESSIONE SEPARATA - alta complessita'] Traduzione in-place PDF/DOCX: pipeline di redaction PyMuPDF, reinserimento testo nel bbox originale con font auto-fit progressivo, sostituzione run python-docx, endpoint POST /documents/translate-inplace, salvataggio atomico con re-indicizzazione LanceDB su PUT /documents/{doc_id}. Da scorporare in sotto-fasi: (1) DOCX-only run replace, (2) PDF fine-mode senza auto-fit, (3) auto-fit progressivo, (4) copertura CJK/font universali - vedi IMPLEMENTATION_PLAN.md"
+  ]
 }

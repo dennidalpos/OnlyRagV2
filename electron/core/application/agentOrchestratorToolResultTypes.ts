@@ -45,4 +45,4 @@ export interface ToolResultProcessingContext {
 
 export type ToolResultProcessingOutcome =
   | { outcome: 'continue' }
-  | { outcome: 'return'; result: { success: true; summary: string } }
+  | { outcome: 'return'; result: { success: boolean; summary: string } }

@@ -19,7 +19,12 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
   if (!ctx.goalPlanner.hasPlan() && (hasExplicitPlanBlock || ctx.streamedOutput.includes('- [ ]') || ctx.streamedOutput.includes('1. '))) {
     const extractedMilestones = GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput)
     if (extractedMilestones.length >= 2) {
-      ctx.goalPlanner.initializePlan(extractedMilestones)
+      // A brand-new plan can only ever start pending: parsePlanFromText's checkbox status
+      // (verified/in_progress/failed) is meant for RE-parsing a plan that was already running
+      // (resume, revision). Trusting it here would let a model that mistakenly echoes "[x]"
+      // on its first turn seed a plan that's already 100% "done" -- compileProgressPrompt then
+      // orders it to call finish immediately, closing the task without doing any work.
+      ctx.goalPlanner.initializePlan(extractedMilestones.map((m) => ({ ...m, status: 'pending' })))
       ctx.emitLog('info', `📋 Execution Plan Initialized (${extractedMilestones.length} milestones)`)
     }
     return
@@ -103,9 +108,12 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
 
   const loopOutcome = await handleLoopDetection(ctx, parsedTool)
   if (loopOutcome) return loopOutcome
-  ctx.state.stagnationStreak = 0
 
   if (parsedTool.tool === 'ask') {
+    // Deliberately does NOT reset stagnationStreak first: "ask" isn't forward progress, so a
+    // model that just burned through a write-loop's stagnation budget and pivots to asking
+    // inherits that same streak instead of getting a fresh grace period (see
+    // agentOrchestratorAskAutoHealing.ts).
     const askOutcome = await handleAskTool({
       parsedTool,
       agentMode: ctx.agentMode,
@@ -116,7 +124,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
       hasRecentToolFailure: ctx.hasRecentToolFailure,
       errorCountInHistory: ctx.errorCountInHistory,
       compiledHistoryBlock: ctx.compiledHistoryBlock,
-      consecutiveAskAttempts: ctx.state.consecutiveAskAttempts,
+      stagnationStreak: ctx.state.stagnationStreak,
       episodicCompactor: ctx.episodicCompactor,
       emitLog: ctx.emitLog,
       emitDone: ctx.emitDone,
@@ -124,11 +132,13 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
       finalizeSession: ctx.finalizeSession,
     })
     if (askOutcome.outcome === 'continue') {
-      ctx.state.consecutiveAskAttempts = askOutcome.consecutiveAskAttempts
+      ctx.state.stagnationStreak = askOutcome.stagnationStreak
       return { outcome: 'continue' }
     }
     return askOutcome
   }
+
+  ctx.state.stagnationStreak = 0
 
   ctx.emitLog('tool_call', `Step ${ctx.stepCount} Tool Call [${parsedTool.tool}]:`, JSON.stringify(parsedTool.parameters, null, 2))
   if (ctx.settings.enableCodingAgentDebugLog) {

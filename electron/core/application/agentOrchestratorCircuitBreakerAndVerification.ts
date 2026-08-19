@@ -28,12 +28,14 @@ export async function runCircuitBreaker(
     return null
   }
 
+  // No escalation model left to try: the breaker is forcing a hard pause, which means the task
+  // did not complete -- must never be reported as a success.
   const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
   ctx.emitLog('info', cbMsg)
-  ctx.emitDone(true, cbRes.suggestedAction || cbMsg)
+  ctx.emitDone(false, cbRes.suggestedAction || cbMsg)
   await ctx.persistCurrentState()
   ctx.finalizeSession()
-  return { outcome: 'return', result: { success: true, summary: cbRes.suggestedAction || cbMsg } }
+  return { outcome: 'return', result: { success: false, summary: cbRes.suggestedAction || cbMsg } }
 }
 
 export async function recordMutationSideEffects(ctx: ToolResultProcessingContext, targetParam: string | undefined) {

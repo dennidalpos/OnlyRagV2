@@ -9,11 +9,16 @@ import type { ToolResultMutableFlags } from './agentOrchestratorToolResultProces
 
 export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
 
-/** Loop-scoped counters the response interpreter and its helpers read and advance across turns. */
+/**
+ * Loop-scoped counters the response interpreter and its helpers read and advance across turns.
+ * stagnationStreak is the single shared "how stuck is the model right now" counter: both the
+ * write/edit loop detector and the ask auto-healing gate increment it, so a model that escapes
+ * a blocked write loop by switching to "ask" doesn't get a fresh grace period -- it inherits
+ * however stuck it already was.
+ */
 export interface ResponseInterpreterState {
   noToolStreak: number
   stagnationStreak: number
-  consecutiveAskAttempts: number
 }
 
 export interface ResponseInterpreterContext {

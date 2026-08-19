@@ -90,12 +90,14 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     )
   }
   if (ctx.isUnlimitedSteps && ctx.state.stagnationStreak >= 15) {
+    // A hard stop here means the model never broke out of its loop -- this is the session
+    // giving up, not completing the task, so it must never be recorded as a success.
     const stagSummary = `Pausa per stagnazione: raggiunti ${ctx.state.stagnationStreak} step consecutivi senza progresso.`
     ctx.emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
-    ctx.emitDone(true, stagSummary)
+    ctx.emitDone(false, stagSummary)
     await ctx.persistCurrentState()
     ctx.finalizeSession()
-    return { outcome: 'return', result: { success: true, summary: stagSummary } }
+    return { outcome: 'return', result: { success: false, summary: stagSummary } }
   }
 
   ctx.loopDetector.resetTarget(loopTarget)

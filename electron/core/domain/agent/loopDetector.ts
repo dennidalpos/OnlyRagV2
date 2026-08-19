@@ -121,33 +121,23 @@ export class AgentActionLoopDetector {
       }
     }
 
-    // 2. Semantic File Edit Oscillation Check (e.g. >=3 edit/replace attempts on the same file in the last 6 actions)
+    // 2. File Edit Thrashing Check: >=2 edit-class operations (write_file, replace_file_content,
+    // multi_replace_file_content) on the same file within the last 4 actions. This used to be two
+    // separate, overlapping checks -- a looser "3 edits in 6" rule covering all three tools and a
+    // stricter "2 write_file's in 4" rule covering only write_file -- which meant a real stuck
+    // session could ride out whichever threshold happened to be slower to fire. One tool-agnostic,
+    // fast-firing rule is both simpler and harder to dodge.
     if (target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(toolCall.tool)) {
-      const recentTargets = this.targetHistory.slice(-6)
+      const recentTargets = this.targetHistory.slice(-4)
       const sameFileEdits = recentTargets.filter(
         (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(rec.tool)
       ).length
 
-      if (sameFileEdits >= 3) {
+      if (sameFileEdits >= 2) {
         return {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
-          suggestedIntervention: `[CRITICAL OSCILLATION INTERVENTION: FILE EDIT CONVERGENCE REQUIRED FOR ${target}]\nYou have executed ${sameFileEdits} edit operations on "${target}".\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If all code changes in the workspace are complete and verified, invoke the finish tool immediately.`,
-        }
-      }
-    }
-
-    // 2.5 Redundant Full Write Loop Check (e.g. >=2 full write_file calls on same target)
-    if (target && toolCall.tool === 'write_file') {
-      const recentWrites = this.targetHistory.slice(-4).filter(
-        (rec) => rec.target === target && rec.tool === 'write_file'
-      ).length
-
-      if (recentWrites >= 2) {
-        return {
-          isLooping: true,
-          consecutiveDuplicateCount: recentWrites,
-          suggestedIntervention: `[CRITICAL WRITE LOOP INTERVENTION: REPEATED FULL WRITES ON ${target}]\nYou have written full file replacements to "${target}" ${recentWrites} times.\nDO NOT call write_file on "${target}" again.\nDirectives:\n1. If you need to make targeted changes, use replace_file_content or multi_replace_file_content.\n2. Run a build/test verification command via run_command to verify your updates.\n3. If your implementation is complete, call the finish tool immediately.`,
+          suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.`,
         }
       }
     }

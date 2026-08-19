@@ -105,6 +105,39 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(4)
   })
 
+  it('must not grant a fresh ask-redirect grace period to a model that just escaped an exhausted write-loop stagnation budget (regression: the loop detector\'s stagnationStreak and the ask auto-healing counter were tracked separately, so a model blocked repeatedly on write_file could dodge the block entirely by switching to "ask", and the resulting session was still recorded as a success)', async () => {
+    const duplicateToolJson = '```json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest still_failing.py" }\n}\n```'
+    const askJson = '```json\n{\n  "tool": "ask",\n  "parameters": { "question": "What should we do next?" }\n}\n```'
+
+    let call = vi.mocked(ResilientModelDispatcher.executeWithFallback)
+    // Enough repeats of the identical failing command for the loop detector to block it at least
+    // once (raising the shared stagnation streak), followed by enough repeated "ask" turns to
+    // exhaust the ask auto-healing redirect budget -- the exact turn at which each guard trips
+    // depends on which of the loop detector's several sub-checks fires first, so this over-
+    // provisions both phases rather than asserting a brittle exact step count.
+    for (let i = 0; i < 8; i++) call = call.mockResolvedValueOnce({ output: duplicateToolJson, usedModel: 'llama3.2', isFallback: false })
+    for (let i = 0; i < 3; i++) call = call.mockResolvedValueOnce({ output: askJson, usedModel: 'llama3.2', isFallback: false })
+
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Debug test failures',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+      },
+      null
+    )
+    // Drain any queued-but-unconsumed mock turns from the over-provisioned chain above so they
+    // can't leak into the next test's call count (vi.clearAllMocks() in beforeEach clears calls,
+    // not queued mockResolvedValueOnce implementations).
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockReset()
+
+    // The identical failing command must be blocked by the loop detector at least once, raising
+    // the shared stagnation streak so that by the time the model pivots to "ask" it has little or
+    // no fresh redirect budget left -- the give-up must be surfaced honestly, not as a success.
+    expect(res.success).toBe(false)
+    expect(res.summary).toContain('What should we do next?')
+  })
+
   it('should offer the configured Deep Reasoning Tier model (not the Standard Tier model) as an escalation candidate when the stagnation circuit breaker trips (regression: deepReasoningModel was wired to the Standard Tier model, so the Deep Reasoning Tier was unreachable via this escalation path)', async () => {
     // Distinct commands each turn (rather than one repeated command) so the loop-detector's
     // exact-duplicate guard doesn't block re-execution and mask the circuit breaker's own
@@ -152,7 +185,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const escalationArgs = vi.mocked(ResilientModelDispatcher.getNextEscalationModel).mock.calls[0][1]
     expect(escalationArgs.deepReasoningModel).toBe('deepseek-r1:14b')
     expect(escalationArgs.deepReasoningModel).not.toBe(escalationArgs.standardModel)
-    expect(res.success).toBe(true)
+    // getNextEscalationModel is mocked to return null (no tier left to try), so the breaker has
+    // no escalation path and must give up honestly: the failing test was never fixed.
+    expect(res.success).toBe(false)
   })
 
   it('should execute in plan mode and complete with step proposal without mutating files', async () => {
@@ -206,6 +241,36 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const savedState = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     expect(savedState.planMilestones.length).toBe(2)
     expect(savedState.planMilestones[0].title).toContain('Design database schema')
+  })
+
+  it('must never seed a freshly-initialized plan with already-verified milestones, even if the model mistakenly emits "[x]" checkboxes on its first turn (regression: a model that echoes a checked-off plan on turn 1 previously seeded 100% progress and told itself to finish immediately without doing any work)', async () => {
+    const wronglyCheckedPlanJson =
+      '<plan>\n[\n  { "id": "m1", "title": "Design database schema", "status": "verified" },\n' +
+      '  { "id": "m2", "title": "Implement API endpoints", "status": "verified" }\n]\n</plan>\n\n' +
+      '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
+      output: wronglyCheckedPlanJson,
+      usedModel: 'llama3.2',
+      isFallback: false,
+    })
+
+    const sessionId = 'test-plan-fresh-checked-session'
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Plan the architecture',
+        agentMode: 'plan',
+        workspacePath: tempDir,
+      },
+      null,
+      sessionId
+    )
+
+    expect(res.success).toBe(true)
+
+    const statePath = path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`)
+    const savedState = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
+    expect(savedState.planMilestones.length).toBe(2)
+    expect(savedState.planMilestones.every((m: { status: string }) => m.status === 'pending')).toBe(true)
   })
 
   it('should hot-swap from plan to agent mode smoothly on consecutive turns', async () => {

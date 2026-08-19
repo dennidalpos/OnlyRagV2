@@ -373,6 +373,38 @@ def test_analyze_pdf_page_structure_classifies_text_plus_image_as_hybrid_vision(
     finally:
         doc.close()
 
+def test_analyze_pdf_page_structure_keeps_short_image_free_text_native():
+    """A page with a short but genuine, image-free native text layer (e.g. one line of translated
+    text) must be classified NATIVE_TEXT, not OCR_REQUIRED, even though it falls under the 40-char
+    threshold. Routing it through OCR anyway would force perfectly valid text back through
+    RapidOCR's Chinese-trained recognition model, which corrupts CJK text into Han-unification
+    variants (Japanese 語 -> Simplified Chinese 语)."""
+    import pymupdf
+    from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((50, 72), "日本語", fontsize=12)
+        struct_info = analyze_pdf_page_structure(page)
+        assert struct_info["strategy"] == PageRoutingStrategy.NATIVE_TEXT
+    finally:
+        doc.close()
+
+def test_analyze_pdf_page_structure_blank_page_stays_ocr_required():
+    """A truly blank page (no text, no images) has no usable native text layer at all, so it must
+    still be routed to OCR_REQUIRED -- only a short-but-real, image-free text layer is exempted."""
+    import pymupdf
+    from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=200, height=200)
+        struct_info = analyze_pdf_page_structure(page)
+        assert struct_info["strategy"] == PageRoutingStrategy.OCR_REQUIRED
+    finally:
+        doc.close()
+
 def test_render_pdf_page_content_describes_figures_with_vision_when_hybrid(monkeypatch):
     """render_pdf_page_content(describe_figures_with_vision=True) must call the Vision model on
     each significant embedded image and fold its description into the figure caption, so diagram

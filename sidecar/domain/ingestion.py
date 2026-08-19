@@ -224,7 +224,7 @@ def extract_pdf_document(
             )
 
         raw_text = page.get_text("text").strip()
-        used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED or len(raw_text) < 40
+        used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
         describe_figures_with_vision = strategy == PageRoutingStrategy.HYBRID_VISION
 
         if used_ocr and progress_callback:

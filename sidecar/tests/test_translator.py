@@ -524,17 +524,20 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
         assert res.status_code == 200
         assert res.json()["status"] == "indexed"
 
-        # Assert against the saved file directly, not the re-ingested extracted_markdown: for a
-        # near-empty synthetic page like this one, the downstream re-ingestion OCR/routing can
-        # normalize CJK unification variants (e.g. Japanese 語 -> Simplified Chinese 语) -- a
-        # pre-existing ingestion-pipeline behavior unrelated to what this test verifies (that the
-        # correct bundled font was selected and embedded for the translated PDF itself).
         translated_doc = pymupdf.open(path)
         try:
             page_text = translated_doc[0].get_text()
         finally:
             translated_doc.close()
         assert japanese_text in page_text
+
+        # The re-ingested markdown must carry the same text as the saved file, unmangled: a
+        # near-empty page like this one used to fall under the OCR_REQUIRED routing threshold
+        # purely on char count, forcing it back through RapidOCR's Chinese-trained recognition
+        # model, which corrupts CJK text into Han-unification variants (Japanese 語 -> Simplified
+        # Chinese 语). analyze_pdf_page_structure now only routes short-text, image-free pages to
+        # OCR when there's no usable native text layer at all.
+        assert japanese_text in res.json()["extracted_markdown"]
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")

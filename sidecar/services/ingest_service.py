@@ -206,7 +206,7 @@ def process_and_index_document_generator(
                     md_tables, _ = extract_tables_from_page(page)
                     table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
                     raw_text = page.get_text("text").strip()
-                    used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED or len(raw_text) < 40
+                    used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
                     describe_figures_with_vision = strategy == PageRoutingStrategy.HYBRID_VISION
 
                     work_items.append(prepare_pdf_page_work_item(

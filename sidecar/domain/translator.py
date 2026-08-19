@@ -15,9 +15,39 @@ _RUN_SEPARATOR = "<<<RUN_SEP>>>"
 _TRANSLATE_BATCH_MAX_CHARS = 2500
 _OLLAMA_URL = "http://127.0.0.1:11434"
 
-# Fase 2 (PDF fine-mode) scope: fixed built-in font, no original-font preservation and no
-# auto-fit -- those are Fase 3/4. See IMPLEMENTATION_PLAN.md Task 4.
-_PDF_TRANSLATE_FONT = "helv"
+# Fase 3 auto-fit: never shrink text below this absolute size or this fraction of the original
+# span size, whichever floor is higher -- keeps reinserted text legible instead of vanishing.
+_PDF_AUTOFIT_MIN_SIZE = 6.0
+_PDF_AUTOFIT_MIN_RATIO = 0.4
+# Binary search stops refining once the [lo, hi] font-size bracket is this narrow.
+_PDF_AUTOFIT_TOLERANCE = 0.25
+
+# Fase 4: bundled static Regular-weight fonts (see sidecar/assets/fonts/OFL-*.txt for license and
+# provenance -- SIL Open Font License 1.1, Noto Project). No PDF base14 font covers CJK or
+# Cyrillic/Greek, so every PDF reinsertion goes through one of these instead of a built-in font.
+_PDF_FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
+_PDF_FALLBACK_FONT_FILE = os.path.join(_PDF_FONT_DIR, "NotoSans-Regular.otf")  # Latin, Cyrillic, Greek
+
+# target_lang (free-text from the frontend language picker) -> bundled font file, matched
+# case-insensitively by substring, first match wins. More specific hints are listed before the
+# broader ones they'd otherwise be shadowed by (e.g. "traditional chinese" before "chinese").
+# Anything not matched here falls back to _PDF_FALLBACK_FONT_FILE.
+_PDF_LANG_FONT_RULES: List[Tuple[str, str]] = [
+    ("japanese", os.path.join(_PDF_FONT_DIR, "NotoSansCJKjp-Regular.otf")),
+    ("korean", os.path.join(_PDF_FONT_DIR, "NotoSansCJKkr-Regular.otf")),
+    ("traditional chinese", os.path.join(_PDF_FONT_DIR, "NotoSansCJKtc-Regular.otf")),
+    ("chinese", os.path.join(_PDF_FONT_DIR, "NotoSansCJKsc-Regular.otf")),  # default: Simplified
+]
+
+
+def _resolve_pdf_font_file(target_lang: str) -> str:
+    """Picks the bundled font file whose script covers target_lang. See _PDF_LANG_FONT_RULES for
+    the matching rules and _PDF_FALLBACK_FONT_FILE for the default."""
+    lang_lower = (target_lang or "").lower()
+    for hint, font_file in _PDF_LANG_FONT_RULES:
+        if hint in lang_lower:
+            return font_file
+    return _PDF_FALLBACK_FONT_FILE
 
 
 class UnsupportedDocumentTypeError(ValueError):
@@ -225,48 +255,99 @@ def _translate_pdf_blocks(blocks: List[Dict[str, Any]], source_lang: str, target
             b["text"] = text
 
 
-def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str, Any]]) -> None:
+def _padded_block_rect(block: Dict[str, Any]) -> "pymupdf.Rect":
+    """The bbox returned by get_text('dict') is the tight ink box around the glyphs, which leaves
+    no room for insert_textbox's internal line leading -- reinserting into it unpadded causes the
+    whole text to be silently dropped rather than merely clipped. Pads 15% of the block's font
+    size on all sides. Used for both redaction and reinsertion, so the erased area is never
+    smaller than the reinserted one."""
+    x0, y0, x1, y1 = block["bbox"]
+    pad = block["size"] * 0.15
+    return pymupdf.Rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+
+
+def _font_alias(font_file: str) -> str:
+    """Short, deterministic internal PDF resource name for a bundled font file (readable in the
+    saved PDF's font resource dict, stable across calls for the same file)."""
+    return os.path.splitext(os.path.basename(font_file))[0]
+
+
+def _fits_at_font_size(rect: "pymupdf.Rect", text: str, fontsize: float, font_file: str) -> bool:
+    """Tests whether `text` wraps to fit `rect` at `fontsize` in `font_file`, using PyMuPDF's own
+    layout via a disposable in-memory scratch page -- never draws on the real page, so trials
+    cost nothing."""
+    scratch_doc = pymupdf.open()
+    try:
+        scratch_page = scratch_doc.new_page(width=rect.x1 + 50, height=rect.y1 + 50)
+        overflow = scratch_page.insert_textbox(
+            rect, text, fontsize=fontsize, fontname=_font_alias(font_file), fontfile=font_file
+        )
+        return overflow >= 0
+    finally:
+        scratch_doc.close()
+
+
+def _resolve_autofit_font_size(rect: "pymupdf.Rect", text: str, original_size: float, font_file: str) -> float:
+    """Fase 3 auto-fit: binary-searches the largest font size <= original_size at which `text`
+    fits `rect`. Returns original_size unchanged if it already fits there. Never searches below
+    max(_PDF_AUTOFIT_MIN_SIZE, original_size * _PDF_AUTOFIT_MIN_RATIO); if even that floor
+    overflows, returns the floor anyway and lets the caller accept clipping at the smallest
+    legible size tried, rather than shrinking text to illegibility to avoid all clipping."""
+    floor = max(_PDF_AUTOFIT_MIN_SIZE, original_size * _PDF_AUTOFIT_MIN_RATIO)
+    if floor >= original_size or _fits_at_font_size(rect, text, original_size, font_file):
+        return original_size
+    if not _fits_at_font_size(rect, text, floor, font_file):
+        return floor
+
+    lo, hi = floor, original_size
+    while hi - lo > _PDF_AUTOFIT_TOLERANCE:
+        mid = (lo + hi) / 2
+        if _fits_at_font_size(rect, text, mid, font_file):
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str, Any]], font_file: str) -> None:
     """Permanently erases the original text under each block's bbox via PyMuPDF native redaction
     (add_redact_annot + apply_redactions -- verified empirically to strip the text from the raw
     page content stream, not just visually overlay it) then reinserts the translated text in the
-    same bbox with a fixed built-in font at the original span size.
+    same bbox using `font_file` (selected by _resolve_pdf_font_file from the target language, see
+    Fase 4), auto-fitting the font size down from the original span size (Fase 3) before
+    accepting clipping as a last resort.
 
-    Fase 2 scope: no auto-fit (Fase 3) and no original-font/CJK preservation (Fase 4) -- text
-    that doesn't fit the padded bbox is clipped by insert_textbox. Redaction fill is white,
-    which only blends cleanly on white/light backgrounds; a known limitation of this phase, see
-    IMPLEMENTATION_PLAN.md Task 4 Fase 2.
-
-    The bbox returned by get_text('dict') is the tight ink box around the glyphs, which leaves no
-    room for insert_textbox's internal line leading -- reinserting into it unpadded causes the
-    whole text to be silently dropped rather than merely clipped. Every block's rect is padded by
-    15% of its font size on all sides before use, for both the redaction and the reinsertion, so
-    the erased area is never smaller than the reinserted one.
+    Redaction fill is white, which only blends cleanly on white/light backgrounds; a known
+    limitation, see IMPLEMENTATION_PLAN.md Task 4.
     """
-    def _padded_rect(block: Dict[str, Any]) -> "pymupdf.Rect":
-        x0, y0, x1, y1 = block["bbox"]
-        pad = block["size"] * 0.15
-        return pymupdf.Rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad)
-
     for block in blocks:
-        page.add_redact_annot(_padded_rect(block), fill=(1, 1, 1))
+        page.add_redact_annot(_padded_block_rect(block), fill=(1, 1, 1))
     page.apply_redactions()
+    font_alias = _font_alias(font_file)
     for block in blocks:
+        rect = _padded_block_rect(block)
+        fit_size = _resolve_autofit_font_size(rect, block["text"], block["size"], font_file)
         overflow = page.insert_textbox(
-            _padded_rect(block), block["text"], fontsize=block["size"], fontname=_PDF_TRANSLATE_FONT,
+            rect, block["text"], fontsize=fit_size, fontname=font_alias, fontfile=font_file,
             color=_int_color_to_rgb(block["color"]),
         )
         if overflow < 0:
-            logger.warning(f"Translated PDF text clipped to fit original bbox (overflow={overflow:.1f}pt)")
+            logger.warning(
+                f"Translated PDF text clipped even at auto-fit floor {fit_size:.1f}pt "
+                f"(original {block['size']:.1f}pt, overflow={overflow:.1f}pt)"
+            )
+        elif fit_size < block["size"]:
+            logger.info(f"Translated PDF text auto-fit from {block['size']:.1f}pt to {fit_size:.1f}pt")
 
 
 def translate_pdf_inplace_fine(doc_id: str, source_lang: str, target_lang: str, model: str = "llama3.2") -> IngestResponse:
     """
-    Fase 2 'fine-mode' PDF in-place translation: for every page, permanently redacts each
-    original text block and reinserts the translated text in the same bbox with a fixed built-in
-    font at the original size (see _redact_and_reinsert_pdf_blocks for the exact scope/limits).
-    Saves to a temp file and atomically replaces the original on success, then re-extracts
-    markdown from the translated file and re-indexes it via the existing update path, mirroring
-    translate_docx_inplace.
+    'Fine-mode' PDF in-place translation: for every page, permanently redacts each original text
+    block and reinserts the translated text in the same bbox, auto-fitting the font size down
+    from the original when needed to avoid clipping (see _redact_and_reinsert_pdf_blocks for the
+    exact scope/limits). Saves to a temp file and atomically replaces the original on success,
+    then re-extracts markdown from the translated file and re-indexes it via the existing update
+    path, mirroring translate_docx_inplace.
     """
     doc_record = _load_doc_record(doc_id)
     file_type = doc_record.get("file_type", "")
@@ -290,15 +371,17 @@ def translate_pdf_inplace_fine(doc_id: str, source_lang: str, target_lang: str, 
         if total_blocks == 0:
             raise ValueError("No translatable text blocks found in document")
 
+        font_file = _resolve_pdf_font_file(target_lang)
         logger.info(
             f"Translating PDF {doc_id} in place (fine-mode): {total_blocks} blocks across "
-            f"{len(pdf_doc)} pages ({source_lang} -> {target_lang}, model={model})"
+            f"{len(pdf_doc)} pages ({source_lang} -> {target_lang}, model={model}, "
+            f"font={os.path.basename(font_file)})"
         )
         for page, blocks in page_blocks:
             if not blocks:
                 continue
             _translate_pdf_blocks(blocks, source_lang, target_lang, model)
-            _redact_and_reinsert_pdf_blocks(page, blocks)
+            _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
 
         tmp_path = file_path + ".translating.tmp"
         pdf_doc.save(tmp_path)

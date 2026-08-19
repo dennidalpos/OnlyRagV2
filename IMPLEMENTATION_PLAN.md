@@ -147,7 +147,7 @@ Nota: `scripts/test_sidecar_health.ps1` aggiornato per puntare a tutta la cartel
 
 ---
 
-### Fase 2 — PDF fine-mode in-place translation (senza auto-fit) — COMPLETATA
+### Fase 2 — PDF fine-mode in-place translation — COMPLETATA
 
 #### Endpoint
 Riusa `POST /documents/{doc_id}/translate-inplace` (stesso schema `TranslateInplaceRequest`/`IngestResponse` della Fase 1). Il dispatch tra pipeline DOCX e PDF avviene internamente in `sidecar/domain/translator.py` in base a `doc.file_type`, non nel layer di presentazione (`main.py` resta thin: solo mapping eccezioni tipizzate → HTTP status).
@@ -160,21 +160,21 @@ La Fase 1 catturava ogni `ValueError` come `404`, quindi il caso "tipo file non 
 2. `translate_pdf_inplace_fine`, per ogni pagina:
    - `_extract_pdf_page_blocks`: estrae blocchi di testo non vuoti via `page.get_text("dict")` (bbox, testo concatenato, font size e colore del primo span non vuoto), saltando i blocchi immagine.
    - `_translate_pdf_blocks`: traduzione batch (~2500 char, stesso delimitatore e stessa logica di fallback per-item della Fase 1 — estratta in `_translate_texts_with_fallback`, condivisa da entrambe le pipeline DOCX e PDF per evitare duplicazione).
-   - `_redact_and_reinsert_pdf_blocks`: per ogni blocco, `add_redact_annot` + `apply_redactions()` (cancellazione reale, verificata) su un rect **paddato del 15% della font size** — il bbox stretto restituito da `get_text("dict")` non lascia margine per l'interlinea interna di `insert_textbox` e causa la perdita silenziosa dell'intero testo, non un semplice clipping (bug scoperto e corretto durante l'esecuzione di questa fase, vedi test). Poi reinserimento del testo tradotto nello stesso rect paddato, font fisso `helv`, size originale. Overflow → clipping (righe scartate da `insert_textbox`), loggato come warning, non un errore.
+   - `_redact_and_reinsert_pdf_blocks`: per ogni blocco, `add_redact_annot` + `apply_redactions()` (cancellazione reale, verificata) su un rect **paddato del 15% della font size** — il bbox stretto restituito da `get_text("dict")` non lascia margine per l'interlinea interna di `insert_textbox` e causa la perdita silenziosa dell'intero testo, non un semplice clipping (bug scoperto e corretto durante l'esecuzione di questa fase, vedi test). Poi reinserimento del testo tradotto nello stesso rect paddato, font fisso `helv`, con font size risolta da `_resolve_autofit_font_size` (Fase 3, vedi sotto). Overflow anche al floor dell'auto-fit → clipping (righe scartate da `insert_textbox`), loggato come warning, non un errore.
    - Salvataggio: `pdf_doc.save(file_path + ".translating.tmp")` poi `os.replace()` atomico sul file originale (più robusto del save diretto in-place usato per DOCX, giustificato dalla natura distruttiva della redazione).
 3. Ri-estrazione markdown + `update_and_reindex_document`, identico alla Fase 1.
 
 #### Limitazioni note (esplicite, non bug)
-- Nessun auto-fit: testo tradotto più lungo dell'originale viene troncato, non ridimensionato (Fase 3).
 - Font fisso `helv` (Helvetica base14): font originale e caratteri CJK non preservati (Fase 4).
 - Fill di redazione bianco: si fonde bene solo su sfondi chiari/bianchi.
+- Testo che eccede lo spazio anche al floor dell'auto-fit viene comunque troncato (vedi Fase 3).
 
-#### Test (`sidecar/tests/test_translator.py`, 14 test totali nel file)
+#### Test (`sidecar/tests/test_translator.py`, 14 test totali nel file di questa fase)
 - Estrazione blocchi (bbox/testo/size/colore)
 - Redazione reale verificata su stream grezzo (byte del PDF salvato, non solo layer di testo parsato)
 - Traduzione batch happy-path e fallback per mismatch segmenti
 - End-to-end via `TestClient`: ingest reale → translate-inplace → verifica testo tradotto nel file, testo originale assente anche nei byte grezzi, markdown reindicizzato
-- Clipping su overflow: non deve sollevare eccezioni né corrompere il documento
+- Clipping su overflow estremo: non deve sollevare eccezioni né corrompere il documento
 - Dispatcher: guardrail `400` per tipo non supportato, `404` per documento inesistente
 
 #### Frontend
@@ -193,10 +193,76 @@ La Fase 1 catturava ogni `ValueError` come `404`, quindi il caso "tipo file non 
 - [x] `docs/api.md` aggiornato con l'endpoint `translate-inplace` (mancava anche per la Fase 1 — gap documentale colmato in questa sessione)
 - [x] `DocumentListTable.tsx` + copy i18n aggiornati per esporre l'azione anche sui PDF
 
-### Fasi 3-4
-Restano non pronte per l'esecuzione. Aprire una sessione di scoping dedicata quando la Fase 2 sarà in produzione:
-- **Fase 3 — Auto-fit progressivo**: riduzione iterativa della font size finché il testo tradotto rientra nel bbox originale, prima di ricorrere al clipping.
-- **Fase 4 — Copertura CJK e font TrueType universali**: font fisso `helv` non copre caratteri CJK; richiede l'imbarco di font TTF e la selezione del font in base al target language.
+---
+
+### Fase 3 — Auto-fit progressivo del font size — COMPLETATA
+
+#### Perché una ricerca binaria su una pagina scratch, non calcolo manuale del wrap
+PyMuPDF non espone un'API "dry run" per `insert_textbox`: chiamarla scrive davvero nel content stream. Ricalcolare manualmente l'andata a capo per stimare l'altezza a una data font size rischierebbe di non combaciare esattamente con l'algoritmo di wrap interno di PyMuPDF (falsi positivi/negativi su cosa "entra"). Soluzione adottata: la funzione di test crea un documento PyMuPDF **in memoria** (mai scritto su disco), disegna la prova su una pagina scratch usa-e-getta e legge il valore di overflow restituito — stesso identico algoritmo di wrap che verrà poi usato per il rendering reale, zero rischio di disallineamento, nessuna I/O.
+
+#### Implementazione (`sidecar/domain/translator.py`)
+- `_fits_at_font_size(rect, text, fontsize, fontname)`: apre un `pymupdf.open()` in-memory, crea una pagina scratch, chiama `insert_textbox` e ritorna `overflow >= 0`. Il documento scratch viene chiuso subito dopo (mai persistito, mai tocca la pagina reale).
+- `_resolve_autofit_font_size(rect, text, original_size, fontname)`: se il testo entra già a `original_size`, nessuna ricerca. Altrimenti ricerca binaria tra `floor` e `original_size` (tolleranza `_PDF_AUTOFIT_TOLERANCE = 0.25pt`) per la size più grande che fa entrare il testo. Floor: `max(_PDF_AUTOFIT_MIN_SIZE=6pt, original_size * _PDF_AUTOFIT_MIN_RATIO=0.4)` — non riduce mai sotto una soglia di leggibilità. Se anche il floor eccede lo spazio, ritorna comunque il floor: il chiamante (`_redact_and_reinsert_pdf_blocks`) accetta il clipping residuo alla size più piccola tentata, invece di continuare a rimpicciolire fino all'illeggibilità.
+- `_redact_and_reinsert_pdf_blocks` ora chiama `_resolve_autofit_font_size` prima di ogni `insert_textbox` reale sulla pagina, e logga a livello `info` quando la size è stata ridotta, `warning` solo se il clipping persiste anche al floor.
+
+#### Test (`sidecar/tests/test_translator.py`, ora 18 test totali)
+- `_resolve_autofit_font_size` non tocca la size se il testo entra già
+- `_resolve_autofit_font_size` riduce la size per un testo tradotto più lungo, verificato empiricamente su un rect reale (bbox paddato di un blocco a 14pt) che una frase più lunga non entra a 14pt ma entra dopo la riduzione
+- `_resolve_autofit_font_size` non scende mai sotto il floor anche con un rect impossibile da riempire
+- `_redact_and_reinsert_pdf_blocks`: una frase che sarebbe stata troncata alla size originale (comportamento Fase 2) ora viene reinserita per intero a size ridotta
+
+#### Definition of Done — Fase 3 — COMPLETATO
+- [x] `_fits_at_font_size` / `_resolve_autofit_font_size` implementate, ricerca binaria verificata empiricamente (script standalone + test)
+- [x] `_redact_and_reinsert_pdf_blocks` integra l'auto-fit, comportamento di clipping residuo al floor invariato per i casi già coperti dalla Fase 2
+- [x] `sidecar/tests/test_translator.py` verde: 18 test (14 preesistenti Fase 1+2 invariati + 4 nuovi Fase 3)
+- [x] `test_sidecar_health.ps1 -Fast` pulito
+- [x] `npm run typecheck` pulito (nessuna modifica frontend in questa fase)
+- [x] `docs/api.md` e `IMPLEMENTATION_PLAN.md` aggiornati, nota "nessun auto-fit" rimossa
+
+### Fase 4 — Copertura CJK e font TrueType universali — COMPLETATA
+
+#### Font imbarcati (`sidecar/assets/fonts/`, ~64 MB totali, licenza SIL OFL 1.1)
+Estratti come pesi statici "Regular" dagli archivi ufficiali multi-peso di [`notofonts/noto-cjk`](https://github.com/notofonts/noto-cjk/releases) e [`notofonts/latin-greek-cyrillic`](https://github.com/notofonts/latin-greek-cyrillic/releases) (scartati gli altri 6-7 pesi e i file non necessari di ciascun archivio, quindi solo i file Regular sono committati):
+
+| File | Lingua/script | Dimensione |
+|---|---|---|
+| `NotoSansCJKjp-Regular.otf` | Giapponese | 16,5 MB |
+| `NotoSansCJKkr-Regular.otf` | Coreano | 16,4 MB |
+| `NotoSansCJKsc-Regular.otf` | Cinese semplificato | 16,4 MB |
+| `NotoSansCJKtc-Regular.otf` | Cinese tradizionale | 16,4 MB |
+| `NotoSans-Regular.otf` | Latino, Cirillico, Greco (fallback universale) | 0,3 MB |
+| `OFL-NotoSansCJK.txt` / `OFL-NotoSans.txt` | Testo di licenza (obbligatorio per redistribuzione OFL) | — |
+
+**Perché pesi statici e non il variable font (~18 MB, un solo file) inizialmente proposto**: PyMuPDF 1.28.2 non espone alcuna API per scegliere l'istanza di un variable font in fase di embedding — verificato empiricamente che sceglie l'istanza di default del file, che per `NotoSansJP[wght].ttf` risultava **"Thin"** invece di "Regular" (visivamente troppo sottile). Nessun `static/` pre-generato disponibile nei repo ufficiali per i font CJK; scelta esplicita dell'utente di scaricare gli archivi multi-peso ed estrarne il solo Regular, evitando di aggiungere `fonttools` come nuova dipendenza Python.
+
+**Scoperta collaterale**: durante la verifica è emerso che il font base14 `helv` (usato in tutta la Fase 2/3) **non copre il cirillico** — il russo, già selezionabile nella UI esistente, veniva renderizzato come `?????`. Risolto nello stesso lavoro: il font fallback Latin/Cirillico/Greco copre anche questo caso, non solo il CJK esplicitamente richiesto.
+
+#### Implementazione (`sidecar/domain/translator.py`)
+- `_resolve_pdf_font_file(target_lang)`: match case-insensitive per sottostringa su `target_lang` (testo libero dal selettore lingua del frontend) contro `_PDF_LANG_FONT_RULES` (giapponese/coreano/cinese tradizionale/cinese, quest'ultimo di default sul semplificato); fallback a `_PDF_FALLBACK_FONT_FILE` per tutto il resto.
+- `_fits_at_font_size` / `_resolve_autofit_font_size` (Fase 3) ora accettano `font_file` invece del nome font built-in, passato a `insert_textbox(fontfile=...)`.
+- `_redact_and_reinsert_pdf_blocks` risolve il font una sola volta per documento (non per pagina/blocco) e lo usa per tutti i blocchi.
+- `_font_alias`: nome risorsa PDF interno derivato deterministicamente dal nome file, per evitare font anonimi/duplicati nel PDF salvato.
+- Rimossa la costante `_PDF_TRANSLATE_FONT = "helv"`: ogni reinserimento PDF passa ora da un font imbarcato, zero uso di font base14 residuo.
+
+#### Packaging
+Nessuna modifica a `package.json`: `extraResources` copia già l'intera cartella `sidecar` (filtro esclude solo `__pycache__`, `*.pyc`, `tests/`), quindi `sidecar/assets/fonts/` viene incluso automaticamente nell'installer.
+
+#### Test (`sidecar/tests/test_translator.py`, ora 23 test totali)
+- Selezione font per lingua (`_resolve_pdf_font_file`) su tutti i casi CJK + fallback
+- Tutti i font referenziati esistono realmente su disco (guardia contro errori di path/packaging)
+- Round-trip reale con glifi CJK (cinese) e cirillico (russo) attraverso redazione+reinserimento, verificato sul layer di testo parsato
+- End-to-end via `TestClient` con `target_lang="Japanese"`: verifica sul file salvato direttamente (non su `extracted_markdown` — per una pagina sintetica quasi vuota la re-ingestione a valle può normalizzare varianti Han unificate, es. 語→语, comportamento pre-esistente della pipeline di ingestione non toccato da questa fase, segnalato a parte)
+
+#### Definition of Done — Fase 4 — COMPLETATO
+- [x] Font Regular statici per JP/KR/SC/TC + fallback Latin/Cirillico/Greco imbarcati in `sidecar/assets/fonts/`, licenze OFL incluse
+- [x] `_resolve_pdf_font_file` + wiring completo in `_fits_at_font_size`/`_resolve_autofit_font_size`/`_redact_and_reinsert_pdf_blocks`/`translate_pdf_inplace_fine`
+- [x] Verificato empiricamente: incorporazione come peso "Regular" (non "Thin"), round-trip CJK e cirillico corretto
+- [x] `sidecar/tests/test_translator.py` verde: 23 test (18 preesistenti Fase 1-3 invariati + 5 nuovi Fase 4)
+- [x] `test_sidecar_health.ps1 -Fast` pulito
+- [x] `docs/api.md` e `IMPLEMENTATION_PLAN.md` aggiornati
+- [x] Nessuna modifica a `package.json`/build config necessaria (packaging automatico via `extraResources` esistente)
+
+**Nota per il futuro**: la variante Han unificata scoperta durante i test (normalizzazione 語→语 nella re-ingestione di pagine PDF quasi vuote) non è stata investigata oltre — è un comportamento della pipeline di ingestione esistente (`ingestion.py`/OCR routing), fuori scope per questo task incentrato sul modulo `translator.py`.
 
 ---
 

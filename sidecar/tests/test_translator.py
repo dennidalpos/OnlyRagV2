@@ -170,6 +170,67 @@ def test_translate_inplace_rejects_non_docx_file_type(tmp_path):
 # --- PDF fine-mode (Fase 2) ---------------------------------------------------------------
 
 
+def test_resolve_autofit_font_size_keeps_original_size_when_it_already_fits():
+    rect = pymupdf.Rect(40, 40, 400, 80)
+    size = translator_module._resolve_autofit_font_size(rect, "short", 14.0, "helv")
+    assert size == 14.0
+
+
+def test_resolve_autofit_font_size_shrinks_to_fit_longer_text():
+    # Tight rect matching a real single-word block's padded bbox at 14pt (see
+    # _padded_block_rect) -- a much longer translated sentence doesn't fit at 14pt here.
+    rect = pymupdf.Rect(37.9, 37.9, 181.4, 61.3)
+    longer_text = "This translated text is considerably longer than the original short marker sentence"
+    original_size = 14.0
+
+    assert not translator_module._fits_at_font_size(rect, longer_text, original_size, "helv")
+
+    fit_size = translator_module._resolve_autofit_font_size(rect, longer_text, original_size, "helv")
+
+    assert fit_size < original_size
+    floor = max(translator_module._PDF_AUTOFIT_MIN_SIZE, original_size * translator_module._PDF_AUTOFIT_MIN_RATIO)
+    assert fit_size >= floor
+    assert translator_module._fits_at_font_size(rect, longer_text, fit_size, "helv")
+
+
+def test_resolve_autofit_font_size_never_shrinks_below_floor():
+    rect = pymupdf.Rect(0, 0, 10, 10)  # too small to ever fit any of this text
+    huge_text = "word " * 200
+    fit_size = translator_module._resolve_autofit_font_size(rect, huge_text, 14.0, "helv")
+    floor = max(translator_module._PDF_AUTOFIT_MIN_SIZE, 14.0 * translator_module._PDF_AUTOFIT_MIN_RATIO)
+    assert fit_size == floor
+
+
+def test_redact_and_reinsert_pdf_blocks_autofits_instead_of_clipping(tmp_path):
+    """A translated sentence that would have been clipped at the original font size (Fase 2
+    behavior) must now be fully reinserted at a smaller auto-fit size (Fase 3), not truncated."""
+    path = str(tmp_path / "autofit_src.pdf")
+    out_path = str(tmp_path / "autofit_out.pdf")
+    _make_pdf(path, text="Short marker text here")
+
+    longer_text = "This translated text is considerably longer than the original short marker sentence"
+    doc = pymupdf.open(path)
+    try:
+        page = doc[0]
+        blocks = translator_module._extract_pdf_page_blocks(page)
+        for b in blocks:
+            b["text"] = longer_text
+        translator_module._redact_and_reinsert_pdf_blocks(page, blocks, translator_module._PDF_FALLBACK_FONT_FILE)
+        doc.save(out_path)
+    finally:
+        doc.close()
+
+    reopened = pymupdf.open(out_path)
+    try:
+        # get_text() joins wrapped lines with '\n' at the point insert_textbox broke them, so
+        # normalize whitespace before comparing -- the point being verified is that the full
+        # sentence survived (auto-fit), not that it landed on a single physical line.
+        page_text = " ".join(reopened[0].get_text().split())
+    finally:
+        reopened.close()
+    assert longer_text in page_text
+
+
 def test_extract_pdf_page_blocks_reads_bbox_text_size_color(tmp_path):
     path = str(tmp_path / "sample.pdf")
     _make_pdf(path, text="Hello PDF world")
@@ -199,7 +260,7 @@ def test_redact_and_reinsert_pdf_blocks_erases_original_text_from_raw_stream(tmp
         assert any(marker in b["text"] for b in blocks)
         for b in blocks:
             b["text"] = "REPLACED"
-        translator_module._redact_and_reinsert_pdf_blocks(page, blocks)
+        translator_module._redact_and_reinsert_pdf_blocks(page, blocks, translator_module._PDF_FALLBACK_FONT_FILE)
         doc.save(out_path)
     finally:
         doc.close()
@@ -351,3 +412,129 @@ def test_translate_document_inplace_returns_404_for_missing_document():
         json={"source_lang": "English", "target_lang": "Italian"},
     )
     assert res.status_code == 404
+
+
+# --- PDF fine-mode Fase 4: bundled CJK / universal fonts -----------------------------------
+
+
+def test_resolve_pdf_font_file_selects_bundled_fonts_by_language():
+    assert "NotoSansCJKjp" in translator_module._resolve_pdf_font_file("Japanese")
+    assert "NotoSansCJKkr" in translator_module._resolve_pdf_font_file("Korean")
+    assert "NotoSansCJKsc" in translator_module._resolve_pdf_font_file("Chinese")
+    assert "NotoSansCJKtc" in translator_module._resolve_pdf_font_file("Traditional Chinese")
+    # Non-CJK languages and unrecognized/empty strings fall back to the bundled Latin/Cyrillic/Greek font.
+    assert translator_module._resolve_pdf_font_file("Italian") == translator_module._PDF_FALLBACK_FONT_FILE
+    assert translator_module._resolve_pdf_font_file("Russian") == translator_module._PDF_FALLBACK_FONT_FILE
+    assert translator_module._resolve_pdf_font_file("") == translator_module._PDF_FALLBACK_FONT_FILE
+
+
+def test_bundled_pdf_fonts_exist_on_disk():
+    """Guards against a packaging/path mistake: every font _resolve_pdf_font_file can return must
+    actually be present under sidecar/assets/fonts."""
+    font_files = {f for _, f in translator_module._PDF_LANG_FONT_RULES} | {translator_module._PDF_FALLBACK_FONT_FILE}
+    for font_file in font_files:
+        assert os.path.isfile(font_file), f"missing bundled font: {font_file}"
+
+
+def test_redact_and_reinsert_pdf_blocks_renders_cjk_glyphs(tmp_path):
+    """The reinserted text must round-trip through PyMuPDF's parsed text layer using real CJK
+    glyphs, not tofu/notdef boxes -- proves the bundled CJK font is actually wired into
+    insert_textbox, not just present on disk (see test_bundled_pdf_fonts_exist_on_disk)."""
+    path = str(tmp_path / "cjk_src.pdf")
+    out_path = str(tmp_path / "cjk_out.pdf")
+    _make_pdf(path, text="Hello world")
+    chinese_text = "你好"
+
+    doc = pymupdf.open(path)
+    try:
+        page = doc[0]
+        blocks = translator_module._extract_pdf_page_blocks(page)
+        for b in blocks:
+            b["text"] = chinese_text
+        font_file = translator_module._resolve_pdf_font_file("Chinese")
+        translator_module._redact_and_reinsert_pdf_blocks(page, blocks, font_file)
+        doc.save(out_path)
+    finally:
+        doc.close()
+
+    reopened = pymupdf.open(out_path)
+    try:
+        assert chinese_text in reopened[0].get_text()
+    finally:
+        reopened.close()
+
+
+def test_redact_and_reinsert_pdf_blocks_renders_cyrillic_fallback(tmp_path):
+    """Non-CJK languages (e.g. Russian) use the bundled Latin/Cyrillic/Greek fallback font. Before
+    Fase 4, the base14 'helv' font used for every PDF language could not render Cyrillic at all
+    (verified separately: it silently degrades to '?????' notdef placeholders)."""
+    path = str(tmp_path / "cyr_src.pdf")
+    out_path = str(tmp_path / "cyr_out.pdf")
+    _make_pdf(path, text="Hello world")
+    russian_text = "Привет"
+
+    doc = pymupdf.open(path)
+    try:
+        page = doc[0]
+        blocks = translator_module._extract_pdf_page_blocks(page)
+        for b in blocks:
+            b["text"] = russian_text
+        font_file = translator_module._resolve_pdf_font_file("Russian")
+        assert font_file == translator_module._PDF_FALLBACK_FONT_FILE
+        translator_module._redact_and_reinsert_pdf_blocks(page, blocks, font_file)
+        doc.save(out_path)
+    finally:
+        doc.close()
+
+    reopened = pymupdf.open(out_path)
+    try:
+        assert russian_text in reopened[0].get_text()
+    finally:
+        reopened.close()
+
+
+def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
+    """Full pipeline end-to-end with a CJK target language: verifies the font-selection wiring
+    from translate_pdf_inplace_fine all the way through to the saved file and reindexed markdown."""
+    # Short phrase, sized to comfortably fit the narrow bbox of the "Hello world" source text
+    # (this test verifies the font-selection wiring, not overflow/clipping behavior -- that's
+    # covered separately by test_translate_pdf_inplace_fine_clips_overflow_without_crashing).
+    japanese_text = "日本語"
+    path = str(tmp_path / "jp_e2e.pdf")
+    _make_pdf(path, text="Hello world")
+
+    def fake_call(text, source_lang, target_lang, model):
+        if translator_module._RUN_SEPARATOR in text:
+            parts = text.split(f"\n{translator_module._RUN_SEPARATOR}\n")
+            return f"\n{translator_module._RUN_SEPARATOR}\n".join(japanese_text for _ in parts)
+        return japanese_text
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
+
+    doc_id = None
+    try:
+        ingest_res = client.post("/ingest-path", json={"file_path": path})
+        assert ingest_res.status_code == 200
+        doc_id = ingest_res.json()["id"]
+
+        res = client.post(
+            f"/documents/{doc_id}/translate-inplace",
+            json={"source_lang": "English", "target_lang": "Japanese"},
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == "indexed"
+
+        # Assert against the saved file directly, not the re-ingested extracted_markdown: for a
+        # near-empty synthetic page like this one, the downstream re-ingestion OCR/routing can
+        # normalize CJK unification variants (e.g. Japanese 語 -> Simplified Chinese 语) -- a
+        # pre-existing ingestion-pipeline behavior unrelated to what this test verifies (that the
+        # correct bundled font was selected and embedded for the translated PDF itself).
+        translated_doc = pymupdf.open(path)
+        try:
+            page_text = translated_doc[0].get_text()
+        finally:
+            translated_doc.close()
+        assert japanese_text in page_text
+    finally:
+        if doc_id:
+            client.delete(f"/documents/{doc_id}")

@@ -1,5 +1,5 @@
 {
   "todos": [
-    "Task 4 Fasi 3-4 (auto-fit progressivo font size, copertura CJK/font TrueType universali): non pronte, sessione dedicata dopo che la Fase 2 e' in produzione"
+    "Investigare normalizzazione varianti Han unificate (es. giapponese 語 -> cinese semplificato 语) nella pipeline di re-ingestione PDF per pagine quasi vuote (ingestion.py/OCR routing) - scoperta durante i test della Fase 4 Task 4, non correlata al modulo translator.py, non ancora scopata"
   ]
 }

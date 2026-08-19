@@ -1,15 +1,9 @@
 import { BrowserWindow } from 'electron'
 import http from 'node:http'
-import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
+import { logger } from '../../diagnostics'
 import type { AgentTaskPayload, AgentTaskResult, AgentToolCall } from '../domain/agent/agentTypes'
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
-import os from 'node:os'
-import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
-import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
-import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
 import { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
-import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
-import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
@@ -17,20 +11,17 @@ import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecut
 import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
-import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
-import { resolveOllamaContextReuse } from '../domain/agent/ollamaContextCacheManager'
-import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
 import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
 import { runToolGates } from './agentOrchestratorToolGates'
 import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { interpretTurnResponse, type ResponseInterpreterState } from './agentOrchestratorResponseInterpreter'
+import { runTurnDispatch } from './agentOrchestratorTurnDispatch'
 import {
   resolveWorkspacePath,
   buildDefaultAgentSettings,
   buildAttachedContextBlock,
   buildPinnedFilesContextBlock,
 } from './agentOrchestratorSessionSetup'
-import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
@@ -48,7 +39,7 @@ export interface ApprovalResponse {
   approvedHunkIndices?: number[]
 }
 
-interface AgentSession {
+export interface AgentSession {
   id: string
   isCancelled: boolean
   targetWindow: BrowserWindow | null
@@ -395,8 +386,8 @@ export async function runAgentOrchestratorLoop(
     })
   }
 
-  /** Frozen per-session Ollama context window — see the num_ctx block inside the loop. */
-  let sessionNumCtx: number | null = null
+  /** Frozen per-session Ollama context window, boxed so agentOrchestratorTurnDispatch.ts can grow it in place. */
+  const sessionNumCtxBox: { value: number | null } = { value: null }
   /** Per-file line deltas applied during this session, for the UI's change metrics. */
   const sessionChangedFiles = new Map<string, { additions: number; deletions: number }>()
 
@@ -472,257 +463,51 @@ export async function runAgentOrchestratorLoop(
       await persistCurrentState()
     }
 
-    const hasRecentToolFailure = episodicCompactor.failureCount > 0
-    const errorCountInHistory = episodicCompactor.failureCount
-
-    const routedComplexity = evaluateTaskComplexity(userTask, {
-      attachedFilesCount: payload.pinnedFiles?.length || 0,
-      contextSizeChars: payload.activeFile?.content?.length || 0,
-      settings,
-      availableModels,
-      hasRecentToolFailure,
-      errorCountInHistory,
-    })
-
-    if (routedComplexity.isEscalated && stepCount > 1) {
-      emitLog('info', `⚡ Complexity Escalated: ${routedComplexity.modelName}`, routedComplexity.reasoning)
-    }
-
-    let targetModel: string = mutableFlags.currentOverriddenModel
-      ? mutableFlags.currentOverriddenModel
-      : settings.useComplexityRouting
-      ? routedComplexity.modelName
-      : (settings.codingModel || settings.defaultModel || 'llama3.2')
-
-    // Native tool-calling routing: when the primary model is detected as tool-calling
-    // capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the
-    // structured tool catalog instead of relying solely on the prompt-engineered JSON
-    // convention. toolParser.ts still parses the result either way (see
-    // agentStreamTransport.ts's serializeNativeToolCall), so downstream tool execution
-    // is unaffected by which path produced the output. Computed here (before prompt
-    // assembly) so AgentPromptAssembler can omit the redundant prose tool block (AGT2).
-    const targetModelToolCallingCapable = supportsNativeToolCalling(targetModel, modelCapabilities)
-    if (targetModelToolCallingCapable) {
-      // The native tool-calling /api/chat path doesn't populate `context` (see
-      // agentStreamTransport.ts), so any cached baseline from an earlier
-      // /api/generate turn would be stale. Clear it so a later turn that
-      // returns to the /api/generate path always starts from a full resend.
-      session.ollamaContextModel = undefined
-    }
-
-    const intermediateModel = settings.complexityStandardModel || settings.codingModel || settings.defaultModel || 'llama3.2'
-    const fallbackModel = settings.complexityFastModel || settings.defaultModel || 'llama3.2'
-    const heavyEscalationModel = settings.complexityHeavyModel || undefined
-
-    const cachedGpu = getCachedGpuInfo()
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
-      settings.hardwareProfile,
-      {
-        hasGpu: cachedGpu?.hasNvidiaGpu,
-        vramTotalMB: cachedGpu?.vramTotalMB,
-        systemRamGB: getMemoryInfo().totalRAMGB,
-        cpuCount: os.cpus()?.length,
-      },
-      routedComplexity.tier
-    )
-    const skillsBlock = await skillAppService.getContextSkillsBlock(skillMatchContext, workspacePath, 3, skillMatchingOptions)
-
-    const compiledHistoryBlock = episodicCompactor.compilePromptHistoryBlock(10000)
-    const planBlock = goalPlanner.compileProgressPrompt()
-
-    let debtTrackerBlock = ''
-    if (workspacePath) {
-      try {
-        const trackerContent = agentSessionStateRepository.loadSessionTrackerMarkdown(workspacePath)
-        if (trackerContent) {
-          const tracker = SessionDebtTracker.parseTrackerMarkdown(trackerContent)
-          debtTrackerBlock = tracker.compilePromptBlock()
-        }
-      } catch (err: any) {
-        logger.log('WARN', 'AgentOrchestratorAppService', `Failed reading SESSION_TRACKER.md: ${err.message}`)
-      }
-    }
-
-    const effectiveAttachedContext = [debtTrackerBlock, attachedContext].filter(Boolean).join('\n\n')
-
-    // Assemble base prompt segments, then apply heuristic compaction at 75% watermark
-    const assembled = AgentPromptAssembler.assembleTurnPrompt({
+    // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx,
+    // decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
+    // See agentOrchestratorTurnDispatch.ts for the exact step order rationale.
+    const dispatchOutcome = await runTurnDispatch({
       userTask,
       initialUserTask,
       agentMode,
       stepCount,
+      maxStepsLabel,
       maxSteps: MAX_STEPS,
-      complexityTier: routedComplexity.tier,
       workspacePath,
       isStandaloneMode,
-      activeFile: payload.activeFile,
-      pinnedFilesContextStr,
-      skillsBlock,
-      planBlock,
-      toolOutputHistory: compiledHistoryBlock,
-      attachedContext: effectiveAttachedContext,
-      projectContextMapStr,
       settings,
-      runtimeOpts,
-      toolCallingCapable: targetModelToolCallingCapable,
+      sessionId,
+      payload,
+      availableModels,
+      modelCapabilities,
+      attachedContext,
+      pinnedFilesContextStr,
+      projectContextMapStr,
+      skillMatchContext,
+      skillMatchingOptions,
+      episodicCompactor,
+      goalPlanner,
+      fsmMode,
+      currentOverriddenModel: mutableFlags.currentOverriddenModel,
+      session,
+      sessionNumCtxBox,
+      isSessionActive,
+      emitLog,
+      emitDone,
+      persistCurrentState,
+      finalizeSession,
     })
-    const basePrompt = assembled.prompt
-
-    const compactionResult = HeuristicContextCompactor.compile(
-      {
-        systemPrompt: basePrompt.split('\n\n')[0] || basePrompt,
-        activePlanBlock: planBlock,
-        pinnedFilesBlock: pinnedFilesContextStr,
-        activeFileBlock: payload.activeFile ? `Active File: ${payload.activeFile.name}\n${(payload.activeFile.content || '').slice(0, 8000)}` : '',
-        skillsBlock,
-        historyBlock: compiledHistoryBlock,
-        attachedContext,
-        projectMapBlock: projectContextMapStr,
-      },
-      runtimeOpts.maxContextChars
-    )
-    const turnPrompt = compactionResult.wasCompacted ? compactionResult.prompt : basePrompt
-    if (compactionResult.wasCompacted) {
-      emitLog('info', `🗜️ Context Compacted: ${compactionResult.originalChars} → ${compactionResult.finalChars} chars (heuristic, zero-cost)`)
-    }
-
-    // num_ctx is frozen for the lifetime of the session and only ever allowed to GROW.
-    // Ollama reallocates its KV cache whenever num_ctx changes, which evicts the prompt
-    // cache — recomputing it per step (as this did) silently defeated the `context`
-    // continuation reuse implemented above (AGT1), and on CPU-only machines cost a model
-    // reload almost every turn. Growth is still permitted so a prompt that outgrows the
-    // frozen window is never silently truncated; the cached baseline is dropped in that
-    // case because the tokens it holds no longer correspond to the new window.
-    const requiredNumCtx = calculateDynamicContextWindow(turnPrompt.length, runtimeOpts.num_ctx)
-    if (sessionNumCtx === null) {
-      sessionNumCtx = requiredNumCtx
-    } else if (requiredNumCtx > sessionNumCtx) {
-      emitLog('info', `📐 Context window grown: ${sessionNumCtx} → ${requiredNumCtx} tokens (prompt outgrew the frozen window).`)
-      sessionNumCtx = requiredNumCtx
-      session.ollamaContextModel = undefined
-      session.ollamaContextTokens = undefined
-      session.ollamaContextStableSection = undefined
-      session.ollamaContextHistoryBlock = undefined
-    }
-    runtimeOpts.num_ctx = sessionNumCtx
-
-    emitLog('tool_call', `[Step ${stepCount}/${maxStepsLabel}] Consulting LLM (${targetModel}) [ctx:${runtimeOpts.num_ctx}${fsmMode.getMode() !== 'AGENT' ? ` | Mode:${fsmMode.getMode()}` : ''}]...`)
-    if (settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logTurnPrompt(sessionId, stepCount, targetModel, runtimeOpts.num_ctx, turnPrompt)
-    }
-
-    // AGT1: reuse Ollama's `context` continuation instead of resending the full
-    // prompt whenever this turn's stable section + history are a byte-exact
-    // continuation of the prior turn's on the SAME model (see
-    // ollamaContextCacheManager.ts). Native tool-calling turns never qualify
-    // (the /api/chat path doesn't populate `context`).
-    const contextReuseDecision = targetModelToolCallingCapable
-      ? { reusedContext: false as const, promptToSend: turnPrompt }
-      : resolveOllamaContextReuse({
-          targetModel,
-          stableSection: assembled.stableSection,
-          historyBlock: assembled.historyBlock,
-          turnSuffix: assembled.turnSuffix,
-          fullPrompt: turnPrompt,
-          wasCompacted: compactionResult.wasCompacted,
-          baseline:
-            session.ollamaContextModel === targetModel && session.ollamaContextStableSection !== undefined
-              ? {
-                  model: session.ollamaContextModel,
-                  stableSection: session.ollamaContextStableSection,
-                  historyBlock: session.ollamaContextHistoryBlock || '',
-                  contextTokens: session.ollamaContextTokens || [],
-                }
-              : null,
-        })
-
-    if (contextReuseDecision.reusedContext) {
-      emitLog(
-        'info',
-        `⚡ Ollama Context Reuse: sending ${contextReuseDecision.promptToSend.length} chars instead of the full ${turnPrompt.length}-char prompt (KV-cache continuation).`
-      )
-    }
-
-    let streamedOutput = ''
-    let lastDispatchEscalated = false
-    try {
-      const dispatchRes = await ResilientModelDispatcher.executeWithFallback(
-        {
-          primaryModel: targetModel,
-          intermediateModel,
-          fallbackModel,
-          heavyEscalationModel,
-          runtimeOpts,
-        },
-        {
-          prompt: turnPrompt,
-          keepAlive: '30m',
-          ollamaEndpoint: settings.ollamaHost,
-          toolCallingCapable: targetModelToolCallingCapable,
-          toolCatalog: targetModelToolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
-          onTokenChunk: (chunk) => {
-            if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-              session.targetWindow.webContents.send('agent:stream-token', { step: stepCount, chunk })
-            }
-          },
-          isCancelled: () => !isSessionActive(),
-          onHttpRequestCreated: (req) => {
-            session.activeHttpRequest = req
-          },
-          onContextReceived: (contextTokens, respondingModel) => {
-            // Only cache when this turn's prompt matched assembled.stableSection/historyBlock
-            // exactly — HeuristicContextCompactor rewrites that structure on compaction, so
-            // the returned tokens wouldn't correspond to the cached baseline shape (AGT1).
-            if (compactionResult.wasCompacted) return
-            session.ollamaContextTokens = contextTokens
-            session.ollamaContextModel = respondingModel
-            session.ollamaContextStableSection = assembled.stableSection
-            session.ollamaContextHistoryBlock = assembled.historyBlock
-          },
-        },
-        (fromModel, toModel, reason) => {
-          const isHeavy = toModel === heavyEscalationModel
-          lastDispatchEscalated = isHeavy
-          const label = isHeavy ? '🔺 Heavy Tier Escalation' : '⚡ Resilient Fallback'
-          emitLog('info', `${label}: ${fromModel} → ${toModel}`, `Triggered: ${reason}`)
-        },
-        contextReuseDecision.reusedContext
-          ? { prompt: contextReuseDecision.promptToSend, previousContext: contextReuseDecision.contextTokens! }
-          : undefined
-      )
-      streamedOutput = dispatchRes.output
-      if (dispatchRes.isEscalated || lastDispatchEscalated) {
-        emitLog('info', `🔺 Heavy Tier active (${dispatchRes.usedModel}): VRAM eviction applied before escalation.`)
-      }
-      session.activeHttpRequest = null
-    } catch (err: any) {
-      emitLog('info', `LLM Stream error on step ${stepCount}: ${err.message}`)
-      emitDone(false, `LLM Stream Error: ${err.message}`)
-      if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logSessionEnd(sessionId, stepCount, false, `LLM Error: ${err.message}`)
-      }
-      agentToolExecutorService.rollbackJournal()
-      await persistCurrentState()
-      finalizeSession()
-      return { success: false, summary: `LLM Error: ${err.message}` }
-    }
-
-    if (!isSessionActive()) {
-      emitLog('info', 'Agent execution cancelled by user.')
-      emitDone(false, 'Task cancelled by user.')
-      if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logSessionEnd(sessionId, stepCount, false, 'Task cancelled by user.')
-      }
-      agentToolExecutorService.rollbackJournal()
-      await persistCurrentState()
-      finalizeSession()
-      return { success: false, summary: 'Task cancelled' }
-    }
-
-    emitLog('info', `AI Agent (${agentMode.toUpperCase()} Step ${stepCount}):`, streamedOutput)
-    if (settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logLlmResponse(sessionId, stepCount, streamedOutput)
-    }
+    if (dispatchOutcome.outcome === 'return') return dispatchOutcome.result
+    const {
+      streamedOutput,
+      hasRecentToolFailure,
+      errorCountInHistory,
+      compiledHistoryBlock,
+      targetModel,
+      intermediateModel,
+      fallbackModel,
+      heavyEscalationModel,
+    } = dispatchOutcome.data
 
     // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with
     // no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special

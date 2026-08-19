@@ -181,10 +181,11 @@ export class SidecarProcessManager {
     let exePath = ''
 
     if (isPackaged) {
-      exePath = path.join(process.resourcesPath, 'sidecar_dist', 'sidecar', 'sidecar.exe')
-      if (!fs.existsSync(exePath)) {
-        exePath = path.join(process.resourcesPath, 'sidecar.exe')
-      }
+      // electron-builder's extraResources entry for sidecar_dist/sidecar has "to": "sidecar",
+      // so the compiled PyInstaller binary lands at resources/sidecar/sidecar.exe -- "sidecar_dist"
+      // is only the local build-time staging directory name (see build_package.ps1), it never
+      // exists inside the packaged app itself.
+      exePath = path.join(process.resourcesPath, 'sidecar', 'sidecar.exe')
     }
 
     if (isPackaged && fs.existsSync(exePath)) {

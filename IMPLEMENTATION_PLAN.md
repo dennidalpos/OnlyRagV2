@@ -86,7 +86,7 @@ npm run test:fast
 
 ### Le 4 domande aperte della stesura precedente, risolte per la Fase 1
 - **Contratto endpoint**: risolto sotto.
-- **Strategia di redaction PyMuPDF**: non si applica alla Fase 1 (DOCX). La riassegnazione di `run.text` in python-docx è cancellazione reale (il testo originale non sopravvive nell'XML del run), non un overlay visivo — nessuna redaction necessaria. Resta un problema aperto solo per la Fase 2 (PDF), da risolvere quando quella sessione verrà aperta; ipotesi di lavoro corrente: `Page.add_redact_annot()` + `apply_redactions()` è l'API standard PyMuPDF per cancellazione reale del contenuto (non solo visiva), da verificare empiricamente con un test di integrazione che ispezioni lo stream PDF grezzo post-redazione prima di considerarla adottata.
+- **Strategia di redaction PyMuPDF**: non si applica alla Fase 1 (DOCX). La riassegnazione di `run.text` in python-docx è cancellazione reale (il testo originale non sopravvive nell'XML del run), non un overlay visivo — nessuna redaction necessaria. **Risolta anche per la Fase 2** (vedi sotto): `page.add_redact_annot()` + `apply_redactions()` verificato empiricamente — sia con uno script standalone sia con un test di integrazione (`test_redact_and_reinsert_pdf_blocks_erases_original_text_from_raw_stream`) che ispeziona i byte grezzi del PDF salvato — cancella realmente il testo dal content stream, non solo visivamente.
 - **Font TTF universali**: non si applica alla Fase 1. `python-docx` riusa il font già presente nel run — nessun font nuovo da imbarcare finché non si traduce verso lingue CJK (Fase 4).
 - **Debounce/queue salvataggio atomico**: non si applica alla Fase 1, che è una singola richiesta/risposta atomica innescata da un'azione utente esplicita, non un autosave continuo. Rilevante solo se una Fase 2/3 introduce editing live per-pagina sincronizzato con Monaco.
 
@@ -145,8 +145,58 @@ Nota: `scripts/test_sidecar_health.ps1` punta esplicitamente a `sidecar\tests\te
 
 Nota: `scripts/test_sidecar_health.ps1` aggiornato per puntare a tutta la cartella `sidecar\tests\` invece del solo `test_sidecar.py`, altrimenti il nuovo file di test non sarebbe mai stato eseguito da quello script.
 
-### Fasi 2-4
-Restano non pronte per l'esecuzione. Aprire una sessione di scoping dedicata quando la Fase 1 sarà in produzione, riutilizzando le ipotesi di lavoro su redaction/font annotate sopra come punto di partenza, non come decisioni già prese.
+---
+
+### Fase 2 — PDF fine-mode in-place translation (senza auto-fit) — COMPLETATA
+
+#### Endpoint
+Riusa `POST /documents/{doc_id}/translate-inplace` (stesso schema `TranslateInplaceRequest`/`IngestResponse` della Fase 1). Il dispatch tra pipeline DOCX e PDF avviene internamente in `sidecar/domain/translator.py` in base a `doc.file_type`, non nel layer di presentazione (`main.py` resta thin: solo mapping eccezioni tipizzate → HTTP status).
+
+#### Guardrail (bug corretto rispetto alla stesura Fase 1)
+La Fase 1 catturava ogni `ValueError` come `404`, quindi il caso "tipo file non supportato" (documentato come `400` nel piano ma mai implementato così) tornava erroneamente `404`. Risolto introducendo `UnsupportedDocumentTypeError(ValueError)` in `translator.py`, mappato esplicitamente su `400` in `main.py` prima del catch generico `ValueError` → `404`.
+
+#### Pipeline (`sidecar/domain/translator.py`)
+1. `translate_document_inplace(doc_id, ...)` — dispatcher: carica il record documento una volta (`_load_doc_record`, helper condiviso anche da `translate_docx_inplace`), poi instrada a `translate_docx_inplace` (`file_type == "docx"`) o `translate_pdf_inplace_fine` (`file_type == "pdf"`); qualunque altro tipo → `UnsupportedDocumentTypeError`.
+2. `translate_pdf_inplace_fine`, per ogni pagina:
+   - `_extract_pdf_page_blocks`: estrae blocchi di testo non vuoti via `page.get_text("dict")` (bbox, testo concatenato, font size e colore del primo span non vuoto), saltando i blocchi immagine.
+   - `_translate_pdf_blocks`: traduzione batch (~2500 char, stesso delimitatore e stessa logica di fallback per-item della Fase 1 — estratta in `_translate_texts_with_fallback`, condivisa da entrambe le pipeline DOCX e PDF per evitare duplicazione).
+   - `_redact_and_reinsert_pdf_blocks`: per ogni blocco, `add_redact_annot` + `apply_redactions()` (cancellazione reale, verificata) su un rect **paddato del 15% della font size** — il bbox stretto restituito da `get_text("dict")` non lascia margine per l'interlinea interna di `insert_textbox` e causa la perdita silenziosa dell'intero testo, non un semplice clipping (bug scoperto e corretto durante l'esecuzione di questa fase, vedi test). Poi reinserimento del testo tradotto nello stesso rect paddato, font fisso `helv`, size originale. Overflow → clipping (righe scartate da `insert_textbox`), loggato come warning, non un errore.
+   - Salvataggio: `pdf_doc.save(file_path + ".translating.tmp")` poi `os.replace()` atomico sul file originale (più robusto del save diretto in-place usato per DOCX, giustificato dalla natura distruttiva della redazione).
+3. Ri-estrazione markdown + `update_and_reindex_document`, identico alla Fase 1.
+
+#### Limitazioni note (esplicite, non bug)
+- Nessun auto-fit: testo tradotto più lungo dell'originale viene troncato, non ridimensionato (Fase 3).
+- Font fisso `helv` (Helvetica base14): font originale e caratteri CJK non preservati (Fase 4).
+- Fill di redazione bianco: si fonde bene solo su sfondi chiari/bianchi.
+
+#### Test (`sidecar/tests/test_translator.py`, 14 test totali nel file)
+- Estrazione blocchi (bbox/testo/size/colore)
+- Redazione reale verificata su stream grezzo (byte del PDF salvato, non solo layer di testo parsato)
+- Traduzione batch happy-path e fallback per mismatch segmenti
+- End-to-end via `TestClient`: ingest reale → translate-inplace → verifica testo tradotto nel file, testo originale assente anche nei byte grezzi, markdown reindicizzato
+- Clipping su overflow: non deve sollevare eccezioni né corrompere il documento
+- Dispatcher: guardrail `400` per tipo non supportato, `404` per documento inesistente
+
+#### Frontend
+- `DocumentListTable.tsx`: azione "Traduci in-place" visibile ora per `docx` e `pdf` (era solo `docx`).
+- Copy i18n (`en.ts`/`it.ts`) del modale di conferma aggiornato per riflettere le due pipeline e i limiti del fine-mode PDF; rimossa la chiave `translateInplaceDocxOnlyHint` (orfana, mai referenziata da alcun componente).
+- Nessuna modifica a `apiService.translateDocumentInplace` / `useIngestion.ts`: il contratto IPC/HTTP non cambia, solo il tipo di documento accettato lato sidecar.
+
+#### Definition of Done — Fase 2 — COMPLETATO
+- [x] `sidecar/domain/translator.py`: dispatcher tipizzato + pipeline PDF fine-mode, zero duplicazione della logica di traduzione batch/fallback tra DOCX e PDF
+- [x] Bug guardrail `400` vs `404` corretto in `main.py`
+- [x] Redazione reale verificata empiricamente (script standalone + test di integrazione su byte grezzi)
+- [x] `sidecar/tests/test_translator.py` verde: 14 test (5 preesistenti Fase 1 invariati + 9 nuovi Fase 2)
+- [x] `.venv\Scripts\pytest.exe sidecar\tests -q` / `test_sidecar_health.ps1 -Fast` puliti
+- [x] `npm run typecheck` pulito
+- [x] `npm run test:fast` pulito — 79 file, 550 test invariati
+- [x] `docs/api.md` aggiornato con l'endpoint `translate-inplace` (mancava anche per la Fase 1 — gap documentale colmato in questa sessione)
+- [x] `DocumentListTable.tsx` + copy i18n aggiornati per esporre l'azione anche sui PDF
+
+### Fasi 3-4
+Restano non pronte per l'esecuzione. Aprire una sessione di scoping dedicata quando la Fase 2 sarà in produzione:
+- **Fase 3 — Auto-fit progressivo**: riduzione iterativa della font size finché il testo tradotto rientra nel bbox originale, prima di ricorrere al clipping.
+- **Fase 4 — Copertura CJK e font TrueType universali**: font fisso `helv` non copre caratteri CJK; richiede l'imbarco di font TTF e la selezione del font in base al target language.
 
 ---
 

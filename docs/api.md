@@ -59,6 +59,14 @@ OnlyRag V2 implementa due livelli di interfaccia:
 * **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali.
 * **`PUT /documents/{doc_id}`**: Aggiorna il contenuto Markdown e re-indicizza i chunk vettoriali. Corpo: `{ "markdown_content": "..." }`.
 * **`GET /documents/{doc_id}/page-preview/{page_num}`**: Genera anteprima PNG di una pagina specifica. Risposta: `{ "doc_id", "page_number", "total_pages", "image_base64", "mime_type" }`.
+* **`POST /documents/{doc_id}/translate-inplace`**: Traduce il testo del documento **in-place**, sovrascrivendo il file originale su disco, poi re-indicizza i chunk vettoriali. Nessun backup automatico: operazione irreversibile, confermata dall'utente lato UI prima della chiamata.
+  * **Request Body:** `{ "source_lang": "Italian", "target_lang": "English", "model"?: "llama3.2" }`
+  * **Risposta (200 OK):** stessa struttura di `IngestResponse` (§1.2).
+  * **Pipeline per formato** (dispatch automatico su `file_type`, vedi [`translator.py`](../sidecar/domain/translator.py)):
+    * `docx` — sostituzione diretta dei run testuali via `python-docx` (stile/font/tabelle invariati, cancellazione reale del testo originale nell'XML del run).
+    * `pdf` (**fine-mode**, senza auto-fit) — per ogni pagina: redazione reale del testo originale (`page.add_redact_annot` + `apply_redactions()`, verificato che cancelli il testo dal content stream e non solo visivamente) seguita dal reinserimento del testo tradotto nello stesso bounding box con font fisso (`helv`) alla dimensione originale. **Limitazioni note di questa fase**: nessun auto-fit — il testo che eccede il bbox originale viene troncato (righe scartate, non ridimensionamento progressivo); il fill di redazione è bianco, quindi si fonde bene solo su sfondi chiari; font originale e copertura CJK non sono preservati (pianificati per le Fasi 3-4, non ancora implementate — vedi `IMPLEMENTATION_PLAN.md`).
+    * Qualsiasi altro `file_type` → `400 Bad Request`.
+  * **Codici di errore:** `400` (tipo file non supportato), `404` (documento non trovato o file originale non più presente su disco), `500` (errore imprevisto).
 
 ---
 

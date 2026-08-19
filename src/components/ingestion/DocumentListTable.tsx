@@ -94,7 +94,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                 </button>
 
                 <div className="flex items-center gap-1 shrink-0 ml-1.5">
-                  {onTranslateInplace && doc.fileType === 'docx' && (
+                  {onTranslateInplace && (doc.fileType === 'docx' || doc.fileType === 'pdf') && (
                     <button
                       type="button"
                       onClick={() => onTranslateInplace(doc)}

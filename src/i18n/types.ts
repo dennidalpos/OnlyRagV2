@@ -361,7 +361,6 @@ export interface TranslationSchema {
     exportCancelled: string
     exportError: string
     translateInplace: string
-    translateInplaceDocxOnlyHint: string
     translateInplaceModalTitle: string
     translateInplaceWarning: string
     translateInplaceConfirm: string

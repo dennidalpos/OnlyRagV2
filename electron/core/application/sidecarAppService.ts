@@ -417,6 +417,98 @@ export class SidecarAppService {
     })
   }
 
+  /** Shared POST-JSON-to-sidecar plumbing (used by the prompt-history endpoints below) --
+   *  same keep-alive agent, timeout+error handling, and safe-fallback-instead-of-throw
+   *  shape as searchVectorDb above. */
+  private postToSidecar<T>(urlPath: string, payload: Record<string, any>, timeoutMs: number, fallback: T): Promise<T> {
+    return new Promise((resolve) => {
+      const postData = JSON.stringify(payload)
+      const req = http.request(
+        `http://127.0.0.1:8000${urlPath}`,
+        {
+          method: 'POST',
+          agent: httpAgent,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+        },
+        (res) => {
+          let raw = ''
+          res.on('data', (chunk) => {
+            raw += chunk
+          })
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(raw))
+            } catch (parseErr: any) {
+              logger.log('ERROR', 'SidecarApp', `Failed parsing ${urlPath} response: ${parseErr.message}`)
+              resolve(fallback)
+            }
+          })
+        }
+      )
+      req.on('error', (err) => {
+        logger.log('ERROR', 'SidecarApp', `${urlPath} request failed: ${err.message}`)
+        resolve(fallback)
+      })
+      req.setTimeout(timeoutMs, () => {
+        req.destroy()
+        logger.log('WARN', 'SidecarApp', `${urlPath} timed out (${timeoutMs}ms)`)
+        resolve(fallback)
+      })
+      req.write(postData)
+      req.end()
+    })
+  }
+
+  /** Fire-and-forget: embeds and upserts one completed prompt into the semantic history index. */
+  indexPromptHistory(payload: {
+    id: string
+    sessionId: string
+    workspacePath: string
+    prompt: string
+    summary?: string
+    outcome: string
+    startedAt: string
+    completedAt?: string
+  }): Promise<{ success: boolean }> {
+    return this.postToSidecar(
+      '/history/index',
+      {
+        id: payload.id,
+        session_id: payload.sessionId,
+        project_path: payload.workspacePath,
+        prompt: payload.prompt,
+        summary: payload.summary,
+        outcome: payload.outcome,
+        started_at: payload.startedAt,
+        completed_at: payload.completedAt,
+      },
+      5000,
+      { success: false }
+    )
+  }
+
+  /** Semantic search across every indexed project's prompt history (or a subset via projectPaths). */
+  searchPromptHistory(query: string, topK: number = 10, projectPaths?: string[]): Promise<any[]> {
+    if (typeof query !== 'string' || !query.trim()) return Promise.resolve([])
+    const payload: Record<string, any> = { query, top_k: topK }
+    if (projectPaths && projectPaths.length > 0) payload.project_paths = projectPaths
+    return this.postToSidecar('/history/search', payload, 4000, [])
+  }
+
+  /** Removes prompt-history index rows for the given sessions (single id or a batch for a clear-all). */
+  removePromptHistoryForSessions(sessionIds: string[]): Promise<{ success: boolean }> {
+    if (!sessionIds || sessionIds.length === 0) return Promise.resolve({ success: true })
+    return this.postToSidecar('/history/remove', { session_ids: sessionIds }, 4000, { success: false })
+  }
+
+  /** Removes every prompt-history index row belonging to a removed project. */
+  removePromptHistoryForProject(projectPath: string): Promise<{ success: boolean }> {
+    return this.postToSidecar('/history/remove', { project_path: projectPath }, 4000, { success: false })
+  }
+
   async exportDocument(markdownContent: string, format: string): Promise<{ success: boolean; message?: string; filePath?: string; error?: string }> {
     if (typeof markdownContent !== 'string' || !markdownContent.trim()) {
       return { success: false, error: 'Il contenuto del documento è vuoto.' }

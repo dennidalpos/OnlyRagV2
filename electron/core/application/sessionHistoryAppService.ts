@@ -4,6 +4,7 @@ import { normalizeSession } from '../domain/sessions/sessionHistoryDomain'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { sidecarAppService } from './sidecarAppService'
 
 /**
  * Use cases for the coding session history. Owns the full lifecycle of a session:
@@ -23,13 +24,18 @@ export class SessionHistoryAppService {
     const deleted = await sessionHistoryRepository.deleteSession(sessionId, workspacePath)
     await agentSessionStateRepository.clearSessionState(sessionId, workspacePath)
     codingAgentLogger.removeSessionFromAuditLog(sessionId)
+    await sidecarAppService.removePromptHistoryForSessions([sessionId])
     return deleted
   }
 
   async clearSessions(workspacePath?: string | null): Promise<boolean> {
+    // Collected before clearing: the local store is the only place that still knows which
+    // session ids belonged to this workspace once it's wiped.
+    const sessionIds = (await sessionHistoryRepository.listSessions(workspacePath)).map((s) => s.id)
     const cleared = await sessionHistoryRepository.clearSessions(workspacePath)
     await agentSessionStateRepository.clearAllSessionStates(workspacePath)
     codingAgentLogger.clearAuditLog()
+    await sidecarAppService.removePromptHistoryForSessions(sessionIds)
     return cleared
   }
 

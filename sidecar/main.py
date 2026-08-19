@@ -21,6 +21,8 @@ from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult,
     ExportRequest, InspectImageRequest, UpdateDocumentRequest, PagePreviewResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
+    IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
+    PromptHistoryRemoveRequest,
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
 from sidecar.infrastructure.db import lance_db, get_existing_tables
@@ -33,6 +35,7 @@ from sidecar.services.ingest_service import (
     render_document_page_preview
 )
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, delete_stored_document
+from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 
 app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.3.0")
 
@@ -173,6 +176,25 @@ async def delete_document(doc_id: str):
 async def search_vector_db(req: SearchRequest):
     logger.info(f"Performing LanceDB vector search for query: '{req.query}'")
     return await asyncio.to_thread(perform_vector_search, req)
+
+@app.post("/history/index")
+async def index_history(req: IndexPromptHistoryRequest):
+    try:
+        await asyncio.to_thread(index_prompt_history, req)
+        return {"success": True}
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error indexing prompt history entry {req.id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/history/search", response_model=List[PromptHistorySearchResult])
+async def search_history(req: PromptHistorySearchRequest):
+    return await asyncio.to_thread(search_prompt_history, req)
+
+@app.post("/history/remove")
+async def remove_history(req: PromptHistoryRemoveRequest):
+    return await asyncio.to_thread(remove_prompt_history, req)
 
 @app.post("/export")
 async def export_document(req: ExportRequest):

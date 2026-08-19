@@ -37,4 +37,12 @@ export function registerSidecarIpcHandlers() {
   ipcMain.handle('ingest:export', async (_, markdownContent: string, format: string) => {
     return sidecarAppService.exportDocument(markdownContent, format)
   })
+
+  ipcMain.handle('history:index', async (_, payload: any) => {
+    return sidecarAppService.indexPromptHistory(payload)
+  })
+
+  ipcMain.handle('history:search', async (_, query: string, topK?: number, projectPaths?: string[]) => {
+    return sidecarAppService.searchPromptHistory(query, topK, projectPaths)
+  })
 }

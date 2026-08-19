@@ -11,6 +11,7 @@ import { registerOllamaIpcHandlers } from './core/presentation/ollamaIpc'
 import { registerSystemIpcHandlers } from './core/presentation/systemIpc'
 import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
 import { registerSessionHistoryIpcHandlers } from './core/presentation/sessionHistoryIpc'
+import { registerProjectRegistryIpcHandlers } from './core/presentation/projectRegistryIpc'
 import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
 
 process.env.DIST = path.join(__dirname, '../dist')
@@ -110,5 +111,6 @@ app.whenReady().then(() => {
   registerAgentIpcHandlers(() => win)
   registerSkillIpcHandlers()
   registerSessionHistoryIpcHandlers()
+  registerProjectRegistryIpcHandlers()
   registerDiagnosticsIpcHandlers()
 })

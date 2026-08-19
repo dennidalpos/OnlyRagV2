@@ -364,9 +364,8 @@ export function useSessionHistory(workspacePath: string | null) {
   /** Closes a prompt run with its outcome and the metrics collected while it ran. */
   const completeExecutedPrompt = useCallback(
     (sessionId: string, executedPromptId: string, result: ExecutedPromptResult) => {
-      mutateSession(sessionId, (session) => ({
-        ...session,
-        executedPrompts: session.executedPrompts.map((item) =>
+      mutateSession(sessionId, (session) => {
+        const executedPrompts = session.executedPrompts.map((item) =>
           item.id === executedPromptId
             ? {
                 ...item,
@@ -379,10 +378,33 @@ export function useSessionHistory(workspacePath: string | null) {
                 summary: result.summary,
               }
             : item
-        ),
-      }))
+        )
+
+        // Fire-and-forget: embeds and upserts the completed prompt into the semantic history
+        // index (see sidecarAppService.indexPromptHistory). Never awaited -- a failed or
+        // skipped index write only means this one prompt won't surface in cross-project search.
+        const completed = executedPrompts.find((p) => p.id === executedPromptId)
+        if (completed && completed.prompt.trim() && workspacePath && window.electronAPI?.indexPromptHistory) {
+          window.electronAPI
+            .indexPromptHistory({
+              id: completed.id,
+              sessionId: completed.sessionId,
+              workspacePath,
+              prompt: completed.prompt,
+              summary: completed.summary,
+              outcome: completed.outcome,
+              startedAt: completed.startedAt,
+              completedAt: completed.completedAt,
+            })
+            .catch((err: any) => {
+              logger.warn('useSessionHistory', `Could not index prompt history entry ${completed.id}: ${err?.message}`)
+            })
+        }
+
+        return { ...session, executedPrompts }
+      })
     },
-    [mutateSession]
+    [mutateSession, workspacePath]
   )
 
   return {

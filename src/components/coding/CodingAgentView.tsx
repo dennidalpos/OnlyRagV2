@@ -11,6 +11,7 @@ import { CodingHeader } from './CodingHeader'
 import { PendingApprovalModal } from './PendingApprovalModal'
 import { SkillHubModal } from './SkillHubModal'
 import { SkillInstallApprovalModal } from './skills/SkillInstallApprovalModal'
+import { PromptHistorySearchModal } from './PromptHistorySearchModal'
 import { useSkillInstallApproval } from '../../hooks/useSkillInstallApproval'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
@@ -58,6 +59,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [isDiffMode, setIsDiffMode] = useState<boolean>(false)
   const [copiedPath, setCopiedPath] = useState<boolean>(false)
   const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
+  const [isPromptHistorySearchOpen, setIsPromptHistorySearchOpen] = useState<boolean>(false)
   const {
     activeRequest: activeSkillInstallRequest,
     approveInstall: approveSkillInstall,
@@ -146,6 +148,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
             onDeleteSession={c.handleDeleteSession}
             onClearSessions={c.handleClearSessionHistory}
             onRenameSession={c.handleRenameSession}
+            onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
             onClose={() => setShowWorkspaceSidebar(false)}
           />
         )}
@@ -250,6 +253,14 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         request={activeSkillInstallRequest}
         onApprove={approveSkillInstall}
         onReject={rejectSkillInstall}
+      />
+
+      {/* Cross-Project Prompt History Search */}
+      <PromptHistorySearchModal
+        isOpen={isPromptHistorySearchOpen}
+        onClose={() => setIsPromptHistorySearchOpen(false)}
+        projects={c.projects}
+        onJump={c.jumpToProjectAndSession}
       />
     </div>
   )

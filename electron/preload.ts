@@ -70,6 +70,16 @@ const api: IElectronAPI = {
   clearCodingSessions: (workspacePath?: string | null) => ipcRenderer.invoke('sessions:clear', workspacePath),
   /** One-shot import of the legacy localStorage session history. */
   migrateLegacyCodingSessions: (sessions: unknown) => ipcRenderer.invoke('sessions:migrate-legacy', sessions),
+  /** Main-process-owned project registry (filesystem store, see projectRegistryRepository). */
+  listProjects: () => ipcRenderer.invoke('projects:list'),
+  registerProject: (projectPath: string, name?: string) => ipcRenderer.invoke('projects:register', projectPath, name),
+  touchProject: (projectPath: string) => ipcRenderer.invoke('projects:touch', projectPath),
+  removeProjectFromRegistry: (projectPath: string) => ipcRenderer.invoke('projects:remove', projectPath),
+  /** One-shot import of the legacy localStorage project list. */
+  migrateLegacyProjects: (projects: unknown) => ipcRenderer.invoke('projects:migrate-legacy', projects),
+  /** Cross-project semantic prompt history (see sidecar's /history/* routes). */
+  indexPromptHistory: (payload: any) => ipcRenderer.invoke('history:index', payload),
+  searchPromptHistory: (query: string, topK?: number, projectPaths?: string[]) => ipcRenderer.invoke('history:search', query, topK, projectPaths),
   onAgentLog: (callback: (log: any) => void) => {
     const subscription = (_: any, log: any) => callback(log)
     ipcRenderer.on('agent:log', subscription)

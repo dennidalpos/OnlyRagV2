@@ -1,65 +1,111 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AppSettings, WorkspaceProject } from '../types'
 import { logger } from '../lib/logger'
 
 const LAST_WORKSPACE_STORAGE_KEY = 'onlyrag_last_workspace'
-const PROJECTS_STORAGE_KEY = 'onlyrag_workspace_projects'
+const LEGACY_PROJECTS_STORAGE_KEY = 'onlyrag_workspace_projects'
+const MIGRATION_FLAG_KEY = 'onlyrag_projects_migrated_to_main_v1'
 
-function loadSavedProjects(): WorkspaceProject[] {
-  try {
-    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
-    }
-  } catch (err: any) {
-    logger.warn('useWorkspaceProjects', `Could not parse saved projects: ${err?.message}`)
-  }
-  return []
+function deriveNameFromPath(pathStr: string): string {
+  return pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
 }
 
-function saveSavedProjects(projects: WorkspaceProject[]) {
+/**
+ * One-shot import of the project list previously kept in localStorage. Runs once per
+ * installation: the legacy key is dropped only after the main process confirms the
+ * import, so a failed migration is retried on the next launch instead of losing data.
+ */
+async function migrateLegacyProjects(): Promise<void> {
+  if (localStorage.getItem(MIGRATION_FLAG_KEY) === 'done') return
+  const raw = localStorage.getItem(LEGACY_PROJECTS_STORAGE_KEY)
+  if (!raw) {
+    localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
+    return
+  }
+  if (!window.electronAPI?.migrateLegacyProjects) return
+
   try {
-    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects))
+    const parsed = JSON.parse(raw)
+    const res = await window.electronAPI.migrateLegacyProjects(parsed)
+    localStorage.removeItem(LEGACY_PROJECTS_STORAGE_KEY)
+    localStorage.setItem(MIGRATION_FLAG_KEY, 'done')
+    logger.info('useWorkspaceProjects', `Migrated ${res?.migrated ?? 0} legacy project(s) to the main-process registry.`)
   } catch (err: any) {
-    logger.warn('useWorkspaceProjects', `Could not save projects: ${err?.message}`)
+    logger.warn('useWorkspaceProjects', `Legacy project migration failed, will retry on next launch: ${err?.message}`)
   }
 }
 
 /**
  * Saved project folders and the workspace root the Coding Agent Studio is attached to,
- * including standalone (no-workspace) mode. File tree and editor state live in
- * `useWorkspaceFiles`, which reloads itself from the values returned here.
+ * including standalone (no-workspace) mode. The project list itself is owned by the main
+ * process (see projectRegistryRepository), so it's available to every window and survives
+ * independently of any single renderer's localStorage; this hook mirrors it in memory.
+ * File tree and editor state live in `useWorkspaceFiles`, which reloads itself from the
+ * values returned here.
  */
 export function useWorkspaceProjects(settings?: AppSettings) {
-  const [projects, setProjects] = useState<WorkspaceProject[]>(() => loadSavedProjects())
+  const [projects, setProjects] = useState<WorkspaceProject[]>([])
   const [workspacePath, setWorkspacePath] = useState<string | null>(
     () => settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null
   )
   const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(settings?.noWorkspaceMode || false)
 
-  const handleSelectProject = useCallback(
-    (pathStr: string) => {
-      setWorkspacePath(pathStr)
+  useEffect(() => {
+    let cancelled = false
+    const loadProjects = async () => {
+      await migrateLegacyProjects()
+      if (!window.electronAPI?.listProjects) return
       try {
-        localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, pathStr)
+        const list = await window.electronAPI.listProjects()
+        if (!cancelled) setProjects(list)
       } catch (err: any) {
-        logger.warn('useWorkspaceProjects', `Failed saving last workspace: ${err?.message}`)
+        logger.warn('useWorkspaceProjects', `Could not load project registry: ${err?.message}`)
       }
-      setProjects((prev) => {
-        const folderName = pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
-        const nowIso = new Date().toISOString()
-        const updated: WorkspaceProject[] = [
-          { path: pathStr, name: folderName, addedAt: nowIso, lastOpenedAt: nowIso },
-          ...prev.filter((p) => p.path !== pathStr),
-        ]
-        saveSavedProjects(updated)
-        return updated
-      })
-      setIsStandaloneMode(false)
-    },
-    []
-  )
+    }
+    void loadProjects()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSelectProject = useCallback((pathStr: string) => {
+    setWorkspacePath(pathStr)
+    try {
+      localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, pathStr)
+    } catch (err: any) {
+      logger.warn('useWorkspaceProjects', `Failed saving last workspace: ${err?.message}`)
+    }
+    setIsStandaloneMode(false)
+
+    // Optimistic reorder so the sidebar reflects the new active project instantly;
+    // reconciled below with the authoritative registry entry once the IPC round-trip resolves.
+    const nowIso = new Date().toISOString()
+    setProjects((prev) => {
+      const existing = prev.find((p) => p.path === pathStr)
+      const optimistic: WorkspaceProject = existing
+        ? { ...existing, lastOpenedAt: nowIso }
+        : { path: pathStr, name: deriveNameFromPath(pathStr), addedAt: nowIso, lastOpenedAt: nowIso }
+      return [optimistic, ...prev.filter((p) => p.path !== pathStr)]
+    })
+
+    void (async () => {
+      if (!window.electronAPI?.touchProject) return
+      try {
+        // touchProject never creates: a path not yet in the registry (e.g. opened via a
+        // stale link or CLI arg) falls back to registerProject.
+        let entry = await window.electronAPI.touchProject(pathStr)
+        if (!entry && window.electronAPI.registerProject) {
+          entry = await window.electronAPI.registerProject(pathStr)
+        }
+        if (entry) {
+          const confirmed = entry
+          setProjects((prev) => [confirmed, ...prev.filter((p) => p.path !== pathStr)])
+        }
+      } catch (err: any) {
+        logger.warn('useWorkspaceProjects', `Could not update project registry: ${err?.message}`)
+      }
+    })()
+  }, [])
 
   const handleAddProject = useCallback(async () => {
     if (!window.electronAPI?.openDirectoryDialog) return
@@ -71,9 +117,14 @@ export function useWorkspaceProjects(settings?: AppSettings) {
 
   const handleRemoveProject = useCallback(
     (pathStr: string) => {
+      if (window.electronAPI?.removeProjectFromRegistry) {
+        window.electronAPI.removeProjectFromRegistry(pathStr).catch((err: any) => {
+          logger.warn('useWorkspaceProjects', `Could not remove project from registry: ${err?.message}`)
+        })
+      }
+
       setProjects((prev) => {
         const updated = prev.filter((p) => p.path !== pathStr)
-        saveSavedProjects(updated)
 
         if (pathStr === workspacePath) {
           if (updated.length > 0) {

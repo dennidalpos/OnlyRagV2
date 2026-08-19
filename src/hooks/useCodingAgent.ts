@@ -175,6 +175,7 @@ ${output.slice(0, 300)}`
     sessions: workspaceSessions,
     activeSession,
     activeSessionId,
+    isLoadingSessions,
     createSession,
     switchSession,
     deleteSession,
@@ -420,6 +421,34 @@ ${output.slice(0, 300)}`
     resetSessionViewState()
     switchSession(sessionId)
   }
+
+  /**
+   * Cross-project jump (from the prompt history search modal): a session belonging to a
+   * different project first requires switching the active project, whose session list only
+   * finishes loading asynchronously (see useSessionHistory's workspacePath-keyed effect) --
+   * the target session is applied once that load settles, overriding whatever session it
+   * auto-selected in the meantime.
+   */
+  const pendingSessionJumpRef = useRef<{ projectPath: string; sessionId: string } | null>(null)
+
+  const jumpToProjectAndSession = useCallback(
+    (projectPath: string, sessionId: string) => {
+      if (projectPath === workspacePath) {
+        handleSwitchSession(sessionId)
+        return
+      }
+      pendingSessionJumpRef.current = { projectPath, sessionId }
+      handleSelectProject(projectPath)
+    },
+    [workspacePath, activeSessionId, handleSelectProject]
+  )
+
+  useEffect(() => {
+    const pending = pendingSessionJumpRef.current
+    if (!pending || workspacePath !== pending.projectPath || isLoadingSessions) return
+    pendingSessionJumpRef.current = null
+    handleSwitchSession(pending.sessionId)
+  }, [workspacePath, isLoadingSessions])
 
   const handleDeleteSession = async (sessionId: string) => {
     if (sessionId === activeSessionId) resetSessionViewState()
@@ -725,6 +754,7 @@ ${output.slice(0, 300)}`
     updateActiveSessionPlans,
     handleCreateSession,
     handleSwitchSession,
+    jumpToProjectAndSession,
     handleDeleteSession,
     handleClearSessionHistory,
     handleRenameSession,

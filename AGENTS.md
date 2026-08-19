@@ -63,9 +63,8 @@ Minimize response size to conserve tokens. Structure final responses strictly in
   - **Infrastructure / Data Layer:** Persistence (DB, ORM), external API calls, third-party services. Implements interfaces defined by upper layers (Dependency Inversion).
   - *Strict Rule:* Never skip layers (e.g., UI controllers must never call repositories or DB directly).
 * **Clean Code Standards:**
-  - **SRP:** Single Responsibility Principle for every file, class, and function.
-  - **File Size:** Max ~150-200 lines per file; decompose larger files.
-  - **Function Length:** Max 20-30 lines per function; extract private sub-functions for multi-step logic.
+  - **SRP:** Single Responsibility Principle for every file, class, and function. Split a file when it mixes unrelated responsibilities or domains, not to hit a line count — a cohesive, single-purpose file stays whole regardless of length. Decompose along real seams (a distinct concern, a distinct domain concept, a distinct layer), never by mechanically slicing a large-but-coherent file into arbitrary chunks.
+  - **Function Length:** Prefer short, focused functions; extract private sub-functions when a function mixes multiple steps or responsibilities — not to satisfy a line-count target.
   - **Strong Typing:** Explicit types mandatory (TypeScript strict, Python Type Hints, etc.). Avoid generic `any` or `Object`.
   - **Boundary Error Handling:** Handle errors at boundaries. Return or throw explicit typed errors; no empty `try/catch` or silently swallowed errors.
 * **Agent Execution Workflow:**

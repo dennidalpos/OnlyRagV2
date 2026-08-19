@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Eraser, FileCode2, FolderOpen, MessageSquare, Plus, RefreshCw, X } from 'lucide-react'
+import { Eraser, FileCode2, FolderOpen, MessageSquare, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { WorkspaceFile, CodingSession, WorkspaceProject } from '../../types'
 import { useTranslation } from '../../i18n'
 import { WorkspaceExplorerFilesTab } from './WorkspaceExplorerFilesTab'
@@ -28,6 +28,7 @@ interface WorkspaceExplorerProps {
   onDeleteSession: (id: string) => void
   onClearSessions: () => void
   onRenameSession: (id: string, title: string) => void
+  onOpenPromptHistorySearch: () => void
   onClose: () => void
 }
 
@@ -50,6 +51,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   onDeleteSession,
   onClearSessions,
   onRenameSession,
+  onOpenPromptHistorySearch,
   onClose,
 }) => {
   const { t } = useTranslation()
@@ -125,6 +127,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
           onToggleExpanded={() => setHistoryExpanded((v) => !v)}
           actions={
             <>
+              <button
+                type="button"
+                onClick={onOpenPromptHistorySearch}
+                title={t('coding.searchHistory')}
+                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 rounded transition-colors"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => {

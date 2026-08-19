@@ -85,6 +85,20 @@ export interface VectorSearchResult {
   score: number
 }
 
+/** One semantic match from the cross-project prompt history index (see sidecar's /history/search). */
+export interface PromptHistorySearchResult {
+  id: string
+  session_id: string
+  project_id: string
+  project_path: string
+  prompt: string
+  summary?: string
+  outcome: ExecutedPromptOutcome
+  started_at: string
+  completed_at?: string
+  score: number
+}
+
 export interface CitationSource {
   docName: string
   chunkId: string
@@ -116,7 +130,7 @@ export interface AgentActionLog {
   detail?: string
 }
 
-import type { ExecutedPrompt, QueuedPromptRecord } from './workspace'
+import type { ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
 
 export * from './workspace'
 
@@ -419,6 +433,28 @@ export interface IElectronAPI {
   clearCodingSessions?: (workspacePath?: string | null) => Promise<boolean>
   /** One-shot import of sessions previously persisted in localStorage. */
   migrateLegacyCodingSessions?: (sessions: unknown) => Promise<{ migrated: number }>
+  /** Main-process-owned registry of every project the user has ever opened (see projectRegistryRepository). */
+  listProjects?: () => Promise<WorkspaceProject[]>
+  /** Explicit "add project" -- creates the entry (or refreshes its name) if unseen. */
+  registerProject?: (projectPath: string, name?: string) => Promise<WorkspaceProject>
+  /** Plain "select project" -- bumps recency only; returns null if the project isn't registered. */
+  touchProject?: (projectPath: string) => Promise<WorkspaceProject | null>
+  removeProjectFromRegistry?: (projectPath: string) => Promise<boolean>
+  /** One-shot import of the project list previously persisted in localStorage. */
+  migrateLegacyProjects?: (projects: unknown) => Promise<{ migrated: number }>
+  /** Fire-and-forget: embeds and upserts one completed prompt into the semantic history index. */
+  indexPromptHistory?: (payload: {
+    id: string
+    sessionId: string
+    workspacePath: string
+    prompt: string
+    summary?: string
+    outcome: ExecutedPromptOutcome
+    startedAt: string
+    completedAt?: string
+  }) => Promise<{ success: boolean }>
+  /** Semantic search across every indexed project's prompt history. */
+  searchPromptHistory?: (query: string, topK?: number, projectPaths?: string[]) => Promise<PromptHistorySearchResult[]>
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
   onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void

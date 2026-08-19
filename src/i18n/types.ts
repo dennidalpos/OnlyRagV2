@@ -184,6 +184,7 @@ export interface TranslationSchema {
     historyExpandSession: string
     historyStepsLabel: string
     historyFilesLabel: string
+    searchHistory: string
     outcomeRunning: string
     outcomeSuccess: string
     outcomeFailed: string
@@ -535,6 +536,18 @@ export interface TranslationSchema {
     noResultsHint: string
     resultsFound: string
     docName: string
+    score: string
+  }
+  promptHistorySearch: {
+    modalTitle: string
+    modalSubtitle: string
+    queryPlaceholder: string
+    searchBtn: string
+    searching: string
+    noResults: string
+    noResultsHint: string
+    resultsFound: string
+    jumpBtn: string
     score: string
   }
   hardwareWizard: {

@@ -2,36 +2,15 @@ import { BrowserWindow } from 'electron'
 import http from 'node:http'
 import { logger } from '../../diagnostics'
 import type { AgentTaskPayload, AgentTaskResult, AgentToolCall } from '../domain/agent/agentTypes'
-import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
-import { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
-import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
-import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
-import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
-import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
-import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
-import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
-import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
 import { runToolGates } from './agentOrchestratorToolGates'
 import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
-import { interpretTurnResponse, type ResponseInterpreterState } from './agentOrchestratorResponseInterpreter'
+import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
 import { runTurnDispatch } from './agentOrchestratorTurnDispatch'
-import {
-  resolveWorkspacePath,
-  buildDefaultAgentSettings,
-  buildAttachedContextBlock,
-  buildPinnedFilesContextBlock,
-} from './agentOrchestratorSessionSetup'
+import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
 import { agentToolExecutorService } from './agentToolExecutorService'
-import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
-import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
-import { skillAppService } from './skillAppService'
-import { skillInstallApprovalService, type SkillInstallCandidate } from './skillInstallApprovalService'
-import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { PlanManager } from '../domain/agent/planManager'
-import type { AppSettings } from '../../../src/types'
 
 export interface ApprovalResponse {
   approved: boolean
@@ -150,15 +129,6 @@ export function respondToApproval(targetSessionId: string, approved: boolean, ap
   return true
 }
 
-async function scanProjectMap(workspacePath: string): Promise<string> {
-  try {
-    return CompactSemanticRepoMapper.generateCompactRepoMap(workspacePath, 150)
-  } catch (err: any) {
-    logger.log('WARN', 'AgentOrchestratorApp', `Project map scan failed: ${err.message}`)
-    return ''
-  }
-}
-
 export async function runAgentOrchestratorLoop(
   payload: AgentTaskPayload,
   win: BrowserWindow | null,
@@ -182,284 +152,66 @@ export async function runAgentOrchestratorLoop(
   // reused sessionId, this run must recognise that it is no longer the owner and stand down.
   const isSessionActive = () => activeAgentSessions.get(sessionId) === session && !session.isCancelled
 
-  const emitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => {
-    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:log', {
-        id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp: new Date().toISOString(),
-        type,
-        message,
-        detail,
-      })
-    }
-  }
-
-  const emitDone = (success: boolean, summary: string) => {
-    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:done', { success, summary })
-    }
-  }
-
-  const userTask = payload.userTask.trim()
-  const agentMode = payload.agentMode || 'plan'
-  let workspacePath = resolveWorkspacePath(payload)
-  const isStandaloneMode = Boolean(payload.isStandaloneMode)
-  const settings: AppSettings = payload.settings || buildDefaultAgentSettings()
-
-  const attachedContext = buildAttachedContextBlock(payload)
-  const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
-
-  const projectContextMapStr = workspacePath && !isStandaloneMode && documentIoRepository.exists(workspacePath)
-    ? await scanProjectMap(workspacePath)
-    : ''
-
-  emitLog(
-    'info',
-    `Task received: "${userTask}"`,
-    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Workspace: ${workspacePath || 'Standalone'}`
-  )
-
-  if (settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionStart(sessionId, userTask, agentMode, settings.codingModel || settings.defaultModel || 'llama3.2', workspacePath)
-  }
-
-  const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
-  // Native tool-calling capability map (see ollamaToolCallingCapability.ts). Fetched once
-  // per session; failures resolve to an empty map, which falls back to the family allow-list.
-  const modelCapabilities = await ollamaAppService.getModelCapabilities(settings.ollamaHost)
-
-  // Warm-up: start loading the model the first turn will most likely use, without waiting
-  // for it. The load then overlaps with skill matching and prompt assembly below instead of
-  // running down the first turn's 45s initial-response timeout on a cold, CPU-only machine.
-  const firstTurnComplexity = evaluateTaskComplexity(userTask, {
-    attachedFilesCount: payload.pinnedFiles?.length || 0,
-    contextSizeChars: payload.activeFile?.content?.length || 0,
-    settings,
-    availableModels,
-    hasRecentToolFailure: false,
-    errorCountInHistory: 0,
+  // One-shot session setup: task/workspace/settings resolution, model warm-up, skill
+  // matching, state restore, and the persist/watchdog closures the turn loop shares below.
+  // See agentOrchestratorBootstrap.ts for the exact composition.
+  const boot = await bootstrapAgentSession({
+    payload,
+    session,
+    sessionId,
+    isSessionActive,
+    deregisterSession: () => activeAgentSessions.delete(sessionId),
   })
-  const warmUpModel = settings.useComplexityRouting
-    ? firstTurnComplexity.modelName
-    : settings.codingModel || settings.defaultModel || 'llama3.2'
-  void ollamaAppService.preloadModel(warmUpModel, settings.ollamaHost).catch(() => {})
-
-  const skillMatchContext = {
+  const {
     userTask,
-    activeFilePath: payload.activeFile?.path,
-    activeFileContent: payload.activeFile?.content,
-    pinnedFiles: payload.pinnedFiles?.map((f) => ({ path: f.path, name: f.name })),
-    workspacePath: workspacePath || undefined,
-  }
+    initialUserTask,
+    agentMode,
+    workspacePath,
+    isStandaloneMode,
+    settings,
+    attachedContext,
+    pinnedFilesContextStr,
+    projectContextMapStr,
+    availableModels,
+    modelCapabilities,
+    skillMatchContext,
+    skillMatchingOptions,
+    episodicCompactor,
+    goalPlanner,
+    fsmMode,
+    executionGuard,
+    circuitBreaker,
+    loopDetector,
+    surfacedDodReasons,
+    mutableFlags,
+    responseInterpreterState,
+    sessionNumCtxBox,
+    sessionChangedFiles,
+    stepCountBox,
+    MAX_STEPS,
+    maxStepsLabel,
+    isUnlimitedSteps,
+    emitLog,
+    emitDone,
+    emitStepUpdate,
+    persistCurrentState,
+    buildSessionTracker,
+    requestApproval,
+    finalizeSession,
+    clearSessionTimeout,
+  } = boot
 
-  // In 'prompt' mode the auto-install of a hub skill is submitted to the user and awaited
-  // here, because the decision happens while this loop assembles the turn prompt.
-  const skillMatchingOptions = {
-    enableSkillRouter: settings.enableSkillRouter !== false && settings.autoInstallHubSkills !== 'disabled',
-    autoInstallHubSkills: settings.autoInstallHubSkills,
-    autoInstallMinScore: settings.autoInstallMinScore,
-    onConfirmInstall: (candidate: SkillInstallCandidate) => {
-      emitLog('info', `🧩 Skill Hub: richiesta conferma installazione '${candidate.skillName}' da ${candidate.hubName} (score ${candidate.score.toFixed(1)})`)
-      return skillInstallApprovalService.requestApproval(session.targetWindow, candidate)
-    },
-  }
-
-  const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath, 3, skillMatchingOptions)
-  if (matchedSkills.length > 0) {
-    const skillNames = matchedSkills.map((s) => s.name)
-    if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:skills-matched', { skills: skillNames })
-    }
-    emitLog('info', `✨ Skill Router: Attivate ${matchedSkills.length} skill [${skillNames.join(', ')}]`)
-    if (settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logSkillsMatched(sessionId, skillNames)
-    }
-  }
-
-  const episodicCompactor = new EpisodicMemoryCompactor(6)
-  const goalPlanner = new GoalDecompositionPlanner()
-  const fsmMode = new AgentRuntimeModeFsm(agentMode)
-  const isUnlimitedSteps = settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
-  const MAX_STEPS = isUnlimitedSteps ? Infinity : Math.max(10, Math.min(200, settings.maxToolCallSteps || 50))
-  const maxStepsLabel = MAX_STEPS === Infinity ? '∞' : String(MAX_STEPS)
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
-  let stepCount = 0
-  // Bundled (rather than loose `let`s) because agentOrchestratorToolResultProcessor.ts
-  // mutates these in place across steps -- see runToolResultProcessing below.
-  const mutableFlags: { hasFileMutations: boolean; hasVerifiedBuild: boolean; currentOverriddenModel: string | null } = {
-    hasFileMutations: false,
-    hasVerifiedBuild: false,
-    currentOverriddenModel: null,
-  }
-  // Same pattern, for the counters agentOrchestratorResponseInterpreter.ts advances.
-  const responseInterpreterState: ResponseInterpreterState = {
-    noToolStreak: 0,
-    stagnationStreak: 0,
-    consecutiveAskAttempts: 0,
-  }
-  /** DoD violation reasons already surfaced to the model — each intercepts `finish` at most once. */
-  const surfacedDodReasons = new Set<string>()
-  const loopDetector = new AgentActionLoopDetector(2)
-  const circuitBreaker = new StagnationCircuitBreaker(10, 5)
-  const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
 
-  // Restore session state if resuming an existing session
-  const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
-  const initialUserTask = savedState?.initialUserTask || payload.initialUserTask || userTask
-
-  if (savedState) {
-    stepCount = savedState.stepCount || 0
-    if (savedState.episodes && savedState.episodes.length > 0) {
-      episodicCompactor.fromState(savedState.episodes, savedState.recentFullLogs)
-    }
-    if (savedState.planMilestones && savedState.planMilestones.length > 0) {
-      goalPlanner.loadMilestones(savedState.planMilestones)
-    }
-    emitLog('info', `🔄 Restored Session State [${sessionId}]: Continuing from Step ${stepCount} with ${episodicCompactor.episodeCount} prior steps in memory.`)
-  }
-
-  const emitStepUpdate = (statusText?: string) => {
-    if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:step-update', {
-        step: stepCount,
-        maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
-        maxStepsLabel,
-        statusText,
-      })
-    }
-    if (settings.enableCodingAgentDebugLog && goalPlanner.hasPlan()) {
-      codingAgentLogger.logPlanMilestoneUpdate(
-        sessionId,
-        stepCount,
-        [...goalPlanner.getMilestones()],
-        statusText
-      )
-    }
-  }
-
-  const persistCurrentState = async () => {
-    // Only the plan's completion flag is persisted: every other field of the compact
-    // state is a projection of planMilestones, which is already stored below.
-    const isPlanCompleted = goalPlanner.hasPlan()
-      ? PlanManager.getCompactStateFromMilestones(goalPlanner.getMilestones(), userTask).isCompleted
-      : false
-
-    await agentSessionStateRepository.saveSessionState({
-      sessionId,
-      workspacePath,
-      agentMode,
-      stepCount,
-      maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
-      episodes: episodicCompactor.getEpisodes(),
-      recentFullLogs: episodicCompactor.getRecentFullLogs(),
-      planMilestones: [...goalPlanner.getMilestones()],
-      userTask,
-      initialUserTask,
-      updatedAt: new Date().toISOString(),
-      status: isPlanCompleted ? 'COMPLETED' : 'IN_PROGRESS',
-    })
-
-    if (workspacePath) {
-      await agentSessionStateRepository.saveSessionTrackerMarkdown(workspacePath, buildSessionTracker())
-    }
-  }
-
-  /**
-   * Builds the single SESSION_TRACKER.md payload from live session state: verified milestones
-   * as completed work, failed ones as debt, pending ones as next steps, plus every file this
-   * session actually touched. One format, produced here and parsed back by SessionDebtTracker.
-   */
-  const buildSessionTracker = (summaryText?: string): SessionDebtTracker => {
-    const milestones = goalPlanner.getMilestones()
-    return new SessionDebtTracker({
-      sessionId,
-      completedTasks: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
-      unresolvedIssues: milestones
-        .filter((m) => m.status === 'failed')
-        .map((m) => `${m.id}: ${m.title}${m.notes ? ` (${m.notes})` : ''}`),
-      nextSteps: milestones
-        .filter((m) => m.status === 'pending' || m.status === 'in_progress')
-        .map((m) => `${m.id}: ${m.title}`),
-      modifiedFiles: Array.from(sessionChangedFiles.keys()),
-      summaryText,
-    })
-  }
-
-  /** Frozen per-session Ollama context window, boxed so agentOrchestratorTurnDispatch.ts can grow it in place. */
-  const sessionNumCtxBox: { value: number | null } = { value: null }
-  /** Per-file line deltas applied during this session, for the UI's change metrics. */
-  const sessionChangedFiles = new Map<string, { additions: number; deletions: number }>()
-
-  // Global session timeout: guarantees SESSION END is always written to the audit log.
-  // Default: 45 minutes. Configurable via settings.agentSessionTimeoutMinutes (if added).
-  const SESSION_TIMEOUT_MS = Math.max(5, (settings as any).agentSessionTimeoutMinutes || 45) * 60 * 1000
-  session.timeoutHandle = setTimeout(async () => {
-    // Identity guard: sessionIds are reused across consecutive runs of the same UI session
-    // (useCodingAgent.ts passes a stable activeSessionId), so a timer left over from an
-    // earlier run must never act on the run currently registered under that id.
-    if (activeAgentSessions.get(sessionId) !== session) return
-    if (isSessionActive()) {
-      const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
-      logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
-      emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
-      session.isCancelled = true
-      if (session.pendingApprovalResolve) {
-        session.pendingApprovalResolve({ approved: false })
-        session.pendingApprovalResolve = undefined
-      }
-      codingAgentLogger.logSessionEnd(sessionId, stepCount, false, timeoutSummary)
-      emitDone(false, timeoutSummary)
-      agentToolExecutorService.rollbackJournal()
-      await persistCurrentState()
-      finalizeSession()
-    }
-  }, SESSION_TIMEOUT_MS)
-
-  const clearSessionTimeout = () => {
-    if (session.timeoutHandle) {
-      clearTimeout(session.timeoutHandle)
-      session.timeoutHandle = null
-    }
-  }
-
-  /**
-   * Single exit point for the loop: clears the session timeout and deregisters the session.
-   * Every early return path must go through this — a timer left armed on an abandoned session
-   * would later fire against whatever run holds the same sessionId.
-   */
-  const finalizeSession = () => {
-    clearSessionTimeout()
-    activeAgentSessions.delete(sessionId)
-  }
-
-  /**
-   * Sends `agent:approval-request` and pauses the calling step in place until the renderer
-   * answers via the `agent:approval-response` IPC channel (see `respondToApproval` below),
-   * or until cancellation/timeout resolves it to `false` (see cleanupSession / the session
-   * timeout handler above). The session stays registered in `activeAgentSessions` the whole
-   * time, so this is a real pause of the same loop iteration -- not the "end the task, then
-   * have the renderer re-execute the action on its own" round trip this replaces.
-   */
-  const requestApproval = (payload: Record<string, unknown>): Promise<ApprovalResponse> => {
-    return new Promise<ApprovalResponse>((resolve) => {
-      if (!session.targetWindow || session.targetWindow.isDestroyed()) {
-        resolve({ approved: false })
-        return
-      }
-      session.pendingApprovalResolve = resolve
-      session.targetWindow.webContents.send('agent:approval-request', { sessionId: session.id, ...payload })
-    })
-  }
-
-  while (stepCount < MAX_STEPS && isSessionActive()) {
-    stepCount++
-    emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
+  while (stepCountBox.value < MAX_STEPS && isSessionActive()) {
+    stepCountBox.value++
+    emitStepUpdate(`Step ${stepCountBox.value}/${maxStepsLabel}`)
     // Periodic checkpoint: persisting on every single step is unnecessary I/O churn.
     // The first step and every Nth step get a checkpoint; mutating tool calls also
     // trigger an immediate persist (see hasFileMutations below). All session-ending
     // exit paths (finish/cancel/error/timeout/circuit-breaker) persist unconditionally.
-    if (stepCount === 1 || stepCount % PERSIST_EVERY_N_STEPS === 0) {
+    if (stepCountBox.value === 1 || stepCountBox.value % PERSIST_EVERY_N_STEPS === 0) {
       await persistCurrentState()
     }
 
@@ -470,7 +222,7 @@ export async function runAgentOrchestratorLoop(
       userTask,
       initialUserTask,
       agentMode,
-      stepCount,
+      stepCount: stepCountBox.value,
       maxStepsLabel,
       maxSteps: MAX_STEPS,
       workspacePath,
@@ -515,7 +267,7 @@ export async function runAgentOrchestratorLoop(
     const interpretation = await interpretTurnResponse({
       streamedOutput,
       agentMode,
-      stepCount,
+      stepCount: stepCountBox.value,
       maxSteps: MAX_STEPS,
       isUnlimitedSteps,
       workspacePath,
@@ -545,7 +297,7 @@ export async function runAgentOrchestratorLoop(
       emitLog('info', `[PLAN Mode] Proposed Tool (${parsedTool.tool}):`, JSON.stringify(parsedTool.parameters, null, 2))
       emitDone(true, `Plan Mode completed step proposal for ${parsedTool.tool}`)
       if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Proposed tool call: ${parsedTool.tool}`)
+        codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, true, `Proposed tool call: ${parsedTool.tool}`)
       }
       await persistCurrentState()
       finalizeSession()
@@ -560,7 +312,7 @@ export async function runAgentOrchestratorLoop(
       agentMode,
       fsmMode,
       workspacePath,
-      stepCount,
+      stepCount: stepCountBox.value,
       episodicCompactor,
       emitLog,
       requestApproval,
@@ -583,7 +335,7 @@ export async function runAgentOrchestratorLoop(
         persistCurrentState,
         settings,
         sessionId,
-        stepCount,
+        stepCount: stepCountBox.value,
         maxStepsLabel,
       })
       continue
@@ -604,7 +356,7 @@ export async function runAgentOrchestratorLoop(
     const processingOutcome = await runToolResultProcessing({
       toolRes,
       parsedTool,
-      stepCount,
+      stepCount: stepCountBox.value,
       sessionId,
       settings,
       workspacePath,
@@ -629,13 +381,13 @@ export async function runAgentOrchestratorLoop(
     if (processingOutcome.outcome === 'return') return processingOutcome.result
   }
 
-  const endSummary = stepCount >= MAX_STEPS && MAX_STEPS !== Infinity
+  const endSummary = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
     ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
-    : `Completed ${stepCount} agent steps.`
+    : `Completed ${stepCountBox.value} agent steps.`
   clearSessionTimeout()
   emitDone(true, endSummary)
   if (settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionEnd(sessionId, stepCount, true, endSummary)
+    codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, true, endSummary)
   }
   await persistCurrentState()
   finalizeSession()

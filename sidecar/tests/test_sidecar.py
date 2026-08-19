@@ -113,6 +113,81 @@ def test_deterministic_fallback_embeddings():
     assert len(vec2) == 384
     assert vec1 == vec2  # Exactly reproducible across runs
 
+def test_history_index_search_and_project_filter():
+    payload = {
+        "id": "test-history-alpha",
+        "session_id": "test-history-session-alpha",
+        "project_path": "C:\\FakeTestProjects\\Alpha",
+        "prompt": "Unit test prompt about database migration rollback strategy",
+        "summary": "Testing history index",
+        "outcome": "success",
+        "started_at": "2026-01-01T00:00:00Z",
+        "completed_at": "2026-01-01T00:05:00Z",
+    }
+    try:
+        response = client.post("/history/index", json=payload)
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        # Idempotent upsert: re-indexing the same id must not duplicate it in search results.
+        assert client.post("/history/index", json=payload).status_code == 200
+
+        search_response = client.post("/history/search", json={"query": "database migration rollback", "top_k": 20})
+        assert search_response.status_code == 200
+        results = search_response.json()
+        matches = [r for r in results if r["id"] == "test-history-alpha"]
+        assert len(matches) == 1
+        assert matches[0]["project_path"] == payload["project_path"]
+        assert matches[0]["score"] > 0
+
+        scoped = client.post("/history/search", json={
+            "query": "database migration rollback",
+            "top_k": 20,
+            "project_paths": ["C:\\FakeTestProjects\\Alpha"],
+        })
+        assert any(r["id"] == "test-history-alpha" for r in scoped.json())
+
+        excluded = client.post("/history/search", json={
+            "query": "database migration rollback",
+            "top_k": 20,
+            "project_paths": ["C:\\FakeTestProjects\\SomethingElse"],
+        })
+        assert all(r["id"] != "test-history-alpha" for r in excluded.json())
+    finally:
+        client.post("/history/remove", json={"session_ids": ["test-history-session-alpha"]})
+
+def test_history_remove_by_project():
+    payload = {
+        "id": "test-history-beta",
+        "session_id": "test-history-session-beta",
+        "project_path": "C:\\FakeTestProjects\\Beta",
+        "prompt": "Unit test prompt for project-scoped removal",
+        "outcome": "success",
+        "started_at": "2026-01-01T00:00:00Z",
+    }
+    client.post("/history/index", json=payload)
+    remove_response = client.post("/history/remove", json={"project_path": "C:\\FakeTestProjects\\Beta"})
+    assert remove_response.status_code == 200
+    search_response = client.post("/history/search", json={"query": "project-scoped removal", "top_k": 20})
+    assert all(r["id"] != "test-history-beta" for r in search_response.json())
+
+def test_history_index_rejects_malformed_id():
+    payload = {
+        "id": "bad\"id",
+        "session_id": "test-history-session-gamma",
+        "project_path": "C:\\FakeTestProjects\\Gamma",
+        "prompt": "test",
+        "outcome": "success",
+        "started_at": "2026-01-01T00:00:00Z",
+    }
+    response = client.post("/history/index", json=payload)
+    assert response.status_code == 400
+
+def test_history_search_empty_query_returns_empty_list():
+    response = client.post("/history/search", json={"query": "   "})
+    assert response.status_code == 200
+    assert response.json() == []
+
 def test_ocr_prepare_image_resizing():
     from sidecar.infrastructure.ocr import _prepare_image_for_ocr
     try:

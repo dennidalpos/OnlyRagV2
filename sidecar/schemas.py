@@ -75,3 +75,45 @@ class LogDiagnosticReportSchema(BaseModel):
     has_critical: bool
     summary: str
 
+
+# ---------------------------------------------------------------------------
+# Prompt History Semantic Search Schemas
+# ---------------------------------------------------------------------------
+
+class IndexPromptHistoryRequest(BaseModel):
+    id: str
+    session_id: str
+    project_path: str
+    prompt: str
+    summary: Optional[str] = None
+    outcome: str
+    started_at: str
+    completed_at: Optional[str] = None
+
+
+class PromptHistorySearchRequest(BaseModel):
+    query: str
+    top_k: Optional[int] = 10
+    # Raw workspace paths, not the internal hashed project_id -- callers should never need to
+    # replicate the id-derivation hash themselves. Empty/omitted searches across all projects.
+    project_paths: Optional[List[str]] = None
+
+
+class PromptHistorySearchResult(BaseModel):
+    id: str
+    session_id: str
+    project_id: str
+    project_path: str
+    prompt: str
+    summary: Optional[str] = None
+    outcome: str
+    started_at: str
+    completed_at: Optional[str] = None
+    score: float
+
+
+class PromptHistoryRemoveRequest(BaseModel):
+    session_ids: Optional[List[str]] = None
+    # Raw workspace path; hashed internally to the same project_id used at index time.
+    project_path: Optional[str] = None
+

@@ -27,7 +27,7 @@ interface SessionHistoryTreeProps {
   onRenameSession: (id: string, title: string) => void
 }
 
-const OUTCOME_STYLES: Record<ExecutedPromptOutcome, { icon: React.ElementType; className: string; labelKey: TranslationKey }> = {
+export const OUTCOME_STYLES: Record<ExecutedPromptOutcome, { icon: React.ElementType; className: string; labelKey: TranslationKey }> = {
   running: { icon: Loader2, className: 'text-cyan-400 animate-spin', labelKey: 'coding.outcomeRunning' },
   success: { icon: CheckCircle2, className: 'text-emerald-400', labelKey: 'coding.outcomeSuccess' },
   failed: { icon: XCircle, className: 'text-rose-400', labelKey: 'coding.outcomeFailed' },

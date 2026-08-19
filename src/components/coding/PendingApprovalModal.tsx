@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle, Check, X, FileCode } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import { computeLineDiff, countDiffLines, type DiffLine } from '../../../electron/core/domain/agent/diffEngine'
+import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../electron/core/domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../../../electron/core/domain/agent/pendingChangeProjection'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
@@ -17,7 +17,8 @@ interface PendingApproval {
 
 interface PendingApprovalModalProps {
   pendingApproval: PendingApproval | null
-  onApprove: () => void
+  /** Called with no args for a full accept (or a non-file-mutation action); with the approved hunk ids for a partial accept. */
+  onApprove: (approvedHunkIndices?: number[]) => void
   onReject: () => void
 }
 
@@ -98,6 +99,34 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
 
   const counts = React.useMemo(() => countDiffLines(diffLines), [diffLines])
 
+  const hunks: DiffHunkGroup[] = React.useMemo(() => groupDiffIntoHunks(diffLines), [diffLines])
+  const [selectedHunkIds, setSelectedHunkIds] = React.useState<Set<number>>(new Set())
+
+  // Default every new proposal to "everything selected" — a single click on Approve still
+  // behaves exactly like the old all-or-nothing flow unless the user deliberately unchecks a hunk.
+  React.useEffect(() => {
+    setSelectedHunkIds(new Set(hunks.map((h) => h.id)))
+  }, [hunks])
+
+  const toggleHunk = (id: number) => {
+    setSelectedHunkIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const showPerHunkSelection = hunks.length > 1
+  const allHunksSelected = selectedHunkIds.size >= hunks.length
+  const canApprove = !showPerHunkSelection || selectedHunkIds.size > 0
+
+  const handleApproveClick = () => {
+    // A full accept is sent as "no hunk list" so the executor keeps the original tool's own
+    // semantics (e.g. delete_file stays a real delete instead of becoming an empty write_file).
+    onApprove(showPerHunkSelection && !allHunksSelected ? Array.from(selectedHunkIds) : undefined)
+  }
+
   if (!pendingApproval) return null
 
   return (
@@ -142,6 +171,38 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
                 <div className="px-3 py-3 text-[11px] text-slate-400 italic">
                   Nessuna differenza rilevata rispetto al contenuto attuale del file.
                 </div>
+              ) : showPerHunkSelection ? (
+                <div className="max-h-72 overflow-auto divide-y divide-slate-800/60">
+                  <div className="flex items-center justify-between gap-2 px-2.5 py-1 bg-slate-900/70 text-[10px] text-slate-400 sticky top-0">
+                    <span>{selectedHunkIds.size}/{hunks.length} modifiche selezionate</span>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setSelectedHunkIds(new Set(hunks.map((h) => h.id)))} className="text-cyan-400 hover:text-cyan-300 font-semibold">
+                        Tutte
+                      </button>
+                      <button type="button" onClick={() => setSelectedHunkIds(new Set())} className="text-slate-400 hover:text-slate-300 font-semibold">
+                        Nessuna
+                      </button>
+                    </div>
+                  </div>
+                  {hunks.map((hunk) => {
+                    const hunkCounts = countDiffLines(hunk.lines)
+                    return (
+                      <div key={hunk.id}>
+                        <label className="flex items-center gap-2 px-2.5 py-1 bg-slate-900/40 cursor-pointer select-none hover:bg-slate-900/70">
+                          <input
+                            type="checkbox"
+                            checked={selectedHunkIds.has(hunk.id)}
+                            onChange={() => toggleHunk(hunk.id)}
+                            className="accent-emerald-500"
+                          />
+                          <span className="text-[10px] text-slate-400">Modifica {hunk.id + 1}/{hunks.length}</span>
+                          <ChangeCounts additions={hunkCounts.additions} deletions={hunkCounts.deletions} />
+                        </label>
+                        <DiffLinesView lines={hunk.lines} />
+                      </div>
+                    )
+                  })}
+                </div>
               ) : (
                 <div className="max-h-72 overflow-auto">
                   <DiffLinesView lines={diffLines} collapse contextRadius={3} />
@@ -180,9 +241,10 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={onApprove}
+            onClick={handleApproveClick}
+            disabled={!canApprove}
             aria-label={t('coding.approveBtn')}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 shadow-md shadow-emerald-950/50"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 shadow-md shadow-emerald-950/50"
           >
             <Check className="w-4 h-4" /> {t('coding.approveBtn')}
           </button>

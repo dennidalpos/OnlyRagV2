@@ -118,6 +118,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     commitMessage: { type: 'string', description: 'The commit message to use.' },
   }, ['commitMessage']),
   tool('rollback_workspace', 'Revert all file modifications made during this session back to their pre-session state.', {}),
+  tool('rollback_last_step', 'Undo only the file changes made by the immediately preceding step, leaving every earlier step in this session untouched. Use this instead of rollback_workspace when only the last action was wrong.', {}),
   tool('get_file_info', 'Get metadata about a file: existence, size, line count, binary detection.', {
     filePath: { type: 'string', description: 'Path of the file to inspect.' },
   }, ['filePath']),

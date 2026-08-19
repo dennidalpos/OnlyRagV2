@@ -62,6 +62,68 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  describe('reconcileHunkApproval', () => {
+    it('should return the tool call unchanged when approvedHunkIndices is absent', () => {
+      const tool = { tool: 'write_file' as const, parameters: { filePath: path.join(tempDir, 'x.txt'), content: 'new' } }
+      expect(agentToolExecutorService.reconcileHunkApproval(tool, undefined, tempDir)).toBe(tool)
+    })
+
+    it('should return the tool call unchanged for non-file-mutation tools', () => {
+      const tool = { tool: 'run_command' as const, parameters: { command: 'echo hi' } }
+      expect(agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)).toBe(tool)
+    })
+
+    it('should return the tool call unchanged (full accept) when every hunk is approved', () => {
+      const filePath = path.join(tempDir, 'full-accept.txt')
+      fs.writeFileSync(filePath, 'a\nb\nc', 'utf-8')
+      const tool = { tool: 'write_file' as const, parameters: { filePath, content: 'a\nB\nC' } }
+      // Both changed lines land in one contiguous hunk (id 0) since there's no context between them.
+      expect(agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)).toBe(tool)
+    })
+
+    it('should rewrite the tool call into a write_file carrying only the approved hunk when hunks are independent', () => {
+      const filePath = path.join(tempDir, 'partial-accept.txt')
+      fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
+      const tool = {
+        tool: 'write_file' as const,
+        parameters: { filePath, content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5' },
+      }
+
+      const reconciled = agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)
+      expect(reconciled.tool).toBe('write_file')
+      expect(reconciled.parameters.content).toBe('line1\nCHANGED2\nline3\nline4\nline5')
+    })
+
+    it('should end-to-end write only the approved hunk\'s content to disk when the reconciled call is executed', async () => {
+      const filePath = path.join(tempDir, 'partial-exec.txt')
+      fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
+      const tool = {
+        tool: 'write_file' as const,
+        parameters: { filePath, content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5' },
+      }
+
+      const reconciled = agentToolExecutorService.reconcileHunkApproval(tool, [1], tempDir) // approve only the SECOND hunk this time
+      await agentToolExecutorService.executeTool(reconciled, tempDir, settings)
+
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('line1\nline2\nline3\nline4\nCHANGED5')
+    })
+
+    it('should convert a partially-rejected delete_file into a real write_file that only removed the approved lines', () => {
+      const filePath = path.join(tempDir, 'partial-delete.txt')
+      fs.writeFileSync(filePath, 'keep1\nDROP\nkeep2', 'utf-8')
+      const tool = { tool: 'delete_file' as const, parameters: { filePath } }
+
+      // A whole-file delete diff has no context lines, so it is exactly one all-or-nothing hunk;
+      // approving it is a full accept and must keep delete_file's own semantics (a real delete).
+      const fullAccept = agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)
+      expect(fullAccept).toBe(tool)
+
+      const rejected = agentToolExecutorService.reconcileHunkApproval(tool, [], tempDir)
+      expect(rejected.tool).toBe('write_file')
+      expect(rejected.parameters.content).toBe('keep1\nDROP\nkeep2')
+    })
+  })
+
   it('should block write_file for a .json path with syntactically invalid JSON content via AST pre-commit validation', async () => {
     const filePath = path.join(tempDir, 'package.json')
     const res = await agentToolExecutorService.executeTool(
@@ -288,6 +350,38 @@ async def async_handler():
 
     expect(rollbackRes.outputForHistory).toContain('[ATOMIC WORKSPACE ROLLBACK EXECUTED]')
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('Original State')
+  })
+
+  it('should execute rollback_last_step and undo only the most recent step, keeping earlier steps intact', async () => {
+    const filePath = path.join(tempDir, 'step_rollback_test.txt')
+    fs.writeFileSync(filePath, 'V1', 'utf-8')
+
+    // Step 1 (as the orchestrator loop would drive it: tool call, then endJournalStep()): V1 -> V2
+    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V2' } }, tempDir, settings)
+    agentToolExecutorService.endJournalStep()
+
+    // Step 2: V2 -> V3
+    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V3' } }, tempDir, settings)
+    agentToolExecutorService.endJournalStep()
+
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('V3')
+
+    const res = await agentToolExecutorService.executeTool({ tool: 'rollback_last_step', parameters: {} }, tempDir, settings)
+
+    expect(res.outputForHistory).toContain('[LAST STEP ROLLBACK EXECUTED]')
+    // Undid step 2 only: back to V2, not all the way to the session-start V1.
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('V2')
+
+    agentToolExecutorService.commitJournal() // don't leak journal state into other tests sharing the singleton
+  })
+
+  it('should report nothing to undo when rollback_last_step has no completed step to reverse', async () => {
+    agentToolExecutorService.commitJournal() // start from a clean journal regardless of test order
+
+    const res = await agentToolExecutorService.executeTool({ tool: 'rollback_last_step', parameters: {} }, tempDir, settings)
+
+    expect(res.outputForHistory).toContain('Nothing to undo')
+    expect(res.logMessage).toBe('Rollback Last Step: nothing to undo')
   })
 
   it('should run an explicit run_tests command override and return a structured pass/fail summary (AGT8)', async () => {

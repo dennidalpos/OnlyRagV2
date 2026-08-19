@@ -611,12 +611,13 @@ ${output.slice(0, 300)}`
   // agent:step-update / agent:done events already wired in the effect above.
   const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])
 
-  const handleApproveAction = async () => {
+  const handleApproveAction = async (approvedHunkIndices?: number[]) => {
     if (!pendingApproval || !window.electronAPI?.respondToAgentApproval) return
     const current = pendingApproval
     setPendingApproval(null)
-    addActionLog('tool_call', `User approved ${current.type}: ${current.target}`)
-    await window.electronAPI.respondToAgentApproval(current.sessionId, true)
+    const partialNote = approvedHunkIndices ? ` (${approvedHunkIndices.length} hunk selezionati)` : ''
+    addActionLog('tool_call', `User approved ${current.type}: ${current.target}${partialNote}`)
+    await window.electronAPI.respondToAgentApproval(current.sessionId, true, approvedHunkIndices)
     // Best-effort refresh of the currently open editor tab if it was the approved target --
     // the write itself now happens asynchronously in the main process, so this is a short
     // grace period rather than the synchronous re-open the old renderer-side execution allowed.

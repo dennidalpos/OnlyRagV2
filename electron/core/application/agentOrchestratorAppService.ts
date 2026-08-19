@@ -1,10 +1,7 @@
 import { BrowserWindow } from 'electron'
 import http from 'node:http'
-import fs from 'node:fs'
-import path from 'node:path'
-import { spawn } from 'node:child_process'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
-import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
+import type { AgentTaskPayload, AgentTaskResult, AgentToolCall } from '../domain/agent/agentTypes'
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import os from 'node:os'
@@ -37,12 +34,20 @@ import {
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import { taskRunner } from '../infrastructure/process/taskRunner'
 import { skillAppService } from './skillAppService'
 import { skillInstallApprovalService, type SkillInstallCandidate } from './skillInstallApprovalService'
 import { ollamaAppService } from './ollamaAppService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { PlanManager } from '../domain/agent/planManager'
 import type { AppSettings } from '../../../src/types'
+
+export interface ApprovalResponse {
+  approved: boolean
+  /** Indices (into groupDiffIntoHunks' result) of the hunks the user approved, for a partial (not all-or-nothing) file-mutation approval. */
+  approvedHunkIndices?: number[]
+}
 
 interface AgentSession {
   id: string
@@ -69,7 +74,7 @@ interface AgentSession {
    * cancellation/timeout racing against it both resolve the same pending Promise exactly
    * once instead of leaving the paused `while` loop blocked forever.
    */
-  pendingApprovalResolve?: (approved: boolean) => void
+  pendingApprovalResolve?: (response: ApprovalResponse) => void
 }
 
 const activeAgentSessions = new Map<string, AgentSession>()
@@ -80,7 +85,7 @@ function cleanupSession(session: AgentSession) {
   // cancelled instead of answered: resolving false lets the awaited Promise settle, the
   // paused `while` loop observe isCancelled on its next check, and exit cleanly.
   if (session.pendingApprovalResolve) {
-    session.pendingApprovalResolve(false)
+    session.pendingApprovalResolve({ approved: false })
     session.pendingApprovalResolve = undefined
   }
   if (session.timeoutHandle) {
@@ -98,7 +103,7 @@ function cleanupSession(session: AgentSession) {
   if (session.activeChildProcess) {
     try {
       if (process.platform === 'win32' && session.activeChildProcess.pid) {
-        spawn('taskkill', ['/pid', session.activeChildProcess.pid.toString(), '/f', '/t'])
+        taskRunner.killProcessTreeWindows(session.activeChildProcess.pid)
       } else {
         session.activeChildProcess.kill('SIGKILL')
       }
@@ -146,12 +151,12 @@ export function cancelActiveAgentTask(targetSessionId?: string) {
  * cancellation or the session timeout already resolved it), so the renderer can tell a
  * genuine hand-off from a stale response.
  */
-export function respondToApproval(targetSessionId: string, approved: boolean): boolean {
+export function respondToApproval(targetSessionId: string, approved: boolean, approvedHunkIndices?: number[]): boolean {
   const session = activeAgentSessions.get(targetSessionId)
   if (!session || !session.pendingApprovalResolve) return false
   const resolve = session.pendingApprovalResolve
   session.pendingApprovalResolve = undefined
-  resolve(approved)
+  resolve({ approved, approvedHunkIndices })
   return true
 }
 
@@ -214,7 +219,7 @@ export async function runAgentOrchestratorLoop(
   const attachedContext = buildAttachedContextBlock(payload)
   const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
 
-  const projectContextMapStr = workspacePath && !isStandaloneMode && fs.existsSync(workspacePath)
+  const projectContextMapStr = workspacePath && !isStandaloneMode && documentIoRepository.exists(workspacePath)
     ? await scanProjectMap(workspacePath)
     : ''
 
@@ -404,7 +409,7 @@ export async function runAgentOrchestratorLoop(
       emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
       session.isCancelled = true
       if (session.pendingApprovalResolve) {
-        session.pendingApprovalResolve(false)
+        session.pendingApprovalResolve({ approved: false })
         session.pendingApprovalResolve = undefined
       }
       codingAgentLogger.logSessionEnd(sessionId, stepCount, false, timeoutSummary)
@@ -440,10 +445,10 @@ export async function runAgentOrchestratorLoop(
    * time, so this is a real pause of the same loop iteration -- not the "end the task, then
    * have the renderer re-execute the action on its own" round trip this replaces.
    */
-  const requestApproval = (payload: Record<string, unknown>): Promise<boolean> => {
-    return new Promise<boolean>((resolve) => {
+  const requestApproval = (payload: Record<string, unknown>): Promise<ApprovalResponse> => {
+    return new Promise<ApprovalResponse>((resolve) => {
       if (!session.targetWindow || session.targetWindow.isDestroyed()) {
-        resolve(false)
+        resolve({ approved: false })
         return
       }
       session.pendingApprovalResolve = resolve
@@ -523,9 +528,8 @@ export async function runAgentOrchestratorLoop(
     let debtTrackerBlock = ''
     if (workspacePath) {
       try {
-        const trackerFile = path.join(workspacePath, '.assistant', 'SESSION_TRACKER.md')
-        if (fs.existsSync(trackerFile)) {
-          const trackerContent = fs.readFileSync(trackerFile, 'utf-8')
+        const trackerContent = agentSessionStateRepository.loadSessionTrackerMarkdown(workspacePath)
+        if (trackerContent) {
           const tracker = SessionDebtTracker.parseTrackerMarkdown(trackerContent)
           debtTrackerBlock = tracker.compilePromptBlock()
         }
@@ -847,7 +851,7 @@ export async function runAgentOrchestratorLoop(
           buildSessionTracker(summary)
         )
         if (saved) {
-          emitLog('info', '📝 Session Debt Tracker salvato in .assistant/SESSION_TRACKER.md')
+          emitLog('info', '📝 Session Debt Tracker salvato in .onlyrag/assistant/SESSION_TRACKER.md')
         }
       }
 
@@ -987,6 +991,9 @@ export async function runAgentOrchestratorLoop(
     // deliberately excludes every mutating tool, see agentRuntimeMode.ts) lets this one
     // specific, just-approved call through without widening the mode itself.
     let approvalGranted = false
+    // Defaults to the model's original call; the ASK-mode gate below may replace it with an
+    // equivalent write_file carrying only the hunks the user approved (see reconcileHunkApproval).
+    let toolCallForExecution: AgentToolCall = parsedTool
 
     // Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action
     // than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of
@@ -994,13 +1001,13 @@ export async function runAgentOrchestratorLoop(
     // only approval-gated in ASK mode below). PLAN mode never reaches this point for any tool
     // (handled by the early return above), so no special-casing is needed for it here.
     if (parsedTool.tool === 'git_commit') {
-      const approved = await requestApproval({
+      const approval = await requestApproval({
         type: 'git_commit',
         target: parsedTool.parameters.commitMessage || 'Git Commit',
         contentOrCmd: parsedTool.parameters.commitMessage || '',
         parameters: parsedTool.parameters,
       })
-      if (!approved) {
+      if (!approval.approved) {
         const feedback = `[USER DENIED] L'utente ha rifiutato il git_commit proposto. Non ripetere questo esatto commit; proponi un'alternativa o chiedi chiarimenti.`
         episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'User denied git_commit approval' }, feedback)
         emitLog('info', `🚫 git_commit rifiutato dall'utente.`)
@@ -1019,7 +1026,7 @@ export async function runAgentOrchestratorLoop(
       const isMutatingTool = ['run_command', 'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file', 'ensure_tool'].includes(parsedTool.tool)
       if (isMutatingTool) {
         const approvalTarget = parsedTool.parameters.filePath || parsedTool.parameters.command || parsedTool.parameters.url || 'Target Action'
-        const approved = await requestApproval({
+        const approval = await requestApproval({
           // ensure_tool is surfaced as the literal winget command it would run: approving a
           // system-level install should show exactly what is about to be executed, and it
           // reuses the existing terminal approval path end to end.
@@ -1048,13 +1055,14 @@ export async function runAgentOrchestratorLoop(
           replacements: parsedTool.parameters.replacements,
           parameters: parsedTool.parameters,
         })
-        if (!approved) {
+        if (!approval.approved) {
           const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${parsedTool.tool} su "${approvalTarget}"). Non ripetere questa esatta azione; proponi un'alternativa o chiedi chiarimenti.`
           episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: 'User denied approval' }, feedback)
           emitLog('info', `🚫 Azione rifiutata dall'utente: ${parsedTool.tool}`)
           continue
         }
         approvalGranted = true
+        toolCallForExecution = agentToolExecutorService.reconcileHunkApproval(parsedTool, approval.approvedHunkIndices, workspacePath)
       }
     }
 
@@ -1090,7 +1098,7 @@ export async function runAgentOrchestratorLoop(
 
     // Execute tool through tool executor service
     const toolRes = await agentToolExecutorService.executeTool(
-      parsedTool,
+      toolCallForExecution,
       workspacePath,
       settings,
       (terminalChunk) => emitLog('terminal', terminalChunk),
@@ -1098,6 +1106,7 @@ export async function runAgentOrchestratorLoop(
         session.activeChildProcess = childProc
       }
     )
+    agentToolExecutorService.endJournalStep()
     const isToolFailure =
       toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
       toolRes.outputForHistory.includes('[REPLACE FILE ERROR') ||

@@ -201,7 +201,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(true)
 
-    const statePath = path.join(tempDir, '.onlyrag', `.agent_state_${sessionId}.json`)
+    const statePath = path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`)
     expect(fs.existsSync(statePath)).toBe(true)
     const savedState = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     expect(savedState.planMilestones.length).toBe(2)
@@ -280,6 +280,40 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.summary).not.toContain('FSM PERMISSION DENIED')
     // Executed through the same tool executor path AGENT mode uses, not a renderer-side re-implementation.
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(true)
+  })
+
+  it('should apply only the approved hunks when the user partially approves a write_file proposal (per-hunk approval)', async () => {
+    const filePath = path.join(tempDir, 'partial.ts')
+    fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
+
+    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "partial.ts", "content": "line1\\nCHANGED2\\nline3\\nline4\\nCHANGED5" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Partial approval applied." }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: writeFileJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const sessionId = 'test-ask-partial-approval-session'
+
+    const resultPromise = runAgentOrchestratorLoop(
+      { sessionId, userTask: 'Update two lines in partial.ts', agentMode: 'ask', workspacePath: tempDir },
+      mockWin
+    )
+
+    await vi.waitFor(() => {
+      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+        'agent:approval-request',
+        expect.objectContaining({ sessionId, type: 'write_file' })
+      )
+    })
+
+    // Approve only the first of the two independent hunks (line2 -> CHANGED2).
+    expect(respondToApproval(sessionId, true, [0])).toBe(true)
+
+    const res = await resultPromise
+    expect(res.success).toBe(true)
+    // The second hunk (line5 -> CHANGED5) must NOT have been applied.
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('line1\nCHANGED2\nline3\nline4\nline5')
   })
 
   it('should feed a denial back to the model and keep the loop running (not stuck) when the user rejects an approval', async () => {
@@ -418,7 +452,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(true)
     // The update must be reflected in the persisted plan state the UI reads back.
-    const statePath = path.join(tempDir, '.onlyrag', '.agent_state_plan-tool-session.json')
+    const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-tool-session.json')
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const verified = saved.planMilestones.filter((m: any) => m.status === 'verified')
     expect(verified.length).toBe(1)
@@ -444,7 +478,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
 
     expect(res.success).toBe(true)
-    const statePath = path.join(tempDir, '.onlyrag', '.agent_state_plan-verify-pass-session.json')
+    const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-verify-pass-session.json')
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
     expect(m1.status).toBe('verified')
@@ -470,7 +504,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
 
     expect(res.success).toBe(true)
-    const statePath = path.join(tempDir, '.onlyrag', '.agent_state_plan-verify-fail-session.json')
+    const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-verify-fail-session.json')
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
     expect(m1.status).toBe('failed')

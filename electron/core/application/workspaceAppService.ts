@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
@@ -81,20 +80,12 @@ export class WorkspaceAppService {
 
   async inspectGuestOsEnvironment(): Promise<GuestOsInfo> {
     const os = await import('node:os')
-    const checkTool = (toolCmd: string): Promise<boolean> => {
-      return new Promise((resolve) => {
-        const proc = spawn('powershell.exe', ['-NoProfile', '-Command', `Get-Command ${toolCmd} -ErrorAction SilentlyContinue`], { windowsHide: true })
-        proc.on('close', (code) => resolve(code === 0))
-        proc.on('error', () => resolve(false))
-      })
-    }
-
     const [hasGit, hasNode, hasNpm, hasPython, hasOllama] = await Promise.all([
-      checkTool('git'),
-      checkTool('node'),
-      checkTool('npm'),
-      checkTool('python'),
-      checkTool('ollama'),
+      taskRunner.checkToolAvailable('git'),
+      taskRunner.checkToolAvailable('node'),
+      taskRunner.checkToolAvailable('npm'),
+      taskRunner.checkToolAvailable('python'),
+      taskRunner.checkToolAvailable('ollama'),
     ])
 
     const cpuList = os.cpus() || []

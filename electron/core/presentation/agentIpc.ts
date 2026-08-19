@@ -17,8 +17,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     return taskQueueAppService.cancelTask(taskId)
   })
 
-  ipcMain.handle('agent:approval-response', async (_, sessionId: string, approved: boolean) => {
-    return respondToApproval(sessionId, approved)
+  ipcMain.handle('agent:approval-response', async (_, sessionId: string, approved: boolean, approvedHunkIndices?: number[]) => {
+    return respondToApproval(sessionId, approved, approvedHunkIndices)
   })
 
   ipcMain.handle('agent:get-queue-status', async () => {

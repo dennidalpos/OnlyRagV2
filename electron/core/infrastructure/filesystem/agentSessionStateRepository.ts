@@ -25,12 +25,13 @@ export interface SavedAgentSessionState {
 export class AgentSessionStateRepository {
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
-      const stateDir = path.join(workspacePath, '.onlyrag')
+      const stateDir = path.join(workspacePath, '.onlyrag', 'sessions')
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
+          this.migrateLegacyStateFiles(workspacePath, stateDir)
         } catch (err: any) {
-          logger.log('WARN', 'AgentSessionStateRepo', `Could not create .onlyrag dir in workspace: ${err.message}`)
+          logger.log('WARN', 'AgentSessionStateRepo', `Could not create .onlyrag/sessions dir in workspace: ${err.message}`)
         }
       }
       if (fs.existsSync(stateDir)) return stateDir
@@ -45,6 +46,25 @@ export class AgentSessionStateRepository {
       }
     }
     return fallbackDir
+  }
+
+  /**
+   * One-time move of `.agent_state_*.json` files left directly under the workspace's
+   * `.onlyrag/` folder by the pre-unification layout (`.assistant/` + `.onlyrag/`), into
+   * the new `.onlyrag/sessions/` subfolder, so existing sessions are not orphaned.
+   */
+  private migrateLegacyStateFiles(workspacePath: string, newStateDir: string): void {
+    const legacyDir = path.join(workspacePath, '.onlyrag')
+    try {
+      const entries = fs.readdirSync(legacyDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.startsWith('.agent_state_') && entry.name.endsWith('.json')) {
+          fs.renameSync(path.join(legacyDir, entry.name), path.join(newStateDir, entry.name))
+        }
+      }
+    } catch (err: any) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Legacy state migration skipped: ${err.message}`)
+    }
   }
 
   private getStateFilePath(sessionId: string, workspacePath?: string | null): string {
@@ -68,9 +88,9 @@ export class AgentSessionStateRepository {
   }
 
   /**
-   * Writes .assistant/SESSION_TRACKER.md. Single writer, single format: the tracker is read
-   * back with SessionDebtTracker.parseTrackerMarkdown (both by the next turn's prompt assembly
-   * and by a resumed session), so it must be written in exactly that format. A second,
+   * Writes .onlyrag/assistant/SESSION_TRACKER.md. Single writer, single format: the tracker is
+   * read back with SessionDebtTracker.parseTrackerMarkdown (both by the next turn's prompt
+   * assembly and by a resumed session), so it must be written in exactly that format. A second,
    * plan-shaped format used to be written here on every checkpoint, which the parser could
    * not read — the injected "previous turn debt" block was silently empty.
    */
@@ -80,9 +100,10 @@ export class AgentSessionStateRepository {
   ): Promise<boolean> {
     if (!workspacePath || !fs.existsSync(workspacePath)) return false
     try {
-      const assistantDir = path.join(workspacePath, '.assistant')
+      const assistantDir = path.join(workspacePath, '.onlyrag', 'assistant')
       if (!fs.existsSync(assistantDir)) {
         await fs.promises.mkdir(assistantDir, { recursive: true })
+        await this.migrateLegacyTracker(workspacePath, assistantDir)
       }
       const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
       const markdown = tracker.compileTrackerMarkdown()
@@ -93,6 +114,30 @@ export class AgentSessionStateRepository {
     } catch (err: any) {
       logger.log('WARN', 'AgentSessionStateRepo', `Failed saving SESSION_TRACKER.md: ${err.message}`)
       return false
+    }
+  }
+
+  /** Reads back SESSION_TRACKER.md's raw markdown, or null if the workspace has none yet. */
+  public loadSessionTrackerMarkdown(workspacePath: string): string | null {
+    try {
+      const trackerPath = path.join(workspacePath, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
+      if (!fs.existsSync(trackerPath)) return null
+      return fs.readFileSync(trackerPath, 'utf-8')
+    } catch (err: any) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Failed reading SESSION_TRACKER.md: ${err.message}`)
+      return null
+    }
+  }
+
+  /** One-time move of a pre-unification `.assistant/SESSION_TRACKER.md` into the new folder. */
+  private async migrateLegacyTracker(workspacePath: string, newAssistantDir: string): Promise<void> {
+    const legacyPath = path.join(workspacePath, '.assistant', 'SESSION_TRACKER.md')
+    try {
+      if (fs.existsSync(legacyPath)) {
+        await fs.promises.rename(legacyPath, path.join(newAssistantDir, 'SESSION_TRACKER.md'))
+      }
+    } catch (err: any) {
+      logger.log('WARN', 'AgentSessionStateRepo', `Legacy tracker migration skipped: ${err.message}`)
     }
   }
 

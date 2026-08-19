@@ -227,13 +227,13 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 
 #### Cronologia Sessioni — Canali IPC CRUD
 
-Store filesystem unico (`sessionHistoryRepository`): `<workspace>/.onlyrag/session_history.json`, con fallback `~/.onlyrag_v2/sessions/session_history.json` per le sessioni standalone. Il renderer non persiste piu' nulla in `localStorage`.
+Store filesystem unico (`sessionHistoryRepository`): `<workspace>/.onlyrag/sessions/session_history.json`, con fallback `~/.onlyrag_v2/sessions/session_history.json` per le sessioni standalone. Il renderer non persiste piu' nulla in `localStorage`.
 
 | Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- | :--- |
 | `sessions:list` | `listCodingSessions(workspacePath?)` | `workspacePath?` | `CodingSession[]` | Sessioni del progetto, ordinate dalla piu' recente, con i relativi `ExecutedPrompt`. |
 | `sessions:save` | `saveCodingSession(session)` | `CodingSession` | `CodingSession \| null` | Upsert della sessione. Normalizza i timestamp in ISO 8601 e deriva il titolo dal primo prompt eseguito. |
-| `sessions:delete` | `deleteCodingSession(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `boolean` | Elimina la sessione, il relativo `.onlyrag/.agent_state_*.json` e le sue voci nell'audit log. |
+| `sessions:delete` | `deleteCodingSession(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `boolean` | Elimina la sessione, il relativo `.onlyrag/sessions/.agent_state_*.json` e le sue voci nell'audit log. |
 | `sessions:clear` | `clearCodingSessions(workspacePath?)` | `workspacePath?` | `boolean` | Svuota la cronologia del progetto e i relativi stati agente (azione "Svuota storico progetto" nel tab Storico). |
 | `sessions:migrate-legacy` | `migrateLegacyCodingSessions(sessions)` | array grezzo da `localStorage` | `{ migrated: number }` | Import one-shot delle sessioni legacy (`onlyrag_coding_sessions_v2`); le sessioni gia' presenti su disco non vengono sovrascritte. |
 

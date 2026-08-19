@@ -304,6 +304,74 @@ export function summarizeDiff(files: ReadonlyArray<DiffFileChange>): DiffStats {
   return { files: files.length, additions, deletions }
 }
 
+/** One independently approvable cluster of consecutive add/del lines from a flat computeLineDiff() result. */
+export interface DiffHunkGroup {
+  /** Position among this diff's hunks, in document order — the id used by reconstructWithApprovedHunks. */
+  id: number
+  lines: DiffLine[]
+}
+
+/**
+ * Splits a flat computeLineDiff() result into independently approvable hunks: each maximal
+ * run of consecutive add/del lines (context lines are never part of a hunk — they are
+ * identical on both sides, so there is nothing to approve or reject about them).
+ */
+export function groupDiffIntoHunks(lines: ReadonlyArray<DiffLine>): DiffHunkGroup[] {
+  const hunks: DiffHunkGroup[] = []
+  let current: DiffLine[] = []
+
+  for (const line of lines) {
+    if (line.type === 'context') {
+      if (current.length > 0) {
+        hunks.push({ id: hunks.length, lines: current })
+        current = []
+      }
+      continue
+    }
+    current.push(line)
+  }
+  if (current.length > 0) hunks.push({ id: hunks.length, lines: current })
+
+  return hunks
+}
+
+/**
+ * Reconstructs the file content that results from applying only the approved hunks: context
+ * lines are kept as-is, an approved hunk contributes its "after" side (its add lines), and a
+ * rejected hunk contributes its "before" side (its del lines, i.e. no change). `hunks` MUST be
+ * groupDiffIntoHunks(lines) for the same `lines` array — reconstruction walks both in lockstep.
+ */
+export function reconstructWithApprovedHunks(
+  lines: ReadonlyArray<DiffLine>,
+  hunks: ReadonlyArray<DiffHunkGroup>,
+  approvedHunkIds: ReadonlySet<number>
+): string {
+  const out: string[] = []
+  let hunkIndex = 0
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    if (line.type === 'context') {
+      out.push(line.content)
+      i++
+      continue
+    }
+
+    const hunk = hunks[hunkIndex]
+    hunkIndex++
+    const approved = hunk ? approvedHunkIds.has(hunk.id) : false
+    const hunkLineCount = hunk ? hunk.lines.length : 0
+    for (const hunkLine of hunk ? hunk.lines : []) {
+      if (approved && hunkLine.type === 'add') out.push(hunkLine.content)
+      if (!approved && hunkLine.type === 'del') out.push(hunkLine.content)
+    }
+    i += hunkLineCount || 1 // defensive: never stall if hunks/lines somehow desync
+  }
+
+  return out.join('\n')
+}
+
 /**
  * Collapses long runs of unchanged lines so a small edit in a large file doesn't render
  * thousands of untouched rows. Returns the kept lines with `gap` markers describing how

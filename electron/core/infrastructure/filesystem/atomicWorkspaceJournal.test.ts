@@ -89,4 +89,88 @@ describe('AtomicWorkspaceJournal Unit Tests', () => {
     expect(rollbackRes.restoredCount).toBe(1)
     expect(fs.existsSync(subDir)).toBe(false)
   })
+
+  it('rollbackLastStep should undo only the most recently ended step, leaving earlier steps intact', () => {
+    const filePath = path.join(tempDir, 'stepped.txt')
+    fs.writeFileSync(filePath, 'V1', 'utf-8')
+
+    // Step 1: V1 -> V2
+    journal.recordBeforeModification(filePath)
+    fs.writeFileSync(filePath, 'V2', 'utf-8')
+    journal.endStep()
+
+    // Step 2: V2 -> V3
+    journal.recordBeforeModification(filePath)
+    fs.writeFileSync(filePath, 'V3', 'utf-8')
+    journal.endStep()
+
+    expect(journal.canRollbackLastStep).toBe(true)
+    const res = journal.rollbackLastStep()
+    expect(res.restoredCount).toBe(1)
+    expect(res.errors).toHaveLength(0)
+    // Undid step 2 only: back to V2, not the session-start V1.
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('V2')
+  })
+
+  it('rollbackLastStep should be a no-op when the last ended step touched no files', () => {
+    journal.endStep() // no recordBeforeModification calls before this
+    expect(journal.canRollbackLastStep).toBe(false)
+    const res = journal.rollbackLastStep()
+    expect(res).toEqual({ restoredCount: 0, errors: [] })
+  })
+
+  it('rollbackLastStep should be a no-op when called twice without an intervening endStep()', () => {
+    const filePath = path.join(tempDir, 'once.txt')
+    fs.writeFileSync(filePath, 'V1', 'utf-8')
+    journal.recordBeforeModification(filePath)
+    fs.writeFileSync(filePath, 'V2', 'utf-8')
+    journal.endStep()
+
+    const first = journal.rollbackLastStep()
+    expect(first.restoredCount).toBe(1)
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('V1')
+
+    const second = journal.rollbackLastStep()
+    expect(second).toEqual({ restoredCount: 0, errors: [] })
+  })
+
+  it('rollbackLastStep should not disturb rollbackAll\'s session-wide baseline for untouched-by-that-step files', () => {
+    const a = path.join(tempDir, 'a.txt')
+    const b = path.join(tempDir, 'b.txt')
+    fs.writeFileSync(a, 'A1', 'utf-8')
+    fs.writeFileSync(b, 'B1', 'utf-8')
+
+    // Step 1 touches both a and b.
+    journal.recordBeforeModification(a)
+    journal.recordBeforeModification(b)
+    fs.writeFileSync(a, 'A2', 'utf-8')
+    fs.writeFileSync(b, 'B2', 'utf-8')
+    journal.endStep()
+
+    // Step 2 touches only a.
+    journal.recordBeforeModification(a)
+    fs.writeFileSync(a, 'A3', 'utf-8')
+    journal.endStep()
+
+    journal.rollbackLastStep()
+    expect(fs.readFileSync(a, 'utf-8')).toBe('A2')
+    expect(fs.readFileSync(b, 'utf-8')).toBe('B2')
+
+    // rollbackAll still restores everything to the true session start.
+    journal.rollbackAll()
+    expect(fs.readFileSync(a, 'utf-8')).toBe('A1')
+    expect(fs.readFileSync(b, 'utf-8')).toBe('B1')
+  })
+
+  it('commit() and rollbackAll() should also clear pending per-step state', () => {
+    const filePath = path.join(tempDir, 'commit-clears-step.txt')
+    fs.writeFileSync(filePath, 'V1', 'utf-8')
+    journal.recordBeforeModification(filePath)
+    fs.writeFileSync(filePath, 'V2', 'utf-8')
+    journal.endStep()
+
+    expect(journal.canRollbackLastStep).toBe(true)
+    journal.commit()
+    expect(journal.canRollbackLastStep).toBe(false)
+  })
 })

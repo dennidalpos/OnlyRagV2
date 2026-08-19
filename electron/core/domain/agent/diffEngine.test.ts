@@ -5,6 +5,8 @@ import {
   countDiffLines,
   summarizeDiff,
   collapseContext,
+  groupDiffIntoHunks,
+  reconstructWithApprovedHunks,
 } from './diffEngine'
 
 describe('diffEngine — unified diff parsing', () => {
@@ -166,5 +168,79 @@ describe('diffEngine — context collapsing', () => {
   it('should keep every line when the file is small enough to have no elidable run', () => {
     const collapsed = collapseContext(computeLineDiff('a\nb', 'a\nB'), 3)
     expect(collapsed.every((entry) => entry.kind === 'line')).toBe(true)
+  })
+})
+
+describe('diffEngine — per-hunk grouping and reconstruction', () => {
+  it('should group a diff with two separate changes into two independent hunks', () => {
+    const before = 'line1\nline2\nline3\nline4\nline5'
+    const after = 'line1\nCHANGED2\nline3\nline4\nCHANGED5'
+    const lines = computeLineDiff(before, after)
+    const hunks = groupDiffIntoHunks(lines)
+
+    expect(hunks).toHaveLength(2)
+    expect(hunks[0].lines.some((l) => l.type === 'del' && l.content === 'line2')).toBe(true)
+    expect(hunks[0].lines.some((l) => l.type === 'add' && l.content === 'CHANGED2')).toBe(true)
+    expect(hunks[1].lines.some((l) => l.type === 'add' && l.content === 'CHANGED5')).toBe(true)
+  })
+
+  it('should treat one contiguous run of changed lines as a single hunk', () => {
+    const before = 'a\nb\nc\nd'
+    const after = 'a\nX\nY\nd'
+    const hunks = groupDiffIntoHunks(computeLineDiff(before, after))
+    expect(hunks).toHaveLength(1)
+  })
+
+  it('reconstructWithApprovedHunks should apply only approved hunks and keep rejected hunks at their original content', () => {
+    const before = 'line1\nline2\nline3\nline4\nline5'
+    const after = 'line1\nCHANGED2\nline3\nline4\nCHANGED5'
+    const lines = computeLineDiff(before, after)
+    const hunks = groupDiffIntoHunks(lines)
+    expect(hunks).toHaveLength(2)
+
+    // Approve only the first hunk (line2 -> CHANGED2), reject the second (line5 -> CHANGED5).
+    const result = reconstructWithApprovedHunks(lines, hunks, new Set([hunks[0].id]))
+    expect(result).toBe('line1\nCHANGED2\nline3\nline4\nline5')
+  })
+
+  it('reconstructWithApprovedHunks should reproduce the full "after" text when every hunk is approved', () => {
+    const before = 'a\nb\nc'
+    const after = 'a\nB\nC'
+    const lines = computeLineDiff(before, after)
+    const hunks = groupDiffIntoHunks(lines)
+    const result = reconstructWithApprovedHunks(lines, hunks, new Set(hunks.map((h) => h.id)))
+    expect(result).toBe(after)
+  })
+
+  it('reconstructWithApprovedHunks should reproduce the original "before" text when no hunk is approved', () => {
+    const before = 'a\nb\nc'
+    const after = 'a\nB\nC'
+    const lines = computeLineDiff(before, after)
+    const hunks = groupDiffIntoHunks(lines)
+    const result = reconstructWithApprovedHunks(lines, hunks, new Set())
+    expect(result).toBe(before)
+  })
+
+  it('should isolate a single removed line as its own hunk when it sits between unchanged lines, leaving the rest untouched on rejection', () => {
+    // Models a replace_chunk that drops one line: the surrounding lines survive as context.
+    const before = 'keep1\nDROP\nkeep2'
+    const after = 'keep1\nkeep2'
+    const lines = computeLineDiff(before, after)
+    const hunks = groupDiffIntoHunks(lines)
+    expect(hunks).toHaveLength(1)
+    expect(hunks[0].lines).toEqual([{ type: 'del', content: 'DROP', oldLineNumber: 2, newLineNumber: null }])
+
+    expect(reconstructWithApprovedHunks(lines, hunks, new Set([hunks[0].id]))).toBe(after)
+    expect(reconstructWithApprovedHunks(lines, hunks, new Set())).toBe(before)
+  })
+
+  it('a full delete_file diff (proposed content is always empty) has no context lines, so it forms exactly one all-or-nothing hunk', () => {
+    const before = 'keep1\nDROP\nkeep2'
+    const lines = computeLineDiff(before, '')
+    const hunks = groupDiffIntoHunks(lines)
+    expect(hunks).toHaveLength(1)
+
+    expect(reconstructWithApprovedHunks(lines, hunks, new Set([hunks[0].id]))).toBe('')
+    expect(reconstructWithApprovedHunks(lines, hunks, new Set())).toBe(before)
   })
 })

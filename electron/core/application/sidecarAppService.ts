@@ -1,10 +1,10 @@
 import http from 'node:http'
 import path from 'node:path'
-import fs from 'node:fs'
 import { BrowserWindow } from 'electron'
 import { logger } from '../../diagnostics'
 import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
 import { taskRunner } from '../infrastructure/process/taskRunner'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -49,7 +49,7 @@ export class SidecarAppService {
     logger.log('INFO', 'SidecarApp', `Ingesting file path (streaming): ${filePath}`)
     try {
       const resolvedPath = path.resolve(filePath)
-      if (!fs.existsSync(resolvedPath)) {
+      if (!documentIoRepository.exists(resolvedPath)) {
         return Promise.resolve({ success: false, error: 'File does not exist on disk' })
       }
 
@@ -447,7 +447,10 @@ export class SidecarAppService {
 
       // If format is markdown or text, we can save immediately
       if (defaultExt === 'md') {
-        fs.writeFileSync(targetPath, markdownContent, 'utf-8')
+        const writeRes = documentIoRepository.writeText(targetPath, markdownContent)
+        if (!writeRes.success) {
+          return { success: false, error: writeRes.error }
+        }
         shell.showItemInFolder(targetPath)
         logger.log('INFO', 'SidecarApp', `Markdown document exported successfully to: ${targetPath}`)
         return { success: true, message: `Documento Markdown salvato con successo: ${path.basename(targetPath)}`, filePath: targetPath }
@@ -507,7 +510,10 @@ export class SidecarAppService {
 
       if (sidecarRes.success && sidecarRes.data?.base64_content) {
         const fileBuffer = Buffer.from(sidecarRes.data.base64_content, 'base64')
-        fs.writeFileSync(targetPath, fileBuffer)
+        const writeRes = documentIoRepository.writeBuffer(targetPath, fileBuffer)
+        if (!writeRes.success) {
+          return { success: false, error: writeRes.error }
+        }
         shell.showItemInFolder(targetPath)
         logger.log('INFO', 'SidecarApp', `PDF/DOCX document exported successfully to: ${targetPath}`)
         return {

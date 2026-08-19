@@ -1,8 +1,7 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { app, dialog, BrowserWindow } from 'electron'
+import { dialog, BrowserWindow } from 'electron'
 import { logger } from '../../diagnostics'
 import { taskRunner } from '../infrastructure/process/taskRunner'
+import { systemStorageRepository } from '../infrastructure/filesystem/systemStorageRepository'
 
 export interface DiskSpaceCheckResult {
   allowed: boolean
@@ -14,22 +13,7 @@ export interface DiskSpaceCheckResult {
 
 export class SystemAppService {
   getOllamaStoragePath(): string {
-    if (process.env.OLLAMA_MODELS && fs.existsSync(process.env.OLLAMA_MODELS)) {
-      return process.env.OLLAMA_MODELS
-    }
-    const homeDir = process.env.USERPROFILE || process.env.HOME || ''
-    const standardOllamaModelsDir = path.join(homeDir, '.ollama', 'models')
-    if (fs.existsSync(standardOllamaModelsDir)) {
-      return standardOllamaModelsDir
-    }
-    if (fs.existsSync(homeDir)) {
-      return homeDir
-    }
-    try {
-      return app.getPath('userData')
-    } catch {
-      return process.platform === 'win32' ? 'C:\\' : '/'
-    }
+    return systemStorageRepository.getOllamaStoragePath()
   }
 
   estimateModelSizeBytes(modelName: string): number {
@@ -62,19 +46,13 @@ export class SystemAppService {
   }
 
   getDiskFreeSpace(targetPath?: string): { freeBytes: number; totalBytes: number } {
-    try {
-      const dir = targetPath || this.getOllamaStoragePath()
-      if (fs.statfsSync) {
-        const stats = fs.statfsSync(dir)
-        const freeBytes = stats.bavail * stats.bsize
-        const totalBytes = stats.blocks * stats.bsize
-        return { freeBytes, totalBytes }
+    const dir = targetPath || this.getOllamaStoragePath()
+    return (
+      systemStorageRepository.getDiskFreeSpace(dir) || {
+        freeBytes: 100 * 1024 * 1024 * 1024,
+        totalBytes: 500 * 1024 * 1024 * 1024,
       }
-    } catch (err: any) {
-      logger.log('WARN', 'SystemApp', `fs.statfsSync failed for ${targetPath}: ${err.message}`)
-    }
-
-    return { freeBytes: 100 * 1024 * 1024 * 1024, totalBytes: 500 * 1024 * 1024 * 1024 }
+    )
   }
 
   validateModelDownloadSpace(models: string[]): DiskSpaceCheckResult {

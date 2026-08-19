@@ -143,6 +143,7 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       if (toolName === 'inspect_os' || toolName === 'os_env' || toolName === 'system_info' || toolName === 'system_environment') toolName = 'inspect_os_env'
       if (toolName === 'git_status' || toolName === 'gitstatus' || toolName === 'status_git' || toolName === 'git_state') toolName = 'git_status'
       if (toolName === 'git_diff' || toolName === 'gitdiff' || toolName === 'git_changes' || toolName === 'diff') toolName = 'git_diff'
+      if (toolName === 'rollback_last_step' || toolName === 'undo_last_step' || toolName === 'undo_step' || toolName === 'revert_last_step') toolName = 'rollback_last_step'
       if (toolName === 'rollback_workspace' || toolName === 'rollback' || toolName === 'undo' || toolName === 'undo_changes' || toolName === 'revert_workspace') toolName = 'rollback_workspace'
       if (toolName === 'get_file_info' || toolName === 'file_info' || toolName === 'stat_file' || toolName === 'file_stats' || toolName === 'file_metadata') toolName = 'get_file_info'
       if (toolName === 'ask' || toolName === 'ask_question' || toolName === 'question' || toolName === 'clarify' || toolName === 'user_input' || toolName === 'prompt_user' || toolName === 'inquire') toolName = 'ask'

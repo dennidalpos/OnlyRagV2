@@ -3,6 +3,7 @@ import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSes
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
+import { estimateTokenCount } from '../../lib/tokenEstimate'
 import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'
 import { AgentTimeline } from './AgentTimeline'
 import { PromptQueueCard } from './PromptQueueCard'
@@ -104,14 +105,20 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } =
     useAgentTimelineScroll(actionLogs, streamingText, isExecuting, autoScroll, onToggleAutoScroll)
 
-  // Context window tracking (reflecting actual turn prompt assembly: max 8 steps + system + prompt)
-  const maxContextLimit = settings?.hardwareProfile === 'High' ? 48000 : settings?.hardwareProfile === 'Low' ? 16000 : 28000
-  const recentLogs = actionLogs.slice(-8)
-  const estimatedTurnChars = Math.min(
-    maxContextLimit,
-    2500 + agentPrompt.length + recentLogs.reduce((acc, log) => acc + log.message.length + Math.min(log.detail?.length || 0, 1200), 0)
-  )
-  const contextPercent = Math.min(100, Math.round((estimatedTurnChars / maxContextLimit) * 100))
+  // Context window tracking (reflecting actual turn prompt assembly: max 8 steps + system + prompt).
+  // Budgets are token counts, not characters: Ollama has no tokenizer API and local model
+  // vocabularies differ, so estimateTokenCount (gpt-tokenizer's o200k_base BPE) is an
+  // approximation for whichever model is actually running — materially closer than a raw
+  // character count, not an exact figure for every model.
+  const maxContextLimit = settings?.hardwareProfile === 'High' ? 12000 : settings?.hardwareProfile === 'Low' ? 4000 : 7000
+  const BASE_PROMPT_OVERHEAD_TOKENS = 650
+  const recentLogsTokens = React.useMemo(() => {
+    const recentLogs = actionLogs.slice(-8)
+    return recentLogs.reduce((acc, log) => acc + estimateTokenCount(log.message) + estimateTokenCount((log.detail || '').slice(0, 1200)), 0)
+  }, [actionLogs])
+  const promptTokens = React.useMemo(() => estimateTokenCount(agentPrompt), [agentPrompt])
+  const estimatedTurnTokens = Math.min(maxContextLimit, BASE_PROMPT_OVERHEAD_TOKENS + promptTokens + recentLogsTokens)
+  const contextPercent = Math.min(100, Math.round((estimatedTurnTokens / maxContextLimit) * 100))
   const isContextHeavy = contextPercent >= 70 || actionLogs.length > 14
 
   return (
@@ -153,7 +160,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
 
       <ContextUsageBanner
         isVisible={isContextHeavy}
-        estimatedTurnChars={estimatedTurnChars}
+        estimatedTurnTokens={estimatedTurnTokens}
         maxContextLimit={maxContextLimit}
         contextPercent={contextPercent}
         isExecuting={isExecuting}

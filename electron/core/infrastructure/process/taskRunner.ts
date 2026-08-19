@@ -155,6 +155,20 @@ export class TaskRunner {
     return { success: true, cleanedCount, bytesFreed }
   }
 
+  /** Windows-only: force-kills a whole process tree by pid via `taskkill /f /t`. */
+  killProcessTreeWindows(pid: number): void {
+    spawn('taskkill', ['/pid', pid.toString(), '/f', '/t'])
+  }
+
+  /** Probes whether a CLI tool (git, node, python, ...) is resolvable on PATH. */
+  checkToolAvailable(toolCmd: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const proc = spawn('powershell.exe', ['-NoProfile', '-Command', `Get-Command ${toolCmd} -ErrorAction SilentlyContinue`], { windowsHide: true })
+      proc.on('close', (code) => resolve(code === 0))
+      proc.on('error', () => resolve(false))
+    })
+  }
+
   async executePowerShellCommand(
     command: string,
     targetCwd?: string,

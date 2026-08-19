@@ -99,6 +99,7 @@ export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strict
 - git_diff: { "filePath"?: "path", "staged"?: false }
 - git_commit: { "commitMessage": "commit message" } (ALWAYS requires explicit user approval before it runs, in every agent mode — unlike other mutating tools)
 - rollback_workspace: {}
+- rollback_last_step: {} (undoes only the previous step's file changes, not the whole session)
 - web_search: { "query": "documentation or technical search term" }
 - fetch_web_content: { "url": "https://..." }
 - download_file: { "url": "https://...", "filePath": "path/inside/workspace" }
@@ -120,7 +121,7 @@ CRITICAL REASONING & STRATEGY DIRECTIVES:
 4. ANTI-SURRENDER DIRECTIVE: If a CLI command or generator (e.g. npm create vite) fails, times out, or cancels with 'Operation cancelled', DO NOT call the 'ask' tool to ask what to do next. Fallback IMMEDIATELY to constructing the required project files directly with write_file (e.g. package.json, index.html, src/App.tsx).
 5. STRICT NO-SPACES FILE NAMING & CODING BEST PRACTICES: File and folder names MUST NEVER contain spaces (e.g. use "user-profile.tsx" or "user_profile.py", NEVER "user profile.tsx" or "my file.ts"). Use clean modular architecture, explicit TypeScript types (avoid 'any'), single responsibility per file, and standard forward slashes '/'.
 6. MANDATORY CHECKLIST COMPLETION & FINAL SUMMARY REPORT: When all items in the plan/checklist are completed or verified (100%), DO NOT execute any more file edits or commands. You MUST IMMEDIATELY invoke the "finish" tool and provide a comprehensive final summary report (resoconto finale in the user's language) detailing: 1) What was implemented, 2) Modified/Created Files, 3) Test/Build Results, 4) Final Conclusion.
-7. PROJECT MANAGEMENT & COMPACTION PROTOCOL: Work sequentially on a single micro-task at a time. The system automatically compacts session state and persists .assistant/SESSION_TRACKER.md and .onlyrag/.agent_state_*.json. When the last micro-task is completed, finalize the task with: "WAITING FOR COMMAND: Plan completed. State saved and compacted. Awaiting instructions.".`
+7. PROJECT MANAGEMENT & COMPACTION PROTOCOL: Work sequentially on a single micro-task at a time. The system automatically compacts session state and persists .onlyrag/assistant/SESSION_TRACKER.md and .onlyrag/sessions/.agent_state_*.json. When the last micro-task is completed, finalize the task with: "WAITING FOR COMMAND: Plan completed. State saved and compacted. Awaiting instructions.".`
 
 /**
  * Family-agnostic coding-agent system prompts, scaled by complexity tier

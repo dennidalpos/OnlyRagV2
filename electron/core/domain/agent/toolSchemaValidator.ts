@@ -129,7 +129,8 @@ export class ToolSchemaValidator {
       }
 
       case 'git_status':
-      case 'rollback_workspace': {
+      case 'rollback_workspace':
+      case 'rollback_last_step': {
         break
       }
 

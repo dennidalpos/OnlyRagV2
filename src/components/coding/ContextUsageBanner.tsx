@@ -3,7 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 
 interface ContextUsageBannerProps {
   isVisible: boolean
-  estimatedTurnChars: number
+  estimatedTurnTokens: number
   maxContextLimit: number
   contextPercent: number
   isExecuting: boolean
@@ -12,7 +12,7 @@ interface ContextUsageBannerProps {
 
 export const ContextUsageBanner: React.FC<ContextUsageBannerProps> = ({
   isVisible,
-  estimatedTurnChars,
+  estimatedTurnTokens,
   maxContextLimit,
   contextPercent,
   isExecuting,
@@ -25,7 +25,7 @@ export const ContextUsageBanner: React.FC<ContextUsageBannerProps> = ({
       <div className="flex items-center gap-2 text-[11px] font-sans">
         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
         <span>
-          Contesto turno: <strong>{estimatedTurnChars.toLocaleString()}</strong> / {maxContextLimit.toLocaleString()} car. ({contextPercent}%)
+          Contesto turno: <strong>{estimatedTurnTokens.toLocaleString()}</strong> / {maxContextLimit.toLocaleString()} token stimati ({contextPercent}%)
         </span>
       </div>
       {onCompactContext && (

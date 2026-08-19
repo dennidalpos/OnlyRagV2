@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Code2, Loader2, ArrowDown } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { AgentActionLog, WorkspaceFile, CodingSession } from '../../types'
 import { useTranslation } from '../../i18n'
 import { AgentTimelineMessage } from './AgentTimelineMessage'
@@ -44,6 +45,18 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       return next
     })
   }
+
+  // Only the messages actually near the viewport are mounted: a long-running session can
+  // accumulate hundreds of entries, and every one of them was previously kept in the DOM for
+  // the life of the session. Item heights vary a lot (a one-line "Explored workspace" badge vs
+  // an expanded command output block), so sizes are measured dynamically instead of assumed.
+  const rowVirtualizer = useVirtualizer({
+    count: actionLogs.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 90,
+    overscan: 6,
+    getItemKey: (index) => actionLogs[index].id,
+  })
 
   return (
     <div
@@ -99,16 +112,38 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
           </div>
         </div>
       ) : (
-        actionLogs.map((log) => (
-          <AgentTimelineMessage
-            key={log.id}
-            log={log}
-            isExpanded={expandedLogIds.has(log.id)}
-            onToggleExpand={toggleExpand}
-            activeModelName={activeModelName}
-            onOpenFile={onOpenFile}
-          />
-        ))
+        <div style={{ position: 'relative', width: '100%', height: rowVirtualizer.getTotalSize() }}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const log = actionLogs[virtualRow.index]
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {/* Bottom padding (not margin) so it counts toward the measured row height the
+                    virtualizer positions the next row from — space-y-* can't reach absolutely
+                    positioned siblings the way it did the plain list this replaced. */}
+                <div className="pb-3.5">
+                  <AgentTimelineMessage
+                    log={log}
+                    isExpanded={expandedLogIds.has(log.id)}
+                    onToggleExpand={toggleExpand}
+                    activeModelName={activeModelName}
+                    onOpenFile={onOpenFile}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {isExecuting && (

@@ -40,7 +40,6 @@ export/
 *.lance
 
 # Coding-Agent Runtime State (generated per-session, machine/session specific)
-.assistant/
 .onlyrag/
 userdata_dev/
 

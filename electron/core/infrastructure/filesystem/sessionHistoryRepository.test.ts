@@ -56,7 +56,7 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect(saved).not.toBeNull()
     // The title is derived from the first executed prompt when the user never renamed it.
     expect(saved?.title).toBe('Aggiungi i test di regressione')
-    expect(fs.existsSync(path.join(tempDir, '.onlyrag', 'session_history.json'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, '.onlyrag', 'sessions', 'session_history.json'))).toBe(true)
 
     const listed = await sessionHistoryRepository.listSessions(tempDir)
     expect(listed).toHaveLength(1)
@@ -64,6 +64,21 @@ describe('SessionHistoryRepository Unit Tests', () => {
 
     expect(await sessionHistoryRepository.deleteSession('session-1', tempDir)).toBe(true)
     expect(await sessionHistoryRepository.listSessions(tempDir)).toHaveLength(0)
+  })
+
+  it('should migrate a pre-unification session_history.json out of the flat .onlyrag/ folder into .onlyrag/sessions/', async () => {
+    const legacyOnlyragDir = path.join(tempDir, '.onlyrag')
+    fs.mkdirSync(legacyOnlyragDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(legacyOnlyragDir, 'session_history.json'),
+      JSON.stringify({ version: 1, sessions: [buildSession('legacy-migrated-session', tempDir, { title: 'Legacy' })] }),
+      'utf-8'
+    )
+
+    const listed = await sessionHistoryRepository.listSessions(tempDir)
+    expect(listed.find((s) => s.id === 'legacy-migrated-session')?.title).toBe('Legacy')
+    expect(fs.existsSync(path.join(legacyOnlyragDir, 'session_history.json'))).toBe(false)
+    expect(fs.existsSync(path.join(legacyOnlyragDir, 'sessions', 'session_history.json'))).toBe(true)
   })
 
   it('should update an existing session instead of duplicating it', async () => {

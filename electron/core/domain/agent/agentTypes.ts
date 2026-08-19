@@ -65,6 +65,7 @@ export type SupportedToolName =
   | 'git_status'
   | 'git_commit'
   | 'rollback_workspace'
+  | 'rollback_last_step'
   | 'get_file_info'
   | 'ensure_tool'
   | 'update_plan'

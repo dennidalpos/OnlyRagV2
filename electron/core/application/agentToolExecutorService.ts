@@ -1,7 +1,6 @@
 import os from 'node:os'
-import fs from 'node:fs'
 import path from 'node:path'
-import { spawn, ChildProcess, execSync, execFileSync } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { logger } from '../../diagnostics'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
@@ -13,7 +12,12 @@ import { NonInteractiveStreamSessionGuard } from '../domain/agent/shellStreamGua
 import { webClient } from '../infrastructure/http/webClient'
 import { FuzzyPatchEngineWithASTValidator } from '../domain/agent/fuzzyPatchEngine'
 import { parseTestRunOutput } from '../domain/agent/testResultParser'
-import { computeLineDiff, countDiffLines } from '../domain/agent/diffEngine'
+import { computeLineDiff, countDiffLines, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../domain/agent/diffEngine'
+import { projectPendingChange, type PendingMutationType } from '../domain/agent/pendingChangeProjection'
+import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
+import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
+import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
+import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
 import {
   DEV_TOOL_ALLOWLIST,
   buildInstallCommand,
@@ -24,6 +28,14 @@ import {
   type DevToolStatus,
 } from '../domain/agent/devToolchain'
 import type { AppSettings } from '../../../src/types'
+
+/** Maps a file-mutating tool name to the PendingChangeProposal type used to project its effect (see pendingChangeProjection.ts). */
+const FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE: Partial<Record<AgentToolCall['tool'], PendingMutationType>> = {
+  write_file: 'write_file',
+  replace_file_content: 'replace_chunk',
+  multi_replace_file_content: 'multi_replace',
+  delete_file: 'delete_file',
+}
 
 /** Ordinary shell command ceiling. */
 const DEFAULT_COMMAND_TIMEOUT_MS = 120000
@@ -91,6 +103,11 @@ export class AgentToolExecutorService {
     return this.journal.rollbackAll()
   }
 
+  /** Marks the end of the current agent step so its file changes become undoable via the rollback_last_step tool. */
+  public endJournalStep(): void {
+    this.journal.endStep()
+  }
+
   public commitJournal(): number {
     return this.journal.commit()
   }
@@ -113,8 +130,7 @@ export class AgentToolExecutorService {
       }
     }
     try {
-      execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15000 })
-      const stdout = execFileSync('git', ['commit', '-m', trimmedMessage], { cwd, encoding: 'utf-8', timeout: 15000 })
+      const stdout = gitCliRepository.commit(cwd, trimmedMessage)
       return {
         success: true,
         output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
@@ -138,20 +154,13 @@ export class AgentToolExecutorService {
     const definition = DEV_TOOL_ALLOWLIST.find((tool) => tool.id === toolId)
     if (!definition) return { id: toolId, displayName: toolId, installed: false, probeError: 'Not allow-listed' }
 
-    try {
-      const stdout = execFileSync(definition.binary, definition.versionArgs, {
-        encoding: 'utf-8',
-        timeout: 5000,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: process.platform === 'win32',
-      })
-      const version = extractVersion(String(stdout))
-      // The Windows Store python stub exits 0 while printing nothing: no version means no tool.
-      if (!version) return { id: definition.id, displayName: definition.displayName, installed: false }
-      return { id: definition.id, displayName: definition.displayName, installed: true, version }
-    } catch {
-      return { id: definition.id, displayName: definition.displayName, installed: false }
-    }
+    const stdout = devToolProbeRepository.probeVersion(definition.binary, definition.versionArgs)
+    if (stdout === null) return { id: definition.id, displayName: definition.displayName, installed: false }
+
+    const version = extractVersion(stdout)
+    // The Windows Store python stub exits 0 while printing nothing: no version means no tool.
+    if (!version) return { id: definition.id, displayName: definition.displayName, installed: false }
+    return { id: definition.id, displayName: definition.displayName, installed: true, version }
   }
 
   /** Presence and version of every allow-listed development tool. */
@@ -161,17 +170,62 @@ export class AgentToolExecutorService {
 
   /** Current on-disk content, or '' when the file does not exist yet (a pure addition). */
   private readContentSafely(absolutePath: string): string {
-    try {
-      return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf-8') : ''
-    } catch {
-      return ''
-    }
+    return agentToolFileRepository.readIfExists(absolutePath)
   }
 
   /** Line-level +/- size of a completed mutation, for the session change metrics. */
   private buildChangeStats(filePath: string, before: string, after: string) {
     const { additions, deletions } = countDiffLines(computeLineDiff(before, after))
     return { filePath, additions, deletions }
+  }
+
+  /**
+   * When the user approved only a subset of hunks in the PendingApprovalModal (instead of the
+   * whole proposal), rewrites the tool call into an equivalent write_file carrying just the
+   * approved hunks' effect, computed against the file's current on-disk content — the same
+   * projection (pendingChangeProjection.ts) and diff (diffEngine.ts) the modal itself used to
+   * show the preview, so what gets written matches exactly what the user reviewed.
+   *
+   * Returns parsedTool unchanged when approvedHunkIndices is absent (the ordinary
+   * all-or-nothing path), the tool isn't a file mutation, or every hunk was approved — a full
+   * accept keeps the original tool's own semantics (e.g. delete_file stays a real delete
+   * instead of becoming a write_file with empty content).
+   */
+  public reconcileHunkApproval(
+    parsedTool: AgentToolCall,
+    approvedHunkIndices: number[] | undefined,
+    workspacePath: string | null | undefined
+  ): AgentToolCall {
+    if (!approvedHunkIndices) return parsedTool
+    const proposalType = FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE[parsedTool.tool]
+    if (!proposalType) return parsedTool
+
+    const filePath = parsedTool.parameters?.filePath
+    const pathCheck = validatePathSafety(filePath, workspacePath)
+    if (!pathCheck.safePath) return parsedTool // let the tool's own case surface the security error
+
+    const beforeContent = this.readContentSafely(pathCheck.safePath)
+    const proposedContent = projectPendingChange(
+      {
+        type: proposalType,
+        content: parsedTool.parameters?.content,
+        targetContent: parsedTool.parameters?.targetContent,
+        replacementContent: parsedTool.parameters?.replacementContent,
+        replacements: parsedTool.parameters?.replacements,
+      },
+      beforeContent
+    )
+
+    const diffLines = computeLineDiff(beforeContent, proposedContent)
+    const hunks = groupDiffIntoHunks(diffLines)
+    if (approvedHunkIndices.length >= hunks.length) return parsedTool // full accept
+
+    const reconstructed = reconstructWithApprovedHunks(diffLines, hunks, new Set(approvedHunkIndices))
+    return {
+      ...parsedTool,
+      tool: 'write_file',
+      parameters: { ...parsedTool.parameters, filePath, content: reconstructed },
+    }
   }
 
   public getOrCreateShellSession(workspacePath?: string | null): PersistentPowerShellSession {
@@ -200,20 +254,13 @@ export class AgentToolExecutorService {
   private detectTestCommand(workspacePath?: string | null): { command: string; source: string } | null {
     const cwd = workspacePath || process.cwd()
 
-    const pkgJsonPath = path.join(cwd, 'package.json')
-    if (fs.existsSync(pkgJsonPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
-        const scripts = pkg.scripts || {}
-        if (scripts['test:fast']) return { command: 'npm run test:fast', source: 'package.json scripts["test:fast"]' }
-        if (scripts['test']) return { command: 'npm test', source: 'package.json scripts.test' }
-      } catch {
-        // Malformed package.json — fall through to other detectors.
-      }
+    const scripts = agentToolFileRepository.readPackageJsonScripts(cwd)
+    if (scripts) {
+      if (scripts['test:fast']) return { command: 'npm run test:fast', source: 'package.json scripts["test:fast"]' }
+      if (scripts['test']) return { command: 'npm test', source: 'package.json scripts.test' }
     }
 
-    const hasPytestConfig = ['pytest.ini', 'pyproject.toml', 'setup.cfg'].some((f) => fs.existsSync(path.join(cwd, f)))
-    if (hasPytestConfig) {
+    if (agentToolFileRepository.hasPytestConfig(cwd)) {
       return { command: 'pytest -q', source: 'pytest config file detected' }
     }
 
@@ -392,11 +439,11 @@ export class AgentToolExecutorService {
         }
 
         try {
-          if (fs.existsSync(pathCheck.safePath)) {
-            const entries = fs.readdirSync(pathCheck.safePath, { withFileTypes: true })
+          const entries = agentToolFileRepository.listDirEntries(pathCheck.safePath)
+          if (entries) {
             const outStr =
               `Listed directory [${dirPath}] (${entries.length} items):\n` +
-              entries.map((e) => `${e.isDirectory() ? '[DIR]' : '[FILE]'} ${e.name}`).join('\n')
+              entries.map((e) => `${e.isDir ? '[DIR]' : '[FILE]'} ${e.name}`).join('\n')
             return {
               outputForHistory: outStr,
               logMessage: `Directory Listing Result (${entries.length} items)`,
@@ -655,7 +702,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Create Directory Rejected: ${pathCheck.error}` }
         }
         try {
-          fs.mkdirSync(pathCheck.safePath, { recursive: true })
+          agentToolFileRepository.mkdir(pathCheck.safePath)
           return {
             outputForHistory: `Successfully created directory ${dirPath}`,
             logMessage: `Successfully created directory ${path.basename(pathCheck.safePath)}`,
@@ -679,9 +726,9 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
 
         try {
-          fs.mkdirSync(path.dirname(dstCheck.safePath), { recursive: true })
+          agentToolFileRepository.mkdir(path.dirname(dstCheck.safePath))
           this.journal.recordBeforeModification(dstCheck.safePath)
-          fs.copyFileSync(srcCheck.safePath, dstCheck.safePath)
+          agentToolFileRepository.copyFileRaw(srcCheck.safePath, dstCheck.safePath)
           return {
             outputForHistory: `Successfully copied file from ${srcPath} to ${dstPath}`,
             logMessage: `Successfully copied ${path.basename(srcCheck.safePath)} -> ${path.basename(dstCheck.safePath)}`,
@@ -705,10 +752,10 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
 
         try {
-          fs.mkdirSync(path.dirname(dstCheck.safePath), { recursive: true })
+          agentToolFileRepository.mkdir(path.dirname(dstCheck.safePath))
           this.journal.recordBeforeModification(srcCheck.safePath)
           this.journal.recordBeforeModification(dstCheck.safePath)
-          fs.renameSync(srcCheck.safePath, dstCheck.safePath)
+          agentToolFileRepository.renameRaw(srcCheck.safePath, dstCheck.safePath)
           return {
             outputForHistory: `Successfully moved file from ${srcPath} to ${dstPath}`,
             logMessage: `Successfully moved ${path.basename(srcCheck.safePath)} -> ${path.basename(dstCheck.safePath)}`,
@@ -730,26 +777,9 @@ Do not retry the same installation. Continue without this tool or ask the user t
         const safePath = pathCheck.safePath
         try {
           const ignoreDirs = new Set(['node_modules', '.git', 'dist', '.venv', 'build', '.next', 'out', 'coverage', '.pytest_cache'])
-          const discovered: string[] = []
 
-          const walk = (currentDir: string, depth: number) => {
-            if (depth > maxDepth) return
-            const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-            for (const entry of entries) {
-              if (ignoreDirs.has(entry.name)) continue
-              const fullPath = path.join(currentDir, entry.name)
-              const relPath = path.relative(safePath, fullPath).replace(/\\/g, '/')
-              if (entry.isDirectory()) {
-                discovered.push(`[DIR]  ${relPath}/`)
-                walk(fullPath, depth + 1)
-              } else if (entry.isFile()) {
-                discovered.push(`[FILE] ${relPath}`)
-              }
-            }
-          }
-
-          if (fs.existsSync(safePath)) {
-            walk(safePath, 1)
+          if (documentIoRepository.exists(safePath)) {
+            const discovered = agentToolFileRepository.listRecursive(safePath, maxDepth, ignoreDirs)
             const outStr = `Recursive Directory Structure for [${dirPath}] (depth <= ${maxDepth}, ${discovered.length} items):\n` + discovered.slice(0, 150).join('\n')
             return {
               outputForHistory: outStr,
@@ -775,10 +805,10 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `File Replace Rejected: ${pathCheck.error}` }
         }
         if (filePath && targetContent) {
-          if (!fs.existsSync(pathCheck.safePath)) {
+          if (!documentIoRepository.exists(pathCheck.safePath)) {
             return { outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
           }
-          const currentContent = fs.readFileSync(pathCheck.safePath, 'utf-8')
+          const currentContent = agentToolFileRepository.readIfExists(pathCheck.safePath)
           const fuzzyRes = FuzzyPatchEngineWithASTValidator.applyFuzzyReplace(currentContent, targetContent, replacementContent)
 
           if (fuzzyRes.success && fuzzyRes.updatedContent !== undefined) {
@@ -965,7 +995,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
               ? `\n\n[PERMISSIONS WARNING: EPERM DETECTED]\nCommand failed due to Windows file permission restrictions (EPERM / Access Denied). DO NOT attempt to write files or run npm install inside system-protected folders (Program Files). Move the project or work inside a user workspace directory (e.g. Desktop or Documents).`
               : ''
             const isZeroModulesVite = lowerOut.includes('0 modules transformed') || (lowerOut.includes('vite') && res.code !== 0)
-            const viteMissingDirective = isZeroModulesVite && workspacePath && !fs.existsSync(path.join(workspacePath, 'index.html'))
+            const viteMissingDirective = isZeroModulesVite && workspacePath && !documentIoRepository.exists(path.join(workspacePath, 'index.html'))
               ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
               : ''
             const isCreateViteCancelled = (cmd.includes('create-vite') || cmd.includes('create vite') || cmd.includes('create-app')) && isCancelled
@@ -1018,7 +1048,7 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
       case 'git_status': {
         const cwd = workspacePath || process.cwd()
         try {
-          const stdout = execSync('git status --short', { cwd, encoding: 'utf-8', timeout: 10000 })
+          const stdout = gitCliRepository.run(cwd, 'status --short', 10000)
           const outStr = stdout.trim()
             ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
             : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
@@ -1050,8 +1080,7 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
         try {
           const fileArg = pathCheck?.safePath ? ` -- "${pathCheck.safePath}"` : ''
           const stagedFlag = isStaged ? ' --staged' : ''
-          const cmdStr = `git diff${stagedFlag}${fileArg}`
-          const stdout = execSync(cmdStr, { cwd, encoding: 'utf-8', timeout: 15000 })
+          const stdout = gitCliRepository.run(cwd, `diff${stagedFlag}${fileArg}`, 15000)
           const truncated = stdout.trim().slice(0, 8000)
           const outStr = stdout.trim()
             ? `[GIT DIFF (${isStaged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`
@@ -1087,6 +1116,22 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
         }
       }
 
+      case 'rollback_last_step': {
+        if (!this.journal.canRollbackLastStep) {
+          return {
+            outputForHistory: '[ROLLBACK LAST STEP] Nothing to undo: the previous step made no file changes, or there is no completed step yet.',
+            logMessage: 'Rollback Last Step: nothing to undo',
+          }
+        }
+        const result = this.journal.rollbackLastStep()
+        const summary = `[LAST STEP ROLLBACK EXECUTED]\nRestored: ${result.restoredCount} file(s) to their state before the previous step.\n` +
+          (result.errors.length > 0 ? `Errors: ${result.errors.join('; ')}` : 'Only the previous step\'s changes were reverted; earlier steps in this session are untouched.')
+        return {
+          outputForHistory: summary,
+          logMessage: `Rollback Last Step: ${result.restoredCount} files restored`,
+        }
+      }
+
       case 'get_file_info': {
         const targetPath = parameters.filePath
         const pathCheck = validatePathSafety(targetPath, workspacePath)
@@ -1098,42 +1143,20 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
         }
 
         try {
-          if (!fs.existsSync(pathCheck.safePath)) {
+          const info = agentToolFileRepository.getFileInfo(pathCheck.safePath)
+          if (!info) {
             return {
               outputForHistory: `[FILE INFO: ${targetPath}]\nStatus: Does Not Exist\n[END FILE INFO]`,
               logMessage: `File Info: File not found: ${targetPath}`,
             }
           }
 
-          const stats = fs.statSync(pathCheck.safePath)
-          let lineCount = 0
-          let isBinary = false
-
-          if (stats.isFile()) {
-            const buf = Buffer.alloc(1024)
-            const fd = fs.openSync(pathCheck.safePath, 'r')
-            const bytesRead = fs.readSync(fd, buf, 0, 1024, 0)
-            fs.closeSync(fd)
-
-            for (let i = 0; i < bytesRead; i++) {
-              if (buf[i] === 0) {
-                isBinary = true
-                break
-              }
-            }
-
-            if (!isBinary) {
-              const fullContent = fs.readFileSync(pathCheck.safePath, 'utf-8')
-              lineCount = fullContent.split('\n').length
-            }
-          }
-
           const infoStr = `[FILE INFO: ${targetPath}]\n` +
-            `Type: ${stats.isDirectory() ? 'Directory' : 'File'}\n` +
-            `Size: ${stats.size} bytes (${(stats.size / 1024).toFixed(2)} KB)\n` +
-            `Is Binary: ${isBinary}\n` +
-            `Line Count: ${lineCount}\n` +
-            `Last Modified: ${stats.mtime.toISOString()}\n` +
+            `Type: ${info.isDirectory ? 'Directory' : 'File'}\n` +
+            `Size: ${info.sizeBytes} bytes (${(info.sizeBytes / 1024).toFixed(2)} KB)\n` +
+            `Is Binary: ${info.isBinary}\n` +
+            `Line Count: ${info.lineCount}\n` +
+            `Last Modified: ${info.mtimeIso}\n` +
             `[END FILE INFO]`
 
           return {

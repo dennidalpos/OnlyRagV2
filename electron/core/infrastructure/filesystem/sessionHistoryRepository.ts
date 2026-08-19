@@ -16,18 +16,19 @@ interface SessionHistoryStore {
 /**
  * Single filesystem store for the coding session history (sessions and their
  * ExecutedPrompt records). Workspace-scoped sessions live in the project's
- * `.onlyrag` folder; standalone sessions fall back to the user home store.
+ * `.onlyrag/sessions` folder; standalone sessions fall back to the user home store.
  * This is the only persistence for session history — the renderer keeps no copy.
  */
 export class SessionHistoryRepository {
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
-      const stateDir = path.join(workspacePath, '.onlyrag')
+      const stateDir = path.join(workspacePath, '.onlyrag', 'sessions')
       if (!fs.existsSync(stateDir)) {
         try {
           fs.mkdirSync(stateDir, { recursive: true })
+          this.migrateLegacyHistoryFile(workspacePath, stateDir)
         } catch (err: any) {
-          logger.log('WARN', 'SessionHistoryRepo', `Could not create .onlyrag dir in workspace: ${err.message}`)
+          logger.log('WARN', 'SessionHistoryRepo', `Could not create .onlyrag/sessions dir in workspace: ${err.message}`)
         }
       }
       if (fs.existsSync(stateDir)) return stateDir
@@ -45,8 +46,23 @@ export class SessionHistoryRepository {
   }
 
   /**
+   * One-time move of `session_history.json` left directly under the workspace's `.onlyrag/`
+   * folder by the pre-unification layout, into the new `.onlyrag/sessions/` subfolder.
+   */
+  private migrateLegacyHistoryFile(workspacePath: string, newStateDir: string): void {
+    const legacyPath = path.join(workspacePath, '.onlyrag', HISTORY_FILE_NAME)
+    try {
+      if (fs.existsSync(legacyPath)) {
+        fs.renameSync(legacyPath, path.join(newStateDir, HISTORY_FILE_NAME))
+      }
+    } catch (err: any) {
+      logger.log('WARN', 'SessionHistoryRepo', `Legacy history migration skipped: ${err.message}`)
+    }
+  }
+
+  /**
    * Every directory a session for this workspace could legitimately be stored in: the
-   * workspace-scoped `.onlyrag` folder (if the workspace still exists on disk) and the home
+   * workspace-scoped `.onlyrag/sessions` folder (if the workspace still exists on disk) and the home
    * fallback used for standalone sessions or workspaces that were unavailable at save time.
    * Delete/clear-by-id must check every candidate, not just the one implied by the caller's
    * *current* workspacePath -- a session saved standalone (or under a workspace that later
@@ -56,7 +72,7 @@ export class SessionHistoryRepository {
   private getCandidateStorageDirs(workspacePath?: string | null): string[] {
     const dirs: string[] = []
     if (workspacePath && fs.existsSync(workspacePath)) {
-      dirs.push(path.join(workspacePath, '.onlyrag'))
+      dirs.push(path.join(workspacePath, '.onlyrag', 'sessions'))
     }
     dirs.push(path.join(os.homedir(), '.onlyrag_v2', 'sessions'))
     return dirs

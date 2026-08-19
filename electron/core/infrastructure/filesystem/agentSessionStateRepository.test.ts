@@ -108,7 +108,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     const savedTracker = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, tracker)
     expect(savedTracker).toBe(true)
 
-    const trackerPath = path.join(tempDir, '.assistant', 'SESSION_TRACKER.md')
+    const trackerPath = path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
     expect(fs.existsSync(trackerPath)).toBe(true)
 
     const content = fs.readFileSync(trackerPath, 'utf-8')
@@ -140,6 +140,43 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loaded?.planMilestones[0].title).toBe('Design schema')
     expect(loaded?.userTask).toBe('Build the login flow')
     expect(loaded?.stepCount).toBe(0)
+  })
+
+  it('should migrate a pre-unification .assistant/SESSION_TRACKER.md into .onlyrag/assistant/ on first write', async () => {
+    const legacyDir = path.join(tempDir, '.assistant')
+    fs.mkdirSync(legacyDir, { recursive: true })
+    fs.writeFileSync(path.join(legacyDir, 'SESSION_TRACKER.md'), '# Legacy tracker content', 'utf-8')
+
+    const tracker = new SessionDebtTracker({
+      sessionId: 'migration-session',
+      completedTasks: [],
+      unresolvedIssues: [],
+      nextSteps: [],
+      modifiedFiles: [],
+    })
+    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(tempDir, tracker)
+    expect(saved).toBe(true)
+
+    const newPath = path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md')
+    expect(fs.existsSync(newPath)).toBe(true)
+    // The freshly written tracker (not the legacy content) must win at the new path.
+    expect(fs.readFileSync(newPath, 'utf-8')).not.toContain('Legacy tracker content')
+  })
+
+  it('should migrate pre-unification .agent_state_*.json files out of the flat .onlyrag/ folder into .onlyrag/sessions/', async () => {
+    const legacyOnlyragDir = path.join(tempDir, '.onlyrag')
+    fs.mkdirSync(legacyOnlyragDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(legacyOnlyragDir, '.agent_state_legacy-migrated-session.json'),
+      JSON.stringify({ sessionId: 'legacy-migrated-session', stepCount: 3 }),
+      'utf-8'
+    )
+
+    const loaded = await agentSessionStateRepository.loadSessionState('legacy-migrated-session', tempDir)
+    expect(loaded).not.toBeNull()
+    expect(loaded?.stepCount).toBe(3)
+    expect(fs.existsSync(path.join(legacyOnlyragDir, '.agent_state_legacy-migrated-session.json'))).toBe(false)
+    expect(fs.existsSync(path.join(legacyOnlyragDir, 'sessions', '.agent_state_legacy-migrated-session.json'))).toBe(true)
   })
 
   it('should merge seeded milestones into an existing session state without discarding other fields', async () => {

@@ -234,7 +234,7 @@ Store filesystem unico (`sessionHistoryRepository`): `<workspace>/.onlyrag/sessi
 | `sessions:list` | `listCodingSessions(workspacePath?)` | `workspacePath?` | `CodingSession[]` | Sessioni del progetto, ordinate dalla piu' recente, con i relativi `ExecutedPrompt`. |
 | `sessions:save` | `saveCodingSession(session)` | `CodingSession` | `CodingSession \| null` | Upsert della sessione. Normalizza i timestamp in ISO 8601 e deriva il titolo dal primo prompt eseguito. |
 | `sessions:delete` | `deleteCodingSession(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `boolean` | Elimina la sessione, il relativo `.onlyrag/sessions/.agent_state_*.json` e le sue voci nell'audit log. |
-| `sessions:clear` | `clearCodingSessions(workspacePath?)` | `workspacePath?` | `boolean` | Svuota la cronologia del progetto e i relativi stati agente (azione "Svuota storico progetto" nel tab Storico). |
+| `sessions:clear` | `clearCodingSessions(workspacePath?)` | `workspacePath?` | `boolean` | Svuota la cronologia del progetto e i relativi stati agente (azione "Svuota storico progetto" nella sezione Storico del Workspace Explorer). |
 | `sessions:migrate-legacy` | `migrateLegacyCodingSessions(sessions)` | array grezzo da `localStorage` | `{ migrated: number }` | Import one-shot delle sessioni legacy (`onlyrag_coding_sessions_v2`); le sessioni gia' presenti su disco non vengono sovrascritte. |
 
 **Tipi TypeScript (da `src/types/`):**

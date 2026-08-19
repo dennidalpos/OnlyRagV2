@@ -1,0 +1,103 @@
+import type { AgentToolCall } from '../domain/agent/agentTypes'
+import { agentToolExecutorService } from './agentToolExecutorService'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
+
+/**
+ * Definition of Done (DoD) Execution Guard Gate. Each distinct violation reason intercepts
+ * finish AT MOST ONCE (tracked in surfacedDodReasons): the guard's job is to make the model
+ * aware of the missing verification, not to deadlock the session when milestone statuses
+ * can't advance (milestone progression is still heuristic).
+ */
+export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
+  if (ctx.agentMode === 'agent') {
+    const pendingMilestonesCount = ctx.goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
+    const dodCheck = ctx.executionGuard.validateTaskCompletion({
+      requireVerifiedBuild: (ctx.settings as any).verifyBeforeFinish !== false,
+      hasVerifiedBuild: ctx.flags.hasVerifiedBuild,
+      pendingMilestonesCount,
+      hasFileMutations: ctx.flags.hasFileMutations,
+    })
+
+    const dodReason = dodCheck.reason || 'Definition of Done Violation'
+    if (!dodCheck.allowed && dodCheck.suggestedAction && !ctx.surfacedDodReasons.has(dodReason)) {
+      ctx.surfacedDodReasons.add(dodReason)
+      ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: dodReason }, dodCheck.suggestedAction)
+      ctx.emitLog('info', `🔒 DoD Guard Interception: ${dodReason}`)
+      if (ctx.settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', dodCheck.suggestedAction)
+      }
+      return { outcome: 'continue' }
+    }
+  }
+
+  agentToolExecutorService.commitJournal()
+  const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'
+
+  if (ctx.workspacePath) {
+    // Same builder and same writer as every checkpoint — the final save only adds the
+    // agent's closing summary on top of the live session state.
+    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
+    if (saved) {
+      ctx.emitLog('info', '📝 Session Debt Tracker salvato in .onlyrag/assistant/SESSION_TRACKER.md')
+    }
+  }
+
+  ctx.emitLog('info', `Task Finished: ${summary}`)
+  ctx.emitDone(true, summary)
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
+    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
+  }
+  await ctx.persistCurrentState()
+  ctx.finalizeSession()
+  return { outcome: 'return', result: { success: true, summary } }
+}
+
+/** Returns null when the call isn't a repeated/oscillating action, so the caller proceeds. */
+export async function handleLoopDetection(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome | null> {
+  const loopCheck = ctx.loopDetector.recordAndCheck(parsedTool)
+  if (!loopCheck.isLooping || !loopCheck.suggestedIntervention) return null
+
+  ctx.state.stagnationStreak++
+  const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
+  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'. You MUST run a verification command via run_command or read a different file to break out of this loop.`
+
+  ctx.episodicCompactor.recordStep(
+    {
+      step: ctx.stepCount,
+      tool: parsedTool.tool,
+      target: loopTarget,
+      status: 'BLOCKED',
+      summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats, Stagnation: ${ctx.state.stagnationStreak})`,
+    },
+    enhancedIntervention
+  )
+  ctx.emitLog(
+    'info',
+    `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
+    'Intervento automatico: cambio di strategia inviato al modello.'
+  )
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logLoopIntervention(
+      ctx.sessionId,
+      ctx.stepCount,
+      parsedTool.tool,
+      loopTarget,
+      loopCheck.consecutiveDuplicateCount,
+      enhancedIntervention
+    )
+  }
+  if (ctx.isUnlimitedSteps && ctx.state.stagnationStreak >= 15) {
+    const stagSummary = `Pausa per stagnazione: raggiunti ${ctx.state.stagnationStreak} step consecutivi senza progresso.`
+    ctx.emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
+    ctx.emitDone(true, stagSummary)
+    await ctx.persistCurrentState()
+    ctx.finalizeSession()
+    return { outcome: 'return', result: { success: true, summary: stagSummary } }
+  }
+
+  ctx.loopDetector.resetTarget(loopTarget)
+  return { outcome: 'continue' }
+}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
-import { FolderOpen, Plus, HardDrive, FileCode2, Folder, MessageSquare, X } from 'lucide-react'
+import { Eraser, FileCode2, FolderOpen, MessageSquare, Plus, RefreshCw, X } from 'lucide-react'
 import { WorkspaceFile, CodingSession, WorkspaceProject } from '../../types'
 import { useTranslation } from '../../i18n'
 import { WorkspaceExplorerFilesTab } from './WorkspaceExplorerFilesTab'
-import { WorkspaceExplorerProjectsTab } from './WorkspaceExplorerProjectsTab'
 import { WorkspaceExplorerHistoryTab } from './WorkspaceExplorerHistoryTab'
+import { WorkspaceExplorerProjectSwitcher } from './WorkspaceExplorerProjectSwitcher'
+import { WorkspaceExplorerTreeSection } from './WorkspaceExplorerTreeSection'
 
 interface WorkspaceExplorerProps {
   projects: WorkspaceProject[]
@@ -52,7 +53,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<'files' | 'projects' | 'history'>('files')
+  const [filesExpanded, setFilesExpanded] = useState(true)
+  const [historyExpanded, setHistoryExpanded] = useState(true)
 
   const activeProjectName = activeProjectPath
     ? activeProjectPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
@@ -75,100 +77,84 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
         </button>
       </div>
 
-      {/* Active Project Header Pill */}
-      <div className="p-2.5 bg-slate-950 border-b border-slate-800/80 flex items-center justify-between text-xs gap-2">
-        <div className="flex items-center gap-2 truncate flex-1">
-          <HardDrive className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-          <div className="truncate min-w-0">
-            <div className="font-bold text-slate-200 truncate text-[11px]">{activeProjectName}</div>
-            <div className="text-[9px] text-slate-400 font-mono truncate">{activeProjectPath || t('coding.selectFolder')}</div>
-          </div>
-        </div>
+      {/* Active Project Switcher (replaces the old Progetti tab) */}
+      <WorkspaceExplorerProjectSwitcher
+        projects={projects}
+        activeProjectPath={activeProjectPath}
+        activeProjectName={activeProjectName}
+        onAddProject={onAddProject}
+        onSelectProject={onSelectProject}
+        onRemoveProject={onRemoveProject}
+      />
 
-        <button
-          type="button"
-          onClick={onAddProject}
-          title="Aggiungi cartella progetto"
-          className="p-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800/80 text-cyan-300 rounded-lg transition-all active:scale-95 shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Navigation Sub-tabs */}
-      <div className="flex items-center border-b border-slate-800 bg-slate-900/60 text-[11px] font-semibold">
-        <button
-          type="button"
-          onClick={() => setActiveTab('files')}
-          className={`flex-1 py-2 text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'files'
-              ? 'border-cyan-400 text-cyan-300 bg-slate-900/90'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <FileCode2 className="w-3.5 h-3.5" /> File ({files.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('projects')}
-          className={`flex-1 py-2 text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'projects'
-              ? 'border-cyan-400 text-cyan-300 bg-slate-900/90'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Folder className="w-3.5 h-3.5" /> Progetti ({projects.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 py-2 text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'history'
-              ? 'border-cyan-400 text-cyan-300 bg-slate-900/90'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <MessageSquare className="w-3.5 h-3.5" /> Storico ({workspaceSessions.length})
-        </button>
-      </div>
-
-      {/* Content Panes */}
+      {/* Unified Tree: File and Storico as expandable sections for the active project */}
       <div className="flex-1 overflow-y-auto p-2">
-        {activeTab === 'files' && (
+        <WorkspaceExplorerTreeSection
+          icon={<FileCode2 className="w-3.5 h-3.5 text-cyan-400" />}
+          title="File"
+          count={files.length}
+          expanded={filesExpanded}
+          onToggleExpanded={() => setFilesExpanded((v) => !v)}
+          actions={
+            <button
+              type="button"
+              onClick={onRefreshFiles}
+              disabled={!activeProjectPath}
+              title="Aggiorna file"
+              className="p-1 hover:bg-slate-800 disabled:opacity-30 text-slate-400 hover:text-cyan-300 rounded"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
+          }
+        >
           <WorkspaceExplorerFilesTab
             files={files}
             selectedFilePath={selectedFilePath}
             pinnedPaths={pinnedPaths}
-            activeProjectPath={activeProjectPath}
             onOpenFile={onOpenFile}
             onTogglePinFile={onTogglePinFile}
-            onRefreshFiles={onRefreshFiles}
             onAddProject={onAddProject}
           />
-        )}
+        </WorkspaceExplorerTreeSection>
 
-        {activeTab === 'projects' && (
-          <WorkspaceExplorerProjectsTab
-            projects={projects}
-            activeProjectPath={activeProjectPath}
-            onAddProject={onAddProject}
-            onSelectProject={onSelectProject}
-            onRemoveProject={onRemoveProject}
-          />
-        )}
-
-        {activeTab === 'history' && (
+        <WorkspaceExplorerTreeSection
+          icon={<MessageSquare className="w-3.5 h-3.5 text-cyan-400" />}
+          title={t('coding.historyTitle')}
+          count={workspaceSessions.length}
+          expanded={historyExpanded}
+          onToggleExpanded={() => setHistoryExpanded((v) => !v)}
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(t('coding.historyClearConfirm'))) onClearSessions()
+                }}
+                title={t('coding.historyClear')}
+                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded transition-colors"
+              >
+                <Eraser className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onCreateSession}
+                title={t('coding.newProjectSession')}
+                className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </>
+          }
+        >
           <WorkspaceExplorerHistoryTab
             activeProjectName={activeProjectName}
             workspaceSessions={workspaceSessions}
             activeSessionId={activeSessionId}
-            onCreateSession={onCreateSession}
             onSwitchSession={onSwitchSession}
             onDeleteSession={onDeleteSession}
-            onClearSessions={onClearSessions}
             onRenameSession={onRenameSession}
           />
-        )}
+        </WorkspaceExplorerTreeSection>
       </div>
     </div>
   )

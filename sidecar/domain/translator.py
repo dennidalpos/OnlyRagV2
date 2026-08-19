@@ -1,6 +1,8 @@
 import os
+import time
 from typing import Any, Dict, List, Tuple
 import docx
+import httpx
 import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, logger, httpx_client
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
@@ -103,6 +105,10 @@ def _batch_runs(runs: List["docx.text.run.Run"], max_chars: int = _TRANSLATE_BAT
     return batches
 
 
+_TRANSLATE_MAX_ATTEMPTS = 2
+_TRANSLATE_RETRY_DELAY_SECONDS = 3.0
+
+
 def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str) -> str:
     prompt = (
         f"Translate the following text from {source_lang} to {target_lang}. "
@@ -111,13 +117,28 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
         f"Do not merge, split, add, or remove segments. Output ONLY the translated text, no commentary.\n\n{text}"
     )
     payload = {"model": model, "prompt": prompt, "stream": False}
-    try:
-        res = httpx_client.post(f"{_OLLAMA_URL}/api/generate", json=payload, timeout=120.0)
-        if res.status_code == 200:
-            return (res.json().get("response") or "").strip()
-        logger.warning(f"Translation call returned HTTP {res.status_code}")
-    except Exception as err:
-        logger.warning(f"Translation call failed: {err}")
+    for attempt in range(1, _TRANSLATE_MAX_ATTEMPTS + 1):
+        try:
+            res = httpx_client.post(f"{_OLLAMA_URL}/api/generate", json=payload, timeout=120.0)
+            if res.status_code == 200:
+                return (res.json().get("response") or "").strip()
+            logger.warning(f"Translation call returned HTTP {res.status_code}")
+            return ""
+        except httpx.TimeoutException as err:
+            # A timeout here is usually transient GPU/Ollama contention (e.g. a concurrent coding
+            # agent task holding the model queue), not a permanent failure -- one short retry
+            # recovers most of these instead of silently leaving the segment untranslated.
+            if attempt < _TRANSLATE_MAX_ATTEMPTS:
+                logger.warning(
+                    f"Translation call timed out (attempt {attempt}/{_TRANSLATE_MAX_ATTEMPTS}), "
+                    f"likely concurrent Ollama load -- retrying in {_TRANSLATE_RETRY_DELAY_SECONDS}s: {err}"
+                )
+                time.sleep(_TRANSLATE_RETRY_DELAY_SECONDS)
+                continue
+            logger.warning(f"Translation call timed out after {attempt} attempts: {err}")
+        except Exception as err:
+            logger.warning(f"Translation call failed: {err}")
+            return ""
     return ""
 
 

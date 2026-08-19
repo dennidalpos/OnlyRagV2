@@ -7,6 +7,32 @@ from sidecar.config import httpx_client, logger
 # OCR Engine Singleton Caches
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
 _RAPIDOCR_ENGINE: Any = None
+_INSTALLED_OLLAMA_MODELS_CACHE: Optional[set] = None
+
+
+def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
+    """Lists locally installed Ollama model names (both with and without their ":tag" suffix, so
+    a caller can match either form), cached for the sidecar process's lifetime -- installed models
+    don't change mid-session. Returns None (not an empty set) if the listing itself failed, so
+    callers can tell "confirmed nothing installed" apart from "couldn't check" and fall back to
+    trying candidates blindly rather than skipping OCR entirely."""
+    global _INSTALLED_OLLAMA_MODELS_CACHE
+    if _INSTALLED_OLLAMA_MODELS_CACHE is not None:
+        return _INSTALLED_OLLAMA_MODELS_CACHE
+    try:
+        res = httpx_client.get(f"{ollama_url}/api/tags", timeout=5.0)
+        if res.status_code == 200:
+            names = set()
+            for entry in res.json().get("models", []):
+                name = entry.get("name", "")
+                if name:
+                    names.add(name)
+                    names.add(name.split(":")[0])
+            _INSTALLED_OLLAMA_MODELS_CACHE = names
+            return names
+    except Exception as err:
+        logger.debug(f"Could not list installed Ollama models: {err}")
+    return None
 
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
     """Downscales oversized images to max_dim on the longest edge to prevent OOM/timeouts."""
@@ -89,7 +115,19 @@ def run_vision_ocr(
     model: str = "llama3.2-vision"
 ) -> str:
     """Uses Ollama Vision model for OCR and document vision parsing with strict timeout."""
-    candidate_models = [m for m in [model, "llama3.2-vision", "minicpm-v", "llava", "moondream"] if m]
+    # dict.fromkeys instead of a set: preserves the priority order (requested model first).
+    candidate_models = list(dict.fromkeys(m for m in [model, "llama3.2-vision", "minicpm-v", "llava", "moondream"] if m))
+
+    # Skip candidates we can confirm aren't installed -- trying them anyway just generates a
+    # guaranteed 404 (observed in production logs: ~300 of them from repeated OCR calls across a
+    # single ingestion). Only filters when the installed-model listing actually succeeded; if it
+    # didn't, candidates are tried blindly as before rather than risking skipping OCR entirely.
+    installed = _get_installed_ollama_model_names(ollama_url)
+    if installed:
+        filtered = [m for m in candidate_models if m in installed or m.split(":")[0] in installed]
+        if filtered:
+            candidate_models = filtered
+
     try:
         prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=1536)
         b64_img = base64.b64encode(prepared_bytes).decode("utf-8")

@@ -12,10 +12,12 @@ import os
 import sys
 import tempfile
 import json
+import pytest
 
 # Ensure root workspace is resolvable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+from sidecar.domain import log_analyzer as log_analyzer_module
 from sidecar.domain.log_analyzer import (
     LogAnalyzer,
     _detect_tool_loops,
@@ -122,6 +124,16 @@ class TestLogAnalyzerDetectors:
 # ---------------------------------------------------------------------------
 
 class TestLogAnalyzerExport:
+    """LogAnalyzer.__init__ always includes the real OnlyRag log directories on top of
+    extra_paths (see resolve_log_paths) -- every test here stubs resolve_log_paths to return
+    nothing, so results only ever reflect the tmpdir fixture, not whatever the host machine's
+    actual app.log happens to contain (regression: test_analyze_and_export_no_anomalies_clean_log
+    asserted zero anomalies but failed on a machine whose real app.log had genuine ones)."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_from_real_logs(self, monkeypatch):
+        monkeypatch.setattr(log_analyzer_module, "resolve_log_paths", lambda: [])
+
     def test_analyze_and_export_writes_json_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = os.path.join(tmpdir, "test.log")

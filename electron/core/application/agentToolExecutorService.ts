@@ -59,6 +59,68 @@ function isLongRunningCommand(command: string): boolean {
 }
 
 /**
+ * Detects a command that starts a dev/watch server or otherwise never exits on its own (e.g.
+ * `npm run dev`, `vite`, `next dev`, `nodemon`, anything with a `--watch` flag). run_command
+ * waits synchronously for the process to exit, so a command like this always burns the full
+ * timeout ceiling (600s for the "npm install; npm run dev" shape, since it also matches the
+ * long-running-install pattern) for zero useful signal -- observed in production logs blocking
+ * the same session twice, 10 minutes each, with no error the model could learn from.
+ */
+function isBlockingDevServerCommand(command: string): boolean {
+  const cmd = command.toLowerCase()
+  return (
+    /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|preview)\b/.test(cmd) ||
+    (/\bvite\b/.test(cmd) && !/\bbuild\b/.test(cmd)) ||
+    (/\bnext\s+(dev|start)\b/.test(cmd)) ||
+    /\bng\s+serve\b/.test(cmd) ||
+    /\bwebpack(-dev-server)?\s+serve\b/.test(cmd) ||
+    /\bnodemon\b/.test(cmd) ||
+    /\bflask\s+run\b/.test(cmd) ||
+    /-m\s+http\.server\b/.test(cmd) ||
+    /--watch(all)?\b/.test(cmd)
+  )
+}
+
+/**
+ * Extracts the package names an install-with-explicit-targets command names (e.g. "tailwindcss"
+ * and "postcss" from `npm install -D tailwindcss postcss`), stripping flags and version
+ * specifiers. Returns an empty array for a bare `npm install`/`npm ci` (no explicit targets,
+ * which legitimately reinstalls from the lockfile every time) or a non-install command.
+ */
+function extractRequestedPackageNames(command: string): string[] {
+  const match = command.trim().match(/^(?:npm|pnpm|yarn|bun)\s+(?:install|i|add)\b(.*)$/i)
+  if (!match) return []
+  return match[1]
+    .split(/\s+/)
+    .filter((tok) => tok && !tok.startsWith('-'))
+    .map((tok) => {
+      // Scoped package ("@scope/name@version"): keep the scope, strip only a trailing version.
+      const versionSplitIndex = tok.startsWith('@') ? tok.indexOf('@', 1) : tok.indexOf('@')
+      return versionSplitIndex > 0 ? tok.slice(0, versionSplitIndex) : tok
+    })
+}
+
+/**
+ * Returns the requested package names if EVERY one is already listed in package.json's
+ * dependencies or devDependencies (a purely mechanical, no-guesswork check) -- meaning the
+ * install command would do nothing. Returns null if any package is missing, or if
+ * package.json can't be read/parsed, so the caller only skips execution when it's certain the
+ * command is fully redundant. Observed in production logs: the same `npm install -D tailwindcss
+ * postcss autoprefixer` (and near-variants of it) re-run 19 times in one session.
+ */
+function findAlreadyInstalledPackages(requestedNames: string[], packageJsonRaw: string): string[] | null {
+  if (requestedNames.length === 0) return null
+  let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+  try {
+    pkg = JSON.parse(packageJsonRaw)
+  } catch {
+    return null
+  }
+  const installed = new Set([...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.devDependencies || {})])
+  return requestedNames.every((name) => installed.has(name)) ? requestedNames : null
+}
+
+/**
  * Effective timeout for a shell command: an explicit override wins, otherwise installs and
  * scaffolding get the long ceiling and everything else the default. The old fixed 60s ceiling
  * meant a cold `npm install` was routinely killed and reported to the model as a failure.
@@ -949,6 +1011,49 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: guardFeedback, logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`, isTerminal: true }
         }
 
+        // Blocking Dev-Server Guard: run_command waits synchronously for the process to exit,
+        // but a dev/watch server never exits on its own -- executing one here always burns the
+        // full command timeout (up to 10 minutes) for no useful signal.
+        if (isBlockingDevServerCommand(cmd)) {
+          const guardFeedback = [
+            `[BLOCKING_DEV_SERVER_BLOCK]`,
+            `Command: "${cmd}"`,
+            `EXECUTION BLOCKED: this command starts a dev/watch server or otherwise never exits on its own.`,
+            `run_command waits synchronously for the process to exit, so this would hang until the timeout is reached, wasting several minutes with no useful result.`,
+            `Directives:`,
+            `1. To verify the project builds correctly, use a one-shot command instead (e.g. "npm run build" or "tsc --noEmit").`,
+            `2. Do NOT run dev servers, watch-mode test runners, or long-lived processes via run_command.`,
+            `3. If you need the running app visually verified, tell the user it is ready to start manually -- do not attempt to launch it yourself.`,
+          ].join('\n')
+          logger.log('WARN', 'AgentToolExecutor', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${cmd}"`)
+          return { outputForHistory: guardFeedback, logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${cmd}"`, isTerminal: true }
+        }
+
+        // Redundant Install Guard: skip an install command whose every named package is already
+        // listed in package.json -- it would be a costly no-op. Only skips when certain (all
+        // requested packages present); any doubt (package.json missing/unreadable, or only some
+        // packages present) lets the command through as before.
+        if (workspacePath) {
+          const requestedPkgs = extractRequestedPackageNames(cmd)
+          if (requestedPkgs.length > 0) {
+            const pkgJsonRes = await this.repo.readFile(path.join(workspacePath, 'package.json'))
+            const alreadyInstalled = pkgJsonRes.success && pkgJsonRes.content
+              ? findAlreadyInstalledPackages(requestedPkgs, pkgJsonRes.content)
+              : null
+            if (alreadyInstalled) {
+              const guardFeedback = [
+                `[REDUNDANT_INSTALL_SKIP]`,
+                `Command: "${cmd}"`,
+                `EXECUTION SKIPPED: every requested package (${alreadyInstalled.join(', ')}) is already listed in package.json.`,
+                `Re-running this install would do nothing but waste time.`,
+                `Directive: proceed with the next step of your plan -- this dependency is already installed.`,
+              ].join('\n')
+              logger.log('WARN', 'AgentToolExecutor', `[REDUNDANT_INSTALL_SKIP] Skipped already-installed packages: ${alreadyInstalled.join(', ')}`)
+              return { outputForHistory: guardFeedback, logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${alreadyInstalled.join(', ')}`, isTerminal: true }
+            }
+          }
+        }
+
         const secCheck = checkCommandSecurity(cmd)
         if (!secCheck.isAllowed) {
           const blockFeedback = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${cmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason}\nDirective: Refrain from executing dangerous commands.`
@@ -1192,4 +1297,10 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
 export const agentToolExecutorService = new AgentToolExecutorService()
 
 /** Internals exposed for unit testing the command timeout policy. */
-export const __testing = { resolveCommandTimeoutMs, isLongRunningCommand }
+export const __testing = {
+  resolveCommandTimeoutMs,
+  isLongRunningCommand,
+  isBlockingDevServerCommand,
+  extractRequestedPackageNames,
+  findAlreadyInstalledPackages,
+}

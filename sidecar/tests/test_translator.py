@@ -64,6 +64,76 @@ def test_batch_runs_respects_max_chars(tmp_path):
     assert flattened == runs
 
 
+class _FakeResponse:
+    def __init__(self, status_code=200, body=None):
+        self.status_code = status_code
+        self._body = body or {}
+
+    def json(self):
+        return self._body
+
+
+def test_call_ollama_translate_retries_once_on_timeout_then_succeeds(monkeypatch):
+    """A timeout is usually transient Ollama/GPU contention (e.g. a concurrent coding agent task
+    holding the model queue) rather than a permanent failure -- reproduces the production incident
+    where an in-place translation lost a segment because a single 120s timeout gave up outright."""
+    import httpx
+
+    call_count = {"n": 0}
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise httpx.TimeoutException("simulated contention timeout")
+            return _FakeResponse(200, {"response": "translated text"})
+
+    monkeypatch.setattr(translator_module, "httpx_client", FakeHttpxClient())
+    monkeypatch.setattr(translator_module.time, "sleep", lambda *_: None)
+
+    result = translator_module._call_ollama_translate("hello", "English", "Italian", "llama3.2")
+
+    assert result == "translated text"
+    assert call_count["n"] == 2
+
+
+def test_call_ollama_translate_gives_up_after_max_attempts_on_repeated_timeout(monkeypatch):
+    import httpx
+
+    call_count = {"n": 0}
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            call_count["n"] += 1
+            raise httpx.TimeoutException("simulated persistent timeout")
+
+    monkeypatch.setattr(translator_module, "httpx_client", FakeHttpxClient())
+    monkeypatch.setattr(translator_module.time, "sleep", lambda *_: None)
+
+    result = translator_module._call_ollama_translate("hello", "English", "Italian", "llama3.2")
+
+    assert result == ""
+    assert call_count["n"] == translator_module._TRANSLATE_MAX_ATTEMPTS
+
+
+def test_call_ollama_translate_does_not_retry_on_non_timeout_failure(monkeypatch):
+    """A bad HTTP status (e.g. model not found) or a non-timeout exception won't be fixed by
+    retrying, so only one attempt should be made."""
+    call_count = {"n": 0}
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            call_count["n"] += 1
+            return _FakeResponse(404, {})
+
+    monkeypatch.setattr(translator_module, "httpx_client", FakeHttpxClient())
+
+    result = translator_module._call_ollama_translate("hello", "English", "Italian", "llama3.2")
+
+    assert result == ""
+    assert call_count["n"] == 1
+
+
 def test_translate_batch_happy_path_reassigns_run_text(tmp_path, monkeypatch):
     path = str(tmp_path / "sample.docx")
     _make_docx(path)

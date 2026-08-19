@@ -60,6 +60,7 @@ const api: IElectronAPI = {
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
+  respondToAgentApproval: (sessionId: string, approved: boolean) => ipcRenderer.invoke('agent:approval-response', sessionId, approved),
   getAgentQueueStatus: () => ipcRenderer.invoke('agent:get-queue-status'),
   /** Session history CRUD (filesystem store, single source of truth). */
   listCodingSessions: (workspacePath?: string | null) => ipcRenderer.invoke('sessions:list', workspacePath),

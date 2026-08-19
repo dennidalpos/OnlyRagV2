@@ -61,14 +61,17 @@ export class GoalDecompositionPlanner {
     return this.milestones.find((m) => m.status === 'in_progress') || this.milestones.find((m) => m.status === 'pending')
   }
 
-  public updateMilestone(idOrIndex: string | number, status: PlanMilestone['status'], notes?: string): boolean {
-    let target: PlanMilestone | undefined
+  /** Same id-or-title-substring lookup updateMilestone uses, exposed so callers can inspect
+   *  a milestone (e.g. its verificationCommand) before deciding what status to apply. */
+  public findMilestone(idOrIndex: string | number): PlanMilestone | undefined {
     if (typeof idOrIndex === 'number') {
-      target = this.milestones[idOrIndex]
-    } else {
-      target = this.milestones.find((m) => m.id === idOrIndex || m.title.toLowerCase().includes(idOrIndex.toLowerCase()))
+      return this.milestones[idOrIndex]
     }
+    return this.milestones.find((m) => m.id === idOrIndex || m.title.toLowerCase().includes(idOrIndex.toLowerCase()))
+  }
 
+  public updateMilestone(idOrIndex: string | number, status: PlanMilestone['status'], notes?: string): boolean {
+    const target = this.findMilestone(idOrIndex)
     if (!target) return false
 
     target.status = status

@@ -18,10 +18,20 @@ import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/pl
 import { logger } from '../../diagnostics'
 import type { AppSettings } from '../../../src/types'
 
+// The exact line format below is mandatory, not stylistic: GoalDecompositionPlanner.parsePlanFromText
+// (planAndSolveGraph.ts) only recognizes "- [ ] text" / "N. text" lines. A prompt that only
+// describes the desired tone (as this one used to) lets a local model answer with prose and bold
+// section headers instead, which the parser cannot turn into milestones -- the plan tab then has
+// nothing to render but raw text. The inline example is here because local models follow a shown
+// format far more reliably than a described one.
 const PLAN_SYSTEM_PROMPT =
-  "Sei un AI Coding Assistant. Analizza la richiesta dell'utente e genera un Piano di Implementazione breve, " +
-  'strutturato e chiaro (max 4-6 punti). Usa emoji per demarcare le fasi (es. 🎯 Obiettivo, 🔍 Analisi, ' +
-  '✏️ Modifiche, 🧪 Verifica).'
+  "Sei un AI Coding Assistant. Analizza la richiesta dell'utente e genera un Piano di Implementazione " +
+  'in formato CHECKLIST MARKDOWN, UNA VOCE PER RIGA, in questo esatto formato:\n\n' +
+  '- [ ] 🎯 Obiettivo: <breve descrizione>\n' +
+  '- [ ] 🔍 Analisi: <breve descrizione>\n' +
+  '- [ ] ✏️ Modifiche: <breve descrizione>\n' +
+  '- [ ] 🧪 Verifica: <breve descrizione>\n\n' +
+  'Genera 4-6 voci. Non usare paragrafi, titoli separati o testo fuori dalla checklist: SOLO righe nel formato "- [ ] testo".'
 
 const FALLBACK_PLAN_TEXT = (prompt: string) =>
   `🎯 Piano di Esecuzione per: ${prompt}\n\n` +

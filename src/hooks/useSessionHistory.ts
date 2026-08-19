@@ -251,6 +251,15 @@ export function useSessionHistory(workspacePath: string | null) {
   const deleteSession = useCallback(
     async (sessionId: string): Promise<CodingSession | null> => {
       pendingWritesRef.current.delete(sessionId)
+      // The debounce timer is shared across every session's scheduled write (schedulePersist),
+      // so removing this one entry from the map is not enough on its own: if it was the only
+      // write pending, the timer is still armed and would fire a no-op flush later. Disarming
+      // it here (instead of only ever inside schedulePersist) closes that window outright
+      // rather than relying on flushPendingWrites filtering an already-deleted id.
+      if (pendingWritesRef.current.size === 0 && persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+      }
       if (window.electronAPI?.deleteCodingSession) {
         try {
           await window.electronAPI.deleteCodingSession(sessionId, workspacePath)
@@ -282,6 +291,10 @@ export function useSessionHistory(workspacePath: string | null) {
   /** Deletes the whole history of the active workspace and starts from a clean session. */
   const clearSessions = useCallback(async (): Promise<CodingSession> => {
     pendingWritesRef.current.clear()
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current)
+      persistTimerRef.current = null
+    }
     if (window.electronAPI?.clearCodingSessions) {
       try {
         await window.electronAPI.clearCodingSessions(workspacePath)

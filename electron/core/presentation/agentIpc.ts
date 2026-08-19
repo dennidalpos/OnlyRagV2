@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { taskQueueAppService } from '../application/taskQueueAppService'
+import { respondToApproval } from '../application/agentOrchestratorAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { sidecarSlmBridgeService } from '../application/sidecarSlmBridgeService'
@@ -14,6 +15,10 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
 
   ipcMain.handle('agent:cancel-task', async (_, taskId?: string) => {
     return taskQueueAppService.cancelTask(taskId)
+  })
+
+  ipcMain.handle('agent:approval-response', async (_, sessionId: string, approved: boolean) => {
+    return respondToApproval(sessionId, approved)
   })
 
   ipcMain.handle('agent:get-queue-status', async () => {

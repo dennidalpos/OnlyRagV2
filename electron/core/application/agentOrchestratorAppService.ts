@@ -8,7 +8,6 @@ import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTyp
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import os from 'node:os'
-import { isIgnoredPath, isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
@@ -28,6 +27,13 @@ import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapa
 import { resolveOllamaContextReuse } from '../domain/agent/ollamaContextCacheManager'
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
+import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
+import {
+  resolveWorkspacePath,
+  buildDefaultAgentSettings,
+  buildAttachedContextBlock,
+  buildPinnedFilesContextBlock,
+} from './agentOrchestratorSessionSetup'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -57,12 +63,26 @@ interface AgentSession {
   ollamaContextModel?: string
   ollamaContextStableSection?: string
   ollamaContextHistoryBlock?: string
+  /**
+   * Set while the loop is paused inside an approval gate (see `requestApproval` in
+   * runAgentOrchestratorLoop), so an in-flight `agent:approval-response` and a
+   * cancellation/timeout racing against it both resolve the same pending Promise exactly
+   * once instead of leaving the paused `while` loop blocked forever.
+   */
+  pendingApprovalResolve?: (approved: boolean) => void
 }
 
 const activeAgentSessions = new Map<string, AgentSession>()
 
 function cleanupSession(session: AgentSession) {
   session.isCancelled = true
+  // A step paused inside requestApproval() must not block forever just because the task was
+  // cancelled instead of answered: resolving false lets the awaited Promise settle, the
+  // paused `while` loop observe isCancelled on its next check, and exit cleanly.
+  if (session.pendingApprovalResolve) {
+    session.pendingApprovalResolve(false)
+    session.pendingApprovalResolve = undefined
+  }
   if (session.timeoutHandle) {
     clearTimeout(session.timeoutHandle)
     session.timeoutHandle = null
@@ -120,6 +140,21 @@ export function cancelActiveAgentTask(targetSessionId?: string) {
   }
 }
 
+/**
+ * Answers a step paused inside requestApproval(). Returns false if the session is no longer
+ * active or isn't currently waiting on an approval (e.g. the response arrived after a
+ * cancellation or the session timeout already resolved it), so the renderer can tell a
+ * genuine hand-off from a stale response.
+ */
+export function respondToApproval(targetSessionId: string, approved: boolean): boolean {
+  const session = activeAgentSessions.get(targetSessionId)
+  if (!session || !session.pendingApprovalResolve) return false
+  const resolve = session.pendingApprovalResolve
+  session.pendingApprovalResolve = undefined
+  resolve(approved)
+  return true
+}
+
 async function scanProjectMap(workspacePath: string): Promise<string> {
   try {
     return CompactSemanticRepoMapper.generateCompactRepoMap(workspacePath, 150)
@@ -172,57 +207,12 @@ export async function runAgentOrchestratorLoop(
 
   const userTask = payload.userTask.trim()
   const agentMode = payload.agentMode || 'plan'
-  let workspacePath = payload.workspacePath || null
-  if (workspacePath && isProtectedSystemDirectory(workspacePath)) {
-    logger.log('WARN', 'AgentOrchestratorApp', `Provided workspace '${workspacePath}' is in a protected system directory. Falling back to User Desktop workspace.`)
-    workspacePath = path.join(os.homedir(), 'Desktop', 'test_app')
-  } else if (!workspacePath && !payload.isStandaloneMode) {
-    const desktopTestApp = path.join(os.homedir(), 'Desktop', 'test_app')
-    if (fs.existsSync(desktopTestApp)) {
-      workspacePath = desktopTestApp
-    }
-  }
-  if (workspacePath && !fs.existsSync(workspacePath)) {
-    try {
-      fs.mkdirSync(workspacePath, { recursive: true })
-    } catch {}
-  }
+  let workspacePath = resolveWorkspacePath(payload)
   const isStandaloneMode = Boolean(payload.isStandaloneMode)
-  const settings: AppSettings = payload.settings || {
-    defaultModel: 'llama3.2',
-    hardwareProfile: 'Auto',
-    ocrEngine: 'native_cuda',
-    ollamaHost: '',
-    codingModel: 'llama3.2',
-    translationModel: 'llama3.2',
-    visionModel: 'llama3.2-vision',
-    embeddingModel: 'nomic-embed-text',
-    complexityFastModel: 'llama3.2:3b',
-    complexityStandardModel: 'qwen2.5-coder:7b',
-    complexityDeepModel: 'deepseek-r1:8b',
-    useComplexityRouting: true,
-    allowTerminalExecution: true,
-    allowFileModifications: true,
-    customPromptOverrides: {},
-  }
+  const settings: AppSettings = payload.settings || buildDefaultAgentSettings()
 
-  const attachedContext = (payload.attachedDocs || [])
-    .map((d) => `[ATTACHED DOCUMENT: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, 3000)}`)
-    .join('\n\n')
-
-  const pinnedFilesContextStr = (payload.pinnedFiles || [])
-    .map((f) => {
-      let content = f.content || ''
-      if (!content && f.path && fs.existsSync(f.path)) {
-        try {
-          content = fs.readFileSync(f.path, 'utf-8')
-        } catch (err: any) {
-          logger.log('WARN', 'AgentOrchestratorApp', `Could not read pinned file ${f.path}: ${err.message}`)
-        }
-      }
-      return `[EXPLICIT REFERENCED FILE: ${f.name} (${f.path})]\n\`\`\`\n${(content || '').slice(0, 12000)}\n\`\`\``
-    })
-    .join('\n\n')
+  const attachedContext = buildAttachedContextBlock(payload)
+  const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
 
   const projectContextMapStr = workspacePath && !isStandaloneMode && fs.existsSync(workspacePath)
     ? await scanProjectMap(workspacePath)
@@ -413,6 +403,10 @@ export async function runAgentOrchestratorLoop(
       logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
       emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
       session.isCancelled = true
+      if (session.pendingApprovalResolve) {
+        session.pendingApprovalResolve(false)
+        session.pendingApprovalResolve = undefined
+      }
       codingAgentLogger.logSessionEnd(sessionId, stepCount, false, timeoutSummary)
       emitDone(false, timeoutSummary)
       agentToolExecutorService.rollbackJournal()
@@ -436,6 +430,25 @@ export async function runAgentOrchestratorLoop(
   const finalizeSession = () => {
     clearSessionTimeout()
     activeAgentSessions.delete(sessionId)
+  }
+
+  /**
+   * Sends `agent:approval-request` and pauses the calling step in place until the renderer
+   * answers via the `agent:approval-response` IPC channel (see `respondToApproval` below),
+   * or until cancellation/timeout resolves it to `false` (see cleanupSession / the session
+   * timeout handler above). The session stays registered in `activeAgentSessions` the whole
+   * time, so this is a real pause of the same loop iteration -- not the "end the task, then
+   * have the renderer re-execute the action on its own" round trip this replaces.
+   */
+  const requestApproval = (payload: Record<string, unknown>): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      if (!session.targetWindow || session.targetWindow.isDestroyed()) {
+        resolve(false)
+        return
+      }
+      session.pendingApprovalResolve = resolve
+      session.targetWindow.webContents.send('agent:approval-request', { sessionId: session.id, ...payload })
+    })
   }
 
   while (stepCount < MAX_STEPS && isSessionActive()) {
@@ -969,27 +982,31 @@ export async function runAgentOrchestratorLoop(
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
 
+    // Set by either approval gate below once the user grants consent this step, so the FSM
+    // gate right after (which would otherwise still deny the tool -- ASK's allowedTools
+    // deliberately excludes every mutating tool, see agentRuntimeMode.ts) lets this one
+    // specific, just-approved call through without widening the mode itself.
+    let approvalGranted = false
+
     // Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action
     // than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of
     // agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mode and are
     // only approval-gated in ASK mode below). PLAN mode never reaches this point for any tool
     // (handled by the early return above), so no special-casing is needed for it here.
     if (parsedTool.tool === 'git_commit') {
-      if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-        session.targetWindow.webContents.send('agent:approval-request', {
-          type: 'git_commit',
-          target: parsedTool.parameters.commitMessage || 'Git Commit',
-          contentOrCmd: parsedTool.parameters.commitMessage || '',
-          parameters: parsedTool.parameters,
-        })
+      const approved = await requestApproval({
+        type: 'git_commit',
+        target: parsedTool.parameters.commitMessage || 'Git Commit',
+        contentOrCmd: parsedTool.parameters.commitMessage || '',
+        parameters: parsedTool.parameters,
+      })
+      if (!approved) {
+        const feedback = `[USER DENIED] L'utente ha rifiutato il git_commit proposto. Non ripetere questo esatto commit; proponi un'alternativa o chiedi chiarimenti.`
+        episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'User denied git_commit approval' }, feedback)
+        emitLog('info', `🚫 git_commit rifiutato dall'utente.`)
+        continue
       }
-      emitDone(true, `Awaiting user approval for git_commit`)
-      if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for git_commit`)
-      }
-      await persistCurrentState()
-      finalizeSession()
-      return { success: true, summary: `Awaiting approval for git_commit` }
+      approvalGranted = true
     }
 
     // ASK Mode Human-Approval Gate: mutating tools are submitted for explicit user approval
@@ -1001,49 +1018,49 @@ export async function runAgentOrchestratorLoop(
     if (agentMode === 'ask') {
       const isMutatingTool = ['run_command', 'write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file', 'ensure_tool'].includes(parsedTool.tool)
       if (isMutatingTool) {
-        if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-          session.targetWindow.webContents.send('agent:approval-request', {
-            // ensure_tool is surfaced as the literal winget command it would run: approving a
-            // system-level install should show exactly what is about to be executed, and it
-            // reuses the existing terminal approval path end to end.
-            type: parsedTool.tool === 'run_command' || parsedTool.tool === 'ensure_tool'
-              ? 'terminal_cmd'
-              : parsedTool.tool === 'download_file'
-              ? 'download_file'
-              : parsedTool.tool === 'delete_file'
-              ? 'delete_file'
-              : parsedTool.tool === 'multi_replace_file_content'
-              ? 'multi_replace'
-              : parsedTool.tool === 'replace_file_content'
-              ? 'replace_chunk'
-              : 'write_file',
-            target: parsedTool.parameters.filePath || parsedTool.parameters.command || parsedTool.parameters.url || 'Target Action',
-            contentOrCmd:
-              (parsedTool.tool === 'ensure_tool'
-                ? buildInstallCommand(String(parsedTool.parameters.toolName || ''))
-                : undefined) ||
-              parsedTool.parameters.command ||
-              parsedTool.parameters.url ||
-              parsedTool.parameters.targetContent ||
-              parsedTool.parameters.content ||
-              '',
-            replacement: parsedTool.parameters.replacementContent,
-            replacements: parsedTool.parameters.replacements,
-            parameters: parsedTool.parameters,
-          })
+        const approvalTarget = parsedTool.parameters.filePath || parsedTool.parameters.command || parsedTool.parameters.url || 'Target Action'
+        const approved = await requestApproval({
+          // ensure_tool is surfaced as the literal winget command it would run: approving a
+          // system-level install should show exactly what is about to be executed, and it
+          // reuses the existing terminal approval path end to end.
+          type: parsedTool.tool === 'run_command' || parsedTool.tool === 'ensure_tool'
+            ? 'terminal_cmd'
+            : parsedTool.tool === 'download_file'
+            ? 'download_file'
+            : parsedTool.tool === 'delete_file'
+            ? 'delete_file'
+            : parsedTool.tool === 'multi_replace_file_content'
+            ? 'multi_replace'
+            : parsedTool.tool === 'replace_file_content'
+            ? 'replace_chunk'
+            : 'write_file',
+          target: approvalTarget,
+          contentOrCmd:
+            (parsedTool.tool === 'ensure_tool'
+              ? buildInstallCommand(String(parsedTool.parameters.toolName || ''))
+              : undefined) ||
+            parsedTool.parameters.command ||
+            parsedTool.parameters.url ||
+            parsedTool.parameters.targetContent ||
+            parsedTool.parameters.content ||
+            '',
+          replacement: parsedTool.parameters.replacementContent,
+          replacements: parsedTool.parameters.replacements,
+          parameters: parsedTool.parameters,
+        })
+        if (!approved) {
+          const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${parsedTool.tool} su "${approvalTarget}"). Non ripetere questa esatta azione; proponi un'alternativa o chiedi chiarimenti.`
+          episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: 'User denied approval' }, feedback)
+          emitLog('info', `🚫 Azione rifiutata dall'utente: ${parsedTool.tool}`)
+          continue
         }
-        emitDone(true, `Awaiting user approval for ${parsedTool.tool}`)
-        if (settings.enableCodingAgentDebugLog) {
-          codingAgentLogger.logSessionEnd(sessionId, stepCount, true, `Awaiting approval for ${parsedTool.tool}`)
-        }
-        await persistCurrentState()
-        finalizeSession()
-        return { success: true, summary: `Awaiting approval for ${parsedTool.tool}` }
+        approvalGranted = true
       }
     }
 
-    // FSM Tool Permission Gate: block unauthorized tools in current mode
-    if (!fsmMode.isToolAllowed(parsedTool.tool as any)) {
+    // FSM Tool Permission Gate: block unauthorized tools in current mode (bypassed only for a
+    // tool just explicitly approved above -- see approvalGranted).
+    if (!approvalGranted && !fsmMode.isToolAllowed(parsedTool.tool as any)) {
       const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${[...Array.from(Object.values(fsmMode.filterAllowedTools([parsedTool.tool as any])))].join(', ') || 'read-only tools only'}. Switch to AGENT mode to execute mutating operations.`
       episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
       emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
@@ -1055,45 +1072,19 @@ export async function runAgentOrchestratorLoop(
     // loop's GoalDecompositionPlanner, not on disk. Before this tool existed, milestone
     // status could only ever be inferred heuristically from tool side effects.
     if ((parsedTool.tool as string) === 'update_plan') {
-      const milestoneRef = String(parsedTool.parameters?.milestoneId || '')
-      const nextStatus = String(parsedTool.parameters?.status || '') as PlanMilestone['status']
-      const notes = parsedTool.parameters?.notes ? String(parsedTool.parameters.notes) : undefined
-
-      let planFeedback: string
-      let planLog: string
-      let updateFailed = false
-
-      if (!goalPlanner.hasPlan()) {
-        updateFailed = true
-        planFeedback = `[UPDATE_PLAN REJECTED] There is no execution plan in this session yet, so milestone '${milestoneRef}' cannot be updated. Produce a plan checklist first, or continue executing tools directly.`
-        planLog = 'update_plan rejected: no active execution plan'
-      } else if (goalPlanner.updateMilestone(milestoneRef, nextStatus, notes)) {
-        const progress = goalPlanner.getProgressSummary()
-        planFeedback = `[PLAN UPDATED] Milestone '${milestoneRef}' is now ${nextStatus}. Progress: ${progress.completed}/${progress.total} verified (${progress.percentage}%).`
-        planLog = `📋 Plan updated: ${milestoneRef} → ${nextStatus} (${progress.completed}/${progress.total} verified)`
-      } else {
-        updateFailed = true
-        const known = goalPlanner.getMilestones().map((m) => `${m.id}: ${m.title}`).join(' | ')
-        planFeedback = `[UPDATE_PLAN REJECTED] No milestone matches '${milestoneRef}'. Known milestones: ${known}. Use the exact milestone id.`
-        planLog = `update_plan rejected: unknown milestone '${milestoneRef}'`
-      }
-
-      episodicCompactor.recordStep(
-        {
-          step: stepCount,
-          tool: 'update_plan',
-          target: milestoneRef,
-          status: updateFailed ? 'FAILURE' : 'SUCCESS',
-          summary: planLog,
-        },
-        planFeedback
-      )
-      emitLog('info', planLog)
-      emitStepUpdate(`Step ${stepCount}/${maxStepsLabel}`)
-      if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logToolResult(sessionId, stepCount, 'update_plan', planFeedback)
-      }
-      await persistCurrentState()
+      await handleUpdatePlanTool({
+        parsedTool,
+        goalPlanner,
+        workspacePath,
+        emitLog,
+        emitStepUpdate,
+        episodicCompactor,
+        persistCurrentState,
+        settings,
+        sessionId,
+        stepCount,
+        maxStepsLabel,
+      })
       continue
     }
 

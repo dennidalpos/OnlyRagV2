@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { runAgentOrchestratorLoop, cancelActiveAgentTask } from './agentOrchestratorAppService'
+import { runAgentOrchestratorLoop, cancelActiveAgentTask, respondToApproval } from './agentOrchestratorAppService'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import { ollamaAppService } from './ollamaAppService'
 import { skillAppService } from './skillAppService'
@@ -248,27 +248,67 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(turn2Res.summary).toBe('Code executed and verified.')
   })
 
-  it('should submit mutating tool calls for human approval in ASK mode instead of FSM-denying them (regression: the FSM permission gate previously ran before the approval check, silently breaking the ASK-mode approval flow promised by promptPresets.ts and the PendingApprovalModal UI)', async () => {
+  it('should pause for human approval in ASK mode, then resume and execute the tool once approved (regression: the FSM permission gate previously ran before the approval check, silently breaking the ASK-mode approval flow promised by promptPresets.ts and the PendingApprovalModal UI; and approval used to end the session instead of resuming it, so an approved write never actually ran)', async () => {
     const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
-    vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
-      output: writeFileJson,
-      usedModel: 'llama3.2',
-      isFallback: false,
-    })
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Write approved and applied." }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: writeFileJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
 
-    const res = await runAgentOrchestratorLoop(
-      {
-        userTask: 'Update the entrypoint file',
-        agentMode: 'ask',
-        workspacePath: tempDir,
-      },
-      null
+    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const sessionId = 'test-ask-approval-session'
+
+    const resultPromise = runAgentOrchestratorLoop(
+      { sessionId, userTask: 'Update the entrypoint file', agentMode: 'ask', workspacePath: tempDir },
+      mockWin
     )
 
+    await vi.waitFor(() => {
+      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+        'agent:approval-request',
+        expect.objectContaining({ sessionId, type: 'write_file' })
+      )
+    })
+    // The pause is real, not a same-tick formality: nothing happens before the response arrives.
+    expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
+
+    expect(respondToApproval(sessionId, true)).toBe(true)
+
+    const res = await resultPromise
     expect(res.success).toBe(true)
-    expect(res.summary).toBe('Awaiting approval for write_file')
+    expect(res.summary).toBe('Write approved and applied.')
     expect(res.summary).not.toContain('FSM PERMISSION DENIED')
-    // Must not execute directly: the file is only written after the user approves via the frontend modal
+    // Executed through the same tool executor path AGENT mode uses, not a renderer-side re-implementation.
+    expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(true)
+  })
+
+  it('should feed a denial back to the model and keep the loop running (not stuck) when the user rejects an approval', async () => {
+    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Acknowledged the denial." }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: writeFileJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const sessionId = 'test-ask-rejection-session'
+
+    const resultPromise = runAgentOrchestratorLoop(
+      { sessionId, userTask: 'Update the entrypoint file', agentMode: 'ask', workspacePath: tempDir },
+      mockWin
+    )
+
+    await vi.waitFor(() => {
+      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+        'agent:approval-request',
+        expect.objectContaining({ sessionId, type: 'write_file' })
+      )
+    })
+
+    expect(respondToApproval(sessionId, false)).toBe(true)
+
+    const res = await resultPromise
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Acknowledged the denial.')
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
   })
 
@@ -293,26 +333,67 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.summary).toBe('Inspection complete.')
   })
 
-  it('should always submit git_commit for human approval, even in AGENT mode (unlike other mutating tools which execute autonomously there)', async () => {
+  it('should always pause for human approval on git_commit, even in AGENT mode (unlike other mutating tools which execute autonomously there), then resume once approved', async () => {
     const commitJson = '```json\n{\n  "tool": "git_commit",\n  "parameters": { "commitMessage": "Add feature X" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Commit step handled." }\n}\n```'
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: commitJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const sessionId = 'test-agent-commit-approval-session'
+
+    const resultPromise = runAgentOrchestratorLoop(
+      { sessionId, userTask: 'Commit the changes', agentMode: 'agent', workspacePath: tempDir },
+      mockWin
+    )
+
+    await vi.waitFor(() => {
+      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+        'agent:approval-request',
+        expect.objectContaining({ sessionId, type: 'git_commit' })
+      )
+    })
+
+    expect(respondToApproval(sessionId, true)).toBe(true)
+
+    const res = await resultPromise
+    expect(res.success).toBe(true)
+    expect(res.summary).toBe('Commit step handled.')
+    expect(res.summary).not.toContain('FSM PERMISSION DENIED')
+  })
+
+  it('should resolve a pending approval as denied when the session is cancelled while awaiting a response', async () => {
+    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
     vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
-      output: commitJson,
+      output: writeFileJson,
       usedModel: 'llama3.2',
       isFallback: false,
     })
 
-    const res = await runAgentOrchestratorLoop(
-      {
-        userTask: 'Commit the changes',
-        agentMode: 'agent',
-        workspacePath: tempDir,
-      },
-      null
+    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const sessionId = 'test-cancel-during-approval-session'
+
+    const resultPromise = runAgentOrchestratorLoop(
+      { sessionId, userTask: 'Update the entrypoint file', agentMode: 'ask', workspacePath: tempDir },
+      mockWin
     )
 
-    expect(res.success).toBe(true)
-    expect(res.summary).toBe('Awaiting approval for git_commit')
-    expect(res.summary).not.toContain('FSM PERMISSION DENIED')
+    await vi.waitFor(() => {
+      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+        'agent:approval-request',
+        expect.objectContaining({ sessionId, type: 'write_file' })
+      )
+    })
+
+    cancelActiveAgentTask(sessionId)
+
+    // The Promise the loop was paused on must have been resolved by the cancellation, not left
+    // dangling: the awaited call below must settle instead of timing out the test.
+    await resultPromise
+    expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
+    // A response arriving after cancellation is stale: nothing is left registered to answer it.
+    expect(respondToApproval(sessionId, true)).toBe(false)
   })
 
   it('should let the model advance the plan explicitly through the update_plan tool', async () => {
@@ -342,6 +423,58 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const verified = saved.planMilestones.filter((m: any) => m.status === 'verified')
     expect(verified.length).toBe(1)
     expect(verified[0].id).toBe('m-1')
+  })
+
+  it('should only mark a milestone verified when its verificationCommand actually exits 0, not on the model\'s say-so', async () => {
+    const planJson =
+      '<plan>[{"id":"m-1","title":"Scaffold project","verificationCommand":"node -e \\"process.exit(0)\\""},{"id":"m-2","title":"Add tests"}]</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
+    const updateJson =
+      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Plan advanced." }\n}\n```'
+
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: planJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: updateJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const res = await runAgentOrchestratorLoop(
+      { userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId: 'plan-verify-pass-session' },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    const statePath = path.join(tempDir, '.onlyrag', '.agent_state_plan-verify-pass-session.json')
+    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
+    const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
+    expect(m1.status).toBe('verified')
+    expect(m1.notes).toContain('Auto-verified by running: node -e "process.exit(0)"')
+  })
+
+  it('should set the milestone to failed (not verified) when the model claims verified but its verificationCommand actually fails', async () => {
+    const planJson =
+      '<plan>[{"id":"m-1","title":"Scaffold project","verificationCommand":"node -e \\"process.exit(1)\\""},{"id":"m-2","title":"Add tests"}]</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
+    const updateJson =
+      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
+
+    vi.mocked(ResilientModelDispatcher.executeWithFallback)
+      .mockResolvedValueOnce({ output: planJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: updateJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+      .mockResolvedValueOnce({ output: finishJson, usedModel: 'llama3.2', isFallback: false })
+
+    const res = await runAgentOrchestratorLoop(
+      { userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId: 'plan-verify-fail-session' },
+      null
+    )
+
+    expect(res.success).toBe(true)
+    const statePath = path.join(tempDir, '.onlyrag', '.agent_state_plan-verify-fail-session.json')
+    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
+    const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
+    expect(m1.status).toBe('failed')
+    expect(m1.notes).toContain('Verification command failed')
   })
 
   it('should keep num_ctx frozen across turns instead of resizing it per prompt (regression: a per-step num_ctx made Ollama reallocate its KV cache every turn, evicting the prompt cache the context-reuse path depends on)', async () => {

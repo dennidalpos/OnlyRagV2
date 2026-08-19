@@ -95,4 +95,26 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect(await sessionHistoryRepository.clearSessions(tempDir)).toBe(true)
     expect(await sessionHistoryRepository.listSessions(tempDir)).toHaveLength(0)
   })
+
+  it('should return false, not a false "success", when deleting a session that does not exist anywhere', async () => {
+    await sessionHistoryRepository.saveSession(buildSession('session-6', tempDir))
+    expect(await sessionHistoryRepository.deleteSession('does-not-exist', tempDir)).toBe(false)
+    // The real entry must be untouched by the no-op delete.
+    expect(await sessionHistoryRepository.listSessions(tempDir)).toHaveLength(1)
+  })
+
+  it('should delete a session saved without a workspacePath even when called with an unrelated one', async () => {
+    // Simulates a session created standalone (no active project), which lands in the home
+    // fallback store, later deleted while some other workspace happens to be active.
+    const standalone = await sessionHistoryRepository.saveSession(buildSession('session-standalone', null))
+    expect(standalone).not.toBeNull()
+
+    const unrelatedWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-history-other-'))
+    try {
+      expect(await sessionHistoryRepository.deleteSession('session-standalone', unrelatedWorkspace)).toBe(true)
+      expect((await sessionHistoryRepository.listSessions(null)).find((s) => s.id === 'session-standalone')).toBeUndefined()
+    } finally {
+      fs.rmSync(unrelatedWorkspace, { recursive: true, force: true })
+    }
+  })
 })

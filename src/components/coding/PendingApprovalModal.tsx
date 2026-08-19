@@ -6,6 +6,7 @@ import { projectPendingChange, type PendingMutationType } from '../../../electro
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
 interface PendingApproval {
+  sessionId: string
   type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
   target: string
   contentOrCmd: string

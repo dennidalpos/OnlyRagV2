@@ -44,12 +44,26 @@ export class SessionHistoryRepository {
     return fallbackDir
   }
 
-  private getHistoryFilePath(workspacePath?: string | null): string {
-    return path.join(this.getStorageDir(workspacePath), HISTORY_FILE_NAME)
+  /**
+   * Every directory a session for this workspace could legitimately be stored in: the
+   * workspace-scoped `.onlyrag` folder (if the workspace still exists on disk) and the home
+   * fallback used for standalone sessions or workspaces that were unavailable at save time.
+   * Delete/clear-by-id must check every candidate, not just the one implied by the caller's
+   * *current* workspacePath -- a session saved standalone (or under a workspace that later
+   * became briefly inaccessible) would otherwise never be found, and would linger forever as
+   * an un-deletable ghost entry even though the UI reports the delete as successful.
+   */
+  private getCandidateStorageDirs(workspacePath?: string | null): string[] {
+    const dirs: string[] = []
+    if (workspacePath && fs.existsSync(workspacePath)) {
+      dirs.push(path.join(workspacePath, '.onlyrag'))
+    }
+    dirs.push(path.join(os.homedir(), '.onlyrag_v2', 'sessions'))
+    return dirs
   }
 
-  private async readStore(workspacePath?: string | null): Promise<CodingSession[]> {
-    const filePath = this.getHistoryFilePath(workspacePath)
+  private async readStoreAtDir(dir: string): Promise<CodingSession[]> {
+    const filePath = path.join(dir, HISTORY_FILE_NAME)
     if (!fs.existsSync(filePath)) return []
     try {
       const raw = await fs.promises.readFile(filePath, 'utf-8')
@@ -64,8 +78,8 @@ export class SessionHistoryRepository {
     }
   }
 
-  private async writeStore(workspacePath: string | null | undefined, sessions: CodingSession[]): Promise<boolean> {
-    const filePath = this.getHistoryFilePath(workspacePath)
+  private async writeStoreAtDir(dir: string, sessions: CodingSession[]): Promise<boolean> {
+    const filePath = path.join(dir, HISTORY_FILE_NAME)
     try {
       const payload: SessionHistoryStore = { version: STORE_VERSION, sessions }
       const tempPath = `${filePath}.tmp`
@@ -76,6 +90,14 @@ export class SessionHistoryRepository {
       logger.log('WARN', 'SessionHistoryRepo', `Failed writing session history at ${filePath}: ${err.message}`)
       return false
     }
+  }
+
+  private async readStore(workspacePath?: string | null): Promise<CodingSession[]> {
+    return this.readStoreAtDir(this.getStorageDir(workspacePath))
+  }
+
+  private async writeStore(workspacePath: string | null | undefined, sessions: CodingSession[]): Promise<boolean> {
+    return this.writeStoreAtDir(this.getStorageDir(workspacePath), sessions)
   }
 
   public async listSessions(workspacePath?: string | null): Promise<CodingSession[]> {
@@ -90,11 +112,22 @@ export class SessionHistoryRepository {
     return saved ? normalized : null
   }
 
+  /**
+   * Returns true only if a matching session was actually found and removed from disk in at
+   * least one candidate store -- unlike the single-store lookup this used to be, a "not
+   * found here" no longer reads as success, so a genuine failure is never masked as one.
+   */
   public async deleteSession(sessionId: string, workspacePath?: string | null): Promise<boolean> {
-    const sessions = await this.readStore(workspacePath)
-    const remaining = sessions.filter((session) => session.id !== sessionId)
-    if (remaining.length === sessions.length) return true
-    return this.writeStore(workspacePath, remaining)
+    let removedAny = false
+    for (const dir of this.getCandidateStorageDirs(workspacePath)) {
+      const sessions = await this.readStoreAtDir(dir)
+      if (sessions.length === 0) continue
+      const remaining = sessions.filter((session) => session.id !== sessionId)
+      if (remaining.length === sessions.length) continue
+      const wrote = await this.writeStoreAtDir(dir, remaining)
+      removedAny = removedAny || wrote
+    }
+    return removedAny
   }
 
   public async clearSessions(workspacePath?: string | null): Promise<boolean> {

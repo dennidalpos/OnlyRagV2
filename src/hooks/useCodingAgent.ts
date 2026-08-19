@@ -38,6 +38,7 @@ export function useCodingAgent(settings?: AppSettings) {
   /** Aggregate +/- size of the file changes applied by the running agent session. */
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
   const [pendingApproval, setPendingApproval] = useState<{
+    sessionId: string
     type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
     target: string
     contentOrCmd: string
@@ -602,57 +603,34 @@ ${output.slice(0, 300)}`
     })
   }
 
+  // Approving/rejecting no longer re-executes the action from the renderer: it only answers
+  // the main-process orchestrator loop, which is paused mid-step waiting for exactly this
+  // response (see requestApproval in agentOrchestratorAppService.ts). The loop performs the
+  // tool call itself through the same path every other step uses, then keeps running --
+  // isExecuting must stay true and untouched here, driven onward by the agent:log /
+  // agent:step-update / agent:done events already wired in the effect above.
+  const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])
+
   const handleApproveAction = async () => {
+    if (!pendingApproval || !window.electronAPI?.respondToAgentApproval) return
+    const current = pendingApproval
+    setPendingApproval(null)
+    addActionLog('tool_call', `User approved ${current.type}: ${current.target}`)
+    await window.electronAPI.respondToAgentApproval(current.sessionId, true)
+    // Best-effort refresh of the currently open editor tab if it was the approved target --
+    // the write itself now happens asynchronously in the main process, so this is a short
+    // grace period rather than the synchronous re-open the old renderer-side execution allowed.
+    if (FILE_MUTATION_APPROVAL_TYPES.has(current.type) && selectedFile && selectedFile.path === current.target) {
+      setTimeout(() => handleOpenFile(selectedFile), 400)
+    }
+  }
+
+  const handleRejectAction = async () => {
     if (!pendingApproval) return
     const current = pendingApproval
     setPendingApproval(null)
-    setIsExecuting(true)
-
-    if (current.type === 'terminal_cmd') {
-      addActionLog('terminal', `User approved terminal command: ${current.contentOrCmd}`)
-      await handleRunTerminalCommand(current.contentOrCmd)
-    } else if (current.type === 'git_commit' && window.electronAPI) {
-      const rawMessage = current.contentOrCmd || ''
-      addActionLog('tool_call', `User approved git commit: ${rawMessage}`)
-      const commitRes = await window.electronAPI.gitCommit(rawMessage, workspacePath || undefined)
-      if (commitRes.success) {
-        addActionLog('terminal', 'Git commit completed', commitRes.output)
-      } else {
-        addActionLog('terminal', `Git commit failed: ${commitRes.error || 'Unknown error'}`)
-      }
-    } else if (current.type === 'replace_chunk' && current.replacement && window.electronAPI) {
-      addActionLog('tool_call', `User approved chunk replacement in: ${current.target}`)
-      await window.electronAPI.replaceWorkspaceFileChunk(current.target, current.contentOrCmd, current.replacement)
-      if (selectedFile && selectedFile.path === current.target) {
-        handleOpenFile(selectedFile)
-      }
-    } else if (current.type === 'multi_replace' && current.replacements && window.electronAPI) {
-      addActionLog('tool_call', `User approved multi-chunk replacement in: ${current.target}`)
-      await window.electronAPI.multiReplaceWorkspaceFileChunks(current.target, current.replacements)
-      if (selectedFile && selectedFile.path === current.target) {
-        handleOpenFile(selectedFile)
-      }
-    } else if (current.type === 'delete_file' && window.electronAPI) {
-      addActionLog('tool_call', `User approved file deletion: ${current.target}`)
-      await window.electronAPI.deleteWorkspaceFile(current.target)
-      purgeFileReferences(current.target)
-    } else if (current.type === 'download_file' && window.electronAPI) {
-      addActionLog('tool_call', `User approved file download from ${current.contentOrCmd} to ${current.target}`)
-      const dlRes = await window.electronAPI.downloadFile(current.contentOrCmd, current.target)
-      if (dlRes.success) {
-        addActionLog('info', `Downloaded ${dlRes.downloadedBytes} bytes to ${current.target}`)
-        if (workspacePath) loadWorkspaceFiles(workspacePath)
-      } else {
-        addActionLog('info', `Download failed: ${dlRes.error}`)
-      }
-    } else if (current.type === 'write_file' && window.electronAPI) {
-      addActionLog('tool_call', `User approved file write to: ${current.target}`)
-      await window.electronAPI.writeWorkspaceFile(current.target, current.contentOrCmd)
-      if (selectedFile && selectedFile.path === current.target) {
-        handleOpenFile(selectedFile)
-      }
-    }
-    setIsExecuting(false)
+    addActionLog('info', `User rejected ${current.type}: ${current.target}`)
+    await window.electronAPI?.respondToAgentApproval?.(current.sessionId, false)
   }
 
   const compactContext = useCallback(() => {
@@ -751,6 +729,7 @@ ${output.slice(0, 300)}`
     handleRenameSession,
     handleNewSession,
     handleApproveAction,
+    handleRejectAction,
     compactContext,
     addActionLog,
   }

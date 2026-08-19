@@ -409,6 +409,8 @@ export interface IElectronAPI {
   openExternalUrl?: (url: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
+  /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
+  respondToAgentApproval?: (sessionId: string, approved: boolean) => Promise<boolean>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
   /** Session history CRUD backed by the filesystem store (see sessionHistoryRepository). */
   listCodingSessions?: (workspacePath?: string | null) => Promise<CodingSession[]>

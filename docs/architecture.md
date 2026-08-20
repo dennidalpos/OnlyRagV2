@@ -143,8 +143,8 @@ flowchart TD
 
 - **Autonomous Tool Calling Loop**:
   - **Ispezione & Navigazione**: `read_file` (con line slicing), `list_dir`, `grep_search`, `extract_code_symbols` (estrazione AST dei simboli esportati).
-  - **Modifica & Patching**: `replace_file_content` (fuzzy matching con tolleranza Levenshtein $\ge 82\%$ e AST pre-commit validation via `FuzzyPatchEngineWithASTValidator`), `multi_replace_file_content`, `write_file` (con validazione AST sintattica in-flight), `delete_file`.
-  - **Esecuzione & Diagnostica**: `run_command` (PowerShell non-interattivo supervised da `NonInteractiveStreamSessionGuard` con cattura prompt interattivi ed enviroment CI=true), `run_tests` (rileva ed esegue il test runner del workspace — script `test:fast`/`test` in package.json o pytest — e ritorna un esito pass/fail strutturato via `testResultParser.ts` invece di testo grezzo), `inspect_os_env`, `finish`.
+  - **Modifica & Patching**: `replace_file_content` (fuzzy matching con tolleranza Levenshtein $\ge 82\%$ e AST pre-commit validation via `fuzzyPatchEngine.ts`), `multi_replace_file_content`, `write_file` (con validazione AST sintattica in-flight), `delete_file`.
+  - **Esecuzione & Diagnostica**: `run_command` (shell persistente PowerShell non-interattiva — `persistentPowerShellSession.ts` — con environment CI=true ed early-abort su prompt interattivi rilevati via `shellStreamGuard.ts`'s `detectInteractivePrompt`, cosí un comando bloccato su un prompt viene interrotto in ~1s invece di attendere il timeout completo), `run_tests` (rileva ed esegue il test runner del workspace — script `test:fast`/`test` in package.json o pytest — e ritorna un esito pass/fail strutturato via `testResultParser.ts` invece di testo grezzo), `inspect_os_env`, `finish`.
   - **Web & Risorse**: `web_search`, `fetch_web_content`, `download_file`.
   - **Interazione Utente**: `ask` (alias `ask_question`) per chiarimenti diretti.
 - **Native Tool-Calling Routing (`ollamaToolCallingCapability.ts` & `ollamaToolSchemaCatalog.ts`)**:
@@ -153,10 +153,10 @@ flowchart TD
 - **Action Loop Fingerprinting & Multi-State Oscillation Prevention (`AgentActionLoopDetector`, incorpora internamente `CycleOscillationDetectorAndReproOracle`)**:
   - Ogni invocazione di tool viene tracciata tramite hash crittografico deterministico SHA-256 (`tool:parameters`) da un'unica istanza per sessione.
   - Rilevamento avanzato di cicli alternati di oscillazione a $k$-Stati ($k \in [2, 4]$, es. $A \rightarrow B \rightarrow A \rightarrow B$). Se l'agente instaura un ciclo alternato o ripete la stessa azione $\ge 2$ volte, il runtime inietta una direttiva correttiva forzata (`[CRITICAL LOOP INTERVENTION]`) ed uno script di riproduzione TDD.
-- **AST-Aware Compact Repo Mapper (`CompactSemanticRepoMapper`)**:
+- **AST-Aware Compact Repo Mapper (`compactSemanticRepoMapper.ts` → `generateCompactRepoMap()`)**:
   - Scansione ad alta densità sintattica della struttura del repository con estrazione dell'albero dei simboli esportati (`class`, `function`, `interface`, `type`) per la generazione di una Repo Map ottimizzata per il budget del contesto.
 - **Optimizations per Hardware Minimo (Previeni Runaway Loops >300 Step)**:
-  - **`ASTAwareStackTraceExtractor`**: Estrazione deterministica dei blocchi di errore e numeri di riga dai log di terminale per una diagnostica ad alta precisione.
+  - **`astStackTraceExtractor.ts` (`extractErrorDiagnostics()`)**: Estrazione deterministica dei blocchi di errore e numeri di riga dai log di terminale per una diagnostica ad alta precisione.
   - **`StagnationCircuitBreaker`**: Interruttore automatico di blocco sulle streak di inattività o errori ripetuti per prevenire loop infiniti runaway.
 - **Resilient Multi-Tier Model Dispatching (`ResilientModelDispatcher`)**:
   - Se il modello primario ad alta intensità incontra timeout, disconnessioni socket o esaurimento VRAM (OOM), l'orchestratore degrada automaticamente verso il modello di fallback su 4 tier (Primary → Intermediate → Fallback → Heavy Escalation), applicando l'evizione VRAM esplicita prima di attivare il tier HEAVY.

@@ -8,9 +8,9 @@ import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
-import { NonInteractiveStreamSessionGuard } from '../domain/agent/shellStreamGuard'
+import { sanitizePowerShellCommand } from '../domain/agent/shellStreamGuard'
 import { webClient } from '../infrastructure/http/webClient'
-import { FuzzyPatchEngineWithASTValidator } from '../domain/agent/fuzzyPatchEngine'
+import { applyFuzzyReplace, validateAST } from '../domain/agent/fuzzyPatchEngine'
 import { parseTestRunOutput } from '../domain/agent/testResultParser'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../domain/agent/pendingChangeProjection'
@@ -368,7 +368,7 @@ export class AgentToolExecutorService {
 
     let sanitizedCmd = secCheck.sanitizedCommand
     if (process.platform === 'win32') {
-      sanitizedCmd = NonInteractiveStreamSessionGuard.sanitizePowerShellCommand(sanitizedCmd)
+      sanitizedCmd = sanitizePowerShellCommand(sanitizedCmd)
     }
 
     const TEST_TIMEOUT_MS = 180000
@@ -733,7 +733,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
 
         // In-flight AST Pre-Commit Syntax Validation
-        const astCheck = FuzzyPatchEngineWithASTValidator.validateAST(pathCheck.safePath, content)
+        const astCheck = validateAST(pathCheck.safePath, content)
         if (!astCheck.isValid) {
           return {
             outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nFile write blocked before disk persistence to prevent workspace corruption. Please fix syntax error.`,
@@ -871,10 +871,10 @@ Do not retry the same installation. Continue without this tool or ask the user t
             return { outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
           }
           const currentContent = agentToolFileRepository.readIfExists(pathCheck.safePath)
-          const fuzzyRes = FuzzyPatchEngineWithASTValidator.applyFuzzyReplace(currentContent, targetContent, replacementContent)
+          const fuzzyRes = applyFuzzyReplace(currentContent, targetContent, replacementContent)
 
           if (fuzzyRes.success && fuzzyRes.updatedContent !== undefined) {
-            const astCheck = FuzzyPatchEngineWithASTValidator.validateAST(pathCheck.safePath, fuzzyRes.updatedContent)
+            const astCheck = validateAST(pathCheck.safePath, fuzzyRes.updatedContent)
             if (!astCheck.isValid) {
               return {
                 outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nReplacement blocked before disk persistence to prevent syntax corruption.`,
@@ -1062,7 +1062,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
 
         let execCmd = secCheck.sanitizedCommand
         if (process.platform === 'win32') {
-          execCmd = NonInteractiveStreamSessionGuard.sanitizePowerShellCommand(execCmd)
+          execCmd = sanitizePowerShellCommand(execCmd)
         }
         const COMMAND_TIMEOUT_MS = resolveCommandTimeoutMs(cmd, parameters.timeoutSeconds)
 
@@ -1111,12 +1111,15 @@ Do not retry the same installation. Continue without this tool or ask the user t
             const missingDepDirective = isMissingDependency
               ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation or runtime failed because an imported module/package is missing. Install the missing dependency via run_command (e.g. 'npm install <package-name>') or add it to 'package.json' before re-running.`
               : ''
+            const interactivePromptDirective = res.interruptedByPrompt
+              ? `\n\n[INTERACTIVE PROMPT DIRECTIVE]\nThe command was aborted because it requested interactive user input (e.g. a [y/n] confirmation or password prompt), which run_command cannot answer. Re-run using the tool's non-interactive flag (e.g. -y, --yes, --force, --batch) so it completes without prompting.`
+              : ''
             const autoHealingFeedback = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]
-Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''})
+Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''}${res.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})
 Captured Error Stack Trace & Failure Output:
 \`\`\`
 ${rawOutput.slice(0, 4000)}
-\`\`\`${permsDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}
+\`\`\`${permsDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${interactivePromptDirective}
 
 AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or timed out. DO NOT ask the user vague clarification questions. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the command autonomously.`
             return {

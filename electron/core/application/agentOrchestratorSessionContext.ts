@@ -5,7 +5,7 @@ import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorAppService'
 import { logger } from '../../diagnostics'
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
-import { CompactSemanticRepoMapper } from '../domain/agent/compactSemanticRepoMapper'
+import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import {
   resolveWorkspacePath,
   buildDefaultAgentSettings,
@@ -45,7 +45,7 @@ export interface SessionContext {
 
 async function scanProjectMap(workspacePath: string): Promise<string> {
   try {
-    return CompactSemanticRepoMapper.generateCompactRepoMap(workspacePath, 150)
+    return generateCompactRepoMap(workspacePath, 150)
   } catch (err: any) {
     logger.log('WARN', 'AgentOrchestratorApp', `Project map scan failed: ${err.message}`)
     return ''

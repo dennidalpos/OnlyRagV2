@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ToolSchemaValidator } from './toolSchemaValidator'
+import { validateAndSanitize } from './toolSchemaValidator'
 import type { AgentToolCall } from './agentTypes'
 
 describe('ToolSchemaValidator Unit Tests', () => {
@@ -8,7 +8,7 @@ describe('ToolSchemaValidator Unit Tests', () => {
       tool: 'read_file',
       parameters: { path: 'src/main.ts', startLine: '10', endLine: '50' } as any,
     }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(true)
     expect(res.sanitizedToolCall.parameters?.filePath).toBe('src/main.ts')
     expect(res.sanitizedToolCall.parameters?.startLine).toBe(10)
@@ -20,7 +20,7 @@ describe('ToolSchemaValidator Unit Tests', () => {
       tool: 'replace_file_content',
       parameters: { path: 'src/App.tsx' } as any,
     }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(false)
     expect(res.errors.length).toBeGreaterThan(0)
     expect(res.errors[0]).toContain('targetContent')
@@ -31,7 +31,7 @@ describe('ToolSchemaValidator Unit Tests', () => {
       tool: 'run_command',
       parameters: { cmd: 'npm test', timeoutMs: '120000' } as any,
     }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(true)
     expect(res.sanitizedToolCall.parameters?.command).toBe('npm test')
     expect(res.sanitizedToolCall.parameters?.timeoutMs).toBe(120000)
@@ -39,7 +39,7 @@ describe('ToolSchemaValidator Unit Tests', () => {
 
   it('should validate run_tests with no parameters (command is optional — auto-detected when omitted)', () => {
     const raw: AgentToolCall = { tool: 'run_tests', parameters: {} }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(true)
     expect(res.sanitizedToolCall.parameters?.command).toBeUndefined()
   })
@@ -49,7 +49,7 @@ describe('ToolSchemaValidator Unit Tests', () => {
       tool: 'run_tests',
       parameters: { command: 'pytest -k test_login -q' },
     }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(true)
     expect(res.sanitizedToolCall.parameters?.command).toBe('pytest -k test_login -q')
   })
@@ -59,20 +59,20 @@ describe('ToolSchemaValidator Unit Tests', () => {
       tool: 'git_commit',
       parameters: { commitMessage: 'Fix login bug' },
     }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(true)
     expect(res.sanitizedToolCall.parameters?.commitMessage).toBe('Fix login bug')
   })
 
   it('should detect missing required commitMessage for git_commit', () => {
     const raw: AgentToolCall = { tool: 'git_commit', parameters: {} }
-    const res = ToolSchemaValidator.validateAndSanitize(raw)
+    const res = validateAndSanitize(raw)
     expect(res.valid).toBe(false)
     expect(res.errors[0]).toContain('commitMessage')
   })
 
   it('should accept update_plan with milestoneId aliases and normalise the status casing', () => {
-    const res = ToolSchemaValidator.validateAndSanitize({
+    const res = validateAndSanitize({
       tool: 'update_plan',
       parameters: { id: 'm-2', status: 'In Progress' },
     } as AgentToolCall)
@@ -83,14 +83,14 @@ describe('ToolSchemaValidator Unit Tests', () => {
   })
 
   it('should reject update_plan with an unknown status or a missing milestone reference', () => {
-    const badStatus = ToolSchemaValidator.validateAndSanitize({
+    const badStatus = validateAndSanitize({
       tool: 'update_plan',
       parameters: { milestoneId: 'm-1', status: 'almost_done' },
     } as AgentToolCall)
     expect(badStatus.valid).toBe(false)
     expect(badStatus.errors.join(' ')).toContain('status')
 
-    const noId = ToolSchemaValidator.validateAndSanitize({
+    const noId = validateAndSanitize({
       tool: 'update_plan',
       parameters: { status: 'verified' },
     } as AgentToolCall)

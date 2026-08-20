@@ -2,7 +2,7 @@ import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import os from 'node:os'
 import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
-import { AgentPromptAssembler } from '../domain/agent/agentPromptAssembler'
+import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
 import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
 import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
@@ -87,7 +87,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   const effectiveAttachedContext = [debtTrackerBlock, ctx.attachedContext].filter(Boolean).join('\n\n')
 
   // Assemble base prompt segments, then apply heuristic compaction at 75% watermark.
-  const assembled = AgentPromptAssembler.assembleTurnPrompt({
+  const assembled = assembleDomainTurnPrompt({
     userTask: ctx.userTask,
     initialUserTask: ctx.initialUserTask,
     agentMode: ctx.agentMode,

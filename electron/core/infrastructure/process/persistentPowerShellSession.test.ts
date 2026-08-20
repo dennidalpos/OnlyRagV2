@@ -43,4 +43,29 @@ describe('PersistentPowerShellSession Unit Tests', () => {
 
     expect(res.stdout).toContain('Val: 150')
   })
+
+  it('should abort immediately on an interactive prompt instead of waiting out the full timeout', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+
+    const startedAt = Date.now()
+    // Emits a recognizable interactive-prompt pattern, then would hang on Start-Sleep if the
+    // guard did not abort first — a large timeoutMs proves the abort is prompt-triggered, not
+    // a coincidental timeout.
+    const res = await session.execute(
+      'Write-Output "Overwrite existing file? [y/n]"; Start-Sleep -Seconds 30',
+      undefined,
+      undefined,
+      25000
+    )
+    const elapsedMs = Date.now() - startedAt
+
+    expect(res.interruptedByPrompt).toBe(true)
+    expect(res.code).toBe(130)
+    expect(res.stderr).toContain('[INTERACTIVE PROMPT DETECTED]')
+    expect(elapsedMs).toBeLessThan(20000)
+
+    // The session must still be usable afterwards (process was recreated, not left wedged).
+    const followUp = await session.execute('Write-Output "still alive"')
+    expect(followUp.stdout).toContain('still alive')
+  })
 })

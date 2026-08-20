@@ -2,12 +2,14 @@ import { spawn, execFileSync, ChildProcess } from 'node:child_process'
 import crypto from 'node:crypto'
 import { logger } from '../../../diagnostics'
 import { normalizePowerShellCommand } from './taskRunner'
+import { detectInteractivePrompt } from '../../domain/agent/shellStreamGuard'
 
 export interface ShellExecutionOutput {
   stdout: string
   stderr: string
   code: number
   timedOut?: boolean
+  interruptedByPrompt?: boolean
 }
 
 /**
@@ -118,6 +120,38 @@ export class PersistentPowerShellSession {
         fullOutput += text
         if (onOutputChunk) {
           onOutputChunk(text)
+        }
+
+        // Interactive-prompt guard: no human is present in the autonomous agent loop to answer
+        // a `[y/n]`/password-style prompt, so abort immediately instead of blocking here until
+        // the full timeout elapses (see shellStreamGuard.ts's detectInteractivePrompt).
+        const promptPattern = detectInteractivePrompt(text)
+        if (promptPattern && !isSettled) {
+          isSettled = true
+          cleanup()
+          logger.log('WARN', 'PersistentPowerShell', `Interactive prompt detected in command output: "${text.trim()}"`)
+          try {
+            this.proc?.stdin?.write('\x03') // Send SIGINT / Ctrl+C to abort the foreground command
+          } catch {}
+          // The shell process may be left in an indeterminate state after an unanswered
+          // interactive prompt (e.g. still waiting on stdin) — recreate it so subsequent
+          // commands in this session aren't silently stuck too, same precaution as the
+          // timeout branch above.
+          try {
+            if (process.platform === 'win32' && this.proc?.pid) {
+              spawn('taskkill', ['/pid', this.proc.pid.toString(), '/f', '/t'])
+            } else {
+              this.proc?.kill('SIGKILL')
+            }
+          } catch {}
+          this.initProcess()
+          resolve({
+            stdout: fullOutput.trim(),
+            stderr: `[INTERACTIVE PROMPT DETECTED] The command requested user interaction matching pattern ${promptPattern}. Aborted to prevent session freeze. Use non-interactive CLI flags (e.g. -y, --yes, --batch).`,
+            code: 130,
+            interruptedByPrompt: true,
+          })
+          return
         }
 
         if (fullOutput.includes(endDelimiter) && fullOutput.includes(exitDelimiter)) {

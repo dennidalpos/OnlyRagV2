@@ -1,6 +1,6 @@
 import { logger } from '../../../diagnostics'
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
-import { ToolSchemaValidator } from './toolSchemaValidator'
+import { validateAndSanitize } from './toolSchemaValidator'
 
 export type { AgentToolCall }
 
@@ -409,6 +409,6 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
 
   if (!candidate) return null
 
-  const validated = ToolSchemaValidator.validateAndSanitize(candidate)
+  const validated = validateAndSanitize(candidate)
   return validated.sanitizedToolCall
 }

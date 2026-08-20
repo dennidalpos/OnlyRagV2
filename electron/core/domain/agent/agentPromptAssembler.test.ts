@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AgentPromptAssembler } from './agentPromptAssembler'
+import { assembleTurnPrompt } from './agentPromptAssembler'
 import { HardwareProfileResolver } from './hardwareProfileResolver'
 import type { AppSettings } from '../../../../src/types'
 
@@ -25,7 +25,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Medium')
 
   it('should assemble turn prompt with base guidelines and user task', () => {
-    const { prompt } = AgentPromptAssembler.assembleTurnPrompt({
+    const { prompt } = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
       agentMode: 'agent',
       stepCount: 1,
@@ -43,7 +43,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   })
 
   it('should include pinned files and active file snippet when provided', () => {
-    const { prompt } = AgentPromptAssembler.assembleTurnPrompt({
+    const { prompt } = assembleTurnPrompt({
       userTask: 'Refactor calculateTotal',
       agentMode: 'agent',
       stepCount: 2,
@@ -70,7 +70,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     // sole responsibility in the orchestrator loop (see agentOrchestratorAppService.ts).
     // Here only the per-segment maxMapChars budget (4000 for maxContextChars<=16000) applies.
     const hugeMap = 'a'.repeat(25000)
-    const { prompt } = AgentPromptAssembler.assembleTurnPrompt({
+    const { prompt } = assembleTurnPrompt({
       userTask: 'Optimize database queries',
       agentMode: 'agent',
       stepCount: 3,
@@ -88,7 +88,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   })
 
   it('should omit the prose tool schema block when toolCallingCapable=true (AGT2: native tool-calling models already receive it via the `tools` API param)', () => {
-    const withProse = AgentPromptAssembler.assembleTurnPrompt({
+    const withProse = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
       agentMode: 'agent',
       stepCount: 1,
@@ -99,7 +99,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       settings: defaultSettings,
       runtimeOpts,
     })
-    const nativeToolCalling = AgentPromptAssembler.assembleTurnPrompt({
+    const nativeToolCalling = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
       agentMode: 'agent',
       stepCount: 1,
@@ -118,7 +118,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   })
 
   it('should render ∞ when maxSteps is Infinity or 0', () => {
-    const { prompt } = AgentPromptAssembler.assembleTurnPrompt({
+    const { prompt } = assembleTurnPrompt({
       userTask: 'Long running task',
       agentMode: 'agent',
       stepCount: 1,
@@ -145,8 +145,8 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     }
 
     it('should keep stableSection byte-identical across turns when only stepCount and history change', () => {
-      const turn1 = AgentPromptAssembler.assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
-      const turn2 = AgentPromptAssembler.assembleTurnPrompt({ ...baseInput, stepCount: 2, toolOutputHistory: ['Ran command: THIS_IS_TURN_2_HISTORY_MARKER'] })
+      const turn1 = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
+      const turn2 = assembleTurnPrompt({ ...baseInput, stepCount: 2, toolOutputHistory: ['Ran command: THIS_IS_TURN_2_HISTORY_MARKER'] })
 
       expect(turn1.stableSection).toBe(turn2.stableSection)
       expect(turn1.stableSection).not.toContain('Step 1')
@@ -154,9 +154,9 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     })
 
     it('should change stableSection when the complexity tier or pinned files change', () => {
-      const standard = AgentPromptAssembler.assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
-      const deep = AgentPromptAssembler.assembleTurnPrompt({ ...baseInput, complexityTier: 'deep_reasoning', stepCount: 1, toolOutputHistory: [] })
-      const withPinned = AgentPromptAssembler.assembleTurnPrompt({
+      const standard = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
+      const deep = assembleTurnPrompt({ ...baseInput, complexityTier: 'deep_reasoning', stepCount: 1, toolOutputHistory: [] })
+      const withPinned = assembleTurnPrompt({
         ...baseInput,
         stepCount: 1,
         toolOutputHistory: [],
@@ -168,14 +168,14 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     })
 
     it('should produce an append-only historyBlock: turn 2 history starts with turn 1 history when steps are only added', () => {
-      const turn1 = AgentPromptAssembler.assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: 'STEP 1 SUMMARY' })
-      const turn2 = AgentPromptAssembler.assembleTurnPrompt({ ...baseInput, stepCount: 2, toolOutputHistory: 'STEP 1 SUMMARY\n\nSTEP 2 SUMMARY' })
+      const turn1 = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: 'STEP 1 SUMMARY' })
+      const turn2 = assembleTurnPrompt({ ...baseInput, stepCount: 2, toolOutputHistory: 'STEP 1 SUMMARY\n\nSTEP 2 SUMMARY' })
 
       expect(turn2.historyBlock.startsWith(turn1.historyBlock)).toBe(true)
     })
 
     it('should carry the step counter only in turnSuffix, not in stableSection or historyBlock', () => {
-      const { stableSection, historyBlock, turnSuffix } = AgentPromptAssembler.assembleTurnPrompt({
+      const { stableSection, historyBlock, turnSuffix } = assembleTurnPrompt({
         ...baseInput,
         stepCount: 5,
         toolOutputHistory: [],
@@ -187,7 +187,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     })
 
     it('should reassemble to the same full prompt from stableSection + historyBlock + turnSuffix', () => {
-      const { prompt, stableSection, historyBlock, turnSuffix } = AgentPromptAssembler.assembleTurnPrompt({
+      const { prompt, stableSection, historyBlock, turnSuffix } = assembleTurnPrompt({
         ...baseInput,
         stepCount: 1,
         toolOutputHistory: 'STEP 1 SUMMARY',

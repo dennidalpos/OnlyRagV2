@@ -1,7 +1,7 @@
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
-import { ASTAwareStackTraceExtractor } from '../domain/agent/astStackTraceExtractor'
+import { extractErrorDiagnostics, formatDiagnosticPrompt } from '../domain/agent/astStackTraceExtractor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
@@ -21,9 +21,9 @@ function extractTargetParam(parsedTool: AgentToolCall): string | undefined {
 function distillOutput(toolRes: ToolExecutionResult, isToolFailure: boolean): string {
   let distilled = toolRes.isTerminal ? DiagnosticOutputReducer.distillTerminalOutput(toolRes.outputForHistory, 2500) : toolRes.outputForHistory
   if (isToolFailure && toolRes.isTerminal) {
-    const frame = ASTAwareStackTraceExtractor.extractErrorDiagnostics(toolRes.outputForHistory)
+    const frame = extractErrorDiagnostics(toolRes.outputForHistory)
     if (frame) {
-      distilled = `${distilled}\n\n${ASTAwareStackTraceExtractor.formatDiagnosticPrompt(frame)}`
+      distilled = `${distilled}\n\n${formatDiagnosticPrompt(frame)}`
     }
   }
   return distilled

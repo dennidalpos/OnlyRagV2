@@ -82,10 +82,6 @@ export class AgentRuntimeModeFsm {
     return this.currentMode
   }
 
-  public setMode(newMode: AgentMode | RuntimeFsmState): void {
-    this.currentMode = this.normalizeMode(newMode)
-  }
-
   public isToolAllowed(toolName: SupportedToolName): boolean {
     const config = MODE_PERMISSIONS[this.currentMode]
     return config.allowedTools.has(toolName)
@@ -94,14 +90,6 @@ export class AgentRuntimeModeFsm {
   public filterAllowedTools(tools: SupportedToolName[]): SupportedToolName[] {
     const config = MODE_PERMISSIONS[this.currentMode]
     return tools.filter((t) => config.allowedTools.has(t))
-  }
-
-  public canModifyFiles(): boolean {
-    return MODE_PERMISSIONS[this.currentMode].allowsFileModifications
-  }
-
-  public canExecuteCommands(): boolean {
-    return MODE_PERMISSIONS[this.currentMode].allowsTerminalExecution
   }
 
   private normalizeMode(mode: string): RuntimeFsmState {

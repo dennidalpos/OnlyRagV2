@@ -10,6 +10,7 @@ class IngestResponse(BaseModel):
     extracted_markdown: str
     status: str
     ingested_at: str
+    used_fallback_embeddings: Optional[bool] = False
 
 class IngestPathRequest(BaseModel):
     file_path: str
@@ -17,6 +18,9 @@ class IngestPathRequest(BaseModel):
     vision_prompt: Optional[str] = None
     normalize_with_llm: Optional[bool] = False
     normalization_model: Optional[str] = None
+    max_tabular_rows: Optional[int] = None
+    max_excel_rows_per_sheet: Optional[int] = None
+    max_excel_sheets: Optional[int] = None
 
 class UpdateDocumentRequest(BaseModel):
     markdown_content: str

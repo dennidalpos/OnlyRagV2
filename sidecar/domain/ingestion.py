@@ -3,11 +3,17 @@ import re
 import io
 import json
 import csv
+import zipfile
 from typing import List, Tuple, Dict, Optional, Any, Callable
 from concurrent.futures import ThreadPoolExecutor
 import pymupdf
 import pandas as pd
-from sidecar.config import logger
+from sidecar.config import (
+    logger,
+    TABULAR_MAX_ROWS,
+    EXCEL_MAX_ROWS_PER_SHEET,
+    EXCEL_MAX_SHEETS
+)
 from sidecar.infrastructure.ocr import run_layout_ocr, run_vision_ocr
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.router import (
@@ -216,10 +222,20 @@ def extract_pdf_document(
 
     return results
 
-def extract_tabular_document(filename: str, content: bytes, file_path: Optional[str]) -> List[Tuple[int, str]]:
-    """Extracts CSV, TSV, XLSX, XLS, Parquet, and JSON data formatted cleanly into Markdown tables."""
+def extract_tabular_document(
+    filename: str,
+    content: bytes,
+    file_path: Optional[str],
+    max_rows: Optional[int] = None,
+    max_excel_rows: Optional[int] = None,
+    max_sheets: Optional[int] = None
+) -> List[Tuple[int, str]]:
+    """Extracts CSV, TSV, XLSX, XLS, Parquet, and JSON data formatted cleanly into Markdown tables with truncation tracking."""
     ext = os.path.splitext(filename)[1].lower()
     text_content = ""
+    limit_csv_rows = max_rows or TABULAR_MAX_ROWS
+    limit_excel_rows = max_excel_rows or EXCEL_MAX_ROWS_PER_SHEET
+    limit_sheets = max_sheets or EXCEL_MAX_SHEETS
 
     # Excel formats (.xlsx, .xls)
     if ext in [".xlsx", ".xls"]:
@@ -227,10 +243,15 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
             excel_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
             xls = pd.ExcelFile(excel_source)
             sheets_output = []
-            for sheet_name in xls.sheet_names[:10]:
-                df = pd.read_excel(xls, sheet_name=sheet_name, nrows=150)
-                if df.empty:
+            total_sheets_count = len(xls.sheet_names)
+            processed_sheets = xls.sheet_names[:limit_sheets]
+
+            for sheet_name in processed_sheets:
+                df_all = pd.read_excel(xls, sheet_name=sheet_name)
+                total_sheet_rows = len(df_all)
+                if df_all.empty:
                     continue
+                df = df_all.head(limit_excel_rows)
                 # Clean column headers
                 df.columns = [str(c).replace("\n", " ").replace("|", "\\|").strip() for c in df.columns]
                 # Convert to markdown
@@ -240,8 +261,17 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
                 for _, row in df.iterrows():
                     row_vals = [str(val).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(val) else "" for val in row]
                     md_table += "| " + " | ".join(row_vals) + " |\n"
-                sheets_output.append(f"### Foglio: {sheet_name}\n\n{md_table}")
-            return [(1, "\n\n".join(sheets_output))]
+
+                sheet_md = f"### Foglio: {sheet_name}\n\n{md_table}"
+                if total_sheet_rows > limit_excel_rows:
+                    sheet_md += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_excel_rows} righe (su {total_sheet_rows} totali nel foglio '{sheet_name}').\n"
+                sheets_output.append(sheet_md)
+
+            combined_excel_md = "\n\n".join(sheets_output)
+            if total_sheets_count > limit_sheets:
+                combined_excel_md += f"\n\n> [!NOTE]\n> Mostrati i primi {len(processed_sheets)} fogli su {total_sheets_count} totali nella cartella Excel.\n"
+
+            return [(1, combined_excel_md)]
         except Exception as e:
             logger.warning(f"Excel parsing fallback for {filename}: {e}")
 
@@ -250,7 +280,9 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
         try:
             csv_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
             sep = "\t" if ext == ".tsv" else ","
-            df = pd.read_csv(csv_source, sep=sep, nrows=300, on_bad_lines="skip")
+            df_all = pd.read_csv(csv_source, sep=sep, on_bad_lines="skip")
+            total_csv_rows = len(df_all)
+            df = df_all.head(limit_csv_rows)
             df.columns = [str(c).replace("\n", " ").replace("|", "\\|").strip() for c in df.columns]
             headers = list(df.columns)
             md_table = "| " + " | ".join(headers) + " |\n"
@@ -258,6 +290,10 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
             for _, row in df.iterrows():
                 row_vals = [str(val).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(val) else "" for val in row]
                 md_table += "| " + " | ".join(row_vals) + " |\n"
+
+            if total_csv_rows > limit_csv_rows:
+                md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {total_csv_rows} totali nel file).\n"
+
             return [(1, md_table)]
         except Exception as e:
             logger.warning(f"CSV/TSV parsing fallback for {filename}: {e}")
@@ -286,7 +322,10 @@ def extract_document_markdown(
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
-    normalization_model: Optional[str] = None
+    normalization_model: Optional[str] = None,
+    max_tabular_rows: Optional[int] = None,
+    max_excel_rows: Optional[int] = None,
+    max_sheets: Optional[int] = None
 ) -> Tuple[str, int]:
     """Fast-routed, sanitized, and pagination-preserving document markdown extractor with progress callback."""
     category = classify_file_type(filename)
@@ -335,7 +374,7 @@ def extract_document_markdown(
 
     elif category == DocumentCategory.DOCX:
         if progress_callback:
-            progress_callback(1, 1, "Estrazione struttura XML e tabelle DOCX...")
+            progress_callback(1, 1, "Estrazione struttura XML, tabelle e immagini DOCX...")
         try:
             import docx
             # Check for EncryptedPackage OLE header
@@ -382,6 +421,23 @@ def extract_document_markdown(
                 if table_md_lines:
                     docx_blocks.append("\n" + "\n".join(table_md_lines) + "\n")
 
+            # Extract embedded images from docx package and run RapidOCR
+            try:
+                docx_zip_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
+                with zipfile.ZipFile(docx_zip_source, "r") as z:
+                    image_names = sorted([n for n in z.namelist() if n.startswith("word/media/") and any(n.lower().endswith(im_ext) for im_ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"])])
+                    img_idx = 1
+                    for img_name in image_names:
+                        img_data = z.read(img_name)
+                        if len(img_data) >= 1500:  # Skip tiny icons or empty placeholder graphics
+                            ocr_text = run_layout_ocr(img_data)
+                            clean_ocr = sanitize_extracted_text(ocr_text)
+                            if clean_ocr and clean_ocr not in ("[Empty Page Content]", "[Scanned page - No readable text detected]"):
+                                docx_blocks.append(f"### Immagine DOCX {img_idx} (Testo rilevato da OCR)\n\n{clean_ocr}")
+                                img_idx += 1
+            except Exception as zip_err:
+                logger.debug(f"DOCX media image extraction skipped for {filename}: {zip_err}")
+
             if docx_blocks:
                 page_blocks.append((1, sanitize_extracted_text("\n\n".join(docx_blocks))))
         except Exception as docx_err:
@@ -390,7 +446,14 @@ def extract_document_markdown(
     elif category == DocumentCategory.TABULAR:
         if progress_callback:
             progress_callback(1, 1, "Parsing matriciale e formattazione tabella Markdown...")
-        page_blocks = extract_tabular_document(filename, content, file_path)
+        page_blocks = extract_tabular_document(
+            filename,
+            content,
+            file_path,
+            max_rows=max_tabular_rows,
+            max_excel_rows=max_excel_rows,
+            max_sheets=max_sheets
+        )
 
     # Fallback to UTF-8 text read
     if not page_blocks:

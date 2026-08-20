@@ -54,10 +54,12 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
         elif img.mode != "RGB":
             img = img.convert("RGB")
 
-        # Slight contrast enhancement for scanned documents
+        # Slight contrast and sharpness enhancement for scanned documents and low-contrast images
         try:
             enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.15)
+            img = enhancer.enhance(1.20)
+            sharpener = ImageEnhance.Sharpness(img)
+            img = sharpener.enhance(1.30)
         except Exception:
             pass
 
@@ -121,7 +123,7 @@ def _find_rapidocr_config() -> Optional[str]:
     return None
 
 def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
-    """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order."""
+    """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order with multi-column support."""
     if not raw_results:
         return ""
 
@@ -156,9 +158,13 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
         for line in lines:
             line_cy = line["cy"]
             line_h = line["h"]
-            if abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h)):
-                matched_line = line
-                break
+            vert_match = abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h))
+            if vert_match:
+                # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
+                horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
+                if horiz_gap <= max(20.0, line_h * 1.0):
+                    matched_line = line
+                    break
 
         if matched_line is not None:
             matched_line["boxes"].append(b)
@@ -276,7 +282,7 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
             if vert_match:
                 # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
                 horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
-                if horiz_gap <= max(45.0, line_h * 2.8):
+                if horiz_gap <= max(20.0, line_h * 1.0):
                     matched_line = line
                     break
 

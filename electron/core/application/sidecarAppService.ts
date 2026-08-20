@@ -132,6 +132,7 @@ export class SidecarAppService {
                       status: finalResult.status,
                       ingestedAt: finalResult.ingested_at,
                       fileType: filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text',
+                      usedFallbackEmbeddings: Boolean(finalResult.used_fallback_embeddings),
                     },
                   })
                 } else {
@@ -211,6 +212,7 @@ export class SidecarAppService {
                     status: data.status,
                     ingestedAt: data.ingested_at,
                     fileType: data.filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text',
+                    usedFallbackEmbeddings: Boolean(data.used_fallback_embeddings),
                   },
                 })
               } catch (parseErr: any) {
@@ -386,6 +388,7 @@ export class SidecarAppService {
                 status: item.status,
                 ingestedAt: item.ingested_at,
                 fileType: item.file_type || 'text',
+                usedFallbackEmbeddings: Boolean(item.used_fallback_embeddings),
               }))
             )
           } catch (parseErr: any) {

@@ -52,9 +52,9 @@ def sanitize_extracted_text(text: str) -> str:
     text = text.replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')
 
     # Normalize N° civico, Località, and common abbreviations before stripping replacement chars
-    text = re.sub(r'(?i)\bN[\ufffd°\.\?]*\s*CIVICO\b', 'N° CIVICO', text)
-    text = re.sub(r'(?i)\bLOCALIT[\ufffd]+\b', 'LOCALITÀ', text)
-    text = re.sub(r'(?i)\bSociet[\ufffd]+\b', 'Società', text)
+    text = re.sub(r'(?i)\bN[\ufffd°º\.\?\^]*\s*CIVICO\b', 'N° CIVICO', text)
+    text = re.sub(r'(?i)\bLOCALIT[\ufffdÀAàa]*\b', 'LOCALITÀ', text)
+    text = re.sub(r'(?i)\bSociet[\ufffdÀAàa]*\b', 'Società', text)
     text = re.sub(r'\b[eE][\ufffd]+(?![-\w])', 'È', text)
 
     text = text.replace('\ufeff', '').replace('\ufffe', '').replace('\ufffd', '')

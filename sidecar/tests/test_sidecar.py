@@ -427,6 +427,58 @@ def test_extract_tabular_document_csv_and_json():
     assert len(json_res) == 1
     assert "```json" in json_res[0][1]
 
+def test_extract_tabular_document_truncation_note():
+    from sidecar.domain.ingestion import extract_tabular_document
+    # CSV with 10 rows, limit to 4
+    lines = ["ColA,ColB"] + [f"Row{i},Val{i}" for i in range(10)]
+    csv_bytes = "\n".join(lines).encode("utf-8")
+    res = extract_tabular_document("big.csv", csv_bytes, None, max_rows=4)
+    assert len(res) == 1
+    text = res[0][1]
+    assert "Tabella troncata a 4 righe (su 10 totali" in text
+    assert "| Row0 | Val0 |" in text
+    assert "| Row3 | Val3 |" in text
+    assert "| Row4 | Val4 |" not in text
+
+def test_generate_embedding_with_status_tracks_fallback():
+    from sidecar.infrastructure.embeddings import generate_embedding_with_status
+    vec, is_fallback = generate_embedding_with_status("Test sentence for embedding vector")
+    assert isinstance(vec, list)
+    assert len(vec) in (384, 768)
+    assert isinstance(is_fallback, bool)
+
+def test_docx_image_extraction_ocr(tmp_path):
+    import docx
+    from PIL import Image, ImageDraw
+    import io
+    from sidecar.domain.ingestion import extract_document_markdown
+
+    # Create image with text
+    img = Image.new("RGB", (300, 80), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 10), "DOCX IMAGE TEXT 7788", fill="black")
+    img_buf = io.BytesIO()
+    img.save(img_buf, format="PNG")
+    img_bytes = img_buf.getvalue()
+
+    # Create docx with paragraph and image
+    doc = docx.Document()
+    doc.add_paragraph("Paragraph inside docx document")
+    img_path = str(tmp_path / "temp_img.png")
+    with open(img_path, "wb") as f:
+        f.write(img_bytes)
+    doc.add_picture(img_path)
+    
+    docx_path = str(tmp_path / "doc_with_image.docx")
+    doc.save(docx_path)
+
+    with open(docx_path, "rb") as f:
+        docx_bytes = f.read()
+
+    md, num_pages = extract_document_markdown("doc_with_image.docx", docx_bytes, docx_path)
+    assert "Paragraph inside docx document" in md
+    assert "DOCX IMAGE TEXT" in md or "7788" in md
+
 def test_semantic_chunks_oversized_line_splitting():
     from sidecar.domain.ingestion import create_semantic_chunks
     long_line = "This is a very long text sentence. " * 100  # ~3500 chars
@@ -479,6 +531,88 @@ def test_reranker_cross_scoring():
     assert len(reranked) == 2
     assert reranked[0]["chunk_id"] == "c_rel"
     assert reranked[0]["score"] > reranked[1]["score"]
+
+
+def test_word_segmenter_defragment_and_compounds():
+    from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
+
+    # Test spaced letter de-fragmentation
+    spaced_raw = "LOCALITA * BORGO MA N TO VA NO Lo C.Villa Poma"
+    normalized_spaced = normalize_ocr_token_spacing(spaced_raw)
+    assert "MANTOVANO" in normalized_spaced
+
+    # Test compound with apostrophe segmentation
+    compound_raw = "Aseguitodell'eserciziodeldirittodirecessodal Contratto Telepass Family"
+    normalized_compound = normalize_ocr_token_spacing(compound_raw)
+    assert "seguito" in normalized_compound.lower()
+    assert "esercizio" in normalized_compound.lower()
+    assert "recesso" in normalized_compound.lower()
+
+    # Test preposition and phrase splitting
+    fused_raw = "conlapresente chiedelacessazione delcontratto sopraindicato viadel Serafico"
+    normalized_fused = normalize_ocr_token_spacing(fused_raw)
+    assert "con la presente" in normalized_fused
+    assert "chiede la cessazione" in normalized_fused
+    assert "del contratto" in normalized_fused
+    assert "sopra indicato" in normalized_fused
+    assert "via del" in normalized_fused
+
+
+def test_multilang_vocab_manager_and_segmentation():
+    from sidecar.domain.word_segmenter import normalize_language_code, get_vocab_manager, normalize_ocr_token_spacing
+
+    assert normalize_language_code("Italian") == "it"
+    assert normalize_language_code("eng") == "en"
+    assert normalize_language_code("Spanish") == "es"
+    assert normalize_language_code("fr_FR") == "fr"
+    assert normalize_language_code(None) == "it"
+
+    mgr = get_vocab_manager()
+    assert mgr.is_known_word("contratto", "it")
+    assert mgr.is_known_word("contract", "en")
+    assert mgr.get_word_zipf("casa", "it") > 0.0
+
+    # Test multi-language token spacing with language parameter
+    en_fused = "consequentderegistration of the equipment"
+    en_norm = normalize_ocr_token_spacing(en_fused, lang="en")
+    assert "equipment" in en_norm.lower()
+
+
+def test_vocab_sync_service_offline_and_caching(tmp_path):
+    import json
+    import pytest
+    from sidecar.services.vocab_service import VocabSyncService
+    from sidecar.domain.word_segmenter import MultiLangVocabManager
+
+    cache_dir = str(tmp_path / "vocab_cache")
+    svc = VocabSyncService(manifest_url="http://127.0.0.1:9999/nonexistent/manifest.json", cache_dir=cache_dir)
+    
+    # Run sync against offline URL
+    import asyncio
+    res = asyncio.run(svc.sync_vocabularies(timeout_sec=0.5))
+    assert res["status"] in ("offline", "cached")
+
+    # Verify custom local dictionary loading in MultiLangVocabManager
+    custom_vocab = {"personalizzato": 6.8, "ultratecnico": 7.2}
+    with open(tmp_path / "vocab_cache" / "it.json", "w", encoding="utf-8") as f:
+        json.dump(custom_vocab, f)
+
+    mgr = MultiLangVocabManager(cache_dir=cache_dir)
+    assert mgr.get_word_zipf("personalizzato", "it") == pytest.approx(6.8)
+    assert mgr.get_word_zipf("ultratecnico", "it") == pytest.approx(7.2)
+
+
+def test_vocab_status_and_sync_endpoints():
+    status_resp = client.get("/vocab/status")
+    assert status_resp.status_code == 200
+    data = status_resp.json()
+    assert "wordfreq_available" in data
+    assert "cached_languages" in data
+
+    sync_resp = client.post("/vocab/sync")
+    assert sync_resp.status_code == 200
+    sync_data = sync_resp.json()
+    assert "status" in sync_data
 
 
 if __name__ == "__main__":

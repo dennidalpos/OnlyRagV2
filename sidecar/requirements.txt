@@ -14,4 +14,4 @@ pillow>=10.0.0
 # and cannot both be installed) -- sidecar/infrastructure/ocr.py detects and uses CUDA automatically
 # once onnxruntime-gpu is present.
 rapidocr-onnxruntime>=1.4.0
-
+wordfreq>=3.1.0

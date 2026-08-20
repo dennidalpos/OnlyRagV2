@@ -51,8 +51,13 @@ OnlyRag V2 implementa due livelli di interfaccia:
 ---
 
 ### 1.3. Ingestione da Path (con Streaming)
-* **`POST /ingest-path`** — Ingestione sincrona da percorso file locale. Corpo: `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2" }`. Risposta: stessa struttura di `IngestResponse`.
-* **`POST /ingest-path-stream`** — Ingestione con streaming NDJSON progressivo. Corpo: `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2" }`. `Content-Type: application/x-ndjson`. Ogni riga è un evento `{ "type": "progress" | "done", "percent": 0-100, "step": "...", "data"?: IngestResponse }`.
+* **`POST /ingest-path`** — Ingestione sincrona da percorso file locale.
+  * **Corpo:** `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2", "max_tabular_rows"?: 500, "max_excel_rows_per_sheet"?: 250, "max_excel_sheets"?: 20 }`.
+  * **Risposta:** `IngestResponse` (`{ "id": "...", "filename": "...", "status": "indexed" | "indexed_fallback", "used_fallback_embeddings": boolean, ... }`).
+* **`POST /ingest-path-stream`** — Ingestione con streaming NDJSON progressivo.
+  * **Corpo:** `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2", "max_tabular_rows"?: 500, "max_excel_rows_per_sheet"?: 250, "max_excel_sheets"?: 20 }`.
+  * **Content-Type:** `application/x-ndjson`.
+  * **Eventi:** `{ "type": "progress" | "done", "percent": 0-100, "step": "...", "data"?: IngestResponse }`.
 
 ---
 
@@ -134,7 +139,13 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
-### 1.9. SLM Agent Studio — Diagnostica Log
+### 1.9. Sincronizzazione Vocabolari Multi-Lingua
+* **`POST /vocab/sync`**: Esegue il controllo asincrono degli aggiornamenti dei vocabolari di lingua upstream (scaricati atomicamente in `%APPDATA%/onlyrag-v2/vocab/`). Risposta: `{ "status": "success" | "cached" | "offline", "updated_languages": [...], "message": "..." }`.
+* **`GET /vocab/status`**: Restituisce lo stato delle lingue caricate in cache locale e la disponibilità della libreria `wordfreq`. Risposta: `{ "wordfreq_available": boolean, "cached_languages": [...], "cache_dir": "..." }`.
+
+---
+
+### 1.10. SLM Agent Studio — Diagnostica Log
 
 > Lo stack di orchestrazione SLM duplicato (`POST /agent/orchestrate`, `slm_tool_registry`, macchina a stati di retry L1/L2/L3) è stato rimosso: era ridondante rispetto al loop agentico principale (`agent:start-task`, vedi §2.2), che è l'unico percorso di esecuzione tool realmente usato dall'app. Rimane solo l'endpoint di diagnostica log qui sotto, usato da `SlmDiagnosticsPanel.tsx`.
 

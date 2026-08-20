@@ -35,6 +35,11 @@ CHUNKS_TABLE_NAME: str = "chunks"
 PROMPT_HISTORY_TABLE_NAME: str = "prompt_history"
 OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
+# Configurable table ingestion truncation limits
+TABULAR_MAX_ROWS: int = int(os.environ.get("ONLYRAG_TABULAR_MAX_ROWS", 300))
+EXCEL_MAX_ROWS_PER_SHEET: int = int(os.environ.get("ONLYRAG_EXCEL_MAX_ROWS_PER_SHEET", 150))
+EXCEL_MAX_SHEETS: int = int(os.environ.get("ONLYRAG_EXCEL_MAX_SHEETS", 10))
+
 import httpx
 
 httpx_client = httpx.Client(timeout=15.0)

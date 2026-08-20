@@ -71,9 +71,10 @@ export interface IngestedDocument {
   numPages: number
   numChunks: number
   extractedMarkdown: string
-  status: 'processing' | 'indexed' | 'error'
+  status: 'processing' | 'indexed' | 'indexed_fallback' | 'error'
   ingestedAt: string
   fileType: 'pdf' | 'image' | 'docx' | 'text'
+  usedFallbackEmbeddings?: boolean
 }
 
 export interface VectorSearchResult {

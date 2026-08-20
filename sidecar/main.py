@@ -37,8 +37,14 @@ from sidecar.services.ingest_service import (
 from sidecar.domain.translator import translate_document_inplace, UnsupportedDocumentTypeError
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
+from sidecar.services.vocab_service import background_vocab_sync_startup, get_vocab_sync_service
 
 app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.3.0")
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("FastAPI Sidecar starting up. Launching background vocabulary sync worker...")
+    asyncio.create_task(background_vocab_sync_startup())
 
 app.add_middleware(
     CORSMiddleware,
@@ -112,7 +118,10 @@ async def ingest_document_by_path(req: IngestPathRequest):
             process_and_index_document, filename, b"", resolved_path,
             req.vision_model, req.vision_prompt,
             normalize_with_llm=bool(req.normalize_with_llm),
-            normalization_model=req.normalization_model
+            normalization_model=req.normalization_model,
+            max_tabular_rows=req.max_tabular_rows,
+            max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
+            max_sheets=req.max_excel_sheets
         )
     except Exception as e:
         logger.error(f"Error ingesting document path {req.file_path}: {str(e)}")
@@ -131,7 +140,10 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
                 filename, b"", resolved_path,
                 vision_model=req.vision_model, vision_prompt=req.vision_prompt,
                 normalize_with_llm=bool(req.normalize_with_llm),
-                normalization_model=req.normalization_model
+                normalization_model=req.normalization_model,
+                max_tabular_rows=req.max_tabular_rows,
+                max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
+                max_sheets=req.max_excel_sheets
             ),
             media_type="application/x-ndjson"
         )
@@ -299,6 +311,26 @@ async def agent_logs_analyze(req: LogDiagnosticQuery):
     except Exception as exc:
         logger.error("Log analysis error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/vocab/sync")
+async def sync_vocab(request: Request):
+    """Triggers vocabulary update check from upstream repository/manifest."""
+    sync_svc = get_vocab_sync_service()
+    result = await sync_svc.sync_vocabularies(timeout_sec=5.0)
+    return result
+
+
+@app.get("/vocab/status")
+def get_vocab_status():
+    """Returns active vocabulary statuses and wordfreq availability."""
+    from sidecar.domain.word_segmenter import _WORDFREQ_AVAILABLE, get_vocab_manager
+    mgr = get_vocab_manager()
+    return {
+        "wordfreq_available": _WORDFREQ_AVAILABLE,
+        "cached_languages": list(mgr._local_vocab_cache.keys()),
+        "cache_dir": mgr.cache_dir
+    }
 
 
 if __name__ == "__main__":

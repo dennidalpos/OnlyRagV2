@@ -15,8 +15,8 @@ from sidecar.services.ingest_service import update_and_reindex_document
 # preserve it verbatim so the response can be split back into the same number of segments, in the
 # same order, and reassigned 1:1 to the runs that produced them.
 _RUN_SEPARATOR = "<<<RUN_SEP>>>"
-_TRANSLATE_BATCH_MAX_CHARS = 500
-_TRANSLATE_BATCH_MAX_ITEMS = 6
+_TRANSLATE_BATCH_MAX_CHARS = 350
+_TRANSLATE_BATCH_MAX_ITEMS = 4
 _OLLAMA_URL = "http://127.0.0.1:11434"
 
 # Fase 3 auto-fit: never shrink text below this absolute size or this fraction of the original
@@ -115,16 +115,15 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
     is_batch = _RUN_SEPARATOR in text
     if is_batch:
         system_content = (
-            f"You are an expert document, form, and contract translator. "
-            f"Translate all text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n"
-            f"Mandatory Rules:\n"
-            f"1. Translate ALL titles, headings, form labels, and administrative terms into {target_lang} "
-            f"(e.g. in English: 'NOME' -> 'FIRST NAME', 'COGNOME' -> 'SURNAME / LAST NAME', 'CODICE FISCALE' -> 'TAX CODE', 'N° CIVICO' -> 'STREET NUMBER', 'LOCALITA' -> 'LOCATION / CITY', 'CAP' -> 'POSTAL CODE', 'PROV' -> 'PROVINCE', 'CONTRATTO' -> 'CONTRACT', 'RICHIESTA CESSAZIONE' -> 'TERMINATION REQUEST', 'LUOGO E DATA' -> 'PLACE AND DATE', 'FIRMA LEGGIBILE' -> 'LEGIBLE SIGNATURE').\n"
-            f"2. Separate any fused words before translating (e.g. 'RICHIESTACESSAZIONECONTRATTO' -> 'CONTRACT TERMINATION REQUEST').\n"
-            f"3. Preserve raw data values: keep personal names, specific street addresses, code values, numbers, dates, emails, and URLs unchanged.\n"
-            f"4. The text contains segments separated by '{_RUN_SEPARATOR}' on its own line. "
-            f"Return EXACTLY the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line.\n"
-            f"5. Output ONLY the translated segments with NO preambles, explanations, quotes, or commentary."
+            f"You are a professional, expert document, form, and contract translator.\n"
+            f"Task: Translate ALL text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n\n"
+            f"Strict Universal Rules:\n"
+            f"1. TRANSLATE EVERY FIELD: You MUST translate every title, heading, section name, table header, form field label, instruction, footer, and administrative keyword into {target_lang} without exception.\n"
+            f"2. Separate any fused or concatenated words before translating.\n"
+            f"3. PRESERVE DATA VALUES ONLY: Keep proper personal names, specific street addresses, code numbers (e.g. tax ID codes, alphanumeric identifiers), pure numbers, dates, emails, and URLs unchanged.\n"
+            f"4. The text contains multiple distinct segments separated by '{_RUN_SEPARATOR}' on its own line. "
+            f"You MUST return EXACTLY the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line, preserving exact segment order.\n"
+            f"5. Output ONLY the translated segments with NO preambles, explanations, conversational text, markdown code blocks, or notes."
         )
         user_content = (
             f"Translate the following segments from {source_lang} to {target_lang}. "
@@ -132,14 +131,13 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
         )
     else:
         system_content = (
-            f"You are an expert document, form, and contract translator.\n"
-            f"Translate the given text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n"
-            f"Mandatory Rules:\n"
-            f"1. Translate ALL section titles, form field labels, headings, instructions, and administrative phrases into {target_lang}.\n"
-            f"   - Form field labels MUST be translated into {target_lang} (e.g. in English: 'NOME' -> 'FIRST NAME', 'COGNOME' -> 'SURNAME / LAST NAME', 'CODICE FISCALE' -> 'TAX CODE', 'N° CIVICO' -> 'STREET NUMBER', 'LOCALITA' -> 'LOCATION / CITY', 'CAP' -> 'POSTAL CODE', 'PROV' -> 'PROVINCE', 'CONTRATTO' -> 'CONTRACT', 'RICHIESTA CESSAZIONE' -> 'TERMINATION REQUEST', 'LUOGO E DATA' -> 'PLACE AND DATE', 'FIRMA LEGGIBILE' -> 'LEGIBLE SIGNATURE', 'I dati con * sono obbligatori' -> 'Data marked with * are mandatory').\n"
-            f"   - Separate any words that were fused by OCR before translating.\n"
-            f"2. Preserve raw data values: keep personal names, specific street addresses, code values (e.g. alphanumeric tax IDs), pure numbers, dates, email addresses, and URLs unchanged.\n"
-            f"3. Return ONLY the direct {target_lang} translation without prefixes, quotes, delimiters, or notes."
+            f"You are a professional, expert document, form, and contract translator.\n"
+            f"Task: Translate the given text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n\n"
+            f"Strict Universal Rules:\n"
+            f"1. TRANSLATE EVERY FIELD: You MUST translate every title, heading, section name, table header, form field label, instruction, footer, and administrative phrase into {target_lang}.\n"
+            f"2. Separate any words that were fused by OCR before translating.\n"
+            f"3. PRESERVE DATA VALUES ONLY: Keep proper personal names, specific street addresses, code numbers, pure digits, dates, email addresses, and URLs unchanged.\n"
+            f"4. Return ONLY the direct {target_lang} translation without prefixes, quotes, delimiters, or notes."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
@@ -197,9 +195,13 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
 
     def _should_skip_translation(s: str) -> bool:
         trimmed = s.strip()
-        if not trimmed or trimmed.isdigit():
+        if not trimmed:
+            return True
+        if trimmed.isdigit():
             return True
         if trimmed.startswith("http://") or trimmed.startswith("https://"):
+            return True
+        if all(c in "-_*=|/\\:.,; " for c in trimmed):
             return True
         return False
 
@@ -375,7 +377,7 @@ def _extract_pdf_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
                         color = span.get("color", color)
                         size_set = True
                         break
-        block_text = " ".join(t.strip() for t in line_texts if t.strip())
+        block_text = "\n".join(t.strip() for t in line_texts if t.strip())
         if block_text:
             blocks_out.append({"bbox": tuple(block["bbox"]), "text": block_text, "size": size, "color": color})
 
@@ -500,11 +502,15 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
         overflow = page.insert_textbox(rect, text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
         if overflow < 0:
             # Dynamic height expansion: expand rect height downwards to accommodate text
-            expanded_rect = pymupdf.Rect(rect.x0, rect.y0, rect.x1, min(page.rect.y1 - 5, rect.y1 + abs(overflow) + 4.0))
+            extra_h = max(10.0, abs(overflow) + 8.0)
+            expanded_rect = pymupdf.Rect(rect.x0, rect.y0, rect.x1, min(page.rect.y1 - 5, rect.y1 + extra_h))
             overflow2 = page.insert_textbox(expanded_rect, text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
             if overflow2 < 0:
-                # Guaranteed fallback: direct text insertion at anchor point
-                page.insert_text(pymupdf.Point(rect.x0, min(page.rect.y1 - 5, rect.y0 + fit_size)), text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
+                floor_size = max(_PDF_AUTOFIT_MIN_SIZE, orig_size * _PDF_AUTOFIT_MIN_RATIO)
+                overflow3 = page.insert_textbox(expanded_rect, text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
+                if overflow3 < 0:
+                    # Guaranteed fallback: direct text insertion at anchor point
+                    page.insert_text(pymupdf.Point(rect.x0, min(page.rect.y1 - 5, rect.y0 + floor_size)), text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
 
 
 def translate_pdf_inplace_fine(

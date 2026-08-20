@@ -773,6 +773,28 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
             )}
           </div>
 
+          {/* Fallback Embeddings Warning Banner */}
+          {ing.selectedDoc && (ing.selectedDoc.status === 'indexed_fallback' || ing.selectedDoc.usedFallbackEmbeddings) && (
+            <div className="bg-amber-950/40 border-b border-amber-800/60 px-4 py-2 flex items-center justify-between gap-3 text-xs text-amber-200 shrink-0">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Vettorizzazione in modalità Fallback:</strong> Questo documento è indicizzato con vettori base perché Ollama non era attivo durante l'ingestione.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => ing.handleSaveDocument()}
+                disabled={ing.isSaving}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm focus-ring shrink-0"
+                title="Re-indicizza calcolando i vettori semantici da Ollama"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${ing.isSaving ? 'animate-spin' : ''}`} />
+                <span>Re-indicizza Vettori</span>
+              </button>
+            </div>
+          )}
+
           {/* Main Paginated Split Layout */}
           {!ing.selectedDoc ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-3 text-slate-400">

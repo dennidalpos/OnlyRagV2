@@ -11,7 +11,7 @@ import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, EXPORT_DIR, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
-from sidecar.infrastructure.embeddings import generate_embedding
+from sidecar.infrastructure.embeddings import generate_embedding, generate_embedding_with_status
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.ingestion import (
     extract_document_markdown,
@@ -30,7 +30,10 @@ def process_and_index_document(
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
-    normalization_model: Optional[str] = None
+    normalization_model: Optional[str] = None,
+    max_tabular_rows: Optional[int] = None,
+    max_excel_rows_per_sheet: Optional[int] = None,
+    max_excel_sheets: Optional[int] = None
 ) -> IngestResponse:
     """Orchestrates document extraction, semantic chunking, embedding generation, and LanceDB indexing."""
     doc_id = str(uuid.uuid4())
@@ -51,7 +54,10 @@ def process_and_index_document(
         filename, content, persisted_path or file_path,
         vision_model=vision_model, vision_prompt=vision_prompt,
         normalize_with_llm=normalize_with_llm,
-        normalization_model=normalization_model
+        normalization_model=normalization_model,
+        max_tabular_rows=max_tabular_rows,
+        max_excel_rows=max_excel_rows_per_sheet,
+        max_sheets=max_excel_sheets
     )
     full_markdown = sanitize_extracted_text(full_markdown)
     raw_chunks = create_semantic_chunks(filename, full_markdown)
@@ -60,11 +66,13 @@ def process_and_index_document(
     file_size = os.path.getsize(persisted_path) if persisted_path and os.path.exists(persisted_path) else len(content)
     ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
 
-    # Parallel embedding computation
+    # Parallel embedding computation with fallback tracking
     chunk_records: List[Dict[str, Any]] = []
+    used_fallback_embeddings = False
+
     def embed_chunk(item):
         idx, text, sec_header = item
-        vec = generate_embedding(text)
+        vec, is_fallback = generate_embedding_with_status(text)
         return {
             "vector": vec,
             "chunk_id": f"{doc_id}_chunk_{idx}",
@@ -75,10 +83,18 @@ def process_and_index_document(
             "section_header": sec_header,
             "file_type": ext,
             "ingested_at": ingested_at,
+            "is_fallback": is_fallback,
         }
 
     with ThreadPoolExecutor(max_workers=min(4, max(1, len(raw_chunks)))) as executor:
-        chunk_records = list(executor.map(embed_chunk, raw_chunks))
+        raw_embedded = list(executor.map(embed_chunk, raw_chunks))
+
+    for rec in raw_embedded:
+        if rec.pop("is_fallback", False):
+            used_fallback_embeddings = True
+        chunk_records.append(rec)
+
+    doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
     if chunk_records:
         try:
@@ -109,9 +125,10 @@ def process_and_index_document(
         "num_pages": num_pages,
         "num_chunks": len(chunk_records),
         "extracted_markdown": full_markdown,
-        "status": "indexed",
+        "status": doc_status,
         "ingested_at": ingested_at,
-        "file_type": ext
+        "file_type": ext,
+        "used_fallback_embeddings": used_fallback_embeddings
     }]
 
     try:
@@ -128,7 +145,7 @@ def process_and_index_document(
                 pass
             lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
 
-    logger.info(f"Ingested {filename} into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed.")
+    logger.info(f"Ingested {filename} into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
 
     return IngestResponse(
         id=doc_id,
@@ -137,8 +154,9 @@ def process_and_index_document(
         num_pages=num_pages,
         num_chunks=len(chunk_records),
         extracted_markdown=full_markdown,
-        status="indexed",
-        ingested_at=ingested_at
+        status=doc_status,
+        ingested_at=ingested_at,
+        used_fallback_embeddings=used_fallback_embeddings
     )
 
 def process_and_index_document_generator(
@@ -148,7 +166,10 @@ def process_and_index_document_generator(
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
-    normalization_model: Optional[str] = None
+    normalization_model: Optional[str] = None,
+    max_tabular_rows: Optional[int] = None,
+    max_excel_rows_per_sheet: Optional[int] = None,
+    max_excel_sheets: Optional[int] = None
 ) -> Generator[str, None, None]:
     """
     Streaming NDJSON generator for real-time progress reporting during document extraction and LanceDB vectorization.
@@ -282,7 +303,10 @@ def process_and_index_document_generator(
             filename, content, persisted_path or file_path,
             vision_model=vision_model, vision_prompt=vision_prompt,
             normalize_with_llm=normalize_with_llm,
-            normalization_model=normalization_model
+            normalization_model=normalization_model,
+            max_tabular_rows=max_tabular_rows,
+            max_excel_rows=max_excel_rows_per_sheet,
+            max_sheets=max_excel_sheets
         )
 
     full_markdown = sanitize_extracted_text(full_markdown)
@@ -302,9 +326,13 @@ def process_and_index_document_generator(
     ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
 
     chunk_records: List[Dict[str, Any]] = []
+    used_fallback_embeddings = False
+
     for c_idx, item in enumerate(raw_chunks):
         idx, text, sec_header = item
-        vec = generate_embedding(text)
+        vec, is_fallback = generate_embedding_with_status(text)
+        if is_fallback:
+            used_fallback_embeddings = True
         chunk_records.append({
             "vector": vec,
             "chunk_id": f"{doc_id}_chunk_{idx}",
@@ -325,6 +353,8 @@ def process_and_index_document_generator(
                 "pipeline": "LanceDB Embeddings",
                 "fileName": filename
             }) + "\n"
+
+    doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
     if chunk_records:
         try:
@@ -361,9 +391,10 @@ def process_and_index_document_generator(
         "num_pages": num_pages,
         "num_chunks": len(chunk_records),
         "extracted_markdown": full_markdown,
-        "status": "indexed",
+        "status": doc_status,
         "ingested_at": ingested_at,
-        "file_type": ext
+        "file_type": ext,
+        "used_fallback_embeddings": used_fallback_embeddings
     }]
 
     try:
@@ -379,7 +410,7 @@ def process_and_index_document_generator(
                 pass
             lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
 
-    logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed.")
+    logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
 
     final_payload = {
         "id": doc_id,
@@ -389,8 +420,9 @@ def process_and_index_document_generator(
         "num_pages": num_pages,
         "num_chunks": len(chunk_records),
         "extracted_markdown": full_markdown,
-        "status": "indexed",
-        "ingested_at": ingested_at
+        "status": doc_status,
+        "ingested_at": ingested_at,
+        "used_fallback_embeddings": used_fallback_embeddings
     }
 
     yield json.dumps({
@@ -446,9 +478,11 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
     updated_at = datetime.datetime.now().isoformat()
 
     chunk_records: List[Dict[str, Any]] = []
+    used_fallback_embeddings = False
+
     def embed_chunk(item):
         idx, text, sec_header = item
-        vec = generate_embedding(text)
+        vec, is_fallback = generate_embedding_with_status(text)
         return {
             "vector": vec,
             "chunk_id": f"{doc_id}_chunk_{idx}",
@@ -459,10 +493,18 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
             "section_header": sec_header,
             "file_type": file_type,
             "ingested_at": updated_at,
+            "is_fallback": is_fallback,
         }
 
     with ThreadPoolExecutor(max_workers=min(4, max(1, len(raw_chunks)))) as executor:
-        chunk_records = list(executor.map(embed_chunk, raw_chunks))
+        raw_embedded = list(executor.map(embed_chunk, raw_chunks))
+
+    for rec in raw_embedded:
+        if rec.pop("is_fallback", False):
+            used_fallback_embeddings = True
+        chunk_records.append(rec)
+
+    doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
     if chunk_records and CHUNKS_TABLE_NAME in existing_tables:
         ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
@@ -482,13 +524,14 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
         "num_pages": num_pages,
         "num_chunks": len(chunk_records),
         "extracted_markdown": clean_markdown,
-        "status": "indexed",
+        "status": doc_status,
         "ingested_at": updated_at,
-        "file_type": file_type
+        "file_type": file_type,
+        "used_fallback_embeddings": used_fallback_embeddings
     }]
     dtbl.add(new_doc_record)
 
-    logger.info(f"Re-indexed document {doc_id} ({filename}): {len(chunk_records)} chunks updated in LanceDB.")
+    logger.info(f"Re-indexed document {doc_id} ({filename}): {len(chunk_records)} chunks updated in LanceDB (status={doc_status}).")
 
     return IngestResponse(
         id=doc_id,
@@ -497,8 +540,9 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
         num_pages=num_pages,
         num_chunks=len(chunk_records),
         extracted_markdown=clean_markdown,
-        status="indexed",
-        ingested_at=updated_at
+        status=doc_status,
+        ingested_at=updated_at,
+        used_fallback_embeddings=used_fallback_embeddings
     )
 
 def render_document_page_preview(doc_id: str, page_num: int) -> PagePreviewResponse:

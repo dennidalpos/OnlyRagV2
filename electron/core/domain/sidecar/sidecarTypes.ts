@@ -13,9 +13,10 @@ export interface IngestedDocument {
   num_pages: number
   num_chunks: number
   extractedMarkdown: string
-  status: 'processing' | 'ready' | 'error'
+  status: 'processing' | 'ready' | 'indexed' | 'indexed_fallback' | 'error'
   ingested_at: string
   file_type: string
+  used_fallback_embeddings?: boolean
 }
 
 export interface VectorSearchResult {

@@ -375,6 +375,19 @@ export interface IngestionStreamProgressPayload {
   data?: IngestedDocument
 }
 
+export interface TranslateProgressPayload {
+  type: 'start' | 'progress' | 'done' | 'error'
+  doc_id?: string
+  filename?: string
+  page?: number
+  total_pages?: number
+  total_blocks?: number
+  phase?: 'extracting_blocks' | 'translating_blocks' | 'reconstructing_layout' | 'translating_runs'
+  percent?: number
+  error?: string
+  data?: IngestedDocument
+}
+
 export interface PagePreviewData {
   docId: string
   pageNumber: number
@@ -482,6 +495,7 @@ export interface IElectronAPI {
   onWorkspaceFileDeleted?: (callback: (data: { filePath: string }) => void) => () => void
   onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
+  onTranslateProgress?: (callback: (data: TranslateProgressPayload) => void) => () => void
   benchmarkModel: (modelName: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
   listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>
   listHubSources: () => Promise<SkillHubSource[]>

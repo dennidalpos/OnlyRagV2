@@ -35,9 +35,123 @@ def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
         logger.debug(f"Could not list installed Ollama models: {err}")
     return None
 
-def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
-    """Prepares image for OCR, normalizing color channels, applying contrast enhancement, and downscaling only if exceeding max_dim."""
+def compute_deskew_angle(image_np: Any) -> float:
+    """Computes skew angle (in degrees) of a text document image using morphological filtering
+    and minimum bounding area of text contours. Returns angle in [-45, 45]."""
     try:
+        import cv2
+        import numpy as np
+
+        if len(image_np.shape) == 3:
+            gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = image_np
+
+        # Binarize with Otsu
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+
+        # Dilate horizontally to connect text lines
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (30, 5))
+        dilated = cv2.dilate(thresh, kernel, iterations=2)
+
+        # Find all contours
+        contours, _ = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        angles = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < 1000:
+                continue
+            rect = cv2.minAreaRect(c)
+            angle = rect[-1]
+            if angle < -45:
+                angle = -(90 + angle)
+            elif angle > 45:
+                angle = 90 - angle
+            angles.append(angle)
+
+        if not angles:
+            return 0.0
+
+        median_angle = float(np.median(angles))
+        return median_angle
+    except Exception as e:
+        logger.debug(f"Deskew angle computation skipped: {e}")
+        return 0.0
+
+
+def deskew_image(image_bytes: bytes) -> bytes:
+    """Deskews an input document image bytes if skew exceeds 0.5 degrees, returning deskewed PNG bytes."""
+    try:
+        import cv2
+        import numpy as np
+
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return image_bytes
+
+        angle = compute_deskew_angle(img)
+        if abs(angle) < 0.5 or abs(angle) > 45.0:
+            return image_bytes
+
+        h, w = img.shape[:2]
+        center = (w // 2, h // 2)
+        rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
+        deskewed = cv2.warpAffine(img, rot_mat, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+        is_success, buffer = cv2.imencode(".png", deskewed)
+        if is_success:
+            logger.info(f"Scanned document deskewed by {angle:.2f} degrees.")
+            return buffer.tobytes()
+    except Exception as err:
+        logger.debug(f"Deskewing failed: {err}")
+    return image_bytes
+
+
+def inpaint_raster_bounding_boxes(image_bytes: bytes, bboxes: List[Tuple[float, float, float, float]], inpaint_radius: int = 3) -> bytes:
+    """Removes text in bounding boxes (x0, y0, x1, y1) from a raster image using OpenCV Navier-Stokes/Telea inpainting,
+    preserving backgrounds and textures under the original text."""
+    if not bboxes:
+        return image_bytes
+    try:
+        import cv2
+        import numpy as np
+
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return image_bytes
+
+        h, w = img.shape[:2]
+        mask = np.zeros((h, w), dtype=np.uint8)
+
+        for bbox in bboxes:
+            x0, y0, x1, y1 = bbox
+            ix0 = max(0, int(round(x0 - 2)))
+            iy0 = max(0, int(round(y0 - 2)))
+            ix1 = min(w, int(round(x1 + 2)))
+            iy1 = min(h, int(round(y1 + 2)))
+            if ix1 > ix0 and iy1 > iy0:
+                cv2.rectangle(mask, (ix0, iy0), (ix1, iy1), 255, -1)
+
+        inpainted = cv2.inpaint(img, mask, inpaintRadius=inpaint_radius, flags=cv2.INPAINT_TELEA)
+        is_success, buffer = cv2.imencode(".png", inpainted)
+        if is_success:
+            return buffer.tobytes()
+    except Exception as err:
+        logger.warning(f"Inpainting bounding boxes failed: {err}")
+    return image_bytes
+
+
+def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
+    """Prepares image for OCR, normalizing color channels, applying contrast enhancement, deskewing, and downscaling only if exceeding max_dim."""
+    try:
+        # Apply deskewing first for scanned images (graceful fallback on failure)
+        try:
+            image_bytes = deskew_image(image_bytes)
+        except Exception as deskew_err:
+            logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
+
         from PIL import Image, ImageOps, ImageEnhance
         import io
         Image.MAX_IMAGE_PIXELS = 60_000_000

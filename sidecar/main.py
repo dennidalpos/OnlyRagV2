@@ -34,7 +34,11 @@ from sidecar.services.ingest_service import (
     update_and_reindex_document,
     render_document_page_preview
 )
-from sidecar.domain.translator import translate_document_inplace, UnsupportedDocumentTypeError
+from sidecar.domain.translator import (
+    translate_document_inplace,
+    translate_document_stream_generator,
+    UnsupportedDocumentTypeError
+)
 from sidecar.services.search_service import perform_vector_search, list_stored_documents, delete_stored_document
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 from sidecar.services.vocab_service import background_vocab_sync_startup, get_vocab_sync_service
@@ -121,7 +125,7 @@ async def ingest_document_by_path(req: IngestPathRequest):
             normalization_model=req.normalization_model,
             max_tabular_rows=req.max_tabular_rows,
             max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
-            max_sheets=req.max_excel_sheets
+            max_excel_sheets=req.max_excel_sheets
         )
     except Exception as e:
         logger.error(f"Error ingesting document path {req.file_path}: {str(e)}")
@@ -181,6 +185,28 @@ async def translate_document_inplace_endpoint(doc_id: str, req: TranslateInplace
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error translating document {doc_id} in place: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/documents/{doc_id}/translate-inplace-stream")
+async def translate_document_inplace_stream_endpoint(doc_id: str, req: TranslateInplaceRequest):
+    logger.info(f"Streaming in-place translation requested for document {doc_id}: {req.source_lang} -> {req.target_lang}")
+    try:
+        return StreamingResponse(
+            translate_document_stream_generator(
+                doc_id,
+                req.source_lang,
+                req.target_lang,
+                model=req.model or "llama3.2",
+                target_dir=req.target_dir
+            ),
+            media_type="application/x-ndjson"
+        )
+    except UnsupportedDocumentTypeError as type_err:
+        raise HTTPException(status_code=400, detail=str(type_err))
+    except ValueError as val_err:
+        raise HTTPException(status_code=404, detail=str(val_err))
+    except Exception as e:
+        logger.error(f"Error initiating streaming translation for document {doc_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/documents/{doc_id}/page-preview/{page_num}", response_model=PagePreviewResponse)

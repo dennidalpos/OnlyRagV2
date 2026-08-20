@@ -33,9 +33,12 @@ def process_and_index_document(
     normalization_model: Optional[str] = None,
     max_tabular_rows: Optional[int] = None,
     max_excel_rows_per_sheet: Optional[int] = None,
-    max_excel_sheets: Optional[int] = None
+    max_excel_sheets: Optional[int] = None,
+    max_sheets: Optional[int] = None,
+    **kwargs: Any
 ) -> IngestResponse:
     """Orchestrates document extraction, semantic chunking, embedding generation, and LanceDB indexing."""
+    effective_max_sheets = max_excel_sheets if max_excel_sheets is not None else max_sheets
     doc_id = str(uuid.uuid4())
 
     persisted_path = file_path or ""
@@ -57,7 +60,7 @@ def process_and_index_document(
         normalization_model=normalization_model,
         max_tabular_rows=max_tabular_rows,
         max_excel_rows=max_excel_rows_per_sheet,
-        max_sheets=max_excel_sheets
+        max_sheets=effective_max_sheets
     )
     full_markdown = sanitize_extracted_text(full_markdown)
     raw_chunks = create_semantic_chunks(filename, full_markdown)
@@ -169,270 +172,282 @@ def process_and_index_document_generator(
     normalization_model: Optional[str] = None,
     max_tabular_rows: Optional[int] = None,
     max_excel_rows_per_sheet: Optional[int] = None,
-    max_excel_sheets: Optional[int] = None
+    max_excel_sheets: Optional[int] = None,
+    max_sheets: Optional[int] = None,
+    **kwargs: Any
 ) -> Generator[str, None, None]:
     """
     Streaming NDJSON generator for real-time progress reporting during document extraction and LanceDB vectorization.
     """
+    effective_max_sheets = max_excel_sheets if max_excel_sheets is not None else max_sheets
     doc_id = str(uuid.uuid4())
     persisted_path = file_path or ""
 
-    if not persisted_path or not os.path.exists(persisted_path):
-        if content:
-            os.makedirs(EXPORT_DIR, exist_ok=True)
-            cached_file = os.path.join(EXPORT_DIR, f"source_{doc_id}_{filename}")
-            try:
-                with open(cached_file, "wb") as f:
-                    f.write(content)
-                persisted_path = cached_file
-            except Exception as save_err:
-                logger.warning(f"Could not cache source file to disk: {save_err}")
+    try:
+        if not persisted_path or not os.path.exists(persisted_path):
+            if content:
+                os.makedirs(EXPORT_DIR, exist_ok=True)
+                cached_file = os.path.join(EXPORT_DIR, f"source_{doc_id}_{filename}")
+                try:
+                    with open(cached_file, "wb") as f:
+                        f.write(content)
+                    persisted_path = cached_file
+                except Exception as save_err:
+                    logger.warning(f"Could not cache source file to disk: {save_err}")
 
-    yield json.dumps({
-        "type": "progress",
-        "percent": 5,
-        "step": f"Avvio Fast-Router e pre-analisi file: {filename}...",
-        "pipeline": "Fast-Router Layout",
-        "fileName": filename
-    }) + "\n"
-
-    category = classify_file_type(filename)
-    num_pages = 1
-    page_blocks: List[Tuple[int, str]] = []
-
-    if category == DocumentCategory.PDF:
-        try:
-            if persisted_path and os.path.exists(persisted_path):
-                pdf_doc = pymupdf.open(persisted_path)
-            else:
-                pdf_doc = pymupdf.open(stream=content, filetype="pdf")
-
-            if pdf_doc.needs_pass != 0 or (pdf_doc.is_encrypted and pdf_doc.needs_pass):
-                pdf_doc.close()
-                err_msg = "Documento protetto da password: il file PDF è crittografato e richiede una password per l'apertura."
-                yield json.dumps({
-                    "type": "error",
-                    "step": err_msg,
-                    "error": err_msg,
-                    "fileName": filename
-                }) + "\n"
-                return
-
-            try:
-                num_pages = len(pdf_doc)
-                yield json.dumps({
-                    "type": "progress",
-                    "percent": 10,
-                    "step": f"Rilevate {num_pages} pagine nel documento PDF. Inizio estrazione ad alta precisione...",
-                    "pipeline": "PDF Stream & Table Extraction",
-                    "page": 1,
-                    "total_pages": num_pages,
-                    "fileName": filename
-                }) + "\n"
-
-                # Phase 1 (sequential, PyMuPDF-bound): routing analysis + raw byte extraction for
-                # every page. PyMuPDF Document/Page objects are not safe to share across threads,
-                # so all page/doc access happens here, on this single thread.
-                work_items: List[Dict[str, Any]] = []
-                page_render_meta: Dict[int, Dict[str, Any]] = {}
-                for page_idx in range(num_pages):
-                    page_num = page_idx + 1
-                    page = pdf_doc.load_page(page_idx)
-
-                    struct_info = analyze_pdf_page_structure(page)
-                    strategy = struct_info.get("strategy")
-                    md_tables, _ = extract_tables_from_page(page)
-                    table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
-                    raw_text = page.get_text("text").strip()
-                    used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
-
-                    work_items.append(prepare_pdf_page_work_item(
-                        pdf_doc, page, page_num, raw_text, md_tables, used_ocr,
-                        vision_model=vision_model,
-                        vision_prompt=vision_prompt,
-                        normalize_with_llm=normalize_with_llm,
-                        normalization_model=normalization_model
-                    ))
-                    page_render_meta[page_num] = {
-                        "table_info": table_info,
-                        "used_ocr": used_ocr,
-                    }
-
-                # Phase 2 (concurrent, bytes-only): OCR rendering
-                render_concurrency = min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))
-                with ThreadPoolExecutor(max_workers=render_concurrency) as executor:
-                    for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
-                        meta = page_render_meta[result_page_num]
-                        if meta["used_ocr"]:
-                            step_msg = f"Pagina {result_page_num}/{num_pages}: OCR Layout completato."
-                            pipeline_label = "OCR Layout (Scansione)"
-                        else:
-                            step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} completata."
-                            pipeline_label = "PDF Stream & Table Finder"
-
-                        yield json.dumps({
-                            "type": "progress",
-                            "percent": int(10 + (result_page_num / num_pages) * 55),
-                            "step": step_msg,
-                            "pipeline": pipeline_label,
-                            "page": result_page_num,
-                            "total_pages": num_pages,
-                            "fileName": filename
-                        }) + "\n"
-
-                        page_blocks.append((result_page_num, page_content))
-            finally:
-                pdf_doc.close()
-
-            paginated_sections = [f"## Page {p_idx}\n\n{p_text}" for p_idx, p_text in page_blocks]
-            full_markdown = f"# {filename}\n\n" + "\n\n".join(paginated_sections)
-        except Exception as pdf_err:
-            logger.warning(f"PyMuPDF streaming parse error: {pdf_err}")
-            full_markdown = f"# {filename}\n\n## Page 1\n\n[Error reading PDF pages]"
-
-    else:
-        # Non-PDF files (DOCX, Image, Tabular, Text)
         yield json.dumps({
             "type": "progress",
-            "percent": 35,
-            "step": f"Estrazione contenuti strutturati per file {filename} ({category})...",
-            "pipeline": "Structured Document Extractor",
+            "percent": 5,
+            "step": f"Avvio Fast-Router e pre-analisi file: {filename}...",
+            "pipeline": "Fast-Router Layout",
             "fileName": filename
         }) + "\n"
-        full_markdown, num_pages = extract_document_markdown(
-            filename, content, persisted_path or file_path,
-            vision_model=vision_model, vision_prompt=vision_prompt,
-            normalize_with_llm=normalize_with_llm,
-            normalization_model=normalization_model,
-            max_tabular_rows=max_tabular_rows,
-            max_excel_rows=max_excel_rows_per_sheet,
-            max_sheets=max_excel_sheets
-        )
 
-    full_markdown = sanitize_extracted_text(full_markdown)
+        category = classify_file_type(filename)
+        num_pages = 1
+        page_blocks: List[Tuple[int, str]] = []
 
-    yield json.dumps({
-        "type": "progress",
-        "percent": 68,
-        "step": "Creazione dei chunk semantici header-aware...",
-        "pipeline": "Semantic Header Chunking",
-        "fileName": filename
-    }) + "\n"
+        if category == DocumentCategory.PDF:
+            try:
+                if persisted_path and os.path.exists(persisted_path):
+                    pdf_doc = pymupdf.open(persisted_path)
+                else:
+                    pdf_doc = pymupdf.open(stream=content, filetype="pdf")
 
-    raw_chunks = create_semantic_chunks(filename, full_markdown)
-    total_chunks = len(raw_chunks)
-    ingested_at = datetime.datetime.now().isoformat()
-    file_size = os.path.getsize(persisted_path) if persisted_path and os.path.exists(persisted_path) else len(content)
-    ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
+                if pdf_doc.needs_pass != 0 or (pdf_doc.is_encrypted and pdf_doc.needs_pass):
+                    pdf_doc.close()
+                    err_msg = "Documento protetto da password: il file PDF è crittografato e richiede una password per l'apertura."
+                    yield json.dumps({
+                        "type": "error",
+                        "step": err_msg,
+                        "error": err_msg,
+                        "fileName": filename
+                    }) + "\n"
+                    return
 
-    chunk_records: List[Dict[str, Any]] = []
-    used_fallback_embeddings = False
+                try:
+                    num_pages = len(pdf_doc)
+                    yield json.dumps({
+                        "type": "progress",
+                        "percent": 10,
+                        "step": f"Rilevate {num_pages} pagine nel documento PDF. Inizio estrazione ad alta precisione...",
+                        "pipeline": "PDF Stream & Table Extraction",
+                        "page": 1,
+                        "total_pages": num_pages,
+                        "fileName": filename
+                    }) + "\n"
 
-    for c_idx, item in enumerate(raw_chunks):
-        idx, text, sec_header = item
-        vec, is_fallback = generate_embedding_with_status(text)
-        if is_fallback:
-            used_fallback_embeddings = True
-        chunk_records.append({
-            "vector": vec,
-            "chunk_id": f"{doc_id}_chunk_{idx}",
-            "doc_id": doc_id,
-            "doc_name": filename,
-            "text": text,
-            "chunk_index": idx,
-            "section_header": sec_header,
-            "file_type": ext,
-            "ingested_at": ingested_at,
-        })
-        if c_idx % max(1, total_chunks // 10) == 0 or c_idx == total_chunks - 1:
-            progress_pct = int(70 + ((c_idx + 1) / total_chunks) * 24)
+                    work_items: List[Dict[str, Any]] = []
+                    page_render_meta: Dict[int, Dict[str, Any]] = {}
+                    for page_idx in range(num_pages):
+                        page_num = page_idx + 1
+                        page = pdf_doc.load_page(page_idx)
+
+                        struct_info = analyze_pdf_page_structure(page)
+                        strategy = struct_info.get("strategy")
+                        md_tables, _ = extract_tables_from_page(page)
+                        table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
+                        raw_text = page.get_text("text").strip()
+                        used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
+
+                        work_items.append(prepare_pdf_page_work_item(
+                            pdf_doc, page, page_num, raw_text, md_tables, used_ocr,
+                            vision_model=vision_model,
+                            vision_prompt=vision_prompt,
+                            normalize_with_llm=normalize_with_llm,
+                            normalization_model=normalization_model
+                        ))
+                        page_render_meta[page_num] = {
+                            "table_info": table_info,
+                            "used_ocr": used_ocr,
+                        }
+
+                    render_concurrency = min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))
+                    with ThreadPoolExecutor(max_workers=render_concurrency) as executor:
+                        for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
+                            meta = page_render_meta[result_page_num]
+                            if meta["used_ocr"]:
+                                step_msg = f"Pagina {result_page_num}/{num_pages}: OCR Layout completato."
+                                pipeline_label = "OCR Layout (Scansione)"
+                            else:
+                                step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} completata."
+                                pipeline_label = "PDF Stream & Table Finder"
+
+                            yield json.dumps({
+                                "type": "progress",
+                                "percent": int(10 + (result_page_num / num_pages) * 55),
+                                "step": step_msg,
+                                "pipeline": pipeline_label,
+                                "page": result_page_num,
+                                "total_pages": num_pages,
+                                "fileName": filename
+                            }) + "\n"
+
+                            page_blocks.append((result_page_num, page_content))
+                finally:
+                    pdf_doc.close()
+
+                paginated_sections = [f"## Page {p_idx}\n\n{p_text}" for p_idx, p_text in page_blocks]
+                full_markdown = f"# {filename}\n\n" + "\n\n".join(paginated_sections)
+            except Exception as pdf_err:
+                logger.warning(f"PyMuPDF streaming parse error: {pdf_err}")
+                full_markdown = f"# {filename}\n\n## Page 1\n\n[Error reading PDF pages]"
+
+        else:
+            # Non-PDF files (DOCX, Image, Tabular, Text)
             yield json.dumps({
                 "type": "progress",
-                "percent": progress_pct,
-                "step": f"Vettorizzazione Chunk {c_idx + 1}/{total_chunks} (nomic-embed-text)...",
-                "pipeline": "LanceDB Embeddings",
+                "percent": 35,
+                "step": f"Estrazione contenuti strutturati per file {filename} ({category})...",
+                "pipeline": "Structured Document Extractor",
+                "fileName": filename
+            }) + "\n"
+            full_markdown, num_pages = extract_document_markdown(
+                filename, content, persisted_path or file_path,
+                vision_model=vision_model, vision_prompt=vision_prompt,
+                normalize_with_llm=normalize_with_llm,
+                normalization_model=normalization_model,
+                max_tabular_rows=max_tabular_rows,
+                max_excel_rows=max_excel_rows_per_sheet,
+                max_sheets=effective_max_sheets
+            )
+
+        full_markdown = sanitize_extracted_text(full_markdown)
+
+        yield json.dumps({
+            "type": "progress",
+            "percent": 68,
+            "step": "Creazione dei chunk semantici header-aware...",
+            "pipeline": "Semantic Header Chunking",
+            "fileName": filename
+        }) + "\n"
+
+        raw_chunks = create_semantic_chunks(filename, full_markdown)
+        total_chunks = len(raw_chunks)
+        ingested_at = datetime.datetime.now().isoformat()
+        file_size = os.path.getsize(persisted_path) if persisted_path and os.path.exists(persisted_path) else len(content)
+        ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
+
+        chunk_records: List[Dict[str, Any]] = []
+        used_fallback_embeddings = False
+
+        for c_idx, item in enumerate(raw_chunks):
+            idx, text, sec_header = item
+            vec, is_fallback = generate_embedding_with_status(text)
+            if is_fallback:
+                used_fallback_embeddings = True
+            chunk_records.append({
+                "vector": vec,
+                "chunk_id": f"{doc_id}_chunk_{idx}",
+                "doc_id": doc_id,
+                "doc_name": filename,
+                "text": text,
+                "chunk_index": idx,
+                "section_header": sec_header,
+                "file_type": ext,
+                "ingested_at": ingested_at,
+            })
+            if total_chunks > 0 and (c_idx % max(1, total_chunks // 10) == 0 or c_idx == total_chunks - 1):
+                progress_pct = int(70 + ((c_idx + 1) / max(1, total_chunks)) * 24)
+                yield json.dumps({
+                    "type": "progress",
+                    "percent": progress_pct,
+                    "step": f"Vettorizzazione Chunk {c_idx + 1}/{total_chunks} (nomic-embed-text)...",
+                    "pipeline": "LanceDB Embeddings",
+                    "fileName": filename
+                }) + "\n"
+
+        doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
+
+        if chunk_records:
+            try:
+                ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
+                ctbl.add(chunk_records)
+            except Exception:
+                try:
+                    ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records, mode="overwrite")
+                except Exception as err:
+                    logger.warning(f"Re-creating {CHUNKS_TABLE_NAME} table due to error: {err}")
+                    try:
+                        lance_db.drop_table(CHUNKS_TABLE_NAME)
+                    except Exception:
+                        pass
+                    ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records)
+
+            yield json.dumps({
+                "type": "progress",
+                "percent": 96,
+                "step": "Creazione e aggiornamento indice Full-Text Search (BM25)...",
+                "pipeline": "LanceDB FTS BM25",
                 "fileName": filename
             }) + "\n"
 
-    doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
-
-    if chunk_records:
-        try:
-            ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-            ctbl.add(chunk_records)
-        except Exception:
             try:
-                ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records)
-            except Exception as err:
-                try:
-                    lance_db.drop_table(CHUNKS_TABLE_NAME)
-                except Exception:
-                    pass
-                ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records)
-
-        yield json.dumps({
-            "type": "progress",
-            "percent": 96,
-            "step": "Creazione e aggiornamento indice Full-Text Search (BM25)...",
-            "pipeline": "LanceDB FTS BM25",
-            "fileName": filename
-        }) + "\n"
-
-        try:
-            ctbl.create_fts_index("text", replace=True)
-        except Exception:
-            pass
-
-    doc_record = [{
-        "id": doc_id,
-        "filename": filename,
-        "file_path": persisted_path,
-        "file_size": file_size,
-        "num_pages": num_pages,
-        "num_chunks": len(chunk_records),
-        "extracted_markdown": full_markdown,
-        "status": doc_status,
-        "ingested_at": ingested_at,
-        "file_type": ext,
-        "used_fallback_embeddings": used_fallback_embeddings
-    }]
-
-    try:
-        dtbl = lance_db.open_table(DOCS_TABLE_NAME)
-        dtbl.add(doc_record)
-    except Exception:
-        try:
-            lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
-        except Exception:
-            try:
-                lance_db.drop_table(DOCS_TABLE_NAME)
+                ctbl.create_fts_index("text", replace=True)
             except Exception:
                 pass
-            lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
 
-    logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
+        doc_record = [{
+            "id": doc_id,
+            "filename": filename,
+            "file_path": persisted_path,
+            "file_size": file_size,
+            "num_pages": num_pages,
+            "num_chunks": len(chunk_records),
+            "extracted_markdown": full_markdown,
+            "status": doc_status,
+            "ingested_at": ingested_at,
+            "file_type": ext,
+            "used_fallback_embeddings": used_fallback_embeddings
+        }]
 
-    final_payload = {
-        "id": doc_id,
-        "filename": filename,
-        "filePath": persisted_path,
-        "file_size": file_size,
-        "num_pages": num_pages,
-        "num_chunks": len(chunk_records),
-        "extracted_markdown": full_markdown,
-        "status": doc_status,
-        "ingested_at": ingested_at,
-        "used_fallback_embeddings": used_fallback_embeddings
-    }
+        try:
+            dtbl = lance_db.open_table(DOCS_TABLE_NAME)
+            dtbl.add(doc_record)
+        except Exception:
+            try:
+                lance_db.create_table(DOCS_TABLE_NAME, data=doc_record, mode="overwrite")
+            except Exception:
+                try:
+                    lance_db.drop_table(DOCS_TABLE_NAME)
+                except Exception:
+                    pass
+                lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
 
-    yield json.dumps({
-        "type": "done",
-        "percent": 100,
-        "step": "Ingestione e indicizzazione completate con successo!",
-        "pipeline": "Completato",
-        "fileName": filename,
-        "data": final_payload
-    }) + "\n"
+        logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
+
+        final_payload = {
+            "id": doc_id,
+            "filename": filename,
+            "filePath": persisted_path,
+            "file_size": file_size,
+            "num_pages": num_pages,
+            "num_chunks": len(chunk_records),
+            "extracted_markdown": full_markdown,
+            "status": doc_status,
+            "ingested_at": ingested_at,
+            "used_fallback_embeddings": used_fallback_embeddings
+        }
+
+        yield json.dumps({
+            "type": "done",
+            "percent": 100,
+            "step": "Ingestione e indicizzazione completate con successo!",
+            "pipeline": "Completato",
+            "fileName": filename,
+            "data": final_payload
+        }) + "\n"
+
+    except Exception as exc:
+        import traceback
+        err_msg = f"Errore durante l'ingestione: {str(exc)}"
+        logger.error(f"Ingestion streaming exception for {filename}: {exc}\n{traceback.format_exc()}")
+        yield json.dumps({
+            "type": "error",
+            "step": err_msg,
+            "error": str(exc),
+            "fileName": filename
+        }) + "\n"
 
 def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestResponse:
     """

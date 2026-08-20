@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import uuid
 from typing import Any, Dict, List, Tuple, Optional
 import docx
 import httpx
@@ -42,6 +43,67 @@ _PDF_LANG_FONT_RULES: List[Tuple[str, str]] = [
     ("traditional chinese", os.path.join(_PDF_FONT_DIR, "NotoSansCJKtc-Regular.otf")),
     ("chinese", os.path.join(_PDF_FONT_DIR, "NotoSansCJKsc-Regular.otf")),  # default: Simplified
 ]
+
+
+_LANG_PATTERNS = {
+    "chinese": re.compile(r'[\u4e00-\u9fff]'),
+    "japanese": re.compile(r'[\u3040-\u30ff\u31f0-\u31ff]'),
+    "korean": re.compile(r'[\uac00-\ud7af\u1100-\u11ff]'),
+    "cyrillic": re.compile(r'[\u0400-\u04ff]'),
+    "arabic": re.compile(r'[\u0600-\u06ff]'),
+    "greek": re.compile(r'[\u0370-\u03ff]'),
+}
+
+_LATIN_STOP_WORDS = {
+    "italian": {"di", "da", "in", "con", "su", "per", "tra", "fra", "il", "lo", "la", "gli", "del", "della", "dei", "delle", "questo", "quello", "sono", "anche", "come", "più", "dati", "documento", "sezione", "totale", "tabella"},
+    "english": {"the", "and", "that", "was", "for", "with", "they", "this", "from", "will", "would", "there", "their", "total", "invoice", "document", "date", "table", "section", "overview"},
+    "french": {"les", "des", "dans", "pour", "avec", "tout", "faire", "cette", "sont", "nous", "vous", "ils", "document", "tableau"},
+    "german": {"der", "die", "das", "und", "den", "von", "mit", "sich", "des", "auf", "für", "ist", "dem", "nicht", "eine", "auch", "werden", "aus", "nach", "wird", "dokument", "tabelle"},
+    "spanish": {"los", "las", "unos", "unas", "del", "para", "por", "con", "sin", "sobre", "entre", "hasta", "desde", "este", "esta", "estos", "estas", "son", "como", "pero", "más", "documento"},
+}
+
+
+def detect_block_language(text: str) -> Optional[str]:
+    """Classifies language of a text block based on Unicode character scripts and stop-word distributions.
+    Returns detected language name in lowercase (e.g. 'italian', 'english', 'chinese') or None if ambiguous/short."""
+    if not text or len(text.strip()) < 15:
+        return None
+
+    cleaned = text.strip()
+    for lang, pattern in _LANG_PATTERNS.items():
+        if pattern.search(cleaned):
+            return lang
+
+    words = re.findall(r'\b[a-zA-Zàèéìòùáéíóúäöüßñç]+\b', cleaned.lower())
+    if len(words) < 3:
+        return None
+
+    word_set = set(words)
+    best_lang = None
+    max_matches = 0
+
+    for lang, stop_words in _LATIN_STOP_WORDS.items():
+        matches = len(word_set.intersection(stop_words))
+        if matches > max_matches:
+            max_matches = matches
+            best_lang = lang
+
+    if max_matches >= 2:
+        return best_lang
+
+    return None
+
+
+def is_block_in_target_lang(text: str, target_lang: str) -> bool:
+    """Returns True if the block is with high confidence already in target_lang, allowing it to be skipped."""
+    if not text or not target_lang:
+        return False
+    t_lang_lower = target_lang.lower().strip()
+    detected = detect_block_language(text)
+    if detected:
+        if detected in t_lang_lower or t_lang_lower in detected:
+            return True
+    return False
 
 
 def _resolve_pdf_font_file(target_lang: str) -> str:
@@ -123,7 +185,8 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"3. PRESERVE DATA VALUES ONLY: Keep proper personal names, specific street addresses, code numbers (e.g. tax ID codes, alphanumeric identifiers), pure numbers, dates, emails, and URLs unchanged.\n"
             f"4. The text contains multiple distinct segments separated by '{_RUN_SEPARATOR}' on its own line. "
             f"You MUST return EXACTLY the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line, preserving exact segment order.\n"
-            f"5. Output ONLY the translated segments with NO preambles, explanations, conversational text, markdown code blocks, or notes."
+            f"5. Output ONLY the translated segments with NO preambles, explanations, conversational text, markdown code blocks, or notes.\n"
+            f"6. If any segment is already written in {target_lang}, return it verbatim without modifying or re-translating it."
         )
         user_content = (
             f"Translate the following segments from {source_lang} to {target_lang}. "
@@ -137,7 +200,8 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"1. TRANSLATE EVERY FIELD: You MUST translate every title, heading, section name, table header, form field label, instruction, footer, and administrative phrase into {target_lang}.\n"
             f"2. Separate any words that were fused by OCR before translating.\n"
             f"3. PRESERVE DATA VALUES ONLY: Keep proper personal names, specific street addresses, code numbers, pure digits, dates, email addresses, and URLs unchanged.\n"
-            f"4. Return ONLY the direct {target_lang} translation without prefixes, quotes, delimiters, or notes."
+            f"4. If the text is already written in {target_lang}, return it verbatim.\n"
+            f"5. Return ONLY the direct {target_lang} translation without prefixes, quotes, delimiters, or notes."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
@@ -202,6 +266,8 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
         if trimmed.startswith("http://") or trimmed.startswith("https://"):
             return True
         if all(c in "-_*=|/\\:.,; " for c in trimmed):
+            return True
+        if is_block_in_target_lang(trimmed, target_lang):
             return True
         return False
 
@@ -284,29 +350,24 @@ def translate_docx_inplace(
     for batch in batches:
         _translate_batch(batch, source_lang, target_lang, model)
 
-    if target_dir and os.path.isdir(target_dir):
-        base_name, ext = os.path.splitext(filename)
-        out_file_path = os.path.join(target_dir, f"{base_name}_{target_lang.lower()}{ext}")
-        docx_doc.save(out_file_path)
-    else:
-        if backup_original and os.path.exists(file_path):
-            backup_path = file_path + ".original.bak"
-            try:
-                shutil.copy2(file_path, backup_path)
-                logger.info(f"Preserved original document backup at: {backup_path}")
-            except Exception as b_err:
-                logger.warning(f"Could not create backup of original file: {b_err}")
-        docx_doc.save(file_path)
-        out_file_path = file_path
+    if backup_original and not target_dir and os.path.exists(file_path):
+        import shutil
+        try:
+            shutil.copy2(file_path, f"{file_path}.original.bak")
+        except Exception as bak_err:
+            logger.warning(f"Could not create backup file: {bak_err}")
+
+    out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
+    docx_doc.save(out_file_path)
 
     return IngestResponse(
         id=doc_id,
-        filename=filename,
+        filename=os.path.basename(out_file_path),
         file_size=os.path.getsize(out_file_path) if os.path.exists(out_file_path) else int(doc_record.get("file_size", 0)),
         num_pages=int(doc_record.get("num_pages", 1)),
         num_chunks=int(doc_record.get("num_chunks", 1)),
         extracted_markdown=str(doc_record.get("extracted_markdown", "")),
-        status="indexed",
+        status=str(doc_record.get("status", "indexed")),
         ingested_at=str(doc_record.get("ingested_at", ""))
     )
 
@@ -472,16 +533,24 @@ def _resolve_autofit_font_size(rect: "pymupdf.Rect", text: str, original_size: f
     return lo
 
 
+def _resolve_output_filepath(file_path: str, filename: str, target_lang: str, target_dir: Optional[str] = None) -> str:
+    """Resolves output file path in target_dir if provided, otherwise returns file_path (in-place destination)."""
+    if target_dir and target_dir.strip():
+        dest_dir = target_dir.strip()
+        os.makedirs(dest_dir, exist_ok=True)
+        base_name, ext = os.path.splitext(filename)
+        lang_suffix = (target_lang or "translated").lower().replace(" ", "_")
+        out_filename = f"{base_name}_{lang_suffix}{ext}"
+        return os.path.join(dest_dir, out_filename)
+    return file_path
+
+
 def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str, Any]], font_file: str) -> None:
     """Permanently erases the original text under each block's bbox via PyMuPDF native redaction
     then reinserts the translated text in the same bbox using font_file, auto-fitting the font size
-    with dynamic height adjustment and fallback to guarantee 100% text retention without dropping blocks."""
+    with collision-aware dynamic height adjustment and fallback to guarantee 100% text retention."""
     for block in blocks:
-        x0, y0, x1, y1 = block["bbox"]
-        pad_x = 2.0
-        pad_y = max(2.0, block["size"] * 0.2)
-        rect = pymupdf.Rect(max(0, x0 - pad_x), max(0, y0 - pad_y), min(page.rect.x1, x1 + pad_x), min(page.rect.y1, y1 + pad_y))
-        page.add_redact_annot(rect, fill=(1, 1, 1))
+        page.add_redact_annot(_padded_block_rect(block), fill=(1, 1, 1))
     page.apply_redactions()
 
     font_alias = _font_alias(font_file)
@@ -489,28 +558,33 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
         text = block.get("text", "").strip()
         if not text:
             continue
-        orig_size = float(block.get("size", 10.0))
-        x0, y0, x1, y1 = block["bbox"]
-        pad_x = 2.0
-        pad_y = max(2.0, orig_size * 0.2)
-        rect = pymupdf.Rect(max(0, x0 - pad_x), max(0, y0 - pad_y), min(page.rect.x1, x1 + pad_x), min(page.rect.y1, y1 + pad_y))
 
-        # Auto-fit calculation using disposable scratch page to avoid duplicate invisible text
+        orig_size = block["size"]
+        color_rgb = _int_color_to_rgb(block["color"])
+        rect = _padded_block_rect(block)
         fit_size = _resolve_autofit_font_size(rect, text, orig_size, font_file)
 
-        color_rgb = _int_color_to_rgb(block.get("color", 0))
+        # First pass: try fitting in original rect at optimal fit_size
         overflow = page.insert_textbox(rect, text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
         if overflow < 0:
-            # Dynamic height expansion: expand rect height downwards to accommodate text
-            extra_h = max(10.0, abs(overflow) + 8.0)
-            expanded_rect = pymupdf.Rect(rect.x0, rect.y0, rect.x1, min(page.rect.y1 - 5, rect.y1 + extra_h))
+            # Second pass: dynamic vertical expansion with collision avoidance
+            extra_h = max(8.0, orig_size * 1.5)
+            # Find the top coordinate of the next block directly below to avoid collisions
+            max_expand_y1 = page.rect.y1 - 10.0
+            for other in blocks:
+                if other is not block:
+                    ox0, oy0, ox1, _ = other["bbox"]
+                    # If other block is below and horizontally overlaps
+                    if oy0 > rect.y1 and not (ox1 < rect.x0 or ox0 > rect.x1):
+                        max_expand_y1 = min(max_expand_y1, oy0 - 2.0)
+
+            expanded_rect = pymupdf.Rect(rect.x0, rect.y0, rect.x1, min(max_expand_y1, rect.y1 + extra_h))
             overflow2 = page.insert_textbox(expanded_rect, text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
             if overflow2 < 0:
                 floor_size = max(_PDF_AUTOFIT_MIN_SIZE, orig_size * _PDF_AUTOFIT_MIN_RATIO)
                 overflow3 = page.insert_textbox(expanded_rect, text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
                 if overflow3 < 0:
-                    # Guaranteed fallback: direct text insertion at anchor point
-                    page.insert_text(pymupdf.Point(rect.x0, min(page.rect.y1 - 5, rect.y0 + floor_size)), text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
+                    page.insert_text(pymupdf.Point(rect.x0, min(max_expand_y1, rect.y0 + floor_size)), text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
 
 
 def translate_pdf_inplace_fine(
@@ -524,10 +598,8 @@ def translate_pdf_inplace_fine(
     """
     'Fine-mode' PDF in-place translation: for every page, permanently redacts each original text
     block and reinserts the translated text in the same bbox, auto-fitting font size and retaining 100% of text blocks.
-    Saves to target_dir or updates the file on disk with optional .original.bak backup.
-    Preserves the original document extracted_markdown in the database to separate RAG and export flows.
+    Saves to target_dir or in-place, creating .original.bak if backup_original is set.
     """
-    import shutil
     doc_record = _load_doc_record(doc_id)
     file_type = doc_record.get("file_type", "")
     file_path = doc_record.get("file_path", "")
@@ -555,7 +627,7 @@ def translate_pdf_inplace_fine(
 
         font_file = _resolve_pdf_font_file(target_lang)
         logger.info(
-            f"Translating PDF {doc_id} in place (fine-mode): {total_blocks} blocks across "
+            f"Translating PDF {doc_id} (fine-mode): {total_blocks} blocks across "
             f"{len(pdf_doc)} pages ({source_lang} -> {target_lang}, model={model}, "
             f"font={os.path.basename(font_file)})"
         )
@@ -564,38 +636,162 @@ def translate_pdf_inplace_fine(
                 continue
             _translate_pdf_blocks(blocks, source_lang, target_lang, model)
             _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
-        if target_dir and os.path.isdir(target_dir):
-            base_name, ext = os.path.splitext(filename)
-            out_file_path = os.path.join(target_dir, f"{base_name}_{target_lang.lower()}{ext}")
-            pdf_doc.save(out_file_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
-            tmp_path = None
-        else:
-            tmp_path = file_path + ".translating.tmp"
-            pdf_doc.save(tmp_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
-            out_file_path = file_path
+
+        if backup_original and not target_dir and os.path.exists(file_path):
+            import shutil
+            try:
+                shutil.copy2(file_path, f"{file_path}.original.bak")
+            except Exception as bak_err:
+                logger.warning(f"Could not create backup file: {bak_err}")
+
+        out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
+        is_same_file = os.path.abspath(out_file_path) == os.path.abspath(file_path)
+        tmp_save_path = f"{out_file_path}.tmp_{uuid.uuid4().hex}.pdf" if is_same_file else out_file_path
+        pdf_doc.save(tmp_save_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
     finally:
         pdf_doc.close()
 
-    if tmp_path and os.path.exists(tmp_path):
-        if backup_original and os.path.exists(file_path):
-            backup_path = file_path + ".original.bak"
-            try:
-                shutil.copy2(file_path, backup_path)
-                logger.info(f"Preserved original document backup at: {backup_path}")
-            except Exception as b_err:
-                logger.warning(f"Could not create backup of original file: {b_err}")
-        os.replace(tmp_path, file_path)
+    if is_same_file and os.path.exists(tmp_save_path):
+        os.replace(tmp_save_path, out_file_path)
 
     return IngestResponse(
         id=doc_id,
-        filename=filename,
+        filename=os.path.basename(out_file_path),
         file_size=os.path.getsize(out_file_path) if os.path.exists(out_file_path) else int(doc_record.get("file_size", 0)),
         num_pages=int(doc_record.get("num_pages", 1)),
         num_chunks=int(doc_record.get("num_chunks", 1)),
         extracted_markdown=str(doc_record.get("extracted_markdown", "")),
-        status="indexed",
+        status=str(doc_record.get("status", "indexed")),
         ingested_at=str(doc_record.get("ingested_at", ""))
     )
+
+
+async def translate_document_stream_generator(
+    doc_id: str,
+    source_lang: str,
+    target_lang: str,
+    model: str = "llama3.2",
+    target_dir: Optional[str] = None
+):
+    """
+    Asynchronous generator yielding NDJSON events for document translation with real-time page progress.
+    """
+    import json
+    import asyncio
+
+    try:
+        doc_record = _load_doc_record(doc_id)
+    except Exception as e:
+        yield json.dumps({"type": "error", "error": str(e)}) + "\n"
+        return
+    file_type = doc_record.get("file_type", "")
+    file_path = doc_record.get("file_path", "")
+    filename = doc_record.get("filename", "document.pdf")
+
+    if not file_path or not os.path.exists(file_path):
+        yield json.dumps({"type": "error", "error": "Original source file is no longer available on disk"}) + "\n"
+        return
+
+    out_file_path = _resolve_output_filepath(file_path, filename, target_lang, target_dir)
+
+    if file_type == "docx":
+        docx_doc = docx.Document(file_path)
+        runs = _collect_docx_runs(docx_doc)
+        total_runs = len(runs)
+        yield json.dumps({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": 1, "total_blocks": total_runs}) + "\n"
+        batches = _batch_runs(runs)
+        for i, batch in enumerate(batches):
+            percent = int((i / max(1, len(batches))) * 90)
+            yield json.dumps({"type": "progress", "page": 1, "total_pages": 1, "phase": "translating_runs", "percent": percent}) + "\n"
+            await asyncio.to_thread(_translate_batch, batch, source_lang, target_lang, model)
+
+        docx_doc.save(out_file_path)
+        yield json.dumps({
+            "type": "done",
+            "data": {
+                "id": doc_id,
+                "filename": os.path.basename(out_file_path),
+                "filePath": out_file_path,
+                "file_size": os.path.getsize(out_file_path),
+                "num_pages": 1,
+                "num_chunks": int(doc_record.get("num_chunks", 1)),
+                "extracted_markdown": str(doc_record.get("extracted_markdown", "")),
+                "status": "translated",
+                "ingested_at": str(doc_record.get("ingested_at", "")),
+                "fileType": "docx"
+            }
+        }) + "\n"
+        return
+
+    if file_type != "pdf":
+        yield json.dumps({"type": "error", "error": f"Unsupported file type: {file_type}"}) + "\n"
+        return
+
+    pdf_doc = pymupdf.open(file_path)
+    if pdf_doc.needs_pass or pdf_doc.is_encrypted:
+        pdf_doc.close()
+        yield json.dumps({"type": "error", "error": "Document is password protected"}) + "\n"
+        return
+
+    try:
+        total_pages = len(pdf_doc)
+        yield json.dumps({"type": "start", "doc_id": doc_id, "filename": filename, "total_pages": total_pages}) + "\n"
+        font_file = _resolve_pdf_font_file(target_lang)
+
+        for page_idx, page in enumerate(pdf_doc):
+            page_num = page_idx + 1
+            yield json.dumps({
+                "type": "progress",
+                "page": page_num,
+                "total_pages": total_pages,
+                "phase": "extracting_blocks",
+                "percent": int(((page_idx + 0.1) / total_pages) * 100)
+            }) + "\n"
+
+            blocks = await asyncio.to_thread(_extract_pdf_page_blocks, page)
+            if blocks:
+                yield json.dumps({
+                    "type": "progress",
+                    "page": page_num,
+                    "total_pages": total_pages,
+                    "phase": "translating_blocks",
+                    "percent": int(((page_idx + 0.5) / total_pages) * 100)
+                }) + "\n"
+                await asyncio.to_thread(_translate_pdf_blocks, blocks, source_lang, target_lang, model)
+
+                yield json.dumps({
+                    "type": "progress",
+                    "page": page_num,
+                    "total_pages": total_pages,
+                    "phase": "reconstructing_layout",
+                    "percent": int(((page_idx + 0.9) / total_pages) * 100)
+                }) + "\n"
+                await asyncio.to_thread(_redact_and_reinsert_pdf_blocks, page, blocks, font_file)
+
+        is_same_file = os.path.abspath(out_file_path) == os.path.abspath(file_path)
+        tmp_save_path = f"{out_file_path}.tmp_{uuid.uuid4().hex}.pdf" if is_same_file else out_file_path
+        pdf_doc.save(tmp_save_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
+    finally:
+        pdf_doc.close()
+
+    if is_same_file and os.path.exists(tmp_save_path):
+        os.replace(tmp_save_path, out_file_path)
+
+    yield json.dumps({
+        "type": "done",
+        "data": {
+            "id": doc_id,
+            "filename": os.path.basename(out_file_path),
+            "filePath": out_file_path,
+            "file_size": os.path.getsize(out_file_path),
+            "num_pages": total_pages,
+            "num_chunks": int(doc_record.get("num_chunks", 1)),
+            "extracted_markdown": str(doc_record.get("extracted_markdown", "")),
+            "status": "translated",
+            "ingested_at": str(doc_record.get("ingested_at", "")),
+            "fileType": "pdf"
+        }
+    }) + "\n"
 
 
 def translate_document_inplace(
@@ -607,7 +803,7 @@ def translate_document_inplace(
     target_dir: Optional[str] = None
 ) -> IngestResponse:
     """
-    Dispatches in-place translation to the DOCX or PDF fine-mode pipeline based on the document's
+    Dispatches translation to the DOCX or PDF fine-mode pipeline based on the document's
     stored file_type. Raises UnsupportedDocumentTypeError (mapped to HTTP 400) for any other
     type, ValueError (mapped to HTTP 404) if the document itself can't be found.
     """
@@ -620,3 +816,4 @@ def translate_document_inplace(
     raise UnsupportedDocumentTypeError(
         f"In-place translation is not supported for file type '{file_type}'. Supported: docx, pdf."
     )
+

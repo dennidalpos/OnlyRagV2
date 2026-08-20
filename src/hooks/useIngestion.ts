@@ -60,6 +60,29 @@ export function useIngestion(settings?: AppSettings) {
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
   const [isTranslatingInplace, setIsTranslatingInplace] = useState<boolean>(false)
   const [translateInplaceStatus, setTranslateInplaceStatus] = useState<{ success: boolean; message: string } | null>(null)
+  const [translateProgress, setTranslateProgress] = useState<{
+    page?: number
+    totalPages?: number
+    percent?: number
+    phase?: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (!window.electronAPI?.onTranslateProgress) return
+    const unsubscribe = window.electronAPI.onTranslateProgress((payload) => {
+      if (payload.type === 'progress') {
+        setTranslateProgress({
+          page: payload.page,
+          totalPages: payload.total_pages,
+          percent: payload.percent,
+          phase: payload.phase,
+        })
+      } else if (payload.type === 'done' || payload.type === 'error') {
+        setTranslateProgress(null)
+      }
+    })
+    return () => unsubscribe()
+  }, [])
 
   // Mirrors this module's busy state (upload/ingest pipeline OR in-place translation) into
   // the cross-module task lock so the coding agent/translation module can block starting
@@ -533,6 +556,7 @@ export function useIngestion(settings?: AppSettings) {
     handleSaveDocument,
     isTranslatingInplace,
     translateInplaceStatus,
+    translateProgress,
     handleTranslateInplace,
     isUploading,
     uploadError,

@@ -143,6 +143,11 @@ const api: IElectronAPI = {
     ipcRenderer.on('ingest:stream-progress', subscription)
     return () => ipcRenderer.removeListener('ingest:stream-progress', subscription)
   },
+  onTranslateProgress: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('ingest:translate-progress', subscription)
+    return () => ipcRenderer.removeListener('ingest:translate-progress', subscription)
+  },
   onOllamaPullProgress: (callback: (data: { modelName: string; status: string; completed?: number; total?: number }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('ollama:pull-progress', subscription)

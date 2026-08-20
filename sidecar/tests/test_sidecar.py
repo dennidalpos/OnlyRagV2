@@ -615,6 +615,77 @@ def test_vocab_status_and_sync_endpoints():
     assert "status" in sync_data
 
 
+def test_opencv_deskew_and_inpaint():
+    import numpy as np
+    import cv2
+    from sidecar.infrastructure.ocr import compute_deskew_angle, deskew_image, inpaint_raster_bounding_boxes
+
+    # Create a synthetic white image with black text rectangle
+    img = np.ones((200, 400, 3), dtype=np.uint8) * 255
+    cv2.rectangle(img, (50, 80), (350, 120), (0, 0, 0), -1)
+    is_success, buf = cv2.imencode(".png", img)
+    assert is_success
+    png_bytes = buf.tobytes()
+
+    # Test angle calculation on horizontal image
+    angle = compute_deskew_angle(img)
+    assert abs(angle) < 1.0
+
+    # Test deskew function returns valid PNG bytes
+    deskewed_bytes = deskew_image(png_bytes)
+    assert len(deskewed_bytes) > 0
+
+    # Test inpainting over the black rectangle
+    inpainted_bytes = inpaint_raster_bounding_boxes(png_bytes, [(50, 80, 350, 120)])
+    assert len(inpainted_bytes) > 0
+    inpainted_arr = cv2.imdecode(np.frombuffer(inpainted_bytes, np.uint8), cv2.IMREAD_COLOR)
+    # The center of the previous black box should no longer be black (0,0,0)
+    center_val = inpainted_arr[100, 200]
+    assert np.mean(center_val) > 100
+
+
+def test_language_detection_and_target_skip():
+    from sidecar.domain.translator import detect_block_language, is_block_in_target_lang
+
+    it_text = "Questo documento contiene i dati relativi alla sezione contrattuale."
+    en_text = "This document contains important data regarding the contract section."
+    zh_text = "这是一个包含合同条款的重要文件。"
+
+    assert detect_block_language(it_text) == "italian"
+    assert detect_block_language(en_text) == "english"
+    assert detect_block_language(zh_text) == "chinese"
+
+    assert is_block_in_target_lang(it_text, "Italian") is True
+    assert is_block_in_target_lang(it_text, "English") is False
+    assert is_block_in_target_lang(en_text, "English") is True
+    assert is_block_in_target_lang(zh_text, "Chinese") is True
+
+
+def test_output_path_resolution(tmp_path):
+    from sidecar.domain.translator import _resolve_output_filepath
+
+    src_file = str(tmp_path / "original_document.pdf")
+    with open(src_file, "w") as f:
+        f.write("dummy")
+
+    target_dir = str(tmp_path / "custom_exports")
+    resolved = _resolve_output_filepath(src_file, "original_document.pdf", "Italian", target_dir)
+    assert resolved.endswith("original_document_italian.pdf")
+    assert "custom_exports" in resolved
+    assert os.path.exists(target_dir)
+
+
+def test_translate_inplace_stream_endpoint_404():
+    payload = {
+        "source_lang": "Italian",
+        "target_lang": "English"
+    }
+    response = client.post("/documents/non-existent-doc-9999/translate-inplace-stream", json=payload)
+    assert response.status_code == 200
+    assert "error" in response.text.lower() or "not found" in response.text.lower()
+
+
+
 if __name__ == "__main__":
     import inspect
     import sys

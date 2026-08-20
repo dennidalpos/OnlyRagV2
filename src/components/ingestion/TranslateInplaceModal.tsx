@@ -7,6 +7,12 @@ interface TranslateInplaceModalProps {
   isOpen: boolean
   filename: string
   isTranslating: boolean
+  translateProgress?: {
+    page?: number
+    totalPages?: number
+    percent?: number
+    phase?: string
+  } | null
   onClose: () => void
   onConfirm: (sourceLang: string, targetLang: string, backupOriginal: boolean, targetDir?: string) => void
 }
@@ -15,6 +21,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   isOpen,
   filename,
   isTranslating,
+  translateProgress,
   onClose,
   onConfirm,
 }) => {
@@ -156,6 +163,37 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
               )}
             </div>
           </div>
+
+          {/* Live Streaming Translation Progress */}
+          {isTranslating && (
+            <div className="space-y-2 p-3 bg-slate-950/80 border border-sky-900/40 rounded-xl">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-sky-300 font-medium flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                  {translateProgress?.phase === 'extracting_blocks'
+                    ? 'Estrazione blocchi di layout...'
+                    : translateProgress?.phase === 'translating_blocks'
+                      ? 'Traduzione blocchi in corso...'
+                      : translateProgress?.phase === 'reconstructing_layout'
+                        ? 'Ricostruzione geometrica layout...'
+                        : translateProgress?.phase === 'translating_runs'
+                          ? 'Traduzione paragrafi in corso...'
+                          : 'Traduzione in corso...'}
+                </span>
+                <span className="text-slate-400 font-mono text-[11px]">
+                  {translateProgress?.page && translateProgress?.totalPages
+                    ? `Pag. ${translateProgress.page}/${translateProgress.totalPages} (${translateProgress.percent ?? 0}%)`
+                    : `${translateProgress?.percent ?? 0}%`}
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-sky-500 to-indigo-500 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.max(5, translateProgress?.percent ?? 0)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-slate-800 flex items-center justify-end gap-2.5">

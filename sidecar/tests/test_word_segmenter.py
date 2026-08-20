@@ -1,4 +1,9 @@
+import os
+import sys
 import pytest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
 from sidecar.domain.word_segmenter import normalize_ocr_token_spacing, _viterbi_segment_compound
 
 def test_normalize_ocr_token_spacing_splits_camel_and_numbers():

@@ -104,7 +104,7 @@ export class SidecarProcessManager {
 
   private async ensureSidecarDependencies(requirementsPath: string): Promise<string> {
     const initialPython = this.getPythonExecutable()
-    const check = await this.execAsync(initialPython, ['-c', 'import fastapi, uvicorn, lancedb, pymupdf'])
+    const check = await this.execAsync(initialPython, ['-c', 'import fastapi, uvicorn, lancedb, pymupdf, cv2, rapidocr_onnxruntime'])
     if (check.status === 0) {
       logger.log('INFO', 'Sidecar', `Python environment verified with required dependencies: ${initialPython}`)
       return initialPython

@@ -140,8 +140,21 @@ export class SidecarAppService {
                   resolve({ success: false, error: 'Ingestion stream terminated without completion confirmation' })
                 }
               } else {
-                logger.log('ERROR', 'SidecarApp', `Sidecar streaming error HTTP ${res.statusCode}`)
-                resolve({ success: false, error: `Sidecar error HTTP ${res.statusCode}` })
+                let errorDetail = `Sidecar error HTTP ${res.statusCode}`
+                if (buffer.trim()) {
+                  try {
+                    const parsed = JSON.parse(buffer.trim())
+                    if (parsed.detail) {
+                      errorDetail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail)
+                    } else if (parsed.error) {
+                      errorDetail = parsed.error
+                    }
+                  } catch {
+                    errorDetail = `${errorDetail}: ${buffer.trim().slice(0, 200)}`
+                  }
+                }
+                logger.log('ERROR', 'SidecarApp', `Sidecar streaming error: ${errorDetail}`)
+                resolve({ success: false, error: errorDetail })
               }
             })
           }
@@ -250,7 +263,7 @@ export class SidecarAppService {
     if (!docId || typeof docId !== 'string') {
       return Promise.resolve({ success: false, error: 'Invalid document ID' })
     }
-    logger.log('INFO', 'SidecarApp', `Translating document in place: ${docId} (${sourceLang} -> ${targetLang})`)
+    logger.log('INFO', 'SidecarApp', `Translating document in place (streaming): ${docId} (${sourceLang} -> ${targetLang})`)
     const postData = JSON.stringify({
       source_lang: sourceLang,
       target_lang: targetLang,
@@ -261,7 +274,7 @@ export class SidecarAppService {
 
     return new Promise((resolve) => {
       const req = http.request(
-        `http://127.0.0.1:8000/documents/${encodeURIComponent(docId)}/translate-inplace`,
+        `http://127.0.0.1:8000/documents/${encodeURIComponent(docId)}/translate-inplace-stream`,
         {
           method: 'POST',
           agent: httpAgent,
@@ -271,39 +284,83 @@ export class SidecarAppService {
           },
         },
         (res) => {
-          let raw = ''
-          res.on('data', (chunk) => { raw += chunk })
+          let buffer = ''
+          let finalResult: any = null
+
+          res.on('data', (chunk) => {
+            buffer += chunk.toString('utf-8')
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed) continue
+              try {
+                const event = JSON.parse(trimmed)
+                BrowserWindow.getAllWindows().forEach((win) => {
+                  if (!win.isDestroyed()) {
+                    win.webContents.send('ingest:translate-progress', event)
+                  }
+                })
+
+                if (event.type === 'done' && event.data) {
+                  finalResult = event.data
+                }
+              } catch {
+                // ignore partial JSON parse errors
+              }
+            }
+          })
+
           res.on('end', () => {
             if (res.statusCode === 200) {
-              try {
-                const data = JSON.parse(raw)
+              if (buffer.trim()) {
+                try {
+                  const event = JSON.parse(buffer.trim())
+                  if (event.type === 'done' && event.data) {
+                    finalResult = event.data
+                  }
+                } catch (err: any) {
+                  logger.log('DEBUG', 'SidecarApp', `Trailing translate buffer was not JSON: ${err?.message}`)
+                }
+              }
+
+              if (finalResult) {
                 resolve({
                   success: true,
                   data: {
-                    id: data.id,
-                    filename: data.filename,
-                    fileSize: data.file_size,
-                    numPages: data.num_pages,
-                    numChunks: data.num_chunks,
-                    extractedMarkdown: data.extracted_markdown,
-                    status: data.status,
-                    ingestedAt: data.ingested_at,
-                    fileType: data.filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx',
+                    id: finalResult.id,
+                    filename: finalResult.filename,
+                    filePath: finalResult.filePath,
+                    fileSize: finalResult.file_size,
+                    numPages: finalResult.num_pages,
+                    numChunks: finalResult.num_chunks,
+                    extractedMarkdown: finalResult.extracted_markdown,
+                    status: finalResult.status,
+                    ingestedAt: finalResult.ingested_at,
+                    fileType: (finalResult.filename || '').toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx',
                   },
                 })
-              } catch (parseErr: any) {
-                logger.log('ERROR', 'SidecarApp', `Failed parsing translate-inplace response: ${parseErr.message}`)
-                resolve({ success: false, error: 'Failed parsing response from sidecar' })
+              } else {
+                logger.log('WARN', 'SidecarApp', 'Translation stream ended without explicit done event')
+                resolve({ success: false, error: 'Translation stream terminated unexpectedly' })
               }
             } else {
-              let detail = `Error HTTP ${res.statusCode}`
-              try {
-                const parsed = JSON.parse(raw)
-                if (parsed.detail) detail = parsed.detail
-              } catch (err: any) {
-                logger.log('DEBUG', 'SidecarApp', `Sidecar error response was not JSON: ${err?.message}`)
+              let errorDetail = `Sidecar error HTTP ${res.statusCode}`
+              if (buffer.trim()) {
+                try {
+                  const parsed = JSON.parse(buffer.trim())
+                  if (parsed.detail) {
+                    errorDetail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail)
+                  } else if (parsed.error) {
+                    errorDetail = parsed.error
+                  }
+                } catch {
+                  errorDetail = `${errorDetail}: ${buffer.trim().slice(0, 200)}`
+                }
               }
-              resolve({ success: false, error: detail })
+              logger.log('ERROR', 'SidecarApp', `Translation sidecar error: ${errorDetail}`)
+              resolve({ success: false, error: errorDetail })
             }
           })
         }
@@ -312,9 +369,9 @@ export class SidecarAppService {
         logger.log('ERROR', 'SidecarApp', `Translate in place HTTP error: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
-      req.setTimeout(300000, () => {
+      req.setTimeout(600000, () => {
         req.destroy()
-        logger.log('WARN', 'SidecarApp', 'Translate in place timed out (5 min)')
+        logger.log('WARN', 'SidecarApp', 'Translate in place timed out (10 min)')
         resolve({ success: false, error: 'Translation timed out' })
       })
       req.write(postData)

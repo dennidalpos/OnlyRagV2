@@ -655,3 +655,59 @@ def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
         if doc_id:
             client.delete(f"/documents/{doc_id}")
 
+
+def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
+    """Scanned PDF with zero native text layer must detect text blocks via RapidOCR and translate in-place."""
+    monkeypatch.setattr(
+        translator_module,
+        "_call_ollama_translate",
+        lambda text, s, t, m: f"TR-{text}",
+    )
+
+    # 1. Create a pure raster image page (no text layer)
+    img_doc = pymupdf.open()
+    img_page = img_doc.new_page(width=595, height=842)
+    img_page.draw_rect(pymupdf.Rect(0, 0, 595, 842), color=(1, 1, 1), fill=(1, 1, 1))
+    img_page.insert_text(pymupdf.Point(50, 80), "Richiesta Cessazione Contratto", fontsize=18, color=(0, 0, 0))
+    pix = img_page.get_pixmap(dpi=200)
+    img_bytes = pix.tobytes(output="png")
+    img_doc.close()
+
+    scanned_pdf_path = str(tmp_path / "scanned_contract.pdf")
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_image(pymupdf.Rect(0, 0, 595, 842), stream=img_bytes)
+    doc.save(scanned_pdf_path)
+    doc.close()
+
+    doc_id = None
+    try:
+        ingest_res = client.post("/ingest-path", json={"file_path": scanned_pdf_path})
+        assert ingest_res.status_code == 200
+        doc_id = ingest_res.json()["id"]
+
+        # 2. In-place translate scanned PDF
+        res = client.post(
+            f"/documents/{doc_id}/translate-inplace",
+            json={
+                "source_lang": "Italian",
+                "target_lang": "English",
+                "backup_original": True,
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "TR-" in data["extracted_markdown"] or "Richiesta" in data["extracted_markdown"]
+
+        # Verify translated PDF now contains search-enabled translated text
+        translated_pdf = pymupdf.open(scanned_pdf_path)
+        try:
+            page_text = translated_pdf[0].get_text()
+            assert len(page_text.strip()) > 0
+        finally:
+            translated_pdf.close()
+    finally:
+        if doc_id:
+            client.delete(f"/documents/{doc_id}")
+
+

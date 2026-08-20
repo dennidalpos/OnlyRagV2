@@ -236,10 +236,46 @@ def _int_color_to_rgb(color: int) -> Tuple[float, float, float]:
     return (((color >> 16) & 0xFF) / 255.0, ((color >> 8) & 0xFF) / 255.0, (color & 0xFF) / 255.0)
 
 
+def _extract_ocr_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
+    """Fallback block extraction for scanned PDF pages using RapidOCR.
+    Renders the page to an image, detects text boxes with RapidOCR, and maps coordinates back to PDF points."""
+    try:
+        from sidecar.infrastructure.ocr import run_rapid_ocr_with_boxes
+        dpi = 200
+        zoom = dpi / 72.0
+        mat = pymupdf.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img_bytes = pix.tobytes(output="png")
+
+        ocr_lines = run_rapid_ocr_with_boxes(img_bytes)
+        if not ocr_lines:
+            return []
+
+        blocks_out: List[Dict[str, Any]] = []
+        for item in ocr_lines:
+            px0, py0, px1, py1 = item["bbox"]
+            pdf_x0 = px0 / zoom
+            pdf_y0 = py0 / zoom
+            pdf_x1 = px1 / zoom
+            pdf_y1 = py1 / zoom
+            height_pt = max(6.0, pdf_y1 - pdf_y0)
+            font_size = max(7.0, min(36.0, height_pt * 0.72))
+            blocks_out.append({
+                "bbox": (pdf_x0, pdf_y0, pdf_x1, pdf_y1),
+                "text": item["text"],
+                "size": font_size,
+                "color": 0,
+            })
+        return blocks_out
+    except Exception as ocr_err:
+        logger.warning(f"OCR fallback extraction failed for PDF page: {ocr_err}")
+        return []
+
+
 def _extract_pdf_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
     """Extracts non-empty text blocks from one page in reading order: bbox, concatenated text
     (spans joined within a line, lines joined with a space), the size and color of the block's
-    first non-empty span. Image blocks (type != 0) are skipped -- Fase 2 only translates text."""
+    first non-empty span. Image blocks (type != 0) are skipped -- falls back to RapidOCR for scanned pages."""
     blocks_out: List[Dict[str, Any]] = []
     for block in page.get_text("dict")["blocks"]:
         if block.get("type") != 0:
@@ -263,6 +299,11 @@ def _extract_pdf_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
         block_text = " ".join(t.strip() for t in line_texts if t.strip())
         if block_text:
             blocks_out.append({"bbox": tuple(block["bbox"]), "text": block_text, "size": size, "color": color})
+
+    # Scanned PDF fallback: if no native text blocks exist on the page, detect text blocks via RapidOCR
+    if not blocks_out:
+        blocks_out = _extract_ocr_page_blocks(page)
+
     return blocks_out
 
 

@@ -34,9 +34,8 @@ def classify_file_type(filename: str) -> str:
 def analyze_pdf_page_structure(page: pymupdf.Page, min_char_threshold: int = 40) -> Dict[str, Any]:
     """
     Analyzes a single PDF page to classify optimal extraction route:
-    - Checks native text character count
-    - Checks count of embedded images/drawings
-    - Classifies as NATIVE_TEXT, OCR_REQUIRED, or HYBRID_VISION
+    - NATIVE_TEXT: Page contains sufficient native text (>= min_char_threshold) or image-free short text
+    - OCR_REQUIRED: Page has missing or sparse text layer with images/drawings (scanned page, graphic layout)
     """
     raw_text = page.get_text("text").strip()
     char_count = len(raw_text)
@@ -45,20 +44,18 @@ def analyze_pdf_page_structure(page: pymupdf.Page, min_char_threshold: int = 40)
     drawing_count = len(page.get_drawings())
 
     if char_count >= min_char_threshold:
-        if image_count > 0 or drawing_count > 5:
-            strategy = PageRoutingStrategy.HYBRID_VISION
-        else:
-            strategy = PageRoutingStrategy.NATIVE_TEXT
-    elif char_count == 0 or image_count > 0 or drawing_count > 0:
-        # A missing/sparse text layer with images or vector drawings indicates a scanned page or graphic layout
-        strategy = PageRoutingStrategy.OCR_REQUIRED
-    else:
         strategy = PageRoutingStrategy.NATIVE_TEXT
+    elif char_count > 0 and image_count == 0 and drawing_count == 0:
+        # Genuine short image-free text layer (e.g. short note or translated line)
+        strategy = PageRoutingStrategy.NATIVE_TEXT
+    else:
+        # Missing or sparse text layer with images or vector drawings: requires OCR
+        strategy = PageRoutingStrategy.OCR_REQUIRED
 
     return {
         "strategy": strategy,
         "char_count": char_count,
         "image_count": image_count,
         "drawing_count": drawing_count,
-        "has_native_text": char_count >= min_char_threshold
+        "has_native_text": char_count >= min_char_threshold or (char_count > 0 and image_count == 0)
     }

@@ -207,26 +207,18 @@ def process_and_index_document_generator(
                     table_info = f" (trovate {len(md_tables)} tabelle)" if md_tables else ""
                     raw_text = page.get_text("text").strip()
                     used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
-                    describe_figures_with_vision = strategy == PageRoutingStrategy.HYBRID_VISION
 
                     work_items.append(prepare_pdf_page_work_item(
                         pdf_doc, page, page_num, raw_text, md_tables, used_ocr,
-                        describe_figures_with_vision=describe_figures_with_vision,
                         vision_model=vision_model,
                         vision_prompt=vision_prompt
                     ))
                     page_render_meta[page_num] = {
                         "table_info": table_info,
                         "used_ocr": used_ocr,
-                        "describe_figures_with_vision": describe_figures_with_vision,
                     }
 
-                # Phase 2 (concurrent, bytes-only): the actual OCR/Vision calls, which dominate
-                # wall-clock time on scanned/hybrid documents. Bounded via PDF_PAGE_RENDER_CONCURRENCY
-                # to avoid overloading the shared local Ollama daemon when several pages fall back to
-                # Vision at once. executor.map submits every item up front but yields results in
-                # input (page) order, so progress events below stay monotonic even though the
-                # underlying work overlaps.
+                # Phase 2 (concurrent, bytes-only): OCR rendering
                 render_concurrency = min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))
                 with ThreadPoolExecutor(max_workers=render_concurrency) as executor:
                     for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
@@ -234,9 +226,6 @@ def process_and_index_document_generator(
                         if meta["used_ocr"]:
                             step_msg = f"Pagina {result_page_num}/{num_pages}: OCR Layout completato."
                             pipeline_label = "OCR Layout (Scansione)"
-                        elif meta["describe_figures_with_vision"]:
-                            step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} e analisi Vision completate."
-                            pipeline_label = "Hybrid Vision Figure Analysis"
                         else:
                             step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} completata."
                             pipeline_label = "PDF Stream & Table Finder"

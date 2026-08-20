@@ -67,17 +67,6 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
 
     return md_tables, table_rects
 
-def _describe_figure_bytes_with_vision(image_bytes: bytes) -> str:
-    """Asks the Vision model to describe one already-extracted figure image (text, labels, axis
-    values, data points) so charts/diagrams become searchable RAG content instead of an opaque
-    resolution caption. Pure bytes-in/text-out (no PyMuPDF calls) so it is safe to run in a
-    worker thread. Returns "" on any failure -- the caller falls back to the plain caption."""
-    try:
-        return run_vision_ocr(image_bytes, prompt=_FIGURE_VISION_PROMPT).strip()
-    except Exception as fig_err:
-        logger.debug(f"Vision figure description failed: {fig_err}")
-        return ""
-
 def prepare_pdf_page_work_item(
     doc: pymupdf.Document,
     page: pymupdf.Page,
@@ -85,40 +74,21 @@ def prepare_pdf_page_work_item(
     raw_text: str,
     md_tables: List[str],
     used_ocr: bool,
-    describe_figures_with_vision: bool = False,
     vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None
+    vision_prompt: Optional[str] = None,
+    **kwargs: Any
 ) -> Dict[str, Any]:
     """
     Sequential, PyMuPDF-bound preparation step for a single PDF page: renders the page image for
-    OCR (if used_ocr) and extracts raw bytes for each significant figure (if
-    describe_figures_with_vision). Must run on the thread that owns doc/page -- PyMuPDF Document
-    and Page objects are not safe to share across threads. The returned dict holds only plain
-    bytes/strings, safe to hand to a worker thread via render_prepared_pdf_page.
+    OCR (if used_ocr or native text is sparse). Must run on the thread that owns doc/page.
     """
     ocr_image_bytes: Optional[bytes] = None
-    if used_ocr or len(raw_text.strip()) < 40:
+    if used_ocr or len(raw_text.strip()) < 60:
         try:
             pix = page.get_pixmap(dpi=200)
             ocr_image_bytes = pix.tobytes("png")
         except Exception as pix_err:
             logger.debug(f"Pixmap generation skipped on page {page_num}: {pix_err}")
-
-    figures: List[Dict[str, Any]] = []
-    try:
-        image_list = page.get_images(full=True)
-        significant_images = [img for img in image_list if len(img) >= 4 and img[2] >= 100 and img[3] >= 100]
-        for img_info in significant_images[:4]:
-            figure_bytes = None
-            if describe_figures_with_vision:
-                try:
-                    raw_image = doc.extract_image(img_info[0])
-                    figure_bytes = raw_image.get("image") if raw_image else None
-                except Exception as extract_err:
-                    logger.debug(f"Figure image extraction skipped on page {page_num}: {extract_err}")
-            figures.append({"width": img_info[2], "height": img_info[3], "image_bytes": figure_bytes})
-    except Exception as img_err:
-        logger.debug(f"Image extraction skipped on page {page_num}: {img_err}")
 
     return {
         "page_num": page_num,
@@ -126,32 +96,23 @@ def prepare_pdf_page_work_item(
         "md_tables": md_tables,
         "used_ocr": used_ocr,
         "ocr_image_bytes": ocr_image_bytes,
-        "figures": figures,
         "vision_model": vision_model,
         "vision_prompt": vision_prompt,
     }
 
 def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     """
-    Slow, I/O-bound rendering step for a single prepared page: runs local/Vision OCR and Vision
-    figure description on the plain bytes captured by prepare_pdf_page_work_item. Contains no
-    PyMuPDF calls, so unlike the prepare step it is safe to run concurrently across pages in a
-    bounded thread pool (see PDF_PAGE_RENDER_CONCURRENCY).
+    Renders a single prepared page: executes local RapidOCR on scanned/bitmap pages or formats native text/tables.
     """
     page_num = work_item["page_num"]
     page_md_parts: List[str] = []
 
     if work_item["used_ocr"] and work_item.get("ocr_image_bytes"):
-        ocr_kwargs: Dict[str, Any] = {}
-        if work_item.get("vision_model"):
-            ocr_kwargs["model"] = work_item["vision_model"]
-        if work_item.get("vision_prompt"):
-            ocr_kwargs["prompt"] = work_item["vision_prompt"]
-        ocr_result = run_layout_ocr(work_item["ocr_image_bytes"], **ocr_kwargs)
+        ocr_result = run_layout_ocr(work_item["ocr_image_bytes"])
         if ocr_result.strip():
             page_md_parts.append(ocr_result.strip())
         else:
-            page_md_parts.append("[Scanned page - No readable text extracted]")
+            page_md_parts.append("[Scanned page - No readable text detected]")
     else:
         native_text = (work_item.get("raw_text") or "").strip()
         if native_text:
@@ -160,25 +121,12 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
             page_md_parts.extend(work_item["md_tables"])
 
         # Fallback for scanned pages where native text layer was empty/sparse and no tables were found
-        if len(native_text) < 40 and not work_item.get("md_tables") and work_item.get("ocr_image_bytes"):
-            ocr_kwargs = {}
-            if work_item.get("vision_model"):
-                ocr_kwargs["model"] = work_item["vision_model"]
-            if work_item.get("vision_prompt"):
-                ocr_kwargs["prompt"] = work_item["vision_prompt"]
-            ocr_result = run_layout_ocr(work_item["ocr_image_bytes"], **ocr_kwargs)
+        if len(native_text) < 60 and not work_item.get("md_tables") and work_item.get("ocr_image_bytes"):
+            ocr_result = run_layout_ocr(work_item["ocr_image_bytes"])
             if ocr_result.strip():
                 if native_text:
                     page_md_parts.clear()
                 page_md_parts.append(ocr_result.strip())
-
-    for idx, fig in enumerate(work_item["figures"]):
-        caption = f"> 📊 **[Figura / Diagramma {idx + 1} - Pagina {page_num}]** *(Risoluzione: {fig['width']}x{fig['height']}px)*"
-        if fig["image_bytes"]:
-            description = _describe_figure_bytes_with_vision(fig["image_bytes"])
-            if description:
-                caption += f"\n>\n> {description}"
-        page_md_parts.append(caption)
 
     page_content = "\n\n".join(page_md_parts).strip()
     if not page_content:
@@ -193,16 +141,13 @@ def render_pdf_page_content(
     raw_text: str,
     md_tables: List[str],
     used_ocr: bool,
-    describe_figures_with_vision: bool = False,
     vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None
+    vision_prompt: Optional[str] = None,
+    **kwargs: Any
 ) -> str:
-    """Single-page convenience wrapper around prepare_pdf_page_work_item + render_prepared_pdf_page
-    for non-batched callers (e.g. the NDJSON streaming path, which renders one page at a time
-    between progress yields)."""
+    """Single-page convenience wrapper around prepare_pdf_page_work_item + render_prepared_pdf_page."""
     work_item = prepare_pdf_page_work_item(
         doc, page, page_num, raw_text, md_tables, used_ocr,
-        describe_figures_with_vision=describe_figures_with_vision,
         vision_model=vision_model,
         vision_prompt=vision_prompt
     )
@@ -216,11 +161,8 @@ def extract_pdf_document(
     vision_prompt: Optional[str] = None
 ) -> List[Tuple[int, str]]:
     """
-    Extracts markdown per page preserving layout, native tables, OCR, and figure captions.
-    All PyMuPDF access (routing analysis, table/text/image extraction) happens sequentially on
-    this thread; the actual OCR/Vision calls for pages that need them run concurrently in a bounded
-    thread pool (PDF_PAGE_RENDER_CONCURRENCY), since they are the slow, I/O-bound part and pages
-    that only have native text are already fast and don't block on anything.
+    Extracts markdown per page preserving layout, native tables, and high-fidelity OCR.
+    PyMuPDF access happens sequentially; OCR rendering runs concurrently in a bounded thread pool.
     """
     num_pages = len(doc)
     work_items: List[Dict[str, Any]] = []
@@ -244,16 +186,12 @@ def extract_pdf_document(
 
         raw_text = page.get_text("text").strip()
         used_ocr = strategy == PageRoutingStrategy.OCR_REQUIRED
-        describe_figures_with_vision = strategy == PageRoutingStrategy.HYBRID_VISION
 
         if used_ocr and progress_callback:
             progress_callback(page_num, num_pages, f"Pagina {page_num}/{num_pages}: Esecuzione OCR Layout...")
-        elif describe_figures_with_vision and progress_callback:
-            progress_callback(page_num, num_pages, f"Pagina {page_num}/{num_pages}: Analisi Vision delle figure...")
 
         work_items.append(prepare_pdf_page_work_item(
             doc, page, page_num, raw_text, md_tables, used_ocr,
-            describe_figures_with_vision=describe_figures_with_vision,
             vision_model=vision_model,
             vision_prompt=vision_prompt
         ))
@@ -380,22 +318,17 @@ def extract_document_markdown(
 
     elif category == DocumentCategory.IMAGE:
         if progress_callback:
-            progress_callback(1, 1, "Esecuzione Vision OCR su immagine...")
+            progress_callback(1, 1, "Esecuzione OCR su immagine...")
         img_bytes = content
         if file_path and os.path.exists(file_path):
             with open(file_path, "rb") as f:
                 img_bytes = f.read()
-        image_ocr_kwargs: Dict[str, Any] = {}
-        if vision_model:
-            image_ocr_kwargs["model"] = vision_model
-        if vision_prompt:
-            image_ocr_kwargs["prompt"] = vision_prompt
-        ocr_text = run_layout_ocr(img_bytes, **image_ocr_kwargs)
+        ocr_text = run_layout_ocr(img_bytes)
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if sanitized_ocr:
             page_blocks.append((1, sanitized_ocr))
         else:
-            page_blocks.append((1, f"[Image file {filename} indexed for Vision inspection]"))
+            page_blocks.append((1, f"[Image file {filename} scanned - No text detected]"))
 
     elif category == DocumentCategory.DOCX:
         if progress_callback:

@@ -224,16 +224,9 @@ def test_rapid_ocr_extracts_text_from_image():
     assert "ONLYRAG" in text_out.upper()
     assert "4200" in text_out
 
-def test_run_layout_ocr_prefers_rapidocr_and_skips_vision_fallback(monkeypatch):
-    """run_layout_ocr must not fall back to the (slower) Ollama Vision tier when RapidOCR already
-    produced usable text -- the vision tier exists for layout-heavy content and RapidOCR failures."""
+def test_run_layout_ocr_uses_rapidocr():
+    """run_layout_ocr must directly run RapidOCR on rendered images."""
     from sidecar.infrastructure import ocr as ocr_module
-
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("run_vision_ocr should not be called when RapidOCR succeeds")
-
-    monkeypatch.setattr(ocr_module, "run_vision_ocr", fail_if_called)
-
     from PIL import Image, ImageDraw
     import io
     img = Image.new("RGB", (400, 100), color="white")
@@ -274,17 +267,13 @@ def test_ocr_vision_fallback_sets_keep_alive_zero():
     assert captured_payloads[0]["keep_alive"] == 0
 
 def test_extract_pdf_document_native_text_page():
-    """extract_pdf_document (shared by the plain and NDJSON-streaming ingestion entry points via
-    render_pdf_page_content) must still extract native page text and report the correct page number."""
+    """extract_pdf_document must extract native page text and report the correct page number."""
     import pymupdf
     from sidecar.domain.ingestion import extract_pdf_document
 
     doc = pymupdf.open()
     try:
         page = doc.new_page(width=595, height=842)
-        # Kept above the 40-char OCR_REQUIRED threshold (analyze_pdf_page_structure) so this
-        # exercises the native-text path deterministically, without depending on a running
-        # OCR/vision backend for the OCR_REQUIRED branch (covered separately, with a mock, below).
         page.insert_text((50, 72), "Hello OnlyRag native text extraction page content", fontsize=12)
 
         pages = extract_pdf_document(doc)
@@ -298,9 +287,7 @@ def test_extract_pdf_document_native_text_page():
 def test_extract_pdf_document_parallelizes_ocr_pages(monkeypatch):
     """extract_pdf_document must run the OCR rendering phase concurrently (bounded by
     PDF_PAGE_RENDER_CONCURRENCY) instead of one page at a time, and still return pages in the
-    correct order despite the underlying work overlapping. Proven by wall clock: 6 pages each with
-    a fixed 0.3s OCR delay must finish well under 6*0.3s=1.8s (fully sequential) -- with the default
-    concurrency of 3, two overlapped rounds should land near ~0.6s."""
+    correct order despite the underlying work overlapping."""
     import time
     import pymupdf
     from sidecar.domain import ingestion as ingestion_module
@@ -326,8 +313,7 @@ def test_extract_pdf_document_parallelizes_ocr_pages(monkeypatch):
         doc.close()
 
 def test_render_pdf_page_content_ocr_path(monkeypatch):
-    """render_pdf_page_content must route to run_layout_ocr (rather than raw_text/md_tables)
-    when used_ocr=True, matching the OCR_REQUIRED routing decision made by callers."""
+    """render_pdf_page_content must route to run_layout_ocr when used_ocr=True."""
     import pymupdf
     from sidecar.domain import ingestion as ingestion_module
 
@@ -343,42 +329,66 @@ def test_render_pdf_page_content_ocr_path(monkeypatch):
     finally:
         doc.close()
 
-def _new_pdf_page_with_embedded_image(doc):
-    """Test helper: a page with >=40 chars of native text plus one significant embedded image,
-    which analyze_pdf_page_structure classifies as HYBRID_VISION (native text + real image)."""
-    from PIL import Image
+def _new_scanned_pdf_page(doc):
+    """Test helper: a scanned PDF page with 0 native text and a rendered bitmap text image."""
+    from PIL import Image, ImageDraw
     import pymupdf
     import io
 
     page = doc.new_page(width=595, height=842)
-    page.insert_text((50, 72), "Report narrative text long enough to skip the OCR threshold", fontsize=10)
-
-    img = Image.new("RGB", (200, 200), color="red")
+    img = Image.new("RGB", (800, 300), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((20, 50), "SCANNED INVOICE ITEM TOTAL 9900 EUR", fill="black")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    page.insert_image(pymupdf.Rect(50, 100, 250, 300), stream=buf.getvalue())
+    page.insert_image(page.rect, stream=buf.getvalue())
     return page
 
-def test_analyze_pdf_page_structure_classifies_text_plus_image_as_hybrid_vision():
-    """Router precondition for the two tests below: a page with native text AND a significant
-    embedded image must be classified HYBRID_VISION, not NATIVE_TEXT."""
+def test_scanned_pdf_page_ocr_extraction():
+    """A scanned PDF with an embedded bitmap text layer must have its text detected by RapidOCR."""
+    import pymupdf
+    from sidecar.domain.ingestion import extract_pdf_document
+
+    doc = pymupdf.open()
+    try:
+        _new_scanned_pdf_page(doc)
+        pages = extract_pdf_document(doc)
+        assert len(pages) == 1
+        page_num, page_text = pages[0]
+        assert page_num == 1
+        assert "SCANNED INVOICE" in page_text.upper() or "9900" in page_text
+    finally:
+        doc.close()
+
+def test_analyze_pdf_page_structure_classifies_scanned_page_as_ocr_required():
+    """A page with image content and zero text must be classified OCR_REQUIRED."""
     import pymupdf
     from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
 
     doc = pymupdf.open()
     try:
-        page = _new_pdf_page_with_embedded_image(doc)
+        page = _new_scanned_pdf_page(doc)
         struct_info = analyze_pdf_page_structure(page)
-        assert struct_info["strategy"] == PageRoutingStrategy.HYBRID_VISION
+        assert struct_info["strategy"] == PageRoutingStrategy.OCR_REQUIRED
+    finally:
+        doc.close()
+
+def test_analyze_pdf_page_structure_classifies_digital_page_as_native_text():
+    """A page with substantial native text must be classified NATIVE_TEXT."""
+    import pymupdf
+    from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((50, 72), "Digital PDF page content with sufficient character length for native text.", fontsize=12)
+        struct_info = analyze_pdf_page_structure(page)
+        assert struct_info["strategy"] == PageRoutingStrategy.NATIVE_TEXT
     finally:
         doc.close()
 
 def test_analyze_pdf_page_structure_keeps_short_image_free_text_native():
-    """A page with a short but genuine, image-free native text layer (e.g. one line of translated
-    text) must be classified NATIVE_TEXT, not OCR_REQUIRED, even though it falls under the 40-char
-    threshold. Routing it through OCR anyway would force perfectly valid text back through
-    RapidOCR's Chinese-trained recognition model, which corrupts CJK text into Han-unification
-    variants (Japanese 語 -> Simplified Chinese 语)."""
+    """A page with a short image-free native text layer must be classified NATIVE_TEXT."""
     import pymupdf
     from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
 
@@ -392,8 +402,7 @@ def test_analyze_pdf_page_structure_keeps_short_image_free_text_native():
         doc.close()
 
 def test_analyze_pdf_page_structure_blank_page_stays_ocr_required():
-    """A truly blank page (no text, no images) has no usable native text layer at all, so it must
-    still be routed to OCR_REQUIRED -- only a short-but-real, image-free text layer is exempted."""
+    """A blank page must still route to OCR_REQUIRED."""
     import pymupdf
     from sidecar.domain.router import analyze_pdf_page_structure, PageRoutingStrategy
 
@@ -402,50 +411,6 @@ def test_analyze_pdf_page_structure_blank_page_stays_ocr_required():
         page = doc.new_page(width=200, height=200)
         struct_info = analyze_pdf_page_structure(page)
         assert struct_info["strategy"] == PageRoutingStrategy.OCR_REQUIRED
-    finally:
-        doc.close()
-
-def test_render_pdf_page_content_describes_figures_with_vision_when_hybrid(monkeypatch):
-    """render_pdf_page_content(describe_figures_with_vision=True) must call the Vision model on
-    each significant embedded image and fold its description into the figure caption, so diagram
-    content becomes part of the searchable chunk instead of only a resolution placeholder."""
-    import pymupdf
-    from sidecar.domain import ingestion as ingestion_module
-
-    monkeypatch.setattr(ingestion_module, "run_vision_ocr", lambda image_bytes, prompt="": "Bar chart showing Q1-Q4 revenue growth")
-
-    doc = pymupdf.open()
-    try:
-        page = _new_pdf_page_with_embedded_image(doc)
-        raw_text = page.get_text("text").strip()
-        result = ingestion_module.render_pdf_page_content(
-            doc, page, page_num=1, raw_text=raw_text, md_tables=[], used_ocr=False,
-            describe_figures_with_vision=True
-        )
-        assert "Report narrative text" in result
-        assert "Bar chart showing Q1-Q4 revenue growth" in result
-    finally:
-        doc.close()
-
-def test_render_pdf_page_content_skips_vision_description_when_not_hybrid(monkeypatch):
-    """Without describe_figures_with_vision, figures must stay as the plain placeholder caption --
-    the Vision model must not be called at all (avoids the extra latency for ordinary NATIVE_TEXT pages)."""
-    import pymupdf
-    from sidecar.domain import ingestion as ingestion_module
-
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("run_vision_ocr should not be called when describe_figures_with_vision=False")
-    monkeypatch.setattr(ingestion_module, "run_vision_ocr", fail_if_called)
-
-    doc = pymupdf.open()
-    try:
-        page = _new_pdf_page_with_embedded_image(doc)
-        raw_text = page.get_text("text").strip()
-        result = ingestion_module.render_pdf_page_content(
-            doc, page, page_num=1, raw_text=raw_text, md_tables=[], used_ocr=False,
-            describe_figures_with_vision=False
-        )
-        assert "Figura / Diagramma" in result
     finally:
         doc.close()
 

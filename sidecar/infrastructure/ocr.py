@@ -1,7 +1,7 @@
 import os
 import base64
 import subprocess
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from sidecar.config import httpx_client, logger
 
 # OCR Engine Singleton Caches
@@ -34,14 +34,14 @@ def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
         logger.debug(f"Could not list installed Ollama models: {err}")
     return None
 
-def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
-    """Downscales oversized images to max_dim on the longest edge to prevent OOM and timeouts on CPU and GPU."""
+def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
+    """Prepares image for OCR, normalizing color channels and downscaling only if exceeding max_dim (2560px for full A4 scans)."""
     try:
         from PIL import Image
         import io
         Image.MAX_IMAGE_PIXELS = 60_000_000
         img = Image.open(io.BytesIO(image_bytes))
-        if img.mode in ("RGBA", "P"):
+        if img.mode in ("RGBA", "P", "LA"):
             img = img.convert("RGB")
         width, height = img.size
         if width > max_dim or height > max_dim:
@@ -56,6 +56,7 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
             img.save(out_buf, format="PNG")
             return out_buf.getvalue()
         elif img.mode != "RGB":
+            img = img.convert("RGB")
             out_buf = io.BytesIO()
             img.save(out_buf, format="PNG")
             return out_buf.getvalue()
@@ -73,6 +74,210 @@ def _rapidocr_cuda_available() -> bool:
     except ImportError:
         return False
 
+def _find_rapidocr_config() -> Optional[str]:
+    """Locates rapidocr_onnxruntime config.yaml across packaged PyInstaller and standard Python environments."""
+    import sys
+    # 1. Check direct module path
+    try:
+        import rapidocr_onnxruntime
+        mod_dir = os.path.dirname(os.path.abspath(rapidocr_onnxruntime.__file__))
+        cfg_cand = os.path.join(mod_dir, "config.yaml")
+        if os.path.exists(cfg_cand):
+            return cfg_cand
+    except Exception:
+        pass
+
+    # 2. Check sys._MEIPASS (PyInstaller runtime)
+    if hasattr(sys, "_MEIPASS"):
+        meipass_cfg = os.path.join(getattr(sys, "_MEIPASS"), "rapidocr_onnxruntime", "config.yaml")
+        if os.path.exists(meipass_cfg):
+            return meipass_cfg
+
+    # 3. Check executable-relative _internal directory
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    internal_cfg = os.path.join(exe_dir, "_internal", "rapidocr_onnxruntime", "config.yaml")
+    if os.path.exists(internal_cfg):
+        return internal_cfg
+
+    # 4. Check resources directory in packaged Electron installation
+    res_cfg = os.path.join(exe_dir, "..", "resources", "sidecar", "_internal", "rapidocr_onnxruntime", "config.yaml")
+    if os.path.exists(res_cfg):
+        return os.path.abspath(res_cfg)
+
+    return None
+
+def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
+    """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order."""
+    if not raw_results:
+        return ""
+
+    boxes: List[Dict[str, Any]] = []
+    for item in raw_results:
+        if not item or len(item) < 2:
+            continue
+        pts, text = item[0], str(item[1]).strip()
+        if not text:
+            continue
+        x0 = min(p[0] for p in pts)
+        y0 = min(p[1] for p in pts)
+        x1 = max(p[0] for p in pts)
+        y1 = max(p[1] for p in pts)
+        h = max(1.0, y1 - y0)
+        cy = (y0 + y1) / 2.0
+        boxes.append({
+            "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "h": h, "cy": cy, "text": text
+        })
+
+    if not boxes:
+        return ""
+
+    # Sort top-to-bottom
+    boxes.sort(key=lambda b: (b["y0"], b["x0"]))
+
+    # Cluster horizontally aligned boxes into lines
+    lines: List[Dict[str, Any]] = []
+    for b in boxes:
+        matched_line = None
+        for line in lines:
+            line_cy = line["cy"]
+            line_h = line["h"]
+            if abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h)):
+                matched_line = line
+                break
+
+        if matched_line is not None:
+            matched_line["boxes"].append(b)
+            matched_line["x0"] = min(matched_line["x0"], b["x0"])
+            matched_line["y0"] = min(matched_line["y0"], b["y0"])
+            matched_line["x1"] = max(matched_line["x1"], b["x1"])
+            matched_line["y1"] = max(matched_line["y1"], b["y1"])
+            matched_line["cy"] = (matched_line["y0"] + matched_line["y1"]) / 2.0
+            matched_line["h"] = matched_line["y1"] - matched_line["y0"]
+        else:
+            lines.append({
+                "y0": b["y0"], "y1": b["y1"], "x0": b["x0"], "x1": b["x1"],
+                "cy": b["cy"], "h": b["h"],
+                "boxes": [b]
+            })
+
+    lines.sort(key=lambda l: l["y0"])
+
+    formatted_paragraphs: List[str] = []
+    current_para: List[str] = []
+    prev_line = None
+
+    for line in lines:
+        line["boxes"].sort(key=lambda b: b["x0"])
+        line_text = " ".join(b["text"] for b in line["boxes"])
+
+        if prev_line is not None:
+            gap = line["y0"] - prev_line["y1"]
+            if gap > prev_line["h"] * 1.3:
+                if current_para:
+                    formatted_paragraphs.append("\n".join(current_para))
+                    current_para = []
+        current_para.append(line_text)
+        prev_line = line
+
+    if current_para:
+        formatted_paragraphs.append("\n".join(current_para))
+
+    return "\n\n".join(formatted_paragraphs).strip()
+
+def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
+    """Runs RapidOCR and returns spatially clustered line blocks with bounding boxes."""
+    global _RAPIDOCR_ENGINE
+    from rapidocr_onnxruntime import RapidOCR
+
+    if _RAPIDOCR_ENGINE is None:
+        use_cuda = _rapidocr_cuda_available()
+        cfg_path = _find_rapidocr_config()
+        ocr_kwargs: Dict[str, Any] = {
+            "det_use_cuda": use_cuda,
+            "cls_use_cuda": use_cuda,
+            "rec_use_cuda": use_cuda
+        }
+        if cfg_path:
+            ocr_kwargs["config_path"] = cfg_path
+
+        try:
+            _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
+        except Exception as init_err:
+            if use_cuda:
+                logger.warning(f"RapidOCR CUDA initialization failed ({init_err}), falling back to CPU execution.")
+                ocr_kwargs["det_use_cuda"] = False
+                ocr_kwargs["cls_use_cuda"] = False
+                ocr_kwargs["rec_use_cuda"] = False
+                _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
+            else:
+                raise init_err
+
+    result, _elapse = _RAPIDOCR_ENGINE(image_bytes)
+    if not result:
+        return []
+
+    boxes: List[Dict[str, Any]] = []
+    for item in result:
+        if not item or len(item) < 2:
+            continue
+        pts, text = item[0], str(item[1]).strip()
+        if not text:
+            continue
+        x0 = min(p[0] for p in pts)
+        y0 = min(p[1] for p in pts)
+        x1 = max(p[0] for p in pts)
+        y1 = max(p[1] for p in pts)
+        h = max(1.0, y1 - y0)
+        cy = (y0 + y1) / 2.0
+        boxes.append({
+            "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "h": h, "cy": cy, "text": text
+        })
+
+    if not boxes:
+        return []
+
+    boxes.sort(key=lambda b: (b["y0"], b["x0"]))
+
+    lines: List[Dict[str, Any]] = []
+    for b in boxes:
+        matched_line = None
+        for line in lines:
+            line_cy = line["cy"]
+            line_h = line["h"]
+            if abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h)):
+                matched_line = line
+                break
+
+        if matched_line is not None:
+            matched_line["boxes"].append(b)
+            matched_line["x0"] = min(matched_line["x0"], b["x0"])
+            matched_line["y0"] = min(matched_line["y0"], b["y0"])
+            matched_line["x1"] = max(matched_line["x1"], b["x1"])
+            matched_line["y1"] = max(matched_line["y1"], b["y1"])
+            matched_line["cy"] = (matched_line["y0"] + matched_line["y1"]) / 2.0
+            matched_line["h"] = matched_line["y1"] - matched_line["y0"]
+        else:
+            lines.append({
+                "y0": b["y0"], "y1": b["y1"], "x0": b["x0"], "x1": b["x1"],
+                "cy": b["cy"], "h": b["h"],
+                "boxes": [b]
+            })
+
+    lines.sort(key=lambda l: l["y0"])
+
+    line_blocks: List[Dict[str, Any]] = []
+    for line in lines:
+        line["boxes"].sort(key=lambda b: b["x0"])
+        text = " ".join(b["text"] for b in line["boxes"])
+        line_blocks.append({
+            "bbox": (line["x0"], line["y0"], line["x1"], line["y1"]),
+            "text": text
+        })
+
+    return line_blocks
+
 def run_rapid_ocr(image_bytes: bytes) -> str:
     """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX).
     Executes on CUDA when available, and automatically falls back to CPU execution on minimal/CPU-only hardware."""
@@ -81,47 +286,48 @@ def run_rapid_ocr(image_bytes: bytes) -> str:
 
     if _RAPIDOCR_ENGINE is None:
         use_cuda = _rapidocr_cuda_available()
+        cfg_path = _find_rapidocr_config()
+        ocr_kwargs: Dict[str, Any] = {
+            "det_use_cuda": use_cuda,
+            "cls_use_cuda": use_cuda,
+            "rec_use_cuda": use_cuda
+        }
+        if cfg_path:
+            ocr_kwargs["config_path"] = cfg_path
+
         try:
-            _RAPIDOCR_ENGINE = RapidOCR(det_use_cuda=use_cuda, cls_use_cuda=use_cuda, rec_use_cuda=use_cuda)
+            _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
         except Exception as init_err:
             if use_cuda:
                 logger.warning(f"RapidOCR CUDA initialization failed ({init_err}), falling back to CPU execution.")
-                _RAPIDOCR_ENGINE = RapidOCR(det_use_cuda=False, cls_use_cuda=False, rec_use_cuda=False)
+                ocr_kwargs["det_use_cuda"] = False
+                ocr_kwargs["cls_use_cuda"] = False
+                ocr_kwargs["rec_use_cuda"] = False
+                _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
             else:
                 raise init_err
 
     result, _elapse = _RAPIDOCR_ENGINE(image_bytes)
-    if not result:
-        return ""
-    lines = [line[1] for line in result if line and len(line) > 1 and line[1]]
-    return "\n".join(lines).strip()
+    return _reconstruct_layout_from_ocr_boxes(result)
 
 def run_layout_ocr(
     image_bytes: bytes,
-    prompt: str = "Extract all text, tables, and key structure from this document image in clean Markdown format.",
-    ollama_url: str = "http://127.0.0.1:11434",
-    model: str = "llama3.2-vision"
+    prompt: Optional[str] = None,
+    ollama_url: Optional[str] = None,
+    model: Optional[str] = None
 ) -> str:
-    """Two-tiered Document OCR Engine: RapidOCR (fast, GPU-capable / CPU-resilient local text recognition) first,
-    falling back to the Ollama Vision model for layout-heavy content (tables, diagrams, complex
-    scans) or when RapidOCR is unavailable / yields no text."""
-    is_cuda_avail = _rapidocr_cuda_available() or detect_gpu_acceleration().get("has_cuda", False)
-    max_dim = 2048 if is_cuda_avail else 1280
-    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=max_dim)
-
-    # Tier 1: RapidOCR (local, fast, CPU/GPU-capable via onnxruntime)
+    """High-fidelity local OCR engine via RapidOCR.
+    Extracts verbatim text lines, numbers, and layout without multimodal LLM hallucination or network latency."""
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
     try:
         text_out = run_rapid_ocr(prepared_bytes)
         if text_out:
             logger.info("OCR successfully performed via RapidOCR.")
             return text_out
-    except ImportError:
-        pass
     except Exception as rapid_err:
         logger.warning(f"RapidOCR processing failed: {rapid_err}")
 
-    # Tier 2: Ollama Vision Model Fallback
-    return run_vision_ocr(prepared_bytes, prompt, ollama_url, model=model)
+    return ""
 
 def run_vision_ocr(
     image_bytes: bytes,

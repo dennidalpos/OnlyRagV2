@@ -141,7 +141,13 @@ async def translate_document_inplace_endpoint(doc_id: str, req: TranslateInplace
     logger.info(f"In-place translation requested for document {doc_id}: {req.source_lang} -> {req.target_lang}")
     try:
         return await asyncio.to_thread(
-            translate_document_inplace, doc_id, req.source_lang, req.target_lang, req.model or "llama3.2"
+            translate_document_inplace,
+            doc_id,
+            req.source_lang,
+            req.target_lang,
+            req.model or "llama3.2",
+            req.backup_original if req.backup_original is not None else True,
+            req.target_dir
         )
     except UnsupportedDocumentTypeError as type_err:
         raise HTTPException(status_code=400, detail=str(type_err))

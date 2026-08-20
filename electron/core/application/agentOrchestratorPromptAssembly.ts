@@ -70,7 +70,9 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
 }
 
 export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection, compiledHistoryBlock: string) {
-  const skillsBlock = await skillAppService.getContextSkillsBlock(ctx.skillMatchContext, ctx.workspacePath, 3, ctx.skillMatchingOptions)
+  const skillsBlock = ctx.skillsBlock !== undefined
+    ? ctx.skillsBlock
+    : await skillAppService.getContextSkillsBlock(ctx.skillMatchContext, ctx.workspacePath, 3, ctx.skillMatchingOptions)
   const planBlock = ctx.goalPlanner.compileProgressPrompt()
 
   let debtTrackerBlock = ''

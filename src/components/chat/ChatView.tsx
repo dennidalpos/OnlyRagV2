@@ -18,6 +18,7 @@ import {
   Square,
   AlertTriangle,
   ArrowDown,
+  GripVertical,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -25,6 +26,7 @@ import { ModelBadge } from '../common/ModelBadge'
 import { useChatEngine } from '../../hooks/useChatEngine'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
+import { useResizablePanel } from '../../hooks/useResizablePanel'
 
 interface ChatViewProps {
   settings: AppSettings
@@ -36,6 +38,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
   const { t } = useTranslation()
   const c = useChatEngine(settings, diagnostics)
   const toast = useToast()
+  const {
+    width: sidebarWidth,
+    isResizing: isSidebarResizing,
+    handleMouseDown: handleSidebarMouseDown,
+    handleKeyDown: handleSidebarKeyDown,
+  } = useResizablePanel(288, 200, 480, 'onlyrag_chat_sidebar_width')
   const toolsMenuRef = useRef<HTMLDivElement>(null)
   const resetConfirmRef = useRef<HTMLDivElement>(null)
   const [showToolsMenu, setShowToolsMenu] = useState(false)
@@ -112,7 +120,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
       {/* Main Split Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar: Context Documents */}
-        <div className="w-72 border-r border-slate-800 bg-slate-900/40 p-4 space-y-3 flex flex-col shrink-0">
+        <div
+          style={{ width: `${sidebarWidth}px` }}
+          className="border-r border-slate-800 bg-slate-900/40 p-4 space-y-3 flex flex-col shrink-0 overflow-hidden select-text"
+        >
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
               <span>{t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}</span>
@@ -161,8 +172,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
           </div>
         </div>
 
+        {/* Resizable Divider Handle */}
+        <div
+          role="separator"
+          tabIndex={0}
+          aria-orientation="vertical"
+          aria-valuenow={sidebarWidth}
+          aria-valuemin={200}
+          aria-valuemax={480}
+          aria-label={t('coding.resizePanels')}
+          onMouseDown={handleSidebarMouseDown}
+          onKeyDown={handleSidebarKeyDown}
+          className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
+            isSidebarResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+          }`}
+          title={t('coding.resizePanels')}
+        >
+          <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isSidebarResizing ? 'opacity-100 text-slate-950' : ''}`} />
+        </div>
+
         {/* Right: Messages & Input */}
-        <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden min-w-0">
+        <div className={`flex-1 flex flex-col bg-slate-950 overflow-hidden min-w-0 ${isSidebarResizing ? 'pointer-events-none select-none' : ''}`}>
           <div
             ref={c.messagesContainerRef}
             onScroll={c.handleScroll}

@@ -30,6 +30,7 @@ interface WorkspaceExplorerProps {
   onRenameSession: (id: string, title: string) => void
   onOpenPromptHistorySearch: () => void
   onClose: () => void
+  width?: number
 }
 
 export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
@@ -53,6 +54,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   onRenameSession,
   onOpenPromptHistorySearch,
   onClose,
+  width,
 }) => {
   const { t } = useTranslation()
   const [filesExpanded, setFilesExpanded] = useState(true)
@@ -63,7 +65,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
     : t('coding.noProjectAttached')
 
   return (
-    <div className="w-72 border-r border-slate-800 bg-[#0c1019] flex flex-col h-full shrink-0 z-20 transition-all select-text font-sans">
+    <div
+      style={width ? { width: `${width}px` } : undefined}
+      className={`${width ? '' : 'w-72'} border-r border-slate-800 bg-[#0c1019] flex flex-col h-full shrink-0 z-20 transition-all select-text font-sans overflow-hidden`}
+    >
       {/* Top Header */}
       <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 text-xs font-bold text-slate-200">
         <span className="flex items-center gap-2 text-cyan-400">

@@ -1,18 +1,38 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 /**
  * Drag-to-resize logic for a horizontally split panel (mouse drag on a divider, plus
  * arrow-key nudging for accessibility). Owns only the width/isResizing state and the
- * event wiring; the divider's markup stays with its caller since exact styling differs
- * per usage.
+ * event wiring; supports optional localStorage persistence across reloads/sessions.
  */
-export function useResizablePanel(initialWidth: number, min: number, max: number) {
-  const [width, setWidth] = useState<number>(initialWidth)
+export function useResizablePanel(initialWidth: number, min: number, max: number, storageKey?: string) {
+  const [width, setWidth] = useState<number>(() => {
+    if (storageKey && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem(storageKey)
+        if (saved) {
+          const parsed = Number(saved)
+          if (!isNaN(parsed) && parsed >= min && parsed <= max) {
+            return parsed
+          }
+        }
+      } catch {}
+    }
+    return initialWidth
+  })
   const [isResizing, setIsResizing] = useState<boolean>(false)
 
   const isDraggingRef = useRef(false)
   const startXRef = useRef(0)
   const startWidthRef = useRef(initialWidth)
+
+  useEffect(() => {
+    if (storageKey && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(storageKey, String(width))
+      } catch {}
+    }
+  }, [width, storageKey])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()

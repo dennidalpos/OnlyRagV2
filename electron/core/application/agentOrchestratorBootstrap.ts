@@ -48,6 +48,7 @@ export interface AgentSessionBootstrap {
   modelCapabilities: Record<string, string[]>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
+  skillsBlock: string
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm

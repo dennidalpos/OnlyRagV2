@@ -312,7 +312,7 @@ export function useIngestion(settings?: AppSettings) {
     }
   }
 
-  const handleTranslateInplace = async (docId: string, sourceLang: string, targetLang: string, model?: string) => {
+  const handleTranslateInplace = async (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string) => {
     if (!docId || isTranslatingInplace) return
 
     const busyModule = peekGlobalTaskLock()
@@ -328,7 +328,7 @@ export function useIngestion(settings?: AppSettings) {
     setTranslateInplaceStatus(null)
 
     try {
-      const res = await apiService.translateDocumentInplace(docId, sourceLang, targetLang, model)
+      const res = await apiService.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir)
       if (res.success && res.data) {
         if (selectedDoc?.id === docId) {
           setSelectedDoc(res.data)

@@ -16,10 +16,11 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
 
   switch (tool) {
     case 'read_file': {
-      if (!rawParams.filePath && !rawParams.path) {
+      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
+      if (!rawPath) {
         errors.push("Missing required parameter 'filePath' for read_file")
       } else {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        rawParams.filePath = String(rawPath)
       }
       if (rawParams.startLine !== undefined) {
         const parsed = Number(rawParams.startLine)
@@ -35,60 +36,79 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     }
 
     case 'write_file': {
-      if (!rawParams.filePath && !rawParams.path) {
+      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile || rawParams.destination || rawParams.save_as
+      if (!rawPath) {
         errors.push("Missing required parameter 'filePath' for write_file")
       } else {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        rawParams.filePath = String(rawPath)
       }
-      if (rawParams.content === undefined && rawParams.codeContent === undefined) {
+      const rawContent = rawParams.content ?? rawParams.codeContent ?? rawParams.code ?? rawParams.text ?? rawParams.file_content ?? rawParams.data ?? rawParams.CodeContent
+      if (rawContent === undefined) {
         rawParams.content = ''
       } else {
-        rawParams.content = String(rawParams.content ?? rawParams.codeContent ?? '')
+        rawParams.content = String(rawContent)
       }
       break
     }
 
     case 'replace_file_content': {
-      if (!rawParams.filePath && !rawParams.path) {
+      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
+      if (!rawPath) {
         errors.push("Missing required parameter 'filePath' for replace_file_content")
       } else {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        rawParams.filePath = String(rawPath)
       }
-      if (rawParams.targetContent === undefined && rawParams.target === undefined) {
+      const rawTarget = rawParams.targetContent ?? rawParams.target ?? rawParams.target_content ?? rawParams.old_content ?? rawParams.old_str ?? rawParams.old_text ?? rawParams.oldContent ?? rawParams.search_text ?? rawParams.searchText ?? rawParams.search ?? rawParams.find ?? rawParams.TargetContent
+      if (rawTarget === undefined) {
         errors.push("Missing required parameter 'targetContent' for replace_file_content")
       } else {
-        rawParams.targetContent = String(rawParams.targetContent ?? rawParams.target)
+        rawParams.targetContent = String(rawTarget)
       }
-      if (rawParams.replacementContent === undefined && rawParams.replacement === undefined) {
+      const rawReplacement = rawParams.replacementContent ?? rawParams.replacement ?? rawParams.replacement_content ?? rawParams.new_content ?? rawParams.new_str ?? rawParams.new_text ?? rawParams.newContent ?? rawParams.replace_text ?? rawParams.replaceText ?? rawParams.replace ?? rawParams.to ?? rawParams.content ?? rawParams.code ?? rawParams.ReplacementContent
+      if (rawReplacement === undefined) {
         errors.push("Missing required parameter 'replacementContent' for replace_file_content")
       } else {
-        rawParams.replacementContent = String(rawParams.replacementContent ?? rawParams.replacement)
+        rawParams.replacementContent = String(rawReplacement)
       }
       break
     }
 
     case 'multi_replace_file_content': {
-      if (!rawParams.filePath && !rawParams.path) {
+      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
+      if (!rawPath) {
         errors.push("Missing required parameter 'filePath' for multi_replace_file_content")
       } else {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        rawParams.filePath = String(rawPath)
       }
-      if (!Array.isArray(rawParams.chunks) || rawParams.chunks.length === 0) {
-        errors.push("Missing or non-array parameter 'chunks' for multi_replace_file_content")
+      const rawChunks = Array.isArray(rawParams.replacements)
+        ? rawParams.replacements
+        : Array.isArray(rawParams.chunks)
+        ? rawParams.chunks
+        : Array.isArray(rawParams.replacement_chunks)
+        ? rawParams.replacement_chunks
+        : Array.isArray(rawParams.edits)
+        ? rawParams.edits
+        : []
+
+      if (!Array.isArray(rawChunks) || rawChunks.length === 0) {
+        errors.push("Missing or non-array parameter 'replacements' for multi_replace_file_content")
       } else {
-        rawParams.chunks = rawParams.chunks.map((c: any) => ({
-          targetContent: String(c.targetContent ?? c.target ?? ''),
-          replacementContent: String(c.replacementContent ?? c.replacement ?? ''),
+        const normalized = rawChunks.map((c: any) => ({
+          targetContent: String(c.targetContent ?? c.target ?? c.target_content ?? c.old_content ?? c.old_str ?? c.TargetContent ?? ''),
+          replacementContent: String(c.replacementContent ?? c.replacement ?? c.replacement_content ?? c.new_content ?? c.new_str ?? c.ReplacementContent ?? ''),
         }))
+        rawParams.replacements = normalized
+        rawParams.chunks = normalized
       }
       break
     }
 
     case 'delete_file': {
-      if (!rawParams.filePath && !rawParams.path) {
+      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
+      if (!rawPath) {
         errors.push("Missing required parameter 'filePath' for delete_file")
       } else {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        rawParams.filePath = String(rawPath)
       }
       break
     }

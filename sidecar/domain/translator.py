@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 import docx
 import httpx
 import pymupdf
@@ -175,12 +175,19 @@ def _translate_batch(runs: List["docx.text.run.Run"], source_lang: str, target_l
         run.text = text
 
 
-def translate_docx_inplace(doc_id: str, source_lang: str, target_lang: str, model: str = "llama3.2") -> IngestResponse:
+def translate_docx_inplace(
+    doc_id: str,
+    source_lang: str,
+    target_lang: str,
+    model: str = "llama3.2",
+    backup_original: bool = True,
+    target_dir: Optional[str] = None
+) -> IngestResponse:
     """
-    Translates a DOCX document's text in place: overwrites the original file on disk with the
-    same styles/paragraphs/tables/images, only the run text is replaced. Then re-extracts markdown
-    from the translated file and re-indexes it in LanceDB via the existing update path.
+    Translates a DOCX document's text: creates a backup of the original or writes to target_dir if provided.
+    Then re-extracts markdown from the translated file and re-indexes it in LanceDB via update path.
     """
+    import shutil
     doc_record = _load_doc_record(doc_id)
     file_type = doc_record.get("file_type", "")
     file_path = doc_record.get("file_path", "")
@@ -204,9 +211,22 @@ def translate_docx_inplace(doc_id: str, source_lang: str, target_lang: str, mode
     for batch in batches:
         _translate_batch(batch, source_lang, target_lang, model)
 
-    docx_doc.save(file_path)
+    if target_dir and os.path.isdir(target_dir):
+        base_name, ext = os.path.splitext(filename)
+        out_file_path = os.path.join(target_dir, f"{base_name}_{target_lang.lower()}{ext}")
+        docx_doc.save(out_file_path)
+    else:
+        if backup_original and os.path.exists(file_path):
+            backup_path = file_path + ".original.bak"
+            try:
+                shutil.copy2(file_path, backup_path)
+                logger.info(f"Preserved original document backup at: {backup_path}")
+            except Exception as b_err:
+                logger.warning(f"Could not create backup of original file: {b_err}")
+        docx_doc.save(file_path)
+        out_file_path = file_path
 
-    new_markdown, _ = extract_document_markdown(filename, b"", file_path)
+    new_markdown, _ = extract_document_markdown(os.path.basename(out_file_path), b"", out_file_path)
     return update_and_reindex_document(doc_id, new_markdown)
 
 
@@ -361,15 +381,21 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
             logger.info(f"Translated PDF text auto-fit from {block['size']:.1f}pt to {fit_size:.1f}pt")
 
 
-def translate_pdf_inplace_fine(doc_id: str, source_lang: str, target_lang: str, model: str = "llama3.2") -> IngestResponse:
+def translate_pdf_inplace_fine(
+    doc_id: str,
+    source_lang: str,
+    target_lang: str,
+    model: str = "llama3.2",
+    backup_original: bool = True,
+    target_dir: Optional[str] = None
+) -> IngestResponse:
     """
     'Fine-mode' PDF in-place translation: for every page, permanently redacts each original text
-    block and reinserts the translated text in the same bbox, auto-fitting the font size down
-    from the original when needed to avoid clipping (see _redact_and_reinsert_pdf_blocks for the
-    exact scope/limits). Saves to a temp file and atomically replaces the original on success,
-    then re-extracts markdown from the translated file and re-indexes it via the existing update
-    path, mirroring translate_docx_inplace.
+    block and reinserts the translated text in the same bbox, auto-fitting the font size down.
+    Saves to a temp file and creates a backup of the original or writes to target_dir if provided.
+    Then re-extracts markdown and re-indexes it via the update path.
     """
+    import shutil
     doc_record = _load_doc_record(doc_id)
     file_type = doc_record.get("file_type", "")
     file_path = doc_record.get("file_path", "")
@@ -403,19 +429,40 @@ def translate_pdf_inplace_fine(doc_id: str, source_lang: str, target_lang: str, 
                 continue
             _translate_pdf_blocks(blocks, source_lang, target_lang, model)
             _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
-
-        tmp_path = file_path + ".translating.tmp"
-        pdf_doc.save(tmp_path)
+        if target_dir and os.path.isdir(target_dir):
+            base_name, ext = os.path.splitext(filename)
+            out_file_path = os.path.join(target_dir, f"{base_name}_{target_lang.lower()}{ext}")
+            pdf_doc.save(out_file_path)
+            tmp_path = None
+        else:
+            tmp_path = file_path + ".translating.tmp"
+            pdf_doc.save(tmp_path)
+            out_file_path = file_path
     finally:
         pdf_doc.close()
 
-    os.replace(tmp_path, file_path)
+    if tmp_path and os.path.exists(tmp_path):
+        if backup_original and os.path.exists(file_path):
+            backup_path = file_path + ".original.bak"
+            try:
+                shutil.copy2(file_path, backup_path)
+                logger.info(f"Preserved original document backup at: {backup_path}")
+            except Exception as b_err:
+                logger.warning(f"Could not create backup of original file: {b_err}")
+        os.replace(tmp_path, file_path)
 
-    new_markdown, _ = extract_document_markdown(filename, b"", file_path)
+    new_markdown, _ = extract_document_markdown(os.path.basename(out_file_path), b"", out_file_path)
     return update_and_reindex_document(doc_id, new_markdown)
 
 
-def translate_document_inplace(doc_id: str, source_lang: str, target_lang: str, model: str = "llama3.2") -> IngestResponse:
+def translate_document_inplace(
+    doc_id: str,
+    source_lang: str,
+    target_lang: str,
+    model: str = "llama3.2",
+    backup_original: bool = True,
+    target_dir: Optional[str] = None
+) -> IngestResponse:
     """
     Dispatches in-place translation to the DOCX or PDF fine-mode pipeline based on the document's
     stored file_type. Raises UnsupportedDocumentTypeError (mapped to HTTP 400) for any other
@@ -424,9 +471,9 @@ def translate_document_inplace(doc_id: str, source_lang: str, target_lang: str, 
     record = _load_doc_record(doc_id)
     file_type = record.get("file_type", "")
     if file_type == "docx":
-        return translate_docx_inplace(doc_id, source_lang, target_lang, model)
+        return translate_docx_inplace(doc_id, source_lang, target_lang, model, backup_original, target_dir)
     if file_type == "pdf":
-        return translate_pdf_inplace_fine(doc_id, source_lang, target_lang, model)
+        return translate_pdf_inplace_fine(doc_id, source_lang, target_lang, model, backup_original, target_dir)
     raise UnsupportedDocumentTypeError(
         f"In-place translation is not supported for file type '{file_type}'. Supported: docx, pdf."
     )

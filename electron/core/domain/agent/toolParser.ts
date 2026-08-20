@@ -171,10 +171,10 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
         parameters.url = rawParams.link || rawParams.href || rawParams.endpoint || rawParams.Url || rawParams.URL
       }
       if (!parameters.targetContent) {
-        parameters.targetContent = rawParams.target || rawParams.target_content || rawParams.old_content || rawParams.old_str || rawParams.search_text || rawParams.TargetContent
+        parameters.targetContent = rawParams.target || rawParams.target_content || rawParams.old_content || rawParams.old_str || rawParams.old_text || rawParams.oldContent || rawParams.search_text || rawParams.searchText || rawParams.search || rawParams.find || rawParams.TargetContent
       }
       if (!parameters.replacementContent) {
-        parameters.replacementContent = rawParams.replacement || rawParams.replacement_content || rawParams.new_content || rawParams.new_str || rawParams.replace_text || rawParams.ReplacementContent
+        parameters.replacementContent = rawParams.replacement || rawParams.replacement_content || rawParams.new_content || rawParams.new_str || rawParams.new_text || rawParams.newContent || rawParams.replace_text || rawParams.replaceText || rawParams.replace || rawParams.to || rawParams.content || rawParams.code || rawParams.ReplacementContent
       }
       if (!parameters.command) {
         const rawCmd = rawParams.cmd || rawParams.terminal_command || rawParams.exec || rawParams.command_line || rawParams.CommandLine || parsed.parameters
@@ -188,7 +188,7 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       }
 
       if (!parameters.content) {
-        parameters.content = rawParams.code || rawParams.text || rawParams.file_content || rawParams.data || rawParams.CodeContent
+        parameters.content = rawParams.code || rawParams.text || rawParams.file_content || rawParams.data || rawParams.CodeContent || rawParams.content
       }
       if (!parameters.query) {
         parameters.query = rawParams.pattern || rawParams.search || rawParams.term || rawParams.keyword || rawParams.search_query || rawParams.q || rawParams.Query
@@ -397,15 +397,17 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
     .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
     .trim()
 
+  const hasThoughtBlocks = cleanText !== text.trim()
+
   const candidate =
     extractToolCallFromText(cleanText) ||
-    extractToolCallFromText(text) ||
+    (hasThoughtBlocks ? extractToolCallFromText(text) : null) ||
     parseFencedCodeBlockFallback(cleanText) ||
-    parseFencedCodeBlockFallback(text) ||
+    (hasThoughtBlocks ? parseFencedCodeBlockFallback(text) : null) ||
     parseShellCodeBlockFallback(cleanText) ||
-    parseShellCodeBlockFallback(text) ||
+    (hasThoughtBlocks ? parseShellCodeBlockFallback(text) : null) ||
     parseDiffCodeBlockFallback(cleanText) ||
-    parseDiffCodeBlockFallback(text)
+    (hasThoughtBlocks ? parseDiffCodeBlockFallback(text) : null)
 
   if (!candidate) return null
 

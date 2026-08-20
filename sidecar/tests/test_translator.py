@@ -606,8 +606,52 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
         # purely on char count, forcing it back through RapidOCR's Chinese-trained recognition
         # model, which corrupts CJK text into Han-unification variants (Japanese 語 -> Simplified
         # Chinese 语). analyze_pdf_page_structure now only routes short-text, image-free pages to
-        # OCR when there's no usable native text layer at all.
         assert japanese_text in res.json()["extracted_markdown"]
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
+
+
+def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        translator_module,
+        "_call_ollama_translate",
+        lambda text, s, t, m: f"TR-{text}",
+    )
+    src_file = tmp_path / "sample.docx"
+    doc = docx.Document()
+    doc.add_paragraph("Original paragraph text")
+    doc.save(str(src_file))
+
+    out_dir = tmp_path / "translated_output"
+    out_dir.mkdir()
+
+    doc_id = None
+    try:
+        ingest_res = client.post("/ingest-path", json={"file_path": str(src_file)})
+        assert ingest_res.status_code == 200
+        doc_id = ingest_res.json()["id"]
+
+        # Test target_dir saving without altering original
+        res = client.post(
+            f"/documents/{doc_id}/translate-inplace",
+            json={
+                "source_lang": "English",
+                "target_lang": "Spanish",
+                "target_dir": str(out_dir),
+                "backup_original": True,
+            },
+        )
+        assert res.status_code == 200
+        target_files = list(out_dir.glob("*.docx"))
+        assert len(target_files) == 1
+        assert "sample_spanish.docx" in target_files[0].name
+
+        # Verify original file was not mutated
+        orig_doc = docx.Document(str(src_file))
+        orig_texts = [r.text for r in translator_module._collect_docx_runs(orig_doc)]
+        assert "Original paragraph text" in orig_texts
+    finally:
+        if doc_id:
+            client.delete(f"/documents/{doc_id}")
+

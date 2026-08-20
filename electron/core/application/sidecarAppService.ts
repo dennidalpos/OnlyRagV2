@@ -242,12 +242,18 @@ export class SidecarAppService {
     })
   }
 
-  translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string) {
+  translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string) {
     if (!docId || typeof docId !== 'string') {
       return Promise.resolve({ success: false, error: 'Invalid document ID' })
     }
     logger.log('INFO', 'SidecarApp', `Translating document in place: ${docId} (${sourceLang} -> ${targetLang})`)
-    const postData = JSON.stringify({ source_lang: sourceLang, target_lang: targetLang, model: model || undefined })
+    const postData = JSON.stringify({
+      source_lang: sourceLang,
+      target_lang: targetLang,
+      model: model || undefined,
+      backup_original: backupOriginal,
+      target_dir: targetDir || undefined,
+    })
 
     return new Promise((resolve) => {
       const req = http.request(

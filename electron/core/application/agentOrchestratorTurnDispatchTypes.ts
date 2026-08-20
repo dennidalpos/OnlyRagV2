@@ -30,6 +30,7 @@ export interface TurnDispatchContext {
   projectContextMapStr: string
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
+  skillsBlock?: string
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm

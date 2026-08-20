@@ -24,6 +24,8 @@ class TranslateInplaceRequest(BaseModel):
     source_lang: str
     target_lang: str
     model: Optional[str] = None
+    backup_original: Optional[bool] = True
+    target_dir: Optional[str] = None
 
 class PagePreviewResponse(BaseModel):
     doc_id: str

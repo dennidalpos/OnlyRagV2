@@ -97,9 +97,12 @@ def prepare_pdf_page_work_item(
     bytes/strings, safe to hand to a worker thread via render_prepared_pdf_page.
     """
     ocr_image_bytes: Optional[bytes] = None
-    if used_ocr:
-        pix = page.get_pixmap(dpi=150)
-        ocr_image_bytes = pix.tobytes("png")
+    if used_ocr or len(raw_text.strip()) < 40:
+        try:
+            pix = page.get_pixmap(dpi=200)
+            ocr_image_bytes = pix.tobytes("png")
+        except Exception as pix_err:
+            logger.debug(f"Pixmap generation skipped on page {page_num}: {pix_err}")
 
     figures: List[Dict[str, Any]] = []
     try:
@@ -138,7 +141,7 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     page_num = work_item["page_num"]
     page_md_parts: List[str] = []
 
-    if work_item["used_ocr"]:
+    if work_item["used_ocr"] and work_item.get("ocr_image_bytes"):
         ocr_kwargs: Dict[str, Any] = {}
         if work_item.get("vision_model"):
             ocr_kwargs["model"] = work_item["vision_model"]
@@ -150,8 +153,24 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
         else:
             page_md_parts.append("[Scanned page - No readable text extracted]")
     else:
-        page_md_parts.append(work_item["raw_text"])
-        page_md_parts.extend(work_item["md_tables"])
+        native_text = (work_item.get("raw_text") or "").strip()
+        if native_text:
+            page_md_parts.append(native_text)
+        if work_item.get("md_tables"):
+            page_md_parts.extend(work_item["md_tables"])
+
+        # Fallback for scanned pages where native text layer was empty/sparse and no tables were found
+        if len(native_text) < 40 and not work_item.get("md_tables") and work_item.get("ocr_image_bytes"):
+            ocr_kwargs = {}
+            if work_item.get("vision_model"):
+                ocr_kwargs["model"] = work_item["vision_model"]
+            if work_item.get("vision_prompt"):
+                ocr_kwargs["prompt"] = work_item["vision_prompt"]
+            ocr_result = run_layout_ocr(work_item["ocr_image_bytes"], **ocr_kwargs)
+            if ocr_result.strip():
+                if native_text:
+                    page_md_parts.clear()
+                page_md_parts.append(ocr_result.strip())
 
     for idx, fig in enumerate(work_item["figures"]):
         caption = f"> 📊 **[Figura / Diagramma {idx + 1} - Pagina {page_num}]** *(Risoluzione: {fig['width']}x{fig['height']}px)*"

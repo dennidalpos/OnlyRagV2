@@ -1,6 +1,6 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
-import type { SkillMatchContext } from '../domain/skills/skillMatcher'
+import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorAppService'
 import { logger } from '../../diagnostics'
@@ -41,6 +41,7 @@ export interface SessionContext {
   modelCapabilities: Record<string, string[]>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
+  skillsBlock: string
 }
 
 async function scanProjectMap(workspacePath: string): Promise<string> {
@@ -124,6 +125,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   }
 
   const matchedSkills = await skillAppService.getMatchedSkills(skillMatchContext, workspacePath, 3, skillMatchingOptions)
+  let skillsBlock = ''
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
     if (session.targetWindow && !session.targetWindow.isDestroyed()) {
@@ -133,6 +135,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     if (settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSkillsMatched(sessionId, skillNames)
     }
+    skillsBlock = compileSkillsContextBlock(matchedSkills)
   }
 
   return {
@@ -148,5 +151,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     modelCapabilities,
     skillMatchContext,
     skillMatchingOptions,
+    skillsBlock,
   }
 }

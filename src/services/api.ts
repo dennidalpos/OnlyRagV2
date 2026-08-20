@@ -105,11 +105,11 @@ export const apiService = {
     }
   },
 
-  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Translating document in place ${docId} (${sourceLang} -> ${targetLang})`)
-      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model)
+      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Translate in-place warning/error: ${res.error}`)
       } else {

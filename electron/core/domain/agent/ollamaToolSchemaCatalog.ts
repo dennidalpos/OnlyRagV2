@@ -122,8 +122,8 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   tool('get_file_info', 'Get metadata about a file: existence, size, line count, binary detection.', {
     filePath: { type: 'string', description: 'Path of the file to inspect.' },
   }, ['filePath']),
-  tool('ensure_tool', 'Ensure a development tool is installed on the host, installing it if missing. Only node, npm, pnpm, git and python can be installed.', {
-    toolName: { type: 'string', description: 'One of: node, npm, pnpm, git, python.' },
+  tool('ensure_tool', 'Ensure a development tool is installed on the host, installing it if missing. Only node, npm, pnpm, git, python and ollama can be installed.', {
+    toolName: { type: 'string', description: 'One of: node, npm, pnpm, git, python, ollama.' },
   }, ['toolName']),
   tool('update_plan', 'Update the status of one milestone in the execution plan. Call this as soon as a milestone is started, completed and verified, or found to be blocked.', {
     milestoneId: { type: 'string', description: 'Milestone id (e.g. "m-2") or a distinctive part of its title.' },

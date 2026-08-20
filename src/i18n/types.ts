@@ -367,6 +367,11 @@ export interface TranslationSchema {
     translateInplace: string
     translateInplaceModalTitle: string
     translateInplaceWarning: string
+    translateInplaceTargetDirNotice: string
+    translateInplaceBackupLabel: string
+    translateInplaceTargetDirLabel: string
+    translateInplaceTargetDirPlaceholder: string
+    translateInplaceBrowse: string
     translateInplaceConfirm: string
     translateInplaceInProgress: string
     translateInplaceSuccess: string

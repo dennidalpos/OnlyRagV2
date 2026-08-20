@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   Copy,
   Check,
+  GripVertical,
 } from 'lucide-react'
 import { SystemPromptModal } from '../common/SystemPromptModal'
 import { ModelBadge } from '../common/ModelBadge'
@@ -31,6 +32,7 @@ import { TranslateInplaceModal } from './TranslateInplaceModal'
 import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
+import { useResizablePanel } from '../../hooks/useResizablePanel'
 import { IngestedDocument } from '../../types'
 
 interface IngestionViewProps {
@@ -42,6 +44,21 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
   const { t } = useTranslation()
   const ing = useIngestion(settings)
   const toast = useToast()
+  const {
+    width: sidebarWidth,
+    isResizing: isSidebarResizing,
+    handleMouseDown: handleSidebarMouseDown,
+    handleKeyDown: handleSidebarKeyDown,
+  } = useResizablePanel(320, 220, 550, 'onlyrag_ingestion_sidebar_width')
+  const initialPreviewWidth = typeof window !== 'undefined'
+    ? Math.max(300, Math.min(Math.round((window.innerWidth - 320) * 0.48), 900))
+    : 450
+  const {
+    width: previewWidth,
+    isResizing: isPreviewResizing,
+    handleMouseDown: handlePreviewMouseDown,
+    handleKeyDown: handlePreviewKeyDown,
+  } = useResizablePanel(initialPreviewWidth, 250, 950, 'onlyrag_ingestion_preview_width')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const dragCounterRef = useRef<number>(0)
@@ -426,7 +443,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
       {/* Main Dual-Pane Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar: Document List & LanceDB Vector Search */}
-        <div className="w-80 border-r border-slate-800 bg-slate-900/40 p-4 space-y-4 flex flex-col shrink-0">
+        <div
+          style={{ width: `${sidebarWidth}px` }}
+          className="border-r border-slate-800 bg-slate-900/40 p-4 space-y-4 flex flex-col shrink-0 overflow-hidden select-text"
+        >
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
               <span>{t('ingestion.indexedDocuments')} ({ing.documents.length})</span>
@@ -456,8 +476,27 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           <VectorSearchPanel embeddingModel={settings?.embeddingModel} />
         </div>
 
+        {/* Resizable Sidebar Divider Handle */}
+        <div
+          role="separator"
+          tabIndex={0}
+          aria-orientation="vertical"
+          aria-valuenow={sidebarWidth}
+          aria-valuemin={220}
+          aria-valuemax={550}
+          aria-label={t('coding.resizePanels')}
+          onMouseDown={handleSidebarMouseDown}
+          onKeyDown={handleSidebarKeyDown}
+          className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
+            isSidebarResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+          }`}
+          title={t('coding.resizePanels')}
+        >
+          <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isSidebarResizing ? 'opacity-100 text-slate-950' : ''}`} />
+        </div>
+
         {/* Center: Dual-Pane Comparison Viewer */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-1 flex flex-col overflow-hidden ${isSidebarResizing ? 'pointer-events-none select-none' : ''}`}>
           {/* Dual-Pane Header & Pagination Toolbar */}
           <div className="bg-slate-900/90 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
             {/* Left: Selected Document Name & Dirty State Status */}
@@ -705,7 +744,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           ) : (
             <div className="flex-1 flex overflow-hidden">
               {/* Left Pane: Preview Originale (Visual/Source Preview) */}
-              <div className="w-1/2 border-r border-slate-800 bg-slate-950 flex flex-col overflow-hidden">
+              <div
+                style={{ width: `${previewWidth}px` }}
+                className="border-r border-slate-800 bg-slate-950 flex flex-col overflow-hidden shrink-0"
+              >
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-cyan-300">
                     <FileText className="w-3.5 h-3.5 text-cyan-400" />
@@ -745,8 +787,27 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 </div>
               </div>
 
+              {/* Resizable Preview Divider Handle */}
+              <div
+                role="separator"
+                tabIndex={0}
+                aria-orientation="vertical"
+                aria-valuenow={previewWidth}
+                aria-valuemin={250}
+                aria-valuemax={950}
+                aria-label={t('coding.resizePanels')}
+                onMouseDown={handlePreviewMouseDown}
+                onKeyDown={handlePreviewKeyDown}
+                className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
+                  isPreviewResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+                }`}
+                title={t('coding.resizePanels')}
+              >
+                <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isPreviewResizing ? 'opacity-100 text-slate-950' : ''}`} />
+              </div>
+
               {/* Right Pane: Editor Markdown (Monaco Editor) */}
-              <div className="w-1/2 bg-slate-950 flex flex-col overflow-hidden">
+              <div className={`flex-1 min-w-0 bg-slate-950 flex flex-col overflow-hidden ${isPreviewResizing ? 'pointer-events-none select-none' : ''}`}>
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-cyan-300">
                     <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
@@ -806,13 +867,15 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         filename={translateInplaceDoc?.filename || ''}
         isTranslating={ing.isTranslatingInplace}
         onClose={() => setTranslateInplaceDoc(null)}
-        onConfirm={async (sourceLang, targetLang) => {
+        onConfirm={async (sourceLang, targetLang, backupOriginal, targetDir) => {
           if (!translateInplaceDoc) return
           await ing.handleTranslateInplace(
             translateInplaceDoc.id,
             sourceLang,
             targetLang,
-            settings?.translationModel || settings?.defaultModel
+            settings?.translationModel || settings?.defaultModel,
+            backupOriginal,
+            targetDir
           )
           setTranslateInplaceDoc(null)
         }}

@@ -54,7 +54,21 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     },
   })
 
-  const { width: leftPanelWidth, isResizing, handleMouseDown, handleKeyDown } = useResizablePanel(460, 300, 850)
+  const defaultInitialWidth = typeof window !== 'undefined'
+    ? Math.max(560, Math.min(Math.round(window.innerWidth * 0.38), 750))
+    : 560
+  const { width: leftPanelWidth, isResizing, handleMouseDown, handleKeyDown } = useResizablePanel(
+    defaultInitialWidth,
+    320,
+    950,
+    'onlyrag_coding_left_panel_width'
+  )
+  const {
+    width: explorerWidth,
+    isResizing: isExplorerResizing,
+    handleMouseDown: handleExplorerMouseDown,
+    handleKeyDown: handleExplorerKeyDown,
+  } = useResizablePanel(288, 200, 480, 'onlyrag_coding_workspace_explorer_width')
   const [showWorkspaceSidebar, setShowWorkspaceSidebar] = useState<boolean>(false)
   const [isDiffMode, setIsDiffMode] = useState<boolean>(false)
   const [copiedPath, setCopiedPath] = useState<boolean>(false)
@@ -129,28 +143,49 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
       <div className="flex-1 flex overflow-hidden">
         {/* Full Workspace Explorer Sidebar */}
         {showWorkspaceSidebar && (
-          <WorkspaceExplorer
-            projects={c.projects}
-            activeProjectPath={c.workspacePath}
-            onAddProject={c.handleAddProject}
-            onRemoveProject={c.handleRemoveProject}
-            onSelectProject={c.handleSelectProject}
-            files={c.files}
-            selectedFilePath={c.selectedFile?.path || null}
-            pinnedPaths={new Set(c.pinnedFiles.keys())}
-            onOpenFile={c.handleOpenFile}
-            onTogglePinFile={c.handleTogglePinFile}
-            onRefreshFiles={() => c.workspacePath && c.loadWorkspaceFiles(c.workspacePath)}
-            workspaceSessions={c.workspaceSessions}
-            activeSessionId={c.activeSessionId}
-            onCreateSession={c.handleCreateSession}
-            onSwitchSession={c.handleSwitchSession}
-            onDeleteSession={c.handleDeleteSession}
-            onClearSessions={c.handleClearSessionHistory}
-            onRenameSession={c.handleRenameSession}
-            onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
-            onClose={() => setShowWorkspaceSidebar(false)}
-          />
+          <>
+            <WorkspaceExplorer
+              width={explorerWidth}
+              projects={c.projects}
+              activeProjectPath={c.workspacePath}
+              onAddProject={c.handleAddProject}
+              onRemoveProject={c.handleRemoveProject}
+              onSelectProject={c.handleSelectProject}
+              files={c.files}
+              selectedFilePath={c.selectedFile?.path || null}
+              pinnedPaths={new Set(c.pinnedFiles.keys())}
+              onOpenFile={c.handleOpenFile}
+              onTogglePinFile={c.handleTogglePinFile}
+              onRefreshFiles={() => c.workspacePath && c.loadWorkspaceFiles(c.workspacePath)}
+              workspaceSessions={c.workspaceSessions}
+              activeSessionId={c.activeSessionId}
+              onCreateSession={c.handleCreateSession}
+              onSwitchSession={c.handleSwitchSession}
+              onDeleteSession={c.handleDeleteSession}
+              onClearSessions={c.handleClearSessionHistory}
+              onRenameSession={c.handleRenameSession}
+              onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
+              onClose={() => setShowWorkspaceSidebar(false)}
+            />
+            {/* Resizable Explorer Divider Handle */}
+            <div
+              role="separator"
+              tabIndex={0}
+              aria-orientation="vertical"
+              aria-valuenow={explorerWidth}
+              aria-valuemin={200}
+              aria-valuemax={480}
+              aria-label={t('coding.resizePanels')}
+              onMouseDown={handleExplorerMouseDown}
+              onKeyDown={handleExplorerKeyDown}
+              className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring z-20 ${
+                isExplorerResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+              }`}
+              title={t('coding.resizePanels')}
+            >
+              <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isExplorerResizing ? 'opacity-100 text-slate-950' : ''}`} />
+            </div>
+          </>
         )}
 
         {/* Left Column: Interactive Timeline & Prompt Composer */}

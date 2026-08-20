@@ -396,7 +396,7 @@ export interface IElectronAPI {
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
   ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean }>

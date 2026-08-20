@@ -97,4 +97,32 @@ describe('ToolSchemaValidator Unit Tests', () => {
     expect(noId.valid).toBe(false)
     expect(noId.errors.join(' ')).toContain('milestoneId')
   })
+
+  it('should accept replace_file_content with old_str and new_str aliases', () => {
+    const raw: AgentToolCall = {
+      tool: 'replace_file_content',
+      parameters: { file_path: 'src/App.tsx', old_str: 'const a = 1', new_str: 'const a = 2' } as any,
+    }
+    const res = validateAndSanitize(raw)
+    expect(res.valid).toBe(true)
+    expect(res.sanitizedToolCall.parameters.filePath).toBe('src/App.tsx')
+    expect(res.sanitizedToolCall.parameters.targetContent).toBe('const a = 1')
+    expect(res.sanitizedToolCall.parameters.replacementContent).toBe('const a = 2')
+  })
+
+  it('should accept multi_replace_file_content with replacements or chunks array', () => {
+    const raw: AgentToolCall = {
+      tool: 'multi_replace_file_content',
+      parameters: {
+        file: 'src/index.ts',
+        replacements: [{ target: 'old', replacement: 'new' }],
+      } as any,
+    }
+    const res = validateAndSanitize(raw)
+    expect(res.valid).toBe(true)
+    expect(res.sanitizedToolCall.parameters.filePath).toBe('src/index.ts')
+    expect(res.sanitizedToolCall.parameters.replacements).toHaveLength(1)
+    expect(res.sanitizedToolCall.parameters.replacements?.[0]?.targetContent).toBe('old')
+    expect(res.sanitizedToolCall.parameters.replacements?.[0]?.replacementContent).toBe('new')
+  })
 })

@@ -34,6 +34,7 @@ export const DEV_TOOL_ALLOWLIST: DevToolDefinition[] = [
   { id: 'pnpm', displayName: 'pnpm', binary: 'pnpm', versionArgs: ['--version'], wingetId: 'pnpm.pnpm' },
   { id: 'git', displayName: 'Git', binary: 'git', versionArgs: ['--version'], wingetId: 'Git.Git' },
   { id: 'python', displayName: 'Python 3', binary: 'python', versionArgs: ['--version'], wingetId: 'Python.Python.3.12' },
+  { id: 'ollama', displayName: 'Ollama', binary: 'ollama', versionArgs: ['--version'], wingetId: 'Ollama.Ollama' },
 ]
 
 const TOOL_ALIASES: Record<string, string> = {
@@ -45,6 +46,7 @@ const TOOL_ALIASES: Record<string, string> = {
   pip: 'python',
   pip3: 'python',
   'git.git': 'git',
+  'ollama.ollama': 'ollama',
 }
 
 export interface DevToolStatus {

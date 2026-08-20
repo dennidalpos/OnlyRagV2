@@ -14,6 +14,8 @@ describe('devToolchain — allow-list policy', () => {
     expect(normalizeToolId('NodeJS')).toBe('node')
     expect(normalizeToolId('python3')).toBe('python')
     expect(normalizeToolId(' Git ')).toBe('git')
+    expect(normalizeToolId('ollama')).toBe('ollama')
+    expect(normalizeToolId('ollama.ollama')).toBe('ollama')
   })
 
   it('should refuse anything outside the allow-list, including plausible package names', () => {

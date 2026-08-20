@@ -110,8 +110,8 @@ export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strict
 - run_tests: { "command"?: "optional override, e.g. 'pytest -k test_login'. Omit to auto-detect the workspace test runner." } (returns a structured pass/fail summary instead of raw output)
 - update_plan: { "milestoneId": "m-2", "status": "in_progress" | "verified" | "failed", "notes"?: "short note" } (mark plan progress the moment a milestone starts, is verified, or fails)
 - ask: { "question": "Question or clarification for the user in user's language" }
-- inspect_os_env: {} (also reports which development tools are installed: node, npm, pnpm, git, python)
-- ensure_tool: { "toolName": "node" | "npm" | "pnpm" | "git" | "python" } (installs the tool if missing; no other software can be installed)
+- inspect_os_env: {} (also reports which development tools are installed: node, npm, pnpm, git, python, ollama)
+- ensure_tool: { "toolName": "node" | "npm" | "pnpm" | "git" | "python" | "ollama" } (installs the tool if missing; no other software can be installed)
 - finish: { "summary": "Task completed summary in user's language" }`
 
 const CODING_CORE_DIRECTIVES = `CRITICAL LANGUAGE DIRECTIVE:

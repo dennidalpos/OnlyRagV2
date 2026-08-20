@@ -1,7 +1,6 @@
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
-import { sidecarAppService } from './sidecarAppService'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
 
@@ -29,12 +28,6 @@ export class WorkspaceAppService {
   async deleteFile(filePath: string) {
     const res = await this.repo.deleteFile(filePath)
     if (res.success) {
-      try {
-        await sidecarAppService.deleteDocument(filePath)
-      } catch (err: any) {
-        // Ignore sidecar purge error if file was not indexed
-      }
-
       try {
         const { BrowserWindow } = await import('electron')
         BrowserWindow.getAllWindows().forEach((win) => {

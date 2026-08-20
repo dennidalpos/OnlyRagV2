@@ -15,6 +15,7 @@ import {
   Check,
   Link,
   AlertTriangle,
+  GripVertical,
 } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -22,6 +23,7 @@ import { ModelBadge } from '../common/ModelBadge'
 import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
+import { useResizablePanel } from '../../hooks/useResizablePanel'
 
 interface TranslationViewProps {
   settings?: AppSettings
@@ -33,6 +35,15 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
   const tr = useDocumentTranslation(settings)
   const toast = useToast()
   const [copiedTranslation, setCopiedTranslation] = useState(false)
+  const initialLeftWidth = typeof window !== 'undefined'
+    ? Math.max(250, Math.min(Math.round(window.innerWidth * 0.45), 900))
+    : 450
+  const {
+    width: leftEditorWidth,
+    isResizing: isLeftEditorResizing,
+    handleMouseDown: handleLeftEditorMouseDown,
+    handleKeyDown: handleLeftEditorKeyDown,
+  } = useResizablePanel(initialLeftWidth, 250, 950, 'onlyrag_translation_split_width')
 
   const progressPercent = tr.totalChunks > 0
     ? Math.round((tr.currentChunkIndex / tr.totalChunks) * 100)
@@ -402,7 +413,10 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
             />
           ) : (
             <div className="h-full flex">
-              <div className="w-1/2 border-r border-slate-800 bg-slate-950 flex flex-col">
+              <div
+                style={{ width: `${leftEditorWidth}px` }}
+                className="border-r border-slate-800 bg-slate-950 flex flex-col shrink-0"
+              >
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-sky-300">
                     <FileText className="w-3.5 h-3.5 text-sky-400" />
@@ -435,7 +449,27 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                   />
                 </div>
               </div>
-              <div className="w-1/2 bg-slate-950 flex flex-col">
+
+              {/* Resizable Translation Split Divider Handle */}
+              <div
+                role="separator"
+                tabIndex={0}
+                aria-orientation="vertical"
+                aria-valuenow={leftEditorWidth}
+                aria-valuemin={250}
+                aria-valuemax={950}
+                aria-label={t('coding.resizePanels')}
+                onMouseDown={handleLeftEditorMouseDown}
+                onKeyDown={handleLeftEditorKeyDown}
+                className={`w-1.5 hover:w-2 hover:bg-sky-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
+                  isLeftEditorResizing ? 'bg-sky-500 w-2 ring-2 ring-sky-500/50' : ''
+                }`}
+                title={t('coding.resizePanels')}
+              >
+                <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isLeftEditorResizing ? 'opacity-100 text-slate-950' : ''}`} />
+              </div>
+
+              <div className={`flex-1 min-w-0 bg-slate-950 flex flex-col ${isLeftEditorResizing ? 'pointer-events-none select-none' : ''}`}>
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-sky-300">
                     <Languages className="w-3.5 h-3.5 text-sky-400" />

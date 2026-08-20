@@ -49,13 +49,8 @@ def analyze_pdf_page_structure(page: pymupdf.Page, min_char_threshold: int = 40)
             strategy = PageRoutingStrategy.HYBRID_VISION
         else:
             strategy = PageRoutingStrategy.NATIVE_TEXT
-    elif char_count == 0 or image_count > 0:
-        # Only a missing text layer (blank/graphic-only page) or a short text layer sharing the
-        # page with an embedded image (likely a scan whose text layer is partial/unreliable)
-        # justifies OCR. A short but genuine, image-free text layer -- e.g. a translated PDF's
-        # single-line page -- must NOT be re-OCR'd: RapidOCR's Chinese-trained recognition model
-        # corrupts CJK text it re-reads into Han-unification variants (Japanese 語 -> Simplified
-        # Chinese 语), silently degrading text that was already correct.
+    elif char_count == 0 or image_count > 0 or drawing_count > 0:
+        # A missing/sparse text layer with images or vector drawings indicates a scanned page or graphic layout
         strategy = PageRoutingStrategy.OCR_REQUIRED
     else:
         strategy = PageRoutingStrategy.NATIVE_TEXT

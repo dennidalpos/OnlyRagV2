@@ -173,35 +173,32 @@ _TRANSLATE_MAX_ATTEMPTS = 2
 _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
 
-def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str) -> str:
-    is_batch = _RUN_SEPARATOR in text
+def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str, is_batch: bool = False, expected_items: int = 1) -> str:
     if is_batch:
         system_content = (
-            f"You are a professional, expert document, form, and contract translator.\n"
-            f"Task: Translate ALL text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n\n"
-            f"Strict Universal Rules:\n"
-            f"1. TRANSLATE EVERY FIELD: You MUST translate every title, heading, section name, table header, form field label, instruction, footer, and administrative keyword into {target_lang} without exception.\n"
-            f"2. Separate any fused or concatenated words before translating.\n"
-            f"3. PRESERVE DATA VALUES ONLY: Keep proper personal names, specific street addresses, code numbers (e.g. tax ID codes, alphanumeric identifiers), pure numbers, dates, emails, and URLs unchanged.\n"
-            f"4. The text contains multiple distinct segments separated by '{_RUN_SEPARATOR}' on its own line. "
-            f"You MUST return EXACTLY the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line, preserving exact segment order.\n"
-            f"5. Output ONLY the translated segments with NO preambles, explanations, conversational text, markdown code blocks, or notes.\n"
-            f"6. If any segment is already written in {target_lang}, return it verbatim without modifying or re-translating it."
+            f"You are an automated document text translation engine.\n"
+            f"Task: Directly translate the numbered text segments from {source_lang} to {target_lang}.\n\n"
+            f"CRITICAL DIRECTIVES:\n"
+            f"1. You MUST return EXACTLY {expected_items} numbered lines in the exact format '[1] translated text', '[2] translated text', etc., preserving exact order.\n"
+            f"2. TRANSLATE EVERY FIELD AND LABEL: Translate every heading, form field label, table header, instruction, footer, and administrative keyword into {target_lang}.\n"
+            f"3. For labeled fields (e.g. '[1] CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('[1] TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
+            f"4. Translate common abbreviations (e.g. 'Spett.le' -> 'Dear Sirs' / 'To the attention of').\n"
+            f"5. ZERO CHATTER: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or notes.\n"
+            f"6. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
         )
         user_content = (
-            f"Translate the following segments from {source_lang} to {target_lang}. "
-            f"Separate each translated segment with '{_RUN_SEPARATOR}' on its own line:\n\n{text}"
+            f"Translate these {expected_items} numbered segments from {source_lang} to {target_lang}:\n\n{text}"
         )
     else:
         system_content = (
-            f"You are a professional, expert document, form, and contract translator.\n"
-            f"Task: Translate the given text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n\n"
-            f"Strict Universal Rules:\n"
-            f"1. TRANSLATE EVERY FIELD: You MUST translate every title, heading, section name, table header, form field label, instruction, footer, and administrative phrase into {target_lang}.\n"
-            f"2. Separate any words that were fused by OCR before translating.\n"
-            f"3. PRESERVE DATA VALUES ONLY: Keep proper personal names, specific street addresses, code numbers, pure digits, dates, email addresses, and URLs unchanged.\n"
-            f"4. If the text is already written in {target_lang}, return it verbatim.\n"
-            f"5. Return ONLY the direct {target_lang} translation without prefixes, quotes, delimiters, or notes."
+            f"You are an automated document text translation engine.\n"
+            f"Your ONLY task is to directly translate text from {source_lang} to {target_lang}.\n\n"
+            f"CRITICAL DIRECTIVES:\n"
+            f"1. TRANSLATE EVERY WORD AND LABEL: Translate every title, heading, form field label, button, footer, table header, and administrative phrase into {target_lang}.\n"
+            f"2. For form fields containing labels and values (e.g. 'CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
+            f"3. Translate abbreviations (e.g. 'Spett.le' -> 'Dear Sirs' / 'To the attention of').\n"
+            f"4. ZERO CHATTER: Output ONLY the direct {target_lang} translation. Never include preambles like 'Here is the translation', explanations, conversational text, notes, quotes, or markdown code fences.\n"
+            f"5. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
@@ -213,7 +210,7 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
         "model": model,
         "messages": messages,
         "stream": False,
-        "options": {"temperature": 0.1}
+        "options": {"temperature": 0.0}
     }
 
     for attempt in range(1, _TRANSLATE_MAX_ATTEMPTS + 1):
@@ -242,20 +239,68 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
     return ""
 
 
-def _clean_translated_segment(text: str) -> str:
-    """Removes any leaked delimiter or artifact from model output."""
+def _clean_translated_segment(text: str, source_text: str = "") -> str:
+    """Removes preambles, refusals, leaked delimiters, markdown code fences, and quotes from model output."""
     if not text:
-        return ""
-    clean = re.sub(r'<{2,4}RUN_[A-Z_\s]*>{2,4}', '', text, flags=re.IGNORECASE)
-    clean = re.sub(r'^```[a-z]*\s*', '', clean)
-    clean = re.sub(r'\s*```$', '', clean)
-    return clean.strip()
+        return source_text
+
+    # 1. Remove markdown code fences
+    cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", text.strip())
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+    # 2. Remove common conversational preambles
+    preamble_patterns = [
+        r"^(?:Here\s+(?:is|are)\s+the\s+(?:translated\s+)?(?:translation|text|version)(?:\s+of\s+(?:the\s+)?(?:given\s+)?(?:text|phrase|word|document|sentence|item))?(?:\s+from\s+[a-zA-Z]+\s+to\s+[a-zA-Z]+)?\s*:?\s*)",
+        r"^(?:The\s+translation\s+(?:of\s+(?:the\s+)?(?:given\s+)?(?:text|phrase|word|document|sentence|item)\s+)?(?:from\s+[a-zA-Z]+\s+to\s+[a-zA-Z]+\s+)?is\s*:?\s*)",
+        r"^(?:Translation\s*(?:\([a-zA-Z\s\-]+\))?\s*:\s*)",
+        r"^(?:Translates\s+to\s*:\s*)",
+        r"^(?:Direct\s+translation\s*:\s*)",
+        r"^(?:Here\s+is\s+the\s+translated\s+(?:text|phrase|version|word)\s*:?\s*)",
+        r"^(?:Below\s+is\s+the\s+translation\s*:?\s*)",
+        r"^(?:Translate\s+the\s+following\s+text\s+from\s+[a-zA-Z]+\s+to\s+[a-zA-Z]+\s*:?\s*)",
+    ]
+    for pat in preamble_patterns:
+        cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()
+
+    # 3. Check for refusal hallucinations
+    refusal_patterns = [
+        r"^I cannot translate.*",
+        r"^I am unable to translate.*",
+        r"^As an AI.*",
+        r"^Sorry, I cannot.*",
+        r"^I cannot process.*",
+    ]
+    for rpat in refusal_patterns:
+        if re.match(rpat, cleaned, flags=re.IGNORECASE):
+            return source_text
+
+    # 4. Remove trailing conversational chatter
+    cleaned = re.split(r"\n\s*(?:Note|Explanation|Please note|Let me know|Is there anything else)\s*:", cleaned, flags=re.IGNORECASE)[0]
+
+    # 5. Remove leaked delimiter tokens and fragments
+    cleaned = re.sub(r'(?i)<{0,4}\s*(?:run_sep|run_s|ep)\s*>{0,4}', '', cleaned)
+    cleaned = re.sub(r'<{2,4}[^>]*>{2,4}', '', cleaned)
+
+    # 6. Strip enclosing quotes if the entire string is wrapped in quotes
+    if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1].strip()
+
+    # Normalize excessive empty lines
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
+    return cleaned.strip() or source_text
 
 
 def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str) -> List[str]:
-    """Translates batched texts via a single delimited Ollama call with individual fallback."""
+    """Translates batched texts via structured numbered line Ollama call with individual fallback."""
     if not texts:
         return []
+
+    # Clean input strings: normalize non-breaking spaces and unprintable control chars
+    clean_texts = [
+        t.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "").replace("\ufffd", "").strip()
+        for t in texts
+    ]
 
     def _should_skip_translation(s: str) -> bool:
         trimmed = s.strip()
@@ -267,42 +312,57 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
             return True
         if all(c in "-_*=|/\\:.,; " for c in trimmed):
             return True
-        if is_block_in_target_lang(trimmed, target_lang):
-            return True
         return False
 
-    if len(texts) == 1:
-        if _should_skip_translation(texts[0]):
-            return texts
-        single = _call_ollama_translate(texts[0], source_lang, target_lang, model)
-        return [_clean_translated_segment(single)] if single.strip() else texts
+    if len(clean_texts) == 1:
+        if _should_skip_translation(clean_texts[0]):
+            return clean_texts
+        single = _call_ollama_translate(clean_texts[0], source_lang, target_lang, model, is_batch=False)
+        return [_clean_translated_segment(single, clean_texts[0])] if single.strip() else clean_texts
 
-    joined = f"\n{_RUN_SEPARATOR}\n".join(texts)
-    translated = _call_ollama_translate(joined, source_lang, target_lang, model)
-    raw_segments = re.split(r'<{2,4}RUN_SEP[_\s\w]*>{2,4}', translated) if translated else []
-    segments = [_clean_translated_segment(s) for s in raw_segments if s.strip()]
+    # Numbered line batch format
+    lines_in = [f"[{i+1}] {t}" for i, t in enumerate(clean_texts)]
+    batch_prompt = "\n".join(lines_in)
 
-    if translated and len(segments) == len(texts):
-        # Verify that non-numeric items were actually translated; if an item was echoed verbatim, fall back individually
-        for i, (orig, trans) in enumerate(zip(texts, segments)):
-            if not _should_skip_translation(orig) and orig.strip().lower() == trans.strip().lower():
-                single = _call_ollama_translate(orig, source_lang, target_lang, model)
+    raw_batch_output = _call_ollama_translate(
+        batch_prompt, source_lang, target_lang, model, is_batch=True, expected_items=len(clean_texts)
+    )
+
+    parsed_batch: Dict[int, str] = {}
+    if raw_batch_output:
+        for line in raw_batch_output.splitlines():
+            m = re.match(r"^\s*\[(\d+)\]\s*(.*)$", line)
+            if m:
+                idx = int(m.group(1))
+                val = m.group(2).strip()
+                if 1 <= idx <= len(clean_texts):
+                    parsed_batch[idx] = val
+
+    if len(parsed_batch) == len(clean_texts):
+        results = [
+            _clean_translated_segment(parsed_batch[i+1], clean_texts[i])
+            for i in range(len(clean_texts))
+        ]
+        # Verify non-empty and non-verbatim echo for active phrases
+        for i, (orig, trans) in enumerate(zip(clean_texts, results)):
+            if not _should_skip_translation(orig) and (not trans or orig.strip().lower() == trans.strip().lower()):
+                single = _call_ollama_translate(orig, source_lang, target_lang, model, is_batch=False)
                 if single.strip():
-                    segments[i] = _clean_translated_segment(single)
-        return segments
+                    results[i] = _clean_translated_segment(single, orig)
+        return results
 
     logger.warning(
-        f"Translation segment mismatch (expected {len(texts)}, got {len(segments)}); "
+        f"Translation numbered batch mismatch (expected {len(clean_texts)}, got {len(parsed_batch)}); "
         "falling back to per-item translation for this batch."
     )
-    results = list(texts)
-    for i, text in enumerate(texts):
+    results = list(clean_texts)
+    for i, text in enumerate(clean_texts):
         if _should_skip_translation(text):
             results[i] = text
             continue
-        single = _call_ollama_translate(text, source_lang, target_lang, model)
+        single = _call_ollama_translate(text, source_lang, target_lang, model, is_batch=False)
         if single.strip():
-            results[i] = _clean_translated_segment(single)
+            results[i] = _clean_translated_segment(single, text)
     return results
 
 
@@ -380,10 +440,10 @@ def _int_color_to_rgb(color: int) -> Tuple[float, float, float]:
 
 def _extract_ocr_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
     """Fallback block extraction for scanned PDF pages using RapidOCR.
-    Renders the page to an image, detects text boxes with RapidOCR, and maps coordinates back to PDF points."""
+    Renders the page to an image at 300 DPI, detects text boxes with RapidOCR, and maps coordinates back to PDF points."""
     try:
         from sidecar.infrastructure.ocr import run_rapid_ocr_with_boxes
-        dpi = 200
+        dpi = 300
         zoom = dpi / 72.0
         mat = pymupdf.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=mat, alpha=False)
@@ -402,12 +462,14 @@ def _extract_ocr_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
             pdf_y1 = py1 / zoom
             height_pt = max(6.0, pdf_y1 - pdf_y0)
             font_size = max(7.0, min(36.0, height_pt * 0.72))
-            blocks_out.append({
-                "bbox": (pdf_x0, pdf_y0, pdf_x1, pdf_y1),
-                "text": item["text"],
-                "size": font_size,
-                "color": 0,
-            })
+            clean_item_text = item["text"].replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").strip()
+            if clean_item_text:
+                blocks_out.append({
+                    "bbox": (pdf_x0, pdf_y0, pdf_x1, pdf_y1),
+                    "text": clean_item_text,
+                    "size": font_size,
+                    "color": 0,
+                })
         return blocks_out
     except Exception as ocr_err:
         logger.warning(f"OCR fallback extraction failed for PDF page: {ocr_err}")
@@ -428,17 +490,19 @@ def _extract_pdf_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
         size_set = False
         for line in block.get("lines", []):
             spans = line.get("spans", [])
-            line_text = "".join(span.get("text", "") for span in spans)
-            if line_text.strip():
-                line_texts.append(line_text)
+            raw_line_text = "".join(span.get("text", "") for span in spans)
+            clean_line_text = raw_line_text.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").strip()
+            if clean_line_text:
+                line_texts.append(clean_line_text)
             if not size_set:
                 for span in spans:
-                    if span.get("text", "").strip():
+                    sp_text = span.get("text", "").replace("\xa0", " ").strip()
+                    if sp_text:
                         size = span.get("size", size)
                         color = span.get("color", color)
                         size_set = True
                         break
-        block_text = "\n".join(t.strip() for t in line_texts if t.strip())
+        block_text = "\n".join(t for t in line_texts if t)
         if block_text:
             blocks_out.append({"bbox": tuple(block["bbox"]), "text": block_text, "size": size, "color": color})
 

@@ -39,10 +39,10 @@ def normalize_language_code(lang: Optional[str]) -> str:
 _CORE_VOCABULARY: Set[str] = {
     # Italian functional & common words
     "a", "ad", "agli", "ai", "al", "aldina", "all", "alla", "alle", "allo", "anche", "ancora", "anni",
-    "anno", "appena", "articolo", "art", "assistenza", "attraverso", "avere", "avendo", "avuto",
+    "anno", "appena", "articolo", "articoli", "art", "assistenza", "attraverso", "avere", "avendo", "avuto",
     "bene", "borgo", "care", "call", "center", "camera", "cap", "casa", "casella", "causa",
-    "cessazione", "che", "chi", "chiede", "chiedo", "ci", "ciao", "ciascun", "ciascuno",
-    "civico", "cliente", "codice", "cognome", "col", "coi", "come", "comune", "con", "contro",
+    "carrello", "categorie", "cessazione", "che", "chi", "chiede", "chiedo", "ci", "ciao", "ciascun", "ciascuno",
+    "civico", "cliente", "codice", "cognome", "col", "coi", "come", "comune", "con", "consegna", "contro",
     "conto", "contratto", "cosa", "cosi", "così", "cui", "customer", "da", "dagli", "dai", "dal",
     "dall", "dalla", "dalle", "dallo", "data", "dati", "dei", "del", "dell", "della",
     "delle", "dello", "detto", "di", "diretto", "direttamente", "diritto", "dispositivo",
@@ -54,16 +54,16 @@ _CORE_VOCABULARY: Set[str] = {
     "fornito", "fra", "gestione", "gestionecontratto", "gia", "già", "giorno", "giorni", "gli", "grazie", "ha", "hanno", "ho",
     "i", "il", "in", "inviare", "inviato", "inviata", "inviati", "inviate", "indicare",
     "indicato", "indicata", "indicati", "indicate", "indicazione", "indicazioni", "indirizzo",
-    "insieme", "intesa", "io", "l", "la", "lasciare", "laurentina", "le", "leggibile", "lei", "lettera", "li", "lo", "loc",
+    "insieme", "intesa", "intestatario", "io", "l", "la", "lasciare", "laurentina", "le", "leggibile", "lei", "lettera", "li", "lo", "loc",
     "localita", "località", "loro", "luogo", "ma", "mail", "mai", "mantova", "mantovano", "me",
     "medio", "meno", "mentre", "mese", "mesi", "mezzo", "mi", "mio", "mia", "miei", "mie",
     "modulo", "molto", "momento", "mondo", "n", "ne", "negli", "nei", "nel", "nell", "nella", "nelle", "nello",
-    "niente", "no", "nome", "non", "nord", "nostro", "nostra", "nostri", "nostre", "noto", "notte",
+    "nascita", "niente", "no", "nome", "non", "nord", "nostro", "nostra", "nostri", "nostre", "noto", "notte",
     "nuovo", "nuova", "numero", "o", "obbligatori", "obbligatorio", "obbligatoria", "oggi", "ogni",
-    "oltre", "oppure", "ora", "ore", "ormai", "oro", "ovvero", "padre", "parte", "parti", "pec", "per",
+    "oltre", "oppure", "ora", "ordini", "ore", "ormai", "oro", "ovvero", "padre", "parte", "parti", "pec", "per",
     "perche", "perché", "percio", "perciò", "persona", "pinotti", "piu", "più", "piazza", "poco", "poi", "point", "poma", "porta", "posta", "postale", "posto", "potere", "poter",
     "potuto", "primo", "prima", "primi", "prime", "presso", "presente", "presenti", "proprio",
-    "prospetto", "protocollo", "prov", "provincia", "punto", "punti", "pure", "quale", "quali",
+    "prospetto", "protocollo", "prov", "provincia", "provvisorio", "punto", "punti", "pure", "quale", "quali",
     "quando", "quanto", "quanta", "quanti", "quante", "quasi", "quello", "quella", "quelli",
     "quelle", "questo", "questa", "questi", "queste", "quietanza", "qui", "quindi", "raccomandata",
     "ragione", "recesso", "recandosi", "rendere", "residenza", "residente", "relativo", "relativa",
@@ -71,10 +71,10 @@ _CORE_VOCABULARY: Set[str] = {
     "salve", "sapere", "saranno", "sara", "sarà", "se", "secondo", "seconda", "seguito", "sei", "serafico",
     "sempre", "senza", "servizio", "servizi", "si", "sia", "sito", "sociale", "societa", "società",
     "solo", "soltanto", "sono", "sopra", "sotto", "sottoscritto", "sottoscritta", "spa", "spett",
-    "spett.le", "spedire", "spedendo", "spedendolo", "spesa", "spese", "spesso", "sta", "stanno",
+    "spett.le", "spettabile", "spedire", "spedendo", "spedendolo", "spedizione", "spesa", "spese", "spesso", "sta", "stanno",
     "stare", "stesso", "stessa", "stessi", "stesse", "succursale", "su", "sua", "sue", "sugli",
     "sui", "sul", "sull", "sulla", "sulle", "sullo", "sud", "suo", "suoi", "tale", "tali", "tanto",
-    "tariffa", "telepass", "tempo", "tempi", "terzo", "testo", "ti", "titolare", "tra", "tramite", "trattamento",
+    "tariffa", "telepass", "tempo", "tempi", "terzo", "testo", "ti", "titolare", "totale", "tra", "tramite", "trattamento",
     "tre", "tu", "tuo", "tua", "tuoi", "tue", "tutto", "tutta", "tutti", "tutte", "un", "una", "uno",
     "unitamente", "uomo", "utente", "va", "vai", "valore", "vecchio", "vendita", "venuto", "veramente",
     "vero", "vera", "versamento", "vi", "via", "viadel", "villa", "vita", "visto", "vista", "voci",
@@ -264,6 +264,10 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     if not text or not text.strip():
         return ""
 
+    # 0. Clean unprintable control characters, replacement chars, and non-breaking spaces
+    text = text.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "").replace("\ufffd", "")
+    text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+
     # 1. Pre-separate common domain TLDs when fused with trailing words
     text = re.sub(
         r'(\.(?:info|tech|biz|com|net|org|gov|edu|eu|it|io|me|ai|co))([a-zA-Z]{2,})',
@@ -295,6 +299,9 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = re.sub(r'(?i)\b(viadel)\b', 'via del', text)
     text = re.sub(r'(?i)\b(deldiritto)\b', 'del diritto', text)
     text = re.sub(r'(?i)\b(direcesso)\b', 'di recesso', text)
+    text = re.sub(r'(?i)\b(dovrd)\b', 'dovrà', text)
+    text = re.sub(r'(?i)\b(we\s+be)\b', 'web e', text)
+    text = re.sub(r'(?i)\b(Lo\s+C\.)\b', 'Loc.', text)
 
     # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
     protected: List[str] = []

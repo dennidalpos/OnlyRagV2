@@ -134,22 +134,37 @@ def test_call_ollama_translate_does_not_retry_on_non_timeout_failure(monkeypatch
     assert call_count["n"] == 1
 
 
+def test_clean_translated_segment_strips_preambles_and_refusals():
+    # Preamble stripping
+    assert translator_module._clean_translated_segment("The translation of the given word is:\n\nSongs") == "Songs"
+    assert translator_module._clean_translated_segment("Here is the translation of the text:\n\nDear Sirs") == "Dear Sirs"
+    assert translator_module._clean_translated_segment("Translation: Electronic") == "Electronic"
+    assert translator_module._clean_translated_segment("Translates to: Publish your books") == "Publish your books"
+    assert translator_module._clean_translated_segment("```\nDirect translation: Hello\n```") == "Hello"
+    # Refusal handling
+    assert translator_module._clean_translated_segment("I cannot translate a tax code. Is there something else I can help you with?", source_text="CODICE FISCALE * PNTLDN49D56E818T") == "CODICE FISCALE * PNTLDN49D56E818T"
+    # Delimiter stripping
+    assert translator_module._clean_translated_segment("Amazon Business Contact\nRun_S\nEP>>>") == "Amazon Business Contact"
+    assert translator_module._clean_translated_segment("<<<RUN_SEP>>> Hello <<<RUN_SEP>>>") == "Hello"
+
+
 def test_translate_batch_happy_path_reassigns_run_text(tmp_path, monkeypatch):
     path = str(tmp_path / "sample.docx")
     _make_docx(path)
     doc = docx.Document(path)
     runs = translator_module._collect_docx_runs(doc)[:2]  # "Test Document", "Hello world"
 
-    def fake_call(text, source_lang, target_lang, model):
-        assert translator_module._RUN_SEPARATOR in text
-        parts = text.split(f"\n{translator_module._RUN_SEPARATOR}\n")
-        return f"\n{translator_module._RUN_SEPARATOR}\n".join(f"[{p}]" for p in parts)
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
+        if is_batch:
+            lines = [f"[{i+1}] TR-{line.split(' ', 1)[1]}" for i, line in enumerate(text.splitlines()) if line.strip()]
+            return "\n".join(lines)
+        return f"TR-{text}"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
     translator_module._translate_batch(runs, "English", "Italian", "llama3.2")
 
-    assert runs[0].text == "[Test Document]"
-    assert runs[1].text == "[Hello world]"
+    assert runs[0].text == "TR-Test Document"
+    assert runs[1].text == "TR-Hello world"
 
 
 def test_translate_batch_falls_back_on_segment_mismatch(tmp_path, monkeypatch):
@@ -161,10 +176,10 @@ def test_translate_batch_falls_back_on_segment_mismatch(tmp_path, monkeypatch):
 
     call_log = []
 
-    def fake_call(text, source_lang, target_lang, model):
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         call_log.append(text)
-        if translator_module._RUN_SEPARATOR in text:
-            return "only one segment back"  # wrong count on purpose
+        if is_batch:
+            return "[1] only one segment back"  # wrong count on purpose
         return f"TR:{text}"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -180,10 +195,10 @@ def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
     path = str(tmp_path / "e2e_sample.docx")
     _make_docx(path)
 
-    def fake_call(text, source_lang, target_lang, model):
-        if translator_module._RUN_SEPARATOR in text:
-            parts = text.split(f"\n{translator_module._RUN_SEPARATOR}\n")
-            return f"\n{translator_module._RUN_SEPARATOR}\n".join(f"TR-{p}" for p in parts)
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
+        if is_batch:
+            lines = [f"[{i+1}] TR-{line.split(' ', 1)[1]}" for i, line in enumerate(text.splitlines()) if line.strip()]
+            return "\n".join(lines)
         return f"TR-{text}"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -356,7 +371,10 @@ def test_translate_pdf_blocks_happy_path(tmp_path, monkeypatch):
     finally:
         doc.close()
 
-    def fake_call(text, source_lang, target_lang, model):
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
+        if is_batch:
+            lines = [f"[{i+1}] [{line.split(' ', 1)[1]}]" for i, line in enumerate(text.splitlines()) if line.strip()]
+            return "\n".join(lines)
         return f"[{text}]"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -365,18 +383,15 @@ def test_translate_pdf_blocks_happy_path(tmp_path, monkeypatch):
 
 
 def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
-    # Same-length transform (reversal) so the "translated" text fits the original bbox width at
-    # the original font size -- this test covers the happy path, not the Fase 2 overflow-clipping
-    # limitation, which is covered separately by test_translate_pdf_inplace_fine_clips_overflow.
     marker = "UNIQUEMARKERXYZ"
     translated_marker = marker[::-1]
     path = str(tmp_path / "e2e_sample.pdf")
     _make_pdf(path, text=marker)
 
-    def fake_call(text, source_lang, target_lang, model):
-        if translator_module._RUN_SEPARATOR in text:
-            parts = text.split(f"\n{translator_module._RUN_SEPARATOR}\n")
-            return f"\n{translator_module._RUN_SEPARATOR}\n".join(p[::-1] for p in parts)
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
+        if is_batch:
+            lines = [f"[{i+1}] {line.split(' ', 1)[1][::-1]}" for i, line in enumerate(text.splitlines()) if line.strip()]
+            return "\n".join(lines)
         return text[::-1]
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -404,9 +419,6 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
             translated_doc.close()
         assert translated_marker in page_text
 
-        # Original marker was genuinely erased, not just overlaid: it must be absent even from
-        # the raw saved bytes (page content streams may be compressed, so this is a stronger
-        # check than the parsed-text assertion above -- it can't find a compressed match either).
         with open(path, "rb") as f:
             raw = f.read()
         assert marker.encode() not in raw
@@ -416,18 +428,14 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
 
 
 def test_translate_pdf_inplace_fine_clips_overflow_without_crashing(tmp_path, monkeypatch):
-    """Fase 2 has no auto-fit: translated text that doesn't fit the original bbox at the original
-    font size is clipped (dropped), not resized. This must not raise or corrupt the document --
-    it's a documented limitation, not an error condition."""
     marker = "UNIQUEMARKERXYZ"
     path = str(tmp_path / "overflow_sample.pdf")
     _make_pdf(path, text=marker)
 
-    def fake_call(text, source_lang, target_lang, model):
-        # Much longer than the original -- guaranteed to overflow the tight original bbox.
-        if translator_module._RUN_SEPARATOR in text:
-            parts = text.split(f"\n{translator_module._RUN_SEPARATOR}\n")
-            return f"\n{translator_module._RUN_SEPARATOR}\n".join(f"TRANSLATED-{p}-VERY-LONG-OUTPUT" for p in parts)
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
+        if is_batch:
+            lines = [f"[{i+1}] TRANSLATED-{line.split(' ', 1)[1]}-VERY-LONG-OUTPUT" for i, line in enumerate(text.splitlines()) if line.strip()]
+            return "\n".join(lines)
         return f"TRANSLATED-{text}-VERY-LONG-OUTPUT"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -574,10 +582,10 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
     path = str(tmp_path / "jp_e2e.pdf")
     _make_pdf(path, text="Hello world")
 
-    def fake_call(text, source_lang, target_lang, model):
-        if translator_module._RUN_SEPARATOR in text:
-            parts = text.split(f"\n{translator_module._RUN_SEPARATOR}\n")
-            return f"\n{translator_module._RUN_SEPARATOR}\n".join(japanese_text for _ in parts)
+    def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
+        if is_batch:
+            lines = [f"[{i+1}] {japanese_text}" for i, _ in enumerate(text.splitlines()) if _.strip()]
+            return "\n".join(lines)
         return japanese_text
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -612,7 +620,7 @@ def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(
         translator_module,
         "_call_ollama_translate",
-        lambda text, s, t, m: f"TR-{text}",
+        lambda text, s, t, m, *args, **kwargs: f"TR-{text}",
     )
     src_file = tmp_path / "sample.docx"
     doc = docx.Document()
@@ -660,7 +668,7 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
     monkeypatch.setattr(
         translator_module,
         "_call_ollama_translate",
-        lambda text, s, t, m: f"TR-{text}",
+        lambda text, s, t, m, *args, **kwargs: f"TR-{text}",
     )
     monkeypatch.setattr(
         ingestion_module,

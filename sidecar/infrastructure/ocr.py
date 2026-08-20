@@ -80,7 +80,7 @@ def compute_deskew_angle(image_np: Any) -> float:
 
 
 def deskew_image(image_bytes: bytes) -> bytes:
-    """Deskews an input document image bytes if skew exceeds 0.5 degrees, returning deskewed PNG bytes."""
+    """Deskews an input document image bytes if skew exceeds 0.2 degrees, returning deskewed PNG bytes."""
     try:
         import cv2
         import numpy as np
@@ -91,7 +91,7 @@ def deskew_image(image_bytes: bytes) -> bytes:
             return image_bytes
 
         angle = compute_deskew_angle(img)
-        if abs(angle) < 0.5 or abs(angle) > 45.0:
+        if abs(angle) < 0.2 or abs(angle) > 45.0:
             return image_bytes
 
         h, w = img.shape[:2]
@@ -144,15 +144,37 @@ def inpaint_raster_bounding_boxes(image_bytes: bytes, bboxes: List[Tuple[float, 
 
 
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
-    """Prepares image for OCR, normalizing color channels, applying contrast enhancement, deskewing, and downscaling only if exceeding max_dim."""
+    """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing, and downscaling only if exceeding max_dim."""
     try:
-        # Apply deskewing first for scanned images (graceful fallback on failure)
+        # 1. Apply deskewing first for scanned images
         try:
             image_bytes = deskew_image(image_bytes)
         except Exception as deskew_err:
             logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
 
-        from PIL import Image, ImageOps, ImageEnhance
+        # 2. Apply OpenCV CLAHE & mild unsharp masking on luminance channel
+        try:
+            import cv2
+            import numpy as np
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if cv_img is not None:
+                lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
+                l, a, b = cv2.split(lab)
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                cl = clahe.apply(l)
+                # Unsharp mask on luminance
+                gaussian = cv2.GaussianBlur(cl, (0, 0), 2.0)
+                unsharp = cv2.addWeighted(cl, 1.25, gaussian, -0.25, 0)
+                merged = cv2.merge((unsharp, a, b))
+                enhanced_bgr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+                success, enc_buf = cv2.imencode(".png", enhanced_bgr)
+                if success:
+                    image_bytes = enc_buf.tobytes()
+        except Exception as cv_err:
+            logger.debug(f"OpenCV CLAHE enhancement skipped: {cv_err}")
+
+        from PIL import Image, ImageOps
         import io
         Image.MAX_IMAGE_PIXELS = 60_000_000
         img = Image.open(io.BytesIO(image_bytes))
@@ -167,15 +189,6 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
             img = img.convert("RGB")
         elif img.mode != "RGB":
             img = img.convert("RGB")
-
-        # Slight contrast and sharpness enhancement for scanned documents and low-contrast images
-        try:
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.20)
-            sharpener = ImageEnhance.Sharpness(img)
-            img = sharpener.enhance(1.30)
-        except Exception:
-            pass
 
         width, height = img.size
         if width > max_dim or height > max_dim:
@@ -276,7 +289,7 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
             if vert_match:
                 # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
                 horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
-                if horiz_gap <= max(20.0, line_h * 1.0):
+                if horiz_gap <= max(16.0, line_h * 0.85):
                     matched_line = line
                     break
 
@@ -396,7 +409,7 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
             if vert_match:
                 # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
                 horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
-                if horiz_gap <= max(20.0, line_h * 1.0):
+                if horiz_gap <= max(16.0, line_h * 0.85):
                     matched_line = line
                     break
 

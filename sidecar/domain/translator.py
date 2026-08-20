@@ -110,24 +110,32 @@ _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
 
 def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str) -> str:
-    prompt = (
-        f"Translate the following text from {source_lang} to {target_lang}. "
-        f"The text may contain segments separated by the exact marker '{_RUN_SEPARATOR}' on its own line. "
-        f"Return EXACTLY the same number of segments, in the same order, separated by the same marker on its own line. "
-        f"Do not merge, split, add, or remove segments. Output ONLY the translated text, no commentary.\n\n{text}"
-    )
-    payload = {"model": model, "prompt": prompt, "stream": False}
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"You are a professional translator. Translate all text accurately from {source_lang} to {target_lang}. "
+                f"If the text contains segments separated by '{_RUN_SEPARATOR}' on its own line, "
+                f"return exactly the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line. "
+                "Output ONLY the translated text without any explanations, preambles, or commentary."
+            ),
+        },
+        {"role": "user", "content": text},
+    ]
+    chat_payload = {"model": model, "messages": messages, "stream": False}
+
     for attempt in range(1, _TRANSLATE_MAX_ATTEMPTS + 1):
         try:
-            res = httpx_client.post(f"{_OLLAMA_URL}/api/generate", json=payload, timeout=120.0)
+            res = httpx_client.post(f"{_OLLAMA_URL}/api/chat", json=chat_payload, timeout=120.0)
             if res.status_code == 200:
-                return (res.json().get("response") or "").strip()
+                body = res.json()
+                content = (body.get("message", {}).get("content") or body.get("response") or "").strip()
+                if content:
+                    return content
+                return ""
             logger.warning(f"Translation call returned HTTP {res.status_code}")
             return ""
         except httpx.TimeoutException as err:
-            # A timeout here is usually transient GPU/Ollama contention (e.g. a concurrent coding
-            # agent task holding the model queue), not a permanent failure -- one short retry
-            # recovers most of these instead of silently leaving the segment untranslated.
             if attempt < _TRANSLATE_MAX_ATTEMPTS:
                 logger.warning(
                     f"Translation call timed out (attempt {attempt}/{_TRANSLATE_MAX_ATTEMPTS}), "

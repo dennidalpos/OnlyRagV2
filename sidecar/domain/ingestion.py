@@ -83,7 +83,7 @@ def prepare_pdf_page_work_item(
     OCR (if used_ocr or native text is sparse). Must run on the thread that owns doc/page.
     """
     ocr_image_bytes: Optional[bytes] = None
-    if used_ocr or len(raw_text.strip()) < 60:
+    if used_ocr or len(raw_text.strip()) == 0:
         try:
             pix = page.get_pixmap(dpi=200)
             ocr_image_bytes = pix.tobytes("png")
@@ -120,12 +120,10 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
         if work_item.get("md_tables"):
             page_md_parts.extend(work_item["md_tables"])
 
-        # Fallback for scanned pages where native text layer was empty/sparse and no tables were found
-        if len(native_text) < 60 and not work_item.get("md_tables") and work_item.get("ocr_image_bytes"):
+        # Fallback for scanned pages where native text layer was empty
+        if not native_text and not work_item.get("md_tables") and work_item.get("ocr_image_bytes"):
             ocr_result = run_layout_ocr(work_item["ocr_image_bytes"])
             if ocr_result.strip():
-                if native_text:
-                    page_md_parts.clear()
                 page_md_parts.append(ocr_result.strip())
 
     page_content = "\n\n".join(page_md_parts).strip()

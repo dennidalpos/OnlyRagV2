@@ -3,6 +3,7 @@ import base64
 import subprocess
 from typing import Dict, Any, Optional, List, Tuple
 from sidecar.config import httpx_client, logger
+from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
 
 # OCR Engine Singleton Caches
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
@@ -169,7 +170,8 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
 
     for line in lines:
         line["boxes"].sort(key=lambda b: b["x0"])
-        line_text = " ".join(b["text"] for b in line["boxes"])
+        raw_line_text = " ".join(b["text"] for b in line["boxes"])
+        line_text = normalize_ocr_token_spacing(raw_line_text)
 
         if prev_line is not None:
             gap = line["y0"] - prev_line["y1"]
@@ -270,7 +272,8 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
     line_blocks: List[Dict[str, Any]] = []
     for line in lines:
         line["boxes"].sort(key=lambda b: b["x0"])
-        text = " ".join(b["text"] for b in line["boxes"])
+        raw_text = " ".join(b["text"] for b in line["boxes"])
+        text = normalize_ocr_token_spacing(raw_text)
         line_blocks.append({
             "bbox": (line["x0"], line["y0"], line["x1"], line["y1"]),
             "text": text

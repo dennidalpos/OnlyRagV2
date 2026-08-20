@@ -200,8 +200,8 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
 
     return "\n\n".join(formatted_paragraphs).strip()
 
-def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
-    """Runs RapidOCR and returns spatially clustered line blocks with bounding boxes."""
+def _get_rapidocr_engine():
+    """Initializes or returns cached RapidOCR engine with high-resolution detection parameters."""
     global _RAPIDOCR_ENGINE
     from rapidocr_onnxruntime import RapidOCR
 
@@ -211,7 +211,10 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
         ocr_kwargs: Dict[str, Any] = {
             "det_use_cuda": use_cuda,
             "cls_use_cuda": use_cuda,
-            "rec_use_cuda": use_cuda
+            "rec_use_cuda": use_cuda,
+            "det_limit_side_len": 2500,
+            "det_db_unclip_ratio": 1.6,
+            "det_db_box_thresh": 0.5
         }
         if cfg_path:
             ocr_kwargs["config_path"] = cfg_path
@@ -228,7 +231,14 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
             else:
                 raise init_err
 
-    result, _elapse = _RAPIDOCR_ENGINE(image_bytes)
+    return _RAPIDOCR_ENGINE
+
+def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
+    """Runs RapidOCR with image enhancement and returns spatially clustered line blocks with bounding boxes."""
+    engine = _get_rapidocr_engine()
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
+
+    result, _elapse = engine(prepared_bytes)
     if not result:
         return []
 
@@ -261,9 +271,14 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
         for line in lines:
             line_cy = line["cy"]
             line_h = line["h"]
-            if abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h)):
-                matched_line = line
-                break
+            # Check vertical alignment
+            vert_match = abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h))
+            if vert_match:
+                # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
+                horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
+                if horiz_gap <= max(45.0, line_h * 2.8):
+                    matched_line = line
+                    break
 
         if matched_line is not None:
             matched_line["boxes"].append(b)
@@ -297,33 +312,9 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
 def run_rapid_ocr(image_bytes: bytes) -> str:
     """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX).
     Executes on CUDA when available, and automatically falls back to CPU execution on minimal/CPU-only hardware."""
-    global _RAPIDOCR_ENGINE
-    from rapidocr_onnxruntime import RapidOCR
-
-    if _RAPIDOCR_ENGINE is None:
-        use_cuda = _rapidocr_cuda_available()
-        cfg_path = _find_rapidocr_config()
-        ocr_kwargs: Dict[str, Any] = {
-            "det_use_cuda": use_cuda,
-            "cls_use_cuda": use_cuda,
-            "rec_use_cuda": use_cuda
-        }
-        if cfg_path:
-            ocr_kwargs["config_path"] = cfg_path
-
-        try:
-            _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
-        except Exception as init_err:
-            if use_cuda:
-                logger.warning(f"RapidOCR CUDA initialization failed ({init_err}), falling back to CPU execution.")
-                ocr_kwargs["det_use_cuda"] = False
-                ocr_kwargs["cls_use_cuda"] = False
-                ocr_kwargs["rec_use_cuda"] = False
-                _RAPIDOCR_ENGINE = RapidOCR(**ocr_kwargs)
-            else:
-                raise init_err
-
-    result, _elapse = _RAPIDOCR_ENGINE(image_bytes)
+    engine = _get_rapidocr_engine()
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
+    result, _elapse = engine(prepared_bytes)
     return _reconstruct_layout_from_ocr_boxes(result)
 
 def run_layout_ocr(

@@ -179,6 +179,8 @@ export interface AppSettings {
   autoInstallMinScore?: number
   // Internationalization
   language?: 'it' | 'en'
+  // Editor & Display Options
+  editorWordWrap?: boolean
 }
 
 /** Aggregate size of the file changes an agent session has applied so far. */

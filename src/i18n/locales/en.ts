@@ -494,6 +494,8 @@ export const en: TranslationSchema = {
     queueProtectionDesc: 'One agent task runs at a time, so concurrent runs can never roll back file changes made by another run.',
     queueLiveStatusRunning: 'Running',
     queueLiveStatusQueued: 'Queued',
+    wordWrap: 'Word wrap',
+    wordWrapDesc: 'Enables automatic word wrap for long lines in Monaco editors, previews, and text log viewers.',
   },
   about: {
     title: 'About OnlyRag V2',

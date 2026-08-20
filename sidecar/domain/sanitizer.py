@@ -50,6 +50,10 @@ def sanitize_extracted_text(text: str) -> str:
     # Normalize non-breaking and zero-width spaces
     text = text.replace('\xa0', ' ')
     text = text.replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')
+
+    # Normalize N° civico and common abbreviations before stripping replacement chars
+    text = re.sub(r'(?i)\bN[\ufffd°\.\?]*\s*CIVICO\b', 'N° CIVICO', text)
+
     text = text.replace('\ufeff', '').replace('\ufffe', '').replace('\ufffd', '')
 
     # Strip null bytes and non-printable control characters

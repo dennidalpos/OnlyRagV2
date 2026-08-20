@@ -89,7 +89,7 @@ def prepare_pdf_page_work_item(
     ocr_image_bytes: Optional[bytes] = None
     if used_ocr or len(raw_text.strip()) == 0:
         try:
-            pix = page.get_pixmap(dpi=200)
+            pix = page.get_pixmap(dpi=250)
             ocr_image_bytes = pix.tobytes("png")
         except Exception as pix_err:
             logger.debug(f"Pixmap generation skipped on page {page_num}: {pix_err}")
@@ -294,25 +294,27 @@ def extract_document_markdown(
     page_blocks: List[Tuple[int, str]] = []
 
     if category == DocumentCategory.PDF:
+        if file_path and os.path.exists(file_path):
+            pdf_doc = pymupdf.open(file_path)
+        else:
+            pdf_doc = pymupdf.open(stream=content, filetype="pdf")
+
+        if pdf_doc.needs_pass != 0 or (pdf_doc.is_encrypted and pdf_doc.needs_pass):
+            pdf_doc.close()
+            raise ValueError("Documento protetto da password: il file PDF è crittografato e richiede una password per l'apertura.")
+
         try:
-            if file_path and os.path.exists(file_path):
-                pdf_doc = pymupdf.open(file_path)
-            else:
-                pdf_doc = pymupdf.open(stream=content, filetype="pdf")
-            try:
-                num_pages = len(pdf_doc)
-                page_blocks = extract_pdf_document(
-                    pdf_doc,
-                    progress_callback=progress_callback,
-                    vision_model=vision_model,
-                    vision_prompt=vision_prompt,
-                    normalize_with_llm=normalize_with_llm,
-                    normalization_model=normalization_model
-                )
-            finally:
-                pdf_doc.close()
-        except Exception as pdf_err:
-            logger.warning(f"PyMuPDF parse error: {pdf_err}. Falling back to plain text read.")
+            num_pages = len(pdf_doc)
+            page_blocks = extract_pdf_document(
+                pdf_doc,
+                progress_callback=progress_callback,
+                vision_model=vision_model,
+                vision_prompt=vision_prompt,
+                normalize_with_llm=normalize_with_llm,
+                normalization_model=normalization_model
+            )
+        finally:
+            pdf_doc.close()
 
     elif category == DocumentCategory.IMAGE:
         if progress_callback:
@@ -336,6 +338,16 @@ def extract_document_markdown(
             progress_callback(1, 1, "Estrazione struttura XML e tabelle DOCX...")
         try:
             import docx
+            # Check for EncryptedPackage OLE header
+            if file_path and os.path.exists(file_path):
+                with open(file_path, "rb") as f:
+                    hdr = f.read(2048)
+            else:
+                hdr = content[:2048]
+
+            if hdr.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1') and (b'EncryptedPackage' in hdr or b'EncryptionInfo' in hdr):
+                raise ValueError("Documento protetto da password: il file Word (DOCX) è crittografato e richiede una password.")
+
             if file_path and os.path.exists(file_path):
                 doc = docx.Document(file_path)
             else:

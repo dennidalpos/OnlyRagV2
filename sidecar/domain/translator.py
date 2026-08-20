@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from typing import Any, Dict, List, Tuple, Optional
 import docx
@@ -110,19 +111,38 @@ _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
 
 def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str) -> str:
+    is_batch = _RUN_SEPARATOR in text
+    if is_batch:
+        system_content = (
+            f"You are an expert document, contract, form, and technical translator. "
+            f"Translate all text faithfully, accurately, and completely from {source_lang} to {target_lang}.\n"
+            f"Mandatory Rules:\n"
+            f"1. Translate all text elements including section titles, headings, form field labels, table headers, legal/administrative clauses, and instructional notes accurately into {target_lang}.\n"
+            f"2. Preserve original alphanumeric identifiers, serial/reference codes, tax IDs, proper personal names, numerical values, dates, email addresses, and URLs unchanged.\n"
+            f"3. The text contains segments separated by '{_RUN_SEPARATOR}' on its own line. "
+            f"Return EXACTLY the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line.\n"
+            f"4. Output ONLY the translated segments with NO preambles, explanations, quotes, or conversational commentary."
+        )
+    else:
+        system_content = (
+            f"You are an expert document, contract, form, and technical translator. "
+            f"Translate the text faithfully, accurately, and completely from {source_lang} to {target_lang}.\n"
+            f"Mandatory Rules:\n"
+            f"1. Translate all text elements including titles, form field labels, table cells, and administrative/legal terms accurately into {target_lang}.\n"
+            f"2. Preserve original alphanumeric identifiers, proper names, numbers, dates, email addresses, and URLs unchanged.\n"
+            f"3. Output ONLY the translated text without delimiters, notes, or conversational commentary."
+        )
+
     messages = [
-        {
-            "role": "system",
-            "content": (
-                f"You are a professional translator. Translate all text accurately from {source_lang} to {target_lang}. "
-                f"If the text contains segments separated by '{_RUN_SEPARATOR}' on its own line, "
-                f"return exactly the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line. "
-                "Output ONLY the translated text without any explanations, preambles, or commentary."
-            ),
-        },
+        {"role": "system", "content": system_content},
         {"role": "user", "content": text},
     ]
-    chat_payload = {"model": model, "messages": messages, "stream": False}
+    chat_payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"temperature": 0.1}
+    }
 
     for attempt in range(1, _TRANSLATE_MAX_ATTEMPTS + 1):
         try:
@@ -139,7 +159,7 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             if attempt < _TRANSLATE_MAX_ATTEMPTS:
                 logger.warning(
                     f"Translation call timed out (attempt {attempt}/{_TRANSLATE_MAX_ATTEMPTS}), "
-                    f"likely concurrent Ollama load -- retrying in {_TRANSLATE_RETRY_DELAY_SECONDS}s: {err}"
+                    f"retrying in {_TRANSLATE_RETRY_DELAY_SECONDS}s: {err}"
                 )
                 time.sleep(_TRANSLATE_RETRY_DELAY_SECONDS)
                 continue
@@ -150,28 +170,41 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
     return ""
 
 
+def _clean_translated_segment(text: str) -> str:
+    """Removes any leaked delimiter or artifact from model output."""
+    if not text:
+        return ""
+    clean = re.sub(r'<<<RUN_[A-Z_\s]*>>>', '', text, flags=re.IGNORECASE)
+    clean = re.sub(r'^```[a-z]*\s*', '', clean)
+    clean = re.sub(r'\s*```$', '', clean)
+    return clean.strip()
+
+
 def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str) -> List[str]:
-    """Translates one already-batched list of texts via a single delimited Ollama call. If the
-    model doesn't return the expected number of segments, falls back to translating each text
-    individually rather than risk misassigning translated text to the wrong item. Items whose
-    fallback call also fails keep their original (untranslated) text."""
+    """Translates batched texts via a single delimited Ollama call with individual fallback."""
+    if not texts:
+        return []
+
+    if len(texts) == 1:
+        single = _call_ollama_translate(texts[0], source_lang, target_lang, model)
+        return [_clean_translated_segment(single)] if single.strip() else texts
+
     joined = f"\n{_RUN_SEPARATOR}\n".join(texts)
     translated = _call_ollama_translate(joined, source_lang, target_lang, model)
-    segments = [s.strip() for s in translated.split(_RUN_SEPARATOR)] if translated else []
+    segments = [_clean_translated_segment(s) for s in translated.split(_RUN_SEPARATOR)] if translated else []
 
     if translated and len(segments) == len(texts):
         return segments
 
-    if len(texts) > 1:
-        logger.warning(
-            f"Translation segment mismatch (expected {len(texts)}, got {len(segments)}); "
-            "falling back to per-item translation for this batch."
-        )
+    logger.warning(
+        f"Translation segment mismatch (expected {len(texts)}, got {len(segments)}); "
+        "falling back to per-item translation for this batch."
+    )
     results = list(texts)
     for i, text in enumerate(texts):
         single = _call_ollama_translate(text, source_lang, target_lang, model)
         if single.strip():
-            results[i] = single.strip()
+            results[i] = _clean_translated_segment(single)
     return results
 
 
@@ -430,13 +463,8 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
         pad_y = max(2.0, orig_size * 0.2)
         rect = pymupdf.Rect(max(0, x0 - pad_x), max(0, y0 - pad_y), min(page.rect.x1, x1 + pad_x), min(page.rect.y1, y1 + pad_y))
 
-        # Auto-fit calculation
-        fit_size = orig_size
-        for sz in [orig_size, orig_size * 0.9, orig_size * 0.8, orig_size * 0.7, 6.0, 5.0]:
-            overflow = page.insert_textbox(rect, text, fontsize=sz, fontname=font_alias, fontfile=font_file, render_mode=3)
-            if overflow >= 0:
-                fit_size = sz
-                break
+        # Auto-fit calculation using disposable scratch page to avoid duplicate invisible text
+        fit_size = _resolve_autofit_font_size(rect, text, orig_size, font_file)
 
         color_rgb = _int_color_to_rgb(block.get("color", 0))
         overflow = page.insert_textbox(rect, text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
@@ -475,6 +503,9 @@ def translate_pdf_inplace_fine(
         raise ValueError("Original source file is no longer available on disk")
 
     pdf_doc = pymupdf.open(file_path)
+    if pdf_doc.needs_pass or pdf_doc.is_encrypted:
+        pdf_doc.close()
+        raise ValueError("Documento protetto da password: il file PDF richiede una password per l'apertura.")
     try:
         page_blocks: List[Tuple[Any, List[Dict[str, Any]]]] = []
         total_blocks = 0

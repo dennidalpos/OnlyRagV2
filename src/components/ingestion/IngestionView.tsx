@@ -22,6 +22,7 @@ import {
   Copy,
   Check,
   GripVertical,
+  WrapText,
 } from 'lucide-react'
 import { SystemPromptModal } from '../common/SystemPromptModal'
 import { ModelBadge } from '../common/ModelBadge'
@@ -251,8 +252,8 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
           {/* Active Chat RAG & Text Check Model Badge */}
           <ModelBadge
             modelName={settings?.chatModel || settings?.defaultModel || 'llama3.2'}
-            tier="standard"
-            tierName="Chat RAG"
+            tier={settings?.normalizeWithLlm ? "heavy" : "standard"}
+            tierName={settings?.normalizeWithLlm ? "Text Check (Chat RAG)" : "Chat RAG"}
             tooltip={t('ingestion.textCheckTooltip', { model: settings?.chatModel || settings?.defaultModel || 'llama3.2' })}
           />
 
@@ -707,6 +708,20 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
 
                 <button
                   type="button"
+                  onClick={() => onUpdateSettings?.({ editorWordWrap: settings?.editorWordWrap === false ? true : false })}
+                  aria-pressed={settings?.editorWordWrap !== false}
+                  aria-label={t('settings.wordWrap')}
+                  title={t('settings.wordWrapDesc')}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
+                    settings?.editorWordWrap !== false ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/80 shadow-sm' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <WrapText className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t('settings.wordWrap')}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={async () => {
                     if (ing.markdownContent) {
                       await navigator.clipboard.writeText(ing.markdownContent)
@@ -864,7 +879,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                     options={{
                       fontSize: 13,
                       minimap: { enabled: false },
-                      wordWrap: 'on',
+                      wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off',
                       automaticLayout: true,
                       fontFamily: 'Fira Code, monospace',
                       lineNumbers: 'on',

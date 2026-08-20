@@ -21,30 +21,30 @@ _CORE_VOCABULARY: Set[str] = {
     "i", "il", "in", "inviare", "inviato", "inviata", "inviati", "inviate", "indicare",
     "indicato", "indicata", "indicati", "indicate", "indicazione", "indicazioni", "indirizzo",
     "insieme", "intesa", "io", "l", "la", "lasciare", "le", "leggibile", "lei", "lettera", "li", "lo",
-    "localita", "località", "loro", "luogo", "ma", "mail", "mai", "mantova", "mantovano", "me",
-    "medio", "meno", "mentre", "mese", "mesi", "mezzo", "mi", "milano", "mio", "mia", "miei", "mie",
+    "localita", "località", "loro", "luogo", "ma", "mail", "mai", "me",
+    "medio", "meno", "mentre", "mese", "mesi", "mezzo", "mi", "mio", "mia", "miei", "mie",
     "modulo", "molto", "momento", "mondo", "n", "ne", "negli", "nei", "nel", "nell", "nella", "nelle", "nello",
     "niente", "no", "nome", "non", "nord", "nostro", "nostra", "nostri", "nostre", "noto", "notte",
     "nuovo", "nuova", "numero", "o", "obbligatori", "obbligatorio", "obbligatoria", "oggi", "ogni",
     "oltre", "oppure", "ora", "ore", "ormai", "oro", "ovvero", "padre", "parte", "parti", "pec", "per",
-    "perche", "perché", "percio", "perciò", "persona", "piu", "più", "piazza", "poco", "poi", "point",
-    "poma", "porta", "posta", "postale", "posto", "potere", "poter", "potuto", "primo", "prima",
-    "primi", "prime", "presso", "presente", "presenti", "proprio", "prov", "provincia", "punto", "punti",
-    "pure", "quale", "quali", "quando", "quanto", "quanta", "quanti", "quante", "quasi",
-    "quello", "quella", "quelli", "quelle", "questo", "questa", "questi", "queste", "qui",
-    "quindi", "raccomandata", "ragione", "recesso", "recandosi", "rendere", "residenza",
-    "residente", "relativo", "relativa", "riconsegnare", "riconsegnato", "riconsegnata",
-    "richiesta", "richiede", "roma", "s", "sa", "salve", "sapere", "saranno", "sara", "sarà", "se",
-    "secondo", "seconda", "seguito", "sei", "sempre", "senza", "serafico", "servizio", "servizi",
-    "si", "sia", "sito", "sociale", "solo", "soltanto", "sono", "sopra", "sotto", "sottoscritto",
-    "sottoscritta", "spa", "spett", "spett.le", "spedire", "spedendo", "spedendolo", "spesa",
-    "spese", "spesso", "sta", "stanno", "stare", "stesso", "stessa", "stessi", "stesse", "succursale",
-    "su", "sua", "sue", "sugli", "sui", "sul", "sull", "sulla", "sulle", "sullo", "sud", "suo", "suoi",
-    "tale", "tali", "tanto", "telepass", "tempo", "tempi", "terzo", "testo", "ti", "titolare",
-    "tra", "tramite", "tre", "tu", "tuo", "tua", "tuoi", "tue", "tutto", "tutta", "tutti", "tutte",
-    "un", "una", "uno", "unitamente", "uomo", "va", "vai", "valore", "vecchio", "vendita", "venuto",
-    "veramente", "vero", "vera", "vi", "via", "viadel", "villa", "vita", "visto", "vista",
-    "voci", "voi", "volere", "volta", "volte", "vostro", "vostra", "vostri", "vostre", "web",
+    "perche", "perché", "percio", "perciò", "persona", "piu", "più", "piazza", "poco", "poi", "point", "porta", "posta", "postale", "posto", "potere", "poter",
+    "potuto", "primo", "prima", "primi", "prime", "presso", "presente", "presenti", "proprio",
+    "prospetto", "protocollo", "prov", "provincia", "punto", "punti", "pure", "quale", "quali",
+    "quando", "quanto", "quanta", "quanti", "quante", "quasi", "quello", "quella", "quelli",
+    "quelle", "questo", "questa", "questi", "queste", "quietanza", "qui", "quindi", "raccomandata",
+    "ragione", "recesso", "recandosi", "rendere", "residenza", "residente", "relativo", "relativa",
+    "ricevuta", "riconsegnare", "riconsegnato", "riconsegnata", "richiesta", "richiede", "roma", "s", "sa",
+    "salve", "sapere", "saranno", "sara", "sarà", "se", "secondo", "seconda", "seguito", "sei",
+    "sempre", "senza", "servizio", "servizi", "si", "sia", "sito", "sociale", "societa", "società",
+    "solo", "soltanto", "sono", "sopra", "sotto", "sottoscritto", "sottoscritta", "spa", "spett",
+    "spett.le", "spedire", "spedendo", "spedendolo", "spesa", "spese", "spesso", "sta", "stanno",
+    "stare", "stesso", "stessa", "stessi", "stesse", "succursale", "su", "sua", "sue", "sugli",
+    "sui", "sul", "sull", "sulla", "sulle", "sullo", "sud", "suo", "suoi", "tale", "tali", "tanto",
+    "tariffa", "tempo", "tempi", "terzo", "testo", "ti", "titolare", "tra", "tramite", "trattamento",
+    "tre", "tu", "tuo", "tua", "tuoi", "tue", "tutto", "tutta", "tutti", "tutte", "un", "una", "uno",
+    "unitamente", "uomo", "utente", "va", "vai", "valore", "vecchio", "vendita", "venuto", "veramente",
+    "vero", "vera", "versamento", "vi", "via", "viadel", "villa", "vita", "visto", "vista", "voci",
+    "voi", "volere", "volta", "volte", "vostro", "vostra", "vostri", "vostre", "web",
     # English functional words
     "about", "above", "across", "after", "again", "against", "all", "almost", "along",
     "already", "also", "although", "always", "among", "an", "and", "another", "any", "anyone",
@@ -171,6 +171,10 @@ def normalize_ocr_token_spacing(text: str) -> str:
     text = re.sub(r'(S\.p\.A\.|Spa|S\.r\.l\.|Srl)([a-zA-Z]+)', r'\1 \2', text, flags=re.IGNORECASE)
     text = re.sub(r'([a-zA-Z]+)(a\.r\.|c\.a\.|c\.p\.)', r'\1 \2', text, flags=re.IGNORECASE)
 
+    # Normalize N° / n° / N. civico and similar form labels
+    text = re.sub(r'(?i)(N[°\.\?]\s*CIVICO)', r'N° CIVICO', text)
+    text = re.sub(r'(?i)(N[°\.\?])(?=[0-9A-Z])', r'\1 ', text)
+
     # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
     protected: List[str] = []
     def _protect_token(m: re.Match) -> str:
@@ -187,8 +191,8 @@ def normalize_ocr_token_spacing(text: str) -> str:
     text = re.sub(r'([,;:\?!])', r'\1 ', text)
     text = re.sub(r'(?<=[a-zA-Z])(\/)(?=[a-zA-Z])', r' \1 ', text)
 
-    # 5. Split digits and letters
-    text = re.sub(r'(?<=[a-zA-Z])([0-9]+)', r' \1', text)
+    # 5. Split digits and letters (excluding protected tokens and degree symbols)
+    text = re.sub(r'(?<=[a-zA-Z°])([0-9]+)', r' \1', text)
     text = re.sub(r'(?<=[0-9])([a-zA-Z]+)', r' \1', text)
 
     # 6. Split PascalCase / camelCase

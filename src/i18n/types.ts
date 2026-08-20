@@ -494,6 +494,8 @@ export interface TranslationSchema {
     queueProtectionDesc: string
     queueLiveStatusRunning: string
     queueLiveStatusQueued: string
+    wordWrap: string
+    wordWrapDesc: string
   }
   about: {
     title: string

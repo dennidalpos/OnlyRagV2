@@ -41,6 +41,7 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   const [isRefreshingLogs, setIsRefreshingLogs] = useState<boolean>(false)
   const [copiedReport, setCopiedReport] = useState<boolean>(false)
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
+  const [isWordWrap, setIsWordWrap] = useState<boolean>(true)
   const consoleBottomRef = useRef<HTMLDivElement | null>(null)
 
   const {
@@ -444,6 +445,17 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             <span>{t('diagnostics.autoScroll')}</span>
           </label>
 
+          {/* Word-wrap toggle */}
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isWordWrap}
+              onChange={(e) => setIsWordWrap(e.target.checked)}
+              className="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-0"
+            />
+            <span>{t('settings.wordWrap')}</span>
+          </label>
+
           <button
             type="button"
             onClick={fetchLogs}
@@ -509,7 +521,7 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 </span>
 
                 <span className="text-slate-300 font-semibold shrink-0">[{log.category}]</span>
-                <span className="text-slate-200 break-all">{log.message}</span>
+                <span className={`text-slate-200 ${isWordWrap ? 'break-all whitespace-pre-wrap' : 'whitespace-pre overflow-x-auto'}`}>{log.message}</span>
               </div>
             ))
           )}

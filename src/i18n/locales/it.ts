@@ -494,6 +494,8 @@ export const it: TranslationSchema = {
     queueProtectionDesc: 'Un solo task agente per volta: due run concorrenti non possono annullarsi a vicenda le modifiche ai file.',
     queueLiveStatusRunning: 'In esecuzione',
     queueLiveStatusQueued: 'In coda',
+    wordWrap: 'A capo automatico',
+    wordWrapDesc: 'Attiva il ritorno a capo automatico delle righe lunghe negli editor Monaco, anteprime e visualizzatori di testo.',
   },
   about: {
     title: 'Informazioni su OnlyRag V2',

@@ -186,6 +186,17 @@ def process_and_index_document_generator(
             else:
                 pdf_doc = pymupdf.open(stream=content, filetype="pdf")
 
+            if pdf_doc.needs_pass != 0 or (pdf_doc.is_encrypted and pdf_doc.needs_pass):
+                pdf_doc.close()
+                err_msg = "Documento protetto da password: il file PDF è crittografato e richiede una password per l'apertura."
+                yield json.dumps({
+                    "type": "error",
+                    "step": err_msg,
+                    "error": err_msg,
+                    "fileName": filename
+                }) + "\n"
+                return
+
             try:
                 num_pages = len(pdf_doc)
                 yield json.dumps({

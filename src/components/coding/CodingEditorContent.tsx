@@ -82,6 +82,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
                   fontFamily: 'Fira Code, Cascadia Code, monospace',
                   minimap: { enabled: false },
                   renderSideBySide: false,
+                  wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off',
                 }}
               />
             ) : (
@@ -100,7 +101,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   fontFamily: 'Fira Code, Cascadia Code, monospace',
-                  wordWrap: 'on',
+                  wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off',
                   lineNumbers: 'on',
                 }}
               />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { DiagnosticsData, AppSettings } from '../../types'
-import { Settings, RefreshCw, Download, Trash2, Zap, Loader2, Globe, Heart, Award, FolderOpen } from 'lucide-react'
+import { Settings, RefreshCw, Download, Trash2, Zap, Loader2, Globe, Heart, Award, FolderOpen, WrapText } from 'lucide-react'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
@@ -115,6 +115,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               🇬🇧 English
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Editor & Viewers Word Wrap Settings */}
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <WrapText className="w-5 h-5 text-cyan-400" /> {t('settings.wordWrap')}
+            </h2>
+            <p className="text-xs text-slate-400 max-w-2xl">
+              {t('settings.wordWrapDesc')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ editorWordWrap: settings.editorWordWrap === false ? true : false })}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all focus-ring active:scale-95 flex items-center gap-2 ${
+              settings.editorWordWrap !== false
+                ? 'bg-cyan-600 text-slate-950 shadow-md shadow-cyan-950/50'
+                : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <WrapText className="w-3.5 h-3.5" />
+            <span>{settings.editorWordWrap !== false ? t('common.active') : t('common.offline')}</span>
+          </button>
         </div>
       </div>
 

@@ -22,7 +22,7 @@ def normalize_page_markdown_with_llm(
     page_text: str,
     page_num: int = 1,
     model: str = "llama3.2",
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = 25.0,
     ollama_url: Optional[str] = None
 ) -> str:
     """

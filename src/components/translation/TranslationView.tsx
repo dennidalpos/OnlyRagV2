@@ -16,6 +16,7 @@ import {
   Link,
   AlertTriangle,
   GripVertical,
+  WrapText,
 } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -287,6 +288,20 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                 <span className="hidden sm:inline">{t('translation.syncScroll')}</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => onUpdateSettings?.({ editorWordWrap: settings?.editorWordWrap === false ? true : false })}
+              aria-pressed={settings?.editorWordWrap !== false}
+              aria-label={t('settings.wordWrap')}
+              title={t('settings.wordWrapDesc')}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
+                settings?.editorWordWrap !== false ? 'bg-sky-950 text-sky-300 border border-sky-800/80 shadow-sm' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <WrapText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t('settings.wordWrap')}</span>
+            </button>
           </div>
 
           {tr.translatedMarkdown && (
@@ -409,7 +424,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
               original={tr.selectedDoc?.extractedMarkdown || ''}
               modified={tr.translatedMarkdown}
               language="markdown"
-              options={{ fontSize: 13, automaticLayout: true }}
+              options={{ fontSize: 13, automaticLayout: true, wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off' }}
             />
           ) : (
             <div className="h-full flex">
@@ -445,7 +460,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                     language="markdown"
                     value={tr.selectedDoc?.extractedMarkdown || ''}
                     onMount={tr.handleLeftEditorDidMount}
-                    options={{ fontSize: 13, readOnly: true, automaticLayout: true, minimap: { enabled: false } }}
+                    options={{ fontSize: 13, readOnly: true, automaticLayout: true, minimap: { enabled: false }, wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off' }}
                   />
                 </div>
               </div>
@@ -499,7 +514,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
                     value={tr.translatedMarkdown}
                     onChange={(val) => tr.setTranslatedMarkdown(val || '')}
                     onMount={tr.handleEditorDidMount}
-                    options={{ fontSize: 13, automaticLayout: true, minimap: { enabled: false } }}
+                    options={{ fontSize: 13, automaticLayout: true, minimap: { enabled: false }, wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off' }}
                   />
                 </div>
               </div>

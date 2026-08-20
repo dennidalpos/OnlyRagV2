@@ -302,6 +302,8 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = re.sub(r'(?i)\b(dovrd)\b', 'dovrà', text)
     text = re.sub(r'(?i)\b(we\s+be)\b', 'web e', text)
     text = re.sub(r'(?i)\b(Lo\s+C\.)\b', 'Loc.', text)
+    text = re.sub(r'(?i)\b(telass)\b', 'Telepass', text)
+    text = re.sub(r'(?i)\b(cagnome)\b', 'cognome', text)
 
     # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
     protected: List[str] = []

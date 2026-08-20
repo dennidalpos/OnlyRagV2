@@ -23,7 +23,7 @@
 
 ## 4. Dependencies, Security & Knowledge Sources
 
-* **Dependencies:** Prefer standard library or existing dependencies. Respect lockfiles; do not upgrade packages without explicit approval.
+* **Dependencies & Universal Libraries:** Prefer established, complete, and universal standard libraries over fragile homegrown logic or hardcoded dictionaries. Keep dependencies updated, maintain lockfiles, and document all packages in `requirements.txt` / `package.json`.
 * **Security:** Never expose, print, or commit secrets/tokens. Use `.env.example` and environment variables.
 * **Forbidden Git Commands:** NEVER run `git reset --hard`, `git clean`, force-push, or history rewriting.
 * **Information Sources:** Use official docs first. If unresolved, search community sources progressively down the hierarchy.

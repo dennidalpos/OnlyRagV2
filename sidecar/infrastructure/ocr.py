@@ -367,9 +367,23 @@ def _get_rapidocr_engine():
     return _RAPIDOCR_ENGINE
 
 def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
-    """Runs RapidOCR with image enhancement and returns spatially clustered line blocks with bounding boxes."""
+    """Runs RapidOCR with image enhancement and returns spatially clustered line blocks with bounding boxes
+    accurately mapped back to the input image_bytes coordinate space."""
     engine = _get_rapidocr_engine()
     prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
+
+    # Compute scale factors between prepared_bytes and original image_bytes
+    scale_x, scale_y = 1.0, 1.0
+    try:
+        from PIL import Image
+        import io
+        orig_img = Image.open(io.BytesIO(image_bytes))
+        prep_img = Image.open(io.BytesIO(prepared_bytes))
+        if prep_img.width > 0 and prep_img.height > 0:
+            scale_x = orig_img.width / float(prep_img.width)
+            scale_y = orig_img.height / float(prep_img.height)
+    except Exception:
+        scale_x, scale_y = 1.0, 1.0
 
     result, _elapse = engine(prepared_bytes)
     if not result:
@@ -382,10 +396,10 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
         pts, text = item[0], str(item[1]).strip()
         if not text:
             continue
-        x0 = min(p[0] for p in pts)
-        y0 = min(p[1] for p in pts)
-        x1 = max(p[0] for p in pts)
-        y1 = max(p[1] for p in pts)
+        x0 = min(p[0] for p in pts) * scale_x
+        y0 = min(p[1] for p in pts) * scale_y
+        x1 = max(p[0] for p in pts) * scale_x
+        y1 = max(p[1] for p in pts) * scale_y
         h = max(1.0, y1 - y0)
         cy = (y0 + y1) / 2.0
         boxes.append({

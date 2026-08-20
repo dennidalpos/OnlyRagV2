@@ -60,18 +60,31 @@ try {
             Write-Host "`n[2/3] Pulizia cache ed artifact di build nel repository..." -ForegroundColor Yellow
         }
 
+        # Cartelle target da rimuovere nel repository
         $targetsRepo = @(
             (Join-Path $rootDir "build"),
             (Join-Path $rootDir "dist"),
             (Join-Path $rootDir "dist-electron"),
             (Join-Path $rootDir "out"),
+            (Join-Path $rootDir "release"),
             (Join-Path $rootDir "sidecar_dist"),
-            (Join-Path $rootDir "sidecar\__pycache__"),
             (Join-Path $rootDir "scripts\build"),
             (Join-Path $rootDir "scripts\dist"),
             (Join-Path $rootDir "node_modules\.vite"),
+            (Join-Path $rootDir "node_modules\.cache"),
+            (Join-Path $rootDir ".vite"),
             (Join-Path $rootDir ".pytest_cache"),
-            (Join-Path $rootDir ".tsbuildinfo")
+            (Join-Path $rootDir "sidecar\.pytest_cache"),
+            (Join-Path $rootDir "coverage"),
+            (Join-Path $rootDir ".nyc_output"),
+            (Join-Path $rootDir "test-results"),
+            (Join-Path $rootDir "htmlcov"),
+            (Join-Path $rootDir "logs"),
+            (Join-Path $rootDir ".onlyrag"),
+            (Join-Path $rootDir "userdata_dev"),
+            (Join-Path $rootDir "lancedb_store"),
+            (Join-Path $rootDir "export"),
+            (Join-Path $rootDir "data")
         )
 
         foreach ($target in $targetsRepo) {
@@ -81,14 +94,32 @@ try {
             }
         }
 
-        # Pulizia file temporanei di cache e log
-        Get-ChildItem -Path $rootDir -Recurse -Include "*.pyc", "gemini-code-*.txt", "Thumbs.db" -ErrorAction SilentlyContinue | ForEach-Object {
+        # Scansione mirata per file temporanei e cartelle di cache ricorsive (escludendo .venv, node_modules e .git)
+        $searchDirs = Get-ChildItem -Path $rootDir -Directory -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notin @(".venv", "venv", "env", "node_modules", ".git") } |
+            ForEach-Object { $_.FullName }
+
+        $filePatterns = @("*.pyc", "*.pyo", "*.pyd", "*.tsbuildinfo", "*.log", "*.log.*", "*.tmp", "*.temp", "Thumbs.db", "ehthumbs.db", "desktop.ini", ".DS_Store", "gemini-code-*.txt", ".coverage", ".coverage.*")
+
+        # Rimuovi file sporchi nella cartella radice
+        Get-ChildItem -Path $rootDir -File -Include $filePatterns -Force -ErrorAction SilentlyContinue | ForEach-Object {
             Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
         }
 
-        # Pulizia cartelle __pycache__ ricorsive
-        Get-ChildItem -Path (Join-Path $rootDir "sidecar") -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue | ForEach-Object {
-            Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        # Rimuovi file sporchi e cartelle di cache ricorsivamente
+        foreach ($dir in $searchDirs) {
+            Get-ChildItem -Path $dir -Recurse -File -Include $filePatterns -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+            }
+            Get-ChildItem -Path $dir -Recurse -Directory -Filter "__pycache__" -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            Get-ChildItem -Path $dir -Recurse -Directory -Filter ".pytest_cache" -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            Get-ChildItem -Path $dir -Recurse -Directory -Filter "*.egg-info" -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            }
         }
 
         if (-not $Fast) { Write-Host "[OK] Pulizia repository completata." -ForegroundColor Green }

@@ -8,7 +8,6 @@ import {
   estimateModelWeightGB,
   getModelFamily,
   getModelApproxSize,
-  formatModelDisplayName,
   isOllamaModelInstalled,
   getRecommendedOllamaEnvVars,
 } from './hardwareRecommendationEngine'
@@ -285,7 +284,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen2.5-coder:7b')
+    expect(recDeep?.modelName).toBe('deepseek-r1:7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -363,7 +362,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recLaw?.modelName).toBe('mistral-small3.2:24b')
   })
 
-  it('should format model display names and compute sizes and families correctly', () => {
+  it('should compute sizes and families correctly', () => {
     expect(getModelFamily('adrienbrault/biomistral-7b:Q4_K_M')).toBe('biomistral')
     expect(getModelFamily('qwen2.5-coder:7b')).toBe('qwen-coder')
     expect(getModelFamily('llama3.2-vision:11b')).toBe('llama-vision')
@@ -372,11 +371,8 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     expect(getModelApproxSize('adrienbrault/biomistral-7b:Q4_K_M')).toBe('4.1 GB')
     expect(getModelApproxSize('qwen2.5-coder:7b')).toBe('4.7 GB')
-    expect(getModelApproxSize('nomic-embed-text:latest')).toBe('276 MB')
+    expect(getModelApproxSize('nomic-embed-text:latest')).toBe('274 MB')
     expect(getModelApproxSize('local')).toBeUndefined()
-
-    expect(formatModelDisplayName('adrienbrault/biomistral-7b:Q4_K_M')).toBe('BioMistral (7B Q4_K_M)')
-    expect(formatModelDisplayName('meditron:7b')).toBe('Meditron (7B)')
   })
 
   it('should handle null diagnostics gracefully with fallback defaults', () => {
@@ -504,6 +500,21 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
         expect(recs.deepReasoningTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
       }
     })
+
+    it('must curate a different model for Standard vs Deep Reasoning on every profile', () => {
+      // Regression: midrange used to curate qwen2.5-coder:7b as the recommended pick in both
+      // STANDARD_TIER_CATALOG and DEEP_REASONING_TIER_CATALOG, so the wizard defaulted both
+      // slots to the identical model.
+      for (const host of REPRESENTATIVE_HOSTS) {
+        const recs = analyzeHardwareAndRecommend(host.diagnostics)
+        const standardPick = recs.standardTierModels.find((m) => m.isRecommended)?.modelName
+        const deepPick = recs.deepReasoningTierModels.find((m) => m.isRecommended)?.modelName
+        expect(
+          deepPick,
+          `${host.tier}: Standard and Deep Reasoning both curated ${standardPick}`
+        ).not.toBe(standardPick)
+      }
+    })
   })
 
   describe('refreshed model matrix', () => {
@@ -516,9 +527,9 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       expect(estimateModelWeightGB('devstral:24b')).toBe(14.0)
       expect(estimateModelWeightGB('mistral-small3.2:24b')).toBe(14.0)
       expect(estimateModelWeightGB('granite3.3:8b')).toBe(4.9)
-      expect(estimateModelWeightGB('gemma3:1b')).toBe(0.82)
+      expect(estimateModelWeightGB('gemma3:1b')).toBeCloseTo(0.8, 2)
       expect(estimateModelWeightGB('gemma3:12b')).toBe(8.1)
-      expect(estimateModelWeightGB('embeddinggemma:300m')).toBe(0.62)
+      expect(estimateModelWeightGB('embeddinggemma:300m')).toBeCloseTo(0.61, 2)
     })
 
     it('should assign the new tags to the correct family badge', () => {

@@ -157,10 +157,10 @@ export const apiService = {
     }
   },
 
-  async exportDocument(markdownContent: string, format: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  async exportDocument(markdownContent: string, format: string, outputFolder?: string): Promise<{ success: boolean; message?: string; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
-      return await window.electronAPI.exportDocument(markdownContent, format)
+      return await window.electronAPI.exportDocument(markdownContent, format, outputFolder)
     } catch (err: any) {
       logger.error('ApiService:Export', `Export failed for format ${format}: ${err.message}`)
       return { success: false, error: err.message }

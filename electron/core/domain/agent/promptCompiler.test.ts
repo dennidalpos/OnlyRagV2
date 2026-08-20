@@ -15,6 +15,7 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
     expect(detectModelFamily('command-r-plus')).toBe('commandr')
     expect(detectModelFamily('yi-coder:9b')).toBe('yicoder')
     expect(detectModelFamily('starcoder2:15b')).toBe('starcoder')
+    expect(detectModelFamily('glm4:9b')).toBe('glm')
     expect(detectModelFamily('custom-unknown-model')).toBe('generic')
   })
 

@@ -61,11 +61,18 @@ export class HardwareProfileResolver {
     // router and the Ollama OS parameters all agree on what a given machine is. This file
     // used to carry its own thresholds (safe budget >= 7.5 / >= 3.0), which is why a 6GB
     // laptop GPU was `entry` for the model recommendations but `Medium` here.
+    //
+    // `entry` (a dedicated 4-7GB GPU) maps to the `Medium` bucket, not `Low`: it has real
+    // VRAM headroom, unlike a `legacy` CPU-only host. chatContextBudget.ts — the sibling
+    // module for the same 5-tier ladder — already gives `entry` the same maxNumCtx ceiling
+    // (8192) as `midrange`, distinct from `legacy`'s 4096; this resolver used to lump
+    // `entry` in with `legacy` instead, an undetected drift from that established pattern
+    // (no test pinned the `entry` case either way).
     const hardwareTier = resolveEffectiveTier(profile, env)
     const effectiveTier: 'Low' | 'Medium' | 'High' =
-      hardwareTier === 'legacy' || hardwareTier === 'entry'
+      hardwareTier === 'legacy'
         ? 'Low'
-        : hardwareTier === 'midrange'
+        : hardwareTier === 'entry' || hardwareTier === 'midrange'
           ? 'Medium'
           : 'High'
 

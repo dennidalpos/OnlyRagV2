@@ -54,6 +54,10 @@ export interface TranslationSchema {
     autoscrollOffAria: string
     autoscrollOnTitle: string
     autoscrollOffTitle: string
+    moduleNameCoding: string
+    moduleNameIngestion: string
+    moduleNameTranslation: string
+    crossModuleTaskBlocked: string
   }
   navigation: {
     ingestion: string
@@ -430,6 +434,11 @@ export interface TranslationSchema {
     codingAgentDebugLog: string
     codingAgentDebugLogDesc: string
     openLogsFolder: string
+    translationOutputFolderTitle: string
+    translationOutputFolderDesc: string
+    translationOutputFolderNotSet: string
+    translationOutputFolderBrowse: string
+    translationOutputFolderClear: string
     fastTier: string
     standardTier: string
     deepTier: string

@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { IngestedDocument, AppSettings } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
 
 export const LANGUAGES = [
   'English',
@@ -89,9 +90,22 @@ export function useDocumentTranslation(settings?: AppSettings) {
   const [targetLang, setTargetLang] = useState('English')
   const [translatedMarkdown, setTranslatedMarkdown] = useState('')
   const [isTranslating, setIsTranslating] = useState(false)
+
+  // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion
+  // module can block starting their own task while a translation is mid-flight (see
+  // useGlobalTaskLock.ts).
+  useEffect(() => {
+    if (isTranslating) {
+      acquireGlobalTaskLock('translation')
+      return () => releaseGlobalTaskLock('translation')
+    }
+    releaseGlobalTaskLock('translation')
+  }, [isTranslating])
+
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
   const [totalChunks, setTotalChunks] = useState(0)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
+  const [translationError, setTranslationError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'split' | 'diff'>('split')
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
 
@@ -176,6 +190,17 @@ export function useDocumentTranslation(settings?: AppSettings) {
 
   const handleStartTranslation = async () => {
     if (!selectedDoc) return
+
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'translation') {
+      const message = busyModule === 'coding'
+        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
+        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameIngestion') })
+      setTranslationError(message)
+      setTimeout(() => setTranslationError(null), 5000)
+      return
+    }
+
     abortTranslationRef.current = false
     setIsTranslating(true)
     setTranslatedMarkdown('')
@@ -236,7 +261,7 @@ export function useDocumentTranslation(settings?: AppSettings) {
     if (!translatedMarkdown.trim()) return
     setExportMessage(t('translation.exportPreparing', { format: format.toUpperCase() }))
     try {
-      const res = await apiService.exportDocument(translatedMarkdown, format)
+      const res = await apiService.exportDocument(translatedMarkdown, format, settings?.translationOutputFolder)
       if (res.success) {
         setExportMessage(res.message || t('translation.exportSuccess', { format: format.toUpperCase() }))
       } else {
@@ -278,6 +303,7 @@ export function useDocumentTranslation(settings?: AppSettings) {
     currentChunkIndex,
     totalChunks,
     exportMessage,
+    translationError,
     viewMode,
     setViewMode,
     syncScroll,

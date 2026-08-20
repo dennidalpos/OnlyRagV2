@@ -122,6 +122,14 @@ export const FAST_TIER_CATALOG: RawModelCatalogEntry[] = [
     description: 'Fast Alibaba lightweight instruction model for concise task routing',
     recommendedForProfiles: [],
   },
+  {
+    modelName: 'codegemma:2b',
+    displayName: 'Google CodeGemma (2B)',
+    family: 'gemma',
+    sizeBytesApprox: '1.4 GB',
+    description: 'Google micro code-completion model for fill-in-the-middle on minimum hardware',
+    recommendedForProfiles: [],
+  },
 ]
 
 // 🔵 Standard Tier Recommendations (Balanced workhorse models: 3B - 30B)
@@ -278,6 +286,22 @@ export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
     description: 'Balanced low-memory fallback model for CPU/Legacy systems',
     recommendedForProfiles: [],
   },
+  {
+    modelName: 'starcoder2:15b',
+    displayName: 'StarCoder 2 (15B)',
+    family: 'starcoder',
+    sizeBytesApprox: '9.4 GB',
+    description: 'BigCode large-scale code generation assistant for 12GB+ GPUs',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'codellama:13b-instruct-q4_k_m',
+    displayName: 'Code Llama (13B Q4_K_M)',
+    family: 'codellama',
+    sizeBytesApprox: '7.4 GB',
+    description: 'Meta larger Code Llama for Python & C++ on 12GB+ GPUs',
+    recommendedForProfiles: [],
+  },
 ]
 
 // 🟣 Deep Reasoning Tier Recommendations (Multi-step reasoning & architecture)
@@ -288,7 +312,7 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '4.7 GB',
     description: 'High-capability coding assistant for deep logic, multi-step refactors & debugging',
-    recommendedForProfiles: ['midrange'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'qwen3:4b',
@@ -320,7 +344,7 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'deepseek-r1',
     sizeBytesApprox: '4.7 GB',
     description: 'Qwen 2.5-Coder/Math distilled reasoning model for deep algorithmic problem solving',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['midrange'],
   },
   {
     modelName: 'deepseek-r1:7b-qwen-distill-q4_k_m',
@@ -450,6 +474,22 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     description: 'High-capacity code intelligence engine for complex software design',
     recommendedForProfiles: [],
   },
+  {
+    modelName: 'qwen3:30b-a3b',
+    displayName: 'Qwen 3 (30B A3B MoE)',
+    family: 'qwen',
+    sizeBytesApprox: '18.6 GB',
+    description: 'Current-generation MoE reasoning model: 30B knowledge at ~3B active-parameter speed',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:32b',
+    displayName: 'Qwen 3 (32B)',
+    family: 'qwen',
+    sizeBytesApprox: '20.0 GB',
+    description: 'Current-generation dense 32B reasoning engine for 32GB+ workstations',
+    recommendedForProfiles: [],
+  },
 ]
 
 // ⚡ Heavy Escalation Tier (14B+) — Auto-healing fallback for complex multi-file tasks
@@ -540,6 +580,22 @@ export const HEAVY_ESCALATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '19.5 GB',
     description: 'Quantized 32B coding model for extreme workstations and multi-GPU setups',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:30b-a3b',
+    displayName: 'Qwen 3 (30B A3B MoE)',
+    family: 'qwen',
+    sizeBytesApprox: '18.6 GB',
+    description: 'MoE escalation target with strong reasoning at 3B active-parameter throughput',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:32b',
+    displayName: 'Qwen 3 (32B)',
+    family: 'qwen',
+    sizeBytesApprox: '20.0 GB',
+    description: 'Dense 32B escalation target for exhaustive multi-file reasoning on 32GB+ workstations',
     recommendedForProfiles: [],
   },
 ]
@@ -634,6 +690,46 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     description: 'Google Gemma 2 high-precision conversational assistant',
     recommendedForProfiles: [],
   },
+  {
+    modelName: 'glm4:9b',
+    displayName: 'Zhipu GLM-4 (9B)',
+    family: 'glm',
+    sizeBytesApprox: '5.5 GB',
+    description: 'Zhipu high-accuracy bilingual (EN/ZH) conversational model for grounded RAG',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen2.5:32b',
+    displayName: 'Qwen 2.5 (32B)',
+    family: 'qwen',
+    sizeBytesApprox: '20.0 GB',
+    description: 'Large-scale multilingual conversational model for 32GB+ workstations',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gemma3:27b',
+    displayName: 'Google Gemma 3 (27B)',
+    family: 'gemma',
+    sizeBytesApprox: '17.0 GB',
+    description: 'Google flagship Gemma 3 conversational assistant for extreme workstations',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'mixtral:8x7b',
+    displayName: 'Mixtral (8x7B MoE)',
+    family: 'mistral',
+    sizeBytesApprox: '26.0 GB',
+    description: 'Mistral Mixture-of-Experts model with strong multi-document reasoning for 32GB+ hosts',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'llama3.3:70b',
+    displayName: 'Llama 3.3 (70B)',
+    family: 'llama',
+    sizeBytesApprox: '40.0 GB',
+    description: 'Meta flagship conversational model rivaling 3.1 405B — requires a 48GB+ workstation',
+    recommendedForProfiles: [],
+  },
 ]
 
 // 🌐 Document Translation Models
@@ -708,6 +804,22 @@ export const TRANSLATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'mistral',
     sizeBytesApprox: '4.1 GB',
     description: 'European high-speed instruction model for document translation',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:14b',
+    displayName: 'Qwen 3 (14B)',
+    family: 'qwen',
+    sizeBytesApprox: '9.3 GB',
+    description: 'Current-generation 14B translator with strong multilingual layout preservation',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gemma3:27b',
+    displayName: 'Google Gemma 3 (27B)',
+    family: 'gemma',
+    sizeBytesApprox: '17.0 GB',
+    description: 'Google flagship Gemma 3 multilingual translator for extreme workstations',
     recommendedForProfiles: [],
   },
 ]
@@ -893,6 +1005,14 @@ export const LEGAL_TIER_CATALOG: RawModelCatalogEntry[] = [
     sizeBytesApprox: '4.9 GB',
     description: 'Statutory compliance, legal drafting & regulatory entity extraction for 12GB+ GPUs',
     recommendedForProfiles: ['highend'],
+  },
+  {
+    modelName: 'command-r7b:latest',
+    displayName: 'Cohere Command R7B',
+    family: 'cohere',
+    sizeBytesApprox: '5.1 GB',
+    description: 'Cohere grounded RAG with strict citations, compact enough for 12GB GPUs',
+    recommendedForProfiles: [],
   },
   {
     modelName: 'mistral-small3.2:24b',

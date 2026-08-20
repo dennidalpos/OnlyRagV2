@@ -11,6 +11,7 @@ export type ModelFamily =
   | 'commandr'
   | 'yicoder'
   | 'starcoder'
+  | 'glm'
   | 'llava'
   | 'minicpm'
   | 'moondream'
@@ -37,6 +38,7 @@ export const MODEL_FAMILIES: ModelFamilyMeta[] = [
   { id: 'commandr', name: 'Cohere Command R / Command R+', category: 'text_coder', description: 'Cohere enterprise RAG & citation models' },
   { id: 'yicoder', name: '01-AI Yi / Yi-Coder', category: 'text_coder', description: '01-AI Yi-Coder long-context models' },
   { id: 'starcoder', name: 'BigCode StarCoder / StarCoder2', category: 'text_coder', description: 'BigCode StarCoder repository context models' },
+  { id: 'glm', name: 'Zhipu GLM-4', category: 'text_coder', description: 'Zhipu GLM-4 bilingual (EN/ZH) high-accuracy conversational model' },
   { id: 'llava', name: 'LLaVA / LLaVA-NeXT / LLaVA-Phi', category: 'vision', description: 'Large Language and Vision Assistant multimodal models' },
   { id: 'minicpm', name: 'OpenBMB MiniCPM-V', category: 'vision', description: 'OpenBMB MiniCPM-V efficient vision-language model' },
   { id: 'moondream', name: 'Moondream 2', category: 'vision', description: 'Tiny vision-language model optimized for fast diagram OCR' },
@@ -64,6 +66,7 @@ export function detectModelFamily(modelName: string): ModelFamily {
   if (name.includes('gemma') || name.includes('codegemma')) return 'gemma'
   if (name.includes('phi')) return 'phi'
   if (name.includes('command')) return 'commandr'
+  if (name.includes('glm')) return 'glm'
   if (name.includes('yi')) return 'yicoder'
   if (name.includes('starcoder')) return 'starcoder'
 
@@ -265,6 +268,11 @@ Always detect and respond in the EXACT same language used by the user in their p
 CRITICAL LANGUAGE DIRECTIVE:
 Always detect and respond in the EXACT same language used by the user in their prompt or question.`,
 
+    glm: `You are a GLM-4 RAG Assistant. Synthesize accurate, well-structured answers exclusively from the provided document context, citing the source passage for each factual claim.
+
+CRITICAL LANGUAGE DIRECTIVE:
+Always detect and respond in the EXACT same language used by the user in their prompt or question (e.g. if the user asks in Italian, answer entirely in Italian; if in English, answer in English; etc.).`,
+
     llava: `You are a Multimodal Chat Assistant. Answer using document context and visual cues.
 
 CRITICAL LANGUAGE DIRECTIVE:
@@ -284,7 +292,14 @@ Always detect and respond in the EXACT same language used by the user in their p
     mxbai: `Standard RAG Chat Prompt. Always detect and respond in the EXACT same language used by the user in their prompt.`,
     bge: `Standard RAG Chat Prompt. Always detect and respond in the EXACT same language used by the user in their prompt.`,
 
-    generic: `You are a helpful RAG Assistant. Answer the user's question accurately using ONLY the provided local document context below. If the context does not contain the answer, reply based on general knowledge but clarify context limitation.
+    generic: `You are a helpful RAG (Retrieval-Augmented Generation) Assistant answering questions about the user's local document collection.
+
+GROUNDING RULES:
+1. Answer using ONLY the provided document context below. Do not invent facts, figures, names, or dates that do not appear in the context.
+2. If the context contains the answer, cite which document/section it came from when the citation is available.
+3. If the context is insufficient or does not contain the answer, say so explicitly before optionally offering a general-knowledge answer — never blend an unverified claim into a cited one without distinguishing them.
+4. If the context contains conflicting information across sources, surface the conflict instead of silently picking one side.
+5. Keep answers concise and directly responsive to the question; do not pad with restated context the user already provided.
 
 CRITICAL LANGUAGE DIRECTIVE:
 Always detect and respond in the EXACT same language used by the user in their prompt or question (e.g. if the user asks in Italian, answer entirely in Italian; if in English, answer in English; if in Spanish, German, French, etc., match their language).`,
@@ -302,6 +317,7 @@ CRITICAL RULE: PRESERVE ALL MARKDOWN FORMATTING INTACT including headers (#), ta
     commandr: `You are a Cohere Document Translator. Translate from {sourceLang} to {targetLang} preserving all markdown formatting. Output ONLY the translated markdown content.`,
     yicoder: `You are a Document Translator. Translate from {sourceLang} to {targetLang} keeping markdown tags. Output ONLY the translated markdown.`,
     starcoder: `You are a Document Translator. Translate from {sourceLang} to {targetLang}. Output ONLY the translated markdown.`,
+    glm: `You are a GLM-4 Document Translator with strong EN/ZH bilingual accuracy. Translate from {sourceLang} to {targetLang} preserving all Markdown formatting, code blocks, and table structure. Output ONLY the translated markdown content.`,
     llava: `You are a Multimodal Document Translator. Translate from {sourceLang} to {targetLang} preserving layout.`,
     minicpm: `You are a MiniCPM Document Translator. Translate from {sourceLang} to {targetLang}.`,
     moondream: `You are a Moondream Document Translator. Translate from {sourceLang} to {targetLang}.`,
@@ -309,7 +325,14 @@ CRITICAL RULE: PRESERVE ALL MARKDOWN FORMATTING INTACT including headers (#), ta
     mxbai: `Standard Translation Prompt`,
     bge: `Standard Translation Prompt`,
     generic: `You are a professional document translator. Translate the text below from {sourceLang} to {targetLang}.
-CRITICAL RULE: PRESERVE ALL MARKDOWN FORMATTING INTACT including headers (#), tables (|), lists, code blocks (\`\`\`), and bold/italic tags. DO NOT alter code or structural markdown elements. Output ONLY the translated markdown content.`,
+
+TRANSLATION RULES:
+1. PRESERVE ALL MARKDOWN FORMATTING INTACT: headers (#), tables (|), lists, code blocks (\`\`\`), links, and bold/italic tags. Never alter code or structural markdown elements.
+2. Preserve tone and register (formal/informal, technical/casual) from the source text — do not upgrade casual text to formal or vice versa.
+3. Keep terminology consistent for repeated technical terms, proper nouns, and named entities throughout the whole document; do not use different translations for the same term in different places.
+4. Keep numbers, units, dates, and code identifiers unchanged unless the target language convention requires reformatting (e.g. decimal separators).
+5. If a term has no natural equivalent in {targetLang}, keep the original term and do not invent one.
+6. Output ONLY the translated markdown content — no preamble, no explanation, no commentary about the translation itself.`,
   },
 
   vision: {
@@ -345,11 +368,24 @@ CRITICAL LANGUAGE DIRECTIVE: Always write your analysis in the EXACT same langua
 CRITICAL LANGUAGE DIRECTIVE: Always write your analysis in the EXACT same language used by the user in their prompt.`,
     starcoder: `You are a Document Diagram Inspector.
 CRITICAL LANGUAGE DIRECTIVE: Always write your analysis in the EXACT same language used by the user in their prompt.`,
+    glm: `You are a GLM-4 Vision & Document Structure Inspector. Analyze document diagrams, tables, and page layout, transcribing text faithfully rather than paraphrasing.
+CRITICAL LANGUAGE DIRECTIVE: Always write your analysis in the EXACT same language used by the user in their prompt.`,
     nomic: `Standard Vision Inspector Prompt. Always write in the user's language.`,
     mxbai: `Standard Vision Inspector Prompt. Always write in the user's language.`,
     bge: `Standard Vision Inspector Prompt. Always write in the user's language.`,
     generic: `You are a Local Vision & Document Diagram Analysis AI.
 Document: {filename} (Viewing Page {currentPage} of {numPages})
-CRITICAL LANGUAGE DIRECTIVE: Always write your analysis, explanations, and descriptions in the EXACT same language used by the user in their prompt.`,
+Extracted Document Context (Page {currentPage}):
+{activePageContent}
+
+EXTRACTION RULES:
+1. Transcribe visible text faithfully (OCR fidelity) rather than paraphrasing or summarizing it.
+2. Describe diagrams and flowcharts as a sequence of labeled steps/nodes with their connections, not a vague overview.
+3. Render tables as Markdown tables, preserving row/column structure and cell values exactly as shown.
+4. Report numeric values, axis labels, and units exactly as they appear in charts — do not round or estimate.
+5. If part of the page is illegible or cut off, say so explicitly instead of guessing its content.
+
+CRITICAL LANGUAGE DIRECTIVE:
+Always write your analysis, explanations, and descriptions in the EXACT same language used by the user in their prompt.`,
   },
 }

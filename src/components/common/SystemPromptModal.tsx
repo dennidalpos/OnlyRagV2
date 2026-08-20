@@ -301,6 +301,24 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
     }
   }
 
+  /**
+   * Scrolls the textarea so the caret's line is visible. Focusing + setSelectionRange alone
+   * does not reliably scroll a textarea to a programmatically-moved caret across browsers,
+   * so inserting a variable near the end of a long prompt could move the cursor past the
+   * visible viewport without the user ever seeing what was actually inserted.
+   */
+  const scrollCaretIntoView = (ta: HTMLTextAreaElement, caretPos: number) => {
+    const lineNumber = ta.value.substring(0, caretPos).split('\n').length - 1
+    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 18
+    const caretTop = lineNumber * lineHeight
+    const caretBottom = caretTop + lineHeight
+    if (caretTop < ta.scrollTop) {
+      ta.scrollTop = caretTop
+    } else if (caretBottom > ta.scrollTop + ta.clientHeight) {
+      ta.scrollTop = caretBottom - ta.clientHeight
+    }
+  }
+
   const handleInsertVariable = (varName: string) => {
     if (textareaRef.current) {
       const ta = textareaRef.current
@@ -308,9 +326,11 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
       const end = ta.selectionEnd || 0
       const nextText = promptText.substring(0, start) + varName + promptText.substring(end)
       setPromptText(nextText)
+      const caretPos = start + varName.length
       setTimeout(() => {
         ta.focus()
-        ta.setSelectionRange(start + varName.length, start + varName.length)
+        ta.setSelectionRange(caretPos, caretPos)
+        scrollCaretIntoView(ta, caretPos)
       }, 0)
     } else {
       setPromptText((prev) => prev + (prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' ') + varName)
@@ -622,7 +642,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
                 onChange={(e) => setPromptText(e.target.value)}
                 rows={10}
                 aria-label={t('systemPrompt.promptText')}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 focus-ring resize-y leading-relaxed"
+                className="w-full flex-1 min-h-[220px] bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 focus-ring resize-y leading-relaxed"
                 placeholder={t('systemPrompt.systemPromptPlaceholder')}
               />
             </div>

@@ -1,3 +1,19 @@
 {
-  "todos": []
+  "todos": [
+    {
+      "id": "verify-inflight-work-2026-08-20",
+      "title": "Verify and finish in-flight uncommitted work",
+      "status": "done",
+      "created": "2026-08-20",
+      "closed": "2026-08-20",
+      "notes": "Reviewed all 30 changed/added files: (1) export-to-configured-folder feature wired end-to-end IPC->preload->service->UI->i18n en/it, (2) cross-module task lock (useGlobalTaskLock, new useSyncExternalStore store) coordinating coding/ingestion/translation with tests, (3) atomic temp-then-rename writes in documentIoRepository with tests, (4) hardware catalog/recommendation engine cleanup: model weights now derived from catalog sizeBytesApprox instead of a hand-duplicated table, dead formatModelDisplayName removed (confirmed no remaining references), GLM-4 family added, entry-tier VRAM bucket fix, distinct Standard/Deep Reasoning default picks. IMPLEMENTATION_PLAN.md deletion is consistent with this being the completed plan. docs/modules.md already updated to match. No orphan code or dead references found.",
+      "steps": [
+        { "step": "Review full diff per file for completeness and orphan/dead code", "done": true },
+        { "step": "Run build (fail-fast)", "done": true, "result": "npx tsc --noEmit: clean, no errors" },
+        { "step": "Run test suite (fast, no flaky)", "done": true, "result": "vitest run: 81 files / 568 tests passed" },
+        { "step": "Validate docs/modules.md reflects current changes", "done": true },
+        { "step": "Close out: mark done only if build+tests+docs are clean", "done": true }
+      ]
+    }
+  ]
 }

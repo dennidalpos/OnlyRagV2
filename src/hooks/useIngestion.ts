@@ -4,6 +4,7 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
 
 export interface IngestionProgressState {
   active: boolean
@@ -59,6 +60,18 @@ export function useIngestion(settings?: AppSettings) {
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
   const [isTranslatingInplace, setIsTranslatingInplace] = useState<boolean>(false)
   const [translateInplaceStatus, setTranslateInplaceStatus] = useState<{ success: boolean; message: string } | null>(null)
+
+  // Mirrors this module's busy state (upload/ingest pipeline OR in-place translation) into
+  // the cross-module task lock so the coding agent/translation module can block starting
+  // their own task while ingestion is mid-flight (see useGlobalTaskLock.ts).
+  const isIngestionBusy = isUploading || isTranslatingInplace
+  useEffect(() => {
+    if (isIngestionBusy) {
+      acquireGlobalTaskLock('ingestion')
+      return () => releaseGlobalTaskLock('ingestion')
+    }
+    releaseGlobalTaskLock('ingestion')
+  }, [isIngestionBusy])
 
   const isDirty = selectedDoc !== null && markdownContent !== selectedDoc.extractedMarkdown
 
@@ -301,6 +314,16 @@ export function useIngestion(settings?: AppSettings) {
 
   const handleTranslateInplace = async (docId: string, sourceLang: string, targetLang: string, model?: string) => {
     if (!docId || isTranslatingInplace) return
+
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'ingestion') {
+      const message = busyModule === 'coding'
+        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
+        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameTranslation') })
+      setTranslateInplaceStatus({ success: false, message })
+      return
+    }
+
     setIsTranslatingInplace(true)
     setTranslateInplaceStatus(null)
 
@@ -327,6 +350,16 @@ export function useIngestion(settings?: AppSettings) {
 
   const handleIngestPath = async (targetFilePath: string, displayName?: string) => {
     if (!targetFilePath || !targetFilePath.trim()) return
+
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'ingestion') {
+      const message = busyModule === 'coding'
+        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
+        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameTranslation') })
+      setUploadError(message)
+      return
+    }
+
     isCancelledRef.current = false
     setIsUploading(true)
     setUploadError(null)

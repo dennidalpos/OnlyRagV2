@@ -150,6 +150,8 @@ export interface AppSettings {
   ollamaHost: string
   customWorkspacePath?: string
   noWorkspaceMode?: boolean
+  /** Default folder for the translation module's exported documents; unset falls back to the interactive save dialog. */
+  translationOutputFolder?: string
   // Family & Module System Prompt Customizations
   customPromptOverrides?: Record<string, string> // key: `${module}:${family}` -> prompt string
   selectedFamilyOverrides?: Record<string, string> // key: module -> family string or 'auto'
@@ -399,7 +401,7 @@ export interface IElectronAPI {
   getIngestedDocuments: () => Promise<IngestedDocument[]>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean }>
   searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => Promise<VectorSearchResult[]>
-  exportDocument: (markdownContent: string, format: string) => Promise<{ success: boolean; message?: string; error?: string }>
+  exportDocument: (markdownContent: string, format: string, outputFolder?: string) => Promise<{ success: boolean; message?: string; error?: string }>
   generateOllamaStream: (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any) => Promise<void>
   cancelOllamaStream: () => Promise<void>
   cancelTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>

@@ -60,11 +60,11 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     const ctxMid: ComplexityEvaluationContext = {
       safeVramBudgetGB: 4.5,
       vramTotalMB: 8192,
-      availableModels: ['qwen2.5-coder:7b', 'deepseek-r1:14b'],
+      availableModels: ['deepseek-r1:7b', 'deepseek-r1:14b'],
     }
     const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxMid)
     expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('qwen2.5-coder:7b')
+    expect(res.modelName).toBe('deepseek-r1:7b')
   })
 
   it('should scale deep reasoning fallbacks to lightweight models on legacy/CPU profiles (< 6GB)', () => {

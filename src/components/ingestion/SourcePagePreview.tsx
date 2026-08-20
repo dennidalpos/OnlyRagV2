@@ -56,9 +56,13 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
       id={`source-page-${pageNumber}`}
       data-page-number={pageNumber}
       className="w-full flex justify-center py-2 select-text"
-      style={{ transform: `scale(${scale})`, transformOrigin: 'top center', transition: 'transform 0.15s ease-out' }}
+      // `zoom` (not `transform: scale`) so the scroll container's layout box actually reflects
+      // the zoomed size — a CSS transform repaints visually without reflowing layout, which left
+      // this pane's scrollHeight out of sync with what was on screen (clipping at zoom > 100%,
+      // dead scroll space at zoom < 100%). Safe here: Electron's renderer is Chromium-only.
+      style={{ zoom: scale }}
     >
-      <div className="w-full max-w-2xl bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-xl min-h-[580px] flex flex-col space-y-3">
+      <div className="w-full max-w-2xl bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col space-y-3">
         {/* Source Header Bar */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5 text-[11px] font-mono text-slate-400">
           <div className="flex items-center gap-2">
@@ -82,7 +86,7 @@ export const SourcePagePreview: React.FC<SourcePagePreviewProps> = ({
               <img
                 src={`data:image/png;base64,${imageBase64}`}
                 alt={t('ingestion.sourcePageAlt', { current: pageNumber })}
-                className="w-full h-auto object-contain max-h-[750px] rounded shadow-md"
+                className="w-full h-auto object-contain rounded shadow-md"
               />
             </div>
           ) : (

@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   Link,
+  AlertTriangle,
 } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -348,6 +349,14 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
           <div className="px-4 py-2 bg-sky-950/80 border-b border-sky-800 text-sky-300 text-xs font-semibold flex items-center gap-2">
             <Download className="w-3.5 h-3.5 text-sky-400" />
             <span>{tr.exportMessage}</span>
+          </div>
+        )}
+
+        {/* Cross-Module Task Lock Feedback Banner */}
+        {tr.translationError && (
+          <div className="px-4 py-2 bg-amber-950/80 border-b border-amber-800 text-amber-300 text-xs font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>{tr.translationError}</span>
           </div>
         )}
 

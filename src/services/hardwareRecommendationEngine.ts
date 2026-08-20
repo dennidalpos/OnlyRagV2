@@ -21,8 +21,65 @@ import {
   LEGAL_TIER_CATALOG,
   VISION_TIER_CATALOG,
   EMBEDDING_TIER_CATALOG,
+  parseCatalogSizeGB,
   type RawModelCatalogEntry,
 } from './hardwareModelCatalog'
+
+// Every catalog model's weight is derived directly from its own `sizeBytesApprox` instead of
+// a hand-maintained duplicate: the two used to be kept in sync only by convention and a test
+// (hardwareRecommendationEngine.test.ts > 'should keep every catalog entry priced consistently
+// with its advertised size'), so a catalog change silently drifted from its price table entry
+// until that test caught it. Only non-catalog aliases (quantization-variant shortcuts and
+// third-party tags a user may have pulled locally outside the curated catalog) need an
+// explicit entry in `KNOWN_WEIGHT_ALIASES_GB` below.
+const CATALOG_DERIVED_WEIGHTS_GB: Record<string, number> = Object.fromEntries(
+  ([
+    ...FAST_TIER_CATALOG,
+    ...STANDARD_TIER_CATALOG,
+    ...DEEP_REASONING_TIER_CATALOG,
+    ...HEAVY_ESCALATION_TIER_CATALOG,
+    ...CHAT_TIER_CATALOG,
+    ...TRANSLATION_TIER_CATALOG,
+    ...MEDICAL_TIER_CATALOG,
+    ...LEGAL_TIER_CATALOG,
+    ...VISION_TIER_CATALOG,
+    ...EMBEDDING_TIER_CATALOG,
+  ] as RawModelCatalogEntry[]).map((entry) => [
+    entry.modelName.toLowerCase(),
+    parseCatalogSizeGB(entry.sizeBytesApprox),
+  ])
+)
+
+const KNOWN_WEIGHT_ALIASES_GB: Record<string, number> = {
+  'all-minilm': 0.12,
+  'nomic-embed-text': 0.27,
+  'snowflake-arctic-embed': 0.6,
+  'mxbai-embed-large': 0.67,
+  'bge-m3': 1.1,
+  'qwen2.5-coder:1.5b-instruct-q4_k_m': 1.0,
+  'moondream': 1.7,
+  'qwen2.5-coder:3b-instruct-q8_0': 3.2,
+  'starcoder2:3b': 2.0,
+  'phi3.5:3.8b': 2.2,
+  'deepseek-coder:6.7b-instruct-q8_0': 7.2,
+  'codellama:7b': 4.2,
+  'adrienbrault/biomistral-7b': 4.1,
+  'qwen2.5-coder:7b-instruct-q8_0': 7.6,
+  'deepseek-r1:8b-llama-distill-q4_k_m': 4.9,
+  'command-r7b': 5.1,
+  'codellama:13b': 7.8,
+  'solar:10.7b': 6.8,
+  'deepseek-coder-v2:16b-lite-instruct-q5_k_m': 10.5,
+  'deepseek-coder-v2:16b': 8.9,
+  'qwen2.5-coder:14b-instruct-q5_k_m': 10.3,
+  'qwen2.5-coder:14b-instruct-q8_0': 15.0,
+  'qwen2.5:14b': 9.0,
+  'phi4:14b-q4_k_m': 9.1,
+  'codestral:22b': 13.0,
+  'codestral:22b-v0.1-q5_k_m': 15.5,
+  'codellama:34b': 20.0,
+  'gpt-oss:120b': 65.0,
+}
 
 // Approximate bytes-per-parameter for common GGUF quantization levels, used to compute
 // a model's weight directly from real Ollama metadata (parameter_size, quantization_level)
@@ -180,110 +237,8 @@ export function estimateModelWeightGB(modelName: string, details?: RunningModelD
   }
 
   const knownWeightsGB: Record<string, number> = {
-    'all-minilm:latest': 0.12,
-    'all-minilm': 0.12,
-    'nomic-embed-text:latest': 0.27,
-    'nomic-embed-text': 0.27,
-    'snowflake-arctic-embed:latest': 0.6,
-    'snowflake-arctic-embed': 0.6,
-    'mxbai-embed-large:latest': 0.67,
-    'mxbai-embed-large': 0.67,
-    'bge-m3:latest': 1.1,
-    'bge-m3': 1.1,
-    'qwen2.5-coder:0.5b': 0.4,
-    'qwen3:0.6b': 0.52,
-    'granite-embedding:278m': 0.56,
-    'embeddinggemma:300m': 0.62,
-    'gemma3:1b': 0.82,
-    'qwen2.5:1.5b': 1.0,
-    'qwen2.5-coder:1.5b': 1.1,
-    'qwen2.5-coder:1.5b-instruct-q4_k_m': 1.0,
-    'qwen2.5-coder:1.5b-instruct-q8_0': 1.6,
-    'deepseek-r1:1.5b': 1.1,
-    'llama3.2:1b': 1.3,
-    'qwen3:1.7b': 1.4,
-    'granite3.3:2b': 1.5,
-    'codegemma:2b': 1.6,
-    'gemma2:2b': 1.6,
-    'moondream:latest': 1.7,
-    'moondream': 1.7,
-    'qwen2.5-coder:3b': 1.9,
-    'qwen2.5-coder:3b-instruct-q4_k_m': 1.8,
-    'qwen2.5-coder:3b-instruct-q8_0': 3.2,
-    'qwen2.5:3b': 1.9,
-    'llama3.2:3b': 2.0,
-    'phi4-mini:3.8b': 2.5,
-    'qwen3:4b': 2.6,
-    'qwen2.5vl:3b': 3.2,
-    'gemma3:4b': 3.3,
-    'starcoder2:3b': 2.0,
-    'phi3.5:3.8b': 2.2,
-    'deepseek-coder:6.7b': 3.8,
-    'deepseek-coder:6.7b-instruct-q4_k_m': 3.8,
-    'deepseek-coder:6.7b-instruct-q8_0': 7.2,
-    'codellama:7b-instruct-q4_k_m': 4.0,
-    'codellama:7b': 4.2,
-    'mistral:7b': 4.1,
-    'adrienbrault/biomistral-7b:q4_k_m': 4.1,
-    'adrienbrault/biomistral-7b:Q4_K_M': 4.1,
-    'adrienbrault/biomistral-7b': 4.1,
-    'meditron:7b': 4.3,
-    'starcoder2:7b': 4.4,
-    'llava:7b': 4.5,
-    'qwen2.5-coder:7b': 4.7,
-    'qwen2.5-coder:7b-instruct-q4_k_m': 4.4,
-    'qwen2.5-coder:7b-instruct-q5_k_m': 5.1,
-    'qwen2.5-coder:7b-instruct-q8_0': 7.6,
-    'qwen2.5:7b': 4.7,
-    'deepseek-r1:7b': 4.7,
-    'deepseek-r1:7b-qwen-distill-q4_k_m': 4.4,
-    'llama3.1:8b': 4.9,
-    'granite3.3:8b': 4.9,
-    'codegemma:7b': 5.0,
-    'qwen3:8b': 5.2,
-    'qwen2.5vl:7b': 6.0,
-    'deepseek-r1:8b': 4.9,
-    'deepseek-r1:8b-llama-distill-q4_k_m': 4.9,
-    'aya-expanse:8b': 5.1,
-    'minicpm-v:8b': 5.5,
-    'gemma2:9b': 5.5,
-    'codellama:13b': 7.8,
-    'solar:10.7b': 6.8,
-    'llama3.2-vision:11b': 7.9,
-    'gemma3:12b': 8.1,
-    'deepseek-coder-v2:16b-lite-instruct-q4_k_m': 8.9,
-    'deepseek-coder-v2:16b-lite-instruct-q5_k_m': 10.5,
-    'deepseek-coder-v2:16b': 8.9,
-    'qwen2.5-coder:14b': 9.0,
-    'qwen2.5-coder:14b-instruct-q4_k_m': 8.9,
-    'qwen2.5-coder:14b-instruct-q5_k_m': 10.3,
-    'qwen2.5-coder:14b-instruct-q8_0': 15.0,
-    'qwen2.5:14b': 9.0,
-    'starcoder2:15b': 9.2,
-    'phi4:14b': 9.1,
-    'phi4:14b-q4_k_m': 9.1,
-    'deepseek-r1:14b': 9.2,
-    'deepseek-r1:14b-qwen-distill-q4_k_m': 9.0,
-    'qwen3:14b': 9.3,
-    'gpt-oss:20b': 13.5,
-    'devstral:24b': 14.0,
-    'mistral-small3.2:24b': 14.0,
-    'gemma3:27b': 17.0,
-    'qwen3-coder:30b': 18.6,
-    'qwen3:30b-a3b': 18.6,
-    'codestral:22b': 13.0,
-    'codestral:22b-v0.1-q4_k_m': 13.0,
-    'codestral:22b-v0.1-q5_k_m': 15.5,
-    'codellama:34b': 20.0,
-    'deepseek-r1:32b': 20.0,
-    'qwen2.5-coder:32b': 20.0,
-    'qwen2.5-coder:32b-instruct-q4_k_m': 19.5,
-    'qwen3:32b': 20.0,
-    'gpt-oss:120b': 65.0,
-    'command-r:35b': 20.0,
-    'meditron:70b': 40.0,
-    'llama3.3:70b': 40.0,
-    'command-r-plus:104b': 60.0,
+    ...CATALOG_DERIVED_WEIGHTS_GB,
+    ...KNOWN_WEIGHT_ALIASES_GB,
   }
 
   // Most-specific-key-wins resolution. A plain insertion-order scan let a SHORTER key
@@ -489,35 +444,6 @@ export function isOllamaModelInstalled(targetModel: string, downloadedModels: st
 
     return false
   })
-}
-
-/**
- * Formats a clean display name for an Ollama tag.
- */
-export function formatModelDisplayName(modelName: string): string {
-  if (!modelName) return ''
-  const lower = modelName.toLowerCase().trim()
-  if (lower === 'qwen2.5-coder:7b-instruct-q4_k_m') return 'Qwen 2.5 Coder (7B Q4_K_M)'
-  if (lower === 'qwen2.5-coder:7b-instruct-q5_k_m') return 'Qwen 2.5 Coder (7B Q5_K_M)'
-  if (lower === 'qwen2.5-coder:7b-instruct-q8_0') return 'Qwen 2.5 Coder (7B Q8_0)'
-  if (lower === 'qwen2.5-coder:14b-instruct-q4_k_m') return 'Qwen 2.5 Coder (14B Q4_K_M)'
-  if (lower === 'qwen2.5-coder:32b-instruct-q4_k_m') return 'Qwen 2.5 Coder (32B Q4_K_M)'
-  if (lower === 'deepseek-coder-v2:16b-lite-instruct-q4_k_m' || lower === 'deepseek-coder-v2:16b') return 'DeepSeek Coder V2 Lite (16B Q4_K_M)'
-  if (lower === 'deepseek-coder:6.7b-instruct-q4_k_m') return 'DeepSeek Coder (6.7B Q4_K_M)'
-  if (lower === 'deepseek-r1:7b-qwen-distill-q4_k_m' || lower === 'deepseek-r1:7b') return 'DeepSeek R1 Distill Qwen (7B)'
-  if (lower === 'deepseek-r1:8b-llama-distill-q4_k_m' || lower === 'deepseek-r1:8b') return 'DeepSeek R1 Distill Llama (8B)'
-  if (lower === 'deepseek-r1:14b-qwen-distill-q4_k_m' || lower === 'deepseek-r1:14b') return 'DeepSeek R1 Distill Qwen (14B)'
-  if (lower === 'deepseek-r1:32b') return 'DeepSeek R1 Distill Qwen (32B)'
-  if (lower === 'codestral:22b-v0.1-q4_k_m' || lower === 'codestral:22b') return 'Mistral Codestral (22B Q4_K_M)'
-  if (lower === 'codellama:7b-instruct-q4_k_m') return 'Code Llama (7B Q4_K_M)'
-  if (lower === 'adrienbrault/biomistral-7b:Q4_K_M' || lower === 'adrienbrault/biomistral-7b:q4_k_m') return 'BioMistral (7B Q4_K_M)'
-  if (lower === 'meditron:7b') return 'Meditron (7B)'
-  if (lower === 'meditron:70b') return 'Meditron (70B)'
-  if (lower === 'bge-m3:latest' || lower === 'bge-m3') return 'BAAI BGE-M3 (1024d)'
-  if (lower === 'nomic-embed-text:latest' || lower === 'nomic-embed-text') return 'Nomic Embed Text (768d)'
-  const base = modelName.split(':')[0].replace(/^(adrienbrault\/|library\/)/, '')
-  const tag = modelName.split(':')[1] || 'latest'
-  return `${base} (${tag})`
 }
 
 /**

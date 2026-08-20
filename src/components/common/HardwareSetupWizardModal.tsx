@@ -58,9 +58,21 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const recStandard =
     recommendations.standardTierModels.find((m) => m.isRecommended)?.modelName ||
     recommendations.standardTierModels[0].modelName
-  const recDeep =
+  const recDeepCurated =
     recommendations.deepReasoningTierModels.find((m) => m.isRecommended)?.modelName ||
     recommendations.deepReasoningTierModels[0].modelName
+  // Standard and Deep Reasoning must default to distinct models: if the curated pick collides
+  // with the Standard tier's, fall back to the next Deep Reasoning candidate that still fits
+  // the detected hardware budget, then to any distinct candidate as a last resort.
+  const recDeep =
+    recDeepCurated !== recStandard
+      ? recDeepCurated
+      : recommendations.deepReasoningTierModels.find(
+          (m) => m.modelName !== recStandard && m.compatibilityStatus !== 'exceeds_vram'
+        )?.modelName ||
+        recommendations.deepReasoningTierModels.find((m) => m.modelName !== recStandard)
+          ?.modelName ||
+        recDeepCurated
   const recChat =
     recommendations.chatTierModels.find((m) => m.isRecommended)?.modelName ||
     recommendations.chatTierModels[0].modelName

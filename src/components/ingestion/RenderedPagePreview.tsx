@@ -17,7 +17,7 @@ export const RenderedPagePreview: React.FC<RenderedPagePreviewProps> = ({
 
   return (
     <div className="w-full flex justify-center py-2 select-text">
-      <div className="w-full max-w-2xl bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-lg min-h-[540px] flex flex-col space-y-3">
+      <div className="w-full max-w-2xl bg-slate-900/40 border border-slate-800/80 rounded-xl p-6 shadow-lg flex flex-col space-y-3">
         {/* No per-page header here: the parent SourcePagePreview card (and the pane toolbar above
             it) already display the current page position -- repeating it here duplicated the same
             text twice, stacked directly on top of each other, whenever a page has no scanned image

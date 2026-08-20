@@ -579,33 +579,43 @@ export class SidecarAppService {
     return this.postToSidecar('/history/remove', { project_path: projectPath }, 4000, { success: false })
   }
 
-  async exportDocument(markdownContent: string, format: string): Promise<{ success: boolean; message?: string; filePath?: string; error?: string }> {
+  async exportDocument(
+    markdownContent: string,
+    format: string,
+    outputFolder?: string
+  ): Promise<{ success: boolean; message?: string; filePath?: string; error?: string }> {
     if (typeof markdownContent !== 'string' || !markdownContent.trim()) {
       return { success: false, error: 'Il contenuto del documento è vuoto.' }
     }
 
     const cleanFormat = (format || 'pdf').toLowerCase()
     const defaultExt = cleanFormat === 'pdf' ? 'pdf' : (cleanFormat === 'docx' ? 'docx' : 'md')
+    const generatedFilename = `OnlyRag_Export_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.${defaultExt}`
 
     try {
       const { app, dialog, shell } = await import('electron')
-      const saveRes = await dialog.showSaveDialog({
-        title: `Esporta Documento (${defaultExt.toUpperCase()})`,
-        defaultPath: path.join(
-          app.getPath('downloads'),
-          `OnlyRag_Export_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.${defaultExt}`
-        ),
-        filters: [
-          { name: `${defaultExt.toUpperCase()} Document (*.${defaultExt})`, extensions: [defaultExt] },
-          { name: 'Tutti i file (*.*)', extensions: ['*'] },
-        ],
-      })
 
-      if (saveRes.canceled || !saveRes.filePath) {
-        return { success: false, message: 'Salvataggio annullato dall\'utente.' }
+      // A configured default output folder skips the interactive dialog entirely — falls
+      // back to it if the folder was deleted/unmounted since the user set it, rather than
+      // silently failing the export.
+      let targetPath: string
+      if (outputFolder && outputFolder.trim() && documentIoRepository.exists(outputFolder)) {
+        targetPath = path.join(outputFolder, generatedFilename)
+      } else {
+        const saveRes = await dialog.showSaveDialog({
+          title: `Esporta Documento (${defaultExt.toUpperCase()})`,
+          defaultPath: path.join(app.getPath('downloads'), generatedFilename),
+          filters: [
+            { name: `${defaultExt.toUpperCase()} Document (*.${defaultExt})`, extensions: [defaultExt] },
+            { name: 'Tutti i file (*.*)', extensions: ['*'] },
+          ],
+        })
+
+        if (saveRes.canceled || !saveRes.filePath) {
+          return { success: false, message: 'Salvataggio annullato dall\'utente.' }
+        }
+        targetPath = saveRes.filePath
       }
-
-      const targetPath = saveRes.filePath
 
       // If format is markdown or text, we can save immediately
       if (defaultExt === 'md') {

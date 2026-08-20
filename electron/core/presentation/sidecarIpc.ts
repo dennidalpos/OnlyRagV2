@@ -38,8 +38,8 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.searchVectorDb(query, topK, embeddingModel, docIds)
   })
 
-  ipcMain.handle('ingest:export', async (_, markdownContent: string, format: string) => {
-    return sidecarAppService.exportDocument(markdownContent, format)
+  ipcMain.handle('ingest:export', async (_, markdownContent: string, format: string, outputFolder?: string) => {
+    return sidecarAppService.exportDocument(markdownContent, format, outputFolder)
   })
 
   ipcMain.handle('history:index', async (_, payload: any) => {

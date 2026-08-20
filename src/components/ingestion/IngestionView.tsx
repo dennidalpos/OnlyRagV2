@@ -162,6 +162,30 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
     }
   }
 
+  // Mouse-wheel page turning in single-page mode: continuing to scroll past the top/bottom
+  // edge of the current page (like a PDF viewer) advances to the prev/next page instead of
+  // doing nothing. The cooldown prevents one continuous wheel gesture from skipping several
+  // pages, since a single scroll motion fires many wheel events in quick succession.
+  const wheelPageCooldownRef = useRef<number>(0)
+  const handlePreviewWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (ing.viewMode !== 'page') return
+    const el = ing.leftPaneRef.current
+    if (!el || e.deltaY === 0) return
+
+    const atBottom = el.scrollHeight - el.clientHeight - el.scrollTop <= 2
+    const atTop = el.scrollTop <= 2
+    const canAdvance = e.deltaY > 0 && atBottom && ing.currentPage < totalPages
+    const canRewind = e.deltaY < 0 && atTop && ing.currentPage > 1
+    if (!canAdvance && !canRewind) return
+
+    const now = Date.now()
+    if (now - wheelPageCooldownRef.current < 500) return
+    wheelPageCooldownRef.current = now
+
+    if (canAdvance) handleNextPage()
+    else handlePrevPage()
+  }
+
   const handleZoomIn = () => {
     ing.setZoomLevel(Math.min(150, ing.zoomLevel + 10))
   }
@@ -695,6 +719,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
                 <div
                   ref={ing.leftPaneRef}
                   onScroll={ing.handleLeftPaneScroll}
+                  onWheel={handlePreviewWheel}
                   className="flex-1 overflow-y-auto p-4 bg-slate-950/60"
                 >
                   {ing.viewMode === 'page' ? (

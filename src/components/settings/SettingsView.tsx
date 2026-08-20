@@ -192,6 +192,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
+      {/* Translation Module Output Folder */}
+      <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-cyan-400" /> {t('settings.translationOutputFolderTitle')}
+            </h2>
+            <p className="text-xs text-slate-400 max-w-2xl">
+              {t('settings.translationOutputFolderDesc')}
+            </p>
+            <p className="text-[11px] font-mono text-slate-300 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 mt-1.5 break-all">
+              {settings.translationOutputFolder || t('settings.translationOutputFolderNotSet')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={async () => {
+                const chosen = await apiService.openDirectoryDialog({
+                  title: t('settings.translationOutputFolderTitle'),
+                })
+                if (chosen) onUpdateSettings({ translationOutputFolder: chosen })
+              }}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-cyan-500/60 text-slate-200 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-2 active:scale-95 shadow-sm"
+              aria-label={t('settings.translationOutputFolderBrowse')}
+            >
+              <FolderOpen className="w-4 h-4 text-cyan-400" /> {t('settings.translationOutputFolderBrowse')}
+            </button>
+            {settings.translationOutputFolder && (
+              <button
+                type="button"
+                onClick={() => onUpdateSettings({ translationOutputFolder: undefined })}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-rose-500/60 text-slate-300 hover:text-rose-300 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-2 active:scale-95 shadow-sm"
+                aria-label={t('settings.translationOutputFolderClear')}
+              >
+                <Trash2 className="w-4 h-4" /> {t('settings.translationOutputFolderClear')}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Ollama Model Management Panel */}
       <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
         <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">

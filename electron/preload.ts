@@ -24,7 +24,7 @@ const api: IElectronAPI = {
   deleteIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:delete', docId),
   searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) =>
     ipcRenderer.invoke('ingest:search', query, topK, embeddingModel, docIds),
-  exportDocument: (markdownContent: string, format: string) => ipcRenderer.invoke('ingest:export', markdownContent, format),
+  exportDocument: (markdownContent: string, format: string, outputFolder?: string) => ipcRenderer.invoke('ingest:export', markdownContent, format, outputFolder),
   generateOllamaStream: async (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any) => {
     const chunkListener = (_: any, chunk: string) => onChunk(chunk)
     ipcRenderer.on('ollama:chunk', chunkListener)

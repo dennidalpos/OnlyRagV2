@@ -9,6 +9,7 @@ import { useAgentTerminal } from './useAgentTerminal'
 import { useGitStatus } from './useGitStatus'
 import { useGrepSearch } from './useGrepSearch'
 import { useGuestOsDiagnostics } from './useGuestOsDiagnostics'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
 import { logger } from '../lib/logger'
 
 export type QueuedPrompt = QueuedPromptRecord
@@ -31,6 +32,19 @@ export function useCodingAgent(settings?: AppSettings) {
   const [agentPrompt, setAgentPrompt] = useState<string>('')
   const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
   const [isExecuting, setIsExecuting] = useState<boolean>(false)
+
+  // Mirrors isExecuting into the cross-module task lock so ingestion/translation can block
+  // starting their own task while the coding agent is mid-turn (see useGlobalTaskLock.ts).
+  // An effect (not scattered acquire/release calls at every isExecuting(false) call site)
+  // guarantees the lock is always released in sync with local state, however the turn ends.
+  useEffect(() => {
+    if (isExecuting) {
+      acquireGlobalTaskLock('coding')
+      return () => releaseGlobalTaskLock('coding')
+    }
+    releaseGlobalTaskLock('coding')
+  }, [isExecuting])
+
   const [activeSkills, setActiveSkills] = useState<string[]>([])
   const [streamingText, setStreamingText] = useState<string>('')
   const [currentStep, setCurrentStep] = useState<number>(0)
@@ -498,6 +512,14 @@ ${output.slice(0, 300)}`
 
   const executeTask = async (taskPrompt: string) => {
     if (!taskPrompt.trim() || !window.electronAPI) return
+
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'coding') {
+      const busyModuleName = busyModule === 'ingestion' ? 'Ingestione Documenti' : 'Traduzione'
+      addActionLog('info', `Impossibile avviare: ${busyModuleName} ha un task in corso. Attendi che finisca prima di procedere.`)
+      return
+    }
+
     setIsExecuting(true)
     setActiveSkills([])
     setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })

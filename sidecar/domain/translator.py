@@ -15,7 +15,8 @@ from sidecar.services.ingest_service import update_and_reindex_document
 # preserve it verbatim so the response can be split back into the same number of segments, in the
 # same order, and reassigned 1:1 to the runs that produced them.
 _RUN_SEPARATOR = "<<<RUN_SEP>>>"
-_TRANSLATE_BATCH_MAX_CHARS = 2500
+_TRANSLATE_BATCH_MAX_CHARS = 500
+_TRANSLATE_BATCH_MAX_ITEMS = 6
 _OLLAMA_URL = "http://127.0.0.1:11434"
 
 # Fase 3 auto-fit: never shrink text below this absolute size or this fraction of the original
@@ -88,14 +89,14 @@ def _collect_docx_runs(doc: "docx.Document") -> List["docx.text.run.Run"]:
     return runs
 
 
-def _batch_runs(runs: List["docx.text.run.Run"], max_chars: int = _TRANSLATE_BATCH_MAX_CHARS) -> List[List["docx.text.run.Run"]]:
-    """Groups consecutive runs into batches bounded by max_chars, preserving order."""
+def _batch_runs(runs: List["docx.text.run.Run"], max_chars: int = _TRANSLATE_BATCH_MAX_CHARS, max_items: int = _TRANSLATE_BATCH_MAX_ITEMS) -> List[List["docx.text.run.Run"]]:
+    """Groups consecutive runs into batches bounded by max_chars and max_items, preserving order."""
     batches: List[List["docx.text.run.Run"]] = []
     current: List["docx.text.run.Run"] = []
     current_len = 0
     for run in runs:
         run_len = len(run.text)
-        if current and current_len + run_len > max_chars:
+        if current and (current_len + run_len > max_chars or len(current) >= max_items):
             batches.append(current)
             current = []
             current_len = 0
@@ -114,28 +115,37 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
     is_batch = _RUN_SEPARATOR in text
     if is_batch:
         system_content = (
-            f"You are an expert document, contract, form, and technical translator. "
-            f"Translate all text faithfully, accurately, and completely from {source_lang} to {target_lang}.\n"
+            f"You are an expert document, form, and contract translator. "
+            f"Translate all text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n"
             f"Mandatory Rules:\n"
-            f"1. Translate all text elements including section titles, headings, form field labels, table headers, legal/administrative clauses, and instructional notes accurately into {target_lang}.\n"
-            f"2. Preserve original alphanumeric identifiers, serial/reference codes, tax IDs, proper personal names, numerical values, dates, email addresses, and URLs unchanged.\n"
-            f"3. The text contains segments separated by '{_RUN_SEPARATOR}' on its own line. "
+            f"1. Translate ALL titles, headings, form labels, and administrative terms into {target_lang} "
+            f"(e.g. in English: 'NOME' -> 'FIRST NAME', 'COGNOME' -> 'SURNAME / LAST NAME', 'CODICE FISCALE' -> 'TAX CODE', 'N° CIVICO' -> 'STREET NUMBER', 'LOCALITA' -> 'LOCATION / CITY', 'CAP' -> 'POSTAL CODE', 'PROV' -> 'PROVINCE', 'CONTRATTO' -> 'CONTRACT', 'RICHIESTA CESSAZIONE' -> 'TERMINATION REQUEST', 'LUOGO E DATA' -> 'PLACE AND DATE', 'FIRMA LEGGIBILE' -> 'LEGIBLE SIGNATURE').\n"
+            f"2. Separate any fused words before translating (e.g. 'RICHIESTACESSAZIONECONTRATTO' -> 'CONTRACT TERMINATION REQUEST').\n"
+            f"3. Preserve raw data values: keep personal names, specific street addresses, code values, numbers, dates, emails, and URLs unchanged.\n"
+            f"4. The text contains segments separated by '{_RUN_SEPARATOR}' on its own line. "
             f"Return EXACTLY the same number of translated segments separated by '{_RUN_SEPARATOR}' on its own line.\n"
-            f"4. Output ONLY the translated segments with NO preambles, explanations, quotes, or conversational commentary."
+            f"5. Output ONLY the translated segments with NO preambles, explanations, quotes, or commentary."
+        )
+        user_content = (
+            f"Translate the following segments from {source_lang} to {target_lang}. "
+            f"Separate each translated segment with '{_RUN_SEPARATOR}' on its own line:\n\n{text}"
         )
     else:
         system_content = (
-            f"You are an expert document, contract, form, and technical translator. "
-            f"Translate the text faithfully, accurately, and completely from {source_lang} to {target_lang}.\n"
+            f"You are an expert document, form, and contract translator.\n"
+            f"Translate the given text faithfully, completely, and accurately from {source_lang} to {target_lang}.\n"
             f"Mandatory Rules:\n"
-            f"1. Translate all text elements including titles, form field labels, table cells, and administrative/legal terms accurately into {target_lang}.\n"
-            f"2. Preserve original alphanumeric identifiers, proper names, numbers, dates, email addresses, and URLs unchanged.\n"
-            f"3. Output ONLY the translated text without delimiters, notes, or conversational commentary."
+            f"1. Translate ALL section titles, form field labels, headings, instructions, and administrative phrases into {target_lang}.\n"
+            f"   - Form field labels MUST be translated into {target_lang} (e.g. in English: 'NOME' -> 'FIRST NAME', 'COGNOME' -> 'SURNAME / LAST NAME', 'CODICE FISCALE' -> 'TAX CODE', 'N° CIVICO' -> 'STREET NUMBER', 'LOCALITA' -> 'LOCATION / CITY', 'CAP' -> 'POSTAL CODE', 'PROV' -> 'PROVINCE', 'CONTRATTO' -> 'CONTRACT', 'RICHIESTA CESSAZIONE' -> 'TERMINATION REQUEST', 'LUOGO E DATA' -> 'PLACE AND DATE', 'FIRMA LEGGIBILE' -> 'LEGIBLE SIGNATURE', 'I dati con * sono obbligatori' -> 'Data marked with * are mandatory').\n"
+            f"   - Separate any words that were fused by OCR before translating.\n"
+            f"2. Preserve raw data values: keep personal names, specific street addresses, code values (e.g. alphanumeric tax IDs), pure numbers, dates, email addresses, and URLs unchanged.\n"
+            f"3. Return ONLY the direct {target_lang} translation without prefixes, quotes, delimiters, or notes."
         )
+        user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
     messages = [
         {"role": "system", "content": system_content},
-        {"role": "user", "content": text},
+        {"role": "user", "content": user_content},
     ]
     chat_payload = {
         "model": model,
@@ -174,7 +184,7 @@ def _clean_translated_segment(text: str) -> str:
     """Removes any leaked delimiter or artifact from model output."""
     if not text:
         return ""
-    clean = re.sub(r'<<<RUN_[A-Z_\s]*>>>', '', text, flags=re.IGNORECASE)
+    clean = re.sub(r'<{2,4}RUN_[A-Z_\s]*>{2,4}', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'^```[a-z]*\s*', '', clean)
     clean = re.sub(r'\s*```$', '', clean)
     return clean.strip()
@@ -185,15 +195,32 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     if not texts:
         return []
 
+    def _should_skip_translation(s: str) -> bool:
+        trimmed = s.strip()
+        if not trimmed or trimmed.isdigit():
+            return True
+        if trimmed.startswith("http://") or trimmed.startswith("https://"):
+            return True
+        return False
+
     if len(texts) == 1:
+        if _should_skip_translation(texts[0]):
+            return texts
         single = _call_ollama_translate(texts[0], source_lang, target_lang, model)
         return [_clean_translated_segment(single)] if single.strip() else texts
 
     joined = f"\n{_RUN_SEPARATOR}\n".join(texts)
     translated = _call_ollama_translate(joined, source_lang, target_lang, model)
-    segments = [_clean_translated_segment(s) for s in translated.split(_RUN_SEPARATOR)] if translated else []
+    raw_segments = re.split(r'<{2,4}RUN_SEP[_\s\w]*>{2,4}', translated) if translated else []
+    segments = [_clean_translated_segment(s) for s in raw_segments if s.strip()]
 
     if translated and len(segments) == len(texts):
+        # Verify that non-numeric items were actually translated; if an item was echoed verbatim, fall back individually
+        for i, (orig, trans) in enumerate(zip(texts, segments)):
+            if not _should_skip_translation(orig) and orig.strip().lower() == trans.strip().lower():
+                single = _call_ollama_translate(orig, source_lang, target_lang, model)
+                if single.strip():
+                    segments[i] = _clean_translated_segment(single)
         return segments
 
     logger.warning(
@@ -202,6 +229,9 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     )
     results = list(texts)
     for i, text in enumerate(texts):
+        if _should_skip_translation(text):
+            results[i] = text
+            continue
         single = _call_ollama_translate(text, source_lang, target_lang, model)
         if single.strip():
             results[i] = _clean_translated_segment(single)
@@ -356,13 +386,13 @@ def _extract_pdf_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
     return blocks_out
 
 
-def _batch_by_char_count(lengths: List[int], max_chars: int) -> List[List[int]]:
-    """Groups consecutive indices into batches whose summed length stays under max_chars."""
+def _batch_by_char_count(lengths: List[int], max_chars: int = _TRANSLATE_BATCH_MAX_CHARS, max_items: int = _TRANSLATE_BATCH_MAX_ITEMS) -> List[List[int]]:
+    """Groups consecutive indices into batches whose summed length stays under max_chars and max_items."""
     batches: List[List[int]] = []
     current: List[int] = []
     current_len = 0
     for i, length in enumerate(lengths):
-        if current and current_len + length > max_chars:
+        if current and (current_len + length > max_chars or len(current) >= max_items):
             batches.append(current)
             current = []
             current_len = 0

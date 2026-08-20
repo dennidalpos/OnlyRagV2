@@ -201,7 +201,7 @@ $env:CSC_LINK = "C:\percorso\certificato.pfx"
 $env:CSC_KEY_PASSWORD = "<password del certificato>"
 
 # Build di distribuzione: fallisce se l'installer risulta non firmato
-.\scriptsuild_package.ps1 -RequireSignature
+.\scripts\build_package.ps1 -RequireSignature
 ```
 
 Senza `-RequireSignature` la build resta consentita e produce un installer non firmato, adatto a test locali.

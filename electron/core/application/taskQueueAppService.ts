@@ -117,7 +117,7 @@ export class TaskQueueAppService {
 
   private async executeTaskItem(item: TaskQueueItem<QueuedAgentTask>): Promise<void> {
     const { id, payload } = item
-    const { payload: taskPayload, winGetter, resolve, reject } = payload
+    const { payload: taskPayload, winGetter, resolve } = payload
 
     logger.log('INFO', 'TaskQueueAppService', `Starting task execution [${id}] with model '${taskPayload.activeModel || taskPayload.settings?.codingModel || 'default'}'`)
 

@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import http from 'node:http'
 import { logger } from '../../diagnostics'
-import type { AgentTaskPayload, AgentTaskResult, AgentToolCall } from '../domain/agent/agentTypes'
+import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
 import { runToolGates } from './agentOrchestratorToolGates'
 import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'

@@ -1,6 +1,5 @@
 import { HubSkillItem, SkillHubSource, SkillCategory } from '../../../domain/skills/skillTypes'
 import { ISkillHubAdapter } from './hubAdapterInterface'
-import { webClient } from '../webClient'
 import { logger } from '../../../../diagnostics'
 
 export const SKILLS_SH_FEATURED_SKILLS: Record<string, {

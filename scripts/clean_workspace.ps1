@@ -12,6 +12,7 @@
     Modalità sintetica per l'Agente AI (output conciso PASS/FAIL).
 #>
 
+[CmdletBinding()]
 param(
     [ValidateSet("Repo", "UserData", "Full")]
     [string]$Mode = "Repo",
@@ -20,6 +21,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $true
+}
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 

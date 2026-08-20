@@ -28,6 +28,10 @@ export class PersistentPowerShellSession {
     this.initProcess()
   }
 
+  public isExecuting(): boolean {
+    return this.isBusy
+  }
+
   private initProcess(): void {
     try {
       this.proc = spawn(

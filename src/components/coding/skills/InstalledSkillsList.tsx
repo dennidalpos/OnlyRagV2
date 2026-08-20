@@ -6,7 +6,6 @@ import {
   RotateCcw,
   Plus,
   Layers,
-  Sparkles,
   AlertTriangle,
   Globe,
   User,

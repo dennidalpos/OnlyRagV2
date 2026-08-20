@@ -12,6 +12,7 @@
     (per le build di distribuzione: richiede CSC_LINK/CSC_KEY_PASSWORD nell'ambiente).
 #>
 
+[CmdletBinding()]
 param(
     [switch]$SkipSidecar = $false,
     [switch]$Fast = $false,
@@ -19,6 +20,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $true
+}
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 

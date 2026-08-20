@@ -4,8 +4,6 @@ import path from 'node:path'
 import os from 'node:os'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask, respondToApproval } from './agentOrchestratorAppService'
 import { ResilientModelDispatcher } from './resilientModelDispatcher'
-import { ollamaAppService } from './ollamaAppService'
-import { skillAppService } from './skillAppService'
 import type { AppSettings } from '../../../src/types'
 
 vi.mock('./resilientModelDispatcher', () => ({

@@ -8,8 +8,6 @@ import {
   CheckCircle2,
   XCircle,
   Terminal,
-  FileCode,
-  Search,
   Globe,
   FolderTree,
 } from 'lucide-react'

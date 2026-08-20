@@ -5,7 +5,6 @@ import os from 'node:os'
 import {
   parseSkillFrontmatter,
   calculateSkillChecksum,
-  serializeSkillContent,
   SkillRepository,
 } from './skillRepository'
 

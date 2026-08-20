@@ -1,4 +1,3 @@
-import React from 'react'
 import { AppLayout } from './components/layout/AppLayout'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { ToastProvider } from './components/common/Toast'

@@ -38,13 +38,13 @@ describe('TransactionalExecutionGuard Unit Tests', () => {
     const file1 = path.join(tempDir, 'file1.txt')
     fs.writeFileSync(file1, 'Version 1', 'utf-8')
 
-    const snap1 = guard.captureWorkspaceSnapshot(['file1.txt'])
+    guard.captureWorkspaceSnapshot(['file1.txt'])
     
     fs.writeFileSync(file1, 'Version 2', 'utf-8')
     guard.captureWorkspaceSnapshot(['file1.txt'])
 
     fs.writeFileSync(file1, 'Version 1', 'utf-8') // Revert to Version 1
-    const snap3 = guard.captureWorkspaceSnapshot(['file1.txt'])
+    guard.captureWorkspaceSnapshot(['file1.txt'])
 
     fs.writeFileSync(file1, 'Version 2', 'utf-8')
     guard.captureWorkspaceSnapshot(['file1.txt'])

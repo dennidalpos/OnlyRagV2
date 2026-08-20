@@ -9,10 +9,15 @@ OLLAMA_EMBED_DISABLED_UNTIL: float = 0.0
 import hashlib
 
 def get_fallback_embedding(text: str, dim: int = EMBEDDING_DIM) -> List[float]:
-    """Generates a deterministic normalized pseudo-embedding vector when LLM embedding API is offline."""
-    seed_int = int(hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()[:8], 16)
-    rng = np.random.RandomState(seed_int)
-    vec = rng.randn(dim)
+    """Generates a deterministic normalized pseudo-embedding vector with semantic word overlap when LLM embedding API is offline."""
+    words = [w for w in (text or "").lower().split() if w]
+    if not words:
+        words = [text or "empty"]
+    vec = np.zeros(dim, dtype=np.float64)
+    for word in words:
+        seed_int = int(hashlib.sha256(word.encode("utf-8", errors="ignore")).hexdigest()[:8], 16)
+        rng = np.random.RandomState(seed_int)
+        vec += rng.randn(dim)
     norm = np.linalg.norm(vec)
     if norm > 0:
         vec = vec / norm

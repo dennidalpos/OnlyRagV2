@@ -1,5 +1,5 @@
 import React from 'react'
-import { Code, ChevronRight, Cpu, Sparkles, Compass } from 'lucide-react'
+import { Code, ChevronRight, Sparkles, Compass } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { ComplexityRouteResult } from '../../services/complexityRouterService'
 import { ModelBadge } from '../common/ModelBadge'

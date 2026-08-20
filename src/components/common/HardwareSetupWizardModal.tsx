@@ -559,7 +559,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             ].map((st) => {
               const isCurrent = step === st.id
               const isCompleted = step > st.id
-              const Icon = st.icon
               return (
                 <button
                   key={st.id}

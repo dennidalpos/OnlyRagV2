@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import fs from 'node:fs'
-import path from 'node:path'
 import { CodingAgentLogger } from './codingAgentLogger'
 
 describe('CodingAgentLogger Unit Tests', () => {

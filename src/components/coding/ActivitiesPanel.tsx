@@ -1,8 +1,6 @@
-import React from 'react'
 import {
   Activity,
   CheckCircle2,
-  Clock,
   Loader2,
   Sparkles,
   Terminal,
@@ -14,7 +12,6 @@ import {
 } from 'lucide-react'
 import { AgentActionLog } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
-import { useTranslation } from '../../i18n'
 
 interface ActivitiesPanelProps {
   actionLogs: AgentActionLog[]
@@ -37,7 +34,6 @@ export const ActivitiesPanel: React.FC<ActivitiesPanelProps> = ({
   pinnedFilesCount = 0,
   attachedDocsCount = 0,
 }) => {
-  const { t } = useTranslation()
 
   // Calculate telemetry metrics from action logs without duplicating full chat text
   const agentLogs = actionLogs.filter((log) => !log.message.startsWith('User Prompt: '))

@@ -32,6 +32,7 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
+    isolate: false,
     include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}'],
     testTimeout: 5000,
     hookTimeout: 5000,

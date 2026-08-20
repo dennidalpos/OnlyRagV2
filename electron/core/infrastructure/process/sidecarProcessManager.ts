@@ -4,7 +4,6 @@ import http from 'node:http'
 import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
 import { logger } from '../../../diagnostics'
-import type { SidecarState } from '../../domain/sidecar/sidecarTypes'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 

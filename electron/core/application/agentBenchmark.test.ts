@@ -2,7 +2,7 @@ import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
-import { validatePathSafety, isIgnoredPath } from '../domain/agent/contextFilter'
+import { validatePathSafety } from '../domain/agent/contextFilter'
 
 describe('Agent Engine Synthetic End-to-End Benchmark Suite', () => {
   const repoRoot = process.cwd()

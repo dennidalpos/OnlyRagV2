@@ -7,11 +7,9 @@ import {
 } from './useIngestedDocuments'
 
 describe('useIngestedDocuments event synchronization', () => {
-  let addEventListenerSpy: any
   let dispatchEventSpy: any
 
   beforeEach(() => {
-    addEventListenerSpy = vi.spyOn(window, 'addEventListener')
     dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')
   })
 

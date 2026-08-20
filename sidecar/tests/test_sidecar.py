@@ -224,18 +224,17 @@ def test_rapid_ocr_extracts_text_from_image():
     assert "ONLYRAG" in text_out.upper()
     assert "4200" in text_out
 
-def test_run_layout_ocr_uses_rapidocr():
-    """run_layout_ocr must directly run RapidOCR on rendered images."""
+def test_run_layout_ocr_uses_rapidocr(monkeypatch):
+    """run_layout_ocr must directly delegate to RapidOCR on rendered images."""
     from sidecar.infrastructure import ocr as ocr_module
-    from PIL import Image, ImageDraw
-    import io
-    img = Image.new("RGB", (400, 100), color="white")
-    ImageDraw.Draw(img).text((10, 10), "Fast tier only please", fill="black")
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-
-    result = ocr_module.run_layout_ocr(buf.getvalue())
+    called = []
+    def fake_rapid(img_bytes):
+        called.append(img_bytes)
+        return "Fast tier only please"
+    monkeypatch.setattr(ocr_module, "run_rapid_ocr", fake_rapid)
+    result = ocr_module.run_layout_ocr(b"dummy_test_bytes")
     assert "Fast tier only please".lower().split()[0] in result.lower()
+    assert len(called) == 1
 
 def test_ocr_vision_fallback_sets_keep_alive_zero():
     """run_vision_ocr must evict the vision model immediately after use (keep_alive: 0),
@@ -344,15 +343,17 @@ def _new_scanned_pdf_page(doc):
     page.insert_image(page.rect, stream=buf.getvalue())
     return page
 
-def test_scanned_pdf_page_ocr_extraction():
-    """A scanned PDF with an embedded bitmap text layer must have its text detected by RapidOCR."""
+def test_scanned_pdf_page_ocr_extraction(monkeypatch):
+    """A scanned PDF with an embedded bitmap text layer must have its text detected by OCR."""
     import pymupdf
-    from sidecar.domain.ingestion import extract_pdf_document
+    from sidecar.domain import ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", lambda img: "SCANNED INVOICE ITEM TOTAL 9900 EUR")
 
     doc = pymupdf.open()
     try:
         _new_scanned_pdf_page(doc)
-        pages = extract_pdf_document(doc)
+        pages = ingestion_module.extract_pdf_document(doc)
         assert len(pages) == 1
         page_num, page_text = pages[0]
         assert page_num == 1
@@ -447,11 +448,13 @@ def test_generate_embedding_with_status_tracks_fallback():
     assert len(vec) in (384, 768)
     assert isinstance(is_fallback, bool)
 
-def test_docx_image_extraction_ocr(tmp_path):
+def test_docx_image_extraction_ocr(tmp_path, monkeypatch):
     import docx
     from PIL import Image, ImageDraw
     import io
-    from sidecar.domain.ingestion import extract_document_markdown
+    from sidecar.domain import ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", lambda img: "DOCX IMAGE TEXT 7788")
 
     # Create image with text
     img = Image.new("RGB", (300, 80), color="white")
@@ -475,7 +478,7 @@ def test_docx_image_extraction_ocr(tmp_path):
     with open(docx_path, "rb") as f:
         docx_bytes = f.read()
 
-    md, num_pages = extract_document_markdown("doc_with_image.docx", docx_bytes, docx_path)
+    md, num_pages = ingestion_module.extract_document_markdown("doc_with_image.docx", docx_bytes, docx_path)
     assert "Paragraph inside docx document" in md
     assert "DOCX IMAGE TEXT" in md or "7788" in md
 

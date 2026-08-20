@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Globe, Plus, HelpCircle, Trash2, Check, RefreshCw, ChevronDown, CheckCircle2, Shield, FolderGit2, Layers } from 'lucide-react'
+import { Globe, Plus, HelpCircle, Trash2, RefreshCw, ChevronDown, CheckCircle2, Shield, FolderGit2, Layers } from 'lucide-react'
 import { SkillHubSource } from '../../../types'
 import { useTranslation } from '../../../i18n'
 

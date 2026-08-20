@@ -15,6 +15,7 @@
     Esegue unicamente la suite di unit test TypeScript.
 #>
 
+[CmdletBinding()]
 param(
     [switch]$Fast = $true,
     [switch]$Full = $false,
@@ -23,6 +24,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $true
+}
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 

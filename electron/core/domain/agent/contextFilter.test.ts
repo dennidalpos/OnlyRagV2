@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
-import { isIgnoredPath, isSecretFile, validatePathSafety, matchesIgnorePatterns, isProtectedSystemDirectory } from './contextFilter'
+import { isIgnoredPath, isSecretFile, validatePathSafety, isProtectedSystemDirectory } from './contextFilter'
 
 describe('contextFilter domain logic & AppSec protection', () => {
   it('should ignore standard hidden & build directories', () => {

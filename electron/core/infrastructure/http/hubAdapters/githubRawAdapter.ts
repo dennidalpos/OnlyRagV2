@@ -27,7 +27,7 @@ export class GitHubRawAdapter implements ISkillHubAdapter {
       // a repo-root or webpage URL (HTML) can otherwise be misidentified as valid skill
       // content just because it happens to contain a '# ' substring somewhere.
       if (res.content.trim().startsWith('---')) {
-        const { metadata, body } = parseSkillFrontmatter(res.content)
+        const { metadata } = parseSkillFrontmatter(res.content)
         const name = metadata.name || 'imported-skill'
         const id = name.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
 

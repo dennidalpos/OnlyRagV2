@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AgentRuntimeModeFsm, MODE_PERMISSIONS } from './agentRuntimeMode'
+import { AgentRuntimeModeFsm } from './agentRuntimeMode'
 
 describe('AgentRuntimeModeFsm', () => {
   it('should initialize with default AGENT mode', () => {

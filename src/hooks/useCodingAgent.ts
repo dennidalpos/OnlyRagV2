@@ -89,7 +89,7 @@ export function useCodingAgent(settings?: AppSettings) {
     })
   }, [])
 
-  const { documents: ingestedDocs, refetchDocuments: loadIngestedDocs } = useIngestedDocuments({
+  const { documents: ingestedDocs } = useIngestedDocuments({
     onDocsUpdated: handleDocsUpdated,
     autoRetryIntervalMs: 3000,
   })
@@ -195,7 +195,6 @@ ${output.slice(0, 300)}`
     deleteSession,
     clearSessions,
     renameSession,
-    updateSessionContent,
     updateSessionPlans,
     beginExecutedPrompt,
     completeExecutedPrompt,
@@ -215,8 +214,6 @@ ${output.slice(0, 300)}`
     promptQueueRef.current = promptQueue
   }, [promptQueue])
 
-  /** Session whose transcript is currently loaded in the view (guards restore vs mirror). */
-  const [loadedSessionId, setLoadedSessionId] = useState<string>('')
   /** ExecutedPrompt record open for the running agent task, closed by the agent:done handler. */
   const runningExecutedPromptRef = useRef<{ sessionId: string; promptId: string } | null>(null)
   /** Live step count and change metrics, readable from the IPC listeners registered once. */
@@ -421,8 +418,7 @@ ${output.slice(0, 300)}`
 
   const handleCreateSession = () => {
     resetSessionViewState()
-    const created = createSession()
-    setLoadedSessionId(created.id)
+    createSession()
     setActionLogs([])
     setPromptQueue([])
     promptQueueRef.current = []
@@ -466,16 +462,12 @@ ${output.slice(0, 300)}`
 
   const handleDeleteSession = async (sessionId: string) => {
     if (sessionId === activeSessionId) resetSessionViewState()
-    const nextActive = await deleteSession(sessionId)
-    if (nextActive) {
-      setLoadedSessionId('')
-    }
+    await deleteSession(sessionId)
   }
 
   const handleClearSessionHistory = async () => {
     resetSessionViewState()
-    const fresh = await clearSessions()
-    setLoadedSessionId(fresh.id)
+    await clearSessions()
     setActionLogs([])
     setPromptQueue([])
     promptQueueRef.current = []

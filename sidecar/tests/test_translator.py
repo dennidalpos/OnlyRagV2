@@ -653,11 +653,24 @@ def test_translate_inplace_with_backup_and_target_dir(monkeypatch, tmp_path):
 
 
 def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
-    """Scanned PDF with zero native text layer must detect text blocks via RapidOCR and translate in-place."""
+    """Scanned PDF with zero native text layer must detect text blocks via OCR fallback and translate in-place."""
+    from sidecar.domain import ingestion as ingestion_module
+    from sidecar.infrastructure import ocr as ocr_infra
+
     monkeypatch.setattr(
         translator_module,
         "_call_ollama_translate",
         lambda text, s, t, m: f"TR-{text}",
+    )
+    monkeypatch.setattr(
+        ingestion_module,
+        "run_layout_ocr",
+        lambda img: "Richiesta Cessazione Contratto",
+    )
+    monkeypatch.setattr(
+        ocr_infra,
+        "run_rapid_ocr_with_boxes",
+        lambda img: [{"bbox": [50, 80, 300, 100], "text": "Richiesta Cessazione Contratto", "score": 0.99}],
     )
 
     # 1. Create a pure raster image page (no text layer)

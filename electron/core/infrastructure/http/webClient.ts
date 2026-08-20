@@ -58,10 +58,6 @@ export function parseDuckDuckGoHtmlResults(html: string, maxResults: number = 8)
   const results: WebSearchResultItem[] = []
   if (!html) return results
 
-  // Matches DuckDuckGo HTML search results
-  const resultRegex = /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
-  const linkTitleRegex = /<a[^>]+class="[^"]*result__url[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
-
   // Generic link and snippet extraction fallback
   const snippetMatches = [...html.matchAll(/<a[^>]+class="result__snippet[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
   const titleMatches = [...html.matchAll(/<a[^>]+class="result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]

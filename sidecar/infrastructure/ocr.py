@@ -35,11 +35,14 @@ def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
     return None
 
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
-    """Downscales oversized images to max_dim on the longest edge to prevent OOM/timeouts."""
+    """Downscales oversized images to max_dim on the longest edge to prevent OOM and timeouts on CPU and GPU."""
     try:
         from PIL import Image
         import io
+        Image.MAX_IMAGE_PIXELS = 60_000_000
         img = Image.open(io.BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
         width, height = img.size
         if width > max_dim or height > max_dim:
             if width > height:
@@ -49,6 +52,10 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2048) -> bytes:
                 new_h = max_dim
                 new_w = max(1, int(width * (max_dim / height)))
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            out_buf = io.BytesIO()
+            img.save(out_buf, format="PNG")
+            return out_buf.getvalue()
+        elif img.mode != "RGB":
             out_buf = io.BytesIO()
             img.save(out_buf, format="PNG")
             return out_buf.getvalue()
@@ -67,15 +74,21 @@ def _rapidocr_cuda_available() -> bool:
         return False
 
 def run_rapid_ocr(image_bytes: bytes) -> str:
-    """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX), with CUDA
-    execution when onnxruntime-gpu is installed and a CUDA device is available. No layout/table
-    understanding -- that class of page is routed to run_vision_ocr by the caller instead."""
+    """Fast local text-recognition OCR via RapidOCR (PP-OCR models exported to ONNX).
+    Executes on CUDA when available, and automatically falls back to CPU execution on minimal/CPU-only hardware."""
     global _RAPIDOCR_ENGINE
     from rapidocr_onnxruntime import RapidOCR
 
     if _RAPIDOCR_ENGINE is None:
         use_cuda = _rapidocr_cuda_available()
-        _RAPIDOCR_ENGINE = RapidOCR(det_use_cuda=use_cuda, cls_use_cuda=use_cuda, rec_use_cuda=use_cuda)
+        try:
+            _RAPIDOCR_ENGINE = RapidOCR(det_use_cuda=use_cuda, cls_use_cuda=use_cuda, rec_use_cuda=use_cuda)
+        except Exception as init_err:
+            if use_cuda:
+                logger.warning(f"RapidOCR CUDA initialization failed ({init_err}), falling back to CPU execution.")
+                _RAPIDOCR_ENGINE = RapidOCR(det_use_cuda=False, cls_use_cuda=False, rec_use_cuda=False)
+            else:
+                raise init_err
 
     result, _elapse = _RAPIDOCR_ENGINE(image_bytes)
     if not result:
@@ -89,12 +102,14 @@ def run_layout_ocr(
     ollama_url: str = "http://127.0.0.1:11434",
     model: str = "llama3.2-vision"
 ) -> str:
-    """Two-tiered Document OCR Engine: RapidOCR (fast, GPU-capable local text recognition) first,
+    """Two-tiered Document OCR Engine: RapidOCR (fast, GPU-capable / CPU-resilient local text recognition) first,
     falling back to the Ollama Vision model for layout-heavy content (tables, diagrams, complex
     scans) or when RapidOCR is unavailable / yields no text."""
-    prepared_bytes = _prepare_image_for_ocr(image_bytes)
+    is_cuda_avail = _rapidocr_cuda_available() or detect_gpu_acceleration().get("has_cuda", False)
+    max_dim = 2048 if is_cuda_avail else 1280
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=max_dim)
 
-    # Tier 1: RapidOCR (local, fast, GPU-capable via onnxruntime)
+    # Tier 1: RapidOCR (local, fast, CPU/GPU-capable via onnxruntime)
     try:
         text_out = run_rapid_ocr(prepared_bytes)
         if text_out:
@@ -114,14 +129,15 @@ def run_vision_ocr(
     ollama_url: str = "http://127.0.0.1:11434",
     model: str = "llama3.2-vision"
 ) -> str:
-    """Uses Ollama Vision model for OCR and document vision parsing with strict timeout."""
-    # dict.fromkeys instead of a set: preserves the priority order (requested model first).
-    candidate_models = list(dict.fromkeys(m for m in [model, "llama3.2-vision", "minicpm-v", "llava", "moondream"] if m))
+    """Uses Ollama Vision model for OCR and document vision parsing with adaptive timeout for CPU/GPU hosts."""
+    is_cuda_avail = _rapidocr_cuda_available() or detect_gpu_acceleration().get("has_cuda", False)
+    # On CPU-only hosts, downscale to 1024 to reduce visual patch tokenization and speed up inference ~3-4x
+    vision_max_dim = 1536 if is_cuda_avail else 1024
+    # On CPU-only hosts, allow up to 60s for full response generation
+    vision_timeout = 25.0 if is_cuda_avail else 60.0
 
-    # Skip candidates we can confirm aren't installed -- trying them anyway just generates a
-    # guaranteed 404 (observed in production logs: ~300 of them from repeated OCR calls across a
-    # single ingestion). Only filters when the installed-model listing actually succeeded; if it
-    # didn't, candidates are tried blindly as before rather than risking skipping OCR entirely.
+    candidate_models = list(dict.fromkeys(m for m in [model, "llama3.2-vision", "minicpm-v", "moondream", "llava"] if m))
+
     installed = _get_installed_ollama_model_names(ollama_url)
     if installed:
         filtered = [m for m in candidate_models if m in installed or m.split(":")[0] in installed]
@@ -129,7 +145,7 @@ def run_vision_ocr(
             candidate_models = filtered
 
     try:
-        prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=1536)
+        prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=vision_max_dim)
         b64_img = base64.b64encode(prepared_bytes).decode("utf-8")
         for v_model in candidate_models:
             payload = {
@@ -140,7 +156,7 @@ def run_vision_ocr(
                 "keep_alive": 0
             }
             try:
-                res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=25.0)
+                res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=vision_timeout)
                 if res.status_code == 200:
                     text_resp = res.json().get("response", "").strip()
                     if text_resp:

@@ -1,9 +1,27 @@
 import React from 'react'
-import { ChevronDown, ChevronRight, User, Bot, AlertTriangle } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  User,
+  Bot,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Terminal,
+  FileCode,
+  Search,
+  Globe,
+  FolderTree,
+} from 'lucide-react'
 import { AgentActionLog, WorkspaceFile } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
 import { useTranslation } from '../../i18n'
-import { getStepModelName, getBadgeLang } from './agentLogMessageUtils'
+import {
+  getStepModelName,
+  getBadgeLang,
+  categorizeAgentLog,
+  type CategorizedAgentLog,
+} from './agentLogMessageUtils'
 
 interface AgentTimelineMessageProps {
   log: AgentActionLog
@@ -21,16 +39,14 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   onOpenFile,
 }) => {
   const { t } = useTranslation()
+  const parsed: CategorizedAgentLog = React.useMemo(
+    () => categorizeAgentLog(log.message, log.type),
+    [log.message, log.type]
+  )
 
-  const isUserMsg = log.message.startsWith('User Prompt: ')
-  const isAgentQuestion =
-    log.message.includes('❓ AI Agent Question:') ||
-    log.message.startsWith('Agent Question:') ||
-    log.message.startsWith('Agent requested clarification:')
-
-  // Distinct User Prompt Bubble
-  if (isUserMsg) {
-    const text = log.message.replace('User Prompt: ', '')
+  // 1. Distinct User Prompt Bubble
+  if (parsed.category === 'user_prompt') {
+    const text = parsed.userPromptText || log.message
     return (
       <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-blue-950/40 to-slate-900/90 border border-indigo-500/40 text-slate-100 font-sans text-xs space-y-2 shadow-lg">
         <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
@@ -47,12 +63,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     )
   }
 
-  // Distinct Agent Question (Ask tool / Clarification request)
-  if (isAgentQuestion) {
-    const qText = log.message
-      .replace('❓ AI Agent Question: ', '')
-      .replace('Agent Question: ', '')
-      .replace('Agent requested clarification: ', '')
+  // 2. Distinct Agent Question (Ask tool / Clarification request)
+  if (parsed.category === 'agent_question') {
+    const qText = parsed.agentQuestionText || log.message
     return (
       <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/50 to-slate-900/90 border-2 border-amber-500/70 text-amber-100 font-sans text-xs space-y-2 shadow-xl animate-in fade-in duration-200">
         <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
@@ -69,10 +82,108 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     )
   }
 
-  // Command Execution step badge
-  if (log.message.includes('run_command') || log.message.startsWith('Ran ') || log.message.includes('npm ') || log.message.includes('git ')) {
-    const cmdMatch = log.message.match(/run_command.*?"command":\s*"([^"]+)"/) || log.message.match(/Ran\s+(.+)/)
-    const cmdText = cmdMatch ? cmdMatch[1] : log.message
+  // 3. Test Run Badge
+  if (parsed.category === 'test_run' && parsed.testRun) {
+    const { isPass, summary } = parsed.testRun
+    return (
+      <div className="space-y-1.5 font-mono">
+        <button
+          type="button"
+          onClick={() => log.detail && onToggleExpand(log.id)}
+          className={`w-full text-left flex items-center justify-between py-1.5 px-2 rounded-lg transition-colors group focus-ring border ${
+            isPass
+              ? 'bg-emerald-950/30 border-emerald-800/50 hover:bg-emerald-950/50'
+              : 'bg-rose-950/30 border-rose-800/50 hover:bg-rose-950/50'
+          }`}
+        >
+          <div className="flex items-center gap-2 text-xs">
+            {isPass ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            ) : (
+              <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            )}
+            <span className="font-sans font-medium text-slate-400">Tests</span>
+            <span className={`font-bold ${isPass ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {summary}
+            </span>
+          </div>
+          {log.detail && (
+            isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          )}
+        </button>
+
+        {isExpanded && log.detail && (
+          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+            {log.detail}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 4. File Mutation Badge (Created, Edited, Deleted, Moved, Copied)
+  if (parsed.category === 'file_mutation' && parsed.fileMutation) {
+    const { verb, fileName, filePath } = parsed.fileMutation
+    const badge = getBadgeLang(fileName)
+
+    const verbColor =
+      verb === 'Created'
+        ? 'text-emerald-400'
+        : verb === 'Deleted'
+        ? 'text-rose-400'
+        : verb === 'Moved' || verb === 'Copied'
+        ? 'text-amber-400'
+        : 'text-cyan-400'
+
+    return (
+      <div className="space-y-1.5 font-mono">
+        <div className="flex items-center justify-between text-xs py-1 px-1 rounded group">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`font-sans font-medium text-xs ${verbColor}`}>{verb}</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${badge.color}`}>
+              {badge.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
+              className="font-bold text-slate-200 hover:text-cyan-300 transition-colors cursor-pointer focus-ring rounded truncate"
+              title={filePath}
+            >
+              {fileName}
+            </button>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {log.detail && (
+              <button
+                type="button"
+                onClick={() => onToggleExpand(log.id)}
+                className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-0.5 focus-ring px-1.5 py-0.5 rounded"
+              >
+                {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
+              className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring"
+            >
+              {t('common.viewDetails')}
+            </button>
+          </div>
+        </div>
+
+        {isExpanded && log.detail && (
+          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+            {log.detail}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 5. Command Execution Badge
+  if (parsed.category === 'command_execution' && parsed.commandExecution) {
+    const { command, isInstall } = parsed.commandExecution
     return (
       <div className="space-y-1.5 font-mono">
         <button
@@ -80,16 +191,21 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
           onClick={() => onToggleExpand(log.id)}
           className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1 px-1 rounded transition-colors group focus-ring"
         >
-          <span className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400 font-sans font-medium">Ran</span>
-            <span className="font-bold text-slate-200 group-hover:text-cyan-300 transition-colors">{cmdText}</span>
-          </span>
-          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Terminal className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="text-slate-400 font-sans font-medium">
+              {isInstall ? 'Installed' : 'Ran'}
+            </span>
+            <span className="font-bold text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
+              {command}
+            </span>
+          </div>
+          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
         </button>
 
         {isExpanded && (
-          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner">
-            <div className="text-slate-400 mb-1">../workspace &gt; {cmdText}</div>
+          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+            <div className="text-slate-500 mb-1">workspace &gt; {command}</div>
             {log.detail || log.message}
           </div>
         )}
@@ -97,58 +213,67 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     )
   }
 
-  // File Edit step badge
-  if (log.message.includes('replace_chunk') || log.message.includes('write_file') || log.message.startsWith('Edited ')) {
-    const fileMatch = log.message.match(/filePath":\s*"([^"]+)"/) || log.message.match(/Edited\s+([^\s]+)/)
-    const filePath = fileMatch ? fileMatch[1] : 'file'
-    const fileName = filePath.split(/[\\/]/).pop() || filePath
-    const badge = getBadgeLang(fileName)
-
+  // 6. Web Research Badge
+  if (parsed.category === 'web_research' && parsed.webResearch) {
+    const { action, queryOrUrl } = parsed.webResearch
     return (
-      <div className="flex items-center justify-between text-xs py-1 px-1 rounded font-mono group">
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400 font-sans font-medium">Edited</span>
-          <span className={`px-1.5 py-0.5 rounded text-[10px] ${badge.color}`}>
-            {badge.label}
-          </span>
-          <button
-            type="button"
-            onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
-            className="font-bold text-slate-200 hover:text-cyan-300 transition-colors cursor-pointer focus-ring rounded"
-            title={t('common.viewDetails')}
-          >
-            {fileName}
-          </button>
-        </div>
+      <div className="space-y-1.5 font-mono">
         <button
           type="button"
-          onClick={() => onOpenFile && onOpenFile({ name: fileName, path: filePath, isDir: false })}
-          className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring"
+          onClick={() => log.detail && onToggleExpand(log.id)}
+          className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1 px-1 rounded transition-colors group focus-ring"
         >
-          {t('common.viewDetails')}
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="text-slate-400 font-sans font-medium">{action}</span>
+            <span className="font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate">
+              {queryOrUrl}
+            </span>
+          </div>
+          {log.detail && (
+            isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          )}
         </button>
+
+        {isExpanded && log.detail && (
+          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+            {log.detail}
+          </div>
+        )}
       </div>
     )
   }
 
-  // Explored File step badge
-  if (log.message.includes('read_file') || log.message.includes('list_dir') || log.message.includes('grep_search') || log.message.startsWith('Explored ')) {
+  // 7. Workspace Exploration Badge
+  if (parsed.category === 'workspace_exploration' && parsed.workspaceExploration) {
+    const { action, target } = parsed.workspaceExploration
     return (
-      <button
-        type="button"
-        onClick={() => onToggleExpand(log.id)}
-        className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1 px-1 rounded transition-colors group font-mono focus-ring"
-      >
-        <span className="flex items-center gap-1.5 text-xs text-slate-300 group-hover:text-slate-100">
-          <span className="text-slate-400 font-sans font-medium">Explored</span>
-          <span className="font-bold text-slate-200">workspace</span>
-        </span>
-        {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
-      </button>
+      <div className="space-y-1.5 font-mono">
+        <button
+          type="button"
+          onClick={() => onToggleExpand(log.id)}
+          className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1 px-1 rounded transition-colors group focus-ring"
+        >
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <FolderTree className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-slate-400 font-sans font-medium">{action}</span>
+            <span className="font-bold text-slate-200 group-hover:text-amber-300 transition-colors truncate">
+              {target}
+            </span>
+          </div>
+          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+        </button>
+
+        {isExpanded && (
+          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+            {log.detail || log.message}
+          </div>
+        )}
+      </div>
     )
   }
 
-  // General assistant output card
+  // 8. General assistant output card / Plan update
   return (
     <div className="p-3.5 rounded-2xl bg-[#0e1422] border border-slate-800/90 text-slate-200 font-sans text-xs leading-relaxed space-y-2 shadow-md">
       <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5">
@@ -169,7 +294,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
           <button
             type="button"
             onClick={() => onToggleExpand(log.id)}
-            className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono font-semibold"
+            className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono font-semibold focus-ring"
           >
             {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             {isExpanded ? t('common.close') : t('common.viewDetails')}

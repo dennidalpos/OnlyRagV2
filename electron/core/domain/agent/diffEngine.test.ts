@@ -243,4 +243,42 @@ describe('diffEngine — per-hunk grouping and reconstruction', () => {
     expect(reconstructWithApprovedHunks(lines, hunks, new Set([hunks[0].id]))).toBe('')
     expect(reconstructWithApprovedHunks(lines, hunks, new Set())).toBe(before)
   })
+
+  it('should handle Windows CRLF line endings cleanly in computeLineDiff', () => {
+    const before = 'line1\r\nline2\r\nline3'
+    const after = 'line1\r\nline2_modified\r\nline3'
+    const lines = computeLineDiff(before, after)
+    const counts = countDiffLines(lines)
+
+    expect(counts.additions).toBe(1)
+    expect(counts.deletions).toBe(1)
+    expect(lines.find((l) => l.type === 'add')?.content).toBe('line2_modified')
+    expect(lines.find((l) => l.type === 'del')?.content).toBe('line2')
+  })
+
+  it('should handle empty before and after strings without throwing', () => {
+    expect(computeLineDiff('', '')).toEqual([])
+    expect(countDiffLines([])).toEqual({ additions: 0, deletions: 0 })
+    expect(groupDiffIntoHunks([])).toEqual([])
+    expect(reconstructWithApprovedHunks([], [], new Set())).toBe('')
+  })
+
+  it('should parse git diff with Windows CRLF newlines without leaking carriage returns', () => {
+    const raw = [
+      'diff --git a/file.ts b/file.ts\r',
+      '--- a/file.ts\r',
+      '+++ b/file.ts\r',
+      '@@ -1,2 +1,2 @@\r',
+      '-old\r',
+      '+new\r',
+      ' same\r',
+    ].join('\n')
+
+    const files = parseUnifiedDiff(raw)
+    expect(files).toHaveLength(1)
+    expect(files[0].hunks[0].lines[0].content).toBe('old')
+    expect(files[0].hunks[0].lines[1].content).toBe('new')
+    expect(files[0].hunks[0].lines[2].content).toBe('same')
+  })
 })
+

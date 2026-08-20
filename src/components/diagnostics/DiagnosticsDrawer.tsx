@@ -40,7 +40,7 @@ export const DiagnosticsDrawer: React.FC<DiagnosticsDrawerProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isRefreshingLogs, setIsRefreshingLogs] = useState<boolean>(false)
   const [copiedReport, setCopiedReport] = useState<boolean>(false)
-  const [autoScroll, setAutoScroll] = useState<boolean>(false)
+  const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const consoleBottomRef = useRef<HTMLDivElement | null>(null)
 
   const {

@@ -179,13 +179,13 @@ export function parseUnifiedDiff(rawDiff: string): DiffFileChange[] {
     if (line.startsWith('\\')) continue
 
     if (line.startsWith('+')) {
-      hunk.lines.push({ type: 'add', content: line.slice(1), oldLineNumber: null, newLineNumber: newLineNo++ })
+      hunk.lines.push({ type: 'add', content: line.slice(1).replace(/\r$/, ''), oldLineNumber: null, newLineNumber: newLineNo++ })
       current.additions++
     } else if (line.startsWith('-')) {
-      hunk.lines.push({ type: 'del', content: line.slice(1), oldLineNumber: oldLineNo++, newLineNumber: null })
+      hunk.lines.push({ type: 'del', content: line.slice(1).replace(/\r$/, ''), oldLineNumber: oldLineNo++, newLineNumber: null })
       current.deletions++
     } else if (line.startsWith(' ') || line === '') {
-      hunk.lines.push({ type: 'context', content: line.slice(1), oldLineNumber: oldLineNo++, newLineNumber: newLineNo++ })
+      hunk.lines.push({ type: 'context', content: line.slice(1).replace(/\r$/, ''), oldLineNumber: oldLineNo++, newLineNumber: newLineNo++ })
     }
   }
 

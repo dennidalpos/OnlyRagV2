@@ -147,6 +147,7 @@ export interface AppSettings {
   allowFileModifications?: boolean
   hardwareProfile: HardwareProfile
   ocrEngine: 'native_cuda' | 'vision_model'
+  normalizeWithLlm?: boolean
   ollamaHost: string
   customWorkspacePath?: string
   noWorkspaceMode?: boolean
@@ -394,7 +395,13 @@ export interface IElectronAPI {
   restartSidecar: () => Promise<{ success: boolean; message?: string; error?: string }>
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string[]>
   openDirectoryDialog: (options?: { title?: string }) => Promise<string | null>
-  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  ingestFile: (
+    filePath: string,
+    visionModel?: string,
+    visionPrompt?: string,
+    normalizeWithLlm?: boolean,
+    normalizationModel?: string
+  ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>

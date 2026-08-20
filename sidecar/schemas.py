@@ -15,6 +15,8 @@ class IngestPathRequest(BaseModel):
     file_path: str
     vision_model: Optional[str] = None
     vision_prompt: Optional[str] = None
+    normalize_with_llm: Optional[bool] = False
+    normalization_model: Optional[str] = None
 
 class UpdateDocumentRequest(BaseModel):
     markdown_content: str

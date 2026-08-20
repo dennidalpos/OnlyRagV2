@@ -207,8 +207,8 @@ def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
         translated_texts = [r.text for r in translator_module._collect_docx_runs(translated_doc)]
         assert all(t.startswith("TR-") for t in translated_texts)
 
-        # Re-indexed markdown reflects the translated content.
-        assert "TR-Hello world" in data["extracted_markdown"]
+        # In-place translation separates flows: original extracted markdown in RAG DB is preserved.
+        assert "Hello world" in data["extracted_markdown"]
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
@@ -394,7 +394,8 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "indexed"
-        assert translated_marker in data["extracted_markdown"]
+        # In-place translation separates flows: original extracted markdown in RAG DB is preserved.
+        assert marker in data["extracted_markdown"]
 
         translated_doc = pymupdf.open(path)
         try:
@@ -600,13 +601,8 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
         finally:
             translated_doc.close()
         assert japanese_text in page_text
-
-        # The re-ingested markdown must carry the same text as the saved file, unmangled: a
-        # near-empty page like this one used to fall under the OCR_REQUIRED routing threshold
-        # purely on char count, forcing it back through RapidOCR's Chinese-trained recognition
-        # model, which corrupts CJK text into Han-unification variants (Japanese 語 -> Simplified
-        # Chinese 语). analyze_pdf_page_structure now only routes short-text, image-free pages to
-        assert japanese_text in res.json()["extracted_markdown"]
+        # In-place translation separates flows: original extracted markdown is preserved.
+        assert "Hello world" in res.json()["extracted_markdown"]
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
@@ -709,5 +705,43 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
+
+
+def test_translate_pdf_inplace_guarantees_100_percent_block_rendering(tmp_path):
+    """Verifies that all blocks on a page are 100% rendered and no block is omitted due to vertical overflow."""
+    font_file = translator_module._resolve_pdf_font_file("English")
+    pdf_path = str(tmp_path / "tight_blocks.pdf")
+    out_pdf_path = str(tmp_path / "tight_blocks_out.pdf")
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    # Create multiple tight blocks with simulated lengthy translated text
+    blocks = []
+    for i in range(10):
+        y0 = 100 + i * 40
+        y1 = y0 + 12
+        blocks.append({
+            "bbox": (50, y0, 300, y1),
+            "text": f"Block {i+1} translated with exceptionally long multi-word explanation that exceeds single line capacity",
+            "size": 10.0,
+            "color": 0,
+        })
+    doc.save(pdf_path)
+    doc.close()
+
+    doc2 = pymupdf.open(pdf_path)
+    page2 = doc2[0]
+    translator_module._redact_and_reinsert_pdf_blocks(page2, blocks, font_file)
+    doc2.save(out_pdf_path)
+    doc2.close()
+
+    doc3 = pymupdf.open(out_pdf_path)
+    page3 = doc3[0]
+    out_blocks = [b for b in page3.get_text("dict")["blocks"] if b.get("type") == 0]
+    doc3.close()
+
+    # All 10 blocks must be present on page
+    assert len(out_blocks) == 10
+
+
 
 

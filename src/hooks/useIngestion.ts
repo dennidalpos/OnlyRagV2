@@ -371,6 +371,9 @@ export function useIngestion(settings?: AppSettings) {
     let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
     let ocrTech = 'PyMuPDF Text Extraction'
 
+    const chatRagModel = settings?.chatModel || settings?.defaultModel || 'llama3.2'
+    const normalizeWithLlm = Boolean(settings?.normalizeWithLlm)
+
     if (ext === 'pdf') {
       detectedCategory = 'PDF (Ibrido / Scansione / Testo)'
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
@@ -393,12 +396,16 @@ export function useIngestion(settings?: AppSettings) {
       ocrTech = 'UTF-8 Control Character Sanitizer'
     }
 
+    if (normalizeWithLlm) {
+      ocrTech += ` + Controllo Testo (${chatRagModel})`
+    }
+
     setIngestionProgress({
       active: true,
       fileName: baseName,
       fileCategory: detectedCategory,
       pipeline: initialPipeline,
-      modelName: settings?.visionModel || 'llama3.2-vision',
+      modelName: normalizeWithLlm ? chatRagModel : (settings?.visionModel || 'llama3.2-vision'),
       ocrTechnology: ocrTech,
       step: 'Pre-elaborazione, Fast-Routing e classificazione del file...',
       percent: 20,
@@ -412,7 +419,13 @@ export function useIngestion(settings?: AppSettings) {
         percent: 55,
       }))
 
-      const res = await apiService.ingestFile(targetFilePath, settings?.visionModel)
+      const res = await apiService.ingestFile(
+        targetFilePath,
+        settings?.visionModel,
+        undefined,
+        normalizeWithLlm,
+        chatRagModel
+      )
 
       if (isCancelledRef.current) return
 

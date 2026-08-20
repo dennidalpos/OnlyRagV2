@@ -42,11 +42,11 @@ export class SidecarAppService {
     return { success: isOnline, message: isOnline ? 'Sidecar engine restarted successfully.' : 'Failed to restart Sidecar.' }
   }
 
-  ingestFile(filePath: string, visionModel?: string, visionPrompt?: string) {
+  ingestFile(filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid file path' })
     }
-    logger.log('INFO', 'SidecarApp', `Ingesting file path (streaming): ${filePath}`)
+    logger.log('INFO', 'SidecarApp', `Ingesting file path (streaming): ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`)
     try {
       const resolvedPath = path.resolve(filePath)
       if (!documentIoRepository.exists(resolvedPath)) {
@@ -57,6 +57,8 @@ export class SidecarAppService {
         file_path: resolvedPath,
         vision_model: visionModel || undefined,
         vision_prompt: visionPrompt || undefined,
+        normalize_with_llm: normalizeWithLlm || undefined,
+        normalization_model: normalizationModel || undefined,
       })
       const taskId = `ingest-${Date.now()}`
 

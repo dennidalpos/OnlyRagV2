@@ -33,6 +33,7 @@ EMBEDDING_DIM: int = 768
 DOCS_TABLE_NAME: str = "documents"
 CHUNKS_TABLE_NAME: str = "chunks"
 PROMPT_HISTORY_TABLE_NAME: str = "prompt_history"
+OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 import httpx
 

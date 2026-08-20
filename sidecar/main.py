@@ -12,7 +12,7 @@ if _current_dir not in sys.path:
 import base64
 import asyncio
 from typing import List, Optional
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -81,18 +81,28 @@ def health_check():
     }
 
 @app.post("/ingest", response_model=IngestResponse)
-async def ingest_document(file: UploadFile = File(...)):
-    logger.info(f"Received file upload for ingestion: {file.filename}")
+async def ingest_document(
+    file: UploadFile = File(...),
+    normalize_with_llm: bool = Form(False),
+    normalization_model: Optional[str] = Form(None)
+):
+    logger.info(f"Received file upload for ingestion: {file.filename} (normalize_with_llm={normalize_with_llm})")
     try:
         content = await file.read()
-        return await asyncio.to_thread(process_and_index_document, file.filename or "uploaded_document", content)
+        return await asyncio.to_thread(
+            process_and_index_document,
+            file.filename or "uploaded_document",
+            content,
+            normalize_with_llm=normalize_with_llm,
+            normalization_model=normalization_model
+        )
     except Exception as e:
         logger.error(f"Error ingesting uploaded document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ingest-path", response_model=IngestResponse)
 async def ingest_document_by_path(req: IngestPathRequest):
-    logger.info(f"Received path for ingestion: {req.file_path}")
+    logger.info(f"Received path for ingestion: {req.file_path} (normalize_with_llm={req.normalize_with_llm})")
     resolved_path = os.path.abspath(req.file_path)
     if not os.path.exists(resolved_path) or not os.path.isfile(resolved_path):
         raise HTTPException(status_code=400, detail="Invalid or non-existent file path")
@@ -100,7 +110,9 @@ async def ingest_document_by_path(req: IngestPathRequest):
         filename = os.path.basename(resolved_path)
         return await asyncio.to_thread(
             process_and_index_document, filename, b"", resolved_path,
-            req.vision_model, req.vision_prompt
+            req.vision_model, req.vision_prompt,
+            normalize_with_llm=bool(req.normalize_with_llm),
+            normalization_model=req.normalization_model
         )
     except Exception as e:
         logger.error(f"Error ingesting document path {req.file_path}: {str(e)}")
@@ -108,7 +120,7 @@ async def ingest_document_by_path(req: IngestPathRequest):
 
 @app.post("/ingest-path-stream")
 async def ingest_document_by_path_stream(req: IngestPathRequest):
-    logger.info(f"Received path for streaming ingestion: {req.file_path}")
+    logger.info(f"Received path for streaming ingestion: {req.file_path} (normalize_with_llm={req.normalize_with_llm})")
     resolved_path = os.path.abspath(req.file_path)
     if not os.path.exists(resolved_path) or not os.path.isfile(resolved_path):
         raise HTTPException(status_code=400, detail="Invalid or non-existent file path")
@@ -117,7 +129,9 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
         return StreamingResponse(
             process_and_index_document_generator(
                 filename, b"", resolved_path,
-                vision_model=req.vision_model, vision_prompt=req.vision_prompt
+                vision_model=req.vision_model, vision_prompt=req.vision_prompt,
+                normalize_with_llm=bool(req.normalize_with_llm),
+                normalization_model=req.normalization_model
             ),
             media_type="application/x-ndjson"
         )

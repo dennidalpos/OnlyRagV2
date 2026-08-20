@@ -80,3 +80,15 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
 - **Contextual Skill Router (`skillMatcher.ts`)**:
   - Evaluates user prompts against installed active skills using weighted scoring: Trigger Match (3.0), Tag Match (1.5), Keyword in Description (1.0), Category Match (0.5).
   - Dynamically injects top 3 matched skills into the turn prompt within an 8k characters budget (`[DOMAIN EXPERT SKILL GUIDELINES]`).
+
+## 6. FastAPI & Python Sidecar Standards
+
+- **Async Non-Blocking Execution**: Use `async def` for I/O bound endpoints. Wrap blocking CPU calculations or synchronous disk I/O in `asyncio.to_thread(...)` to prevent stalling the FastAPI event loop.
+- **Typed Pydantic Schemas**: Define explicit request and response models with Pydantic v2 (`BaseModel`).
+- **Resource Cleanup**: Ensure all file handles (`pymupdf.Document`, file descriptors) are wrapped in `try/finally: doc.close()`.
+
+## 7. React 19 & Frontend Development Standards
+
+- **React 19 Idioms**: Pass `ref` directly as a prop (no `forwardRef` boilerplate required in modern React 19 components).
+- **Strict Typing**: TypeScript strict mode enabled throughout `src/` — avoid `any` or loose untyped objects.
+- **State Management**: Encapsulate domain logic in custom hooks (`useIngestion`, `useCodingAgent`, `useTranslation`, `useSettings`).

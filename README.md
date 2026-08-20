@@ -11,7 +11,7 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4-0f172a?style=for-the-badge&logo=tailwindcss&logoColor=67e8f9)](https://tailwindcss.com)
 [![LanceDB](https://img.shields.io/badge/LanceDB-Embedded_Vector_DB-0f172a?style=for-the-badge&logo=databricks&logoColor=67e8f9)](https://lancedb.com)
 [![Ollama](https://img.shields.io/badge/Ollama-100%25_Local_LLM-0f172a?style=for-the-badge&logo=ollama&logoColor=67e8f9)](https://ollama.com)
-[![Tests](https://img.shields.io/badge/Tests-Passing_568/568-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
+[![Tests](https://img.shields.io/badge/Tests-Passing_585/585-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
 [![License](https://img.shields.io/badge/License-MIT-0f172a?style=for-the-badge&logo=open-source-initiative&logoColor=67e8f9)](LICENSE)
 
 <br />

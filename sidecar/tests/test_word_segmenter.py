@@ -18,6 +18,27 @@ def test_normalize_ocr_token_spacing_preserves_emails_and_urls():
     assert "https://telepass.com/info" in result
 
 def test_normalize_ocr_token_spacing_preserves_unknown_unbroken_words():
-    # Regular whole words that are not fused should remain intact
     assert normalize_ocr_token_spacing("extraction") == "extraction"
     assert normalize_ocr_token_spacing("content") == "content"
+
+def test_normalize_ocr_token_spacing_handles_uppercase_compounds():
+    assert "CODICE FISCALE *" in normalize_ocr_token_spacing("CODICEFISCALE*")
+    assert "INDIRIZZO RESIDENZA *" in normalize_ocr_token_spacing("INDIRIZZORESIDENZA*")
+    assert "VIA ROMA NORD" in normalize_ocr_token_spacing("VIAROMANORD")
+    assert "LUOGO E DATA" in normalize_ocr_token_spacing("LUOGOEDATA")
+    assert "FIRMA LEGGIBILE DEL CLIENTE" in normalize_ocr_token_spacing("FIRMALEGGIBILEDELCLIENTE")
+
+def test_normalize_ocr_token_spacing_preserves_italian_fiscal_code():
+    cf = "PNTLDN49D56E818T"
+    result = normalize_ocr_token_spacing(f"CODICEFISCALE* {cf}")
+    assert cf in result
+    assert "CODICE FISCALE *" in result
+
+def test_normalize_ocr_token_spacing_separates_fused_email_prefixes_and_tlds():
+    raw = "Ipresentemodulodovraessereinviatoallacasellae-mailgestionecontratto@telepass.com,oppureallindirizzoPEC assistenza@pec.telepass.comovvero"
+    result = normalize_ocr_token_spacing(raw)
+    assert "gestionecontratto@telepass.com" in result
+    assert "assistenza@pec.telepass.com" in result
+    assert "ovvero" in result
+    assert "presente modulo" in result
+    assert "oppure all indirizzo PEC" in result

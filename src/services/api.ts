@@ -71,11 +71,17 @@ export const apiService = {
     }
   },
 
-  async ingestFile(filePath: string, visionModel?: string, visionPrompt?: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async ingestFile(
+    filePath: string,
+    visionModel?: string,
+    visionPrompt?: string,
+    normalizeWithLlm?: boolean,
+    normalizationModel?: string
+  ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
-      logger.info('ApiService:Ingestion', `Initiating ingestion for file: ${filePath}`)
-      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt)
+      logger.info('ApiService:Ingestion', `Initiating ingestion for file: ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`)
+      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Ingestion warning/error: ${res.error}`)
       } else {

@@ -37,7 +37,7 @@ def _render_pdf_from_markdown(markdown_content: str, output_path: str):
 
                     rect = pymupdf.Rect(margin, y_offset, margin + page_width, y_offset + 50)
                     page.draw_rect(rect, color=(0.2, 0.2, 0.2), fill=(0.95, 0.95, 0.97))
-                    page.insert_textbox(rect, code_text, fontsize=9, fontname="couri", color=(0.1, 0.1, 0.1))
+                    page.insert_textbox(rect, code_text, fontsize=9, fontname="cour", color=(0.1, 0.1, 0.1))
                     y_offset += 60
                 else:
                     in_code_block = True
@@ -110,7 +110,7 @@ def _render_pdf_from_markdown(markdown_content: str, output_path: str):
             page.insert_textbox(rect, clean_text, fontsize=font_size, fontname=font_name, color=color)
             y_offset += line_height
 
-        doc.save(output_path)
+        doc.save(output_path, deflate=True, garbage=4, clean=True, deflate_images=True, deflate_fonts=True)
     finally:
         doc.close()
 

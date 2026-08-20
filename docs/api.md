@@ -32,6 +32,8 @@ OnlyRag V2 implementa due livelli di interfaccia:
 * **Content-Type:** `multipart/form-data`
 * **Parametri:**
   * `file`: File binario (`PDF`, `DOCX`, `TXT`, `MD`, `PNG`, `JPG`).
+  * `normalize_with_llm` *(opzionale, default: false)*: Attiva la normalizzazione del testo estratto pagina per pagina con modello LLM locale.
+  * `normalization_model` *(opzionale, default: null / "llama3.2")*: Modello Ollama specifico da impiegare per la normalizzazione Markdown.
 * **Risposta (200 OK):**
 ```json
 {
@@ -49,8 +51,8 @@ OnlyRag V2 implementa due livelli di interfaccia:
 ---
 
 ### 1.3. Ingestione da Path (con Streaming)
-* **`POST /ingest-path`** — Ingestione sincrona da percorso file locale. Corpo: `{ "file_path": "C:/docs/report.pdf" }`. Risposta: stessa struttura di `IngestResponse`.
-* **`POST /ingest-path-stream`** — Ingestione con streaming NDJSON progressivo. `Content-Type: application/x-ndjson`. Ogni riga è un evento `{ "type": "progress" | "done", "percent": 0-100, "step": "...", "data"?: IngestResponse }`.
+* **`POST /ingest-path`** — Ingestione sincrona da percorso file locale. Corpo: `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2" }`. Risposta: stessa struttura di `IngestResponse`.
+* **`POST /ingest-path-stream`** — Ingestione con streaming NDJSON progressivo. Corpo: `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2" }`. `Content-Type: application/x-ndjson`. Ogni riga è un evento `{ "type": "progress" | "done", "percent": 0-100, "step": "...", "data"?: IngestResponse }`.
 
 ---
 
@@ -58,12 +60,12 @@ OnlyRag V2 implementa due livelli di interfaccia:
 * **`GET /documents`**: Lista tutti i documenti indicizzati in LanceDB con metadati completi.
 * **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali.
 * **`PUT /documents/{doc_id}`**: Aggiorna il contenuto Markdown e re-indicizza i chunk vettoriali. Corpo: `{ "markdown_content": "..." }`.
-* **`POST /documents/{doc_id}/translate-inplace`**: Traduce il testo del documento **in-place** o verso una cartella target, con opzione di backup automatico (`.original.bak`), poi re-indicizza i chunk vettoriali.
+* **`POST /documents/{doc_id}/translate-inplace`**: Traduce il documento **in-place** su file system o verso una cartella target (`target_dir`), con opzione di backup automatico (`.original.bak`), salvataggio compresso ad alta efficienza (`deflate=True, garbage=4, clean=True`), separando nettamente il flusso di esportazione/modifica file su disco dalla base di conoscenza RAG (il campo `extracted_markdown` e i vettori LanceDB del documento originale rimangono inalterati nella lingua sorgente originale).
   * **Request Body:** `{ "source_lang": "Italian", "target_lang": "English", "model"?: "llama3.2", "backup_original"?: true, "target_dir"?: "C:\\path\\to\\folder" }`
-  * **Risposta (200 OK):** stessa struttura di `IngestResponse` (§1.2).
+  * **Risposta (200 OK):** stessa struttura di `IngestResponse` (§1.2), con il testo `extracted_markdown` originale preservato.
   * **Pipeline per formato** (dispatch automatico su `file_type`, vedi [`translator.py`](../sidecar/domain/translator.py)):
     * `docx` — sostituzione diretta dei run testuali via `python-docx` (stile/font/tabelle invariati, cancellazione reale del testo originale nell'XML del run). Preserva backup `.original.bak` o esporta in `target_dir`.
-    * `pdf` (**fine-mode**) — per ogni pagina: redazione reale del testo originale (`page.add_redact_annot` + `apply_redactions()`, verificato che cancelli il testo dal content stream e non solo visivamente) seguita dal reinserimento del testo tradotto nello stesso bounding box, con **auto-fit progressivo del font size** (ricerca binaria verso il basso dal size originale, floor a `max(6pt, 40% del size originale)`) quando il testo tradotto non entra alla dimensione originale. **Selezione font per lingua** (`_resolve_pdf_font_file`, match case-insensitive su `target_lang`): giapponese/coreano/cinese semplificato/cinese tradizionale usano il rispettivo font Noto Sans CJK imbarcato in `sidecar/assets/fonts/`; ogni altra lingua (incluso il cirillico, non coperto dal font base14 `helv`) usa il fallback Noto Sans Latin/Cirillico/Greco. Preserva backup `.original.bak` o esporta in `target_dir`.
+    * `pdf` (**fine-mode compresso**) — per ogni pagina: redazione reale del testo originale (`page.add_redact_annot` + `apply_redactions()`) seguita dal reinserimento del testo tradotto nello stesso bounding box, con **auto-fit progressivo del font size**, **espansione dinamica dell'altezza** in caso di overflow verticale e **fallback di rendering garantito** (100% dei blocchi testuali mantenuti senza cadute di testo). Salvataggio finale compresso con deflating stream e garbage collection PyMuPDF. **Selezione font per lingua** (`_resolve_pdf_font_file`, match case-insensitive su `target_lang`): giapponese/coreano/cinese semplificato/cinese tradizionale usano il rispettivo font Noto Sans CJK imbarcato in `sidecar/assets/fonts/`; ogni altra lingua usa il fallback Noto Sans Latin/Cirillico/Greco. Preserva backup `.original.bak` o esporta in `target_dir`.
     * Qualsiasi altro `file_type` → `400 Bad Request`.
   * **Codici di errore:** `400` (tipo file non supportato), `404` (documento non trovato o file originale non più presente su disco), `500` (errore imprevisto).
 
@@ -392,3 +394,19 @@ const report = await analyzeLogs()
 | `skills:save-custom` | `input: SkillSaveInput, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Creazione o aggiornamento di una skill locale/personalizzata con rilevamento modifiche. |
 | `skills:reset-original` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Ripristino di una skill modificata al contenuto originale dell'hub. |
 | `skills:uninstall` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, error?: string }` | Disinstallazione ed eliminazione sicura della cartella skill. |
+
+---
+
+### 2.6. Canali Ingestion, Ricerca Vettoriale & Export (`ingest:*` / `vector:*` / `export:*`)
+
+| Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
+| :--- | :--- | :--- | :--- | :--- |
+| `ingest:file` | `ingestFile(...)` | `filePath, visionModel?, visionPrompt?, normalizeWithLlm?, normalizationModel?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Ingestione documento con parsing PyMuPDF, OCR e normalizzazione LLM opzionale. |
+| `ingest:update` | `updateIngestedDocument(docId, md)` | `docId: string, markdownContent: string` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Aggiornamento manuale del Markdown estratto e re-indicizzazione dei vettori in LanceDB. |
+| `ingest:translate-inplace` | `translateDocumentInplace(...)` | `docId, sourceLang, targetLang, model?, backupOriginal?, targetDir?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Traduzione in-place PDF/DOCX preservando il Markdown originale indicizzato nel RAG. |
+| `ingest:page-preview` | `getDocumentPagePreview(...)` | `docId: string, pageNumber: number` | `PagePreviewData \| null` | Rendering raster ad alta risoluzione della pagina sorgente per la preview a due pannelli. |
+| `ingest:list` | `getIngestedDocuments()` | `none` | `IngestedDocument[]` | Elenco di tutti i documenti indicizzati in LanceDB. |
+| `ingest:delete` | `deleteIngestedDocument(docId)` | `docId: string` | `{ success: boolean }` | Eliminazione del documento e dei relativi vettori da LanceDB. |
+| `vector:search` | `searchVectorDb(...)` | `query, topK?, embeddingModel?, docIds?` | `VectorSearchResult[]` | Ricerca ibrida (vettoriale densa + BM25) su LanceDB. |
+| `export:document` | `exportDocument(...)` | `markdownContent, format, outputFolder?` | `{ success: boolean, message?: string, error?: string }` | Compilazione ed esportazione compressa in PDF, DOCX o Markdown. |
+

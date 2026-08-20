@@ -28,7 +28,9 @@ def process_and_index_document(
     content: bytes,
     file_path: Optional[str] = None,
     vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None
+    vision_prompt: Optional[str] = None,
+    normalize_with_llm: bool = False,
+    normalization_model: Optional[str] = None
 ) -> IngestResponse:
     """Orchestrates document extraction, semantic chunking, embedding generation, and LanceDB indexing."""
     doc_id = str(uuid.uuid4())
@@ -47,7 +49,9 @@ def process_and_index_document(
 
     full_markdown, num_pages = extract_document_markdown(
         filename, content, persisted_path or file_path,
-        vision_model=vision_model, vision_prompt=vision_prompt
+        vision_model=vision_model, vision_prompt=vision_prompt,
+        normalize_with_llm=normalize_with_llm,
+        normalization_model=normalization_model
     )
     full_markdown = sanitize_extracted_text(full_markdown)
     raw_chunks = create_semantic_chunks(filename, full_markdown)
@@ -142,7 +146,9 @@ def process_and_index_document_generator(
     content: bytes,
     file_path: Optional[str] = None,
     vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None
+    vision_prompt: Optional[str] = None,
+    normalize_with_llm: bool = False,
+    normalization_model: Optional[str] = None
 ) -> Generator[str, None, None]:
     """
     Streaming NDJSON generator for real-time progress reporting during document extraction and LanceDB vectorization.
@@ -211,7 +217,9 @@ def process_and_index_document_generator(
                     work_items.append(prepare_pdf_page_work_item(
                         pdf_doc, page, page_num, raw_text, md_tables, used_ocr,
                         vision_model=vision_model,
-                        vision_prompt=vision_prompt
+                        vision_prompt=vision_prompt,
+                        normalize_with_llm=normalize_with_llm,
+                        normalization_model=normalization_model
                     ))
                     page_render_meta[page_num] = {
                         "table_info": table_info,
@@ -261,7 +269,9 @@ def process_and_index_document_generator(
         }) + "\n"
         full_markdown, num_pages = extract_document_markdown(
             filename, content, persisted_path or file_path,
-            vision_model=vision_model, vision_prompt=vision_prompt
+            vision_model=vision_model, vision_prompt=vision_prompt,
+            normalize_with_llm=normalize_with_llm,
+            normalization_model=normalization_model
         )
 
     full_markdown = sanitize_extracted_text(full_markdown)

@@ -67,6 +67,8 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
 
     return md_tables, table_rects
 
+from sidecar.domain.llm_normalizer import normalize_page_markdown_with_llm
+
 def prepare_pdf_page_work_item(
     doc: pymupdf.Document,
     page: pymupdf.Page,
@@ -76,6 +78,8 @@ def prepare_pdf_page_work_item(
     used_ocr: bool,
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
+    normalize_with_llm: bool = False,
+    normalization_model: Optional[str] = None,
     **kwargs: Any
 ) -> Dict[str, Any]:
     """
@@ -98,11 +102,14 @@ def prepare_pdf_page_work_item(
         "ocr_image_bytes": ocr_image_bytes,
         "vision_model": vision_model,
         "vision_prompt": vision_prompt,
+        "normalize_with_llm": normalize_with_llm,
+        "normalization_model": normalization_model,
     }
 
 def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     """
     Renders a single prepared page: executes local RapidOCR on scanned/bitmap pages or formats native text/tables.
+    Applies optional LLM Markdown normalization only if explicitly requested.
     """
     page_num = work_item["page_num"]
     page_md_parts: List[str] = []
@@ -130,7 +137,13 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     if not page_content:
         page_content = "[Empty Page Content]"
 
-    return page_num, sanitize_extracted_text(page_content)
+    sanitized = sanitize_extracted_text(page_content)
+
+    if work_item.get("normalize_with_llm"):
+        norm_model = work_item.get("normalization_model") or "llama3.2"
+        sanitized = normalize_page_markdown_with_llm(sanitized, page_num=page_num, model=norm_model)
+
+    return page_num, sanitized
 
 def render_pdf_page_content(
     doc: pymupdf.Document,
@@ -156,7 +169,9 @@ def extract_pdf_document(
     doc: pymupdf.Document,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None
+    vision_prompt: Optional[str] = None,
+    normalize_with_llm: bool = False,
+    normalization_model: Optional[str] = None
 ) -> List[Tuple[int, str]]:
     """
     Extracts markdown per page preserving layout, native tables, and high-fidelity OCR.
@@ -191,7 +206,9 @@ def extract_pdf_document(
         work_items.append(prepare_pdf_page_work_item(
             doc, page, page_num, raw_text, md_tables, used_ocr,
             vision_model=vision_model,
-            vision_prompt=vision_prompt
+            vision_prompt=vision_prompt,
+            normalize_with_llm=normalize_with_llm,
+            normalization_model=normalization_model
         ))
 
     with ThreadPoolExecutor(max_workers=min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))) as executor:
@@ -218,62 +235,41 @@ def extract_tabular_document(filename: str, content: bytes, file_path: Optional[
                 df.columns = [str(c).replace("\n", " ").replace("|", "\\|").strip() for c in df.columns]
                 # Convert to markdown
                 headers = list(df.columns)
-                md_lines = [f"### Sheet: {sheet_name}\n"]
-                md_lines.append("| " + " | ".join(headers) + " |")
-                md_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
-                for row_tuple in df.itertuples(index=False):
-                    row_vals = [str(v).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(v) else "" for v in row_tuple]
-                    md_lines.append("| " + " | ".join(row_vals) + " |")
-                sheets_output.append("\n".join(md_lines))
-
-            if sheets_output:
-                return [(1, "\n\n".join(sheets_output))]
-        except Exception as excel_err:
-            logger.warning(f"Excel parsing failed for {filename}: {excel_err}")
-
-    # Parquet format
-    elif ext == ".parquet":
-        try:
-            parquet_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
-            df = pd.read_parquet(parquet_source)
-            df_subset = df.head(150)
-            headers = [str(c).replace("|", "\\|").strip() for c in df_subset.columns]
-            md_lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
-            for row_tuple in df_subset.itertuples(index=False):
-                row_vals = [str(v).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(v) else "" for v in row_tuple]
-                md_lines.append("| " + " | ".join(row_vals) + " |")
-            return [(1, "\n".join(md_lines))]
-        except Exception as pq_err:
-            logger.warning(f"Parquet parsing failed for {filename}: {pq_err}")
-
-    if file_path and os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            text_content = f.read()
-    else:
-        text_content = content.decode("utf-8", errors="ignore")
-
-    if ext in [".csv", ".tsv"]:
-        delimiter = "\t" if ext == ".tsv" else ","
-        try:
-            reader = csv.reader(io.StringIO(text_content), delimiter=delimiter)
-            rows = [r for r in reader if any(r)]
-            if rows:
-                md_lines = []
-                headers = [h.replace("|", "\\|").replace("\n", " ").strip() for h in rows[0]]
-                md_lines.append("| " + " | ".join(headers) + " |")
-                md_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
-                for r in rows[1:150]:
-                    padded = r + [""] * (len(headers) - len(r))
-                    clean_row = [c.replace("|", "\\|").replace("\n", " ").strip() for c in padded[:len(headers)]]
-                    md_lines.append("| " + " | ".join(clean_row) + " |")
-                if len(rows) > 150:
-                    md_lines.append(f"\n*... Total {len(rows)} rows tabular data extracted.*")
-                return [(1, "\n".join(md_lines))]
+                md_table = "| " + " | ".join(headers) + " |\n"
+                md_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+                for _, row in df.iterrows():
+                    row_vals = [str(val).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(val) else "" for val in row]
+                    md_table += "| " + " | ".join(row_vals) + " |\n"
+                sheets_output.append(f"### Foglio: {sheet_name}\n\n{md_table}")
+            return [(1, "\n\n".join(sheets_output))]
         except Exception as e:
-            logger.warning(f"Error parsing tabular file {filename}: {e}")
+            logger.warning(f"Excel parsing fallback for {filename}: {e}")
 
-    elif ext == ".json":
+    # CSV / TSV
+    if ext in [".csv", ".tsv"]:
         try:
+            csv_source = file_path if (file_path and os.path.exists(file_path)) else io.BytesIO(content)
+            sep = "\t" if ext == ".tsv" else ","
+            df = pd.read_csv(csv_source, sep=sep, nrows=300, on_bad_lines="skip")
+            df.columns = [str(c).replace("\n", " ").replace("|", "\\|").strip() for c in df.columns]
+            headers = list(df.columns)
+            md_table = "| " + " | ".join(headers) + " |\n"
+            md_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+            for _, row in df.iterrows():
+                row_vals = [str(val).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(val) else "" for val in row]
+                md_table += "| " + " | ".join(row_vals) + " |\n"
+            return [(1, md_table)]
+        except Exception as e:
+            logger.warning(f"CSV/TSV parsing fallback for {filename}: {e}")
+
+    # JSON formatted
+    if ext == ".json":
+        try:
+            if file_path and os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    text_content = f.read()
+            else:
+                text_content = content.decode("utf-8", errors="ignore")
             data = json.loads(text_content)
             pretty_json = json.dumps(data, indent=2, ensure_ascii=False)
             return [(1, f"```json\n{pretty_json}\n```")]
@@ -288,7 +284,9 @@ def extract_document_markdown(
     file_path: Optional[str] = None,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None
+    vision_prompt: Optional[str] = None,
+    normalize_with_llm: bool = False,
+    normalization_model: Optional[str] = None
 ) -> Tuple[str, int]:
     """Fast-routed, sanitized, and pagination-preserving document markdown extractor with progress callback."""
     category = classify_file_type(filename)
@@ -307,7 +305,9 @@ def extract_document_markdown(
                     pdf_doc,
                     progress_callback=progress_callback,
                     vision_model=vision_model,
-                    vision_prompt=vision_prompt
+                    vision_prompt=vision_prompt,
+                    normalize_with_llm=normalize_with_llm,
+                    normalization_model=normalization_model
                 )
             finally:
                 pdf_doc.close()
@@ -323,6 +323,9 @@ def extract_document_markdown(
                 img_bytes = f.read()
         ocr_text = run_layout_ocr(img_bytes)
         sanitized_ocr = sanitize_extracted_text(ocr_text)
+        if normalize_with_llm and sanitized_ocr:
+            norm_model = normalization_model or "llama3.2"
+            sanitized_ocr = normalize_page_markdown_with_llm(sanitized_ocr, page_num=1, model=norm_model)
         if sanitized_ocr:
             page_blocks.append((1, sanitized_ocr))
         else:

@@ -1,5 +1,5 @@
 import re
-from typing import Set
+from typing import Set, List
 
 # Core Italian and English vocabulary for OCR word separation
 _CORE_VOCABULARY: Set[str] = {
@@ -9,40 +9,41 @@ _CORE_VOCABULARY: Set[str] = {
     "bene", "borgo", "care", "call", "center", "camera", "cap", "casa", "casella", "causa",
     "cessazione", "che", "chi", "chiede", "chiedo", "ci", "ciao", "ciascun", "ciascuno",
     "civico", "cliente", "codice", "cognome", "col", "coi", "come", "comune", "con", "contro",
-    "conto", "contratto", "cosa", "cosi", "cui", "customer", "da", "dagli", "dai", "dal",
+    "conto", "contratto", "cosa", "cosi", "così", "cui", "customer", "da", "dagli", "dai", "dal",
     "dall", "dalla", "dalle", "dallo", "data", "dati", "dei", "del", "dell", "della",
     "delle", "dello", "detto", "di", "diretto", "direttamente", "diritto", "dispositivo",
-    "documento", "dopo", "dove", "dovra", "dovrà", "dovere", "due", "e", "ed",
-    "elenco", "email", "e-mail", "entro", "era", "erano", "esclusiva", "escluso", "esempio",
-    "esercizio", "essere", "essendo", "stato", "stata", "stati", "state", "europeo", "fa",
-    "family", "fatto", "fino", "firenze", "firma", "fiscale", "fornire", "fornite", "forniti",
-    "fornito", "fra", "gestione", "gia", "giorno", "gli", "grazie", "ha", "hanno", "ho",
+    "disponibile", "disponibili", "disattivazione", "decorrenza", "dichiara", "documento",
+    "dopo", "dove", "dovra", "dovrà", "dovrd", "dovere", "due", "e", "ed", "elenco",
+    "email", "e-mail", "entro", "era", "erano", "esclusiva", "escluso", "esempio",
+    "esercizio", "essere", "essendo", "stato", "stata", "stati", "state", "europeo", "europea",
+    "fa", "family", "fatto", "fino", "firenze", "firma", "fiscale", "fornire", "fornite", "forniti",
+    "fornito", "fra", "gestione", "gia", "già", "giorno", "giorni", "gli", "grazie", "ha", "hanno", "ho",
     "i", "il", "in", "inviare", "inviato", "inviata", "inviati", "inviate", "indicare",
     "indicato", "indicata", "indicati", "indicate", "indicazione", "indicazioni", "indirizzo",
-    "insieme", "io", "l", "la", "lasciare", "le", "leggibile", "lei", "lettera", "li", "lo",
-    "loro", "luogo", "ma", "mail", "mai", "mantova", "me", "medio", "meno", "mentre", "mese",
-    "mesi", "mezzo", "mi", "mio", "mia", "miei", "mie", "modulo", "molto", "momento", "mondo",
-    "ne", "negli", "nei", "nel", "nell", "nella", "nelle", "nello", "niente", "no", "nome",
-    "non", "nostro", "nostra", "nostri", "nostre", "noto", "notte", "nuovo", "nuova", "numero",
-    "o", "obbligatori", "obbligatorio", "obbligatoria", "oggi", "ogni", "oltre", "oppure",
-    "ora", "ore", "ormai", "oro", "ovvero", "padre", "parte", "parti", "pec", "per", "perche",
-    "perché", "percio", "persona", "piu", "più", "poco", "poi", "point", "porta", "posta",
-    "postale", "posto", "potere", "poter", "potuto", "primo", "prima", "primi", "prime",
-    "presso", "presente", "presenti", "proprio", "prov", "provincia", "punto", "punti",
+    "insieme", "intesa", "io", "l", "la", "lasciare", "le", "leggibile", "lei", "lettera", "li", "lo",
+    "localita", "località", "loro", "luogo", "ma", "mail", "mai", "mantova", "mantovano", "me",
+    "medio", "meno", "mentre", "mese", "mesi", "mezzo", "mi", "milano", "mio", "mia", "miei", "mie",
+    "modulo", "molto", "momento", "mondo", "n", "ne", "negli", "nei", "nel", "nell", "nella", "nelle", "nello",
+    "niente", "no", "nome", "non", "nord", "nostro", "nostra", "nostri", "nostre", "noto", "notte",
+    "nuovo", "nuova", "numero", "o", "obbligatori", "obbligatorio", "obbligatoria", "oggi", "ogni",
+    "oltre", "oppure", "ora", "ore", "ormai", "oro", "ovvero", "padre", "parte", "parti", "pec", "per",
+    "perche", "perché", "percio", "perciò", "persona", "piu", "più", "piazza", "poco", "poi", "point",
+    "poma", "porta", "posta", "postale", "posto", "potere", "poter", "potuto", "primo", "prima",
+    "primi", "prime", "presso", "presente", "presenti", "proprio", "prov", "provincia", "punto", "punti",
     "pure", "quale", "quali", "quando", "quanto", "quanta", "quanti", "quante", "quasi",
     "quello", "quella", "quelli", "quelle", "questo", "questa", "questi", "queste", "qui",
     "quindi", "raccomandata", "ragione", "recesso", "recandosi", "rendere", "residenza",
-    "richiesta", "richiede", "riconsegnare", "riconsegnato", "riconsegnata", "roma", "s",
-    "sa", "salve", "sapere", "saranno", "sara", "sarà", "se", "secondo", "seconda", "seguito",
-    "sei", "sempre", "senza", "serafico", "servizio", "servizi", "si", "sia", "sito", "sociale",
-    "solo", "soltanto", "sono", "sopra", "sotto", "sottoscritto", "sottoscritta", "spett",
-    "spett.le", "spedire", "spedendo", "spedendolo", "spesa", "spese", "spesso", "sta",
-    "stanno", "stare", "stesso", "stessa", "stessi", "stesse", "succursale", "su", "sua",
-    "sue", "sugli", "sui", "sul", "sull", "sulla", "sulle", "sullo", "suo", "suoi", "tale",
-    "tali", "tanto", "telepass", "tempo", "tempi", "terzo", "testo", "ti", "tra", "tramite",
-    "tre", "tu", "tuo", "tua", "tuoi", "tue", "tutto", "tutta", "tutti", "tutte", "un",
-    "una", "uno", "uomo", "va", "vai", "valore", "vecchio", "vendita", "venuto", "veramente",
-    "vero", "vera", "vi", "via", "viadel", "villa", "poma", "vita", "visto", "vista",
+    "residente", "relativo", "relativa", "riconsegnare", "riconsegnato", "riconsegnata",
+    "richiesta", "richiede", "roma", "s", "sa", "salve", "sapere", "saranno", "sara", "sarà", "se",
+    "secondo", "seconda", "seguito", "sei", "sempre", "senza", "serafico", "servizio", "servizi",
+    "si", "sia", "sito", "sociale", "solo", "soltanto", "sono", "sopra", "sotto", "sottoscritto",
+    "sottoscritta", "spa", "spett", "spett.le", "spedire", "spedendo", "spedendolo", "spesa",
+    "spese", "spesso", "sta", "stanno", "stare", "stesso", "stessa", "stessi", "stesse", "succursale",
+    "su", "sua", "sue", "sugli", "sui", "sul", "sull", "sulla", "sulle", "sullo", "sud", "suo", "suoi",
+    "tale", "tali", "tanto", "telepass", "tempo", "tempi", "terzo", "testo", "ti", "titolare",
+    "tra", "tramite", "tre", "tu", "tuo", "tua", "tuoi", "tue", "tutto", "tutta", "tutti", "tutte",
+    "un", "una", "uno", "unitamente", "uomo", "va", "vai", "valore", "vecchio", "vendita", "venuto",
+    "veramente", "vero", "vera", "vi", "via", "viadel", "villa", "vita", "visto", "vista",
     "voci", "voi", "volere", "volta", "volte", "vostro", "vostra", "vostri", "vostre", "web",
     # English functional words
     "about", "above", "across", "after", "again", "against", "all", "almost", "along",
@@ -69,33 +70,43 @@ _CORE_VOCABULARY: Set[str] = {
     "word", "work", "would", "write", "written", "year", "you", "your"
 }
 
+_VALID_SINGLE_LETTERS: Set[str] = {"a", "e", "i", "o", "d", "n"}
+
+def _is_italian_fiscal_code(token: str) -> bool:
+    """Checks if token is a standard 16-character Italian Fiscal Code (Codice Fiscale)."""
+    return bool(re.match(r'^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$', token))
+
 def _viterbi_segment_compound(text: str) -> str:
     """Dynamic programming Viterbi unigram word segmentation for fused OCR Latin text."""
     if len(text) <= 3 or text.lower() in _CORE_VOCABULARY:
         return text
 
+    is_upper = text.isupper()
+    is_title = text.istitle()
     n = len(text)
     dp = [(float('inf'), -1)] * (n + 1)
     dp[0] = (0, 0)
+    w_lower = text.lower()
 
     for i in range(1, n + 1):
         for j in range(max(0, i - 25), i):
-            w = text[j:i].lower()
-            if w in _CORE_VOCABULARY:
-                # Prefer recognized longer dictionary words
-                cost = dp[j][0] + 1.0 / (len(w) ** 1.25)
+            sub = w_lower[j:i]
+            if sub in _CORE_VOCABULARY:
+                if len(sub) == 1:
+                    cost = dp[j][0] + 4.5
+                else:
+                    cost = dp[j][0] + 1.0 / (len(sub) ** 1.3)
                 if cost < dp[i][0]:
                     dp[i] = (cost, j)
             elif j == i - 1 and dp[j][0] != float('inf'):
-                # Single-character fallback penalty
-                cost = dp[j][0] + 6.0
+                cost = dp[j][0] + 8.0
                 if cost < dp[i][0]:
                     dp[i] = (cost, j)
 
     if dp[n][0] == float('inf') or dp[n][1] == -1:
         return text
 
-    res = []
+    res: List[str] = []
     curr = n
     while curr > 0:
         prev = dp[curr][1]
@@ -104,57 +115,113 @@ def _viterbi_segment_compound(text: str) -> str:
 
     res.reverse()
 
-    # Guard: if any segment is a single character (other than common Italian/English 1-letter words 'a', 'e', 'i', 'o', 'd'),
-    # the segmentation was an unnatural split of an unknown word. Reject and preserve the original text.
-    valid_single_letters = {"a", "e", "i", "o", "d"}
-    for segment in res:
-        if len(segment) == 1 and segment.lower() not in valid_single_letters:
-            return text
-        if len(segment) > 1 and segment.lower() not in _CORE_VOCABULARY:
+    # Guard 1: single-letter segments must all be valid single words and constitute <= 35% of total segments
+    single_letters = [s for s in res if len(s) == 1]
+    if any(s.lower() not in _VALID_SINGLE_LETTERS for s in single_letters):
+        return text
+    if len(res) > 1 and (len(single_letters) / len(res)) > 0.35:
+        return text
+
+    # Guard 2: Every multi-letter segment must be a recognized vocabulary word
+    for s in res:
+        if len(s) > 1 and s.lower() not in _CORE_VOCABULARY:
             return text
 
-    return " ".join(res)
+    if len(res) <= 1:
+        return text
+
+    out_segments: List[str] = []
+    for s in res:
+        if is_upper:
+            out_segments.append(s.upper())
+        elif is_title and len(out_segments) == 0:
+            out_segments.append(s.capitalize())
+        else:
+            out_segments.append(s)
+
+    return " ".join(out_segments)
 
 def normalize_ocr_token_spacing(text: str) -> str:
     """
     Normalizes spacing on OCR text:
+    - Isolates email addresses and URLs
+    - Separates fused TLDs (e.g. .comovvero -> .com ovvero)
+    - Separates email keywords (e.g. e-mailgestione -> e-mail gestione)
     - Splits letters and digits (e.g. Laurentina449 -> Laurentina 449)
     - Splits camelCase / PascalCase (e.g. TelepassFamily -> Telepass Family)
-    - Separates punctuation boundaries (e.g. Telepass,recandosi -> Telepass, recandosi)
-    - Segments fused lowercase compounds (e.g. conlapresentechiedelacessazionedelcontratto)
-    - Preserves emails, URLs, and formatted IDs/Fiscal codes
+    - Separates punctuation and symbol boundaries (e.g. Telepass,recandosi -> Telepass, recandosi, CODICEFISCALE* -> CODICE FISCALE *)
+    - Segments fused lowercase and uppercase compounds (e.g. CODICEFISCALE, conlapresentechiedelacessazionedelcontratto)
+    - Preserves emails, URLs, and formatted 16-char Italian Fiscal Codes
     """
     if not text or not text.strip():
         return ""
 
+    # 1. Pre-separate common domain TLDs when fused with trailing words
+    text = re.sub(
+        r'(\.(?:info|tech|biz|com|net|org|gov|edu|eu|it|io|me|ai|co))([a-zA-Z]{2,})',
+        r'\1 \2',
+        text,
+        flags=re.IGNORECASE
+    )
+
+    # 2. Pre-separate email prefixes, company forms, and trailing abbreviations when fused
+    text = re.sub(r'(?i)(e-mail|email|casella|indirizzo|pec)(?=[a-zA-Z0-9])', r' \1 ', text)
+    text = re.sub(r'(?i)([a-zA-Z]+)(e-mail|email)', r'\1 \2', text)
+    text = re.sub(r'([a-zA-Z]+)(S\.p\.A\.|Spa|S\.r\.l\.|Srl)', r'\1 \2', text, flags=re.IGNORECASE)
+    text = re.sub(r'(S\.p\.A\.|Spa|S\.r\.l\.|Srl)([a-zA-Z]+)', r'\1 \2', text, flags=re.IGNORECASE)
+    text = re.sub(r'([a-zA-Z]+)(a\.r\.|c\.a\.|c\.p\.)', r'\1 \2', text, flags=re.IGNORECASE)
+
+    # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
+    protected: List[str] = []
+    def _protect_token(m: re.Match) -> str:
+        idx = len(protected)
+        protected.append(m.group(0))
+        return f" __PROT_TOK_{idx}__ "
+
+    text = re.sub(r'https?://[^\s,;]+', _protect_token, text)
+    text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _protect_token, text)
+    text = re.sub(r'\b[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]\b', _protect_token, text)
+
+    # 4. Separate asterisks and symbols
+    text = re.sub(r'(\*+)', r' \1 ', text)
+    text = re.sub(r'([,;:\?!])', r'\1 ', text)
+    text = re.sub(r'(?<=[a-zA-Z])(\/)(?=[a-zA-Z])', r' \1 ', text)
+
+    # 5. Split digits and letters
+    text = re.sub(r'(?<=[a-zA-Z])([0-9]+)', r' \1', text)
+    text = re.sub(r'(?<=[0-9])([a-zA-Z]+)', r' \1', text)
+
+    # 6. Split PascalCase / camelCase
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    text = re.sub(r'([A-Z]{2,})([A-Z][a-z])', r'\1 \2', text)
+
     tokens = text.split()
-    cleaned_tokens = []
+    cleaned_tokens: List[str] = []
 
     for raw_tok in tokens:
-        # Preserve emails, URLs, and standard 16-char uppercase fiscal codes verbatim
-        if "@" in raw_tok or raw_tok.startswith("http://") or raw_tok.startswith("https://") or (raw_tok.isupper() and len(raw_tok) == 16):
-            cleaned_tokens.append(raw_tok)
-            continue
+        # Check for placeholder
+        if raw_tok.startswith("__PROT_TOK_") and raw_tok.endswith("__"):
+            try:
+                prot_idx = int(raw_tok[len("__PROT_TOK_"):-2])
+                cleaned_tokens.append(protected[prot_idx])
+                continue
+            except (ValueError, IndexError):
+                pass
 
-        # Normalize intra-token punctuation spacing
-        tok = re.sub(r'(?<=[a-zA-Z0-9])([,;:\*])(?=[a-zA-Z0-9])', r'\1 ', raw_tok)
-        tok = re.sub(r'(?<=[a-zA-Z])(\/)(?=[a-zA-Z])', r' \1 ', tok)
-
-        # Split digits and letters
-        tok = re.sub(r'([a-zA-Z])([0-9])', r'\1 \2', tok)
-        tok = re.sub(r'([0-9])([a-zA-Z])', r'\1 \2', tok)
-
-        # Split PascalCase / camelCase
-        tok = re.sub(r'([a-z])([A-Z])', r'\1 \2', tok)
-
-        sub_tokens = tok.split()
-        for st in sub_tokens:
-            # Segment long lowercase run if >= 7 characters and purely alphabetic
-            clean_alpha = re.sub(r'[^a-zA-Z]', '', st)
-            if len(clean_alpha) >= 7 and clean_alpha.isalpha() and not clean_alpha.isupper():
-                cleaned_tokens.append(_viterbi_segment_compound(st))
+        # Extract leading and trailing punctuation
+        match = re.match(r'^([^a-zA-Z0-9]*)(.*?)([^a-zA-Z0-9]*)$', raw_tok)
+        if match:
+            pre, core, post = match.groups()
+            if len(core) >= 5 and core.isalpha():
+                seg = _viterbi_segment_compound(core)
+                cleaned_tokens.append(f"{pre}{seg}{post}")
             else:
-                cleaned_tokens.append(st)
+                cleaned_tokens.append(raw_tok)
+        else:
+            cleaned_tokens.append(raw_tok)
 
     out = " ".join(cleaned_tokens)
+    for idx, prot_val in enumerate(protected):
+        out = out.replace(f"__PROT_TOK_{idx}__", prot_val)
+
     return re.sub(r'\s+', ' ', out).strip()

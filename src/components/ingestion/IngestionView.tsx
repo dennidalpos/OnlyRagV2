@@ -248,11 +248,39 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Active Model Badge */}
+          {/* Active Chat RAG & Text Check Model Badge */}
           <ModelBadge
-            modelName={settings?.visionModel || 'llama3.2-vision'}
-            tooltip={`Vision & OCR: ${settings?.visionModel || 'llama3.2-vision'}`}
+            modelName={settings?.chatModel || settings?.defaultModel || 'llama3.2'}
+            tier="standard"
+            tierName="Chat RAG"
+            tooltip={t('ingestion.textCheckTooltip', { model: settings?.chatModel || settings?.defaultModel || 'llama3.2' })}
           />
+
+          {/* Active Vision Model Badge */}
+          {settings?.visionModel && (
+            <ModelBadge
+              modelName={settings.visionModel}
+              tier="fast"
+              tierName="Vision"
+              tooltip={`Vision & OCR: ${settings.visionModel}`}
+            />
+          )}
+
+          {/* Optional LLM Text Check Toggle */}
+          <button
+            type="button"
+            onClick={() => onUpdateSettings?.({ normalizeWithLlm: !settings?.normalizeWithLlm })}
+            aria-label={t('ingestion.textCheckToggle')}
+            title={t('ingestion.textCheckTooltip', { model: settings?.chatModel || settings?.defaultModel || 'llama3.2' })}
+            className={`px-3 py-1.5 border text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 ${
+              settings?.normalizeWithLlm
+                ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-700/80 text-emerald-300 shadow-sm'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${settings?.normalizeWithLlm ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+            <span>{t('ingestion.textCheckToggle')}</span>
+          </button>
 
           <button
             type="button"

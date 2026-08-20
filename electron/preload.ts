@@ -14,9 +14,10 @@ const api: IElectronAPI = {
   installOrLaunchOllama: () => ipcRenderer.invoke('ollama:install-or-launch'),
   getSidecarStatus: () => ipcRenderer.invoke('sidecar:status'),
   restartSidecar: () => ipcRenderer.invoke('sidecar:restart'),
-  openFileDialog: (options) => ipcRenderer.invoke('dialog:open-file', options),
-  openDirectoryDialog: (options) => ipcRenderer.invoke('dialog:open-directory', options),
-  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string) => ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt),
+  openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:open-file', options),
+  openDirectoryDialog: (options?: { title?: string }) => ipcRenderer.invoke('dialog:open-directory', options),
+  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string) =>
+    ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel),
   updateIngestedDocument: (docId: string, markdownContent: string) => ipcRenderer.invoke('ingest:update', docId, markdownContent),
   translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, backupOriginal, targetDir),
   getDocumentPagePreview: (docId: string, pageNumber: number) => ipcRenderer.invoke('ingest:page-preview', docId, pageNumber),

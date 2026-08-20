@@ -26,6 +26,27 @@ def sanitize_extracted_text(text: str) -> str:
     # Convert common font-embedded bullet characters to standard markdown list dashes
     text = re.sub(r'[\uf0b7\uf0a7\uf076\uf0d8\u2022\u25cf\u25cb\u25aa\u25a0]\s*', '- ', text)
 
+    # Normalize fullwidth punctuation from OCR models to standard ASCII
+    fullwidth_map = str.maketrans({
+        '\uff0c': ', ',
+        '\uff0e': '. ',
+        '\uff1a': ': ',
+        '\uff1b': '; ',
+        '\uff01': '! ',
+        '\uff1f': '? ',
+        '\uff08': '(',
+        '\uff09': ')',
+        '\uff3b': '[',
+        '\uff3d': ']',
+        '\uff0d': '-',
+        '\uff5e': '~',
+        '\u201c': '"',
+        '\u201d': '"',
+        '\u2018': "'",
+        '\u2019': "'",
+    })
+    text = text.translate(fullwidth_map)
+
     # Normalize non-breaking and zero-width spaces
     text = text.replace('\xa0', ' ')
     text = text.replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')

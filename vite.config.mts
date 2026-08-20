@@ -50,6 +50,12 @@ export default defineConfig({
             if (id.includes('@monaco-editor') || id.includes('monaco-editor')) {
               return 'monaco-vendor'
             }
+            if (id.includes('gpt-tokenizer')) {
+              return 'tokenizer-vendor'
+            }
+            if (id.includes('@tanstack')) {
+              return 'virtual-vendor'
+            }
             if (id.includes('lucide-react')) {
               return 'icons-vendor'
             }

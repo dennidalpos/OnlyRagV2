@@ -36,14 +36,31 @@ def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
     return None
 
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
-    """Prepares image for OCR, normalizing color channels and downscaling only if exceeding max_dim (2560px for full A4 scans)."""
+    """Prepares image for OCR, normalizing color channels, applying contrast enhancement, and downscaling only if exceeding max_dim."""
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps, ImageEnhance
         import io
         Image.MAX_IMAGE_PIXELS = 60_000_000
         img = Image.open(io.BytesIO(image_bytes))
+
+        # Auto-orient EXIF metadata if present
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+
         if img.mode in ("RGBA", "P", "LA"):
             img = img.convert("RGB")
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Slight contrast enhancement for scanned documents
+        try:
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.15)
+        except Exception:
+            pass
+
         width, height = img.size
         if width > max_dim or height > max_dim:
             if width > height:
@@ -53,14 +70,10 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
                 new_h = max_dim
                 new_w = max(1, int(width * (max_dim / height)))
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            out_buf = io.BytesIO()
-            img.save(out_buf, format="PNG")
-            return out_buf.getvalue()
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
-            out_buf = io.BytesIO()
-            img.save(out_buf, format="PNG")
-            return out_buf.getvalue()
+
+        out_buf = io.BytesIO()
+        img.save(out_buf, format="PNG")
+        return out_buf.getvalue()
     except Exception as e:
         logger.debug(f"Image preprocessing skipped: {e}")
     return image_bytes

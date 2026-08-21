@@ -1,9 +1,14 @@
-import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
+import type { AgentToolCall, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
-type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
+type EmitLog = (
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
+  message: string,
+  detail?: string,
+  meta?: Partial<AgentLogEntry>
+) => void
 
 export interface AskToolContext {
   parsedTool: AgentToolCall
@@ -94,7 +99,9 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
   // A vague clarification that ran out of redirect budget is the model giving up after being
   // stuck, not a genuine question -- the session must not be recorded as a success.
   const gaveUpWhileStuck = isVagueClarification && ctx.stagnationStreak >= ASK_REDIRECT_LIMIT
-  ctx.emitLog('info', `❓ AI Agent Question: ${question}`)
+  ctx.emitLog('info', `❓ AI Agent Question: ${question}`, undefined, {
+    category: 'agent_question',
+  })
   ctx.emitDone(!gaveUpWhileStuck, question)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'ask', parsedTool.parameters, parsedTool.explanation)

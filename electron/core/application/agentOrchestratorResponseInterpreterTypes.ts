@@ -7,7 +7,14 @@ import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultProcessor'
 
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
+import type { AgentLogEntry } from '../domain/agent/agentTypes'
+
+export type EmitLog = (
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
+  message: string,
+  detail?: string,
+  meta?: Partial<AgentLogEntry>
+) => void
 
 /**
  * Loop-scoped counters the response interpreter and its helpers read and advance across turns.

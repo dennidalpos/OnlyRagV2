@@ -423,10 +423,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         streamThrottleTimer.current = intervalId
 
         try {
-          const dynamicNumCtx = calculateDynamicContextWindow(finalPrompt.length, budget.maxNumCtx)
+          const dynamicNumCtx = calculateDynamicContextWindow(finalPrompt, budget.maxNumCtx)
           logger.info(
             'ChatEngine',
-            `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: prompt ${finalPrompt.length} chars -> num_ctx ${dynamicNumCtx} (max ${budget.maxNumCtx})`
+            `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: prompt -> num_ctx ${dynamicNumCtx} (max ${budget.maxNumCtx})`
           )
 
           await window.electronAPI.generateOllamaStream(

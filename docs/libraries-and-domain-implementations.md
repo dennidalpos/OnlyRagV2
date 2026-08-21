@@ -39,6 +39,7 @@ Questo documento costituisce la fonte di verità sulle dipendenze esterne utiliz
 | **`gray-matter`** | `^4.0.3` | Parsing ed estrazione dei metadati YAML frontmatter nei manifesti delle skill agentiche (`SKILL.md`). |
 | **`ignore`** | `^7.0.6` | Rispetto rigoroso dei pattern standard `.gitignore` durante la scansione e l'esplorazione ricorsiva del workspace. |
 | **`strip-ansi`** | `^7.2.0` | Rimozione dei codici di escape ANSI di colore e formattazione dai log shell prima della persistenza su disco e dell'invio all'LLM. |
+| **`gpt-tokenizer`** | `^4.0.0` | Calcolo deterministico dei token reali BPE (`o200k_base`) per la selezione ottimale del `num_ctx` Ollama (`contextWindowCalculator.ts`). |
 | **`p-queue` & `p-retry`** | `^9.3.3` / `^8.0.0` | Accodamento sequenziale dei task asincroni ed esecuzione di retry resilienti con backoff esponenziale. |
 
 ---

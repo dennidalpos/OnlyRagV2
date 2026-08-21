@@ -16,12 +16,38 @@ export interface AgentTaskPayload {
   settings?: AppSettings
 }
 
+export type AgentLogCategory =
+  | 'user_prompt'
+  | 'agent_thought'
+  | 'tool_execution'
+  | 'file_mutation'
+  | 'command_execution'
+  | 'test_run'
+  | 'workspace_exploration'
+  | 'web_research'
+  | 'final_report'
+  | 'agent_question'
+  | 'system_alert'
+  | 'generic_info'
+
 export interface AgentLogEntry {
   id: string
   timestamp: string
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request'
   message: string
   detail?: string
+  category?: AgentLogCategory
+  toolName?: string
+  target?: string
+  status?: 'running' | 'success' | 'failure'
+  modelName?: string
+  verb?: 'Created' | 'Edited' | 'Deleted' | 'Moved' | 'Copied' | 'Ran' | 'Read' | 'Search' | 'Fetch' | 'Download' | 'Symbols' | 'List'
+  testRun?: {
+    isPass: boolean
+    summary: string
+    passedCount?: number
+    failedCount?: number
+  }
 }
 
 export interface AgentApprovalRequest {

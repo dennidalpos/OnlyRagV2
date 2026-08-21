@@ -13,6 +13,25 @@ import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from '
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
   if (ctx.agentMode === 'agent') {
     const pendingMilestonesCount = ctx.goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
+
+    // Critical Early-Finish Defense:
+    // If the model tries to finish immediately at step 1 or 2 with 0 file mutations and multiple pending milestones (>1),
+    // and has not executed any mutating tool, block it and force it to take action.
+    const isPrematureStart = ctx.stepCount <= 2 && !ctx.flags.hasFileMutations && pendingMilestonesCount > 1
+    if (isPrematureStart && !ctx.surfacedDodReasons.has('premature_start')) {
+      ctx.surfacedDodReasons.add('premature_start')
+      const zeroMutationIntervention = `[CRITICAL EXECUTION ERROR: PREMATURE FINISH WITH ZERO WORK DONE]\nYou have NOT created or modified any files yet in this workspace (0 files touched).\nYou are STRICTLY FORBIDDEN from calling the "finish" tool at this stage.\nDirectives:\n1. You MUST begin implementing the first milestone immediately.\n2. Create the necessary project files (e.g. package.json, src/App.tsx, index.html) using "write_file" or scaffold with "run_command".\n3. DO NOT invoke "finish" until your implementation is written and verified.`
+
+      ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: 'Premature finish with 0 file mutations on session start' }, zeroMutationIntervention)
+      ctx.emitLog('info', '⛔ DoD Guard: Chiusura rifiutata — Nessun file creato o modificato nel workspace.', zeroMutationIntervention, {
+        category: 'system_alert',
+      })
+      if (ctx.settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', zeroMutationIntervention)
+      }
+      return { outcome: 'continue' }
+    }
+
     const dodCheck = ctx.executionGuard.validateTaskCompletion({
       requireVerifiedBuild: (ctx.settings as any).verifyBeforeFinish !== false,
       hasVerifiedBuild: ctx.flags.hasVerifiedBuild,
@@ -30,7 +49,9 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     if (!dodCheck.allowed && dodCheck.suggestedAction && !ctx.surfacedDodReasons.has(dodCategory)) {
       ctx.surfacedDodReasons.add(dodCategory)
       ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: dodReason }, dodCheck.suggestedAction)
-      ctx.emitLog('info', `🔒 DoD Guard Interception: ${dodReason}`)
+      ctx.emitLog('info', `🔒 DoD Guard Interception: ${dodReason}`, dodCheck.suggestedAction, {
+        category: 'system_alert',
+      })
       if (ctx.settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', dodCheck.suggestedAction)
       }
@@ -56,7 +77,9 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     }
   }
 
-  ctx.emitLog('info', `Task Finished: ${summary}`, summary)
+  ctx.emitLog('info', `Task Finished: ${summary}`, summary, {
+    category: 'final_report',
+  })
   ctx.emitDone(true, summary)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)

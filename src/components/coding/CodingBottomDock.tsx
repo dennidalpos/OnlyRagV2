@@ -3,8 +3,6 @@ import {
   Terminal,
   FileText,
   GitBranch,
-  Activity,
-  ScanLine,
   ChevronDown,
   ChevronUp,
   Maximize2,
@@ -17,10 +15,8 @@ import { useTranslation } from '../../i18n'
 import { CodingTerminal } from './CodingTerminal'
 import { PlanPanel } from './PlanPanel'
 import { GitDiffPanel } from './GitDiffPanel'
-import { ActivitiesPanel } from './ActivitiesPanel'
-import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 
-export type BottomDockTab = 'terminal' | 'plan' | 'git_diff' | 'activities' | 'slm_diagnostics'
+export type BottomDockTab = 'terminal' | 'git_diff' | 'plan'
 
 interface CodingBottomDockProps {
   isOpen: boolean
@@ -45,7 +41,7 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
   c,
   planApproval,
   settings,
-  activeModelName,
+  activeModelName: _activeModelName,
   autoScroll,
   height,
   isResizing,
@@ -75,6 +71,19 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
           <button
             type="button"
             onClick={() => {
+              setActiveDockTab('git_diff')
+              c.fetchGitStatusAndDiff()
+              onToggleOpen()
+            }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-slate-400 hover:text-indigo-300 hover:bg-slate-900 transition-colors"
+          >
+            <GitBranch className="w-3 h-3 text-indigo-400" />
+            <span>Changes (Diff)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               setActiveDockTab('plan')
               onToggleOpen()
             }}
@@ -83,31 +92,6 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
             <FileText className="w-3 h-3 text-amber-400" />
             <span>Plan</span>
             {planIsReady && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveDockTab('git_diff')
-              c.fetchGitStatusAndDiff()
-              onToggleOpen()
-            }}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-slate-400 hover:text-indigo-300 hover:bg-slate-900 transition-colors"
-          >
-            <GitBranch className="w-3 h-3 text-indigo-400" />
-            <span>Git Diff</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveDockTab('activities')
-              onToggleOpen()
-            }}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-slate-400 hover:text-emerald-300 hover:bg-slate-900 transition-colors"
-          >
-            <Activity className="w-3 h-3 text-emerald-400" />
-            <span>Attività</span>
           </button>
         </div>
 
@@ -162,20 +146,6 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
 
           <button
             type="button"
-            onClick={() => setActiveDockTab('plan')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] transition-colors relative ${
-              activeDockTab === 'plan'
-                ? 'bg-slate-900 text-amber-300 border border-amber-800/60 font-semibold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5 text-amber-400" />
-            <span>Plan</span>
-            {planIsReady && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping absolute top-1 right-1" />}
-          </button>
-
-          <button
-            type="button"
             onClick={() => {
               setActiveDockTab('git_diff')
               c.fetchGitStatusAndDiff()
@@ -187,33 +157,21 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
             }`}
           >
             <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
-            <span>{t('coding.gitDiffTab')}</span>
+            <span>Changes (Diff)</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveDockTab('activities')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] transition-colors ${
-              activeDockTab === 'activities'
-                ? 'bg-slate-900 text-emerald-300 border border-emerald-800/60 font-semibold'
+            onClick={() => setActiveDockTab('plan')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] transition-colors relative ${
+              activeDockTab === 'plan'
+                ? 'bg-slate-900 text-amber-300 border border-amber-800/60 font-semibold'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
             }`}
           >
-            <Activity className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Attività</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveDockTab('slm_diagnostics')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] transition-colors ${
-              activeDockTab === 'slm_diagnostics'
-                ? 'bg-slate-900 text-fuchsia-300 border border-fuchsia-800/60 font-semibold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-            }`}
-          >
-            <ScanLine className="w-3.5 h-3.5 text-fuchsia-400" />
-            <span>{t('coding.slmDiagnosticsTab')}</span>
+            <FileText className="w-3.5 h-3.5 text-amber-400" />
+            <span>Plan</span>
+            {planIsReady && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping absolute top-1 right-1" />}
           </button>
         </div>
 
@@ -252,6 +210,15 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
           />
         )}
 
+        {activeDockTab === 'git_diff' && (
+          <GitDiffPanel
+            gitStatusLines={c.gitStatusLines}
+            gitDiffText={c.gitDiffText}
+            isFetchingGit={c.isFetchingGit}
+            onRefreshGit={c.fetchGitStatusAndDiff}
+          />
+        )}
+
         {activeDockTab === 'plan' && (
           <PlanPanel
             plan={planApproval.currentPlan}
@@ -275,30 +242,6 @@ export const CodingBottomDock: React.FC<CodingBottomDockProps> = ({
             completedStepCount={c.currentStep}
           />
         )}
-
-        {activeDockTab === 'git_diff' && (
-          <GitDiffPanel
-            gitStatusLines={c.gitStatusLines}
-            gitDiffText={c.gitDiffText}
-            isFetchingGit={c.isFetchingGit}
-            onRefreshGit={c.fetchGitStatusAndDiff}
-          />
-        )}
-
-        {activeDockTab === 'activities' && (
-          <ActivitiesPanel
-            actionLogs={c.actionLogs}
-            isExecuting={c.isExecuting}
-            activeSkills={c.activeSkills}
-            agentPrompt={c.agentPrompt}
-            activeModelName={activeModelName}
-            openFilesCount={c.openFiles.length}
-            pinnedFilesCount={c.pinnedFiles.size}
-            attachedDocsCount={c.attachedDocIds.size}
-          />
-        )}
-
-        {activeDockTab === 'slm_diagnostics' && <SlmDiagnosticsPanel />}
       </div>
     </div>
   )

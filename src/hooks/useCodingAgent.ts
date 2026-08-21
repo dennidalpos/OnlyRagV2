@@ -61,18 +61,22 @@ export function useCodingAgent(settings?: AppSettings) {
     parameters?: Record<string, any>
   } | null>(null)
 
-  const addActionLog = useCallback((type: AgentActionLog['type'], message: string, detail?: string) => {
-    setActionLogs((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        type,
-        message,
-        detail,
-      },
-    ])
-  }, [])
+  const addActionLog = useCallback(
+    (type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
+      setActionLogs((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          timestamp: new Date().toISOString(),
+          type,
+          message,
+          detail,
+          ...meta,
+        },
+      ])
+    },
+    []
+  )
 
   // Attached RAG documents
   const [attachedDocIds, setAttachedDocIds] = useState<Set<string>>(new Set())
@@ -302,17 +306,24 @@ ${output.slice(0, 300)}`
       }
 
       // 2. Refresh & purge references on file write/replace/delete operations
-      if (log.message.includes('Successfully deleted')) {
+      if (log.verb === 'Deleted' || log.message.includes('Successfully deleted')) {
         const match = log.message.match(/Successfully deleted (?:file|directory)?\s*(.+)/i)
-        const targetPath = match ? match[1].trim() : ''
-        if (targetPath) {
+        const targetPath = log.target || (match ? match[1].trim() : '')
+        if (targetPath && (log.verb === 'Deleted' || log.message.includes('Successfully deleted'))) {
           purgeFileReferences(targetPath)
-        } else if (workspacePath) {
+        }
+        if (workspacePath) {
           loadWorkspaceFiles(workspacePath)
         }
       } else if (
+        log.category === 'file_mutation' ||
+        log.verb === 'Created' ||
+        log.verb === 'Edited' ||
+        log.verb === 'Moved' ||
+        log.verb === 'Copied' ||
         log.message.includes('Successfully wrote file') ||
-        log.message.includes('Successfully replaced')
+        log.message.includes('Successfully replaced') ||
+        log.message.includes('Applied')
       ) {
         if (workspacePath) {
           loadWorkspaceFiles(workspacePath)
@@ -529,7 +540,7 @@ ${output.slice(0, 300)}`
     setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
     changeMetricsRef.current = { filesTouched: 0, additions: 0, deletions: 0 }
     currentStepRef.current = 0
-    addActionLog('info', `User Prompt: ${taskPrompt}`)
+    addActionLog('info', `User Prompt: ${taskPrompt}`, undefined, { category: 'user_prompt' })
 
     const effectiveMode = overrideMode || agentMode
     const runSessionId = activeSessionId || activeSession?.id || ''

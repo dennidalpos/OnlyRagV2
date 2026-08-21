@@ -1,9 +1,9 @@
-export class DiagnosticOutputReducer {
-  private static readonly ANSI_REGEX = /\u001b\[[0-9;]*[a-zA-Z]/g
+import stripAnsi from 'strip-ansi'
 
+export class DiagnosticOutputReducer {
   public static stripAnsi(text: string): string {
     if (!text) return ''
-    return text.replace(this.ANSI_REGEX, '')
+    return stripAnsi(text)
   }
 
   public static distillTerminalOutput(output: string, maxChars: number = 2500): string {

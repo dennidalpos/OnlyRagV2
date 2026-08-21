@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  categorizeAgentLog,
   getBadgeLang,
   getStepModelName,
+  extractBaseName,
+  resolveLogCategory,
 } from './agentLogMessageUtils'
+import { AgentActionLog } from '../../types'
 
 describe('agentLogMessageUtils Unit Tests', () => {
   describe('getBadgeLang', () => {
@@ -46,140 +48,57 @@ describe('agentLogMessageUtils Unit Tests', () => {
     })
   })
 
-  describe('categorizeAgentLog', () => {
-    it('should categorize user prompt messages', () => {
-      const res = categorizeAgentLog('User Prompt: Refactor the auth module')
-      expect(res.category).toBe('user_prompt')
-      expect(res.userPromptText).toBe('Refactor the auth module')
+  describe('extractBaseName', () => {
+    it('should extract the filename from Windows and POSIX paths', () => {
+      expect(extractBaseName('src\\components\\App.tsx')).toBe('App.tsx')
+      expect(extractBaseName('src/components/Button.tsx')).toBe('Button.tsx')
+      expect(extractBaseName('index.html')).toBe('index.html')
+      expect(extractBaseName('src/utils/diff.ts (confidence 100%)')).toBe('diff.ts')
     })
+  })
 
-    it('should categorize agent question and clarification requests', () => {
-      const res1 = categorizeAgentLog('❓ AI Agent Question: Should I use TypeScript or JavaScript?')
-      expect(res1.category).toBe('agent_question')
-      expect(res1.agentQuestionText).toBe('Should I use TypeScript or JavaScript?')
-
-      const res2 = categorizeAgentLog('Agent requested clarification: Please provide the port number')
-      expect(res2.category).toBe('agent_question')
-      expect(res2.agentQuestionText).toBe('Please provide the port number')
-    })
-
-    it('should categorize final implementation reports (Task Finished)', () => {
-      const res = categorizeAgentLog('Task Finished: ### 🎯 Riepilogo Implementazione\n- Creato file index.html\n- Test passati al 100%')
-      expect(res.category).toBe('final_report')
-      expect(res.finalReportText).toContain('### 🎯 Riepilogo Implementazione')
-      expect(res.finalReportText).toContain('Creato file index.html')
-    })
-
-    it('should categorize test runs with PASS/FAIL details', () => {
-      const resPass = categorizeAgentLog('Test Run: PASS (15 passed, 0 failed)')
-      expect(resPass.category).toBe('test_run')
-      expect(resPass.testRun?.isPass).toBe(true)
-      expect(resPass.testRun?.passedCount).toBe(15)
-
-      const resFail = categorizeAgentLog('Test Run: FAIL (2 failed, 10 passed)')
-      expect(resFail.category).toBe('test_run')
-      expect(resFail.testRun?.isPass).toBe(false)
-      expect(resFail.testRun?.failedCount).toBe(2)
-      expect(resFail.testRun?.passedCount).toBe(10)
-    })
-
-    it('should categorize file creations (write_file)', () => {
-      const res = categorizeAgentLog('Successfully wrote file src/components/App.tsx')
+  describe('resolveLogCategory', () => {
+    it('should resolve structured log metadata when present', () => {
+      const log: AgentActionLog = {
+        id: '1',
+        type: 'tool_call',
+        message: 'Created src/components/App.tsx',
+        timestamp: new Date().toISOString(),
+        category: 'file_mutation',
+        verb: 'Created',
+        target: 'src/components/App.tsx',
+        status: 'success',
+      }
+      const res = resolveLogCategory(log)
       expect(res.category).toBe('file_mutation')
-      expect(res.fileMutation?.verb).toBe('Created')
-      expect(res.fileMutation?.fileName).toBe('App.tsx')
-      expect(res.fileMutation?.filePath).toBe('src/components/App.tsx')
+      expect(res.verb).toBe('Created')
+      expect(res.target).toBe('src/components/App.tsx')
     })
 
-    it('should categorize file edits (replace_file_content / multi_replace)', () => {
-      const resChunk = categorizeAgentLog('Successfully replaced target chunk in src/utils/diffEngine.ts (Fuzzy Match Confidence: 100.0%)')
-      expect(resChunk.category).toBe('file_mutation')
-      expect(resChunk.fileMutation?.verb).toBe('Edited')
-      expect(resChunk.fileMutation?.fileName).toBe('diffEngine.ts')
+    it('should fallback gracefully for legacy unannotated logs', () => {
+      const userLog: AgentActionLog = {
+        id: '2',
+        type: 'info',
+        message: 'User Prompt: Build a new feature',
+        timestamp: new Date().toISOString(),
+      }
+      expect(resolveLogCategory(userLog).category).toBe('user_prompt')
 
-      const resMulti = categorizeAgentLog('Successfully applied 3 replacements in electron/main.ts')
-      expect(resMulti.category).toBe('file_mutation')
-      expect(resMulti.fileMutation?.verb).toBe('Edited')
-      expect(resMulti.fileMutation?.fileName).toBe('main.ts')
+      const cmdLog: AgentActionLog = {
+        id: '3',
+        type: 'terminal',
+        message: 'npm test',
+        timestamp: new Date().toISOString(),
+      }
+      expect(resolveLogCategory(cmdLog).category).toBe('command_execution')
 
-      const resEdited = categorizeAgentLog('Edited src/index.css')
-      expect(resEdited.category).toBe('file_mutation')
-      expect(resEdited.fileMutation?.verb).toBe('Edited')
-      expect(resEdited.fileMutation?.fileName).toBe('index.css')
-    })
-
-    it('should categorize file deletions, moves, and copies', () => {
-      const resDel = categorizeAgentLog('Successfully deleted file old_script.js')
-      expect(resDel.category).toBe('file_mutation')
-      expect(resDel.fileMutation?.verb).toBe('Deleted')
-      expect(resDel.fileMutation?.fileName).toBe('old_script.js')
-
-      const resMove = categorizeAgentLog('Successfully moved src/temp.ts -> src/final.ts')
-      expect(resMove.category).toBe('file_mutation')
-      expect(resMove.fileMutation?.verb).toBe('Moved')
-      expect(resMove.fileMutation?.fileName).toBe('final.ts')
-
-      const resCopy = categorizeAgentLog('Successfully copied template.json -> config.json')
-      expect(resCopy.category).toBe('file_mutation')
-      expect(resCopy.fileMutation?.verb).toBe('Copied')
-      expect(resCopy.fileMutation?.fileName).toBe('config.json')
-
-      const resMkdir = categorizeAgentLog('Successfully created directory src/lib/helpers')
-      expect(resMkdir.category).toBe('file_mutation')
-      expect(resMkdir.fileMutation?.verb).toBe('Created')
-      expect(resMkdir.fileMutation?.fileName).toBe('helpers')
-    })
-
-    it('should categorize command executions', () => {
-      const resRan = categorizeAgentLog('Ran npm run test:fast')
-      expect(resRan.category).toBe('command_execution')
-      expect(resRan.commandExecution?.command).toBe('npm run test:fast')
-      expect(resRan.commandExecution?.isInstall).toBe(false)
-
-      const resInstall = categorizeAgentLog('Ran npm install -D tailwindcss')
-      expect(resInstall.category).toBe('command_execution')
-      expect(resInstall.commandExecution?.isInstall).toBe(true)
-
-      const resTerminal = categorizeAgentLog('ls -la', 'terminal')
-      expect(resTerminal.category).toBe('command_execution')
-    })
-
-    it('should categorize web research actions', () => {
-      const resSearch = categorizeAgentLog('Web search: react 19 useActionState')
-      expect(resSearch.category).toBe('web_research')
-      expect(resSearch.webResearch?.action).toBe('Search')
-      expect(resSearch.webResearch?.queryOrUrl).toBe('react 19 useActionState')
-
-      const resFetch = categorizeAgentLog('Fetched web content: https://vite.dev/guide')
-      expect(resFetch.category).toBe('web_research')
-      expect(resFetch.webResearch?.action).toBe('Fetch')
-      expect(resFetch.webResearch?.queryOrUrl).toBe('https://vite.dev/guide')
-
-      const resDownload = categorizeAgentLog('Downloaded file: https://example.com/asset.png')
-      expect(resDownload.category).toBe('web_research')
-      expect(resDownload.webResearch?.action).toBe('Download')
-    })
-
-    it('should categorize workspace exploration', () => {
-      const resRead = categorizeAgentLog('Read file package.json (lines 1-50)')
-      expect(resRead.category).toBe('workspace_exploration')
-      expect(resRead.workspaceExploration?.action).toBe('Read')
-
-      const resGrep = categorizeAgentLog('Grep search: "export function"')
-      expect(resGrep.category).toBe('workspace_exploration')
-      expect(resGrep.workspaceExploration?.action).toBe('Grep')
-
-      const resList = categorizeAgentLog('Recursive List: 42 items in src/')
-      expect(resList.category).toBe('workspace_exploration')
-      expect(resList.workspaceExploration?.action).toBe('List')
-    })
-
-    it('should categorize plan updates and generic assistant messages', () => {
-      const resPlan = categorizeAgentLog('[PLAN Mode] Proposed Tool: write_file')
-      expect(resPlan.category).toBe('plan_update')
-
-      const resGeneric = categorizeAgentLog('I have completed analyzing the files.')
-      expect(resGeneric.category).toBe('generic_assistant')
+      const finalLog: AgentActionLog = {
+        id: '4',
+        type: 'info',
+        message: 'Task Finished: All done',
+        timestamp: new Date().toISOString(),
+      }
+      expect(resolveLogCategory(finalLog).category).toBe('final_report')
     })
   })
 })

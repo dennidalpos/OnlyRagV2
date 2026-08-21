@@ -170,6 +170,18 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     void loadWorkspaceFiles(workspacePath)
   }, [workspacePath, isStandaloneMode, loadWorkspaceFiles])
 
+  useEffect(() => {
+    if (!window.electronAPI?.onAgentChangeMetrics) return
+    const unsub = window.electronAPI.onAgentChangeMetrics(() => {
+      if (workspacePath) {
+        void loadWorkspaceFiles(workspacePath)
+      }
+    })
+    return () => {
+      unsub?.()
+    }
+  }, [workspacePath, loadWorkspaceFiles])
+
   return {
     files,
     openFiles,

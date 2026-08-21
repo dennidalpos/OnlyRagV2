@@ -6,7 +6,14 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
 import type { ApprovalResponse } from './agentOrchestratorAppService'
 
-type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
+import type { AgentLogEntry } from '../domain/agent/agentTypes'
+
+type EmitLog = (
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
+  message: string,
+  detail?: string,
+  meta?: Partial<AgentLogEntry>
+) => void
 type RequestApproval = (payload: Record<string, unknown>) => Promise<ApprovalResponse>
 
 export interface ToolGateContext {

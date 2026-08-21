@@ -7,7 +7,14 @@ import type { TransactionalExecutionGuard } from '../domain/agent/transactionalE
 import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
+import type { AgentLogEntry } from '../domain/agent/agentTypes'
+
+export type EmitLog = (
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
+  message: string,
+  detail?: string,
+  meta?: Partial<AgentLogEntry>
+) => void
 
 /** The subset of the loop's mutable counters this step can flip. Mutated in place by design
  *  (same pattern as the AgentSession object) -- see agentOrchestratorAppService.ts's mutableFlags. */

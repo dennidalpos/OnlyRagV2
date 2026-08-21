@@ -153,7 +153,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
  * dropped in that case because the tokens it holds no longer correspond to the new window.
  */
 export function freezeOrGrowContextWindow(ctx: TurnDispatchContext, turnPrompt: string, runtimeOpts: OllamaRuntimeOptions) {
-  const requiredNumCtx = calculateDynamicContextWindow(turnPrompt.length, runtimeOpts.num_ctx)
+  const requiredNumCtx = calculateDynamicContextWindow(turnPrompt, runtimeOpts.num_ctx)
   if (ctx.sessionNumCtxBox.value === null) {
     ctx.sessionNumCtxBox.value = requiredNumCtx
   } else if (requiredNumCtx > ctx.sessionNumCtxBox.value) {

@@ -124,7 +124,10 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
     return { outcome: 'return', result: { success: false, summary: 'Task cancelled' } }
   }
 
-  ctx.emitLog('info', `AI Agent (${ctx.agentMode.toUpperCase()} Step ${ctx.stepCount}):`, dispatchResult.streamedOutput)
+  ctx.emitLog('info', `AI Agent (${ctx.agentMode.toUpperCase()} Step ${ctx.stepCount}):`, dispatchResult.streamedOutput, {
+    category: 'agent_thought',
+    modelName: selection.targetModel,
+  })
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logLlmResponse(ctx.sessionId, ctx.stepCount, dispatchResult.streamedOutput)
   }

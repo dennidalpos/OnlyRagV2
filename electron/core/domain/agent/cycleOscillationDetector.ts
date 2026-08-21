@@ -46,21 +46,4 @@ export class CycleOscillationDetectorAndReproOracle {
 
     return { isOscillating: false }
   }
-
-  /**
-   * Generates a minimal reproduction test template for FAIL -> PASS verification.
-   */
-  public static generateReproTestTemplate(targetModule: string, expectedBehavior: string): string {
-    return `import { test, expect } from 'vitest';
-import { } from '${targetModule}';
-
-test('reproduce issue: ${expectedBehavior.replace(/'/g, "\\'")}', async () => {
-  // 1. Arrange & Act
-  // Minimal bug reproduction test logic
-  
-  // 2. Assert (Expected to FAIL before fix, PASS after fix)
-  expect(true).toBe(true);
-});
-`
-  }
 }

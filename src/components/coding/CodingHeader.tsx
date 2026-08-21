@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Code, ChevronRight, Sparkles, Compass, Cpu, CheckCircle2, AlertCircle, Wrench } from 'lucide-react'
+import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { ComplexityRouteResult } from '../../services/complexityRouterService'
 import { ModelBadge } from '../common/ModelBadge'
@@ -14,30 +14,23 @@ interface CodingHeaderProps {
   complexity: ComplexityRouteResult
   /** Model actually driving the agent: complexity.modelName when routing is on, otherwise the fixed coding model. */
   activeModel: string
+  onOpenDiagnosticsModal?: () => void
+  onOpenSkillHubModal?: () => void
 }
 
 export const CodingHeader: React.FC<CodingHeaderProps> = ({
   guestOsInfo,
   settings,
-  onUpdateSettings,
+  _onUpdateSettings,
   activeSkills = [],
   complexity,
   activeModel,
-}) => {
+  onOpenDiagnosticsModal,
+  onOpenSkillHubModal,
+}: CodingHeaderProps & { _onUpdateSettings?: any }) => {
   const { t } = useTranslation()
   const [isSystemPopoverOpen, setIsSystemPopoverOpen] = useState<boolean>(false)
   const popoverRef = useRef<HTMLDivElement>(null)
-
-  const isAutoHubEnabled = settings?.autoInstallHubSkills !== 'disabled'
-
-  const toggleAutoHub = () => {
-    if (onUpdateSettings) {
-      onUpdateSettings({
-        autoInstallHubSkills: isAutoHubEnabled ? 'disabled' : 'auto',
-        enableSkillRouter: !isAutoHubEnabled,
-      })
-    }
-  }
 
   // Handle outside click to close popover
   useEffect(() => {
@@ -78,55 +71,46 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
 
       {/* Right: Actions, System Popover, Skills & Model Badge */}
       <div className="flex items-center gap-2 text-xs">
-        {/* Quick Toggle for Auto-Discovery Skill Hub */}
+        {/* Active Skills Badge / Trigger */}
         <button
           type="button"
-          onClick={toggleAutoHub}
+          onClick={onOpenSkillHubModal}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-bold border transition-all cursor-pointer shadow-sm ${
-            isAutoHubEnabled
-              ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
-              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:bg-slate-850'
+            activeSkills.length > 0
+              ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60'
+              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
           }`}
-          title={isAutoHubEnabled ? t('coding.autoHubOnTitle') : t('coding.autoHubOffTitle')}
+          title={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')} ${activeSkills.join(', ')}` : 'Apri Skill Hub & Marketplace'}
         >
-          <Compass className={`w-3 h-3 ${isAutoHubEnabled ? 'text-emerald-400' : 'text-slate-400'}`} />
-          <span>Auto-Hub: {isAutoHubEnabled ? 'ON' : 'OFF'}</span>
-        </button>
-
-        {/* Active Skills Badge */}
-        {activeSkills.length > 0 && (
-          <div
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-950/40 border border-cyan-500/30 rounded-xl text-[10px] text-cyan-300 font-sans shadow-sm"
-            title={`${t('coding.activeSkillsTitle')} ${activeSkills.join(', ')}`}
-          >
-            <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
-            <span className="font-semibold text-slate-300 hidden md:inline">{t('coding.skillsInUse')}</span>
+          <Sparkles className={`w-3 h-3 ${activeSkills.length > 0 ? 'text-cyan-400' : 'text-slate-400'}`} />
+          <span>Skills</span>
+          {activeSkills.length > 0 && (
             <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-200 font-mono text-[9px] font-bold border border-cyan-500/30">
               {activeSkills.length}
             </span>
-          </div>
-        )}
+          )}
+        </button>
 
-        {/* Compact System & Toolchain Status Popover */}
+        {/* System & Toolchain Status Trigger */}
         <div className="relative" ref={popoverRef}>
           <button
             type="button"
-            onClick={() => setIsSystemPopoverOpen((prev) => !prev)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-medium border transition-colors shadow-sm cursor-pointer ${
-              allCoreToolsAvailable
-                ? 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300'
-                : 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-500/40 text-amber-300'
-            }`}
-            title="Visualizza lo stato dei tool di sistema e dell'hardware"
-          >
-            {allCoreToolsAvailable ? (
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-3 h-3 text-amber-400" />
-            )}
-            <span className="hidden sm:inline">System</span>
-            <Cpu className="w-3 h-3 text-slate-400" />
-          </button>
+            onClick={onOpenDiagnosticsModal || (() => setIsSystemPopoverOpen((prev) => !prev))}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-medium border transition-colors shadow-sm cursor-pointer ${
+            allCoreToolsAvailable
+              ? 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:text-slate-100'
+              : 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-500/40 text-amber-300'
+          }`}
+          title="Visualizza Diagnostica, Telemetria e Toolchain di Sistema"
+        >
+          {allCoreToolsAvailable ? (
+            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-3 h-3 text-amber-400" />
+          )}
+          <span className="hidden sm:inline">System</span>
+          <Cpu className="w-3 h-3 text-slate-400" />
+        </button>
 
           {isSystemPopoverOpen && (
             <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl z-50 text-xs font-sans space-y-2.5 animate-in fade-in zoom-in-95 duration-150">

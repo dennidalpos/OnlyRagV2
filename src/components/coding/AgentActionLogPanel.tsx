@@ -6,9 +6,6 @@ import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
 import { estimateTokenCount } from '../../lib/tokenEstimate'
 import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'
 import { AgentTimeline } from './AgentTimeline'
-import { PromptQueueCard } from './PromptQueueCard'
-import { ChangeMetricsBar } from './ChangeMetricsBar'
-import { ContextUsageBanner } from './ContextUsageBanner'
 import { PromptComposer } from './PromptComposer'
 
 export { getStepModelName } from './agentLogMessageUtils'
@@ -43,9 +40,7 @@ interface AgentActionLogPanelProps {
   onOpenSkillHubModal?: () => void
   onResetSession?: () => void
   onCompactContext?: () => void
-  /** Drafts a plan from the current prompt without changing agentMode or replacing normal send. */
   onGeneratePlan?: () => void
-  /** Shows a badge on the "Genera piano" icon when there are un-consolidated pending milestones. */
   hasPendingUnconsolidatedMilestones?: boolean
   workspacePath?: string | null
   workspaceSessions?: CodingSession[]
@@ -56,11 +51,12 @@ interface AgentActionLogPanelProps {
   onDeleteSession?: (id: string) => void
   onRenameSession?: (id: string, title: string) => void
   onSelectWorkspaceFolder?: () => void
-  /** Aggregate size of the file changes applied so far in this session. */
   changeMetrics?: AgentChangeMetrics
-  /** Shared with other agent-opened panels (e.g. CodingTerminal) so one toggle governs autoscroll everywhere. */
   autoScroll: boolean
   onToggleAutoScroll: () => void
+  showWorkspaceSidebar?: boolean
+  onToggleWorkspaceSidebar?: () => void
+  filesCount?: number
 }
 
 export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
@@ -70,6 +66,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   agentPrompt,
   setAgentPrompt,
   isExecuting,
+  currentStep = 0,
+  maxSteps = 50,
   streamingText = '',
   onExecute,
   onCancel,
@@ -78,7 +76,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   ingestedDocs,
   attachedDocIds,
   onToggleAttachDoc,
-  selectedFile,
   activeModelName,
   settings,
   onOpenFile,
@@ -103,15 +100,14 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   changeMetrics,
   autoScroll,
   onToggleAutoScroll,
+  showWorkspaceSidebar,
+  onToggleWorkspaceSidebar,
+  filesCount,
 }) => {
   const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } =
     useAgentTimelineScroll(actionLogs, streamingText, isExecuting, autoScroll, onToggleAutoScroll)
 
-  // Context window tracking (reflecting actual turn prompt assembly: max 8 steps + system + prompt).
-  // Budgets are token counts, not characters: Ollama has no tokenizer API and local model
-  // vocabularies differ, so estimateTokenCount (gpt-tokenizer's o200k_base BPE) is an
-  // approximation for whichever model is actually running — materially closer than a raw
-  // character count, not an exact figure for every model.
+  // Context window tracking
   const maxContextLimit = settings?.hardwareProfile === 'High' ? 12000 : settings?.hardwareProfile === 'Low' ? 4000 : 7000
   const BASE_PROMPT_OVERHEAD_TOKENS = 650
   const recentLogsTokens = React.useMemo(() => {
@@ -135,6 +131,12 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         onSwitchSession={onSwitchSession}
         onDeleteSession={onDeleteSession}
         onRenameSession={onRenameSession}
+        showWorkspaceSidebar={showWorkspaceSidebar}
+        onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
+        filesCount={filesCount}
+        isExecuting={isExecuting}
+        currentStep={currentStep}
+        maxSteps={maxSteps}
       />
 
       <AgentTimeline
@@ -150,23 +152,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         isScrolledUp={isScrolledUp}
         onScroll={handleScroll}
         onScrollToBottom={() => scrollToBottom(true)}
-      />
-
-      <PromptQueueCard
-        promptQueue={promptQueue}
-        onRemoveFromQueue={onRemoveFromQueue}
-        onEditPromptInQueue={onEditPromptInQueue}
-      />
-
-      <ChangeMetricsBar changeMetrics={changeMetrics} />
-
-      <ContextUsageBanner
-        isVisible={isContextHeavy}
-        estimatedTurnTokens={estimatedTurnTokens}
-        maxContextLimit={maxContextLimit}
-        contextPercent={contextPercent}
-        isExecuting={isExecuting}
-        onCompactContext={onCompactContext}
       />
 
       <PromptComposer
@@ -190,6 +175,15 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         onTogglePinFile={onTogglePinFile}
         onOpenSkillHubModal={onOpenSkillHubModal}
         onOpenPromptModal={onOpenPromptModal}
+        promptQueue={promptQueue}
+        onRemoveFromQueue={onRemoveFromQueue}
+        onEditPromptInQueue={onEditPromptInQueue}
+        changeMetrics={changeMetrics}
+        contextPercent={contextPercent}
+        estimatedTurnTokens={estimatedTurnTokens}
+        maxContextLimit={maxContextLimit}
+        isContextHeavy={isContextHeavy}
+        onCompactContext={onCompactContext}
       />
     </div>
   )

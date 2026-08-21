@@ -133,12 +133,38 @@ export interface WorkspaceFile {
   sizeBytes?: number
 }
 
+export type AgentLogCategory =
+  | 'user_prompt'
+  | 'agent_thought'
+  | 'tool_execution'
+  | 'file_mutation'
+  | 'command_execution'
+  | 'test_run'
+  | 'workspace_exploration'
+  | 'web_research'
+  | 'final_report'
+  | 'agent_question'
+  | 'system_alert'
+  | 'generic_info'
+
 export interface AgentActionLog {
   id: string
   timestamp: string
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request'
   message: string
   detail?: string
+  category?: AgentLogCategory
+  toolName?: string
+  target?: string
+  status?: 'running' | 'success' | 'failure'
+  modelName?: string
+  verb?: 'Created' | 'Edited' | 'Deleted' | 'Moved' | 'Copied' | 'Ran' | 'Read' | 'Search' | 'Fetch' | 'Download' | 'Symbols' | 'List'
+  testRun?: {
+    isPass: boolean
+    summary: string
+    passedCount?: number
+    failedCount?: number
+  }
 }
 
 import type { ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
@@ -535,6 +561,14 @@ export interface IElectronAPI {
   agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
   agentPlanSeed?: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string) => Promise<boolean>
+  /** Generates a self-contained AI-optimized debug diagnostic bundle in Markdown. */
+  exportAiDebugBundle?: (options: {
+    sessionId: string
+    workspacePath?: string | null
+    settings?: AppSettings
+    activeModelName?: string
+    activeSkills?: string[]
+  }) => Promise<string>
 }
 
 // ---------------------------------------------------------------------------

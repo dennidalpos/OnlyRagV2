@@ -1,7 +1,7 @@
 import { jsonrepair } from 'jsonrepair'
 import { logger } from '../../../diagnostics'
-import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
-import { validateAndSanitize } from './toolSchemaValidator'
+import type { AgentToolCall } from './agentTypes'
+import { validateAndSanitize, normalizeToolName } from './toolSchemaValidator'
 
 export type { AgentToolCall }
 
@@ -94,162 +94,29 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
     // Accept both the prompt-engineered "tool" key and the native / OpenAI-style
     // "name" key (used by tool-calling-capable models that echo their function
     // call as JSON text instead of populating the API's structured tool_calls).
-    // "name" is only trusted alongside a sibling "arguments" object — "name" alone
-    // is too common in incidental JSON (e.g. a package.json snippet) to signal a tool call.
     const rawToolName = parsed?.tool ?? (parsed?.arguments && typeof parsed?.name === 'string' ? parsed.name : undefined)
     if (parsed && typeof rawToolName === 'string') {
-      let toolName = rawToolName.toLowerCase().trim()
-
-      if (toolName === 'readfile' || toolName === 'read' || toolName === 'view_file' || toolName === 'view_file_slice' || toolName === 'open_file' || toolName === 'cat') toolName = 'read_file'
-      if (toolName === 'extract_code_symbols' || toolName === 'extract_symbols' || toolName === 'code_symbols' || toolName === 'symbols' || toolName === 'find_symbols' || toolName === 'get_symbols' || toolName === 'list_symbols') toolName = 'extract_code_symbols'
-      if (toolName === 'writefile' || toolName === 'write' || toolName === 'create_file' || toolName === 'write_code' || toolName === 'save_file' || toolName === 'write_to_file' || toolName === 'put_file') toolName = 'write_file'
-      if (toolName === 'replace_content' || toolName === 'replace_chunk' || toolName === 'edit_file' || toolName === 'replace_file' || toolName === 'modify_file' || toolName === 'update_file' || toolName === 'patch_file') toolName = 'replace_file_content'
-      if (toolName === 'multi_replace' || toolName === 'replace_multiple' || toolName === 'multi_replace_content' || toolName === 'multi_edit' || toolName === 'batch_replace') toolName = 'multi_replace_file_content'
-      if (toolName === 'delete_file' || toolName === 'remove_file' || toolName === 'unlink' || toolName === 'delete' || toolName === 'del_file' || toolName === 'rm') toolName = 'delete_file'
-      if (toolName === 'grep' || toolName === 'search' || toolName === 'search_files' || toolName === 'find_in_files' || toolName === 'search_in_files' || toolName === 'grep_files' || toolName === 'search_code' || toolName === 'find_text') toolName = 'grep_search'
-      if (toolName === 'create_directory' || toolName === 'mkdir' || toolName === 'make_directory' || toolName === 'create_folder' || toolName === 'ensure_dir') toolName = 'create_directory'
-      if (toolName === 'copy_file' || toolName === 'copy' || toolName === 'cp' || toolName === 'duplicate_file') toolName = 'copy_file'
-      if (toolName === 'move_file' || toolName === 'move' || toolName === 'mv' || toolName === 'rename_file' || toolName === 'rename') toolName = 'move_file'
-      if (toolName === 'list_files_recursive' || toolName === 'find_files' || toolName === 'tree' || toolName === 'list_files_tree' || toolName === 'file_tree') toolName = 'list_files_recursive'
-      if (toolName === 'list' || toolName === 'ls' || toolName === 'listdir' || toolName === 'list_files' || toolName === 'list_directory' || toolName === 'dir') toolName = 'list_dir'
-      if (toolName === 'web_search' || toolName === 'search_web' || toolName === 'google' || toolName === 'duckduckgo' || toolName === 'web' || toolName === 'search_internet' || toolName === 'bing') toolName = 'web_search'
-      if (toolName === 'fetch_web_content' || toolName === 'fetch_url' || toolName === 'read_url' || toolName === 'web_fetch' || toolName === 'read_web_page' || toolName === 'browse' || toolName === 'get_url' || toolName === 'read_url_content' || toolName === 'fetch_web') toolName = 'fetch_web_content'
-      if (toolName === 'download_file' || toolName === 'download' || toolName === 'fetch_file' || toolName === 'download_asset' || toolName === 'save_url') toolName = 'download_file'
-      if (toolName === 'runcommand' || toolName === 'terminal' || toolName === 'exec' || toolName === 'powershell' || toolName === 'exec_command' || toolName === 'cmd' || toolName === 'run_cmd' || toolName === 'execute_command' || toolName === 'shell' || toolName === 'bash') toolName = 'run_command'
-      if (toolName === 'inspect_os' || toolName === 'os_env' || toolName === 'system_info' || toolName === 'system_environment') toolName = 'inspect_os_env'
-      if (toolName === 'git_status' || toolName === 'gitstatus' || toolName === 'status_git' || toolName === 'git_state') toolName = 'git_status'
-      if (toolName === 'git_diff' || toolName === 'gitdiff' || toolName === 'git_changes' || toolName === 'diff') toolName = 'git_diff'
-      if (toolName === 'rollback_last_step' || toolName === 'undo_last_step' || toolName === 'undo_step' || toolName === 'revert_last_step') toolName = 'rollback_last_step'
-      if (toolName === 'rollback_workspace' || toolName === 'rollback' || toolName === 'undo' || toolName === 'undo_changes' || toolName === 'revert_workspace') toolName = 'rollback_workspace'
-      if (toolName === 'get_file_info' || toolName === 'file_info' || toolName === 'stat_file' || toolName === 'file_stats' || toolName === 'file_metadata') toolName = 'get_file_info'
-      if (toolName === 'ask' || toolName === 'ask_question' || toolName === 'question' || toolName === 'clarify' || toolName === 'user_input' || toolName === 'prompt_user' || toolName === 'inquire') toolName = 'ask'
-      if (toolName === 'complete' || toolName === 'done' || toolName === 'finish_task' || toolName === 'stop' || toolName === 'end_task') toolName = 'finish'
+      const toolName = normalizeToolName(rawToolName)
+      if (!toolName) return null
 
       const rawParams: Record<string, any> = {
         ...parsed,
         ...(parsed.parameters || parsed.arguments || parsed.args || parsed.params || {}),
       }
-      const parameters: Record<string, any> = { ...rawParams }
 
-      if (!parameters.filePath) {
-        parameters.filePath = rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.targetPath || rawParams.destination || rawParams.save_as || rawParams.TargetFile
-      }
-      if (!parameters.sourcePath) {
-        parameters.sourcePath = rawParams.source || rawParams.src || rawParams.from || rawParams.source_path || rawParams.filePath || rawParams.path
-      }
-      if (!parameters.targetPath) {
-        parameters.targetPath = rawParams.target || rawParams.dest || rawParams.destination || rawParams.to || rawParams.target_path || rawParams.new_path || rawParams.newPath
-      }
-      if (!parameters.dirPath) {
-        parameters.dirPath = rawParams.path || rawParams.dir || rawParams.directory || rawParams.dir_path || rawParams.folder
-      }
-      if (!parameters.url) {
-        parameters.url = rawParams.link || rawParams.href || rawParams.endpoint || rawParams.Url || rawParams.URL
-      }
-      if (!parameters.targetContent) {
-        parameters.targetContent = rawParams.target || rawParams.target_content || rawParams.old_content || rawParams.old_str || rawParams.old_text || rawParams.oldContent || rawParams.search_text || rawParams.searchText || rawParams.search || rawParams.find || rawParams.TargetContent
-      }
-      if (!parameters.replacementContent) {
-        parameters.replacementContent = rawParams.replacement || rawParams.replacement_content || rawParams.new_content || rawParams.new_str || rawParams.new_text || rawParams.newContent || rawParams.replace_text || rawParams.replaceText || rawParams.replace || rawParams.to || rawParams.content || rawParams.code || rawParams.ReplacementContent
-      }
-      if (!parameters.command) {
-        const rawCmd = rawParams.cmd || rawParams.terminal_command || rawParams.exec || rawParams.command_line || rawParams.CommandLine || parsed.parameters
-        if (Array.isArray(rawCmd)) {
-          parameters.command = rawCmd.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
-        } else if (typeof rawCmd === 'string') {
-          parameters.command = rawCmd
-        }
-      } else if (Array.isArray(parameters.command)) {
-        parameters.command = parameters.command.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
-      }
-
-      if (!parameters.content) {
-        parameters.content = rawParams.code || rawParams.text || rawParams.file_content || rawParams.data || rawParams.CodeContent || rawParams.content
-      }
-      if (!parameters.query) {
-        parameters.query = rawParams.pattern || rawParams.search || rawParams.term || rawParams.keyword || rawParams.search_query || rawParams.q || rawParams.Query
-      }
-      if (!parameters.question) {
-        parameters.question = rawParams.question || rawParams.query || rawParams.prompt || rawParams.message || rawParams.text || parsed.explanation || parsed.reason || ''
-      }
-
-      // Line slice parsing
-      if (parameters.startLine === undefined && rawParams.start_line !== undefined) {
-        parameters.startLine = Number(rawParams.start_line)
-      } else if (parameters.startLine !== undefined) {
-        parameters.startLine = Number(parameters.startLine)
-      }
-      if (parameters.endLine === undefined && rawParams.end_line !== undefined) {
-        parameters.endLine = Number(rawParams.end_line)
-      } else if (parameters.endLine !== undefined) {
-        parameters.endLine = Number(parameters.endLine)
-      }
-
-      // Multi-replace chunk normalization
-      const rawChunks = rawParams.replacements || rawParams.replacement_chunks || rawParams.chunks || rawParams.ReplacementChunks || rawParams.edits
-      if (Array.isArray(rawChunks)) {
-        parameters.replacements = rawChunks
-          .map((chunk: any) => ({
-            targetContent: chunk.targetContent || chunk.target || chunk.target_content || chunk.old_content || chunk.TargetContent || '',
-            replacementContent: chunk.replacementContent || chunk.replacement || chunk.replacement_content || chunk.new_content || chunk.ReplacementContent || '',
-          }))
-          .filter((chunk: AgentToolReplacementChunk) => chunk.targetContent)
-      }
-
-      // Input parameter validations for individual tools
-      if (toolName === 'read_file' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected read_file call: missing required filePath')
-        return null
-      }
-      if (toolName === 'extract_code_symbols' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected extract_code_symbols call: missing required filePath')
-        return null
-      }
-      if (toolName === 'write_file' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected write_file call: missing required filePath')
-        return null
-      }
-      if (toolName === 'delete_file' && (!parameters.filePath || typeof parameters.filePath !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected delete_file call: missing required filePath')
-        return null
-      }
-      if (toolName === 'replace_file_content' && (!parameters.filePath || !parameters.targetContent)) {
-        logger.log('WARN', 'ToolParser', 'Rejected replace_file_content call: missing required filePath or targetContent')
-        return null
-      }
-      if (toolName === 'multi_replace_file_content' && (!parameters.filePath || !Array.isArray(parameters.replacements) || parameters.replacements.length === 0)) {
-        logger.log('WARN', 'ToolParser', 'Rejected multi_replace_file_content call: missing required filePath or valid replacements array')
-        return null
-      }
-      if (toolName === 'web_search' && (!parameters.query || typeof parameters.query !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected web_search call: missing required query parameter')
-        return null
-      }
-      if (toolName === 'fetch_web_content' && (!parameters.url || typeof parameters.url !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected fetch_web_content call: missing required url parameter')
-        return null
-      }
-      if (toolName === 'download_file' && (!parameters.url || !parameters.filePath)) {
-        logger.log('WARN', 'ToolParser', 'Rejected download_file call: missing required url or filePath')
-        return null
-      }
-      if (toolName === 'run_command' && (!parameters.command || typeof parameters.command !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected run_command call: missing required command parameter')
-        return null
-      }
-      if (toolName === 'grep_search' && (!parameters.query || typeof parameters.query !== 'string')) {
-        logger.log('WARN', 'ToolParser', 'Rejected grep_search call: missing required query parameter')
-        return null
-      }
-      if (toolName === 'list_dir' && !parameters.dirPath) {
-        parameters.dirPath = '.'
-      }
-
-      return {
-        tool: toolName as SupportedToolName,
-        parameters,
+      const candidateCall: AgentToolCall = {
+        tool: toolName,
+        parameters: rawParams,
         explanation: parsed.explanation || parsed.reason || parsed.summary || parsed.thought,
       }
+
+      const validation = validateAndSanitize(candidateCall)
+      if (!validation.valid) {
+        logger.log('WARN', 'ToolParser', `Rejected ${toolName} call: ${validation.errors.join('; ')}`)
+        return null
+      }
+
+      return validation.sanitizedToolCall
     }
   }
 

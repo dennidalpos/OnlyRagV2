@@ -186,6 +186,14 @@ const api: IElectronAPI = {
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
   agentPlanSeed: (sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string) =>
     ipcRenderer.invoke('agent:plan-seed', sessionId, workspacePath, planMilestones, userTask),
+  /** AI Debug Diagnostic Bundle: compile zero-noise high-density report for external AI analysis. */
+  exportAiDebugBundle: (options: {
+    sessionId: string
+    workspacePath?: string | null
+    settings?: AppSettings
+    activeModelName?: string
+    activeSkills?: string[]
+  }) => ipcRenderer.invoke('agent:export-ai-debug-bundle', options),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

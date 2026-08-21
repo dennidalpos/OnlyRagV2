@@ -3,11 +3,16 @@ import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type { AgentToolCall } from '../domain/agent/agentTypes'
+import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { PlanMilestone } from '../domain/agent/planAndSolveGraph'
 import type { AppSettings } from '../../../src/types'
 
-type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
+type EmitLog = (
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
+  message: string,
+  detail?: string,
+  meta?: Partial<AgentLogEntry>
+) => void
 
 export interface UpdatePlanToolContext {
   parsedTool: AgentToolCall

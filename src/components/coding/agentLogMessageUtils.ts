@@ -1,66 +1,15 @@
 /**
  * src/components/coding/agentLogMessageUtils.ts
  *
- * Presentation / Utility Layer — Message categorization, language badges, and model tag resolution.
- * Provides deterministic structured parsing for agent activity logs (Claude Code UX standard).
+ * Presentation / Utility Layer — Language badges, model tag resolution, and log categorization.
+ * Directly consumes structured fields from AgentActionLog (zero brittle string-scraping).
  */
 
-export type AgentLogCategory =
-  | 'user_prompt'
-  | 'agent_question'
-  | 'final_report'
-  | 'file_mutation'
-  | 'command_execution'
-  | 'test_run'
-  | 'workspace_exploration'
-  | 'web_research'
-  | 'plan_update'
-  | 'generic_assistant'
+import { AgentActionLog } from '../../types'
 
 export type MutationVerb = 'Edited' | 'Created' | 'Deleted' | 'Moved' | 'Copied'
 
-export interface FileMutationDetails {
-  verb: MutationVerb
-  fileName: string
-  filePath: string
-  summary?: string
-}
-
-export interface CommandExecutionDetails {
-  command: string
-  isInstall: boolean
-}
-
-export interface TestRunDetails {
-  isPass: boolean
-  summary: string
-  passedCount?: number
-  failedCount?: number
-}
-
-export interface WorkspaceExplorationDetails {
-  action: 'Read' | 'Grep' | 'List' | 'Symbols' | 'Explored'
-  target: string
-}
-
-export interface WebResearchDetails {
-  action: 'Search' | 'Fetch' | 'Download'
-  queryOrUrl: string
-}
-
-export interface CategorizedAgentLog {
-  category: AgentLogCategory
-  userPromptText?: string
-  agentQuestionText?: string
-  finalReportText?: string
-  fileMutation?: FileMutationDetails
-  commandExecution?: CommandExecutionDetails
-  testRun?: TestRunDetails
-  workspaceExploration?: WorkspaceExplorationDetails
-  webResearch?: WebResearchDetails
-}
-
-export function getStepModelName(message: string, fallbackModelName?: string): string {
+export function getStepModelName(message?: string, fallbackModelName?: string): string {
   if (!message) return fallbackModelName || 'LLM'
 
   const consultingMatch = message.match(/Consulting LLM \(([^)]+)\)/i)
@@ -135,311 +84,52 @@ export function getBadgeLang(filename?: string): { label: string; color: string 
   return { label: 'FILE', color: 'bg-slate-800 text-slate-300' }
 }
 
-function cleanExtractedPath(rawPath: string): string {
-  return rawPath.replace(/\s*\([^)]*\)$/, '').trim()
-}
-
-function extractBaseName(rawPath: string): string {
-  const cleaned = cleanExtractedPath(rawPath)
+export function extractBaseName(rawPath?: string): string {
+  if (!rawPath) return ''
+  const cleaned = rawPath.replace(/\s*\([^)]*\)$/, '').trim()
   const normalized = cleaned.replace(/\\/g, '/')
   const segments = normalized.split('/')
   return segments[segments.length - 1] || cleaned
 }
 
-export function categorizeAgentLog(message: string, logType?: string): CategorizedAgentLog {
-  const msg = message || ''
+export function resolveLogCategory(log: AgentActionLog): {
+  category: AgentActionLog['category'] | 'user_prompt' | 'agent_question' | 'final_report' | 'file_mutation' | 'command_execution' | 'test_run' | 'workspace_exploration' | 'web_research' | 'generic_assistant'
+  target: string
+  verb?: string
+  modelName?: string
+} {
+  if (log.category) {
+    return {
+      category: log.category,
+      target: log.target || extractBaseName(log.message),
+      verb: log.verb,
+      modelName: log.modelName,
+    }
+  }
 
-  // 1. User Prompt
+  // Fallback for legacy / unannotated logs
+  const msg = log.message || ''
   if (msg.startsWith('User Prompt: ')) {
-    return {
-      category: 'user_prompt',
-      userPromptText: msg.replace('User Prompt: ', '').trim(),
-    }
+    return { category: 'user_prompt', target: '' }
   }
-
-  // 2. Agent Question / Clarification
-  if (
-    msg.includes('❓ AI Agent Question:') ||
-    msg.startsWith('Agent Question:') ||
-    msg.startsWith('Agent requested clarification:')
-  ) {
-    const qText = msg
-      .replace('❓ AI Agent Question: ', '')
-      .replace('Agent Question: ', '')
-      .replace('Agent requested clarification: ', '')
-      .trim()
-    return {
-      category: 'agent_question',
-      agentQuestionText: qText,
-    }
+  if (msg.includes('❓ AI Agent Question:') || msg.startsWith('Agent Question:')) {
+    return { category: 'agent_question', target: '' }
   }
-
-  // 3. Test Run
+  if (msg.startsWith('Task Finished:') || msg.startsWith('Task completed:')) {
+    return { category: 'final_report', target: '' }
+  }
   if (msg.includes('Test Run: PASS') || msg.includes('Test Run: FAIL') || msg.includes('run_tests')) {
-    const isPass = msg.includes('Test Run: PASS') || msg.includes('PASS')
-    const passMatch = msg.match(/(\d+)\s+passed/i)
-    const failMatch = msg.match(/(\d+)\s+failed/i)
-    return {
-      category: 'test_run',
-      testRun: {
-        isPass,
-        summary: msg,
-        passedCount: passMatch ? parseInt(passMatch[1], 10) : undefined,
-        failedCount: failMatch ? parseInt(failMatch[1], 10) : undefined,
-      },
-    }
+    return { category: 'test_run', target: '' }
+  }
+  if (log.type === 'terminal' || msg.includes('run_command') || msg.startsWith('Ran ')) {
+    return { category: 'command_execution', target: msg.replace(/^Ran\s+/, ''), verb: 'Ran' }
+  }
+  if (msg.includes('write_file') || msg.includes('Successfully wrote') || msg.includes('replace_chunk') || msg.includes('multi_replace') || msg.startsWith('Edited ')) {
+    return { category: 'file_mutation', target: extractBaseName(msg), verb: msg.startsWith('Created') ? 'Created' : 'Edited' }
+  }
+  if (msg.includes('Loop') || msg.includes('Oscillation') || msg.includes('Intervention') || msg.includes('[SECURITY BLOCK]') || msg.includes('Error:')) {
+    return { category: 'system_alert', target: '' }
   }
 
-  // 4. File Mutations
-  // 4a. write_file / creation
-  const writeMatch = msg.match(/(?:Successfully wrote file|Created file|write_file.*?filePath":\s*")([^"\n]+)/i)
-  if (writeMatch) {
-    const rawPath = writeMatch[1].trim()
-    const filePath = cleanExtractedPath(rawPath)
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Created',
-        fileName: extractBaseName(filePath),
-        filePath,
-        summary: msg,
-      },
-    }
-  }
-
-  // 4b. replace_chunk / multi_replace / edit
-  const replaceChunkMatch = msg.match(/(?:Successfully replaced target chunk in|Successfully replaced content in|replace_chunk.*?filePath":\s*")([^"\n]+)/i)
-  if (replaceChunkMatch) {
-    const rawPath = replaceChunkMatch[1].trim()
-    const filePath = cleanExtractedPath(rawPath)
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Edited',
-        fileName: extractBaseName(filePath),
-        filePath,
-        summary: msg,
-      },
-    }
-  }
-
-  const multiReplaceMatch = msg.match(/(?:Successfully applied \d+ replacements in|multi_replace.*?filePath":\s*")([^"\n]+)/i)
-  if (multiReplaceMatch) {
-    const rawPath = multiReplaceMatch[1].trim()
-    const filePath = cleanExtractedPath(rawPath)
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Edited',
-        fileName: extractBaseName(filePath),
-        filePath,
-        summary: msg,
-      },
-    }
-  }
-
-  const editedPrefixMatch = msg.match(/^Edited\s+([^\s]+)/)
-  if (editedPrefixMatch) {
-    const rawPath = editedPrefixMatch[1].trim()
-    const filePath = cleanExtractedPath(rawPath)
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Edited',
-        fileName: extractBaseName(filePath),
-        filePath,
-        summary: msg,
-      },
-    }
-  }
-
-  // 4c. delete_file
-  const deleteMatch = msg.match(/(?:Successfully deleted file|delete_file.*?filePath":\s*")([^"\n]+)/i)
-  if (deleteMatch) {
-    const filePath = deleteMatch[1].trim()
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Deleted',
-        fileName: extractBaseName(filePath),
-        filePath,
-        summary: msg,
-      },
-    }
-  }
-
-  // 4d. move_file / copy_file / create_directory
-  const moveMatch = msg.match(/Successfully moved (.+?) -> (.+)/i)
-  if (moveMatch) {
-    const dstPath = moveMatch[2].trim()
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Moved',
-        fileName: extractBaseName(dstPath),
-        filePath: dstPath,
-        summary: msg,
-      },
-    }
-  }
-
-  const copyMatch = msg.match(/Successfully copied (.+?) -> (.+)/i)
-  if (copyMatch) {
-    const dstPath = copyMatch[2].trim()
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Copied',
-        fileName: extractBaseName(dstPath),
-        filePath: dstPath,
-        summary: msg,
-      },
-    }
-  }
-
-  const mkdirMatch = msg.match(/Successfully created directory (.+)/i)
-  if (mkdirMatch) {
-    const dirPath = mkdirMatch[1].trim()
-    return {
-      category: 'file_mutation',
-      fileMutation: {
-        verb: 'Created',
-        fileName: extractBaseName(dirPath),
-        filePath: dirPath,
-        summary: msg,
-      },
-    }
-  }
-
-  // 5. Command Execution
-  if (
-    msg.includes('run_command') ||
-    msg.startsWith('Ran ') ||
-    msg.startsWith('Executed command:') ||
-    logType === 'terminal'
-  ) {
-    const cmdMatch =
-      msg.match(/run_command.*?"command":\s*"([^"]+)"/) ||
-      msg.match(/Ran\s+(.+)/) ||
-      msg.match(/Executed command:\s*(.+)/)
-    const command = cmdMatch ? cmdMatch[1].trim() : msg
-    const isInstall = /\b(npm|pnpm|yarn|pip|winget)\s+(install|add|i)\b/i.test(command)
-    return {
-      category: 'command_execution',
-      commandExecution: {
-        command,
-        isInstall,
-      },
-    }
-  }
-
-  // 6. Web Research
-  if (msg.includes('web_search') || msg.startsWith('Web search:')) {
-    const qMatch = msg.match(/Web search:\s*(.+)/i) || msg.match(/"query":\s*"([^"]+)"/)
-    return {
-      category: 'web_research',
-      webResearch: {
-        action: 'Search',
-        queryOrUrl: qMatch ? qMatch[1].trim() : msg,
-      },
-    }
-  }
-
-  if (msg.includes('fetch_web_content') || msg.startsWith('Fetched web content:')) {
-    const urlMatch = msg.match(/Fetched web content:\s*(.+)/i) || msg.match(/"url":\s*"([^"]+)"/)
-    return {
-      category: 'web_research',
-      webResearch: {
-        action: 'Fetch',
-        queryOrUrl: urlMatch ? urlMatch[1].trim() : msg,
-      },
-    }
-  }
-
-  if (msg.includes('download_file') || msg.startsWith('Downloaded file:')) {
-    const urlMatch = msg.match(/Downloaded file:\s*(.+)/i) || msg.match(/"url":\s*"([^"]+)"/)
-    return {
-      category: 'web_research',
-      webResearch: {
-        action: 'Download',
-        queryOrUrl: urlMatch ? urlMatch[1].trim() : msg,
-      },
-    }
-  }
-
-  // 7. Workspace Exploration
-  if (
-    msg.includes('read_file') ||
-    msg.startsWith('Read file') ||
-    msg.includes('list_dir') ||
-    msg.startsWith('List dir') ||
-    msg.includes('grep_search') ||
-    msg.startsWith('Grep search') ||
-    msg.includes('list_files_recursive') ||
-    msg.startsWith('Recursive List:') ||
-    msg.includes('extract_code_symbols') ||
-    msg.startsWith('Explored ')
-  ) {
-    let action: WorkspaceExplorationDetails['action'] = 'Explored'
-    let target = 'workspace'
-
-    if (msg.startsWith('Read file') || msg.includes('read_file')) {
-      action = 'Read'
-      const m = msg.match(/Read file\s+([^\s]+)/i) || msg.match(/"filePath":\s*"([^"]+)"/)
-      if (m) target = extractBaseName(m[1])
-    } else if (msg.startsWith('Grep search') || msg.includes('grep_search')) {
-      action = 'Grep'
-      const m = msg.match(/Grep search:\s*"?([^"\n]+)"?/i) || msg.match(/"query":\s*"([^"]+)"/)
-      if (m) target = m[1]
-    } else if (msg.startsWith('List dir') || msg.includes('list_dir')) {
-      action = 'List'
-      const m = msg.match(/List dir\s+([^\s]+)/i) || msg.match(/"dirPath":\s*"([^"]+)"/)
-      if (m) target = extractBaseName(m[1])
-    } else if (msg.startsWith('Recursive List:') || msg.includes('list_files_recursive')) {
-      action = 'List'
-      const m = msg.match(/Recursive List:\s*\d+\s+items in\s+([^\s]+)/i)
-      if (m) target = extractBaseName(m[1])
-    } else if (msg.includes('extract_code_symbols')) {
-      action = 'Symbols'
-      const m = msg.match(/"filePath":\s*"([^"]+)"/)
-      if (m) target = extractBaseName(m[1])
-    }
-
-    return {
-      category: 'workspace_exploration',
-      workspaceExploration: {
-        action,
-        target,
-      },
-    }
-  }
-
-  // 8. Plan Update
-  if (msg.includes('[PLAN Mode]') || msg.includes('update_plan') || msg.startsWith('Plan milestone')) {
-    return {
-      category: 'plan_update',
-    }
-  }
-
-  // 9. Final Implementation Report / Task Finished
-  if (
-    msg.startsWith('Task Finished: ') ||
-    msg.startsWith('Task Finished:') ||
-    msg.startsWith('Task completed: ') ||
-    msg.startsWith('Task completed successfully')
-  ) {
-    const reportText = msg
-      .replace(/^Task Finished:\s*/i, '')
-      .replace(/^Task completed:\s*/i, '')
-      .trim()
-    return {
-      category: 'final_report',
-      finalReportText: reportText,
-    }
-  }
-
-  // 10. Generic Assistant Output
-  return {
-    category: 'generic_assistant',
-  }
+  return { category: 'generic_assistant', target: '' }
 }

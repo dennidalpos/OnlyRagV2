@@ -4,19 +4,34 @@
  * Prevents allocating redundant KV-Cache in VRAM while avoiding truncation.
  */
 
+import { countTokens } from 'gpt-tokenizer'
+
 const STANDARD_CONTEXT_BUCKETS = [2048, 4096, 8192, 16384, 32768, 65536]
-const CHARS_PER_TOKEN_ESTIMATE = 3.8
 const COMPLETION_HEADROOM_TOKENS = 2048
 const MIN_CONTEXT_TOKENS = 2048
 const DEFAULT_MAX_CONTEXT_TOKENS = 32768
 
+/**
+ * Counts actual BPE tokens using gpt-tokenizer (o200k_base), falling back to character approximation.
+ */
+export function countPromptTokens(prompt: string | number): number {
+  if (typeof prompt === 'number') {
+    return Math.ceil(Math.max(0, prompt) / 3.8)
+  }
+  if (!prompt || typeof prompt !== 'string') return 0
+  try {
+    return countTokens(prompt)
+  } catch {
+    return Math.ceil(prompt.length / 3.8)
+  }
+}
+
 export function calculateDynamicContextWindow(
-  promptLengthChars: number,
+  promptOrChars: string | number,
   hardwareMaxCtx?: number,
   headroomTokens: number = COMPLETION_HEADROOM_TOKENS
 ): number {
-  const safePromptChars = Math.max(0, promptLengthChars || 0)
-  const estimatedPromptTokens = Math.ceil(safePromptChars / CHARS_PER_TOKEN_ESTIMATE)
+  const estimatedPromptTokens = countPromptTokens(promptOrChars)
   const totalRequiredTokens = estimatedPromptTokens + headroomTokens
 
   const maxAllowed = hardwareMaxCtx && hardwareMaxCtx >= MIN_CONTEXT_TOKENS

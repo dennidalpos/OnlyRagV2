@@ -9,9 +9,13 @@ import {
   Pin,
   X,
   FileText,
+  Minimize2,
+  Layers,
+  Sparkles,
 } from 'lucide-react'
-import { IngestedDocument, WorkspaceFile } from '../../types'
+import { IngestedDocument, WorkspaceFile, AgentChangeMetrics } from '../../types'
 import { AgentMode } from './CodingAgentView'
+import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useTranslation } from '../../i18n'
 import { PromptComposerToolsMenu } from './PromptComposerToolsMenu'
 import { AgentModeSelector } from './AgentModeSelector'
@@ -37,6 +41,15 @@ interface PromptComposerProps {
   onTogglePinFile?: (file: WorkspaceFile) => void
   onOpenSkillHubModal?: () => void
   onOpenPromptModal?: () => void
+  promptQueue?: QueuedPrompt[]
+  onRemoveFromQueue?: (id: string) => void
+  onEditPromptInQueue?: (id: string, newPrompt: string) => void
+  changeMetrics?: AgentChangeMetrics
+  contextPercent?: number
+  estimatedTurnTokens?: number
+  maxContextLimit?: number
+  isContextHeavy?: boolean
+  onCompactContext?: () => void
 }
 
 export const PromptComposer: React.FC<PromptComposerProps> = ({
@@ -60,6 +73,14 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   onTogglePinFile,
   onOpenSkillHubModal,
   onOpenPromptModal,
+  promptQueue = [],
+  onRemoveFromQueue,
+  changeMetrics,
+  contextPercent = 0,
+  estimatedTurnTokens = 0,
+  maxContextLimit = 7000,
+  isContextHeavy = false,
+  onCompactContext,
 }) => {
   const { t } = useTranslation()
   const [showToolsMenu, setShowToolsMenu] = useState(false)
@@ -109,9 +130,41 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const pinnedFilesArray = Array.from(pinnedFiles.values())
   const attachedDocsArray = ingestedDocs.filter((d) => attachedDocIds.has(d.id))
   const hasContextPills = pinnedFilesArray.length > 0 || attachedDocsArray.length > 0
+  const hasChanges = (changeMetrics?.filesTouched || 0) > 0
 
   return (
-    <div className="p-3 bg-slate-950 shrink-0">
+    <div className="p-3 bg-slate-950 shrink-0 space-y-2 select-text font-sans">
+      {/* Floating Prompt Queue Strip */}
+      {promptQueue.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-2 bg-slate-900/90 border border-slate-800 rounded-xl text-xs">
+          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            Coda ({promptQueue.length}):
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+            {promptQueue.map((item, idx) => (
+              <span
+                key={item.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 font-mono text-[10px] shrink-0"
+              >
+                <span className="text-cyan-400 font-bold">#{idx + 1}</span>
+                <span className="truncate max-w-[140px]">{item.prompt}</span>
+                {onRemoveFromQueue && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveFromQueue(item.id)}
+                    className="p-0.5 hover:text-rose-400 text-slate-500 rounded cursor-pointer"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Composer Box */}
       <div className="bg-slate-900/90 border border-slate-800 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
         {/* Context Pills (Pinned files & Attached RAG docs) */}
         {hasContextPills && (
@@ -128,7 +181,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   <button
                     type="button"
                     onClick={() => onTogglePinFile(file)}
-                    className="hover:text-rose-400 p-0.5 transition-colors"
+                    className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -147,7 +200,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleAttachDoc(doc.id)}
-                  className="hover:text-rose-400 p-0.5 transition-colors"
+                  className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer"
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
@@ -156,7 +209,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           </div>
         )}
 
-        {/* Top/Center: Auto-resizing Prompt Textarea */}
+        {/* Prompt Textarea */}
         <textarea
           ref={textareaRef}
           value={agentPrompt}
@@ -168,7 +221,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1 min-h-[38px] max-h-[160px]"
         />
 
-        {/* Bottom row: [Left: Tools & Actions] --- [Right: Mode selector, Send/Stop/Queue] */}
+        {/* Bottom Bar: [Left Tools] --- [Center Context Gauge] --- [Right Mode & Actions] */}
         <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800/40">
           {/* Left: Tools popover trigger, Plan generation & Reset */}
           <div className="flex items-center gap-1 shrink-0">
@@ -190,7 +243,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               onClick={onToggleAutoScroll}
               aria-label={autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
               title={autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
-              className={`p-1.5 rounded-lg transition-colors focus-ring ${
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                 autoScroll
                   ? 'text-cyan-400 bg-cyan-950/60 border border-cyan-800/60'
                   : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
@@ -206,7 +259,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 onClick={onResetSession}
                 aria-label={t('common.reset')}
                 title={t('common.reset')}
-                className="p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-colors focus-ring"
+                className="p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -220,7 +273,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.generatePlanFromPrompt')}
                 title={t('coding.generatePlanFromPrompt')}
-                className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors focus-ring"
+                className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
               >
                 <ClipboardList className="w-3.5 h-3.5" />
                 {hasPendingUnconsolidatedMilestones && (
@@ -231,6 +284,32 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 )}
               </button>
             )}
+          </div>
+
+          {/* Center: Context & Metrics Status Pill */}
+          <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-slate-400">
+            {hasChanges && (
+              <span className="flex items-center gap-1 text-slate-300">
+                <Layers className="w-3 h-3 text-cyan-400" />
+                <span>{changeMetrics?.filesTouched}f</span>
+                <span className="text-emerald-400">+{changeMetrics?.additions}</span>
+                <span className="text-rose-400">-{changeMetrics?.deletions}</span>
+              </span>
+            )}
+
+            <span className={`flex items-center gap-1 ${isContextHeavy ? 'text-amber-300 font-bold' : 'text-slate-400'}`} title={`${estimatedTurnTokens}/${maxContextLimit} tokens stimati`}>
+              <span>Ctx: {contextPercent}%</span>
+              {isContextHeavy && onCompactContext && (
+                <button
+                  type="button"
+                  onClick={onCompactContext}
+                  title="Compatta il contesto della sessione"
+                  className="p-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 hover:bg-amber-900 cursor-pointer"
+                >
+                  <Minimize2 className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </span>
           </div>
 
           {/* Right: Mode Selector + Action Buttons (Send / Stop / Queue) */}
@@ -244,7 +323,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 onClick={onCancel}
                 aria-label={t('coding.stopTask')}
                 title={t('coding.stopTask')}
-                className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-lg shadow-rose-950/50 active:scale-95 shrink-0"
+                className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-lg shadow-rose-950/50 active:scale-95 shrink-0 cursor-pointer"
               >
                 <Square className="w-3 h-3 fill-current" />
               </button>
@@ -257,7 +336,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.queuedPrompts', { count: queueLength })}
                 title={t('coding.queuedPrompts', { count: queueLength })}
-                className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0"
+                className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0 cursor-pointer"
               >
                 <ListPlus className="w-3.5 h-3.5" />
                 <span className="text-[11px]">+</span>
@@ -269,7 +348,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.runTask')}
                 title={t('coding.runTask')}
-                className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0"
+                className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0 cursor-pointer"
               >
                 <ArrowUp className="w-3.5 h-3.5 font-bold" />
               </button>

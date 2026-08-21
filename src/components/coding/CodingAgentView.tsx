@@ -18,6 +18,7 @@ import { useTranslation } from '../../i18n'
 import { CodingEditorTabBar } from './CodingEditorTabBar'
 import { CodingEditorContent } from './CodingEditorContent'
 import { CodingBottomDock, BottomDockTab } from './CodingBottomDock'
+import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
@@ -75,6 +76,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [copiedPath, setCopiedPath] = useState<boolean>(false)
   const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
   const [isPromptHistorySearchOpen, setIsPromptHistorySearchOpen] = useState<boolean>(false)
+  const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false)
   const {
     activeRequest: activeSkillInstallRequest,
     approveInstall: approveSkillInstall,
@@ -160,6 +162,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         activeSkills={c.activeSkills}
         complexity={routedComplexity}
         activeModel={activeModelName}
+        onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
+        onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
       />
 
       {/* Main Workspace Split Layout */}
@@ -333,6 +337,23 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         onClose={() => setIsPromptHistorySearchOpen(false)}
         projects={c.projects}
         onJump={c.jumpToProjectAndSession}
+      />
+
+      {/* System Diagnostics & Telemetry Modal */}
+      <SystemDiagnosticsModal
+        isOpen={isDiagnosticsModalOpen}
+        onClose={() => setIsDiagnosticsModalOpen(false)}
+        guestOsInfo={c.guestOsInfo}
+        settings={settings}
+        actionLogs={c.actionLogs}
+        isExecuting={c.isExecuting}
+        activeModelName={activeModelName}
+        openFilesCount={c.openFiles.length}
+        pinnedFilesCount={c.pinnedFiles.size}
+        attachedDocsCount={c.attachedDocIds.size}
+        sessionId={c.activeSessionId}
+        workspacePath={c.workspacePath}
+        activeSkills={c.activeSkills}
       />
     </div>
   )

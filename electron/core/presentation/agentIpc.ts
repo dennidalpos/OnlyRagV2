@@ -6,6 +6,7 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { sidecarSlmBridgeService } from '../application/sidecarSlmBridgeService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
+import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../src/types'
 
@@ -97,10 +98,27 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    * task execution starts, so runAgentOrchestratorLoop's restore-from-savedState
    * path loads them into GoalDecompositionPlanner as its starting state.
    */
-  ipcMain.handle(
+    ipcMain.handle(
     'agent:plan-seed',
     async (_, sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string) => {
       return agentSessionStateRepository.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask)
+    }
+  )
+
+  /**
+   * Generates a comprehensive AI-optimized debug diagnostic bundle in Markdown
+   * for troubleshooting and direct handover to an AI Assistant.
+   */
+  ipcMain.handle(
+    'agent:export-ai-debug-bundle',
+    async (_, options: {
+      sessionId: string
+      workspacePath?: string | null
+      settings?: AppSettings
+      activeModelName?: string
+      activeSkills?: string[]
+    }) => {
+      return aiDebugBundleService.generateDebugBundle(options)
     }
   )
 }

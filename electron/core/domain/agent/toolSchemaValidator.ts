@@ -1,4 +1,11 @@
-import type { AgentToolCall, SupportedToolName } from './agentTypes'
+/**
+ * electron/core/domain/agent/toolSchemaValidator.ts
+ *
+ * Domain Layer — Declarative Schema Validation and Parameter Coercion for Agent Tools.
+ * Single source of truth for tool name aliases, parameter normalization, and input validation.
+ */
+
+import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
 
 export interface SchemaValidationResult {
   valid: boolean
@@ -6,21 +13,245 @@ export interface SchemaValidationResult {
   sanitizedToolCall: AgentToolCall
 }
 
+const TOOL_NAME_ALIASES: Record<string, SupportedToolName> = {
+  readfile: 'read_file',
+  read: 'read_file',
+  view_file: 'read_file',
+  view_file_slice: 'read_file',
+  open_file: 'read_file',
+  cat: 'read_file',
+  extract_code_symbols: 'extract_code_symbols',
+  extract_symbols: 'extract_code_symbols',
+  code_symbols: 'extract_code_symbols',
+  symbols: 'extract_code_symbols',
+  find_symbols: 'extract_code_symbols',
+  get_symbols: 'extract_code_symbols',
+  list_symbols: 'extract_code_symbols',
+  writefile: 'write_file',
+  write: 'write_file',
+  create_file: 'write_file',
+  write_code: 'write_file',
+  save_file: 'write_file',
+  write_to_file: 'write_file',
+  put_file: 'write_file',
+  replace_content: 'replace_file_content',
+  replace_chunk: 'replace_file_content',
+  edit_file: 'replace_file_content',
+  replace_file: 'replace_file_content',
+  modify_file: 'replace_file_content',
+  update_file: 'replace_file_content',
+  patch_file: 'replace_file_content',
+  multi_replace: 'multi_replace_file_content',
+  replace_multiple: 'multi_replace_file_content',
+  multi_replace_content: 'multi_replace_file_content',
+  multi_edit: 'multi_replace_file_content',
+  batch_replace: 'multi_replace_file_content',
+  delete_file: 'delete_file',
+  remove_file: 'delete_file',
+  unlink: 'delete_file',
+  delete: 'delete_file',
+  del_file: 'delete_file',
+  rm: 'delete_file',
+  grep: 'grep_search',
+  search: 'grep_search',
+  search_files: 'grep_search',
+  find_in_files: 'grep_search',
+  search_in_files: 'grep_search',
+  grep_files: 'grep_search',
+  search_code: 'grep_search',
+  find_text: 'grep_search',
+  create_directory: 'create_directory',
+  mkdir: 'create_directory',
+  make_directory: 'create_directory',
+  create_folder: 'create_directory',
+  ensure_dir: 'create_directory',
+  copy_file: 'copy_file',
+  copy: 'copy_file',
+  cp: 'copy_file',
+  duplicate_file: 'copy_file',
+  move_file: 'move_file',
+  move: 'move_file',
+  mv: 'move_file',
+  rename_file: 'move_file',
+  rename: 'move_file',
+  list_files_recursive: 'list_files_recursive',
+  find_files: 'list_files_recursive',
+  tree: 'list_files_recursive',
+  list_files_tree: 'list_files_recursive',
+  file_tree: 'list_files_recursive',
+  list: 'list_dir',
+  ls: 'list_dir',
+  listdir: 'list_dir',
+  list_files: 'list_dir',
+  list_directory: 'list_dir',
+  dir: 'list_dir',
+  web_search: 'web_search',
+  search_web: 'web_search',
+  google: 'web_search',
+  duckduckgo: 'web_search',
+  web: 'web_search',
+  search_internet: 'web_search',
+  bing: 'web_search',
+  fetch_web_content: 'fetch_web_content',
+  fetch_url: 'fetch_web_content',
+  read_url: 'fetch_web_content',
+  web_fetch: 'fetch_web_content',
+  read_web_page: 'fetch_web_content',
+  browse: 'fetch_web_content',
+  get_url: 'fetch_web_content',
+  read_url_content: 'fetch_web_content',
+  fetch_web: 'fetch_web_content',
+  download_file: 'download_file',
+  download: 'download_file',
+  fetch_file: 'download_file',
+  download_asset: 'download_file',
+  save_url: 'download_file',
+  runcommand: 'run_command',
+  terminal: 'run_command',
+  exec: 'run_command',
+  powershell: 'run_command',
+  exec_command: 'run_command',
+  cmd: 'run_command',
+  run_cmd: 'run_command',
+  execute_command: 'run_command',
+  shell: 'run_command',
+  bash: 'run_command',
+  inspect_os: 'inspect_os_env',
+  os_env: 'inspect_os_env',
+  system_info: 'inspect_os_env',
+  system_environment: 'inspect_os_env',
+  git_status: 'git_status',
+  gitstatus: 'git_status',
+  status_git: 'git_status',
+  git_state: 'git_status',
+  git_diff: 'git_diff',
+  gitdiff: 'git_diff',
+  git_changes: 'git_diff',
+  diff: 'git_diff',
+  rollback_last_step: 'rollback_last_step',
+  undo_last_step: 'rollback_last_step',
+  undo_step: 'rollback_last_step',
+  revert_last_step: 'rollback_last_step',
+  rollback_workspace: 'rollback_workspace',
+  rollback: 'rollback_workspace',
+  undo: 'rollback_workspace',
+  undo_changes: 'rollback_workspace',
+  revert_workspace: 'rollback_workspace',
+  get_file_info: 'get_file_info',
+  file_info: 'get_file_info',
+  stat_file: 'get_file_info',
+  file_stats: 'get_file_info',
+  file_metadata: 'get_file_info',
+  ask: 'ask',
+  ask_question: 'ask',
+  question: 'ask',
+  clarify: 'ask',
+  user_input: 'ask',
+  prompt_user: 'ask',
+  inquire: 'ask',
+  complete: 'finish',
+  done: 'finish',
+  finish_task: 'finish',
+  stop: 'finish',
+  end_task: 'finish',
+}
+
+/**
+ * Normalizes tool name alias to canonical SupportedToolName.
+ */
+export function normalizeToolName(rawName?: string): SupportedToolName | null {
+  if (!rawName || typeof rawName !== 'string') return null
+  const cleaned = rawName.toLowerCase().trim()
+  return TOOL_NAME_ALIASES[cleaned] || (cleaned as SupportedToolName)
+}
+
+/**
+ * Normalizes raw parameter dictionary, mapping alias keys to canonical names.
+ */
+export function normalizeToolParams(raw: Record<string, any>): Record<string, any> {
+  if (!raw || typeof raw !== 'object') return {}
+  const p: Record<string, any> = { ...raw }
+
+  // 1. Path aliases
+  if (!p.filePath) {
+    p.filePath = p.path || p.file || p.target_file || p.file_path || p.filename || p.targetPath || p.destination || p.save_as || p.TargetFile
+  }
+  if (!p.sourcePath) {
+    p.sourcePath = p.source || p.src || p.from || p.source_path || p.filePath || p.path
+  }
+  if (!p.targetPath) {
+    p.targetPath = p.target || p.dest || p.destination || p.to || p.target_path || p.new_path || p.newPath
+  }
+  if (!p.dirPath) {
+    p.dirPath = p.path || p.dir || p.directory || p.dir_path || p.folder
+  }
+  if (!p.url) {
+    p.url = p.link || p.href || p.endpoint || p.Url || p.URL
+  }
+
+  // 2. Content & Edit aliases
+  if (!p.targetContent) {
+    p.targetContent = p.target || p.target_content || p.old_content || p.old_str || p.old_text || p.oldContent || p.search_text || p.searchText || p.search || p.find || p.TargetContent
+  }
+  if (!p.replacementContent) {
+    p.replacementContent = p.replacement || p.replacement_content || p.new_content || p.new_str || p.new_text || p.newContent || p.replace_text || p.replaceText || p.replace || p.to || p.content || p.code || p.ReplacementContent
+  }
+  if (p.content === undefined) {
+    const rawContent = p.code || p.text || p.file_content || p.data || p.CodeContent
+    if (rawContent !== undefined) p.content = rawContent
+  }
+
+  // 3. Query, Command & Question
+  if (!p.query) {
+    p.query = p.pattern || p.search || p.term || p.keyword || p.search_query || p.q || p.Query || p.searchTerm
+  }
+  if (!p.command) {
+    const rawCmd = p.cmd || p.terminal_command || p.exec || p.command_line || p.CommandLine || p.parameters
+    if (Array.isArray(rawCmd)) {
+      p.command = rawCmd.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
+    } else if (typeof rawCmd === 'string') {
+      p.command = rawCmd
+    }
+  } else if (Array.isArray(p.command)) {
+    p.command = p.command.filter((c: any) => typeof c === 'string' && c.trim()).join('; ')
+  }
+  if (!p.question) {
+    p.question = p.question || p.query || p.prompt || p.message || p.text || p.explanation || p.reason || ''
+  }
+
+  // 4. Line slice integers
+  if (p.startLine === undefined && p.start_line !== undefined) p.startLine = Number(p.start_line)
+  if (p.endLine === undefined && p.end_line !== undefined) p.endLine = Number(p.end_line)
+
+  // 5. Multi-replace chunks
+  const rawChunks = p.replacements || p.replacement_chunks || p.chunks || p.ReplacementChunks || p.edits
+  if (Array.isArray(rawChunks)) {
+    p.replacements = rawChunks
+      .map((chunk: any) => ({
+        targetContent: String(chunk.targetContent || chunk.target || chunk.target_content || chunk.old_content || chunk.TargetContent || ''),
+        replacementContent: String(chunk.replacementContent || chunk.replacement || chunk.replacement_content || chunk.new_content || chunk.ReplacementContent || ''),
+      }))
+      .filter((chunk: AgentToolReplacementChunk) => chunk.targetContent)
+    p.chunks = p.replacements
+  }
+
+  return p
+}
+
 /**
  * Zero-dependency strict schema validator and parameter coercer for Agent tool payloads.
  */
 export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationResult {
   const errors: string[] = []
-  const rawParams = { ...(toolCall.parameters || {}) }
-  const tool = toolCall.tool as SupportedToolName
+  const rawParams = normalizeToolParams({ ...(toolCall.parameters || {}) })
+  const tool = (normalizeToolName(toolCall.tool) || toolCall.tool) as SupportedToolName
 
   switch (tool) {
     case 'read_file': {
-      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
-      if (!rawPath) {
+      if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for read_file")
       } else {
-        rawParams.filePath = String(rawPath)
+        rawParams.filePath = String(rawParams.filePath)
       }
       if (rawParams.startLine !== undefined) {
         const parsed = Number(rawParams.startLine)
@@ -36,97 +267,73 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     }
 
     case 'write_file': {
-      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile || rawParams.destination || rawParams.save_as
-      if (!rawPath) {
+      if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for write_file")
       } else {
-        rawParams.filePath = String(rawPath)
+        rawParams.filePath = String(rawParams.filePath)
       }
-      const rawContent = rawParams.content ?? rawParams.codeContent ?? rawParams.code ?? rawParams.text ?? rawParams.file_content ?? rawParams.data ?? rawParams.CodeContent
-      if (rawContent === undefined) {
+      if (rawParams.content === undefined) {
         rawParams.content = ''
       } else {
-        rawParams.content = String(rawContent)
+        rawParams.content = String(rawParams.content)
       }
       break
     }
 
     case 'replace_file_content': {
-      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
-      if (!rawPath) {
+      if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for replace_file_content")
       } else {
-        rawParams.filePath = String(rawPath)
+        rawParams.filePath = String(rawParams.filePath)
       }
-      const rawTarget = rawParams.targetContent ?? rawParams.target ?? rawParams.target_content ?? rawParams.old_content ?? rawParams.old_str ?? rawParams.old_text ?? rawParams.oldContent ?? rawParams.search_text ?? rawParams.searchText ?? rawParams.search ?? rawParams.find ?? rawParams.TargetContent
-      if (rawTarget === undefined) {
+      if (rawParams.targetContent === undefined) {
         errors.push("Missing required parameter 'targetContent' for replace_file_content")
       } else {
-        rawParams.targetContent = String(rawTarget)
+        rawParams.targetContent = String(rawParams.targetContent)
       }
-      const rawReplacement = rawParams.replacementContent ?? rawParams.replacement ?? rawParams.replacement_content ?? rawParams.new_content ?? rawParams.new_str ?? rawParams.new_text ?? rawParams.newContent ?? rawParams.replace_text ?? rawParams.replaceText ?? rawParams.replace ?? rawParams.to ?? rawParams.content ?? rawParams.code ?? rawParams.ReplacementContent
-      if (rawReplacement === undefined) {
+      if (rawParams.replacementContent === undefined) {
         errors.push("Missing required parameter 'replacementContent' for replace_file_content")
       } else {
-        rawParams.replacementContent = String(rawReplacement)
+        rawParams.replacementContent = String(rawParams.replacementContent)
       }
       break
     }
 
     case 'multi_replace_file_content': {
-      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
-      if (!rawPath) {
+      if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for multi_replace_file_content")
       } else {
-        rawParams.filePath = String(rawPath)
+        rawParams.filePath = String(rawParams.filePath)
       }
-      const rawChunks = Array.isArray(rawParams.replacements)
-        ? rawParams.replacements
-        : Array.isArray(rawParams.chunks)
-        ? rawParams.chunks
-        : Array.isArray(rawParams.replacement_chunks)
-        ? rawParams.replacement_chunks
-        : Array.isArray(rawParams.edits)
-        ? rawParams.edits
-        : []
-
-      if (!Array.isArray(rawChunks) || rawChunks.length === 0) {
+      if (!Array.isArray(rawParams.replacements) || rawParams.replacements.length === 0) {
         errors.push("Missing or non-array parameter 'replacements' for multi_replace_file_content")
-      } else {
-        const normalized = rawChunks.map((c: any) => ({
-          targetContent: String(c.targetContent ?? c.target ?? c.target_content ?? c.old_content ?? c.old_str ?? c.TargetContent ?? ''),
-          replacementContent: String(c.replacementContent ?? c.replacement ?? c.replacement_content ?? c.new_content ?? c.new_str ?? c.ReplacementContent ?? ''),
-        }))
-        rawParams.replacements = normalized
-        rawParams.chunks = normalized
       }
       break
     }
 
     case 'delete_file': {
-      const rawPath = rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file || rawParams.file_path || rawParams.filename || rawParams.TargetFile
-      if (!rawPath) {
+      if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for delete_file")
       } else {
-        rawParams.filePath = String(rawPath)
+        rawParams.filePath = String(rawParams.filePath)
       }
       break
     }
 
     case 'list_dir': {
-      if (!rawParams.dirPath && !rawParams.path) {
+      if (!rawParams.dirPath) {
         rawParams.dirPath = '.'
       } else {
-        rawParams.dirPath = String(rawParams.dirPath || rawParams.path)
+        rawParams.dirPath = String(rawParams.dirPath)
       }
       break
     }
 
     case 'grep_search': {
-      if (!rawParams.query && !rawParams.searchTerm) {
+      if (!rawParams.query) {
         errors.push("Missing required parameter 'query' for grep_search")
       } else {
-        rawParams.query = String(rawParams.query || rawParams.searchTerm)
+        rawParams.query = String(rawParams.query)
       }
       if (rawParams.dirPath) {
         rawParams.dirPath = String(rawParams.dirPath)
@@ -135,10 +342,10 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     }
 
     case 'run_command': {
-      if (!rawParams.command && !rawParams.cmd) {
+      if (!rawParams.command) {
         errors.push("Missing required parameter 'command' for run_command")
       } else {
-        rawParams.command = String(rawParams.command || rawParams.cmd)
+        rawParams.command = String(rawParams.command)
       }
       if (rawParams.timeoutMs !== undefined) {
         const parsed = Number(rawParams.timeoutMs)
@@ -147,9 +354,40 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
     }
 
-    case 'git_status':
-    case 'rollback_workspace':
-    case 'rollback_last_step': {
+    case 'extract_code_symbols': {
+      if (!rawParams.filePath) {
+        errors.push("Missing required parameter 'filePath' for extract_code_symbols")
+      } else {
+        rawParams.filePath = String(rawParams.filePath)
+      }
+      break
+    }
+
+    case 'web_search': {
+      if (!rawParams.query) {
+        errors.push("Missing required parameter 'query' for web_search")
+      } else {
+        rawParams.query = String(rawParams.query)
+      }
+      break
+    }
+
+    case 'fetch_web_content': {
+      if (!rawParams.url) {
+        errors.push("Missing required parameter 'url' for fetch_web_content")
+      } else {
+        rawParams.url = String(rawParams.url)
+      }
+      break
+    }
+
+    case 'download_file': {
+      if (!rawParams.url || !rawParams.filePath) {
+        errors.push("Missing required parameter 'url' or 'filePath' for download_file")
+      } else {
+        rawParams.url = String(rawParams.url)
+        rawParams.filePath = String(rawParams.filePath)
+      }
       break
     }
 
@@ -162,28 +400,11 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
     }
 
-    case 'run_tests': {
-      if (rawParams.command) {
-        rawParams.command = String(rawParams.command)
-      }
-      break
-    }
-
-    case 'git_diff': {
-      if (rawParams.filePath) {
-        rawParams.filePath = String(rawParams.filePath)
-      }
-      if (rawParams.staged !== undefined) {
-        rawParams.staged = Boolean(rawParams.staged)
-      }
-      break
-    }
-
     case 'get_file_info': {
-      if (!rawParams.filePath && !rawParams.path) {
+      if (!rawParams.filePath) {
         errors.push("Missing required parameter 'filePath' for get_file_info")
       } else {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path)
+        rawParams.filePath = String(rawParams.filePath)
       }
       break
     }
@@ -199,8 +420,6 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     }
 
     case 'update_plan': {
-      // Accept the aliases small models reach for (id / milestone / title) rather than
-      // rejecting an otherwise well-formed plan update over a parameter name.
       const rawId = rawParams.milestoneId ?? rawParams.id ?? rawParams.milestone ?? rawParams.title
       if (rawId === undefined || String(rawId).trim() === '') {
         errors.push("Missing required parameter 'milestoneId' for update_plan")
@@ -217,44 +436,27 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       } else {
         rawParams.status = rawStatus
       }
-
-      if (rawParams.notes !== undefined) {
-        rawParams.notes = String(rawParams.notes)
-      }
       break
     }
 
     case 'ask': {
-      if (!rawParams.question && !rawParams.query) {
+      if (!rawParams.question) {
         errors.push("Missing required parameter 'question' for ask")
       } else {
-        rawParams.question = String(rawParams.question || rawParams.query)
+        rawParams.question = String(rawParams.question)
       }
       break
     }
 
-    case 'open_in_browser': {
-      if (rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file) {
-        rawParams.filePath = String(rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file)
-      }
-      if (rawParams.url) {
-        rawParams.url = String(rawParams.url)
-      }
-      if (!rawParams.filePath && !rawParams.url) {
-        errors.push("Missing required parameter 'filePath' or 'url' for open_in_browser")
-      }
+    case 'git_status':
+    case 'git_diff':
+    case 'rollback_workspace':
+    case 'rollback_last_step':
+    case 'run_tests':
+    case 'finish':
       break
-    }
-
-    case 'finish': {
-      if (rawParams.summary) {
-        rawParams.summary = String(rawParams.summary)
-      }
-      break
-    }
 
     default:
-      // Generic safety string coercion for all other tools
       for (const k of Object.keys(rawParams)) {
         if (typeof rawParams[k] === 'object' && rawParams[k] !== null && !Array.isArray(rawParams[k])) {
           rawParams[k] = JSON.stringify(rawParams[k])
@@ -267,8 +469,9 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
     valid: errors.length === 0,
     errors,
     sanitizedToolCall: {
-      ...toolCall,
+      tool,
       parameters: rawParams,
+      explanation: toolCall.explanation,
     },
   }
 }

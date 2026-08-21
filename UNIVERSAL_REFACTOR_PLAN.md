@@ -78,3 +78,41 @@ Piano di implementazione per il perfezionamento di **Ingestione Doc** (traduzion
 - [x] **6.6. Verifica Seriale, Test & Sync Documentazione**:
   - Eseguire typecheck, suite di test e aggiornare `/docs/`.
 
+---
+
+### Fase 7: Coding Agent Studio — Streamlining UI/UX, Eliminazione Overengineering & Unified Dock
+- [x] **7.1. Backend Data Contract & Structured Events (Anti-Hardcoding)**:
+  - Estendere `AgentActionLog` in `src/types/index.ts` ed `electron/core/domain/agent/agentTypes.ts` con campi strutturati (`category`, `verb`, `target`, `status`, `testRun`, `modelName`).
+  - Aggiornare `agentOrchestratorToolResultProcessor.ts`, `agentOrchestratorTurnDispatch.ts`, `agentOrchestratorFinishAndLoopGuards.ts`, `agentOrchestratorAskAutoHealing.ts` per emettere log già strutturati.
+  - Sostituite 446 righe di regex-scraping fragile in `agentLogMessageUtils.ts` con un resolver deterministico e tipizzato a monte.
+- [x] **7.2. Single Header & Omni-Composer Ergonomico (Stile Cursor / Claude Code)**:
+  - Consolidato il layout del pannello sinistro in un singolo header integrato (`WorkspaceExplorer` toggle, session selector e step badge).
+  - Creato Omni-Composer (`PromptComposer.tsx`) con prompt queue chips galleggianti, context pills rimovibili (`📌 File`, `📄 RAG`), textarea ad auto-espansione, barra di stato contesto/token discreta e selettore di modalità a pillola segmentata (`[⚡ Agent] [📋 Plan] [💬 Ask]`).
+- [x] **7.3. Timeline a Turni & Action Groups Collassabili**:
+  - Riprogettato `AgentTimelineMessage.tsx` con rendering Markdown standard, Action Cards dedicate (File Mutation, Command Execution con output collassabile, Test Run con badge PASS/FAIL, User Prompt bubbles, System Alert cards).
+- [x] **7.4. Dock Inferiore Snello & Spostamento Diagnostica / Telemetria**:
+  - Ridotto `CodingBottomDock.tsx` a 3 tab operative: `Terminal` (PowerShell ConPTY), `Changes` (Git diff), `Plan` (Milestones e checklist).
+  - Spostato il monitoraggio telemetrico, toolchain e log SLM in un modale dedicato (`SystemDiagnosticsModal.tsx`) accessibile da `CodingHeader.tsx`.
+- [x] **7.5. Unificazione Flusso Monaco Diff**:
+  - Flusso coerente di visualizzazione ed apertura diff cliccando sui file modificati sia dalla timeline che dalla tab Changes.
+- [x] **7.6. Verifica Seriale dei Test & Aggiornamento Documentazione**:
+  - Eseguiti typecheck e suite completa Vitest (89/89 test files PASS, 624/624 test passati) e documentazione sincronizzata in `/docs/`.
+
+---
+
+### Fase 8: Coding Agent Studio — Unificazione Domain Logic, Guardrails & AI Debug Diagnostic Bundle
+- [x] **8.1. Unificazione Tool Schema Catalog & Parameter Normalization**:
+  - Centralizzati in `toolSchemaValidator.ts` gli alias di tutti gli strumenti (`TOOL_NAME_ALIASES`) e dei parametri (`normalizeToolParams`, `normalizeToolName`, `validateAndSanitize`).
+  - Semplificato drasticamente `toolParser.ts` eliminando oltre 200 righe di verifiche di fallback duplicate.
+- [x] **8.2. Unificazione Guardrail & Circuit Breakers (`agentExecutionGuard.ts`)**:
+  - Creato il motore coordinatore `AgentExecutionGuard` per loop detection crittografica SHA-256, stagnation circuit breaker e verifica della Definition of Done (`TransactionalExecutionGuard`).
+  - Rimossa logica orfana non utilizzata (`generateReproTestTemplate` in `cycleOscillationDetector.ts`).
+- [x] **8.3. AI Debug Diagnostic Bundle**:
+  - Implementato `aiDebugBundleService.ts` per generare report Markdown diagnostici ad alta densità per assistenti AI (Claude, Antigravity, ChatGPT, DeepSeek) con specifiche host, toolchain, prompt originale, tabella turni, errori puliti da codici ANSI e `git diff` unificato.
+  - Integrato pulsante 1-click **"📋 Copia per AI Agent"** in `SystemDiagnosticsModal.tsx`.
+- [x] **8.4. Verifica Seriale Completa**:
+  - `npm run typecheck` $\rightarrow$ 0 errori.
+  - `npm run test:fast` $\rightarrow$ 89/89 test files PASS (624/624 test passati).
+
+
+

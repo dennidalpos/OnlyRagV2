@@ -32,8 +32,17 @@ describe('Context Window Calculator Domain Unit Tests', () => {
     expect(ctx).toBe(8192)
   })
 
+  it('should handle string prompts accurately via BPE token counting', () => {
+    const shortPrompt = 'You are a helpful coding agent. Please refactor this function.'
+    expect(calculateDynamicContextWindow(shortPrompt, 32768, 512)).toBe(2048)
+
+    const largePrompt = 'const x = 1;\n'.repeat(3000)
+    expect(calculateDynamicContextWindow(largePrompt)).toBeGreaterThanOrEqual(8192)
+  })
+
   it('should handle zero or negative character counts safely', () => {
     expect(calculateDynamicContextWindow(0)).toBe(2048)
     expect(calculateDynamicContextWindow(-500)).toBe(2048)
+    expect(calculateDynamicContextWindow('')).toBe(2048)
   })
 })

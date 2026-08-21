@@ -1,4 +1,4 @@
-import type { AgentToolCall } from '../domain/agent/agentTypes'
+import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { extractErrorDiagnostics, formatDiagnosticPrompt } from '../domain/agent/astStackTraceExtractor'
@@ -91,10 +91,52 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   }
   trackVerification(ctx, isToolFailure)
 
+  const toolName = parsedTool.tool
+  let category: AgentLogEntry['category'] = 'tool_execution'
+  let verb: AgentLogEntry['verb'] = undefined
+
+  if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file', 'move_file', 'create_directory'].includes(toolName)) {
+    category = 'file_mutation'
+    verb = toolName === 'write_file' || toolName === 'create_directory'
+      ? 'Created'
+      : toolName === 'delete_file'
+      ? 'Deleted'
+      : toolName === 'move_file'
+      ? 'Moved'
+      : toolName === 'copy_file'
+      ? 'Copied'
+      : 'Edited'
+  } else if (toolName === 'run_command') {
+    category = 'command_execution'
+    verb = 'Ran'
+  } else if (toolName === 'run_tests') {
+    category = 'test_run'
+  } else if (['read_file', 'grep_search', 'list_dir', 'list_files_recursive', 'extract_code_symbols', 'get_file_info'].includes(toolName)) {
+    category = 'workspace_exploration'
+    verb = toolName === 'read_file' ? 'Read' : toolName === 'grep_search' ? 'Search' : toolName === 'extract_code_symbols' ? 'Symbols' : 'List'
+  } else if (['web_search', 'fetch_web_content', 'download_file'].includes(toolName)) {
+    category = 'web_research'
+    verb = toolName === 'web_search' ? 'Search' : toolName === 'fetch_web_content' ? 'Fetch' : 'Download'
+  }
+
+  const testRunMeta = toolName === 'run_tests' ? {
+    isPass: !isToolFailure,
+    summary: toolRes.logMessage,
+  } : undefined
+
+  const structuredMeta = {
+    category,
+    toolName,
+    target: targetParam,
+    status: (isToolFailure ? 'failure' : 'success') as 'failure' | 'success',
+    verb,
+    testRun: testRunMeta,
+  }
+
   if (toolRes.isTerminal) {
-    ctx.emitLog('terminal', toolRes.logMessage, toolRes.logDetail)
+    ctx.emitLog('terminal', toolRes.logMessage, toolRes.logDetail, structuredMeta)
   } else {
-    ctx.emitLog('info', toolRes.logMessage, toolRes.logDetail)
+    ctx.emitLog('info', toolRes.logMessage, toolRes.logDetail, structuredMeta)
   }
 
   if (ctx.settings.enableCodingAgentDebugLog) {

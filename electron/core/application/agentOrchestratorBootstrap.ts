@@ -12,12 +12,18 @@ import type { SkillMatchingOptions } from './skillAppService'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorAppService'
+import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import { resolveSessionContext } from './agentOrchestratorSessionContext'
 import { initializeSessionState } from './agentOrchestratorSessionState'
 import { buildSessionPersistence } from './agentOrchestratorSessionPersistence'
 import { armSessionWatchdog } from './agentOrchestratorSessionWatchdog'
 
-export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string) => void
+export type EmitLog = (
+  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
+  message: string,
+  detail?: string,
+  meta?: Partial<AgentLogEntry>
+) => void
 
 export interface BootstrapParams {
   payload: AgentTaskPayload
@@ -88,7 +94,7 @@ export interface AgentSessionBootstrap {
 export async function bootstrapAgentSession(params: BootstrapParams): Promise<AgentSessionBootstrap> {
   const { payload, session, sessionId, isSessionActive, deregisterSession } = params
 
-  const emitLog: AgentSessionBootstrap['emitLog'] = (type, message, detail) => {
+  const emitLog: AgentSessionBootstrap['emitLog'] = (type, message, detail, meta) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
       session.targetWindow.webContents.send('agent:log', {
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -96,6 +102,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
         type,
         message,
         detail,
+        ...meta,
       })
     }
   }

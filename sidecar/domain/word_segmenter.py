@@ -1,7 +1,8 @@
 import os
 import json
 import re
-from typing import Set, Dict, List, Optional
+import ftfy
+from typing import Set, Dict, List, Optional, Any
 from sidecar.config import logger
 
 _WORDFREQ_AVAILABLE = False
@@ -10,6 +11,14 @@ try:
     _WORDFREQ_AVAILABLE = True
 except ImportError:
     _WORDFREQ_AVAILABLE = False
+
+_SYMSPELL_AVAILABLE = False
+try:
+    import symspellpy
+    from symspellpy import SymSpell
+    _SYMSPELL_AVAILABLE = True
+except ImportError:
+    _SYMSPELL_AVAILABLE = False
 
 # Standard ISO 639-1 two-letter language code normalization map
 _LANG_CODE_MAP: Dict[str, str] = {
@@ -35,14 +44,14 @@ def normalize_language_code(lang: Optional[str]) -> str:
     cleaned = lang.strip().lower().split("_")[0].split("-")[0]
     return _LANG_CODE_MAP.get(cleaned, _LANG_CODE_MAP.get(lang.strip().lower(), "it"))
 
-# Genuine standalone 1-letter words in Latin/European languages (conjunctions, prepositions, articles, pronouns)
-_VALID_SINGLE_LETTERS: Set[str] = {"a", "e", "i", "o", "u", "y", "d"}
+# Genuine standalone 1-letter words / abbreviations in Latin/European languages (conjunctions, prepositions, articles, pronouns, units)
+_VALID_SINGLE_LETTERS: Set[str] = {"a", "e", "i", "o", "u", "y", "d", "n", "c", "v", "p", "s", "l", "m", "g", "k", "h"}
 
 
 class MultiLangVocabManager:
     """
-    Manages multi-language vocabulary word frequencies and unigram probabilities.
-    Integrates wordfreq (45+ languages) with local AppData custom terminology caches.
+    Manages multi-language vocabulary word frequencies and SymSpell statistical segmentation engines.
+    Integrates wordfreq (45+ languages) with symspellpy and local custom terminology caches.
     """
     def __init__(self, cache_dir: Optional[str] = None):
         if not cache_dir:
@@ -51,6 +60,7 @@ class MultiLangVocabManager:
         else:
             self.cache_dir = cache_dir
         self._local_vocab_cache: Dict[str, Dict[str, float]] = {}
+        self._symspell_cache: Dict[str, Any] = {}
         self._load_cached_vocabularies()
 
     def _load_cached_vocabularies(self) -> None:
@@ -99,6 +109,31 @@ class MultiLangVocabManager:
         """Returns True if word is recognized with significant statistical frequency."""
         return self.get_word_zipf(word, lang) >= 2.0
 
+    def get_symspell_engine(self, lang: str = "it") -> Optional[Any]:
+        """Returns a cached SymSpell engine initialized from universal wordfreq corpus for the language."""
+        if not _SYMSPELL_AVAILABLE:
+            return None
+        norm_lang = normalize_language_code(lang)
+        if norm_lang in self._symspell_cache:
+            return self._symspell_cache[norm_lang]
+
+        try:
+            sym = SymSpell(max_dictionary_edit_distance=0, prefix_length=7)
+            if _WORDFREQ_AVAILABLE:
+                freq_dict = wordfreq.get_frequency_dict(norm_lang)
+                for w, freq in freq_dict.items():
+                    sym.create_dictionary_entry(w, max(1, int(freq * 1_000_000_000)))
+            # Add custom local words if present
+            if norm_lang in self._local_vocab_cache:
+                for cw, z_score in self._local_vocab_cache[norm_lang].items():
+                    sym.create_dictionary_entry(cw, int(10 ** z_score))
+
+            self._symspell_cache[norm_lang] = sym
+            return sym
+        except Exception as e:
+            logger.debug(f"SymSpell engine initialization skipped: {e}")
+            return None
+
 
 _VOCAB_MANAGER: Optional[MultiLangVocabManager] = None
 
@@ -116,8 +151,8 @@ def _is_italian_fiscal_code(token: str) -> bool:
 
 def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
     """
-    Dynamic programming Viterbi unigram word segmentation for fused OCR Latin text.
-    Uses negative log-likelihood cost based purely on universal Zipf frequency.
+    Statistical word segmentation using symspellpy word_segmentation powered by wordfreq,
+    with automatic casing preservation and DP fallback.
     """
     if len(text) <= 3:
         return text
@@ -130,6 +165,25 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
     if whole_zipf >= 2.5:
         return text
 
+    # 1. Primary: SymSpell standard statistical word segmentation
+    sym_engine = vocab_mgr.get_symspell_engine(norm_lang)
+    if sym_engine is not None:
+        try:
+            res = sym_engine.word_segmentation(text.lower())
+            corrected = (res.corrected_string or "").strip()
+            if corrected and " " in corrected:
+                words = corrected.split()
+                # Verify segmented words
+                if len(words) > 1 and all(len(w) > 1 or w in _VALID_SINGLE_LETTERS for w in words):
+                    if text.isupper():
+                        return corrected.upper()
+                    if text[0].isupper():
+                        return corrected[0].upper() + corrected[1:]
+                    return corrected
+        except Exception as e:
+            logger.debug(f"SymSpell segmentation error: {e}")
+
+    # 2. Fallback: Dynamic programming Viterbi unigram segmentation
     is_upper = text.isupper()
     is_title = text.istitle()
     n = len(text)
@@ -146,7 +200,6 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
                 if cost < dp[i][0]:
                     dp[i] = (cost, j)
             elif j == i - 1 and dp[j][0] != float('inf'):
-                # Unknown single-character transition penalty
                 cost = dp[j][0] + 12.0
                 if cost < dp[i][0]:
                     dp[i] = (cost, j)
@@ -154,32 +207,30 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
     if dp[n][0] == float('inf') or dp[n][1] == -1:
         return text
 
-    res: List[str] = []
+    res_words: List[str] = []
     curr = n
     while curr > 0:
         prev = dp[curr][1]
-        res.append(text[prev:curr])
+        res_words.append(text[prev:curr])
         curr = prev
 
-    res.reverse()
+    res_words.reverse()
 
-    # Guard 1: single-letter segments must all be valid single words and constitute <= 40% of total segments
-    single_letters = [s for s in res if len(s) == 1]
+    single_letters = [s for s in res_words if len(s) == 1]
     if any(s.lower() not in _VALID_SINGLE_LETTERS for s in single_letters):
         return text
-    if len(res) > 1 and (len(single_letters) / len(res)) > 0.40:
+    if len(res_words) > 1 and (len(single_letters) / len(res_words)) > 0.40:
         return text
 
-    # Guard 2: Every multi-letter segment must be a recognized vocabulary word
-    for s in res:
+    for s in res_words:
         if len(s) > 1 and not vocab_mgr.is_known_word(s, norm_lang):
             return text
 
-    if len(res) <= 1:
+    if len(res_words) <= 1:
         return text
 
     out_segments: List[str] = []
-    for s in res:
+    for s in res_words:
         if is_upper:
             out_segments.append(s.upper())
         elif is_title and len(out_segments) == 0:
@@ -192,19 +243,25 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
 
 def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     """
-    Normalizes spacing on OCR text:
+    Normalizes spacing on OCR text using standard ftfy and symspellpy libraries:
+    - Automatically repairs encoding / mojibake via ftfy
     - Isolates email addresses, URLs, and formatted Italian Fiscal Codes
     - Separates fused TLDs (e.g. .comovvero -> .com ovvero)
     - Separates email keywords (e.g. e-mailgestione -> e-mail gestione)
     - Splits letters and digits (e.g. Laurentina449 -> Laurentina 449)
     - Splits camelCase / PascalCase (e.g. TelepassFamily -> Telepass Family)
-    - Segments fused compound words dynamically via statistical Viterbi algorithm
+    - Segments fused compound words statistically via SymSpell & wordfreq
     """
     if not text or not text.strip():
         return ""
 
-    # 0. Clean unprintable control characters, replacement chars, and non-breaking spaces
-    text = text.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "").replace("\ufffd", "")
+    # 0. Clean unprintable control characters and repair text via ftfy
+    try:
+        text = ftfy.fix_text(text)
+    except Exception:
+        pass
+
+    text = text.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "")
     text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
 
     # 1. Pre-separate common domain TLDs when fused with trailing words
@@ -223,7 +280,9 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = re.sub(r'([a-zA-Z]+)(a\.r\.|c\.a\.|c\.p\.)', r'\1 \2', text, flags=re.IGNORECASE)
 
     # Normalize N° / n° / N. civico and similar form labels
-    text = re.sub(r'(?i)(N[°º\.\?]\s*CIVICO)', r'N° CIVICO', text)
+    text = re.sub(r'([a-zA-Z]+)(N[°º\.\?])', r'\1 \2', text)
+    text = re.sub(r'(?i)\bN[\ufffd°º\.\?\^]*\s*CIVICO\b', 'N° CIVICO', text)
+    text = re.sub(r'(?i)\bLOCALIT[\ufffdÀAàa]*\b', 'LOCALITÀ', text)
     text = re.sub(r'(?i)(N[°º\.\?])(?=[0-9A-Z])', r'\1 ', text)
 
     # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
@@ -292,7 +351,7 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
                         seg_parts.append(sp)
                 else:
                     seg_parts.append(sp)
-            cleaned_tokens.append("'".join(seg_parts))
+                cleaned_tokens.append("'".join(seg_parts))
             continue
 
         # Extract leading and trailing punctuation

@@ -43,12 +43,16 @@ from sidecar.services.search_service import perform_vector_search, list_stored_d
 from sidecar.services.prompt_history_service import index_prompt_history, search_prompt_history, remove_prompt_history
 from sidecar.services.vocab_service import background_vocab_sync_startup, get_vocab_sync_service
 
-app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.3.0")
+from contextlib import asynccontextmanager
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI):
     logger.info("FastAPI Sidecar starting up. Launching background vocabulary sync worker...")
     asyncio.create_task(background_vocab_sync_startup())
+    yield
+    logger.info("FastAPI Sidecar shutting down.")
+
+app = FastAPI(title="OnlyRag V2 Python Sidecar Engine", version="2.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

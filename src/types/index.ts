@@ -116,6 +116,15 @@ export interface ChatMessage {
   isStreaming?: boolean
 }
 
+export interface ChatConversation {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  selectedDocIds: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface WorkspaceFile {
   name: string
   path: string

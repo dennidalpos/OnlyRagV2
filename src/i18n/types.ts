@@ -111,6 +111,14 @@ export interface TranslationSchema {
     resetConfirmAction: string
     newChatStarted: string
     chatCleared: string
+    historyTitle: string
+    historyButton: string
+    noConversations: string
+    deleteConversation: string
+    renameConversation: string
+    saveTitle: string
+    conversationDeleted: string
+    conversationLoaded: string
     send: string
     stop: string
   }
@@ -526,6 +534,10 @@ export interface TranslationSchema {
     contactsTitle: string
     contactsSubtitle: string
     githubIssues: string
+    searchPlaceholder: string
+    technologiesCount: string
+    noResults: string
+    clearSearch: string
   }
   systemPrompt: {
     title: string

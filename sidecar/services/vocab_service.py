@@ -35,7 +35,7 @@ class VocabSyncService:
         current_langs: List[str] = []
 
         try:
-            resp = await httpx_client.get(self.manifest_url, timeout=timeout_sec)
+            resp = await asyncio.to_thread(httpx_client.get, self.manifest_url, timeout=timeout_sec)
             if resp.status_code == 200:
                 manifest = resp.json()
                 packs = manifest.get("packs", {})
@@ -57,7 +57,7 @@ class VocabSyncService:
                             local_version = None
 
                     if local_version != remote_version and download_url:
-                        pack_resp = await httpx_client.get(download_url, timeout=timeout_sec)
+                        pack_resp = await asyncio.to_thread(httpx_client.get, download_url, timeout=timeout_sec)
                         if pack_resp.status_code == 200:
                             content = pack_resp.json()
                             if isinstance(content, dict):

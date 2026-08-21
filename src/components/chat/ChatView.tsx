@@ -19,6 +19,10 @@ import {
   AlertTriangle,
   ArrowDown,
   GripVertical,
+  History,
+  Trash2,
+  Edit2,
+  Clock,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -49,6 +53,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
   const [showToolsMenu, setShowToolsMenu] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [copiedCitationIdx, setCopiedCitationIdx] = useState<string | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<'context' | 'history'>('context')
+  const [editingConvId, setEditingConvId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
 
   // Close tools and reset popovers on click outside or Escape
   useEffect(() => {
@@ -65,6 +72,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
       if (e.key === 'Escape') {
         setShowToolsMenu(false)
         setShowResetConfirm(false)
+        setEditingConvId(null)
       }
     }
 
@@ -77,6 +85,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [showToolsMenu, showResetConfirm])
+
+  const handleStartRename = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingConvId(id)
+    setEditingTitle(currentTitle)
+  }
+
+  const handleSaveRename = (id: string, e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (editingTitle.trim()) {
+      c.renameConversation(id, editingTitle.trim())
+    }
+    setEditingConvId(null)
+  }
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
@@ -119,57 +141,205 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
 
       {/* Main Split Layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Context Documents */}
+        {/* Left Sidebar: Context Documents & History */}
         <div
           style={{ width: `${sidebarWidth}px` }}
-          className="border-r border-slate-800 bg-slate-900/40 p-4 space-y-3 flex flex-col shrink-0 overflow-hidden select-text"
+          className="border-r border-slate-800 bg-slate-900/40 p-3 space-y-3 flex flex-col shrink-0 overflow-hidden select-text"
         >
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-              <span>{t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })}</span>
-            </div>
+          {/* Sidebar Tab Switcher */}
+          <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800">
             <button
               type="button"
-              onClick={c.fetchDocuments}
-              aria-label={t('chat.refreshList')}
-              title={t('chat.refreshList')}
-              className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg focus-ring active:scale-95"
+              onClick={() => setSidebarTab('context')}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                sidebarTab === 'context'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <FileText className="w-3.5 h-3.5" />
+              <span>Contesto ({c.selectedDocIds.size}/{c.documents.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarTab('history')}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                sidebarTab === 'history'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Storico ({c.conversations.length})</span>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label={t('chat.toolsTitle')}>
-            {c.documents.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
-                {t('chat.noDocsIndexed')} {t('chat.noDocsHint')}
+          {/* Context Tab Content */}
+          {sidebarTab === 'context' ? (
+            <>
+              <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Documenti Vettorizzati
+                </span>
+                <button
+                  type="button"
+                  onClick={c.fetchDocuments}
+                  aria-label={t('chat.refreshList')}
+                  title={t('chat.refreshList')}
+                  className="p-1 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg focus-ring active:scale-95"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
               </div>
-            ) : (
-              c.documents.map((doc) => {
-                const isSelected = c.selectedDocIds.has(doc.id)
-                return (
-                  <button
-                    type="button"
-                    key={doc.id}
-                    onClick={() => c.toggleDocSelection(doc.id)}
-                    aria-pressed={isSelected}
-                    aria-label={`${doc.filename} (${isSelected ? t('common.active') : t('common.none')})`}
-                    className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all focus-ring active:scale-95 flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
-                        : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <FileText className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
-                      <span className="truncate font-medium" title={doc.filename}>{doc.filename}</span>
-                    </div>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
-                  </button>
-                )
-              })
-            )}
-          </div>
+
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1" role="group" aria-label={t('chat.toolsTitle')}>
+                {c.documents.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
+                    {t('chat.noDocsIndexed')} {t('chat.noDocsHint')}
+                  </div>
+                ) : (
+                  c.documents.map((doc) => {
+                    const isSelected = c.selectedDocIds.has(doc.id)
+                    return (
+                      <button
+                        type="button"
+                        key={doc.id}
+                        onClick={() => c.toggleDocSelection(doc.id)}
+                        aria-pressed={isSelected}
+                        aria-label={`${doc.filename} (${isSelected ? t('common.active') : t('common.none')})`}
+                        className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all focus-ring active:scale-95 flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                          <span className="truncate font-medium" title={doc.filename}>{doc.filename}</span>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </>
+          ) : (
+            /* History Tab Content */
+            <>
+              <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {t('chat.historyTitle')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    c.handleNewChat()
+                    toast.info(t('chat.newChatStarted'))
+                  }}
+                  className="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                  title={t('chat.newChat')}
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Nuova</span>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                {c.conversations.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl p-4 leading-relaxed">
+                    {t('chat.noConversations')}
+                  </div>
+                ) : (
+                  c.conversations.map((conv) => {
+                    const isActive = conv.id === c.activeConversationId
+                    const isEditing = editingConvId === conv.id
+                    return (
+                      <div
+                        key={conv.id}
+                        onClick={() => {
+                          if (!isEditing) {
+                            c.loadConversation(conv.id)
+                            toast.info(t('chat.conversationLoaded'))
+                          }
+                        }}
+                        className={`group relative p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                          isActive
+                            ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        {isEditing ? (
+                          <form onSubmit={(e) => handleSaveRename(conv.id, e)} className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              autoFocus
+                              className="flex-1 px-2 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-xs text-slate-100 focus:outline-none"
+                            />
+                            <button
+                              type="submit"
+                              className="p-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-md"
+                              title={t('chat.saveTitle')}
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingConvId(null)}
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-slate-200 truncate flex items-center gap-1.5" title={conv.title}>
+                                <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                                <span className="truncate">{conv.title}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  {new Date(conv.updatedAt || conv.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span>• {conv.messages?.length || 0} msg</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={(e) => handleStartRename(conv.id, conv.title, e)}
+                                className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors"
+                                title={t('chat.renameConversation')}
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  c.deleteConversation(conv.id)
+                                  toast.info(t('chat.conversationDeleted'))
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
+                                title={t('chat.deleteConversation')}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Resizable Divider Handle */}
@@ -249,105 +419,114 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             ) : (
               c.messages.map((msg) => {
                 const isUser = msg.sender === 'user'
-                const isPendingBot = !isUser && !msg.text && c.isGenerating
+                const isCopied = c.copiedMsgId === msg.id
 
                 return (
-                  <div key={msg.id} className={`flex gap-3 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : ''}`}>
+                  <div
+                    key={msg.id}
+                    className={`flex gap-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
+                  >
+                    {/* Avatar Icon */}
                     <div
                       className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
                         isUser
-                          ? 'bg-indigo-950/80 text-indigo-300 border-indigo-700/80 shadow-md'
-                          : 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80 shadow-md'
+                          ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400'
                       }`}
                     >
-                      {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                      {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-cyan-400" />}
                     </div>
 
-                    <div className={`space-y-2 group min-w-0 max-w-[85%] ${isUser ? 'items-end' : ''}`}>
+                    {/* Message Bubble */}
+                    <div className={`space-y-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
                       <div
-                        className={`p-4 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap break-words overflow-hidden space-y-2 ${
+                        className={`p-4 rounded-2xl text-xs leading-relaxed border select-text ${
                           isUser
-                            ? 'bg-gradient-to-r from-indigo-950/70 via-blue-950/50 to-slate-900/90 border border-indigo-500/50 text-slate-100 font-medium rounded-tr-none shadow-lg'
-                            : 'bg-[#0e1422] border border-slate-800 text-slate-200 rounded-tl-none shadow-md'
+                            ? 'bg-cyan-950/80 border-cyan-800/80 text-cyan-100 rounded-tr-sm shadow-md shadow-cyan-950/30'
+                            : 'bg-slate-900/90 border-slate-800 text-slate-200 rounded-tl-sm shadow-md shadow-slate-950/40'
                         }`}
                       >
-                        <div className={`flex items-center justify-between border-b pb-1.5 text-[10px] font-mono ${isUser ? 'border-indigo-500/30 text-indigo-300' : 'border-slate-800 text-slate-400'}`}>
-                          <span className="font-bold">{isUser ? t('coding.userRole') : t('coding.agentRole')}</span>
-                          {/* msg.timestamp is already pre-formatted as a locale time string (see
-                              useChatEngine.ts) -- wrapping it in `new Date(...)` here parsed a
-                              string like "14:32" as an invalid date and rendered "Invalid Date". */}
-                          <span>{msg.timestamp}</span>
-                        </div>
-                        {isPendingBot ? (
-                          <div className="flex items-center gap-2 text-cyan-300 py-0.5">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                            <span className="font-mono text-[11px] animate-pulse">{t('chat.generating')}</span>
-                          </div>
-                        ) : (
-                          <div>{msg.text}</div>
-                        )}
-                      </div>
-
-                      {msg.sources && msg.sources.length > 0 && (
-                        <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2 text-[11px] font-mono">
-                          <div className="text-cyan-400 font-bold flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3" /> {t('chat.citationsTitle', { count: msg.sources.length })}
-                          </div>
-                          {msg.sources.map((cite, idx) => {
-                            const relevancePercent = cite.score ? Math.round(Math.min(1, Math.max(0, cite.score)) * 100) : null
-                            const citationKey = `${msg.id}-${idx}`
-                            return (
-                              <div key={idx} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800/80 text-slate-300 break-words space-y-1 group/cite">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-cyan-300 font-semibold truncate">{cite.docName}</span>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {relevancePercent !== null && (
-                                      <span className="px-1.5 py-0.5 rounded bg-cyan-950/90 text-cyan-300 border border-cyan-800/80 text-[10px] font-bold font-mono">
-                                        {t('chat.relevance')}: {relevancePercent}%
-                                      </span>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        await navigator.clipboard.writeText(cite.snippet)
-                                        setCopiedCitationIdx(citationKey)
-                                        toast.success(t('chat.citationCopied'))
-                                        setTimeout(() => setCopiedCitationIdx(null), 2000)
-                                      }}
-                                      aria-label={t('chat.copyCitation')}
-                                      title={t('chat.copyCitation')}
-                                      className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
-                                    >
-                                      {copiedCitationIdx === citationKey ? (
-                                        <Check className="w-3 h-3 text-emerald-400" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                                <p className="text-slate-300 text-[11px] italic font-sans leading-relaxed">{cite.snippet}</p>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      <div className={`flex items-center gap-2 text-[10px] text-slate-400 ${isUser ? 'justify-end' : ''}`}>
-                        <span>{msg.timestamp}</span>
-                        {msg.text && (
+                        {/* Message Header (Timestamp & Copy) */}
+                        <div className="flex items-center justify-between gap-4 mb-2 pb-1.5 border-b border-slate-800/60 text-[10px] text-slate-400">
+                          <span className="font-semibold uppercase tracking-wider">
+                            {isUser ? 'Tu' : 'Assistente AI RAG'} • {msg.timestamp}
+                          </span>
                           <button
                             type="button"
                             onClick={() => {
                               c.handleCopyMessage(msg.id, msg.text)
-                              toast.success(t('chat.msgCopied'))
+                              toast.info(t('chat.msgCopied'))
                             }}
-                            aria-label={t('chat.copyMsg')}
+                            className="p-1 hover:text-slate-200 rounded transition-colors focus-ring"
                             title={t('chat.copyMsg')}
-                            className="opacity-70 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:text-slate-200 transition-opacity focus-ring rounded p-0.5"
                           >
-                            {c.copiedMsgId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            {isCopied ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
                           </button>
+                        </div>
+
+                        {/* Message Text / Streaming State */}
+                        {msg.text ? (
+                          <div className="whitespace-pre-wrap font-sans text-slate-200 selection:bg-cyan-500/30 selection:text-cyan-100">
+                            {msg.text}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-cyan-400 animate-pulse py-1">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span className="text-[11px] font-medium">{t('chat.generating')}</span>
+                          </div>
+                        )}
+
+                        {/* Citations and Source Verification Cards */}
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
+                            <div className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3 text-cyan-400" />
+                              <span>{t('chat.citationsTitle', { count: msg.sources.length })}</span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-1.5">
+                              {msg.sources.map((src, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1"
+                                >
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="font-semibold text-slate-300 truncate max-w-[240px]">
+                                      {src.docName}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-cyan-400 font-mono text-[9px] px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
+                                        {t('chat.relevance')}: {(src.score * 100).toFixed(0)}%
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(src.snippet)
+                                          setCopiedCitationIdx(`${msg.id}-${idx}`)
+                                          toast.info(t('chat.citationCopied'))
+                                          setTimeout(() => setCopiedCitationIdx(null), 2000)
+                                        }}
+                                        className="p-0.5 text-slate-400 hover:text-slate-200 transition-colors"
+                                        title={t('chat.copyCitation')}
+                                      >
+                                        {copiedCitationIdx === `${msg.id}-${idx}` ? (
+                                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-2.5 h-2.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 font-sans italic line-clamp-2 leading-relaxed">
+                                    "{src.snippet}"
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -355,46 +534,59 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                 )
               })
             )}
-
-            <div className="sr-only" aria-live="polite" aria-atomic="true">
-              {c.isGenerating ? t('chat.generating') : ''}
-            </div>
             <div ref={c.chatBottomRef} />
           </div>
 
-          {/* Unified Floating Prompt Composer Bar */}
-          <div className="p-4 border-t border-slate-800 bg-slate-900/60 shrink-0">
-            <div className="bg-[#161c28] border border-slate-800/80 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
-              {/* Center: Prompt Textarea */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  c.handleSendMessage(e)
-                }}
-                className="w-full flex flex-col space-y-2"
-              >
-                <textarea
-                  value={c.input}
-                  onChange={(e) => c.setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      if (c.input.trim() && !c.isGenerating) {
-                        c.handleSendMessage()
-                      }
-                    }
-                  }}
-                  rows={2}
-                  disabled={c.isGenerating}
-                  placeholder={t('chat.inputPlaceholder')}
-                  aria-label={t('chat.headerTitle')}
-                  className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-400 resize-none font-sans leading-relaxed px-1"
-                />
+          {/* Mention Auto-Complete Popover */}
+          {c.showMentions && c.filteredMentions.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Document mentions"
+              className="absolute bottom-20 left-6 z-30 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden font-sans animate-in fade-in"
+            >
+              <div className="p-2 border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-3 h-3 text-cyan-400" />
+                <span>Collega Contesto Documento (@)</span>
+              </div>
+              <div className="max-h-48 overflow-y-auto p-1 space-y-1">
+                {c.filteredMentions.map((doc) => (
+                  <button
+                    type="button"
+                    key={doc.id}
+                    onClick={() => c.selectMentionDoc(doc)}
+                    role="option"
+                    aria-selected={c.selectedDocIds.has(doc.id)}
+                    className="w-full text-left p-2 rounded-xl hover:bg-slate-800 text-xs text-slate-300 hover:text-cyan-200 flex items-center gap-2 transition-colors focus-ring"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span className="truncate">{doc.filename}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-                {/* Bottom row: [Left: Tools Popover] --- [Right: Quick Actions & Send] */}
-                <div className="flex items-center justify-between pt-1 border-t border-slate-800/40">
-                  {/* Left: Tools & Context Menu Trigger */}
-                  <div className="relative">
+          {/* Bottom Chat Input Form Container */}
+          <div className="p-4 border-t border-slate-800 bg-slate-900/60 shrink-0">
+            <div className="max-w-4xl mx-auto space-y-2">
+              <form onSubmit={c.handleSendMessage} className="space-y-2">
+                {/* Main Input Text Field */}
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={c.input}
+                    onChange={c.handleInputChange}
+                    placeholder={t('chat.inputPlaceholder')}
+                    aria-label={t('chat.inputPlaceholder')}
+                    disabled={c.isGenerating}
+                    className="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/80 transition-all font-sans disabled:opacity-50"
+                  />
+                </div>
+
+                {/* Controls Bar Below Input */}
+                <div className="flex items-center justify-between text-xs px-1">
+                  {/* Left: Tools & System Prompt Trigger */}
+                  <div className="flex items-center gap-2 relative">
                     <button
                       type="button"
                       onClick={() => setShowToolsMenu(!showToolsMenu)}
@@ -440,9 +632,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                           </button>
                         </div>
 
-                        {/* Selected context documents are managed in the always-visible left
-                            sidebar list -- this popover only surfaces actions that have no other
-                            entry point, so it no longer repeats that same document list here. */}
                         <div className="text-[11px] text-slate-400">
                           {c.documents.length > 0
                             ? t('chat.contextTitle', { selected: c.selectedDocIds.size, total: c.documents.length })

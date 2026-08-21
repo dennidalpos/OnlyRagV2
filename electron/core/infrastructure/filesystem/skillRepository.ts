@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import matter from 'gray-matter'
+import yaml from 'js-yaml'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
@@ -17,9 +17,18 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
   }
 
   try {
-    const parsed = matter(rawContent)
-    const data = parsed.data || {}
-    const body = (parsed.content || '').trim()
+    let data: Record<string, any> = {}
+    let body = rawContent.trim()
+
+    const frontmatterMatch = rawContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+    if (frontmatterMatch) {
+      const yamlStr = frontmatterMatch[1]
+      body = frontmatterMatch[2].trim()
+      const loaded = yaml.load(yamlStr)
+      if (loaded && typeof loaded === 'object') {
+        data = loaded as Record<string, any>
+      }
+    }
 
     // Helper to safely parse string array or comma-separated string
     const toStringArray = (val: any): string[] => {
@@ -59,7 +68,7 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
 
     return { metadata, body }
   } catch (err: any) {
-    logger.log('WARN', 'SkillRepo', `Failed parsing skill frontmatter with gray-matter: ${err.message}`)
+    logger.log('WARN', 'SkillRepo', `Failed parsing skill frontmatter with js-yaml: ${err.message}`)
     return {
       metadata: { name: 'custom-skill', description: 'Custom workspace skill' },
       body: rawContent.trim(),

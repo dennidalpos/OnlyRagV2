@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Languages, AlertTriangle, X, Loader2, Folder } from 'lucide-react'
 import { LANGUAGES } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
@@ -7,6 +7,7 @@ interface TranslateInplaceModalProps {
   isOpen: boolean
   filename: string
   isTranslating: boolean
+  defaultTargetDir?: string
   translateProgress?: {
     page?: number
     totalPages?: number
@@ -21,6 +22,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   isOpen,
   filename,
   isTranslating,
+  defaultTargetDir,
   translateProgress,
   onClose,
   onConfirm,
@@ -29,7 +31,13 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   const [sourceLang, setSourceLang] = useState('Italian')
   const [targetLang, setTargetLang] = useState('English')
   const [backupOriginal, setBackupOriginal] = useState<boolean>(true)
-  const [targetDir, setTargetDir] = useState<string>('')
+  const [targetDir, setTargetDir] = useState<string>(defaultTargetDir || '')
+
+  useEffect(() => {
+    if (isOpen) {
+      setTargetDir(defaultTargetDir || '')
+    }
+  }, [isOpen, defaultTargetDir])
 
   if (!isOpen) return null
 

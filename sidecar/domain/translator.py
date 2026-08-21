@@ -670,15 +670,20 @@ def _resolve_autofit_font_size(rect: "pymupdf.Rect", text: str, original_size: f
 
 
 def _resolve_output_filepath(file_path: str, filename: str, target_lang: str, target_dir: Optional[str] = None) -> str:
-    """Resolves output file path in target_dir if provided, otherwise returns file_path (in-place destination)."""
-    if target_dir and target_dir.strip():
-        dest_dir = target_dir.strip()
-        os.makedirs(dest_dir, exist_ok=True)
-        base_name, ext = os.path.splitext(filename)
-        lang_suffix = (target_lang or "translated").lower().replace(" ", "_")
-        out_filename = f"{base_name}_{lang_suffix}{ext}"
-        return os.path.join(dest_dir, out_filename)
-    return file_path
+    """Resolves output file path in target_dir if provided, otherwise in the original file directory as a new distinct file.
+    Guarantees the original source file is never overwritten or modified."""
+    dest_dir = target_dir.strip() if target_dir and target_dir.strip() else os.path.dirname(os.path.abspath(file_path))
+    os.makedirs(dest_dir, exist_ok=True)
+    base_name, ext = os.path.splitext(filename)
+    lang_suffix = (target_lang or "translated").lower().replace(" ", "_")
+    out_filename = f"{base_name}_{lang_suffix}{ext}"
+    out_path = os.path.join(dest_dir, out_filename)
+
+    # Ensure it never collides with or overwrites the original file
+    if os.path.abspath(out_path) == os.path.abspath(file_path):
+        out_filename = f"{base_name}_{lang_suffix}_{int(time.time())}{ext}"
+        out_path = os.path.join(dest_dir, out_filename)
+    return out_path
 
 
 def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str, Any]], font_file: str) -> None:

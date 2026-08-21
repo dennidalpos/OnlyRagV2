@@ -932,6 +932,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         filename={translateInplaceDoc?.filename || ''}
         isTranslating={ing.isTranslatingInplace}
         translateProgress={ing.translateProgress}
+        defaultTargetDir={settings?.translationOutputFolder || ''}
         onClose={() => setTranslateInplaceDoc(null)}
         onConfirm={async (sourceLang, targetLang, backupOriginal, targetDir) => {
           if (!translateInplaceDoc) return

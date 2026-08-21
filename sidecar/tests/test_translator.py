@@ -217,8 +217,14 @@ def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
         data = res.json()
         assert data["status"] == "indexed"
 
-        # Original file on disk was overwritten in place with translated run text.
-        translated_doc = docx.Document(path)
+        # Original file on disk remains intact and unchanged
+        orig_doc = docx.Document(path)
+        orig_texts = [r.text for r in translator_module._collect_docx_runs(orig_doc)]
+        assert "Hello world" in orig_texts
+
+        # Translated file on disk contains translated run text
+        translated_file_path = str(tmp_path / data["filename"])
+        translated_doc = docx.Document(translated_file_path)
         translated_texts = [r.text for r in translator_module._collect_docx_runs(translated_doc)]
         assert all(t.startswith("TR-") for t in translated_texts)
 
@@ -412,16 +418,21 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
         # In-place translation separates flows: original extracted markdown in RAG DB is preserved.
         assert marker in data["extracted_markdown"]
 
-        translated_doc = pymupdf.open(path)
+        # Original file remains intact
+        orig_doc = pymupdf.open(path)
+        try:
+            assert marker in orig_doc[0].get_text()
+        finally:
+            orig_doc.close()
+
+        # Translated document contains translated text
+        translated_file_path = str(tmp_path / data["filename"])
+        translated_doc = pymupdf.open(translated_file_path)
         try:
             page_text = translated_doc[0].get_text()
         finally:
             translated_doc.close()
         assert translated_marker in page_text
-
-        with open(path, "rb") as f:
-            raw = f.read()
-        assert marker.encode() not in raw
     finally:
         if doc_id:
             client.delete(f"/documents/{doc_id}")
@@ -603,7 +614,15 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
         assert res.status_code == 200
         assert res.json()["status"] == "indexed"
 
-        translated_doc = pymupdf.open(path)
+        # Original file remains intact
+        orig_doc = pymupdf.open(path)
+        try:
+            assert "Hello world" in orig_doc[0].get_text()
+        finally:
+            orig_doc.close()
+
+        translated_file_path = str(tmp_path / res.json()["filename"])
+        translated_doc = pymupdf.open(translated_file_path)
         try:
             page_text = translated_doc[0].get_text()
         finally:
@@ -717,7 +736,8 @@ def test_translate_scanned_pdf_inplace_with_ocr_fallback(monkeypatch, tmp_path):
         assert "TR-" in data["extracted_markdown"] or "Richiesta" in data["extracted_markdown"]
 
         # Verify translated PDF now contains search-enabled translated text
-        translated_pdf = pymupdf.open(scanned_pdf_path)
+        translated_file_path = str(tmp_path / data["filename"])
+        translated_pdf = pymupdf.open(translated_file_path)
         try:
             page_text = translated_pdf[0].get_text()
             assert len(page_text.strip()) > 0
@@ -764,5 +784,20 @@ def test_translate_pdf_inplace_guarantees_100_percent_block_rendering(tmp_path):
     assert len(out_blocks) == 10
 
 
+def test_resolve_output_filepath_never_overwrites_original(tmp_path):
+    orig_file = str(tmp_path / "manual.pdf")
+    with open(orig_file, "w") as f:
+        f.write("dummy content")
 
+    # 1. Without target_dir: output is created as distinct file with language suffix, never overwriting original
+    out_same_dir = translator_module._resolve_output_filepath(orig_file, "manual.pdf", "Italian")
+    assert out_same_dir != orig_file
+    assert os.path.abspath(out_same_dir) != os.path.abspath(orig_file)
+    assert "manual_italian.pdf" in out_same_dir
 
+    # 2. With target_dir: output is created inside target_dir
+    target_dir = str(tmp_path / "custom_exports")
+    out_target_dir = translator_module._resolve_output_filepath(orig_file, "manual.pdf", "English", target_dir=target_dir)
+    assert out_target_dir != orig_file
+    assert os.path.dirname(os.path.abspath(out_target_dir)) == os.path.abspath(target_dir)
+    assert "manual_english.pdf" in out_target_dir

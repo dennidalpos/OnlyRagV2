@@ -1,38 +1,38 @@
 import React from 'react'
-import { FileCode2, X, FileText, Activity, ScanLine, Terminal, GitBranch, Split, Save } from 'lucide-react'
+import { FileCode2, X, Split, Save, Terminal, FileText } from 'lucide-react'
 import { WorkspaceFile } from '../../types'
 import { useTranslation } from '../../i18n'
-
-type EditorTab = 'editor' | 'plan' | 'activities' | 'slm_diagnostics' | 'terminal' | 'git_diff'
+import { BottomDockTab } from './CodingBottomDock'
 
 interface CodingEditorTabBarProps {
   openFiles: WorkspaceFile[]
-  activeTab: string
   selectedFile: WorkspaceFile | null | undefined
   isSaved: boolean
   onOpenFile: (file: WorkspaceFile) => void
   onCloseFile: (file: WorkspaceFile, e: React.MouseEvent) => void
-  setActiveTab: (tab: EditorTab) => void
-  planIsReady: boolean
-  onGitDiffTabClick: () => void
   isDiffMode: boolean
   setIsDiffMode: (updater: (prev: boolean) => boolean) => void
   onSaveFile: () => void
+  isBottomDockOpen?: boolean
+  onToggleBottomDock?: () => void
+  activeDockTab?: BottomDockTab
+  onOpenDockTab?: (tab: BottomDockTab) => void
+  planIsReady?: boolean
 }
 
 export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
   openFiles,
-  activeTab,
   selectedFile,
   isSaved,
   onOpenFile,
   onCloseFile,
-  setActiveTab,
-  planIsReady,
-  onGitDiffTabClick,
   isDiffMode,
   setIsDiffMode,
   onSaveFile,
+  isBottomDockOpen,
+  onToggleBottomDock,
+  onOpenDockTab,
+  planIsReady,
 }) => {
   const { t } = useTranslation()
 
@@ -41,7 +41,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
       <div className="flex items-center gap-1 overflow-x-auto py-0.5">
         {/* File Tabs */}
         {openFiles.map((file: WorkspaceFile) => {
-          const isActive = activeTab === 'editor' && selectedFile?.path === file.path
+          const isActive = selectedFile?.path === file.path
           const isDirty = isActive && !isSaved
           return (
             <div
@@ -83,78 +83,11 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             <span>{t('coding.noFilesOpen')}</span>
           </div>
         )}
-
-        {/* Utility Tabs: Plan, Activities, Terminal & Git Diff */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('plan')}
-          className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring relative ${
-            activeTab === 'plan'
-              ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5 text-amber-400" /> Plan
-          {planIsReady && (
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute top-1 right-1" />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('activities')}
-          className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
-            activeTab === 'activities'
-              ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
-          }`}
-        >
-          <Activity className="w-3.5 h-3.5 text-emerald-400" /> Attività
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('slm_diagnostics')}
-          className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
-            activeTab === 'slm_diagnostics'
-              ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
-          }`}
-        >
-          <ScanLine className="w-3.5 h-3.5 text-fuchsia-400" /> {t('coding.slmDiagnosticsTab')}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('terminal')}
-          className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
-            activeTab === 'terminal'
-              ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
-          }`}
-        >
-          <Terminal className="w-3.5 h-3.5" /> {t('coding.terminalTab')}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('git_diff')
-            onGitDiffTabClick()
-          }}
-          className={`px-3 py-1.5 rounded-t-lg font-medium transition-colors flex items-center gap-1.5 border-t-2 focus-ring ${
-            activeTab === 'git_diff'
-              ? 'bg-slate-950 text-cyan-300 border-t-cyan-400 font-bold shadow-md'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 border-transparent'
-          }`}
-        >
-          <GitBranch className="w-3.5 h-3.5" /> {t('coding.gitDiffTab')}
-        </button>
       </div>
 
-      {/* Right Editor Controls: Save, Diff Split, Copy Path */}
+      {/* Right Controls: Save, Diff Toggle & Quick Bottom Dock shortcuts */}
       <div className="flex items-center gap-1.5 pb-1">
-        {selectedFile && activeTab === 'editor' && (
+        {selectedFile && (
           <>
             <button
               type="button"
@@ -180,6 +113,29 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
               <Save className="w-3 h-3" /> {t('coding.saveButton')}
             </button>
           </>
+        )}
+
+        {/* Quick Tools Shortcuts */}
+        {onOpenDockTab && (
+          <div className="flex items-center gap-1 pl-2 border-l border-slate-800">
+            <button
+              type="button"
+              onClick={() => onOpenDockTab('terminal')}
+              title="Terminale"
+              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-cyan-300 transition-colors"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenDockTab('plan')}
+              title="Piano di Lavoro"
+              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-amber-300 transition-colors relative"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {planIsReady && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping absolute top-0.5 right-0.5" />}
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -1,5 +1,19 @@
 import React, { useState } from 'react'
-import { Folder, FolderOpen, FileCode2, ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  Folder,
+  FolderOpen,
+  FileCode2,
+  FileCode,
+  FileJson,
+  FileText,
+  Palette,
+  Image as ImageIcon,
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Pin,
+  PinOff,
+} from 'lucide-react'
 import { WorkspaceFile } from '../../types'
 import { apiService } from '../../services/api'
 import { logger } from '../../lib/logger'
@@ -9,8 +23,38 @@ interface FileTreeNodeProps {
   level: number
   selectedFilePath: string | null
   pinnedPaths: Set<string>
+  searchFilter?: string
   onOpenFile: (file: WorkspaceFile) => void
   onTogglePinFile: (file: WorkspaceFile) => void
+}
+
+const getFileIcon = (fileName: string, isPinned: boolean) => {
+  const lower = fileName.toLowerCase()
+  const ext = lower.split('.').pop() || ''
+
+  if (lower.startsWith('.env') || lower === '.gitignore' || ext === 'yaml' || ext === 'yml' || ext === 'toml') {
+    return <Settings className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+  }
+  if (ext === 'json') {
+    return <FileJson className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+  }
+  if (ext === 'md' || ext === 'txt' || ext === 'pdf' || ext === 'csv') {
+    return <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+  }
+  if (ext === 'css' || ext === 'scss' || ext === 'less') {
+    return <Palette className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+  }
+  if (['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'ico'].includes(ext)) {
+    return <ImageIcon className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+  }
+  if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) {
+    return <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+  }
+  if (ext === 'py') {
+    return <FileCode className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+  }
+
+  return <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isPinned ? 'text-cyan-300' : 'text-slate-400'}`} />
 }
 
 export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
@@ -18,6 +62,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
   level,
   selectedFilePath,
   pinnedPaths,
+  searchFilter = '',
   onOpenFile,
   onTogglePinFile,
 }) => {
@@ -26,6 +71,12 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false)
 
   const isPinned = pinnedPaths.has(item.path)
+  const isSelected = selectedFilePath === item.path
+
+  // Check if this item matches search filter
+  const matchesFilter = searchFilter
+    ? item.name.toLowerCase().includes(searchFilter.toLowerCase())
+    : true
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -52,23 +103,24 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
     }
   }
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
+  const handlePinClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!item.isDir) {
-      onTogglePinFile(item)
-    }
+    onTogglePinFile(item)
+  }
+
+  if (searchFilter && !item.isDir && !matchesFilter) {
+    return null
   }
 
   return (
-    <div role="none">
+    <div role="none" className="relative select-none">
       <div
         role="treeitem"
         tabIndex={0}
         aria-expanded={item.isDir ? isOpen : undefined}
-        aria-selected={selectedFilePath === item.path}
+        aria-selected={isSelected}
         aria-label={`${item.isDir ? 'Cartella' : 'File'} ${item.name}`}
         onClick={handleToggle}
-        onDoubleClick={handleDoubleClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
@@ -79,44 +131,76 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
             }
           }
         }}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
-        className={`py-1.5 pr-2 rounded-lg cursor-pointer flex items-center justify-between transition-all text-xs font-mono select-none focus-ring active:scale-95 ${
-          selectedFilePath === item.path
-            ? 'bg-emerald-950/40 border border-emerald-500/50 text-emerald-300'
+        style={{ paddingLeft: `${Math.max(6, level * 14 + 6)}px` }}
+        className={`group py-1 pr-2 rounded-md cursor-pointer flex items-center justify-between text-[11px] font-mono transition-colors focus-ring ${
+          isSelected
+            ? 'bg-cyan-950/70 text-cyan-200 border-l-2 border-cyan-400 font-semibold'
             : isPinned
-            ? 'bg-cyan-950/40 border border-cyan-500/40 text-cyan-300'
-            : 'text-slate-300 hover:bg-slate-900'
+            ? 'bg-cyan-950/30 text-cyan-300 hover:bg-slate-900/80'
+            : 'text-slate-300 hover:bg-slate-900/80 hover:text-slate-100'
         }`}
-        title={!item.isDir ? 'Click to open in editor | Double-click to pin/reference in chat context' : ''}
+        title={item.path}
       >
-        <div className="flex items-center gap-1.5 truncate">
+        <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+          {item.isDir ? (
+            <span className="text-slate-500 group-hover:text-slate-300 transition-colors shrink-0">
+              {isLoading ? (
+                <span className="animate-pulse">...</span>
+              ) : isOpen ? (
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+              )}
+            </span>
+          ) : (
+            <span className="w-3.5 shrink-0" />
+          )}
+
           {item.isDir ? (
             isOpen ? (
               <FolderOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
             ) : (
-              <Folder className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <Folder className="w-3.5 h-3.5 text-sky-400/80 shrink-0" />
             )
           ) : (
-            <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isPinned ? 'text-cyan-300' : 'text-cyan-400'}`} />
+            getFileIcon(item.name, isPinned)
           )}
-          <span className="truncate">{item.name}</span>
-          {isPinned && <span className="text-[9px] px-1 bg-cyan-900/80 text-cyan-200 rounded font-bold">PIN</span>}
-        </div>
-        {item.isDir && (
-          <span className="text-[10px] text-slate-400 font-sans">
-            {isLoading ? '...' : isOpen ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+
+          <span className={`truncate ${searchFilter && matchesFilter && !item.isDir ? 'text-cyan-300 font-bold underline decoration-cyan-500/40' : ''}`}>
+            {item.name}
           </span>
+        </div>
+
+        {/* Action icons on hover */}
+        {!item.isDir && (
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={handlePinClick}
+              title={isPinned ? 'Rimuovi dal contesto agente (Unpin)' : 'Includi nel contesto agente (Pin)'}
+              className={`p-0.5 rounded transition-colors ${
+                isPinned ? 'text-cyan-300 hover:bg-cyan-900/60' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
+              }`}
+            >
+              {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+            </button>
+          </div>
         )}
       </div>
 
+      {/* Directory Children with vertical guide line */}
       {item.isDir && isOpen && (
-        <div role="group" aria-label={`Contenuto cartella ${item.name}`} className="space-y-0.5 mt-0.5">
+        <div
+          role="group"
+          aria-label={`Contenuto cartella ${item.name}`}
+          className="relative ml-2 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5"
+        >
           {children.length === 0 && !isLoading ? (
             <div
-              style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
-              className="py-1 text-[11px] text-slate-400 italic font-mono"
+              style={{ paddingLeft: `${Math.max(6, (level + 1) * 14 + 6)}px` }}
+              className="py-1 text-[10px] text-slate-500 italic font-mono"
             >
-              (cartella vuota)
+              (vuota)
             </div>
           ) : (
             children.map((child) => (
@@ -126,6 +210,7 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
                 level={level + 1}
                 selectedFilePath={selectedFilePath}
                 pinnedPaths={pinnedPaths}
+                searchFilter={searchFilter}
                 onOpenFile={onOpenFile}
                 onTogglePinFile={onTogglePinFile}
               />
@@ -136,3 +221,4 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
     </div>
   )
 }
+

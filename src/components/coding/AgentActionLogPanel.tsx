@@ -27,6 +27,7 @@ interface AgentActionLogPanelProps {
   onExecute: () => void
   onCancel: () => void
   pinnedFiles: Map<string, WorkspaceFile>
+  onTogglePinFile?: (file: WorkspaceFile) => void
   ingestedDocs: IngestedDocument[]
   attachedDocIds: Set<string>
   onToggleAttachDoc: (docId: string) => void
@@ -73,6 +74,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onExecute,
   onCancel,
   pinnedFiles,
+  onTogglePinFile,
   ingestedDocs,
   attachedDocIds,
   onToggleAttachDoc,
@@ -184,6 +186,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         ingestedDocs={ingestedDocs}
         attachedDocIds={attachedDocIds}
         onToggleAttachDoc={onToggleAttachDoc}
+        pinnedFiles={pinnedFiles}
+        onTogglePinFile={onTogglePinFile}
         onOpenSkillHubModal={onOpenSkillHubModal}
         onOpenPromptModal={onOpenPromptModal}
       />

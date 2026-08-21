@@ -6,6 +6,7 @@ interface WorkspaceExplorerFilesTabProps {
   files: WorkspaceFile[]
   selectedFilePath: string | null
   pinnedPaths: Set<string>
+  searchFilter?: string
   onOpenFile: (file: WorkspaceFile) => void
   onTogglePinFile: (file: WorkspaceFile) => void
   onAddProject: () => void
@@ -15,6 +16,7 @@ export const WorkspaceExplorerFilesTab: React.FC<WorkspaceExplorerFilesTabProps>
   files,
   selectedFilePath,
   pinnedPaths,
+  searchFilter = '',
   onOpenFile,
   onTogglePinFile,
   onAddProject,
@@ -43,6 +45,7 @@ export const WorkspaceExplorerFilesTab: React.FC<WorkspaceExplorerFilesTabProps>
           level={0}
           selectedFilePath={selectedFilePath}
           pinnedPaths={pinnedPaths}
+          searchFilter={searchFilter}
           onOpenFile={onOpenFile}
           onTogglePinFile={onTogglePinFile}
         />

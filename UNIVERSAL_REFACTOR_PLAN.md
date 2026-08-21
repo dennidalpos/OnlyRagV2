@@ -53,3 +53,28 @@ Piano di implementazione per il perfezionamento di **Ingestione Doc** (traduzion
   - Pytest sidecar, Vitest frontend/electron (`npm run test:unit-only`, `npm run test:agent`, `npm run typecheck`).
 - [x] **5.2. Aggiornamento Documentazione `/docs/` e Pulizia `PROJECT_STATUS.json`**:
   - Sincronizzare `docs/libraries-and-domain-implementations.md`, `docs/architecture.md`, `docs/modules.md`.
+
+---
+
+### Fase 6: Coding Agent Studio — Refactoring Completo UI/UX & Architettura
+- [x] **6.1. Header & System Specs Streamlining**:
+  - In `CodingHeader.tsx`, sostituire i 10+ badge statici con un indicatore di stato compatto (`🟢 System Ready ▾`) dotato di popover/tooltip con specifiche runtime e tool hardware.
+- [x] **6.2. Workspace Explorer & File Tree Moderno**:
+  - In `WorkspaceExplorer.tsx`, `FileExplorerTree.tsx` e `WorkspaceExplorerProjectSwitcher.tsx`:
+    - Eliminare le card nidificate e i selettori doppi.
+    - Implementare guide verticali di profondità (`tree guides`), icone contestuali per estensione via `lucide-react`, barra di filtro rapido e gestione pulita dei file pinnati.
+  - Eliminare il file morto `WorkspaceExplorerTreeSection.tsx`.
+- [x] **6.3. Timeline & Collapsible Tool Execution**:
+  - In `AgentTimeline.tsx`, `AgentTimelineMessage.tsx` e `AgentActionLogPanel.tsx`:
+    - Raggruppare i passaggi dei tool in badge compatti espandibili al click (`✓ Read file`, `⚡ Ran command`).
+    - Collassare il blocco di ragionamento (*CoT*) e ottimizzare la virtualizzazione.
+  - Eliminare il componente duplicato `AgentSessionHeaderBar.tsx`.
+- [x] **6.4. Prompt Composer con Context Pills & Auto-Resize**:
+  - In `PromptComposer.tsx`: textarea ad auto-espansione, pill rimovibili per file pinnati e documenti allegati, selettore di modalità a 3 stati (`Agent` | `Ask` | `Plan`) e token gauge compatto.
+- [x] **6.5. Separazione Editor & Bottom Tool Dock (Opzione 1)**:
+  - Creare `CodingBottomDock.tsx` per ospitare Terminale PTY, Piano dei task, Git Diff e Diagnostica con tab e resize dedicato.
+  - In `CodingEditorTabBar.tsx` e `CodingEditorContent.tsx`, dedicare la tab bar superiore esclusivamente ai file di codice Monaco aperti.
+  - In `CodingAgentView.tsx`, assemblare il layout a 3 colonne con Bottom Dock inferiore.
+- [x] **6.6. Verifica Seriale, Test & Sync Documentazione**:
+  - Eseguire typecheck, suite di test e aggiornare `/docs/`.
+

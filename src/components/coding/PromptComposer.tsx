@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Square, ArrowDown, RotateCcw, ClipboardList, ListPlus } from 'lucide-react'
-import { IngestedDocument } from '../../types'
+import {
+  ArrowUp,
+  Square,
+  ArrowDown,
+  RotateCcw,
+  ClipboardList,
+  ListPlus,
+  Pin,
+  X,
+  FileText,
+} from 'lucide-react'
+import { IngestedDocument, WorkspaceFile } from '../../types'
 import { AgentMode } from './CodingAgentView'
 import { useTranslation } from '../../i18n'
 import { PromptComposerToolsMenu } from './PromptComposerToolsMenu'
@@ -23,6 +33,8 @@ interface PromptComposerProps {
   ingestedDocs: IngestedDocument[]
   attachedDocIds: Set<string>
   onToggleAttachDoc: (docId: string) => void
+  pinnedFiles?: Map<string, WorkspaceFile>
+  onTogglePinFile?: (file: WorkspaceFile) => void
   onOpenSkillHubModal?: () => void
   onOpenPromptModal?: () => void
 }
@@ -44,12 +56,24 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   ingestedDocs,
   attachedDocIds,
   onToggleAttachDoc,
+  pinnedFiles = new Map(),
+  onTogglePinFile,
   onOpenSkillHubModal,
   onOpenPromptModal,
 }) => {
   const { t } = useTranslation()
   const [showToolsMenu, setShowToolsMenu] = useState(false)
   const toolsMenuRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 40), 160)
+      textareaRef.current.style.height = `${newHeight}px`
+    }
+  }, [agentPrompt])
 
   // Close tools popover on click outside or Escape
   useEffect(() => {
@@ -82,24 +106,72 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     }
   }
 
+  const pinnedFilesArray = Array.from(pinnedFiles.values())
+  const attachedDocsArray = ingestedDocs.filter((d) => attachedDocIds.has(d.id))
+  const hasContextPills = pinnedFilesArray.length > 0 || attachedDocsArray.length > 0
+
   return (
     <div className="p-3 bg-slate-950 shrink-0">
-      <div className="bg-slate-900 border border-slate-800 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
-        {/* Top/Center: Prompt Textarea */}
+      <div className="bg-slate-900/90 border border-slate-800 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
+        {/* Context Pills (Pinned files & Attached RAG docs) */}
+        {hasContextPills && (
+          <div className="flex flex-wrap gap-1.5 pb-1 border-b border-slate-800/50">
+            {pinnedFilesArray.map((file) => (
+              <span
+                key={file.path}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 text-[10px] font-mono shadow-sm"
+                title={file.path}
+              >
+                <Pin className="w-2.5 h-2.5" />
+                <span className="truncate max-w-[120px]">{file.name}</span>
+                {onTogglePinFile && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePinFile(file)}
+                    className="hover:text-rose-400 p-0.5 transition-colors"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </span>
+            ))}
+
+            {attachedDocsArray.map((doc) => (
+              <span
+                key={doc.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/70 border border-emerald-800/60 text-emerald-300 text-[10px] font-mono shadow-sm"
+                title={doc.filename}
+              >
+                <FileText className="w-2.5 h-2.5" />
+                <span className="truncate max-w-[120px]">{doc.filename}</span>
+                <button
+                  type="button"
+                  onClick={() => onToggleAttachDoc(doc.id)}
+                  className="hover:text-rose-400 p-0.5 transition-colors"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Top/Center: Auto-resizing Prompt Textarea */}
         <textarea
+          ref={textareaRef}
           value={agentPrompt}
           onChange={(e) => setAgentPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          rows={2}
+          rows={1}
           aria-label={t('coding.promptPlaceholder')}
           placeholder={t('coding.promptPlaceholder')}
-          className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-400 resize-none font-sans leading-relaxed px-1"
+          className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1 min-h-[38px] max-h-[160px]"
         />
 
-        {/* Bottom row: [Left: Tools & Reset & Autoscroll] --- [Right: Mode selector, Complexity, Send/Stop/Queue] */}
+        {/* Bottom row: [Left: Tools & Actions] --- [Right: Mode selector, Send/Stop/Queue] */}
         <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800/40">
-          {/* Left: Context menu trigger + Reset + Autoscroll toggle */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Left: Tools popover trigger, Plan generation & Reset */}
+          <div className="flex items-center gap-1 shrink-0">
             <PromptComposerToolsMenu
               isOpen={showToolsMenu}
               onToggle={() => setShowToolsMenu(!showToolsMenu)}
@@ -112,37 +184,35 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               onOpenPromptModal={onOpenPromptModal}
             />
 
-            {/* Autoscroll Toggle Button */}
+            {/* Autoscroll Toggle Mini Button */}
             <button
               type="button"
               onClick={onToggleAutoScroll}
               aria-label={autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
               title={autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-all focus-ring text-[10px] font-mono font-bold cursor-pointer border ${
+              className={`p-1.5 rounded-lg transition-colors focus-ring ${
                 autoScroll
-                  ? 'text-cyan-300 bg-cyan-950/80 border-cyan-800/80 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-300 bg-slate-900 border-slate-800'
+                  ? 'text-cyan-400 bg-cyan-950/60 border border-cyan-800/60'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
               }`}
             >
-              <ArrowDown className={`w-3 h-3 ${autoScroll ? 'text-cyan-400' : 'text-slate-400'}`} />
-              <span>Scroll: {autoScroll ? 'ON' : 'OFF'}</span>
+              <ArrowDown className="w-3.5 h-3.5" />
             </button>
 
-            {/* Reset Session Mini Icon */}
+            {/* Reset Session Icon */}
             {onResetSession && (
               <button
                 type="button"
                 onClick={onResetSession}
                 aria-label={t('common.reset')}
                 title={t('common.reset')}
-                className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded-lg transition-colors focus-ring"
+                className="p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-colors focus-ring"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
             )}
 
-            {/* Generate Plan Mini Icon: drafts a plan from the current prompt,
-                independent of agentMode and without replacing normal send. */}
+            {/* Generate Plan Icon */}
             {onGeneratePlan && (
               <button
                 type="button"
@@ -150,12 +220,12 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.generatePlanFromPrompt')}
                 title={t('coding.generatePlanFromPrompt')}
-                className="relative p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors focus-ring"
+                className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors focus-ring"
               >
                 <ClipboardList className="w-3.5 h-3.5" />
                 {hasPendingUnconsolidatedMilestones && (
                   <span
-                    className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 border border-slate-900"
+                    className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-400 border border-slate-900"
                     title={t('coding.pendingMilestonesBadge')}
                   />
                 )}
@@ -163,7 +233,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
             )}
           </div>
 
-          {/* Right: Quick actions, states, mode switches, complexity router, send */}
+          {/* Right: Mode Selector + Action Buttons (Send / Stop / Queue) */}
           <div className="flex items-center gap-1.5 shrink-0 min-w-0">
             <AgentModeSelector agentMode={agentMode} setAgentMode={setAgentMode} />
 

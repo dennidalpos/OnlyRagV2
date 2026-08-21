@@ -82,6 +82,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
           onCancel={c.handleCancelAgent}
           pinnedFiles={c.pinnedFiles}
+          onTogglePinFile={c.handleTogglePinFile}
           ingestedDocs={c.ingestedDocs}
           attachedDocIds={c.attachedDocIds}
           onToggleAttachDoc={c.toggleAttachDoc}

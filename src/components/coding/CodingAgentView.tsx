@@ -17,6 +17,7 @@ import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
 import { CodingEditorTabBar } from './CodingEditorTabBar'
 import { CodingEditorContent } from './CodingEditorContent'
+import { CodingBottomDock, BottomDockTab } from './CodingBottomDock'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
@@ -30,16 +31,15 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const { t } = useTranslation()
   const c = useCodingAgent(settings)
 
-  // Single autoscroll toggle shared by every agent-opened panel (action log, terminal, ...)
-  // so disabling it stops auto-scrolling everywhere in the Coding Agent Studio, not just one panel.
+  // Single autoscroll toggle shared by every agent-opened panel
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
-
-  // The prompt textarea is cleared the instant a task is submitted (see useCodingAgent's
-  // handleAgentExecute), so re-evaluating complexity from the live draft while a task is
-  // executing would show a meaningless "empty prompt" tier for the entire run. Freeze the
-  // routed complexity on the prompt that was actually sent once execution starts, and only
-  // go back to previewing the live draft once idle again.
   const [lastExecutedPrompt, setLastExecutedPrompt] = useState<string>('')
+
+  // Bottom dock state (Layout Opzione 1: Monaco Top + Dock Bottom)
+  const [isBottomDockOpen, setIsBottomDockOpen] = useState<boolean>(false)
+  const [activeDockTab, setActiveDockTab] = useState<BottomDockTab>('terminal')
+  const [dockHeight, setDockHeight] = useState<number>(220)
+  const [isDockResizing, setIsDockResizing] = useState<boolean>(false)
 
   // Plan Hook Integration with Session Isolation
   const planApproval = usePlanApproval({
@@ -95,9 +95,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     ? routedComplexity.modelName
     : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
 
-  // True when the most recent approved plan still has non-verified milestones
-  // left over from an interrupted/finished run, i.e. residue a new plan should
-  // consolidate (see handleGeneratePlanFromPrompt / C7 reconciliation context).
   const hasPendingUnconsolidatedMilestones = useMemo(() => {
     if (c.isExecuting) return false
     const plan = planApproval.currentPlan
@@ -113,9 +110,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     }
   }
 
-  // Sending a prompt always executes directly. Plan drafting is a separate,
-  // explicit action (see the dedicated "Genera piano" composer icon in
-  // CodingHeader), decoupled from every-send plan generation.
   const handleInitiateTaskExecution = () => {
     if (!c.agentPrompt.trim()) return
     setLastExecutedPrompt(c.agentPrompt)
@@ -124,8 +118,36 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   const handleGeneratePlanFromPrompt = async () => {
     if (!c.agentPrompt.trim()) return
-    c.setActiveTab('plan')
+    setActiveDockTab('plan')
+    setIsBottomDockOpen(true)
     await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
+  }
+
+  const handleDockMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDockResizing(true)
+    const startY = e.clientY
+    const startHeight = dockHeight
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = startY - moveEvent.clientY
+      const newHeight = Math.max(120, Math.min(500, startHeight + deltaY))
+      setDockHeight(newHeight)
+    }
+
+    const onMouseUp = () => {
+      setIsDockResizing(false)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  const handleOpenDockTab = (tab: BottomDockTab) => {
+    setActiveDockTab(tab)
+    setIsBottomDockOpen(true)
   }
 
   return (
@@ -226,33 +248,47 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`} />
         </div>
 
-        {/* Right Column: Multi-tab Monaco Code, Plan, Activities & Diff Editor */}
+        {/* Right Column: Pure Monaco Code Editor + Bottom Tool Dock (Layout Opzione 1) */}
         <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
           <CodingEditorTabBar
             openFiles={c.openFiles}
-            activeTab={c.activeTab}
             selectedFile={c.selectedFile}
             isSaved={c.isSaved}
             onOpenFile={c.handleOpenFile}
             onCloseFile={c.handleCloseFile}
-            setActiveTab={c.setActiveTab}
-            planIsReady={planApproval.currentPlan?.status === 'ready'}
-            onGitDiffTabClick={c.fetchGitStatusAndDiff}
             isDiffMode={isDiffMode}
             setIsDiffMode={setIsDiffMode}
             onSaveFile={c.handleSaveFile}
+            isBottomDockOpen={isBottomDockOpen}
+            onToggleBottomDock={() => setIsBottomDockOpen((prev) => !prev)}
+            activeDockTab={activeDockTab}
+            onOpenDockTab={handleOpenDockTab}
+            planIsReady={planApproval.currentPlan?.status === 'ready'}
           />
 
           <CodingEditorContent
             c={c}
-            planApproval={planApproval}
             settings={settings}
-            activeModelName={activeModelName}
             isDiffMode={isDiffMode}
             copiedPath={copiedPath}
             onCopyPath={handleCopyPath}
             onShowWorkspaceSidebar={() => setShowWorkspaceSidebar(true)}
+          />
+
+          {/* Collapsible & Resizable Bottom Tool Dock */}
+          <CodingBottomDock
+            isOpen={isBottomDockOpen}
+            onToggleOpen={() => setIsBottomDockOpen((prev) => !prev)}
+            activeDockTab={activeDockTab}
+            setActiveDockTab={setActiveDockTab}
+            c={c}
+            planApproval={planApproval}
+            settings={settings}
+            activeModelName={activeModelName}
             autoScroll={autoScroll}
+            height={dockHeight}
+            isResizing={isDockResizing}
+            onMouseDownResize={handleDockMouseDown}
           />
         </div>
       </div>

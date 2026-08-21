@@ -40,6 +40,8 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     expect(prompt).toContain('Fix typo in index.html')
     expect(prompt).toContain('D:/project')
     expect(prompt).toContain('AGENT')
+    expect(prompt).toContain('INCREMENTAL DEVELOPMENT & RESPECT EXISTING FILES')
+    expect(prompt).toContain('BROWSER PREVIEW & PAGE LAUNCH')
   })
 
   it('should include pinned files and active file snippet when provided', () => {

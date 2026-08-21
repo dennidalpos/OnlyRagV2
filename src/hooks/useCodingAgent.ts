@@ -200,6 +200,18 @@ ${output.slice(0, 300)}`
     completeExecutedPrompt,
   } = useSessionHistory(workspacePath)
 
+  // Synchronize actionLogs, metrics, and state with the active session whenever workspace or session changes
+  const prevSessionIdRef = useRef<string>('')
+  useEffect(() => {
+    if (activeSessionId !== prevSessionIdRef.current) {
+      prevSessionIdRef.current = activeSessionId
+      setActionLogs(activeSession?.actionLogs || [])
+      setStreamingText('')
+      setPendingApproval(null)
+      setCurrentStep(0)
+    }
+  }, [activeSessionId, activeSession])
+
   // The agent:done / agent:log listeners are registered once, so they reach the current
   // history callback through a ref instead of re-subscribing on every render.
   const completeExecutedPromptRef = useRef(completeExecutedPrompt)
@@ -502,7 +514,7 @@ ${output.slice(0, 300)}`
     })
   }
 
-  const executeTask = async (taskPrompt: string) => {
+  const executeTask = async (taskPrompt: string, overrideMode?: AgentMode) => {
     if (!taskPrompt.trim() || !window.electronAPI) return
 
     const busyModule = peekGlobalTaskLock()
@@ -519,13 +531,12 @@ ${output.slice(0, 300)}`
     currentStepRef.current = 0
     addActionLog('info', `User Prompt: ${taskPrompt}`)
 
-    // Open the ExecutedPrompt record for this run; the session title is derived from
-    // the first one by the history store, and `agent:done` closes it with its metrics.
+    const effectiveMode = overrideMode || agentMode
     const runSessionId = activeSessionId || activeSession?.id || ''
     if (runSessionId) {
       runningExecutedPromptRef.current = {
         sessionId: runSessionId,
-        promptId: beginExecutedPrompt(runSessionId, taskPrompt, agentMode),
+        promptId: beginExecutedPrompt(runSessionId, taskPrompt, effectiveMode),
       }
     }
 
@@ -575,7 +586,7 @@ ${output.slice(0, 300)}`
         sessionId: runSessionId,
         userTask: taskPrompt,
         initialUserTask,
-        agentMode,
+        agentMode: effectiveMode,
         workspacePath: workspacePath || undefined,
         isStandaloneMode,
         activeModel,
@@ -598,7 +609,10 @@ ${output.slice(0, 300)}`
     }
   }
 
-  const handleAgentExecute = async (overridePrompt?: string | unknown) => {
+  const handleAgentExecute = async (overridePrompt?: string | unknown, overrideMode?: AgentMode) => {
+    if (overrideMode) {
+      setAgentMode(overrideMode)
+    }
     const rawPrompt = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
     const text = (rawPrompt || '').trim()
     if (!text) return
@@ -611,7 +625,7 @@ ${output.slice(0, 300)}`
     }
 
     if (!isOverride) setAgentPrompt('')
-    await executeTask(text)
+    await executeTask(text, overrideMode)
   }
 
   const addToPromptQueue = (text: string) => {

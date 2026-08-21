@@ -636,5 +636,64 @@ async def async_handler():
     )
     expect(missingFile.outputForHistory).toContain('File not found to open')
   })
+
+  it('should execute list_files_recursive and get_file_info correctly', async () => {
+    const subDir = path.join(tempDir, 'subfolder')
+    fs.mkdirSync(subDir, { recursive: true })
+    const file1 = path.join(tempDir, 'root.txt')
+    const file2 = path.join(subDir, 'nested.pdf')
+    fs.writeFileSync(file1, 'root content', 'utf-8')
+    fs.writeFileSync(file2, 'pdf content', 'utf-8')
+
+    const listRes = await agentToolExecutorService.executeTool(
+      { tool: 'list_files_recursive', parameters: { dirPath: tempDir, maxDepth: 2 } },
+      tempDir,
+      settings
+    )
+    expect(listRes.outputForHistory).toContain('root.txt')
+    expect(listRes.outputForHistory).toContain('nested.pdf')
+
+    const infoRes = await agentToolExecutorService.executeTool(
+      { tool: 'get_file_info', parameters: { filePath: file2 } },
+      tempDir,
+      settings
+    )
+    expect(infoRes.outputForHistory).toContain('[FILE INFO:')
+    expect(infoRes.outputForHistory).toContain('nested.pdf')
+  })
+
+  it('should execute create_directory, copy_file, and move_file correctly', async () => {
+    const newDir = path.join(tempDir, 'new_dir')
+    const createDirRes = await agentToolExecutorService.executeTool(
+      { tool: 'create_directory', parameters: { dirPath: newDir } },
+      tempDir,
+      settings
+    )
+    expect(createDirRes.outputForHistory).toContain('Successfully created directory')
+    expect(fs.existsSync(newDir)).toBe(true)
+
+    const srcFile = path.join(tempDir, 'source.txt')
+    fs.writeFileSync(srcFile, 'source text', 'utf-8')
+
+    const copyDst = path.join(newDir, 'copied.txt')
+    const copyRes = await agentToolExecutorService.executeTool(
+      { tool: 'copy_file', parameters: { sourcePath: srcFile, targetPath: copyDst } },
+      tempDir,
+      settings
+    )
+    expect(copyRes.outputForHistory).toContain('Successfully copied')
+    expect(fs.existsSync(copyDst)).toBe(true)
+
+    const moveDst = path.join(newDir, 'moved.txt')
+    const moveRes = await agentToolExecutorService.executeTool(
+      { tool: 'move_file', parameters: { sourcePath: copyDst, targetPath: moveDst } },
+      tempDir,
+      settings
+    )
+    expect(moveRes.outputForHistory).toContain('Successfully moved')
+    expect(fs.existsSync(moveDst)).toBe(true)
+    expect(fs.existsSync(copyDst)).toBe(false)
+  })
 })
+
 

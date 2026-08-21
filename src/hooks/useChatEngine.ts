@@ -385,7 +385,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           `MANDATORY DIRECTIVE: The following excerpts constitute the actual parsed text of the user's selected documents and attachments. You have FULL access to this information. Always search, extract, and cite from this text to accurately answer any user question regarding files, documents, or attachments.\n\n` +
           `${boundedContext}\n` +
           `[END DOCUMENT CONTEXT]`
-        : ''
+        : `[ATTACHMENT CONTEXT STATUS]\n` +
+          `No documents or attachments are currently selected. If the user asks to analyze, inspect, summarize, or read specific documents, files, logs, or attachments (such as "analizza log" or "riassumi allegato"), inform the user clearly in their language that no attachments are selected, and invite them to select a document from the left sidebar or mention '@filename'. If the question is general knowledge, answer normally.\n` +
+          `[END ATTACHMENT CONTEXT STATUS]`
 
       const promptSections = [
         effectiveSystemPrompt,

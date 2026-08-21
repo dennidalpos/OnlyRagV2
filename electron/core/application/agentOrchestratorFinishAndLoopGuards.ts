@@ -21,8 +21,14 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     })
 
     const dodReason = dodCheck.reason || 'Definition of Done Violation'
-    if (!dodCheck.allowed && dodCheck.suggestedAction && !ctx.surfacedDodReasons.has(dodReason)) {
-      ctx.surfacedDodReasons.add(dodReason)
+    const dodCategory = dodReason.includes('Unverified Milestones')
+      ? 'unverified_milestones'
+      : dodReason.includes('Verified Build')
+      ? 'missing_build_verification'
+      : dodReason
+
+    if (!dodCheck.allowed && dodCheck.suggestedAction && !ctx.surfacedDodReasons.has(dodCategory)) {
+      ctx.surfacedDodReasons.add(dodCategory)
       ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: dodReason }, dodCheck.suggestedAction)
       ctx.emitLog('info', `🔒 DoD Guard Interception: ${dodReason}`)
       if (ctx.settings.enableCodingAgentDebugLog) {

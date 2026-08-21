@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as ts from 'typescript'
+import { DEFAULT_IGNORED_DIRS, isSecretFile } from './contextFilter'
 
 export interface SymbolSummary {
   name: string
@@ -65,19 +66,24 @@ export function generateCompactRepoMap(workspacePath: string, maxFiles = 100): s
       const entries = fs.readdirSync(dir, { withFileTypes: true })
 
       for (const entry of entries) {
-        if (['node_modules', '.git', 'dist', 'build', 'out', '.venv', '.next'].includes(entry.name)) continue
+        if (DEFAULT_IGNORED_DIRS.has(entry.name) || isSecretFile(entry.name)) continue
         const fullPath = path.join(dir, entry.name)
         const relPath = path.relative(workspacePath, fullPath).replace(/\\/g, '/')
 
         if (entry.isDirectory()) {
           scanDir(fullPath, depth + 1)
-        } else if (['.ts', '.tsx', '.js', '.jsx'].includes(path.extname(entry.name))) {
-          const symbols = extractFileSymbols(fullPath)
-          if (symbols.length > 0) {
-            const symStr = symbols
-              .map((s) => `${s.exported ? 'export ' : ''}${s.kind} ${s.name}`)
-              .join(', ')
-            lines.push(`📄 ${relPath} ➔ { ${symStr} }`)
+        } else {
+          const ext = path.extname(entry.name).toLowerCase()
+          if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
+            const symbols = extractFileSymbols(fullPath)
+            if (symbols.length > 0) {
+              const symStr = symbols
+                .map((s) => `${s.exported ? 'export ' : ''}${s.kind} ${s.name}`)
+                .join(', ')
+              lines.push(`📄 ${relPath} ➔ { ${symStr} }`)
+            } else {
+              lines.push(`📄 ${relPath}`)
+            }
           } else {
             lines.push(`📄 ${relPath}`)
           }

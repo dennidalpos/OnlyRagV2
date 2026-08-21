@@ -65,6 +65,11 @@ describe('contextFilter domain logic & AppSec protection', () => {
     const relativeEscape = validatePathSafety('../../other-folder/secret.txt', root)
     expect(relativeEscape.safePath).toBeNull()
     expect(relativeEscape.error).toContain('Directory Traversal Blocked')
+
+    // Explicit absolute user directories outside workspace are allowed when no workspaceRoot constraint is given (e.g. Standalone exploration)
+    const userDocPath = validatePathSafety('C:\\Users\\Utente\\Il mio Drive\\document.pdf', null)
+    expect(userDocPath.safePath).not.toBeNull()
+    expect(userDocPath.error).toBeUndefined()
   })
 
   it('should block access to credential files via validatePathSafety', () => {

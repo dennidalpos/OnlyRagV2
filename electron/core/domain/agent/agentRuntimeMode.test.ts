@@ -25,10 +25,33 @@ describe('AgentRuntimeModeFsm', () => {
     expect(fsm.isToolAllowed('replace_file_content')).toBe(false)
   })
 
-  it('should correctly filter a list of tools according to active mode', () => {
-    const fsm = new AgentRuntimeModeFsm('ask')
-    const allTools = ['read_file', 'write_file', 'run_command', 'grep_search'] as const
-    const filtered = fsm.filterAllowedTools(allTools as any)
-    expect(filtered).toEqual(['read_file', 'grep_search'])
+  it('should allow all execution and diagnostic tools in AGENT mode', () => {
+    const fsm = new AgentRuntimeModeFsm('agent')
+    expect(fsm.getMode()).toBe('AGENT')
+    expect(fsm.isToolAllowed('list_files_recursive')).toBe(true)
+    expect(fsm.isToolAllowed('get_file_info')).toBe(true)
+    expect(fsm.isToolAllowed('open_in_browser')).toBe(true)
+    expect(fsm.isToolAllowed('run_tests')).toBe(true)
+    expect(fsm.isToolAllowed('create_directory')).toBe(true)
+    expect(fsm.isToolAllowed('copy_file')).toBe(true)
+    expect(fsm.isToolAllowed('move_file')).toBe(true)
+    expect(fsm.isToolAllowed('git_status')).toBe(true)
+    expect(fsm.isToolAllowed('git_diff')).toBe(true)
+  })
+
+  it('should allow read-only exploration and open_in_browser in ASK and PLAN modes', () => {
+    const askFsm = new AgentRuntimeModeFsm('ask')
+    expect(askFsm.isToolAllowed('list_files_recursive')).toBe(true)
+    expect(askFsm.isToolAllowed('get_file_info')).toBe(true)
+    expect(askFsm.isToolAllowed('open_in_browser')).toBe(true)
+    expect(askFsm.isToolAllowed('git_status')).toBe(true)
+    expect(askFsm.isToolAllowed('git_diff')).toBe(true)
+    expect(askFsm.isToolAllowed('create_directory')).toBe(false)
+    expect(askFsm.isToolAllowed('run_command')).toBe(false)
+
+    const planFsm = new AgentRuntimeModeFsm('plan')
+    expect(planFsm.isToolAllowed('list_files_recursive')).toBe(true)
+    expect(planFsm.isToolAllowed('get_file_info')).toBe(true)
+    expect(planFsm.isToolAllowed('open_in_browser')).toBe(true)
   })
 })

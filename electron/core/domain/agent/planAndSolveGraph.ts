@@ -144,11 +144,14 @@ export class GoalDecompositionPlanner {
   public static parsePlanFromText(text: string): PlanMilestone[] {
     if (!text || typeof text !== 'string') return []
 
+    // Strip thinking tags from reasoning models (e.g. DeepSeek-R1, Qwen) so internal thoughts don't pollute milestones
+    const sanitizedText = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+
     const milestones: PlanMilestone[] = []
 
     // 1. Try extracting <plan>...</plan> JSON or structured checklist
-    const planBlockMatch = text.match(/<plan>([\s\S]*?)<\/plan>/i)
-    const sourceText = planBlockMatch ? planBlockMatch[1] : text
+    const planBlockMatch = sanitizedText.match(/<plan>([\s\S]*?)<\/plan>/i)
+    const sourceText = planBlockMatch ? planBlockMatch[1] : sanitizedText
 
     // Check for JSON array inside plan block
     const jsonMatch = sourceText.match(/\[\s*\{[\s\S]*\}\s*\]/)

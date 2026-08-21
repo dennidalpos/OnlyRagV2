@@ -50,7 +50,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     onSessionPlansChange: c.updateActiveSessionPlans,
     onPlanApproved: (_approvedPlan) => {
       setLastExecutedPrompt(c.agentPrompt)
-      c.handleAgentExecute()
+      c.setAgentMode('agent')
+      c.handleAgentExecute(undefined, 'agent')
     },
   })
 

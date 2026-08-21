@@ -8,6 +8,7 @@ import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalc
 import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
 import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
+import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { skillAppService } from './skillAppService'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
@@ -88,6 +89,15 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   }
   const effectiveAttachedContext = [debtTrackerBlock, ctx.attachedContext].filter(Boolean).join('\n\n')
 
+  let currentProjectMapStr = ctx.projectContextMapStr
+  if (ctx.workspacePath && !ctx.isStandaloneMode) {
+    try {
+      currentProjectMapStr = generateCompactRepoMap(ctx.workspacePath, 150)
+    } catch {
+      currentProjectMapStr = ctx.projectContextMapStr
+    }
+  }
+
   // Assemble base prompt segments, then apply heuristic compaction at 75% watermark.
   const assembled = assembleDomainTurnPrompt({
     userTask: ctx.userTask,
@@ -104,7 +114,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     planBlock,
     toolOutputHistory: compiledHistoryBlock,
     attachedContext: effectiveAttachedContext,
-    projectContextMapStr: ctx.projectContextMapStr,
+    projectContextMapStr: currentProjectMapStr,
     settings: ctx.settings,
     runtimeOpts: selection.runtimeOpts,
     toolCallingCapable: selection.targetModelToolCallingCapable,
@@ -122,7 +132,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       skillsBlock,
       historyBlock: compiledHistoryBlock,
       attachedContext: ctx.attachedContext,
-      projectMapBlock: ctx.projectContextMapStr,
+      projectMapBlock: currentProjectMapStr,
     },
     selection.runtimeOpts.maxContextChars
   )

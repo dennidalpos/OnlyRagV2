@@ -1,32 +1,48 @@
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { logger } from '../../diagnostics'
 import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../src/types'
 
 /**
- * Resolves the effective workspace directory for a run: redirects out of protected system
- * directories, falls back to the Desktop test_app scratch folder when nothing was supplied
- * (unless running standalone), and ensures the resolved directory exists on disk.
+ * Resolves the effective workspace directory for a run:
+ * 1. If a valid user workspace path is provided, validates safety and creates if missing.
+ * 2. If running standalone or no workspace is specified, allocates an isolated temporary
+ *    per-session scratch directory in %TEMP%/onlyrag_sessions/<sessionId>.
  */
-export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspacePath' | 'isStandaloneMode'>): string | null {
+export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspacePath' | 'isStandaloneMode' | 'sessionId'>): string | null {
   const rawPath = payload.workspacePath ? payload.workspacePath.trim() : null
-  if (!rawPath) {
-    return null
+  if (rawPath && !isProtectedSystemDirectory(rawPath)) {
+    if (!fs.existsSync(rawPath)) {
+      try {
+        fs.mkdirSync(rawPath, { recursive: true })
+      } catch (err: any) {
+        logger.log('WARN', 'AgentOrchestratorApp', `Could not create workspace directory '${rawPath}': ${err.message}`)
+      }
+    }
+    if (fs.existsSync(rawPath)) {
+      return rawPath
+    }
   }
-  if (isProtectedSystemDirectory(rawPath)) {
-    logger.log('WARN', 'AgentOrchestratorApp', `Provided workspace '${rawPath}' is inside a protected system directory.`)
-    return null
-  }
-  if (!fs.existsSync(rawPath)) {
+
+  // Standalone / Chat Libera mode: allocate an isolated user temp scratch directory
+  if (payload.isStandaloneMode) {
+    const sessionSubdir = payload.sessionId ? payload.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_') : `standalone-${Date.now()}`
+    const tempBase = path.join(os.tmpdir(), 'onlyrag_sessions', sessionSubdir)
     try {
-      fs.mkdirSync(rawPath, { recursive: true })
+      if (!fs.existsSync(tempBase)) {
+        fs.mkdirSync(tempBase, { recursive: true })
+      }
+      return tempBase
     } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestratorApp', `Could not create workspace directory '${rawPath}': ${err.message}`)
+      logger.log('WARN', 'AgentOrchestratorApp', `Could not create temp session directory '${tempBase}': ${err.message}`)
       return null
     }
   }
-  return rawPath
+
+  return null
 }
 
 /** Fallback settings used only when the caller (renderer) didn't supply any. */

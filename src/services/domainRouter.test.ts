@@ -102,6 +102,13 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
       expect(res.requiresRetrieval).toBe(true)
     })
 
+    it('should route log analysis query to general domain and set requiresRetrieval=true', () => {
+      const res = evaluateDomainIntent('analizza log', mockSettings)
+      expect(res.domain).toBe('general')
+      expect(res.modelName).toBe('llama3.1:8b')
+      expect(res.requiresRetrieval).toBe(true)
+    })
+
     it('should detect chit-chat greetings across languages and set requiresRetrieval=false', () => {
       const itChat = evaluateDomainIntent('Ciao come stai?', mockSettings)
       expect(itChat.domain).toBe('general')

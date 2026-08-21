@@ -145,4 +145,18 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(compiledFast.prompt).toContain('Create a component')
     expect(compiledDeep.prompt).toContain('Create a component')
   })
+
+  it('should include explicit attachment grounding and no-attachment directives in chat prompt presets', () => {
+    const baseSettings: AppSettings = {
+      defaultModel: 'llama3.2',
+      hardwareProfile: 'Auto',
+      ocrEngine: 'native_cuda',
+      ollamaHost: 'http://127.0.0.1:11434',
+    }
+
+    const res = getEffectivePrompt('chat', 'llama3.2', baseSettings)
+    expect(res.prompt).toContain('INDEXED DOCUMENT CONTEXT')
+    expect(res.prompt).toContain('ATTACHMENT CONTEXT STATUS')
+    expect(res.prompt).toContain('analizza log')
+  })
 })

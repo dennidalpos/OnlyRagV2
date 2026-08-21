@@ -214,7 +214,7 @@ def _smart_decode_pdf_text(text: str) -> str:
 
 
 def _should_skip_translation(s: str) -> bool:
-    """Returns True if the block contains no translatable words (pure numbers, dates, codes, single symbols, bullets)."""
+    """Returns True if the block contains no translatable words (pure numbers, dates, codes, emails, URLs, single symbols, bullets)."""
     trimmed = s.strip()
     if not trimmed:
         return True
@@ -222,14 +222,25 @@ def _should_skip_translation(s: str) -> bool:
         return True
     if trimmed.startswith("http://") or trimmed.startswith("https://"):
         return True
-    if all(c in "-_*=|/\\:.,;•§°#~ " for c in trimmed):
+    # Email addresses (e.g. gestionecontratto@telepass.com, assistenza@pec.telepass.com)
+    if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', trimmed):
+        return True
+    # Dates (e.g. 18/06/2024, 2024-06-18, 18.06.2024)
+    if re.match(r'^\d{1,4}[/\-\.]\d{1,2}[/\-\.]\d{1,4}$', trimmed):
+        return True
+    # Pure punctuation / symbols
+    if all(c in "-_*=|/\\:.,;•§°º#~ " for c in trimmed):
+        return True
+    # Italian fiscal code
+    if re.match(r'^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$', trimmed):
+        return True
+    # Pure alphanumeric codes or contract IDs with numbers (e.g. 159549431, PNTLDN49D56E818T, DOC-123)
+    if re.match(r'^[A-Z0-9\-_]{4,}$', trimmed) and any(c.isdigit() for c in trimmed):
         return True
     letters_only = re.sub(r'[^a-zA-Z\u00C0-\u017F\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]', '', trimmed)
     if not letters_only:
         return True
     if len(letters_only) == 1 and letters_only.lower() not in ('e', 'a', 'o', 'i', 'y', 'u'):
-        return True
-    if re.match(r'^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$', trimmed):
         return True
     return False
 
@@ -242,10 +253,11 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"CRITICAL DIRECTIVES:\n"
             f"1. You MUST return EXACTLY {expected_items} numbered lines in the exact format '[1] translated text', '[2] translated text', etc., preserving exact order.\n"
             f"2. TRANSLATE EVERY FIELD AND LABEL: Translate every heading, form field label, table header, instruction, footer, and administrative keyword into {target_lang}.\n"
-            f"3. Common terms: 'TFR' / 'Trattamento di Fine Rapporto' -> 'TFR (Severance Indemnity)' or 'Severance Pay', 'IRPEF' -> 'IRPEF (Income Tax)', 'Spett.le' -> 'Dear Sirs' / 'To the attention of'.\n"
-            f"4. For labeled fields (e.g. '[1] CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('[1] TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
-            f"5. ZERO CHATTER: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or notes.\n"
-            f"6. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
+            f"3. BRAND & ENTITY INTEGRITY: Never alter, transliterate, or distort brand names or company names (e.g. 'Telepass' MUST remain 'Telepass', 'DocuSign' MUST remain 'DocuSign').\n"
+            f"4. ACCURATE TERMINOLOGY: 'CESSAZIONE' -> 'CANCELLATION' or 'TERMINATION' (never invent non-words), 'TFR' / 'Trattamento di Fine Rapporto' -> 'TFR (Severance Indemnity)' or 'Severance Pay', 'IRPEF' -> 'IRPEF (Income Tax)', 'Spett.le' -> 'Dear Sirs' / 'To the attention of'.\n"
+            f"5. For labeled fields (e.g. '[1] CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('[1] TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
+            f"6. ZERO CHATTER: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or notes.\n"
+            f"7. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
         )
         user_content = (
             f"Translate these {expected_items} numbered segments from {source_lang} to {target_lang}:\n\n{text}"
@@ -256,10 +268,11 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"Your ONLY task is to directly translate text from {source_lang} to {target_lang}.\n\n"
             f"CRITICAL DIRECTIVES:\n"
             f"1. TRANSLATE EVERY WORD AND LABEL: Translate every title, heading, form field label, button, footer, table header, and administrative phrase into {target_lang}.\n"
-            f"2. Common terms: 'TFR' / 'Trattamento di Fine Rapporto' -> 'TFR (Severance Indemnity)' or 'Severance Pay', 'IRPEF' -> 'IRPEF (Income Tax)', 'Spett.le' -> 'Dear Sirs' / 'To the attention of'.\n"
-            f"3. For form fields containing labels and values (e.g. 'CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
-            f"4. ZERO CHATTER: Output ONLY the direct {target_lang} translation. Never include preambles like 'Here is the translation', explanations, conversational text, notes, quotes, or markdown code fences.\n"
-            f"5. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
+            f"2. BRAND & ENTITY INTEGRITY: Never alter, transliterate, or distort brand names or company names (e.g. 'Telepass' MUST remain 'Telepass', 'DocuSign' MUST remain 'DocuSign').\n"
+            f"3. ACCURATE TERMINOLOGY: 'CESSAZIONE' -> 'CANCELLATION' or 'TERMINATION' (never invent non-words), 'TFR' / 'Trattamento di Fine Rapporto' -> 'TFR (Severance Indemnity)' or 'Severance Pay', 'IRPEF' -> 'IRPEF (Income Tax)', 'Spett.le' -> 'Dear Sirs' / 'To the attention of'.\n"
+            f"4. For form fields containing labels and values (e.g. 'CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
+            f"5. ZERO CHATTER: Output ONLY the direct {target_lang} translation. Never include preambles like 'Here is the translation', explanations, conversational text, notes, quotes, or markdown code fences.\n"
+            f"6. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 

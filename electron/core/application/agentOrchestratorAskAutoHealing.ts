@@ -50,10 +50,28 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
   const hasCancellationInHistory =
     historyText.includes('cancelled') || historyText.includes('canceled') || historyText.includes('interrupted')
 
+  const isTrivialPreferenceQuestion =
+    qLower.includes('quale libreria') ||
+    qLower.includes('quali librerie') ||
+    qLower.includes('quale framework') ||
+    qLower.includes('quali framework') ||
+    qLower.includes('quale libreria o framework') ||
+    qLower.includes('quali librerie o framework') ||
+    qLower.includes('which library') ||
+    qLower.includes('which framework') ||
+    qLower.includes('which styling') ||
+    qLower.includes('what library') ||
+    qLower.includes('which animation') ||
+    qLower.includes('preferisci usare') ||
+    qLower.includes('vuoi utilizzare') ||
+    qLower.includes('do you want to use') ||
+    qLower.includes('prefer to use')
+
   const isVagueClarification =
     ctx.hasRecentToolFailure ||
     ctx.errorCountInHistory > 0 ||
     hasCancellationInHistory ||
+    isTrivialPreferenceQuestion ||
     qLower.includes('interrupted') ||
     qLower.includes('what next') ||
     qLower.includes('what should we do') ||
@@ -62,7 +80,9 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     qLower.includes('how to proceed')
 
   if (ctx.agentMode === 'agent' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.stagnationStreak < ASK_REDIRECT_LIMIT) {
-    const feedback = hasCancellationInHistory
+    const feedback = isTrivialPreferenceQuestion
+      ? `[AUTONOMOUS TECHNICAL DECISION DIRECTIVE: DO NOT STALL FOR TECHNICAL CHOICES]\nIn AGENT mode, you MUST autonomously select sensible standard technologies (e.g. standard CSS keyframes, GSAP, vanilla HTML5/JS, standard npm packages) and implement the requested feature directly. DO NOT ask the user for library or aesthetic preferences.\nProceed IMMEDIATELY by creating or editing the required files with write_file / replace_file_content or running build/test commands.`
+      : hasCancellationInHistory
       ? `[PROACTIVE AUTO-HEALING DIRECTIVE: CLI GENERATOR CANCELLED]\nYour previous terminal command or CLI generator cancelled or was interrupted. In AGENT mode, DO NOT ask the user what to do next.\nFallback IMMEDIATELY to constructing the project files directly with write_file (e.g. package.json, index.html, src/main.tsx, src/App.tsx).`
       : `[PROACTIVE AUTO-HEALING DIRECTIVE: DO NOT ASK LAZY QUESTIONS]\nYour previous tool or command encountered an error or was interrupted. In AGENT mode, you MUST NOT ask vague clarification questions to the user.\nInspect the error trace in your episodic history, analyze the root cause (e.g. missing dependency, syntax error, path issue, or process timeout), and immediately issue a corrective tool call (such as run_command with a fix, read_file, list_dir, or replace_file_content) to resolve the issue autonomously.`
     ctx.episodicCompactor.recordStep(
@@ -76,7 +96,7 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     )
     ctx.emitLog(
       'info',
-      `⚡ Proactive Auto-Healing: Intercettata richiesta di chiarimento pigra dopo errore/interruzione. L'agente sta analizzando l'errore per risolverlo autonomamente.`
+      `⚡ Proactive Auto-Healing: Intercettata richiesta di chiarimento pigra. L'agente procede in autonomia verso il completamento.`
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', feedback)

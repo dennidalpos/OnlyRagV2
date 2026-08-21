@@ -72,7 +72,8 @@
       "output": "dist"
     },
     "files": [
-      "dist/**/*",
+      "dist/index.html",
+      "dist/assets/**/*",
       "dist-electron/**/*"
     ],
     "extraResources": [

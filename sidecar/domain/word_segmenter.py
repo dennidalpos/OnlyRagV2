@@ -351,7 +351,7 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
                         seg_parts.append(sp)
                 else:
                     seg_parts.append(sp)
-                cleaned_tokens.append("'".join(seg_parts))
+            cleaned_tokens.append("'".join(seg_parts))
             continue
 
         # Extract leading and trailing punctuation

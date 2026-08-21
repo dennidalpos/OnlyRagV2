@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Folder, HardDrive, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, HardDrive, MessageSquare, Plus, Trash2 } from 'lucide-react'
 import { WorkspaceProject } from '../../types'
-import { useTranslation } from '../../i18n'
 
 interface WorkspaceExplorerProjectSwitcherProps {
   projects: WorkspaceProject[]
@@ -20,7 +19,6 @@ export const WorkspaceExplorerProjectSwitcher: React.FC<WorkspaceExplorerProject
   onSelectProject,
   onRemoveProject,
 }) => {
-  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -58,10 +56,14 @@ export const WorkspaceExplorerProjectSwitcher: React.FC<WorkspaceExplorerProject
           aria-expanded={isOpen}
           className="flex items-center gap-2 truncate flex-1 min-w-0 text-left hover:bg-slate-900/60 rounded-lg p-0.5 transition-colors"
         >
-          <HardDrive className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          {activeProjectPath ? (
+            <HardDrive className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          ) : (
+            <MessageSquare className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          )}
           <div className="truncate min-w-0 flex-1">
             <div className="font-bold text-slate-200 truncate text-[11px]">{activeProjectName}</div>
-            <div className="text-[9px] text-slate-400 font-mono truncate">{activeProjectPath || t('coding.selectFolder')}</div>
+            <div className="text-[9px] text-slate-400 font-mono truncate">{activeProjectPath || 'Chat Libera (Nessuna cartella)'}</div>
           </div>
           <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
@@ -81,6 +83,26 @@ export const WorkspaceExplorerProjectSwitcher: React.FC<WorkspaceExplorerProject
           role="listbox"
           className="absolute top-full left-2.5 right-2.5 mt-1.5 z-50 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/60"
         >
+          {/* Option for Free Chat / Standalone Mode */}
+          <div
+            role="option"
+            aria-selected={!activeProjectPath}
+            className={`px-3 py-2 flex items-center justify-between gap-2 cursor-pointer transition-colors group ${
+              !activeProjectPath ? 'bg-indigo-950/60 text-indigo-200' : 'hover:bg-slate-800/80 text-slate-300'
+            }`}
+            onClick={() => handleSelect('')}
+          >
+            <div className="flex items-center gap-2 truncate min-w-0">
+              <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${!activeProjectPath ? 'text-indigo-400' : 'text-slate-400'}`} />
+              <div className="truncate min-w-0">
+                <div className="font-bold truncate text-[11px]">Chat Libera (Standalone)</div>
+                <div className="text-[9px] font-mono text-slate-400 truncate">Nessuna cartella progetto associata</div>
+              </div>
+            </div>
+            {!activeProjectPath && (
+              <span className="text-[9px] font-mono bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">Attiva</span>
+            )}
+          </div>
           {projects.length === 0 ? (
             <div className="p-3 text-center text-xs text-slate-400">
               Nessun progetto salvato. Aggiungi la tua prima cartella di lavoro.

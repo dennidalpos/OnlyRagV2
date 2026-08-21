@@ -63,6 +63,12 @@ try {
 
     # 3. Compilazione Build & Packaging NSIS tramite electron-builder
     if (-not $Fast) { Write-Host "`n[3/4] Avvio build Vite + Electron ed impacchettamento NSIS (electron-builder)..." -ForegroundColor Yellow }
+    $distPath = Join-Path -Path $PSScriptRoot -ChildPath "..\dist"
+    if (Test-Path $distPath) {
+        Remove-Item -Path (Join-Path $distPath "win-unpacked") -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem -Path $distPath -Filter "*.exe" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        Get-ChildItem -Path $distPath -Filter "*.blockmap" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
     npm run build
     if ($LASTEXITCODE -ne 0) {
         throw "[ERRORE] Build o impacchettamento NSIS fallito con codice di uscita $LASTEXITCODE. Interruzione immediata."

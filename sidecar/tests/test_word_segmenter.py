@@ -47,3 +47,21 @@ def test_normalize_ocr_token_spacing_separates_fused_email_prefixes_and_tlds():
     assert "ovvero" in result
     assert "presente modulo" in result
     assert "oppure all indirizzo PEC" in result
+
+def test_normalize_ocr_token_spacing_handles_apostrophes_without_duplication():
+    raw = "oppure all'indirizzo PEC"
+    result = normalize_ocr_token_spacing(raw)
+    assert result == "oppure all'indirizzo PEC"
+    assert "oppure all oppure all'" not in result
+
+    raw2 = "A seguito dell'esercizio del diritto di recesso"
+    result2 = normalize_ocr_token_spacing(raw2)
+    assert result2 == "A seguito dell'esercizio del diritto di recesso"
+    assert "A seguito dell A seguito dell'" not in result2
+
+def test_normalize_ocr_token_spacing_defragments_spaced_words():
+    raw = "LOCALITA * BORGOMANTOVANOLoc.VillaPoma PROV * MANTOVA"
+    result = normalize_ocr_token_spacing(raw)
+    assert "MANTOVANO" in result
+    assert "MANTOVA" in result
+

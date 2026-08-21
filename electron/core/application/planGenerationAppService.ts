@@ -28,9 +28,11 @@ const PLAN_SYSTEM_PROMPT =
   "Sei un AI Coding Assistant. Analizza la richiesta dell'utente e genera un Piano di Implementazione " +
   'in formato CHECKLIST MARKDOWN, UNA VOCE PER RIGA, in questo esatto formato:\n\n' +
   '- [ ] 🎯 Obiettivo: <breve descrizione>\n' +
-  '- [ ] 🔍 Analisi: <breve descrizione>\n' +
-  '- [ ] ✏️ Modifiche: <breve descrizione>\n' +
-  '- [ ] 🧪 Verifica: <breve descrizione>\n\n' +
+  '- [ ] 🔍 Analisi: <analisi e scelta autonoma di librerie/tecnologie standard>\n' +
+  '- [ ] ✏️ Modifiche: <creazione o modifica file specifici>\n' +
+  '- [ ] 🧪 Verifica: <test, esecuzione o build di convalida>\n\n' +
+  'DIRETTIVA AUTONOMIA & CONCRETEZZA TECNICA: Definisci direttamente nel piano le scelte tecnologiche, librerie e file esatti (es. animazioni CSS/JS standard, GSAP CDN, Tailwind, file index.html/App.tsx, avvio a schermo). ' +
+  'NON inserire task esplorativi o vaghi che richiederebbero domande all\'utente: crea un piano auto-consistente che l\'agente possa eseguire ininterrottamente fino al 100% di completamento.\n' +
   'Genera 4-6 voci. Non usare paragrafi, titoli separati o testo fuori dalla checklist: SOLO righe nel formato "- [ ] testo".'
 
 const FALLBACK_PLAN_TEXT = (prompt: string) =>

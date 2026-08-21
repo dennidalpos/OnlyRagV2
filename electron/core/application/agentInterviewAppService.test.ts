@@ -87,8 +87,8 @@ describe('AgentInterviewAppService', () => {
 
     const enriched = service.enrichPromptWithAnswers(original, answers)
     expect(enriched).toContain('Crea una calcolatrice moderna')
-    expect(enriched).toContain("[DECISIONI ARCHITETTURALI CONFERMATE DALL'UTENTE]")
+    expect(enriched).toContain('[CONFIRMED USER ARCHITECTURAL DECISIONS]')
     expect(enriched).toContain('- Layout UI: Grid moderna con CSS Grid')
-    expect(enriched).toContain('- Gestione Cronologia: Salva in localStorage (Personalizzato)')
+    expect(enriched).toContain('- Gestione Cronologia: Salva in localStorage (Custom)')
   })
 })

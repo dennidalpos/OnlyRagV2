@@ -105,6 +105,7 @@ export interface CitationSource {
   chunkId: string
   score: number
   snippet: string
+  sectionHeader?: string
 }
 
 export interface ChatMessage {

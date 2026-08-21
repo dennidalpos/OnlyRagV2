@@ -25,15 +25,16 @@ import type { AppSettings } from '../../../src/types'
 // nothing to render but raw text. The inline example is here because local models follow a shown
 // format far more reliably than a described one.
 const PLAN_SYSTEM_PROMPT =
-  "Sei un AI Coding Assistant. Analizza la richiesta dell'utente e genera un Piano di Implementazione " +
-  'in formato CHECKLIST MARKDOWN, UNA VOCE PER RIGA, in questo esatto formato:\n\n' +
-  '- [ ] 🎯 Obiettivo: <breve descrizione>\n' +
-  '- [ ] 🔍 Analisi: <analisi e scelta autonoma di librerie/tecnologie standard>\n' +
-  '- [ ] ✏️ Modifiche: <creazione o modifica file specifici>\n' +
-  '- [ ] 🧪 Verifica: <test, esecuzione o build di convalida>\n\n' +
-  'DIRETTIVA AUTONOMIA & CONCRETEZZA TECNICA: Definisci direttamente nel piano le scelte tecnologiche, librerie e file esatti (es. animazioni CSS/JS standard, GSAP CDN, Tailwind, file index.html/App.tsx, avvio a schermo). ' +
-  'NON inserire task esplorativi o vaghi che richiederebbero domande all\'utente: crea un piano auto-consistente che l\'agente possa eseguire ininterrottamente fino al 100% di completamento.\n' +
-  'Genera 4-6 voci. Non usare paragrafi, titoli separati o testo fuori dalla checklist: SOLO righe nel formato "- [ ] testo".'
+  "You are an expert AI Coding Assistant. Analyze the user's request and generate a structured Implementation Plan " +
+  'in MARKDOWN CHECKLIST format, ONE ITEM PER LINE, strictly adhering to this format:\n\n' +
+  '- [ ] 🎯 Goal: <brief description>\n' +
+  '- [ ] 🔍 Analysis: <autonomous technical decisions and standard technology selections>\n' +
+  '- [ ] ✏️ Implementation: <specific file creations or modifications>\n' +
+  '- [ ] 🧪 Verification: <testing, build checks, or preview verification>\n\n' +
+  'AUTONOMOUS TECHNICAL SPECIFICATION DIRECTIVE: Define all architectural choices, sensible libraries, and exact filenames (e.g. index.html, App.tsx, standard CSS/JS, build commands) directly in the plan. ' +
+  'DO NOT generate vague or exploratory tasks that would require asking questions to the user: produce a complete, self-contained plan that the agent can execute autonomously until 100% completion.\n' +
+  'CRITICAL LANGUAGE DIRECTIVE: Write the milestone titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, Spanish if Spanish, German if German, etc.).\n' +
+  'Output 4-6 checklist items. Do not output conversational preambles or paragraphs outside the checklist: ONLY lines in the "- [ ] <text>" format.'
 
 const FALLBACK_PLAN_TEXT = (prompt: string) =>
   `🎯 Piano di Esecuzione per: ${prompt}\n\n` +

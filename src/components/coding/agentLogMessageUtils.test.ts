@@ -63,6 +63,13 @@ describe('agentLogMessageUtils Unit Tests', () => {
       expect(res2.agentQuestionText).toBe('Please provide the port number')
     })
 
+    it('should categorize final implementation reports (Task Finished)', () => {
+      const res = categorizeAgentLog('Task Finished: ### 🎯 Riepilogo Implementazione\n- Creato file index.html\n- Test passati al 100%')
+      expect(res.category).toBe('final_report')
+      expect(res.finalReportText).toContain('### 🎯 Riepilogo Implementazione')
+      expect(res.finalReportText).toContain('Creato file index.html')
+    })
+
     it('should categorize test runs with PASS/FAIL details', () => {
       const resPass = categorizeAgentLog('Test Run: PASS (15 passed, 0 failed)')
       expect(resPass.category).toBe('test_run')

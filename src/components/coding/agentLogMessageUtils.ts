@@ -8,6 +8,7 @@
 export type AgentLogCategory =
   | 'user_prompt'
   | 'agent_question'
+  | 'final_report'
   | 'file_mutation'
   | 'command_execution'
   | 'test_run'
@@ -51,6 +52,7 @@ export interface CategorizedAgentLog {
   category: AgentLogCategory
   userPromptText?: string
   agentQuestionText?: string
+  finalReportText?: string
   fileMutation?: FileMutationDetails
   commandExecution?: CommandExecutionDetails
   testRun?: TestRunDetails
@@ -419,7 +421,24 @@ export function categorizeAgentLog(message: string, logType?: string): Categoriz
     }
   }
 
-  // 9. Generic Assistant Output
+  // 9. Final Implementation Report / Task Finished
+  if (
+    msg.startsWith('Task Finished: ') ||
+    msg.startsWith('Task Finished:') ||
+    msg.startsWith('Task completed: ') ||
+    msg.startsWith('Task completed successfully')
+  ) {
+    const reportText = msg
+      .replace(/^Task Finished:\s*/i, '')
+      .replace(/^Task completed:\s*/i, '')
+      .trim()
+    return {
+      category: 'final_report',
+      finalReportText: reportText,
+    }
+  }
+
+  // 10. Generic Assistant Output
   return {
     category: 'generic_assistant',
   }

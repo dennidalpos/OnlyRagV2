@@ -33,7 +33,13 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
   }
 
   agentToolExecutorService.commitJournal()
-  const summary = parsedTool.explanation || parsedTool.parameters?.summary || 'Task completed successfully.'
+  const paramSummary = parsedTool.parameters?.summary || parsedTool.parameters?.report || parsedTool.parameters?.finalReport || parsedTool.parameters?.content
+  const explanation = parsedTool.explanation
+  const summary = (paramSummary && paramSummary.trim().length > 0)
+    ? paramSummary.trim()
+    : (explanation && explanation.trim().length > 0)
+    ? explanation.trim()
+    : 'Task completed successfully.'
 
   if (ctx.workspacePath) {
     // Same builder and same writer as every checkpoint — the final save only adds the
@@ -44,7 +50,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     }
   }
 
-  ctx.emitLog('info', `Task Finished: ${summary}`)
+  ctx.emitLog('info', `Task Finished: ${summary}`, summary)
   ctx.emitDone(true, summary)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)

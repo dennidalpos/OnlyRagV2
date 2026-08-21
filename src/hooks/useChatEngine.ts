@@ -329,13 +329,14 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
             for (let idx = 0; idx < validResults.length; idx++) {
               const res = validResults[idx]
-              const block = `[Fonte ${idx + 1}: ${res.doc_name || 'Documento'} | Sezione: ${res.section_header || 'Generale'}]\n${res.text}`
+              const block = `[Source ${idx + 1}: ${res.doc_name || 'Document'} | Section: ${res.section_header || 'General'}]\n${res.text}`
               if (includedBlocks.length > 0 && usedChars + block.length > budget.vectorContextChars) break
               includedBlocks.push(block)
               usedChars += block.length
               includedSources.push({
                 chunkId: res.chunk_id || '',
                 docName: res.doc_name || 'Document',
+                sectionHeader: res.section_header || undefined,
                 snippet: (res.text || '').slice(0, 150) + (res.text?.length > 150 ? '...' : ''),
                 score: res.score || 0,
               })
@@ -358,10 +359,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const activeDocs = documents.filter((d) => selectedDocIds.has(d.id))
       const directDocsText = activeDocs
-        .map((d) => `[Documento Completo: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, budget.perDocumentPreviewChars)}...`)
+        .map((d) => `[Full Document: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, budget.perDocumentPreviewChars)}...`)
         .join('\n\n---\n\n')
 
-      const combinedRawContext = [vectorContextText, directDocsText].filter(Boolean).join('\n\n=== ULTERIORE CONTESTO ===\n\n')
+      const combinedRawContext = [vectorContextText, directDocsText].filter(Boolean).join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
       // Budget context to prevent context window overflow
       const boundedContext = combinedRawContext.slice(0, budget.totalContextChars)
 
@@ -370,19 +371,26 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const effectiveSystemPrompt = effectivePromptObj.prompt
 
       const now = new Date()
-      const formattedDate = now.toLocaleDateString('it-IT', {
+      const formattedDate = now.toLocaleDateString(undefined, {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       })
       const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      const temporalContext = `[TEMPORAL CONTEXT]\nData e ora corrente del sistema: ${now.toISOString().split('T')[0]} (${formattedDate}, ${formattedTime})\nUsa sempre queste informazioni temporali per rispondere a domande relative alla data odierna, giorno corrente, mese o anno.`
+      const temporalContext = `[TEMPORAL CONTEXT]\nCurrent system date and time: ${now.toISOString().split('T')[0]} (${formattedDate}, ${formattedTime})\nAlways use this temporal information to accurately answer any questions regarding the current date, time, day of the week, month, or year.`
+
+      const docContextBlock = boundedContext
+        ? `[INDEXED DOCUMENT CONTEXT (LanceDB)]\n` +
+          `MANDATORY DIRECTIVE: The following excerpts constitute the actual parsed text of the user's selected documents and attachments. You have FULL access to this information. Always search, extract, and cite from this text to accurately answer any user question regarding files, documents, or attachments.\n\n` +
+          `${boundedContext}\n` +
+          `[END DOCUMENT CONTEXT]`
+        : ''
 
       const promptSections = [
         effectiveSystemPrompt,
         temporalContext,
-        boundedContext ? `[CONTESTO DOCUMENTI INDICIZZATI (LanceDB)]\n${boundedContext}\n[FINE CONTESTO]` : '',
+        docContextBlock,
       ].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 

@@ -34,35 +34,36 @@ export interface UserInterviewAnswer {
   isCustom?: boolean
 }
 
-const INTERVIEW_SYSTEM_PROMPT = `Sei un AI Software Architect esperto. Il tuo compito è analizzare la richiesta dell'utente prima di generare il piano di sviluppo.
+const INTERVIEW_SYSTEM_PROMPT = `You are an expert AI Software Architect. Your job is to analyze the user's coding request before formulating an implementation plan.
 
-Valuta se la richiesta presenta scelte architetturali, tecnologiche, di layout o di librerie che beneficerebbero di una decisione esplicita dell'utente (ad esempio: framework CSS/Vanilla, gestione dello stato/persistenza, stile di layout, singolo file HTML vs modulare).
+Evaluate whether the request has significant architectural, technological, styling, or library choices that would genuinely benefit from the user's explicit preference (for example: CSS framework vs Vanilla CSS, state management/persistence strategy, single-file HTML vs modular SPA structure).
 
-Se la richiesta è già completamente specificata o non presenta dubbi tecnici rilevanti, rispondi con:
+If the request is already clear, well-scoped, or has obvious standard choices, respond with:
 {"hasQuestions": false, "questions": []}
 
-Se ci sono 1-2 scelte tecniche chiave da chiarire, genera un JSON valido con questo schema esatto:
+If there are 1-2 genuine technical trade-offs to clarify, output a valid JSON block with this exact schema:
 {
   "hasQuestions": true,
   "questions": [
     {
       "id": "q1",
-      "question": "Descrizione sintetica della scelta tecnica",
+      "question": "Concise description of the technical choice",
       "options": [
-        "Opzione consigliata",
-        "Opzione alternativa 1",
-        "Opzione alternativa 2"
+        "Recommended option",
+        "Alternative option 1",
+        "Alternative option 2"
       ],
       "recommendedIndex": 0
     }
   ]
 }
 
-REGOLE TASSATIVE:
-1. Massimo 1-2 domande, ciascuna con 2-3 opzioni chiare e concrete.
-2. L'opzione all'indice 0 (recommendedIndex: 0) deve essere la scelta tecnica standard migliore e autosufficiente.
-3. NON fare domande banali (es. "vuoi procedere?"). Fai solo domande su trade-off tecnici effettivi.
-4. Rispondi ESCLUSIVAMENTE con il blocco JSON.`
+STRICT RULES:
+1. At most 1-2 questions, each with 2-3 clear and concrete options.
+2. The option at index 0 (recommendedIndex: 0) MUST be the best standard, self-sufficient default choice.
+3. NEVER ask trivial confirmation questions (e.g. "do you want to proceed?"). Only ask about real technical architectural trade-offs.
+4. CRITICAL LANGUAGE DIRECTIVE: The question and options text MUST be written in the EXACT same language used by the user in their prompt (e.g. Italian if prompt is in Italian, English if English, French if French, Spanish if Spanish, German if German, etc.).
+5. Respond EXCLUSIVELY with the valid JSON block.`
 
 export class AgentInterviewAppService {
   async conductInterview(
@@ -73,58 +74,63 @@ export class AgentInterviewAppService {
     const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(settings.hardwareProfile)
 
-    const fullPrompt = `${INTERVIEW_SYSTEM_PROMPT}\n\nAnalizza la seguente richiesta dell'utente:\n\n${prompt}`
+    const fullPrompt = `${INTERVIEW_SYSTEM_PROMPT}\n\nUser request to analyze:\n\n${prompt}`
 
     let accumulated = ''
     try {
       const res = await ollamaAppService.generateStream(
         modelToUse,
         fullPrompt,
-        (chunk) => {
+        (chunk: string) => {
           accumulated += chunk
         },
         () => {},
-        { num_ctx: runtimeOpts.num_ctx, temperature: 0.1 }
+        runtimeOpts
       )
 
       if (!res.success) {
         logger.log('WARN', 'AgentInterviewAppService', `Interview generation failed: ${res.error}`)
         return { hasQuestions: false, questions: [] }
       }
-    } catch (err: any) {
-      logger.log('WARN', 'AgentInterviewAppService', `Interview generation threw: ${err.message}`)
-      return { hasQuestions: false, questions: [] }
-    }
 
-    try {
-      const cleanedJson = this.extractAndRepairJson(accumulated)
-      if (!cleanedJson) {
+      const repaired = this.extractAndRepairJson(accumulated)
+      if (!repaired) {
+        logger.log('WARN', 'AgentInterviewAppService', `Could not extract or repair valid JSON from model output: ${accumulated}`)
         return { hasQuestions: false, questions: [] }
       }
 
-      const parsed = JSON.parse(cleanedJson)
-      if (!parsed || typeof parsed !== 'object') {
+      const parsed = JSON.parse(repaired)
+      if (typeof parsed !== 'object' || parsed === null) {
         return { hasQuestions: false, questions: [] }
       }
 
-      const hasQuestions = Boolean(parsed.hasQuestions && Array.isArray(parsed.questions) && parsed.questions.length > 0)
-      if (!hasQuestions) {
+      if (!parsed.hasQuestions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
         return { hasQuestions: false, questions: [] }
       }
 
-      const questions: InterviewQuestion[] = parsed.questions
-        .filter((q: any) => q && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length >= 2)
-        .slice(0, 2)
-        .map((q: any, idx: number) => ({
-          id: q.id || `q_${idx + 1}`,
-          question: q.question.trim(),
-          options: q.options.map((opt: any) => String(opt).trim()).filter(Boolean),
-          recommendedIndex: typeof q.recommendedIndex === 'number' && q.recommendedIndex >= 0 && q.recommendedIndex < q.options.length ? q.recommendedIndex : 0,
-        }))
+      const validatedQuestions: InterviewQuestion[] = []
+      for (const q of parsed.questions) {
+        if (
+          typeof q.id === 'string' &&
+          typeof q.question === 'string' &&
+          Array.isArray(q.options) &&
+          q.options.length >= 2
+        ) {
+          const recIdx = typeof q.recommendedIndex === 'number' && q.recommendedIndex >= 0 && q.recommendedIndex < q.options.length
+            ? q.recommendedIndex
+            : 0
+          validatedQuestions.push({
+            id: q.id,
+            question: q.question,
+            options: q.options.map(String),
+            recommendedIndex: recIdx,
+          })
+        }
+      }
 
       return {
-        hasQuestions: questions.length > 0,
-        questions,
+        hasQuestions: validatedQuestions.length > 0,
+        questions: validatedQuestions,
         rawResponse: accumulated,
       }
     } catch (parseErr: any) {
@@ -166,12 +172,12 @@ export class AgentInterviewAppService {
     if (!answers || answers.length === 0) return originalPrompt
 
     const formattedChoices = answers
-      .map((a) => `- ${a.questionText}: ${a.selectedOption}${a.isCustom ? ' (Personalizzato)' : ''}`)
+      .map((a) => `- ${a.questionText}: ${a.selectedOption}${a.isCustom ? ' (Custom)' : ''}`)
       .join('\n')
 
     return (
       `${originalPrompt.trim()}\n\n` +
-      `[DECISIONI ARCHITETTURALI CONFERMATE DALL'UTENTE]\n` +
+      `[CONFIRMED USER ARCHITECTURAL DECISIONS]\n` +
       `${formattedChoices}`
     )
   }

@@ -10,6 +10,8 @@ import {
   Terminal,
   Globe,
   FolderTree,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { AgentActionLog, WorkspaceFile } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
@@ -20,6 +22,90 @@ import {
   categorizeAgentLog,
   type CategorizedAgentLog,
 } from './agentLogMessageUtils'
+
+function formatInlineMarkdown(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="text-slate-100 font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      )
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code
+          key={i}
+          className="px-1.5 py-0.5 rounded bg-slate-950 text-cyan-300 font-mono text-[11px] border border-slate-800"
+        >
+          {part.slice(1, -1)}
+        </code>
+      )
+    }
+    return part
+  })
+}
+
+function renderMarkdownReportContent(text: string): React.ReactNode {
+  const lines = text.split('\n')
+  return (
+    <div className="space-y-1.5 text-xs leading-relaxed text-slate-200 font-sans">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim()
+        if (!trimmed) {
+          return <div key={idx} className="h-1" />
+        }
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4 key={idx} className="text-xs font-bold text-emerald-300 pt-2 pb-0.5 border-b border-emerald-900/40 flex items-center gap-1.5">
+              <span>{formatInlineMarkdown(trimmed.slice(4))}</span>
+            </h4>
+          )
+        }
+        if (trimmed.startsWith('## ')) {
+          return (
+            <h3 key={idx} className="text-sm font-bold text-emerald-200 pt-2.5 pb-1 border-b border-emerald-800/50">
+              {formatInlineMarkdown(trimmed.slice(3))}
+            </h3>
+          )
+        }
+        if (trimmed.startsWith('# ')) {
+          return (
+            <h2 key={idx} className="text-base font-extrabold text-emerald-100 pt-3 pb-1 border-b border-emerald-700/60">
+              {formatInlineMarkdown(trimmed.slice(2))}
+            </h2>
+          )
+        }
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={idx} className="flex items-start gap-2 ml-2 my-0.5">
+              <span className="text-emerald-400 mt-0.5 text-[10px] shrink-0">✦</span>
+              <span className="text-slate-200">{formatInlineMarkdown(trimmed.slice(2))}</span>
+            </div>
+          )
+        }
+        if (/^\d+\.\s/.test(trimmed)) {
+          const match = trimmed.match(/^(\d+\.)\s*(.+)/)
+          return (
+            <div key={idx} className="flex items-start gap-2 ml-2 my-0.5">
+              <span className="text-emerald-400 font-mono font-bold text-[10px] shrink-0">{match?.[1]}</span>
+              <span className="text-slate-200">{formatInlineMarkdown(match?.[2] || trimmed)}</span>
+            </div>
+          )
+        }
+        if (trimmed === '---' || trimmed === '***') {
+          return <hr key={idx} className="my-2 border-emerald-800/40" />
+        }
+        return (
+          <p key={idx} className="text-slate-300 my-0.5 leading-relaxed">
+            {formatInlineMarkdown(trimmed)}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
 
 interface AgentTimelineMessageProps {
   log: AgentActionLog
@@ -37,6 +123,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   onOpenFile,
 }) => {
   const { t } = useTranslation()
+  const [isCopied, setIsCopied] = React.useState(false)
   const parsed: CategorizedAgentLog = React.useMemo(
     () => categorizeAgentLog(log.message, log.type),
     [log.message, log.type]
@@ -76,6 +163,48 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
           <span className="text-[10px] text-amber-400/80 font-mono">{formatClockTime(log.timestamp)}</span>
         </div>
         <div className="whitespace-pre-wrap leading-relaxed font-semibold text-amber-200">{qText}</div>
+      </div>
+    )
+  }
+
+  // 3. Dedicated Final Implementation Report Card
+  if (parsed.category === 'final_report') {
+    const reportText = parsed.finalReportText || log.detail || log.message
+    const handleCopy = () => {
+      navigator.clipboard.writeText(reportText)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    }
+
+    return (
+      <div className="p-4 rounded-2xl bg-gradient-to-b from-emerald-950/40 via-slate-900/90 to-slate-950/95 border-2 border-emerald-500/60 text-slate-100 font-sans text-xs space-y-3 shadow-xl animate-in fade-in duration-200">
+        <div className="flex items-center justify-between border-b border-emerald-500/30 pb-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shadow-sm shadow-emerald-500/20">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </div>
+            <span className="font-bold text-xs text-emerald-300">
+              Report Finale di Implementazione
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold">
+              {getStepModelName(log.message, activeModelName)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-emerald-400/70 font-mono">{formatClockTime(log.timestamp)}</span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="p-1 px-2 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-[10px] text-emerald-200 flex items-center gap-1 font-mono transition-all active:scale-95 focus-ring"
+              title="Copia Report"
+            >
+              {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              <span>{isCopied ? 'Copiato' : 'Copia'}</span>
+            </button>
+          </div>
+        </div>
+
+        {renderMarkdownReportContent(reportText)}
       </div>
     )
   }

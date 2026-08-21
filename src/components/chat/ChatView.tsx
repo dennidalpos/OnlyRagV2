@@ -492,53 +492,74 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                         )}
 
                         {/* Citations and Source Verification Cards */}
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
-                            <div className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
-                              <Sparkles className="w-3 h-3 text-cyan-400" />
-                              <span>{t('chat.citationsTitle', { count: msg.sources.length })}</span>
-                            </div>
-                            <div className="grid grid-cols-1 gap-1.5">
-                              {msg.sources.map((src, idx) => (
-                                <div
-                                  key={idx}
-                                  className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1"
-                                >
-                                  <div className="flex items-center justify-between text-[10px]">
-                                    <span className="font-semibold text-slate-300 truncate max-w-[240px]">
-                                      {src.docName}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-cyan-400 font-mono text-[9px] px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
-                                        {t('chat.relevance')}: {(src.score * 100).toFixed(0)}%
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          navigator.clipboard.writeText(src.snippet)
-                                          setCopiedCitationIdx(`${msg.id}-${idx}`)
-                                          toast.info(t('chat.citationCopied'))
-                                          setTimeout(() => setCopiedCitationIdx(null), 2000)
-                                        }}
-                                        className="p-0.5 text-slate-400 hover:text-slate-200 transition-colors"
-                                        title={t('chat.copyCitation')}
-                                      >
-                                        {copiedCitationIdx === `${msg.id}-${idx}` ? (
-                                          <Check className="w-2.5 h-2.5 text-emerald-400" />
-                                        ) : (
-                                          <Copy className="w-2.5 h-2.5" />
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <p className="text-[10px] text-slate-400 font-sans italic line-clamp-2 leading-relaxed">
-                                    "{src.snippet}"
-                                  </p>
+                        {msg.sources && msg.sources.length > 0 && (() => {
+                          const uniqueDocNames = Array.from(new Set(msg.sources.map((s) => s.docName || 'Documento')))
+                          const uniqueDocsCount = uniqueDocNames.length
+                          const chunksCount = msg.sources.length
+                          const headerLabel = uniqueDocsCount === 1
+                            ? `${chunksCount} ${chunksCount === 1 ? 'estratto rilevante' : 'estratti rilevanti'} da "${uniqueDocNames[0]}"`
+                            : `${chunksCount} estratti da ${uniqueDocsCount} documenti`
+
+                          return (
+                            <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
+                              <div className="text-[11px] font-bold text-cyan-300 flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                                  <span>Fonti &amp; Citazioni ({headerLabel})</span>
                                 </div>
-                              ))}
+                              </div>
+                              <div className="grid grid-cols-1 gap-1.5">
+                                {msg.sources.map((src, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="p-2 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between text-[10px]">
+                                      <div className="flex items-center gap-1.5 truncate max-w-[280px]">
+                                        <span className="px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800/60 text-cyan-300 font-mono text-[9px] font-bold">
+                                          Estratto {idx + 1}
+                                        </span>
+                                        <span className="font-semibold text-slate-300 truncate">
+                                          {src.docName}
+                                        </span>
+                                        {src.sectionHeader && (
+                                          <span className="text-slate-400 text-[9px] truncate">
+                                            ({src.sectionHeader})
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-cyan-400 font-mono text-[9px] px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-800/50 rounded-full">
+                                          {t('chat.relevance')}: {(src.score * 100).toFixed(0)}%
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(src.snippet)
+                                            setCopiedCitationIdx(`${msg.id}-${idx}`)
+                                            toast.info(t('chat.citationCopied'))
+                                            setTimeout(() => setCopiedCitationIdx(null), 2000)
+                                          }}
+                                          className="p-0.5 text-slate-400 hover:text-slate-200 transition-colors"
+                                          title={t('chat.copyCitation')}
+                                        >
+                                          {copiedCitationIdx === `${msg.id}-${idx}` ? (
+                                            <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                          ) : (
+                                            <Copy className="w-2.5 h-2.5" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-sans italic line-clamp-2 leading-relaxed">
+                                      "{src.snippet}"
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>

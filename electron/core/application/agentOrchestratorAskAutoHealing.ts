@@ -44,43 +44,30 @@ const ASK_REDIRECT_LIMIT = 2
 export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome> {
   const { parsedTool } = ctx
   const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'
-  const qLower = question.toLowerCase()
 
   const historyText = ctx.compiledHistoryBlock.toLowerCase()
   const hasCancellationInHistory =
     historyText.includes('cancelled') || historyText.includes('canceled') || historyText.includes('interrupted')
 
-  const isTrivialPreferenceQuestion =
-    qLower.includes('quale libreria') ||
-    qLower.includes('quali librerie') ||
-    qLower.includes('quale framework') ||
-    qLower.includes('quali framework') ||
-    qLower.includes('quale libreria o framework') ||
-    qLower.includes('quali librerie o framework') ||
-    qLower.includes('which library') ||
-    qLower.includes('which framework') ||
-    qLower.includes('which styling') ||
-    qLower.includes('what library') ||
-    qLower.includes('which animation') ||
-    qLower.includes('preferisci usare') ||
-    qLower.includes('vuoi utilizzare') ||
-    qLower.includes('do you want to use') ||
-    qLower.includes('prefer to use')
+  const PERMISSION_REGEX = /\b(proceed|procedere|start|iniziare|cominciare|confirm|conferma|shall we|should we|can we|do you want|would you like|vuoi che|posso)\b/i
+  const TRIVIAL_PREFERENCE_REGEX = /\b(which (library|framework|styling|animation)|what (library|framework)|quale (libreria|framework)|quali (librerie|framework)|preferisci|prefer to|prefer)\b/i
+  const VAGUE_WHAT_NEXT_REGEX = /\b(what next|what should (?:we|i) do|how should (?:we|i) proceed|what to do next|how to proceed|interrupted)\b/i
+
+  const isPermissionOrProceedQuestion = PERMISSION_REGEX.test(question)
+  const isTrivialPreferenceQuestion = isPermissionOrProceedQuestion || TRIVIAL_PREFERENCE_REGEX.test(question)
 
   const isVagueClarification =
     ctx.hasRecentToolFailure ||
     ctx.errorCountInHistory > 0 ||
     hasCancellationInHistory ||
     isTrivialPreferenceQuestion ||
-    qLower.includes('interrupted') ||
-    qLower.includes('what next') ||
-    qLower.includes('what should we do') ||
-    qLower.includes('how should we proceed') ||
-    qLower.includes('what to do next') ||
-    qLower.includes('how to proceed')
+    ctx.stepCount === 1 ||
+    VAGUE_WHAT_NEXT_REGEX.test(question)
 
   if (ctx.agentMode === 'agent' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.stagnationStreak < ASK_REDIRECT_LIMIT) {
-    const feedback = isTrivialPreferenceQuestion
+    const feedback = isPermissionOrProceedQuestion || ctx.stepCount === 1
+      ? `[AUTONOMOUS EXECUTION DIRECTIVE: DO NOT ASK FOR PERMISSION TO PROCEED]\nYou are operating in AGENT mode. The execution plan has ALREADY been approved by the user.\nYou have FULL authorization to implement the task immediately.\nDO NOT ask "Do you want to proceed?", "Posso procedere?", or request confirmation to start.\nProceed IMMEDIATELY by executing the first milestone using write_file, replace_file_content, read_file, or run_command.`
+      : isTrivialPreferenceQuestion
       ? `[AUTONOMOUS TECHNICAL DECISION DIRECTIVE: DO NOT STALL FOR TECHNICAL CHOICES]\nIn AGENT mode, you MUST autonomously select sensible standard technologies (e.g. standard CSS keyframes, GSAP, vanilla HTML5/JS, standard npm packages) and implement the requested feature directly. DO NOT ask the user for library or aesthetic preferences.\nProceed IMMEDIATELY by creating or editing the required files with write_file / replace_file_content or running build/test commands.`
       : hasCancellationInHistory
       ? `[PROACTIVE AUTO-HEALING DIRECTIVE: CLI GENERATOR CANCELLED]\nYour previous terminal command or CLI generator cancelled or was interrupted. In AGENT mode, DO NOT ask the user what to do next.\nFallback IMMEDIATELY to constructing the project files directly with write_file (e.g. package.json, index.html, src/main.tsx, src/App.tsx).`
@@ -90,13 +77,13 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
         step: ctx.stepCount,
         tool: 'ask',
         status: 'BLOCKED',
-        summary: 'Auto-Healing Interception: Intercepted lazy clarification question after command failure',
+        summary: 'Auto-Healing Interception: Intercepted lazy clarification or permission request in AGENT mode',
       },
       feedback
     )
     ctx.emitLog(
       'info',
-      `⚡ Proactive Auto-Healing: Intercettata richiesta di chiarimento pigra. L'agente procede in autonomia verso il completamento.`
+      `⚡ Proactive Auto-Healing: Intercettata richiesta di permesso/chiarimento ridondante. L'agente procede direttamente con l'implementazione.`
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', feedback)

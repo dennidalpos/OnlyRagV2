@@ -50,12 +50,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
   } = useResizablePanel(288, 200, 480, 'onlyrag_chat_sidebar_width')
   const toolsMenuRef = useRef<HTMLDivElement>(null)
   const resetConfirmRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const [showToolsMenu, setShowToolsMenu] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [copiedCitationIdx, setCopiedCitationIdx] = useState<string | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'context' | 'history'>('context')
   const [editingConvId, setEditingConvId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+
+  // Automatically maintain and restore focus on the prompt input field
+  useEffect(() => {
+    if (!c.isGenerating) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus()
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [c.isGenerating, c.activeConversationId])
 
   // Close tools and reset popovers on click outside or Escape
   useEffect(() => {
@@ -573,6 +584,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                 {/* Main Input Text Field */}
                 <div className="relative flex items-center">
                   <input
+                    ref={inputRef}
                     type="text"
                     value={c.input}
                     onChange={c.handleInputChange}

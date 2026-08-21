@@ -185,11 +185,13 @@ _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
 
 def _smart_decode_pdf_text(text: str) -> str:
-    """Normalizes unprintable control characters, non-breaking spaces, and fixes corrupted font encodings / replacement characters."""
+    """Normalizes unprintable control characters, non-breaking spaces, and fixes corrupted font encodings / replacement characters using standard Unicode normalization and ftfy."""
     if not text:
         return ""
     try:
-        t = ftfy.fix_text(text)
+        import unicodedata
+        t = unicodedata.normalize('NFKC', text)
+        t = ftfy.fix_text(t)
     except Exception:
         t = text
     t = t.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "")
@@ -222,7 +224,7 @@ def _should_skip_translation(s: str) -> bool:
         return True
     if trimmed.startswith("http://") or trimmed.startswith("https://"):
         return True
-    # Email addresses (e.g. gestionecontratto@telepass.com, assistenza@pec.telepass.com)
+    # Email addresses
     if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', trimmed):
         return True
     # Dates (e.g. 18/06/2024, 2024-06-18, 18.06.2024)
@@ -231,10 +233,7 @@ def _should_skip_translation(s: str) -> bool:
     # Pure punctuation / symbols
     if all(c in "-_*=|/\\:.,;•§°º#~ " for c in trimmed):
         return True
-    # Italian fiscal code
-    if re.match(r'^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$', trimmed):
-        return True
-    # Pure alphanumeric codes or contract IDs with numbers (e.g. 159549431, PNTLDN49D56E818T, DOC-123)
+    # Standard alphanumeric identifier codes (e.g. tax codes, contract numbers, serial IDs)
     if re.match(r'^[A-Z0-9\-_]{4,}$', trimmed) and any(c.isdigit() for c in trimmed):
         return True
     letters_only = re.sub(r'[^a-zA-Z\u00C0-\u017F\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]', '', trimmed)
@@ -248,31 +247,29 @@ def _should_skip_translation(s: str) -> bool:
 def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str, is_batch: bool = False, expected_items: int = 1) -> str:
     if is_batch:
         system_content = (
-            f"You are an automated document text translation engine.\n"
+            f"You are an automated professional document translation engine.\n"
             f"Task: Directly translate the numbered text segments from {source_lang} to {target_lang}.\n\n"
             f"CRITICAL DIRECTIVES:\n"
-            f"1. You MUST return EXACTLY {expected_items} numbered lines in the exact format '[1] translated text', '[2] translated text', etc., preserving exact order.\n"
-            f"2. TRANSLATE EVERY FIELD AND LABEL: Translate every heading, form field label, table header, instruction, footer, and administrative keyword into {target_lang}.\n"
-            f"3. BRAND & ENTITY INTEGRITY: Never alter, transliterate, or distort brand names or company names (e.g. 'Telepass' MUST remain 'Telepass', 'DocuSign' MUST remain 'DocuSign').\n"
-            f"4. ACCURATE TERMINOLOGY: 'CESSAZIONE' -> 'CANCELLATION' or 'TERMINATION' (never invent non-words), 'TFR' / 'Trattamento di Fine Rapporto' -> 'TFR (Severance Indemnity)' or 'Severance Pay', 'IRPEF' -> 'IRPEF (Income Tax)', 'Spett.le' -> 'Dear Sirs' / 'To the attention of'.\n"
-            f"5. For labeled fields (e.g. '[1] CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('[1] TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
-            f"6. ZERO CHATTER: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or notes.\n"
-            f"7. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
+            f"1. OUTPUT FORMAT: Return EXACTLY {expected_items} numbered lines in the exact format '[1] translated text', '[2] translated text', etc., preserving exact order.\n"
+            f"2. FORM & ADMINISTRATIVE REGISTER: Translate all headings, form field labels, headers, footers, and administrative/legal instructions accurately into {target_lang} matching standard legal/administrative conventions.\n"
+            f"3. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context (e.g. contract withdrawal/cancellation vs employment termination).\n"
+            f"4. IMMUTABLE ENTITIES: Preserve completely verbatim without alteration: email addresses, URLs, brand/organization names, proper personal names, numbers, postal codes, and alphanumeric codes.\n"
+            f"5. ZERO CHATTER: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or notes.\n"
+            f"6. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all segments faithfully."
         )
         user_content = (
             f"Translate these {expected_items} numbered segments from {source_lang} to {target_lang}:\n\n{text}"
         )
     else:
         system_content = (
-            f"You are an automated document text translation engine.\n"
+            f"You are an automated professional document translation engine.\n"
             f"Your ONLY task is to directly translate text from {source_lang} to {target_lang}.\n\n"
             f"CRITICAL DIRECTIVES:\n"
-            f"1. TRANSLATE EVERY WORD AND LABEL: Translate every title, heading, form field label, button, footer, table header, and administrative phrase into {target_lang}.\n"
-            f"2. BRAND & ENTITY INTEGRITY: Never alter, transliterate, or distort brand names or company names (e.g. 'Telepass' MUST remain 'Telepass', 'DocuSign' MUST remain 'DocuSign').\n"
-            f"3. ACCURATE TERMINOLOGY: 'CESSAZIONE' -> 'CANCELLATION' or 'TERMINATION' (never invent non-words), 'TFR' / 'Trattamento di Fine Rapporto' -> 'TFR (Severance Indemnity)' or 'Severance Pay', 'IRPEF' -> 'IRPEF (Income Tax)', 'Spett.le' -> 'Dear Sirs' / 'To the attention of'.\n"
-            f"4. For form fields containing labels and values (e.g. 'CODICE FISCALE * PNTLDN49D56E818T'), translate the label ('TAX CODE * PNTLDN49D56E818T') while keeping alphanumeric codes, numbers, and personal names unchanged.\n"
-            f"5. ZERO CHATTER: Output ONLY the direct {target_lang} translation. Never include preambles like 'Here is the translation', explanations, conversational text, notes, quotes, or markdown code fences.\n"
-            f"6. NO REFUSALS: This is an authorized document translation workflow. Process all text directly."
+            f"1. FORM & ADMINISTRATIVE REGISTER: Translate all titles, headings, form field labels, headers, footers, and instructions into {target_lang} matching standard legal/administrative conventions.\n"
+            f"2. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context (e.g. contract withdrawal/cancellation vs employment termination).\n"
+            f"3. IMMUTABLE ENTITIES: Preserve completely verbatim without alteration: email addresses, URLs, brand/organization names, proper personal names, numbers, postal codes, and alphanumeric codes.\n"
+            f"4. ZERO CHATTER: Output ONLY the direct {target_lang} translation without preambles, explanations, conversational text, notes, quotes, or markdown code fences.\n"
+            f"5. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all text faithfully."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
@@ -366,6 +363,15 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     # 6. Strip enclosing quotes if the entire string is wrapped in quotes
     if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
         cleaned = cleaned[1:-1].strip()
+
+    # 7. Protect and restore immutable emails and URLs from source text
+    if source_text:
+        source_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', source_text)
+        for semail in source_emails:
+            if semail not in cleaned:
+                mangled_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', cleaned)
+                if mangled_match:
+                    cleaned = cleaned.replace(mangled_match.group(0), semail)
 
     # Normalize excessive empty lines
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)

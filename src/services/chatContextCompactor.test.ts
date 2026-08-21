@@ -59,7 +59,6 @@ describe('chatContextCompactor Unit Tests', () => {
     expect(res.isCompacted).toBe(true)
     expect(res.summarizedTurnsCount).toBeGreaterThan(0)
     expect(res.verbatimTurnsCount).toBeGreaterThanOrEqual(2)
-    expect(res.historyBlock).toContain('[SINTESI CONTESTO CONVERSAZIONE PRECEDENTE')
     expect(res.historyBlock).toContain('Domanda specifica numero 1')
     expect(res.historyBlock).toContain('Domanda specifica numero 20')
   })

@@ -21,9 +21,10 @@
 * **Agent Fast Mode:** Automated tests run by AI must run in fast/summarized mode (concise output: `PASS/FAIL` + minimal stack trace on failure). PowerShell test scripts must support both `-Fast` mode (agent default) and `-Full` mode (manual debugging).
 * **Honesty:** Update/add tests for code changes. Run sequential checks before reporting completion. Never claim checks or tests were run if they were skipped.
 
-## 4. Dependencies, Security & Knowledge Sources
+## 4. Dependencies, Universal Libraries & Anti-Hardcoding Directives
 
-* **Dependencies & Universal Libraries:** Prefer established, complete, and universal standard libraries over fragile homegrown logic or hardcoded dictionaries. Keep dependencies updated, maintain lockfiles, and document all packages in `requirements.txt` / `package.json`.
+* **Universal Libraries Over Homegrown Code:** È obbligatorio preferire librerie standard mature, ottimizzate e manutenute rispetto a soluzioni artigianali, euristiche fragili o logiche casalinghe. Tutte le dipendenze devono essere documentate in `package.json` o `sidecar/requirements.txt` e catalogate in `docs/libraries-and-domain-implementations.md`.
+* **Divieto Assoluto di Soluzioni Hardcoded (Anti-Hardcoding Rule):** È severamente vietato inserire nel codice dizionari di vocaboli o brand specifici (es. nomi di aziende, parole singole cablate), regex ritagliate su singoli casi di test o string matching statici su messaggi/prompt. Ogni elaborazione (Unicode, OCR, segmentazione, spelling, tokenizzazione, diffing, parsing JSON) deve essere delegata alle rispettive librerie ottimizzate dello stack (`ftfy`, `unicodedata`, `symspellpy`, `wordfreq`, `jsonrepair`, `diff`, `gpt-tokenizer`, `pymupdf`, `rapidocr-onnxruntime`, `lancedb`) o a modelli generici universali.
 * **Security:** Never expose, print, or commit secrets/tokens. Use `.env.example` and environment variables.
 * **Forbidden Git Commands:** NEVER run `git reset --hard`, `git clean`, force-push, or history rewriting.
 * **Information Sources:** Use official docs first. If unresolved, search community sources progressively down the hierarchy.

@@ -279,12 +279,6 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = re.sub(r'(S\.p\.A\.|Spa|S\.r\.l\.|Srl)([a-zA-Z]+)', r'\1 \2', text, flags=re.IGNORECASE)
     text = re.sub(r'([a-zA-Z]+)(a\.r\.|c\.a\.|c\.p\.)', r'\1 \2', text, flags=re.IGNORECASE)
 
-    # Normalize N° / n° / N. civico and similar form labels
-    text = re.sub(r'([a-zA-Z]+)(N[°º\.\?])', r'\1 \2', text)
-    text = re.sub(r'(?i)\bN[\ufffd°º\.\?\^]*\s*CIVICO\b', 'N° CIVICO', text)
-    text = re.sub(r'(?i)\bLOCALIT[\ufffdÀAàa]*\b', 'LOCALITÀ', text)
-    text = re.sub(r'(?i)(N[°º\.\?])(?=[0-9A-Z])', r'\1 ', text)
-
     # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
     protected: List[str] = []
     def _protect_token(m: re.Match) -> str:
@@ -295,6 +289,10 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = re.sub(r'https?://[^\s,;]+', _protect_token, text)
     text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _protect_token, text)
     text = re.sub(r'\b[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]\b', _protect_token, text)
+
+    # 4. Standard typographic and abbreviation marker separation
+    text = re.sub(r'([a-zA-Z]+)(N[°º\.\?])', r'\1 \2', text)
+    text = re.sub(r'(?i)(N[°º\.\?])(?=[0-9A-Z])', r'\1 ', text)
 
     # 4. Separate asterisks and symbols
     text = re.sub(r'(\*+)', r' \1 ', text)

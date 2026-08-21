@@ -386,10 +386,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       ].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 
-      // Assemble full multi-turn prompt
+      // Assemble full multi-turn prompt in standard conversational format
       const promptParts = [systemPromptWithContext]
       if (previousTurns) {
-        promptParts.push(`[CRONOLOGIA CONVERSAZIONE]\n${previousTurns}\n[FINE CRONOLOGIA]`)
+        promptParts.push(previousTurns)
       }
       promptParts.push(`User: ${userText}\nAssistant:`)
       const finalPrompt = promptParts.join('\n\n')

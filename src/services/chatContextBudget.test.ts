@@ -17,7 +17,7 @@ describe('chatContextBudget', () => {
     expect(budget.vectorContextChars).toBe(4000)
     expect(budget.totalContextChars).toBe(5500)
     expect(budget.perDocumentPreviewChars).toBe(1500)
-    expect(budget.historyTurns).toBe(6)
+    expect(budget.historyTurns).toBe(16)
   })
 
   it('should collapse every budget dimension together on minimum hardware', () => {

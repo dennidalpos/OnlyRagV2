@@ -14,19 +14,19 @@ export interface ChatCompactionResult {
 /**
  * Distills an older chat turn using TextRank NLP graph-based extractive summarization.
  */
-function distillTurn(userText: string, botText: string, turnIndex: number): string {
+function distillTurn(userText: string, botText: string): string {
   const cleanUser = (userText || '').replace(/\s+/g, ' ').trim()
   const cleanBot = (botText || '').replace(/\s+/g, ' ').trim()
 
-  const summarizedUser = cleanUser.length > 150
-    ? TextRankSummarizer.summarize(cleanUser, { targetSentences: 1 }) || cleanUser.slice(0, 140)
+  const summarizedUser = cleanUser.length > 250
+    ? TextRankSummarizer.summarize(cleanUser, { targetSentences: 2 }) || cleanUser.slice(0, 240)
     : cleanUser
 
-  const summarizedBot = cleanBot.length > 200
-    ? TextRankSummarizer.summarize(cleanBot, { targetSentences: 1 }) || cleanBot.slice(0, 190)
+  const summarizedBot = cleanBot.length > 350
+    ? TextRankSummarizer.summarize(cleanBot, { targetSentences: 2 }) || cleanBot.slice(0, 340)
     : cleanBot
 
-  return `• Turno ${turnIndex} - Utente: "${summarizedUser}" -> Assistente: "${summarizedBot}"`
+  return `User: ${summarizedUser}\nAssistant: ${summarizedBot}`
 }
 
 /**
@@ -38,10 +38,15 @@ export function compactChatHistory(
   budget: ChatContextBudget,
   hasSelectedDocs: boolean
 ): ChatCompactionResult {
-  // Filter out system greetings or empty messages
+  // Filter out empty messages and the initial placeholder greeting only
   const dialogueMessages = messages
-    .slice(1)
-    .filter((m) => m.text && m.text.trim())
+    .filter((m) => {
+      if (!m.text || !m.text.trim()) return false
+      if (m.sender === 'bot' && m.id === '1') {
+        return false
+      }
+      return true
+    })
 
   if (dialogueMessages.length === 0) {
     return {
@@ -57,8 +62,8 @@ export function compactChatHistory(
   // Calculate dynamic character budget for history:
   // When no documents are selected, the model's full context window (minus system prompt ~2500 chars) is available.
   const baseBudget = hasSelectedDocs
-    ? budget.historyChars
-    : Math.max(budget.historyChars, Math.floor(budget.maxNumCtx * 3.2 - 2500))
+    ? Math.max(budget.historyChars, Math.floor(budget.maxNumCtx * 2.0))
+    : Math.max(budget.historyChars, Math.floor(budget.maxNumCtx * 3.5 - 2500))
 
   // Group messages into user-assistant pairs
   const turnPairs: { user: string; assistant: string; userMsgId: string; assistantMsgId?: string }[] = []
@@ -98,15 +103,15 @@ export function compactChatHistory(
     }
   }
 
-  // If over budget, dynamically split between summarized older turns and verbatim recent turns
-  const recentBudget = Math.floor(baseBudget * 0.65)
+  // If over budget, dynamically allocate 80% to recent turns and distill older turns
+  const recentBudget = Math.floor(baseBudget * 0.80)
   const recentTurns: typeof turnPairs = []
   let recentChars = 0
 
   for (let i = turnPairs.length - 1; i >= 0; i--) {
     const turn = turnPairs[i]
     const turnStr = turn.assistant ? `User: ${turn.user}\nAssistant: ${turn.assistant}` : `User: ${turn.user}`
-    if (recentTurns.length >= 2 && recentChars + turnStr.length > recentBudget) {
+    if (recentTurns.length >= 4 && recentChars + turnStr.length > recentBudget) {
       break
     }
     recentTurns.unshift(turn)
@@ -115,11 +120,9 @@ export function compactChatHistory(
 
   const olderTurns = turnPairs.slice(0, turnPairs.length - recentTurns.length)
 
-  // Distill older turns into summary synopsis
-  const summaryPoints = olderTurns.map((turn, idx) => distillTurn(turn.user, turn.assistant, idx + 1))
-  const summarySection = summaryPoints.length > 0
-    ? `[SINTESI CONTESTO CONVERSAZIONE PRECEDENTE (Cronologia Storica Compattata)]\n${summaryPoints.join('\n')}\n[FINE SINTESI STORICA]`
-    : ''
+  // Distill older turns into concise conversational dialogue turns
+  const summaryPoints = olderTurns.map((turn) => distillTurn(turn.user, turn.assistant))
+  const summarySection = summaryPoints.join('\n\n')
 
   const recentSection = recentTurns
     .map((t) => (t.assistant ? `User: ${t.user}\nAssistant: ${t.assistant}` : `User: ${t.user}`))

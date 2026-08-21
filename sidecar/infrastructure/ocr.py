@@ -143,14 +143,15 @@ def inpaint_raster_bounding_boxes(image_bytes: bytes, bboxes: List[Tuple[float, 
     return image_bytes
 
 
-def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560) -> bytes:
-    """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing, and downscaling only if exceeding max_dim."""
+def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew: bool = True) -> bytes:
+    """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing (optional), and downscaling only if exceeding max_dim."""
     try:
-        # 1. Apply deskewing first for scanned images
-        try:
-            image_bytes = deskew_image(image_bytes)
-        except Exception as deskew_err:
-            logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
+        # 1. Apply deskewing first for scanned images when rotation is allowed
+        if allow_deskew:
+            try:
+                image_bytes = deskew_image(image_bytes)
+            except Exception as deskew_err:
+                logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
 
         # 2. Apply OpenCV CLAHE & mild unsharp masking on luminance channel
         try:
@@ -371,7 +372,7 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
     """Runs RapidOCR with image enhancement and returns spatially clustered line blocks with bounding boxes
     accurately mapped back to the input image_bytes coordinate space."""
     engine = _get_rapidocr_engine()
-    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)
+    prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560, allow_deskew=False)
 
     # Compute scale factors between prepared_bytes and original image_bytes
     scale_x, scale_y = 1.0, 1.0

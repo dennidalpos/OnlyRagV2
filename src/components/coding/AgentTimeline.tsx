@@ -83,7 +83,9 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             <Code2 className="w-6 h-6" />
           </div>
           <div>
-            <div className="font-semibold text-slate-200 text-sm">{activeSession?.title || t('coding.headerTitle')}</div>
+            <div className="font-semibold text-slate-200 text-sm">
+              {(activeSession?.executedPrompts?.length ?? 0) > 0 ? activeSession?.title : t('coding.headerTitle')}
+            </div>
             <p className="text-xs max-w-xs leading-relaxed text-slate-400 mt-1">
               {t('coding.subtitle')}
             </p>

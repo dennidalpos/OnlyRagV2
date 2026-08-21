@@ -33,6 +33,13 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
 
   const projectName = workspacePath ? workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace' : t('coding.noProjectAttached')
 
+  const realSessions = workspaceSessions.filter(
+    (s) => (s.executedPrompts?.length ?? 0) > 0 || (s.actionLogs?.length ?? 0) > 0 || (s.plans?.length ?? 0) > 0
+  )
+  const currentTitle = activeSession && ((activeSession.executedPrompts?.length ?? 0) > 0 || (activeSession.actionLogs?.length ?? 0) > 0)
+    ? activeSession.title
+    : 'Studio Coding'
+
   return (
     <div className="p-2.5 px-4 border-b border-slate-800/90 bg-[#0d131f] flex items-center justify-between gap-3 shrink-0 z-10">
       {/* Left: Project Folder info */}
@@ -70,11 +77,13 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
           >
             <MessageSquare className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             <span className="truncate max-w-[120px] font-semibold text-slate-200">
-              {activeSession?.title || t('coding.sessionTitleDefault')}
+              {currentTitle}
             </span>
-            <span className="text-[10px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
-              {workspaceSessions.length}
-            </span>
+            {realSessions.length > 0 && (
+              <span className="text-[10px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
+                {realSessions.length}
+              </span>
+            )}
             <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
 
@@ -97,9 +106,14 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
               </div>
 
               <div className="max-h-56 overflow-y-auto space-y-1 pt-1">
-                {workspaceSessions.map((session) => {
-                  const isActive = session.id === activeSessionId
-                  const isEditing = editingSessionTitleId === session.id
+                {realSessions.length === 0 ? (
+                  <div className="text-center py-3 text-[11px] text-slate-400">
+                    Nessuna sessione precedente.
+                  </div>
+                ) : (
+                  realSessions.map((session) => {
+                    const isActive = session.id === activeSessionId
+                    const isEditing = editingSessionTitleId === session.id
 
                   return (
                     <div
@@ -177,7 +191,7 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
                       )}
                     </div>
                   )
-                })}
+                }))}
               </div>
             </div>
           )}

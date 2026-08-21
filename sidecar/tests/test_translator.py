@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import docx
 import pymupdf
@@ -143,9 +144,23 @@ def test_clean_translated_segment_strips_preambles_and_refusals():
     assert translator_module._clean_translated_segment("```\nDirect translation: Hello\n```") == "Hello"
     # Refusal handling
     assert translator_module._clean_translated_segment("I cannot translate a tax code. Is there something else I can help you with?", source_text="CODICE FISCALE * PNTLDN49D56E818T") == "CODICE FISCALE * PNTLDN49D56E818T"
-    # Delimiter stripping
-    assert translator_module._clean_translated_segment("Amazon Business Contact\nRun_S\nEP>>>") == "Amazon Business Contact"
-    assert translator_module._clean_translated_segment("<<<RUN_SEP>>> Hello <<<RUN_SEP>>>") == "Hello"
+    # Delimiter stripping without corrupting words with 'ep'
+    assert translator_module._clean_translated_segment("Telepass S.p.A. next step in development") == "Telepass S.p.A. next step in development"
+    assert translator_module._clean_translated_segment("<<<RUN_SEP>>> Telepass Family <<<RUN_SEP>>>") == "Telepass Family"
+    assert translator_module._clean_translated_segment("<seg id=\"1\">Telepass S.p.A.</seg>") == "Telepass S.p.A."
+
+
+def test_immutable_entity_masking_and_unmasking():
+    text = "Inviare modulo a assistenza@pec.telepass.com o visitare https://www.telepass.com per dettagli."
+    masked, token_map = translator_module._mask_immutable_entities(text)
+    assert "assistenza@pec.telepass.com" not in masked
+    assert "https://www.telepass.com" not in masked
+    assert len(token_map) == 2
+
+    # Simulate translation preserving token placeholders
+    translated_sim = masked.replace("Inviare modulo a", "Send form to").replace("o visitare", "or visit").replace("per dettagli", "for details")
+    unmasked = translator_module._unmask_immutable_entities(translated_sim, token_map)
+    assert "Send form to assistenza@pec.telepass.com or visit https://www.telepass.com for details." == unmasked
 
 
 def test_translate_batch_happy_path_reassigns_run_text(tmp_path, monkeypatch):
@@ -156,8 +171,8 @@ def test_translate_batch_happy_path_reassigns_run_text(tmp_path, monkeypatch):
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
-            lines = [f"[{i+1}] TR-{line.split(' ', 1)[1]}" for i, line in enumerate(text.splitlines()) if line.strip()]
-            return "\n".join(lines)
+            # Emits XML segments
+            return "<seg id=\"1\">TR-Test Document</seg>\n<seg id=\"2\">TR-Hello world</seg>"
         return f"TR-{text}"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -197,8 +212,10 @@ def test_translate_docx_inplace_end_to_end(tmp_path, monkeypatch):
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
-            lines = [f"[{i+1}] TR-{line.split(' ', 1)[1]}" for i, line in enumerate(text.splitlines()) if line.strip()]
-            return "\n".join(lines)
+            matches = re.findall(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', text)
+            if matches:
+                return "\n".join([f'<seg id="{idx}">TR-{val.strip()}</seg>' for idx, val in matches])
+            return "\n".join([f'<seg id="{i+1}">TR-{line.strip()}</seg>' for i, line in enumerate(text.splitlines()) if line.strip()])
         return f"TR-{text}"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -379,8 +396,10 @@ def test_translate_pdf_blocks_happy_path(tmp_path, monkeypatch):
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
-            lines = [f"[{i+1}] [{line.split(' ', 1)[1]}]" for i, line in enumerate(text.splitlines()) if line.strip()]
-            return "\n".join(lines)
+            matches = re.findall(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', text)
+            if matches:
+                return "\n".join([f'<seg id="{idx}">[{val.strip()}]</seg>' for idx, val in matches])
+            return "\n".join([f'<seg id="{i+1}">[{line.strip()}]</seg>' for i, line in enumerate(text.splitlines()) if line.strip()])
         return f"[{text}]"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -396,8 +415,10 @@ def test_translate_pdf_inplace_fine_end_to_end(tmp_path, monkeypatch):
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
-            lines = [f"[{i+1}] {line.split(' ', 1)[1][::-1]}" for i, line in enumerate(text.splitlines()) if line.strip()]
-            return "\n".join(lines)
+            matches = re.findall(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', text)
+            if matches:
+                return "\n".join([f'<seg id="{idx}">{val.strip()[::-1]}</seg>' for idx, val in matches])
+            return "\n".join([f'<seg id="{i+1}">{line.strip()[::-1]}</seg>' for i, line in enumerate(text.splitlines()) if line.strip()])
         return text[::-1]
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -445,8 +466,10 @@ def test_translate_pdf_inplace_fine_clips_overflow_without_crashing(tmp_path, mo
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
-            lines = [f"[{i+1}] TRANSLATED-{line.split(' ', 1)[1]}-VERY-LONG-OUTPUT" for i, line in enumerate(text.splitlines()) if line.strip()]
-            return "\n".join(lines)
+            matches = re.findall(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', text)
+            if matches:
+                return "\n".join([f'<seg id="{idx}">TRANSLATED-{val.strip()}-VERY-LONG-OUTPUT</seg>' for idx, val in matches])
+            return "\n".join([f'<seg id="{i+1}">TRANSLATED-{line.strip()}-VERY-LONG-OUTPUT</seg>' for i, line in enumerate(text.splitlines()) if line.strip()])
         return f"TRANSLATED-{text}-VERY-LONG-OUTPUT"
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)
@@ -595,8 +618,10 @@ def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
 
     def fake_call(text, source_lang, target_lang, model, is_batch=False, expected_items=1, *args, **kwargs):
         if is_batch:
-            lines = [f"[{i+1}] {japanese_text}" for i, _ in enumerate(text.splitlines()) if _.strip()]
-            return "\n".join(lines)
+            matches = re.findall(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', text)
+            if matches:
+                return "\n".join([f'<seg id="{idx}">{japanese_text}</seg>' for idx, _ in matches])
+            return "\n".join([f'<seg id="{i+1}">{japanese_text}</seg>' for i, _ in enumerate(text.splitlines()) if _.strip()])
         return japanese_text
 
     monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call)

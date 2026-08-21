@@ -135,6 +135,11 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
             countdownSeconds={planApproval.countdownSeconds}
             isAutoProceedPaused={planApproval.isAutoProceedPaused}
             autoProceedEnabled={settings?.autoProceedPlan !== false}
+            interviewQuestions={planApproval.interviewQuestions}
+            isInterviewActive={planApproval.isInterviewActive}
+            isAnalyzingInterview={planApproval.isAnalyzingInterview}
+            onConfirmInterview={planApproval.confirmInterviewAnswers}
+            onSkipInterview={planApproval.skipInterviewWithRecommended}
             onApprove={planApproval.handleApprovePlan}
             onReject={planApproval.handleRejectPlan}
             onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused(!planApproval.isAutoProceedPaused)}

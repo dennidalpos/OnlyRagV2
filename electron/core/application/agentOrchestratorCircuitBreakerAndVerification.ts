@@ -79,6 +79,16 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
     }
     return
   }
+
+  if (ctx.parsedTool.tool === 'open_in_browser' && !isToolFailure) {
+    ctx.flags.hasVerifiedBuild = true
+    const activeM = ctx.goalPlanner.getActiveMilestone()
+    if (activeM && activeM.status !== 'verified') {
+      ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Verified by launching browser preview.')
+    }
+    return
+  }
+
   if (ctx.parsedTool.tool !== 'run_command') return
 
   // A successful build/typecheck/lint still satisfies the Definition of Done gate for

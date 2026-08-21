@@ -169,6 +169,12 @@ const api: IElectronAPI = {
   uninstallSkill: (skillId: string, workspaceRoot?: string) => ipcRenderer.invoke('skills:uninstall', skillId, workspaceRoot),
   /** SLM Agent Studio: trigger log anomaly scan; returns structured diagnostic report. */
   agentLogsAnalyze: (extraPaths?: string[]) => ipcRenderer.invoke('agent:logs-analyze', extraPaths),
+  /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
+  agentPlanInterview: (prompt: string, model: string | undefined, settings: AppSettings) =>
+    ipcRenderer.invoke('agent:plan-interview', prompt, model, settings),
+  /** Enriches prompt with user's confirmed interview answers. */
+  agentPlanEnrichPrompt: (prompt: string, answers: any[]) =>
+    ipcRenderer.invoke('agent:plan-enrich-prompt', prompt, answers),
   /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
   agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[]) =>
     ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, pendingResidueMilestones),

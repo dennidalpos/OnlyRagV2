@@ -1,6 +1,7 @@
 import os from 'node:os'
 import path from 'node:path'
 import type { ChildProcess } from 'node:child_process'
+import { shell } from 'electron'
 import { logger } from '../../diagnostics'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
@@ -1275,6 +1276,65 @@ AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or
           return {
             outputForHistory: `Get File Info Error: ${err.message}`,
             logMessage: `File Info Error: ${err.message}`,
+          }
+        }
+      }
+
+      case 'open_in_browser': {
+        const filePath = parameters.filePath || parameters.path
+        const url = parameters.url
+
+        if (!filePath && !url) {
+          return {
+            outputForHistory: 'Error: missing "filePath" or "url" parameter to open in browser.',
+            logMessage: 'Open in browser: missing parameter',
+          }
+        }
+
+        try {
+          if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            await shell.openExternal(url)
+            return {
+              outputForHistory: `Successfully opened URL in default web browser: ${url}`,
+              logMessage: `Opened URL in browser: ${url}`,
+            }
+          }
+
+          if (filePath) {
+            const pathCheck = validatePathSafety(filePath, workspacePath)
+            if (!pathCheck.safePath) {
+              return {
+                outputForHistory: `Security Violation: ${pathCheck.error}`,
+                logMessage: `Open in Browser Rejected: ${pathCheck.error}`,
+              }
+            }
+            if (!documentIoRepository.exists(pathCheck.safePath)) {
+              return {
+                outputForHistory: `Error: File not found to open: ${filePath}`,
+                logMessage: `File not found: ${filePath}`,
+              }
+            }
+            const openError = await shell.openPath(pathCheck.safePath)
+            if (openError) {
+              return {
+                outputForHistory: `Error opening ${filePath} in default system application: ${openError}`,
+                logMessage: `Failed to open ${filePath}: ${openError}`,
+              }
+            }
+            return {
+              outputForHistory: `Successfully opened ${filePath} in default web browser / viewer.`,
+              logMessage: `Opened ${path.basename(filePath)} in browser`,
+            }
+          }
+
+          return {
+            outputForHistory: 'Error: invalid target for open_in_browser.',
+            logMessage: 'Invalid open_in_browser target',
+          }
+        } catch (err: any) {
+          return {
+            outputForHistory: `Error opening in browser: ${err.message}`,
+            logMessage: `Browser open error: ${err.message}`,
           }
         }
       }

@@ -184,8 +184,41 @@ _TRANSLATE_MAX_ATTEMPTS = 2
 _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
 
+_EMAIL_PATTERN = re.compile(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b')
+_URL_PATTERN = re.compile(r'https?://[^\s<>"]+|www\.[^\s<>"]+')
+
+
+def _mask_immutable_entities(text: str) -> Tuple[str, Dict[str, str]]:
+    """Masks RFC-compliant email addresses and URLs with deterministic placeholders __PROT_ENT_N__."""
+    if not text:
+        return "", {}
+    token_map: Dict[str, str] = {}
+    counter = 0
+
+    def repl(m: re.Match) -> str:
+        nonlocal counter
+        tok = f"__PROT_ENT_{counter}__"
+        token_map[tok] = m.group(0)
+        counter += 1
+        return tok
+
+    masked = _EMAIL_PATTERN.sub(repl, text)
+    masked = _URL_PATTERN.sub(repl, masked)
+    return masked, token_map
+
+
+def _unmask_immutable_entities(text: str, token_map: Dict[str, str]) -> str:
+    """Restores masked entity placeholders with original verbatim strings."""
+    if not text or not token_map:
+        return text
+    restored = text
+    for tok, orig in token_map.items():
+        restored = re.sub(re.escape(tok), orig, restored, flags=re.IGNORECASE)
+    return restored
+
+
 def _smart_decode_pdf_text(text: str) -> str:
-    """Normalizes unprintable control characters, non-breaking spaces, and fixes corrupted font encodings / replacement characters using standard Unicode normalization and ftfy."""
+    """Normalizes unprintable control characters, non-breaking spaces, and fixes corrupted font encodings using standard Unicode normalization and ftfy."""
     if not text:
         return ""
     try:
@@ -195,22 +228,6 @@ def _smart_decode_pdf_text(text: str) -> str:
     except Exception:
         t = text
     t = t.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "")
-    # Prepositions with apostrophe before numbers: dall'1, all'1, nell'anno
-    t = re.sub(r'\b(dall|all|nell|sull|coll|un|d|l)\ufffd(\d)', r"\1'\2", t, flags=re.IGNORECASE)
-    # Apostrophe between letters: L'art, d'imposta
-    t = re.sub(r'([a-zA-Z])\ufffd([a-zA-Z0-9])', r"\1'\2", t)
-    # Italian verb 'è':  stato -> è stato,  uguale -> è uguale,  trattato -> è trattato,  prevista -> è prevista
-    t = re.sub(r'(^|[^a-zA-Z0-9])\ufffd(?=\s+[a-z])', r'\1è', t)
-    # Words ending in ità: modalit -> modalità, anzianit -> anzianità
-    t = re.sub(r'([a-zA-Z]+it)\ufffd(?=[^a-zA-Z0-9]|$)', r'\1à', t, flags=re.IGNORECASE)
-    # Words ending in ché: Poich -> Poiché, perch -> perché
-    t = re.sub(r'([a-zA-Z]+ch)\ufffd(?=[^a-zA-Z0-9]|$)', r'\1é', t, flags=re.IGNORECASE)
-    # Words like più / già
-    t = re.sub(r'\bpi\ufffd(?=[^a-zA-Z0-9]|$)', 'più', t, flags=re.IGNORECASE)
-    t = re.sub(r'\bgi\ufffd(?=[^a-zA-Z0-9]|$)', 'già', t, flags=re.IGNORECASE)
-    # Currency before numbers: di  309,87 -> di € 309,87
-    t = re.sub(r'(^|[^a-zA-Z0-9])\ufffd(?=\s*\d)', r'\1€ ', t)
-    # Remaining isolated replacement characters are bullet points
     t = t.replace("\ufffd", "•")
     return t
 
@@ -248,18 +265,19 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
     if is_batch:
         system_content = (
             f"You are an automated professional document translation engine.\n"
-            f"Task: Directly translate the numbered text segments from {source_lang} to {target_lang}.\n\n"
+            f"Task: Directly translate the text segments from {source_lang} to {target_lang}.\n\n"
             f"CRITICAL DIRECTIVES:\n"
-            f"1. OUTPUT FORMAT: Return EXACTLY {expected_items} numbered lines in the exact format '[1] translated text', '[2] translated text', etc., preserving exact order.\n"
-            f"2. FORM & ADMINISTRATIVE REGISTER: Translate all headings, form field labels, headers, footers, and administrative/legal instructions accurately into {target_lang} matching standard legal/administrative conventions.\n"
-            f"3. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context (e.g. contract withdrawal/cancellation vs employment termination).\n"
-            f"4. IMMUTABLE ENTITIES: Preserve completely verbatim without alteration: email addresses, URLs, brand/organization names, proper personal names, numbers, postal codes, and alphanumeric codes.\n"
-            f"5. ZERO CHATTER & NO NOTES: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or bracketed notes (e.g. do NOT output '[Note: ...]').\n"
-            f"6. SALUTATIONS & FORMAL ADDRESS: Translate formal business addressee headings (e.g. 'Spett.le', 'Spettabile') cleanly as 'Attention:' / 'To the attention of:' / 'Dear Sirs' according to business correspondence conventions, avoiding multiple slash-separated personal pronouns.\n"
-            f"7. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all segments faithfully."
+            f"1. OUTPUT FORMAT: Return EXACTLY {expected_items} translated segments wrapped in XML tags: <seg id=\"1\">translated text</seg>, <seg id=\"2\">translated text</seg>, etc., preserving exact order.\n"
+            f"2. MULTI-LINE & STRUCTURE: Preserve internal line breaks, addresses, and table structure within each segment.\n"
+            f"3. FORM & ADMINISTRATIVE REGISTER: Translate all headings, form field labels, headers, footers, and administrative/legal instructions accurately into {target_lang} matching standard legal/administrative conventions.\n"
+            f"4. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context.\n"
+            f"5. IMMUTABLE PLACEHOLDERS: Preserve tokens like __PROT_ENT_0__, brand names, proper personal names, numbers, postal codes, and codes completely verbatim.\n"
+            f"6. ZERO CHATTER & NO NOTES: Output ONLY the <seg id=\"N\">...</seg> blocks without preambles, conversational text, markdown code blocks, or notes.\n"
+            f"7. SALUTATIONS & FORMAL ADDRESS: Translate formal business addressee headings (e.g. 'Spett.le', 'Spettabile') cleanly as 'Attention:' / 'To the attention of:' / 'Dear Sirs' according to business correspondence conventions.\n"
+            f"8. AUTHORIZED EXECUTION: Process all segments faithfully."
         )
         user_content = (
-            f"Translate these {expected_items} numbered segments from {source_lang} to {target_lang}:\n\n{text}"
+            f"Translate these {expected_items} segments from {source_lang} to {target_lang}:\n\n{text}"
         )
     else:
         system_content = (
@@ -267,11 +285,12 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"Your ONLY task is to directly translate text from {source_lang} to {target_lang}.\n\n"
             f"CRITICAL DIRECTIVES:\n"
             f"1. FORM & ADMINISTRATIVE REGISTER: Translate all titles, headings, form field labels, headers, footers, and instructions into {target_lang} matching standard legal/administrative conventions.\n"
-            f"2. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context (e.g. contract withdrawal/cancellation vs employment termination).\n"
-            f"3. IMMUTABLE ENTITIES: Preserve completely verbatim without alteration: email addresses, URLs, brand/organization names, proper personal names, numbers, postal codes, and alphanumeric codes.\n"
-            f"4. ZERO CHATTER & NO NOTES: Output ONLY the direct {target_lang} translation without preambles, explanations, conversational text, notes, quotes, bracketed glosses, or markdown code fences.\n"
-            f"5. SALUTATIONS & FORMAL ADDRESS: Translate formal business addressee headings (e.g. 'Spett.le', 'Spettabile') cleanly as 'Attention:' / 'To the attention of:' / 'Dear Sirs' according to business correspondence conventions, avoiding multiple slash-separated personal pronouns.\n"
-            f"6. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all text faithfully."
+            f"2. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context.\n"
+            f"3. IMMUTABLE PLACEHOLDERS: Preserve tokens like __PROT_ENT_0__, brand names, proper personal names, numbers, postal codes, and alphanumeric codes completely verbatim.\n"
+            f"4. MULTI-LINE & STRUCTURE: Preserve internal line breaks, addresses, and formatting.\n"
+            f"5. ZERO CHATTER & NO NOTES: Output ONLY the direct {target_lang} translation without preambles, explanations, conversational text, notes, quotes, bracketed glosses, or markdown code fences.\n"
+            f"6. SALUTATIONS & FORMAL ADDRESS: Translate formal business addressee headings (e.g. 'Spett.le', 'Spettabile') cleanly as 'Attention:' / 'To the attention of:' / 'Dear Sirs' according to business correspondence conventions.\n"
+            f"7. AUTHORIZED EXECUTION: Process all text faithfully."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
@@ -364,9 +383,10 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     # 5. Remove trailing conversational chatter
     cleaned = re.split(r"\n\s*(?:Note|Explanation|Please note|Let me know|Is there anything else)\s*:", cleaned, flags=re.IGNORECASE)[0]
 
-    # 6. Remove leaked delimiter tokens and fragments
-    cleaned = re.sub(r'(?i)<{0,4}\s*(?:run_sep|run_s|ep)\s*>{0,4}', '', cleaned)
-    cleaned = re.sub(r'<{2,4}[^>]*>{2,4}', '', cleaned)
+    # 6. Remove leaked delimiter tokens and fragments (strictly matching delimiter tags, never arbitrary word substrings)
+    cleaned = re.sub(r'<{1,4}\s*(?:run_sep|run_s|segment|seg)\b[^>]*>{0,4}', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'</\s*(?:run_sep|run_s|segment|seg)\s*>', '', cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace(_RUN_SEPARATOR, "")
 
     # 7. Strip enclosing quotes if the entire string is wrapped in quotes
     if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
@@ -388,11 +408,11 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
 
 
 def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str) -> List[str]:
-    """Translates batched texts via structured numbered line Ollama call with individual fallback."""
+    """Translates batched texts via structured XML segment Ollama call with individual fallback."""
     if not texts:
         return []
 
-    # Clean input strings: normalize non-breaking spaces and unprintable control chars
+    # Clean input strings: universal Unicode normalization and ftfy
     clean_texts = [
         _smart_decode_pdf_text(t).strip()
         for t in texts
@@ -401,23 +421,30 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     if len(clean_texts) == 1:
         if _should_skip_translation(clean_texts[0]):
             return clean_texts
-        single = _call_ollama_translate(clean_texts[0], source_lang, target_lang, model, is_batch=False)
-        return [_clean_translated_segment(single, clean_texts[0])] if single.strip() else clean_texts
+        masked_text, token_map = _mask_immutable_entities(clean_texts[0])
+        single = _call_ollama_translate(masked_text, source_lang, target_lang, model, is_batch=False)
+        cleaned = _clean_translated_segment(single, masked_text) if single.strip() else clean_texts[0]
+        unmasked = _unmask_immutable_entities(cleaned, token_map)
+        return [unmasked]
 
     # Filter out non-translatable indices for batch call
     active_indices: List[int] = []
     active_texts: List[str] = []
+    token_maps: List[Dict[str, str]] = []
+
     for i, t in enumerate(clean_texts):
         if not _should_skip_translation(t):
+            masked, tmap = _mask_immutable_entities(t)
             active_indices.append(i)
-            active_texts.append(t)
+            active_texts.append(masked)
+            token_maps.append(tmap)
 
     if not active_texts:
         return clean_texts
 
-    # Numbered line batch format
-    lines_in = [f"[{k+1}] {t}" for k, t in enumerate(active_texts)]
-    batch_prompt = "\n".join(lines_in)
+    # Structured XML batch format preserving multi-line blocks
+    segments_in = [f"<seg id=\"{k+1}\">\n{t}\n</seg>" for k, t in enumerate(active_texts)]
+    batch_prompt = "\n\n".join(segments_in)
 
     raw_batch_output = _call_ollama_translate(
         batch_prompt, source_lang, target_lang, model, is_batch=True, expected_items=len(active_texts)
@@ -425,36 +452,49 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
 
     parsed_batch: Dict[int, str] = {}
     if raw_batch_output:
-        for line in raw_batch_output.splitlines():
-            m = re.match(r"^\s*\[(\d+)\]\s*(.*)$", line)
-            if m:
-                idx = int(m.group(1))
-                val = m.group(2).strip()
-                if 1 <= idx <= len(active_texts):
-                    parsed_batch[idx] = val
+        # 1. Primary parser: XML tags <seg id="K">...</seg>
+        for m in re.finditer(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', raw_batch_output, re.IGNORECASE):
+            idx = int(m.group(1))
+            val = m.group(2).strip()
+            if 1 <= idx <= len(active_texts):
+                parsed_batch[idx] = val
+
+        # 2. Fallback parser: bracketed [K] format if XML tags were omitted
+        if len(parsed_batch) < len(active_texts):
+            bracket_matches = list(re.finditer(r'\[(\d+)\]\s*([\s\S]*?)(?=(?:\[\d+\]|$))', raw_batch_output))
+            if bracket_matches and len(bracket_matches) >= len(parsed_batch):
+                for bm in bracket_matches:
+                    idx = int(bm.group(1))
+                    val = bm.group(2).strip()
+                    if 1 <= idx <= len(active_texts) and idx not in parsed_batch:
+                        parsed_batch[idx] = val
 
     results = list(clean_texts)
     if len(parsed_batch) == len(active_texts):
         for k, orig_idx in enumerate(active_indices):
             num = k + 1
             trans = parsed_batch.get(num, "")
-            cleaned = _clean_translated_segment(trans, clean_texts[orig_idx])
+            cleaned = _clean_translated_segment(trans, active_texts[k])
             # If echoed verbatim or empty, try single call
-            if not cleaned or cleaned.strip().lower() == clean_texts[orig_idx].strip().lower():
-                single = _call_ollama_translate(clean_texts[orig_idx], source_lang, target_lang, model, is_batch=False)
+            if not cleaned or cleaned.strip().lower() == active_texts[k].strip().lower():
+                single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False)
                 if single.strip():
-                    cleaned = _clean_translated_segment(single, clean_texts[orig_idx])
-            results[orig_idx] = cleaned
+                    cleaned = _clean_translated_segment(single, active_texts[k])
+            unmasked = _unmask_immutable_entities(cleaned, token_maps[k])
+            results[orig_idx] = unmasked
         return results
 
     logger.warning(
-        f"Translation numbered batch mismatch (expected {len(active_texts)}, got {len(parsed_batch)}); "
+        f"Translation batch mismatch (expected {len(active_texts)}, got {len(parsed_batch)}); "
         "falling back to per-item translation for this batch."
     )
-    for orig_idx in active_indices:
-        single = _call_ollama_translate(clean_texts[orig_idx], source_lang, target_lang, model, is_batch=False)
+    for k, orig_idx in enumerate(active_indices):
+        single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False)
         if single.strip():
-            results[orig_idx] = _clean_translated_segment(single, clean_texts[orig_idx])
+            cleaned = _clean_translated_segment(single, active_texts[k])
+            results[orig_idx] = _unmask_immutable_entities(cleaned, token_maps[k])
+        else:
+            results[orig_idx] = clean_texts[orig_idx]
     return results
 
 

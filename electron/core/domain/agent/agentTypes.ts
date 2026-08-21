@@ -70,6 +70,7 @@ export type SupportedToolName =
   | 'ensure_tool'
   | 'update_plan'
   | 'ask'
+  | 'open_in_browser'
   | 'finish'
 
 export interface AgentToolCall {

@@ -109,12 +109,26 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 
 ---
 
+### 3.6. Pre-Flight Clarification Interview & Enriched Prompting (Claude Code Style)
+* **Moduli:** [`agentInterviewAppService.ts`](../electron/core/application/agentInterviewAppService.ts), [`PlanInterviewCard.tsx`](../src/components/coding/PlanInterviewCard.tsx), [`usePlanApproval.ts`](../src/hooks/usePlanApproval.ts)
+* **Motivazione Tecnica:** Prima di avviare la generazione automatica di un piano d'azione, richieste ambigue dell'utente su architettura, persistenza o styling richiedono una chiarificazione preliminare interattiva, fornendo opzioni mirate con default consigliato e supporto write-in.
+* **Soluzione Implementata:** Servizio application layer che interroga l'LLM locale con schema JSON rigoroso, riparato e convalidato tramite `jsonrepair`, per generare al massimo 1-2 quesiti tecnici mirati e arricchire il prompt con le scelte dell'utente prima della scomposizione in milestone.
+
+---
+
+### 3.7. Browser Preview & Local App Launcher
+* **Moduli:** [`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts), [`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts)
+* **Motivazione Tecnica:** Gli agenti di sviluppo locale non devono avviare server di sviluppo bloccanti a ciclo infinito (`run_command npm run dev`), ma devono consentire all'utente di visionare immediatamente le pagine web e le SPA statiche create nel loro browser predefinito.
+* **Soluzione Implementata:** Tool deterministico `open_in_browser` validato da `validatePathSafety`, integrato con le API native sicure di Electron (`electron.shell.openPath` per file HTML locali e `electron.shell.openExternal` per URL HTTP/HTTPS).
+
+---
+
 ## 4. Mappatura delle Sostituzioni (Refactoring da Logiche Artigianali a Librerie Standard)
 
 | Ambito | Precedente Soluzione Artigianale / Hardcoded | Sostituzione con Libreria Standard Universale | Beneficio Architetturale |
 | :--- | :--- | :--- | :--- |
 | **Normalizzazione Testo OCR** | Regex con sostituzioni hardcoded di specifici brand e parole | **`unicodedata.normalize('NFKC')`** + **`ftfy.fix_text()`** + **`SymSpell`** / **`wordfreq`** | Funziona universalmente su qualsiasi documento, marca, lingua e formato senza dizionari cablati. |
-| **Preservazione Indirizzi Email / URL** | Stringhe fisse di domini e caselle nel prompt | Pattern regex standard RFC + token protection con placeholder `__PROT_TOK_N__` | Preserva al 100% qualsiasi indirizzo email, URL o codice alfanumerico esistente. |
+| **Preservazione Indirizzi Email / URL** | Stringhe fisse di domini e caselle nel prompt | Pattern regex standard RFC + token protection con placeholder `__PROT_ENT_N__` | Preserva al 100% qualsiasi indirizzo email, URL o codice alfanumerico esistente. |
 | **Prompt di Traduzione** | Esempi hardcoded di singoli termini e contratti | Direttive semantiche universali sul registro formale/amministrativo | Riduzione del consumo di token e qualità di traduzione scalabile su ogni tipologia di testo. |
 | **Riconoscimento Saluto Chat** | Substring check hardcoded (`'local AI RAG Assistant'`) | Identificazione strutturale univoca (`m.id === '1' && m.sender === 'bot'`) | Indipendente dalla lingua o dal testo personalizzato del saluto iniziale. |
 | **Stima Token del Contesto** | Divisione euristica basata sul conteggio dei caratteri | **`gpt-tokenizer`** (`o200k_base` BPE) | Stima reale dei token coerente con l'architettura dei moderni LLM. |

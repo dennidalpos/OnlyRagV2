@@ -5,6 +5,7 @@ import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { sidecarSlmBridgeService } from '../application/sidecarSlmBridgeService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
+import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../src/types'
 
@@ -37,6 +38,27 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
   ipcMain.handle('agent:logs-analyze', async (_, extraPaths?: string[]) => {
     return sidecarSlmBridgeService.analyzeLogs(extraPaths)
   })
+
+  /**
+   * Pre-flight Clarification Interview: analyze user prompt for key architectural
+   * and implementation trade-offs (Claude Code style) before drafting a plan.
+   */
+  ipcMain.handle(
+    'agent:plan-interview',
+    async (_, prompt: string, model: string | undefined, settings: AppSettings) => {
+      return agentInterviewAppService.conductInterview(prompt, model, settings)
+    }
+  )
+
+  /**
+   * Enriches prompt with user's confirmed interview choices.
+   */
+  ipcMain.handle(
+    'agent:plan-enrich-prompt',
+    async (_, prompt: string, answers: any[]) => {
+      return agentInterviewAppService.enrichPromptWithAnswers(prompt, answers)
+    }
+  )
 
   /**
    * Plan Approval flow: draft a plan for the given prompt, routed through the

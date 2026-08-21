@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { AgentPlan, AppSettings, PlanMilestone } from '../types'
+import { AgentPlan, AppSettings, PlanMilestone, InterviewQuestion, UserInterviewAnswer } from '../types'
 import { logger } from '../lib/logger'
 
 export type { AgentPlan } from '../types'
@@ -72,6 +72,12 @@ export function usePlanApproval({
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
   const [countdownSeconds, setCountdownSeconds] = useState<number>(15)
   const [isAutoProceedPaused, setIsAutoProceedPaused] = useState<boolean>(false)
+
+  // Pre-flight Clarification Interview state (Claude Code style)
+  const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
+  const [isInterviewActive, setIsInterviewActive] = useState<boolean>(false)
+  const [isAnalyzingInterview, setIsAnalyzingInterview] = useState<boolean>(false)
+  const pendingFlowRef = useRef<{ prompt: string; targetModel?: string; currentStep: number } | null>(null)
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const requireApproval = settings?.requirePlanApproval ?? true
@@ -306,6 +312,67 @@ export function usePlanApproval({
 
   const hasApprovedPlan = planHistory.some((p) => p.status === 'approved')
 
+  const startPlanFlow = useCallback(
+    async (prompt: string, targetModel?: string, currentStep: number = 0): Promise<AgentPlan | null> => {
+      clearPlanTimer()
+      setIsAutoProceedPaused(false)
+      pendingFlowRef.current = { prompt, targetModel, currentStep }
+
+      // Check if pre-flight interview is supported and enabled
+      if (window.electronAPI?.agentPlanInterview && settings && (settings as any).enablePrePlanInterview !== false) {
+        setIsAnalyzingInterview(true)
+        try {
+          const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+          const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings)
+          setIsAnalyzingInterview(false)
+
+          if (interviewRes?.hasQuestions && interviewRes.questions && interviewRes.questions.length > 0) {
+            setInterviewQuestions(interviewRes.questions)
+            setIsInterviewActive(true)
+            return null
+          }
+        } catch (err: any) {
+          logger.warn('usePlanApproval', `agentPlanInterview failed: ${err?.message}`)
+          setIsAnalyzingInterview(false)
+        }
+      }
+
+      setIsInterviewActive(false)
+      setInterviewQuestions([])
+      return generatePlan(prompt, targetModel, currentStep)
+    },
+    [clearPlanTimer, generatePlan, settings]
+  )
+
+  const confirmInterviewAnswers = useCallback(
+    async (answers: UserInterviewAnswer[]) => {
+      setIsInterviewActive(false)
+      setInterviewQuestions([])
+      const pending = pendingFlowRef.current
+      if (!pending) return
+
+      let effectivePrompt = pending.prompt
+      if (window.electronAPI?.agentPlanEnrichPrompt && answers.length > 0) {
+        try {
+          effectivePrompt = await window.electronAPI.agentPlanEnrichPrompt(pending.prompt, answers)
+        } catch (err: any) {
+          logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message}`)
+        }
+      }
+
+      return generatePlan(effectivePrompt, pending.targetModel, pending.currentStep)
+    },
+    [generatePlan]
+  )
+
+  const skipInterviewWithRecommended = useCallback(() => {
+    setIsInterviewActive(false)
+    setInterviewQuestions([])
+    const pending = pendingFlowRef.current
+    if (!pending) return
+    return generatePlan(pending.prompt, pending.targetModel, pending.currentStep)
+  }, [generatePlan])
+
   return {
     currentPlan,
     latestActivePlan,
@@ -317,6 +384,12 @@ export function usePlanApproval({
     isAutoProceedPaused,
     setIsAutoProceedPaused,
     generatePlan,
+    startPlanFlow,
+    interviewQuestions,
+    isInterviewActive,
+    isAnalyzingInterview,
+    confirmInterviewAnswers,
+    skipInterviewWithRecommended,
     handleApprovePlan,
     handleRejectPlan,
     handleUpdatePlanText,

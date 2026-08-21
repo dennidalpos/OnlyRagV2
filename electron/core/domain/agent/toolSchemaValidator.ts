@@ -233,6 +233,19 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
     }
 
+    case 'open_in_browser': {
+      if (rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file) {
+        rawParams.filePath = String(rawParams.filePath || rawParams.path || rawParams.file || rawParams.target_file)
+      }
+      if (rawParams.url) {
+        rawParams.url = String(rawParams.url)
+      }
+      if (!rawParams.filePath && !rawParams.url) {
+        errors.push("Missing required parameter 'filePath' or 'url' for open_in_browser")
+      }
+      break
+    }
+
     case 'finish': {
       if (rawParams.summary) {
         rawParams.summary = String(rawParams.summary)

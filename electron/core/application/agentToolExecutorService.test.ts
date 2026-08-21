@@ -620,5 +620,21 @@ async def async_handler():
 
     expect(res.changeStats).toBeUndefined()
   })
+
+  it('should handle open_in_browser parameter validation and missing target', async () => {
+    const missingParams = await agentToolExecutorService.executeTool(
+      { tool: 'open_in_browser', parameters: {} },
+      tempDir,
+      settings
+    )
+    expect(missingParams.outputForHistory).toContain('missing "filePath" or "url"')
+
+    const missingFile = await agentToolExecutorService.executeTool(
+      { tool: 'open_in_browser', parameters: { filePath: 'nonexistent.html' } },
+      tempDir,
+      settings
+    )
+    expect(missingFile.outputForHistory).toContain('File not found to open')
+  })
 })
 

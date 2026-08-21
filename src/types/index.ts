@@ -522,6 +522,10 @@ export interface IElectronAPI {
   unloadModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
   agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
+  /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
+  agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings) => Promise<InterviewAnalysisResult>
+  /** Enriches prompt with user's confirmed interview answers. */
+  agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[]) => Promise<string>
   /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
   agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[]) => Promise<PlanGenerationResult>
   /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
@@ -530,6 +534,30 @@ export interface IElectronAPI {
   agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
   agentPlanSeed?: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string) => Promise<boolean>
+}
+
+// ---------------------------------------------------------------------------
+// Pre-flight Clarification Interview Types (Claude Code Style)
+// ---------------------------------------------------------------------------
+
+export interface InterviewQuestion {
+  id: string
+  question: string
+  options: string[]
+  recommendedIndex: number
+}
+
+export interface InterviewAnalysisResult {
+  hasQuestions: boolean
+  questions: InterviewQuestion[]
+  rawResponse?: string
+}
+
+export interface UserInterviewAnswer {
+  questionId: string
+  questionText: string
+  selectedOption: string
+  isCustom?: boolean
 }
 
 // ---------------------------------------------------------------------------

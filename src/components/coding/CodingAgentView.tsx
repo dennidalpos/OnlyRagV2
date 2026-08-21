@@ -124,7 +124,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const handleGeneratePlanFromPrompt = async () => {
     if (!c.agentPrompt.trim()) return
     c.setActiveTab('plan')
-    await planApproval.generatePlan(c.agentPrompt, undefined, c.currentStep)
+    await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
   }
 
   return (

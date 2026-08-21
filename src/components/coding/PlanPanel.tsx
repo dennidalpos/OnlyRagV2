@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
+import type { InterviewQuestion, UserInterviewAnswer } from '../../types'
 import { parsePlanChecklist, PlanChecklistItem } from './planChecklistParser'
 import { PlanPanelHeader } from './PlanPanelHeader'
 import { PlanPanelCountdownBanner } from './PlanPanelCountdownBanner'
 import { PlanPanelChecklistView } from './PlanPanelChecklistView'
 import { PlanPanelDocumentView } from './PlanPanelDocumentView'
+import { PlanInterviewCard } from './PlanInterviewCard'
 
 export type { PlanChecklistItem }
 
@@ -19,6 +21,11 @@ interface PlanPanelProps {
   countdownSeconds: number
   isAutoProceedPaused: boolean
   autoProceedEnabled: boolean
+  interviewQuestions?: InterviewQuestion[]
+  isInterviewActive?: boolean
+  isAnalyzingInterview?: boolean
+  onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
+  onSkipInterview?: () => void
   onApprove: () => void
   onReject: () => void
   onTogglePauseAutoProceed: () => void
@@ -36,6 +43,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   countdownSeconds,
   isAutoProceedPaused,
   autoProceedEnabled,
+  interviewQuestions = [],
+  isInterviewActive = false,
+  isAnalyzingInterview = false,
+  onConfirmInterview,
+  onSkipInterview,
   onApprove,
   onReject,
   onTogglePauseAutoProceed,
@@ -108,7 +120,22 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {isGenerating ? (
+        {isAnalyzingInterview ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+            <div className="font-bold text-slate-200 text-xs">Analisi del Prompt &amp; Scelte Tecniche (Claude Code style)...</div>
+            <p className="text-[11px] text-slate-400 max-w-xs">
+              L'AI sta valutando se ci sono trade-off architetturali da confermare prima di generare la checklist.
+            </p>
+          </div>
+        ) : isInterviewActive && interviewQuestions.length > 0 ? (
+          <PlanInterviewCard
+            questions={interviewQuestions}
+            onConfirm={onConfirmInterview || (() => {})}
+            onSkipWithRecommended={onSkipInterview || (() => {})}
+            isGenerating={isGenerating}
+          />
+        ) : isGenerating ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
             <div className="font-bold text-slate-200 text-xs">Generazione del Piano (v{planHistory.length + 1}) in corso...</div>

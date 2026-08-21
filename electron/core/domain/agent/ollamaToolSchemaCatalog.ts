@@ -133,6 +133,10 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   tool('ask', 'Ask the user a clarifying question and pause execution for their answer.', {
     question: { type: 'string', description: 'The question to ask the user.' },
   }, ['question']),
+  tool('open_in_browser', 'Open a local HTML/web file or URL directly in the user\'s default web browser or application viewer for preview.', {
+    filePath: { type: 'string', description: 'Path to local file (e.g. index.html) to open in browser.' },
+    url: { type: 'string', description: 'Optional http/https URL to open.' },
+  }),
   tool('finish', 'Signal that the task is complete and provide a final summary.', {
     summary: { type: 'string', description: 'Final summary of what was accomplished.' },
   }, ['summary']),

@@ -1,6 +1,4 @@
 import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
 import { logger } from '../../diagnostics'
 import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
@@ -12,22 +10,23 @@ import type { AppSettings } from '../../../src/types'
  * (unless running standalone), and ensures the resolved directory exists on disk.
  */
 export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspacePath' | 'isStandaloneMode'>): string | null {
-  let workspacePath = payload.workspacePath || null
-  if (workspacePath && isProtectedSystemDirectory(workspacePath)) {
-    logger.log('WARN', 'AgentOrchestratorApp', `Provided workspace '${workspacePath}' is in a protected system directory. Falling back to User Desktop workspace.`)
-    workspacePath = path.join(os.homedir(), 'Desktop', 'test_app')
-  } else if (!workspacePath && !payload.isStandaloneMode) {
-    const desktopTestApp = path.join(os.homedir(), 'Desktop', 'test_app')
-    if (fs.existsSync(desktopTestApp)) {
-      workspacePath = desktopTestApp
+  const rawPath = payload.workspacePath ? payload.workspacePath.trim() : null
+  if (!rawPath) {
+    return null
+  }
+  if (isProtectedSystemDirectory(rawPath)) {
+    logger.log('WARN', 'AgentOrchestratorApp', `Provided workspace '${rawPath}' is inside a protected system directory.`)
+    return null
+  }
+  if (!fs.existsSync(rawPath)) {
+    try {
+      fs.mkdirSync(rawPath, { recursive: true })
+    } catch (err: any) {
+      logger.log('WARN', 'AgentOrchestratorApp', `Could not create workspace directory '${rawPath}': ${err.message}`)
+      return null
     }
   }
-  if (workspacePath && !fs.existsSync(workspacePath)) {
-    try {
-      fs.mkdirSync(workspacePath, { recursive: true })
-    } catch {}
-  }
-  return workspacePath
+  return rawPath
 }
 
 /** Fallback settings used only when the caller (renderer) didn't supply any. */

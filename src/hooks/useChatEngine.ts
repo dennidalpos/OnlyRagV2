@@ -6,6 +6,7 @@ import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { resolveChatContextBudget, resolveChatThreadCount } from '../services/chatContextBudget'
+import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
 
@@ -201,20 +202,19 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
-    // Capture recent history before adding the new user message. Both the turn count and the
-    // total size are budgeted: on minimum hardware a long transcript is the single largest
-    // avoidable contributor to prompt-eval time on every subsequent message.
+    // Dynamically preserve and compact full conversation history based on detected hardware profile.
+    // Preserves 100% of historical dialogue via rolling synopsis when over budget without hardcoded drop caps.
     const budget = budgetRef.current
-    const previousTurnsRaw = messages
-      .slice(1) // skip generic greeting
-      .filter((m) => m.text && m.text.trim())
-      .slice(-budget.historyTurns)
-      .map((m) => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
-      .join('\n\n')
-    // Trim from the front so the most recent exchanges always survive the cap.
-    const previousTurns = previousTurnsRaw.length > budget.historyChars
-      ? previousTurnsRaw.slice(-budget.historyChars)
-      : previousTurnsRaw
+    const hasSelectedDocs = selectedDocIds.size > 0
+    const compactionResult = compactChatHistory(messages, budget, hasSelectedDocs)
+    const previousTurns = compactionResult.historyBlock
+
+    if (compactionResult.isCompacted) {
+      logger.info(
+        'ChatEngine',
+        `Conversation history compacted: ${compactionResult.totalOriginalChars} -> ${compactionResult.finalChars} chars (${compactionResult.summarizedTurnsCount} summarized turns, ${compactionResult.verbatimTurnsCount} verbatim turns)`
+      )
+    }
 
     setMessages((prev) => [...prev, userMsg, botMsg])
     setIsGenerating(true)
@@ -229,12 +229,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       let vectorContextText = ''
       let citationSources: CitationSource[] = []
-      const scopedDocIds = selectedDocIds.size > 0 ? Array.from(selectedDocIds) : undefined
+      const scopedDocIds = hasSelectedDocs ? Array.from(selectedDocIds) : undefined
 
-      // Retrieval requires BOTH an explicit document selection AND a non-chitchat message
-      // (routingResult.requiresRetrieval) — otherwise a "grazie"/"ciao" follow-up while docs
-      // are still selected would run a pointless vector search and surface irrelevant citations.
-      if (scopedDocIds && scopedDocIds.length > 0 && routingResult.requiresRetrieval) {
+      // Retrieval runs ONLY when documents are explicitly selected and the query is non-chitchat
+      if (hasSelectedDocs && routingResult.requiresRetrieval) {
         try {
           const searchResults = await apiService.searchVectorDb(
             userText,
@@ -294,9 +292,22 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       const effectivePromptObj = getEffectivePrompt('chat', modelToUse, settings)
       const effectiveSystemPrompt = effectivePromptObj.prompt
 
-      const systemPromptWithContext = boundedContext
-        ? `${effectiveSystemPrompt}\n\n[CONTESTO DOCUMENTI INDICIZZATI (LanceDB)]\n${boundedContext}\n[FINE CONTESTO]`
-        : effectiveSystemPrompt
+      const now = new Date()
+      const formattedDate = now.toLocaleDateString('it-IT', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+      const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const temporalContext = `[TEMPORAL CONTEXT]\nData e ora corrente del sistema: ${now.toISOString().split('T')[0]} (${formattedDate}, ${formattedTime})\nUsa sempre queste informazioni temporali per rispondere a domande relative alla data odierna, giorno corrente, mese o anno.`
+
+      const promptSections = [
+        effectiveSystemPrompt,
+        temporalContext,
+        boundedContext ? `[CONTESTO DOCUMENTI INDICIZZATI (LanceDB)]\n${boundedContext}\n[FINE CONTESTO]` : '',
+      ].filter(Boolean)
+      const systemPromptWithContext = promptSections.join('\n\n')
 
       // Assemble full multi-turn prompt
       const promptParts = [systemPromptWithContext]

@@ -77,6 +77,10 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
     ? `PRIMARY OVERALL GOAL / PROJECT SPECIFICATION:\n"""\n${initialUserTask.trim()}\n"""\n\nCURRENT TURN INSTRUCTION / FOLLOW-UP ANSWER:\n"""\n${userTask.trim()}\n"""`
     : userTask.trim()
 
+  const now = new Date()
+  const formattedDate = now.toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const currentDate = `${now.toISOString().split('T')[0]} (${formattedDate})`
+
   // Priority 1: Base System Prompt & User Goal Guidelines (Mandatory intact).
   // Family-agnostic: selected by complexity tier, not by model family (see B2).
   // Deliberately excludes the per-turn step counter (see turnSuffix below) so this
@@ -87,6 +91,7 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
       agentMode: agentMode.toUpperCase(),
       userTask: effectiveTaskText,
       workspacePath: isStandaloneMode ? 'Standalone (No Workspace)' : (workspacePath || 'No Folder Selected'),
+      currentDate,
     },
     settings,
     toolCallingCapable

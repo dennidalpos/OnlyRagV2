@@ -202,6 +202,15 @@ export async function runAgentOrchestratorLoop(
     clearSessionTimeout,
   } = boot
 
+  if (!workspacePath && !isStandaloneMode) {
+    const errorMsg = 'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
+    emitLog('info', `❌ Errore Workspace: ${errorMsg}`)
+    emitDone(false, errorMsg)
+    clearSessionTimeout()
+    finalizeSession()
+    return { success: false, summary: errorMsg }
+  }
+
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
 

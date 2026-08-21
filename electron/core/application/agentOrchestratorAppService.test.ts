@@ -684,4 +684,19 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     // Exactly one interception: turn 1 write, turn 2 blocked finish, turn 3 accepted finish.
     expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(3)
   })
+
+  it('should immediately fail-fast and inform user if workspace is not specified and not in standalone mode', async () => {
+    const res = await runAgentOrchestratorLoop(
+      {
+        userTask: 'Create a new React project',
+        agentMode: 'agent',
+        workspacePath: undefined,
+        isStandaloneMode: false,
+      },
+      null
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.summary).toContain('Nessuna cartella di progetto / workspace specificata')
+  })
 })

@@ -113,7 +113,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
 
   const compactionResult = HeuristicContextCompactor.compile(
     {
-      systemPrompt: basePrompt.split('\n\n')[0] || basePrompt,
+      systemPrompt: assembled.stableSection || basePrompt,
       activePlanBlock: planBlock,
       pinnedFilesBlock: ctx.pinnedFilesContextStr,
       activeFileBlock: ctx.payload.activeFile

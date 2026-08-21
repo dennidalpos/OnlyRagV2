@@ -250,37 +250,38 @@ def _find_rapidocr_config() -> Optional[str]:
     return None
 
 def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
-    """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order with multi-column support."""
+    """Groups detected OCR bounding boxes into visual lines and paragraphs in reading order with multi-column support via vectorized NumPy."""
     if not raw_results:
         return ""
 
-    boxes: List[Dict[str, Any]] = []
+    import numpy as np
+
+    extracted = []
     for item in raw_results:
         if not item or len(item) < 2:
             continue
         pts, text = item[0], str(item[1]).strip()
         if not text:
             continue
-        x0 = min(p[0] for p in pts)
-        y0 = min(p[1] for p in pts)
-        x1 = max(p[0] for p in pts)
-        y1 = max(p[1] for p in pts)
+        pts_arr = np.array(pts, dtype=np.float32)
+        x0, y0 = float(pts_arr[:, 0].min()), float(pts_arr[:, 1].min())
+        x1, y1 = float(pts_arr[:, 0].max()), float(pts_arr[:, 1].max())
         h = max(1.0, y1 - y0)
         cy = (y0 + y1) / 2.0
-        boxes.append({
+        extracted.append({
             "x0": x0, "y0": y0, "x1": x1, "y1": y1,
             "h": h, "cy": cy, "text": text
         })
 
-    if not boxes:
+    if not extracted:
         return ""
 
-    # Sort top-to-bottom
-    boxes.sort(key=lambda b: (b["y0"], b["x0"]))
+    # Sort top-to-bottom, left-to-right
+    extracted.sort(key=lambda b: (b["y0"], b["x0"]))
 
-    # Cluster horizontally aligned boxes into lines
+    # Cluster horizontally aligned boxes into visual lines
     lines: List[Dict[str, Any]] = []
-    for b in boxes:
+    for b in extracted:
         matched_line = None
         for line in lines:
             line_cy = line["cy"]

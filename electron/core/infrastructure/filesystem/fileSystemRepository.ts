@@ -1,5 +1,6 @@
 import path from 'node:path'
 import fs from 'node:fs'
+import * as ts from 'typescript'
 import { logger } from '../../../diagnostics'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
 
@@ -341,83 +342,91 @@ export class FileSystemRepository {
       }
 
       const rawContent = await fs.promises.readFile(resolved, 'utf-8')
-      const lines = rawContent.split(/\r?\n/)
       const ext = path.extname(resolved).toLowerCase()
       const symbols: CodeSymbolItem[] = []
       const normFilter = filterKind ? filterKind.toLowerCase().trim() : null
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) {
-          continue
+      if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+        const sourceFile = ts.createSourceFile(
+          resolved,
+          rawContent,
+          ts.ScriptTarget.Latest,
+          true,
+          ext === '.tsx' || ext === '.jsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+        )
+
+        const visit = (node: ts.Node) => {
+          const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+          const lineNum = line + 1
+
+          if (ts.isFunctionDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'function', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isClassDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'class', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isInterfaceDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'interface', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isTypeAliasDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'type', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isEnumDeclaration(node) && node.name) {
+            const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+            symbols.push({ name: node.name.text, kind: 'enum', startLine: lineNum, signature: firstLine.slice(0, 160) })
+          } else if (ts.isVariableStatement(node)) {
+            for (const decl of node.declarationList.declarations) {
+              if (
+                ts.isIdentifier(decl.name) &&
+                decl.initializer &&
+                (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
+              ) {
+                const firstLine = node.getText(sourceFile).split(/\r?\n/)[0].trim()
+                symbols.push({ name: decl.name.text, kind: 'function', startLine: lineNum, signature: firstLine.slice(0, 160) })
+              }
+            }
+          }
+
+          ts.forEachChild(node, visit)
         }
 
-        const lineNum = i + 1
-
-        // TypeScript / JavaScript / React (.ts, .tsx, .js, .jsx, .mjs, .cjs)
-        if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
-          const fnMatch = line.match(/(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)\s*(?:<[^>]+>)?\s*\(([^)]*)\)/)
-          if (fnMatch) {
-            symbols.push({ name: fnMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+        visit(sourceFile)
+      } else {
+        const lines = rawContent.split(/\r?\n/)
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          const trimmed = line.trim()
+          if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('#')) {
             continue
           }
 
-          const arrowMatch = line.match(/(?:export\s+)?(?:const|let|var)\s+([a-zA-Z0-9_$]+)\s*(?::\s*[^=]+)?\s*=\s*(?:async\s*)?(?:<[^>]+>)?\s*\(([^)]*)\)\s*(?::\s*[^=]+)?\s*=>/)
-          if (arrowMatch) {
-            symbols.push({ name: arrowMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
+          const lineNum = i + 1
 
-          const classMatch = line.match(/(?:export\s+(?:default\s+)?)?(?:abstract\s+)?class\s+([a-zA-Z0-9_$]+)/)
-          if (classMatch) {
-            symbols.push({ name: classMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
+          if (ext === '.py') {
+            const pyClassMatch = line.match(/^\s*class\s+([a-zA-Z0-9_]+)/)
+            if (pyClassMatch) {
+              symbols.push({ name: pyClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
 
-          const interfaceMatch = line.match(/(?:export\s+)?interface\s+([a-zA-Z0-9_$]+)/)
-          if (interfaceMatch) {
-            symbols.push({ name: interfaceMatch[1], kind: 'interface', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
+            const pyDefMatch = line.match(/^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/)
+            if (pyDefMatch) {
+              const isMethod = line.startsWith('    ') || line.startsWith('\t')
+              symbols.push({ name: pyDefMatch[1], kind: isMethod ? 'method' : 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
+          } else if (['.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.java'].includes(ext)) {
+            const genClassMatch = line.match(/(?:class|struct|interface|trait|enum)\s+([a-zA-Z0-9_]+)/)
+            if (genClassMatch) {
+              symbols.push({ name: genClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
 
-          const typeMatch = line.match(/(?:export\s+)?type\s+([a-zA-Z0-9_$]+)(?:<[^>]+>)?\s*=/)
-          if (typeMatch) {
-            symbols.push({ name: typeMatch[1], kind: 'type', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
-
-          const enumMatch = line.match(/(?:export\s+)?enum\s+([a-zA-Z0-9_$]+)/)
-          if (enumMatch) {
-            symbols.push({ name: enumMatch[1], kind: 'enum', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
-        } else if (ext === '.py') {
-          // Python (.py)
-          const pyClassMatch = line.match(/^\s*class\s+([a-zA-Z0-9_]+)/)
-          if (pyClassMatch) {
-            symbols.push({ name: pyClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
-
-          const pyDefMatch = line.match(/^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/)
-          if (pyDefMatch) {
-            const isMethod = line.startsWith('    ') || line.startsWith('\t')
-            symbols.push({ name: pyDefMatch[1], kind: isMethod ? 'method' : 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
-        } else if (['.go', '.rs', '.c', '.cpp', '.h', '.hpp', '.cs', '.java'].includes(ext)) {
-          // Go / Rust / C / C++ / Java / C#
-          const genClassMatch = line.match(/(?:class|struct|interface|trait|enum)\s+([a-zA-Z0-9_]+)/)
-          if (genClassMatch) {
-            symbols.push({ name: genClassMatch[1], kind: 'class', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
-          }
-
-          const genFnMatch = line.match(/(?:func|fn|def|void|int|string|bool|async|public|private)\s+([a-zA-Z0-9_]+)\s*\(/)
-          if (genFnMatch) {
-            symbols.push({ name: genFnMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
-            continue
+            const genFnMatch = line.match(/(?:func|fn|def|void|int|string|bool|async|public|private)\s+([a-zA-Z0-9_]+)\s*\(/)
+            if (genFnMatch) {
+              symbols.push({ name: genFnMatch[1], kind: 'function', startLine: lineNum, signature: trimmed.slice(0, 160) })
+              continue
+            }
           }
         }
       }

@@ -3,6 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
+import stripAnsi from 'strip-ansi'
 import { logger } from '../../../diagnostics'
 
 export interface ActiveTask {
@@ -324,7 +325,7 @@ export class TaskRunner {
               isCompleted = true
               clearTimeout(timeoutTimer)
               logger.log('INFO', 'TaskRunner', `node-pty PowerShell process PID ${ptyProcess.pid} finished with exit code ${exitCode}`)
-              const cleanOutput = outputText.replace(/\x1b\[[0-9;]*[a-zA-K]/g, '').trim()
+              const cleanOutput = stripAnsi(outputText).trim()
               resolve({
                 success: exitCode === 0,
                 output: cleanOutput || (exitCode === 0 ? 'Command executed successfully.' : `Process exited with code ${exitCode}`),

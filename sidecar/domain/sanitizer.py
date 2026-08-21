@@ -1,5 +1,6 @@
 import re
 import unicodedata
+import ftfy
 
 # Regex to identify ASCII/ANSI control characters (excluding newline \n, tab \t, carriage return \r)
 _CONTROL_CHAR_REGEX = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]')
@@ -10,6 +11,7 @@ _PUA_REGEX = re.compile(r'[\ue000-\uf8ff\U000f0000-\U000ffffd\U00100000-\U0010ff
 def sanitize_extracted_text(text: str) -> str:
     """
     Comprehensive sanitization of extracted document text from PDF / OCR engines:
+    - Automatically fixes mojibake and broken encoding via ftfy
     - Replaces font bullet PUA symbols (\uf0b7, \uf0a7, etc.) with markdown bullet points
     - Replaces non-breaking spaces (\xa0) with standard spaces
     - Cleans Private Use Area (PUA) unicode artifacts and corrupted font glyphs
@@ -19,6 +21,12 @@ def sanitize_extracted_text(text: str) -> str:
     """
     if not text:
         return ""
+
+    # Fix broken encodings, mojibake, and mixed UTF-8 artifacts
+    try:
+        text = ftfy.fix_text(text)
+    except Exception:
+        pass
 
     # Normalize Unicode form to NFC
     text = unicodedata.normalize("NFC", text)

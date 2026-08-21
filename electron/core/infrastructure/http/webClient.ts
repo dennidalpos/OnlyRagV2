@@ -3,6 +3,8 @@ import https from 'node:https'
 import fs from 'node:fs'
 import path from 'node:path'
 import { URL } from 'node:url'
+import TurndownService from 'turndown'
+import * as cheerio from 'cheerio'
 import { logger } from '../../../diagnostics'
 import { validatePathSafety } from '../../domain/agent/contextFilter'
 
@@ -12,81 +14,101 @@ export interface WebSearchResultItem {
   snippet: string
 }
 
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+})
+turndownService.remove(['script', 'style', 'noscript', 'nav', 'footer', 'iframe'] as (keyof HTMLElementTagNameMap)[])
+
 export function htmlToCleanMarkdown(html: string): string {
   if (!html || typeof html !== 'string') return ''
 
-  let text = html
-  // 1. Remove script, style, svg, noscript, nav, header, footer blocks
-  text = text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-  text = text.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-  text = text.replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, '')
-  text = text.replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-  text = text.replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+  try {
+    const $ = cheerio.load(html)
+    // 1. Remove non-content elements
+    $('script, style, svg, noscript, nav, footer, iframe, header').remove()
 
-  // 2. Convert common markdown structural tags
-  text = text.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n')
-  text = text.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n')
-  text = text.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n')
-  text = text.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n#### $1\n')
-  text = text.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n')
-  text = text.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
-  text = text.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1')
-  text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n$1\n')
-  text = text.replace(/<br\s*\/?>/gi, '\n')
-  text = text.replace(/<hr\s*\/?>/gi, '\n---\n')
-
-  // 3. Strip remaining HTML tags
-  text = text.replace(/<[^>]+>/g, ' ')
-
-  // 4. Decode common HTML entities
-  text = text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-
-  // 5. Clean excessive whitespace and empty lines
-  text = text.replace(/[ \t]+/g, ' ')
-  text = text.replace(/\n\s*\n\s*\n+/g, '\n\n')
-  return text.trim()
+    const bodyHtml = $('body').html() || $.html()
+    const md = turndownService.turndown(bodyHtml)
+    return md.replace(/\n\s*\n\s*\n+/g, '\n\n').trim()
+  } catch {
+    // Robust fallback
+    return html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/[ \t]+/g, ' ')
+      .trim()
+  }
 }
 
 export function parseDuckDuckGoHtmlResults(html: string, maxResults: number = 8): WebSearchResultItem[] {
   const results: WebSearchResultItem[] = []
   if (!html) return results
 
-  // Generic link and snippet extraction fallback
-  const snippetMatches = [...html.matchAll(/<a[^>]+class="result__snippet[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
-  const titleMatches = [...html.matchAll(/<a[^>]+class="result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+  try {
+    const $ = cheerio.load(html)
+    const items = $('.result, .results_links, .web-result')
 
-  for (let i = 0; i < Math.min(titleMatches.length, maxResults); i++) {
-    const rawUrl = titleMatches[i][1] || ''
-    const rawTitle = titleMatches[i][2] || ''
-    const rawSnippet = snippetMatches[i] ? snippetMatches[i][2] : ''
+    if (items.length > 0) {
+      items.each((_, el) => {
+        if (results.length >= maxResults) return false
+        const titleEl = $(el).find('.result__a, .result__title a, a.result__url').first()
+        const snippetEl = $(el).find('.result__snippet, .result__snippet-wrapper').first()
+        const rawUrl = titleEl.attr('href') || ''
+        const rawTitle = titleEl.text().trim()
+        const snippet = snippetEl.text().trim()
 
-    // Clean DDG redirect url if present (e.g. //duckduckgo.com/l/?uddg=...)
-    let cleanUrl = rawUrl
-    try {
-      if (rawUrl.includes('uddg=')) {
-        const u = new URL(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`)
-        const uddg = u.searchParams.get('uddg')
-        if (uddg) cleanUrl = decodeURIComponent(uddg)
-      }
-    } catch {}
+        let cleanUrl = rawUrl
+        try {
+          if (rawUrl.includes('uddg=')) {
+            const u = new URL(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`)
+            const uddg = u.searchParams.get('uddg')
+            if (uddg) cleanUrl = decodeURIComponent(uddg)
+          }
+        } catch {}
 
-    const title = htmlToCleanMarkdown(rawTitle)
-    const snippet = htmlToCleanMarkdown(rawSnippet)
-
-    if (title && cleanUrl) {
-      results.push({
-        title,
-        url: cleanUrl,
-        snippet: snippet || title,
+        if (rawTitle && cleanUrl) {
+          results.push({
+            title: rawTitle,
+            url: cleanUrl,
+            snippet: snippet || rawTitle,
+          })
+        }
       })
     }
+
+    if (results.length === 0) {
+      const snippetMatches = [...html.matchAll(/<a[^>]+class="result__snippet[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+      const titleMatches = [...html.matchAll(/<a[^>]+class="result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+
+      for (let i = 0; i < Math.min(titleMatches.length, maxResults); i++) {
+        const rawUrl = titleMatches[i][1] || ''
+        const rawTitle = $(titleMatches[i][2]).text() || titleMatches[i][2]
+        const rawSnippet = snippetMatches[i] ? $(snippetMatches[i][2]).text() : ''
+
+        let cleanUrl = rawUrl
+        try {
+          if (rawUrl.includes('uddg=')) {
+            const u = new URL(rawUrl.startsWith('http') ? rawUrl : `https:${rawUrl}`)
+            const uddg = u.searchParams.get('uddg')
+            if (uddg) cleanUrl = decodeURIComponent(uddg)
+          }
+        } catch {}
+
+        const title = rawTitle.trim()
+        const snippet = (rawSnippet || rawTitle).trim()
+
+        if (title && cleanUrl) {
+          results.push({
+            title,
+            url: cleanUrl,
+            snippet: snippet || title,
+          })
+        }
+      }
+    }
+  } catch (e) {
+    logger.log('WARN', 'WebClient', `Failed parsing DDG html results: ${e}`)
   }
 
   return results

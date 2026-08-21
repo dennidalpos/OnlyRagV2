@@ -88,4 +88,75 @@ describe('FileSystemRepository Unit Tests', () => {
     expect(delRes.success).toBe(true)
     expect(fs.existsSync(subDir)).toBe(false)
   })
+
+  it('should extract TypeScript symbols via AST correctly', async () => {
+    const tsFile = path.join(tempDir, 'sample.ts')
+    const content = `
+      export interface User {
+        id: string;
+        name: string;
+      }
+
+      export type UserId = string;
+
+      export enum Status {
+        Active = 'active',
+        Inactive = 'inactive'
+      }
+
+      export class AuthService {
+        login() {}
+      }
+
+      export function calculateTotal(a: number, b: number): number {
+        return a + b;
+      }
+
+      export const formatCurrency = (amount: number) => '$' + amount;
+    `
+    fs.writeFileSync(tsFile, content, 'utf-8')
+
+    const res = await repo.extractCodeSymbols(tsFile)
+    expect(res.success).toBe(true)
+    expect(res.symbols).toBeDefined()
+
+    const names = res.symbols!.map((s) => s.name)
+    expect(names).toContain('User')
+    expect(names).toContain('UserId')
+    expect(names).toContain('Status')
+    expect(names).toContain('AuthService')
+    expect(names).toContain('calculateTotal')
+    expect(names).toContain('formatCurrency')
+
+    const iface = res.symbols!.find((s) => s.name === 'User')!
+    expect(iface.kind).toBe('interface')
+
+    const cls = res.symbols!.find((s) => s.name === 'AuthService')!
+    expect(cls.kind).toBe('class')
+
+    const fn = res.symbols!.find((s) => s.name === 'calculateTotal')!
+    expect(fn.kind).toBe('function')
+  })
+
+  it('should extract Python classes and functions correctly', async () => {
+    const pyFile = path.join(tempDir, 'script.py')
+    const content = `
+class DataProcessor:
+    def process_data(self):
+        pass
+
+def standalone_func(x):
+    return x * 2
+`
+    fs.writeFileSync(pyFile, content, 'utf-8')
+
+    const res = await repo.extractCodeSymbols(pyFile)
+    expect(res.success).toBe(true)
+    expect(res.symbols).toBeDefined()
+
+    const names = res.symbols!.map((s) => s.name)
+    expect(names).toContain('DataProcessor')
+    expect(names).toContain('process_data')
+    expect(names).toContain('standalone_func')
+  })
 })

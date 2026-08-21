@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import matter from 'gray-matter'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import { SkillDefinition, SkillMetadata, SkillOriginType } from '../../domain/skills/skillTypes'
@@ -15,120 +16,55 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
     return { metadata: { name: 'untitled', description: '' }, body: '' }
   }
 
-  const frontmatterRegex = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/
-  const match = rawContent.match(frontmatterRegex)
+  try {
+    const parsed = matter(rawContent)
+    const data = parsed.data || {}
+    const body = (parsed.content || '').trim()
 
-  if (!match) {
+    // Helper to safely parse string array or comma-separated string
+    const toStringArray = (val: any): string[] => {
+      if (Array.isArray(val)) {
+        return val.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
+      }
+      if (typeof val === 'string' && val.trim()) {
+        return val
+          .replace(/[\[\]'"]/g, '')
+          .split(',')
+          .map((v) => v.trim().toLowerCase())
+          .filter(Boolean)
+      }
+      return []
+    }
+
+    const metadata: SkillMetadata = {
+      name: data.name ? String(data.name).trim() : 'custom-skill',
+      description: data.description ? String(data.description).trim() : '',
+      version: data.version ? String(data.version).trim() : undefined,
+      author: data.author ? String(data.author).trim() : undefined,
+      originHub: (data.originHub || data.origin_hub) ? String(data.originHub || data.origin_hub).trim() : undefined,
+      originHubId: (data.originHubId || data.origin_hub_id) ? String(data.originHubId || data.origin_hub_id).trim() : undefined,
+      originChecksum: (data.originChecksum || data.origin_checksum) ? String(data.originChecksum || data.origin_checksum).trim() : undefined,
+      isModified: data.isModified !== undefined ? Boolean(data.isModified) : (data.is_modified !== undefined ? Boolean(data.is_modified) : undefined),
+      triggers: toStringArray(data.triggers),
+      tags: toStringArray(data.tags),
+    }
+
+    // Deduplicate array fields
+    if (metadata.triggers && metadata.triggers.length > 0) {
+      metadata.triggers = Array.from(new Set(metadata.triggers))
+    }
+    if (metadata.tags && metadata.tags.length > 0) {
+      metadata.tags = Array.from(new Set(metadata.tags))
+    }
+
+    return { metadata, body }
+  } catch (err: any) {
+    logger.log('WARN', 'SkillRepo', `Failed parsing skill frontmatter with gray-matter: ${err.message}`)
     return {
       metadata: { name: 'custom-skill', description: 'Custom workspace skill' },
       body: rawContent.trim(),
     }
   }
-
-  const rawYaml = match[1]
-  const body = (match[2] || '').trim()
-  const metadata: SkillMetadata = {
-    name: 'custom-skill',
-    description: '',
-    triggers: [],
-    tags: [],
-  }
-
-  const lines = rawYaml.split(/\r?\n/)
-  let currentArrayKey: 'triggers' | 'tags' | null = null
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-
-    // Handle YAML multiline list items: "- trigger_or_tag"
-    if (trimmed.startsWith('-') && currentArrayKey) {
-      const itemVal = trimmed.replace(/^-+\s*/, '').replace(/^['"]|['"]$/g, '').trim().toLowerCase()
-      if (itemVal) {
-        if (currentArrayKey === 'triggers') {
-          if (!metadata.triggers) metadata.triggers = []
-          metadata.triggers.push(itemVal)
-        } else if (currentArrayKey === 'tags') {
-          if (!metadata.tags) metadata.tags = []
-          metadata.tags.push(itemVal)
-        }
-      }
-      continue
-    }
-
-    const colonIdx = line.indexOf(':')
-    if (colonIdx === -1) {
-      currentArrayKey = null
-      continue
-    }
-
-    const rawKey = line.slice(0, colonIdx).trim().toLowerCase().replace(/[-_]/g, '')
-    const val = line.slice(colonIdx + 1).trim()
-    const cleanVal = val.replace(/^['"]|['"]$/g, '')
-
-    if (rawKey === 'name') {
-      currentArrayKey = null
-      metadata.name = cleanVal
-    } else if (rawKey === 'description') {
-      currentArrayKey = null
-      metadata.description = cleanVal
-    } else if (rawKey === 'version') {
-      currentArrayKey = null
-      metadata.version = cleanVal
-    } else if (rawKey === 'author') {
-      currentArrayKey = null
-      metadata.author = cleanVal
-    } else if (rawKey === 'originhub') {
-      currentArrayKey = null
-      metadata.originHub = cleanVal
-    } else if (rawKey === 'originhubid') {
-      currentArrayKey = null
-      metadata.originHubId = cleanVal
-    } else if (rawKey === 'originchecksum') {
-      currentArrayKey = null
-      metadata.originChecksum = cleanVal
-    } else if (rawKey === 'ismodified') {
-      currentArrayKey = null
-      metadata.isModified = cleanVal.toLowerCase() === 'true'
-    } else if (rawKey === 'triggers') {
-      if (val) {
-        currentArrayKey = null
-        metadata.triggers = val
-          .replace(/[\[\]'"]/g, '')
-          .split(',')
-          .map((t) => t.trim().toLowerCase())
-          .filter(Boolean)
-      } else {
-        currentArrayKey = 'triggers'
-        metadata.triggers = []
-      }
-    } else if (rawKey === 'tags') {
-      if (val) {
-        currentArrayKey = null
-        metadata.tags = val
-          .replace(/[\[\]'"]/g, '')
-          .split(',')
-          .map((t) => t.trim().toLowerCase())
-          .filter(Boolean)
-      } else {
-        currentArrayKey = 'tags'
-        metadata.tags = []
-      }
-    } else {
-      currentArrayKey = null
-    }
-  }
-
-  // Deduplicate array fields
-  if (metadata.triggers && metadata.triggers.length > 0) {
-    metadata.triggers = Array.from(new Set(metadata.triggers))
-  }
-  if (metadata.tags && metadata.tags.length > 0) {
-    metadata.tags = Array.from(new Set(metadata.tags))
-  }
-
-  return { metadata, body }
 }
 
 export function serializeSkillContent(body: string, metadata: Partial<SkillMetadata>): string {

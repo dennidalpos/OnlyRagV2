@@ -1,3 +1,4 @@
+import { jsonrepair } from 'jsonrepair'
 import { logger } from '../../../diagnostics'
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
 import { validateAndSanitize } from './toolSchemaValidator'
@@ -7,53 +8,28 @@ export type { AgentToolCall }
 function sanitizeAndParseJson(raw: string): any {
   if (!raw || !raw.trim()) return null
 
-  // First attempt direct parse
+  // 1. Direct parse attempt for clean JSON
   try {
     return JSON.parse(raw)
   } catch (_) {
-    // Fallback parsing strategy for heavily quantized LLM outputs
+    // Fallback parsing strategy using jsonrepair for LLM outputs
   }
 
   try {
     let clean = raw.trim()
 
-    // 1. Strip <think>...</think> and <thought>...</thought> reasoning blocks if present
+    // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>)
     clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim()
 
-    // 2. Convert JS backtick-quoted template literal values: "key": `value` or key: `value`
-    clean = clean.replace(/:\s*`([\s\S]*?)`(?=\s*[,}\]])/g, (_match, p1) => {
-      const escaped = p1
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/\r\n|\r|\n/g, '\\n')
-        .replace(/\t/g, '\\t')
-      return `: "${escaped}"`
-    })
-
-    // 3. Fix unescaped control newlines, carriage returns, and tabs inside double-quoted strings
-    clean = clean.replace(/("(?:[^"\\]|\\.)*")/gs, (match) => {
-      return match.replace(/\r\n|\r|\n/g, '\\n').replace(/\t/g, '\\t')
-    })
-
-    // 4. Fix lone single backslashes in path fields (e.g. C:\Users\test_app -> C:\\Users\\test_app)
+    // 2. Normalize Windows file paths with single backslashes (e.g. "filePath": "C:\Users\test" -> "C:\\Users\\test")
     clean = clean.replace(/("(?:filePath|path|dirPath|target_file|file_path|filename|destination)"\s*:\s*)"([^"]*)"/gi, (_m, keyPart, pathVal) => {
       const fixedSlashes = pathVal.replace(/(?<!\\)\\(?!\\)/g, '\\\\')
       return `${keyPart}"${fixedSlashes}"`
     })
 
-    // 5. Fix remaining lone unescaped backslashes across JSON without corrupting existing \\
-    clean = clean.replace(/(?<!\\)\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4}|\\)/g, '\\\\')
-
-    // 6. Fix trailing commas before closing braces/brackets across multi-line strings
-    clean = clean.replace(/,\s*([}\]])/g, '$1')
-
-    // 7. Fix single quoted keys e.g. {'tool': ...} -> {"tool": ...}
-    clean = clean.replace(/([{,]\s*)'([^']+)'\s*:/g, '$1"$2":')
-
-    // 8. Fix single quoted values e.g. "tool": 'read_file' -> "tool": "read_file"
-    clean = clean.replace(/:\s*'([^']*)'/g, ':"$1"')
-
-    return JSON.parse(clean)
+    // 3. Battle-tested jsonrepair repairs unescaped newlines, trailing commas, single quotes, template strings, missing braces
+    const repaired = jsonrepair(clean)
+    return JSON.parse(repaired)
   } catch (err: any) {
     if (raw.trim().startsWith('{') || raw.trim().startsWith('[')) {
       logger.log('WARN', 'ToolParser', `Sanitized JSON parse failed: ${err.message}`)

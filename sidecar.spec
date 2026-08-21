@@ -11,7 +11,7 @@ datas = [
 binaries = []
 hiddenimports = []
 
-for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rapidocr_onnxruntime', 'onnxruntime']:
+for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rapidocr_onnxruntime', 'onnxruntime', 'wordfreq', 'langdetect', 'chonkie', 'ftfy', 'puremagic', 'tabulate']:
     try:
         tmp_ret = collect_all(pkg)
         datas += tmp_ret[0]

@@ -36,7 +36,7 @@ _FIGURE_VISION_PROMPT = (
 )
 
 def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
-    """Extracts tables natively from a PDF page and converts them to formatted Markdown tables."""
+    """Extracts tables natively from a PDF page and converts them to formatted Markdown tables via tabulate."""
     md_tables: List[str] = []
     table_rects: List[Any] = []
     try:
@@ -44,6 +44,17 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
         if tabs and tabs.tables:
             for tab in tabs.tables:
                 table_rects.append(tab.bbox)
+                try:
+                    df = tab.to_pandas()
+                    if df is not None and not df.empty:
+                        df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
+                        md_table = df.to_markdown(tablefmt="pipe", index=False)
+                        if md_table:
+                            md_tables.append("\n" + md_table + "\n")
+                            continue
+                except Exception:
+                    pass
+
                 rows = tab.extract()
                 if not rows or len(rows) < 1:
                     continue
@@ -57,17 +68,11 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
                     continue
 
                 headers = clean_rows[0]
-                num_cols = max(1, len(headers))
-                # Ensure headers are not all empty
                 safe_headers = [h if h else f"Col {i+1}" for i, h in enumerate(headers)]
-                md_lines = []
-                md_lines.append("| " + " | ".join(safe_headers) + " |")
-                md_lines.append("| " + " | ".join(["---"] * num_cols) + " |")
-                for row in clean_rows[1:]:
-                    padded = row + [""] * (num_cols - len(row))
-                    md_lines.append("| " + " | ".join(padded[:num_cols]) + " |")
-
-                md_tables.append("\n" + "\n".join(md_lines) + "\n")
+                df_fallback = pd.DataFrame(clean_rows[1:], columns=safe_headers)
+                md_fallback = df_fallback.to_markdown(tablefmt="pipe", index=False)
+                if md_fallback:
+                    md_tables.append("\n" + md_fallback + "\n")
     except Exception as e:
         logger.debug(f"Table detection skipped or not supported on page: {e}")
 
@@ -253,14 +258,8 @@ def extract_tabular_document(
                     continue
                 df = df_all.head(limit_excel_rows)
                 # Clean column headers
-                df.columns = [str(c).replace("\n", " ").replace("|", "\\|").strip() for c in df.columns]
-                # Convert to markdown
-                headers = list(df.columns)
-                md_table = "| " + " | ".join(headers) + " |\n"
-                md_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
-                for _, row in df.iterrows():
-                    row_vals = [str(val).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(val) else "" for val in row]
-                    md_table += "| " + " | ".join(row_vals) + " |\n"
+                df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
+                md_table = df.to_markdown(tablefmt="pipe", index=False) or ""
 
                 sheet_md = f"### Foglio: {sheet_name}\n\n{md_table}"
                 if total_sheet_rows > limit_excel_rows:
@@ -283,13 +282,8 @@ def extract_tabular_document(
             df_all = pd.read_csv(csv_source, sep=sep, on_bad_lines="skip")
             total_csv_rows = len(df_all)
             df = df_all.head(limit_csv_rows)
-            df.columns = [str(c).replace("\n", " ").replace("|", "\\|").strip() for c in df.columns]
-            headers = list(df.columns)
-            md_table = "| " + " | ".join(headers) + " |\n"
-            md_table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
-            for _, row in df.iterrows():
-                row_vals = [str(val).replace("\n", " ").replace("|", "\\|").strip() if pd.notna(val) else "" for val in row]
-                md_table += "| " + " | ".join(row_vals) + " |\n"
+            df.columns = [str(c).replace("\n", " ").strip() if str(c).strip() else f"Col {i+1}" for i, c in enumerate(df.columns)]
+            md_table = df.to_markdown(tablefmt="pipe", index=False) or ""
 
             if total_csv_rows > limit_csv_rows:
                 md_table += f"\n\n> [!NOTE]\n> Tabella troncata a {limit_csv_rows} righe (su {total_csv_rows} totali nel file).\n"
@@ -494,13 +488,65 @@ def _split_oversized_text(text: str, max_chars: int = 1000, overlap: int = 100) 
         start = end - overlap if end < len(text) else end
     return [c for c in chunks if c]
 
+_RECURSIVE_CHUNKER: Optional[Any] = None
+
+def _get_recursive_chunker():
+    global _RECURSIVE_CHUNKER
+    if _RECURSIVE_CHUNKER is None:
+        try:
+            from chonkie import RecursiveChunker
+            _RECURSIVE_CHUNKER = RecursiveChunker(tokenizer="character", chunk_size=800, min_characters_per_chunk=24)
+        except Exception as e:
+            logger.debug(f"chonkie RecursiveChunker initialization: {e}")
+            _RECURSIVE_CHUNKER = False
+    return _RECURSIVE_CHUNKER
+
+
 def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int, str, str]]:
-    """Header-Aware Semantic Chunking preserving Markdown structural integrity and returning (chunk_index, chunk_text, section_header)."""
+    """
+    Header-Aware Semantic Chunking using chonkie RecursiveChunker:
+    Preserves Markdown structural hierarchy, section context prefixes, and code blocks.
+    Returns list of (chunk_index, chunk_text, section_header).
+    """
+    chunker = _get_recursive_chunker()
     raw_chunks: List[Tuple[int, str, str]] = []
     header_path: List[str] = [filename]
     chunk_index = 0
-    current_buffer = ""
+    current_buffer: List[str] = []
     in_code_block = False
+
+    def _flush_buffer():
+        nonlocal chunk_index, current_buffer
+        if not current_buffer:
+            return
+        curr_section_header = ' > '.join([h for h in header_path if h])
+        context_prefix = f"[Documento: {filename} | Sezione: {curr_section_header}]\n"
+        buf_text = "\n".join(current_buffer).strip()
+        current_buffer = []
+        if not buf_text:
+            return
+
+        if chunker:
+            try:
+                sub_chunks = chunker.chunk(buf_text)
+                for sc in sub_chunks:
+                    if sc.text and sc.text.strip():
+                        raw_chunks.append((chunk_index, context_prefix + sc.text.strip(), curr_section_header))
+                        chunk_index += 1
+                return
+            except Exception:
+                pass
+
+        # Robust Fallback chunking
+        if len(buf_text) > 800:
+            pieces = _split_oversized_text(buf_text, max_chars=800, overlap=100)
+            for p in pieces:
+                if p.strip():
+                    raw_chunks.append((chunk_index, context_prefix + p.strip(), curr_section_header))
+                    chunk_index += 1
+        else:
+            raw_chunks.append((chunk_index, context_prefix + buf_text, curr_section_header))
+            chunk_index += 1
 
     lines = full_markdown.splitlines()
     for line in lines:
@@ -512,43 +558,18 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
         if not in_code_block and stripped_line.startswith("#"):
             header_match = re.match(r'^(#+)\s+(.+)$', stripped_line)
             if header_match:
+                _flush_buffer()
                 level = len(header_match.group(1))
                 h_text = header_match.group(2).strip()
                 header_path = header_path[:level]
                 if len(header_path) < level:
                     header_path.extend([""] * (level - len(header_path)))
                 header_path = header_path[:level-1] + [h_text]
+                continue
 
-        curr_section_header = ' > '.join([h for h in header_path if h])
-        context_prefix = f"[Documento: {filename} | Sezione: {curr_section_header}]\n"
+        current_buffer.append(line)
 
-        # Check for individual oversized lines
-        if len(line) > 1000 and not in_code_block:
-            if current_buffer.strip():
-                chunk_text = context_prefix + current_buffer.strip()
-                raw_chunks.append((chunk_index, chunk_text, curr_section_header))
-                chunk_index += 1
-                current_buffer = ""
-            sub_pieces = _split_oversized_text(line, max_chars=800, overlap=100)
-            for piece in sub_pieces:
-                raw_chunks.append((chunk_index, context_prefix + piece, curr_section_header))
-                chunk_index += 1
-            continue
-
-        if len(current_buffer) + len(line) > 750 and not in_code_block and current_buffer.strip():
-            chunk_text = context_prefix + current_buffer.strip()
-            raw_chunks.append((chunk_index, chunk_text, curr_section_header))
-            chunk_index += 1
-            overlap = current_buffer.strip()[-100:]
-            current_buffer = overlap + "\n" + line + "\n"
-        else:
-            current_buffer += line + "\n"
-
-    if current_buffer.strip():
-        curr_section_header = ' > '.join([h for h in header_path if h])
-        context_prefix = f"[Documento: {filename} | Sezione: {curr_section_header}]\n"
-        chunk_text = context_prefix + current_buffer.strip()
-        raw_chunks.append((chunk_index, chunk_text, curr_section_header))
+    _flush_buffer()
 
     if not raw_chunks:
         fallback_text = full_markdown.strip() or f"# {filename}\n\nDocument content ingested."

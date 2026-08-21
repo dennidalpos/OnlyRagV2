@@ -1,3 +1,4 @@
+import pRetry from 'p-retry'
 import { AgentStreamTransport, StreamSession } from '../infrastructure/http/agentStreamTransport'
 import { logger } from '../../diagnostics'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
@@ -146,6 +147,18 @@ export class ResilientModelDispatcher {
    * that produced them, so every fallback/escalation tier below always uses the full prompt
    * from `sessionOpts` regardless of this override.
    */
+  private static async streamWithRetry(session: StreamSession, retries: number = 0): Promise<string> {
+    if (retries <= 0) {
+      return AgentStreamTransport.streamCompletion(session)
+    }
+    return pRetry(() => AgentStreamTransport.streamCompletion(session), {
+      retries,
+      minTimeout: 200,
+      maxTimeout: 1000,
+      factor: 2,
+    })
+  }
+
   public static async executeWithFallback(
     plan: ModelDispatchPlan,
     sessionOpts: Omit<StreamSession, 'targetModel' | 'runtimeOpts'>,
@@ -156,7 +169,7 @@ export class ResilientModelDispatcher {
 
     // 1. Attempt Primary Model
     try {
-      const output = await AgentStreamTransport.streamCompletion({
+      const output = await this.streamWithRetry({
         ...sessionOpts,
         targetModel: primaryModel,
         runtimeOpts,

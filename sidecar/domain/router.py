@@ -1,6 +1,7 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import pymupdf
+import puremagic
 from sidecar.config import logger
 
 class DocumentCategory:
@@ -16,16 +17,26 @@ class PageRoutingStrategy:
     OCR_REQUIRED = "ocr_required"
     HYBRID_VISION = "hybrid_vision"
 
-def classify_file_type(filename: str) -> str:
-    """Classifies file type category based on extension and filename."""
-    ext = os.path.splitext(filename)[1].lower()
+def classify_file_type(filename: str, content_bytes: Optional[bytes] = None) -> str:
+    """Classifies file type category based on extension, filename, and magic bytes header."""
+    ext = os.path.splitext(filename)[1].lower() if filename else ""
+
+    # Check magic byte signature if extension is missing or unknown
+    if content_bytes and len(content_bytes) >= 16 and (not ext or ext in [".bin", ".dat"]):
+        try:
+            detected_ext = puremagic.from_string(content_bytes[:2048])
+            if detected_ext:
+                ext = detected_ext.lower()
+        except Exception:
+            pass
+
     if ext == ".pdf":
         return DocumentCategory.PDF
     elif ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif"]:
         return DocumentCategory.IMAGE
     elif ext in [".docx", ".doc"]:
         return DocumentCategory.DOCX
-    elif ext in [".csv", ".tsv", ".xlsx", ".json", ".parquet"]:
+    elif ext in [".csv", ".tsv", ".xlsx", ".xls", ".json", ".parquet"]:
         return DocumentCategory.TABULAR
     elif ext in [".txt", ".md", ".py", ".ts", ".js", ".html", ".css", ".yaml", ".yml", ".xml", ".sql", ".sh", ".ps1"]:
         return DocumentCategory.TEXT

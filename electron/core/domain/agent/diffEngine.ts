@@ -57,8 +57,6 @@ export interface DiffStats {
   deletions: number
 }
 
-/** Files above this line count skip the O(n*m) LCS and fall back to a block replace. */
-const MAX_LCS_LINES = 2500
 
 function stripPathPrefix(rawPath: string): string {
   const trimmed = rawPath.trim().replace(/^"|"$/g, '')
@@ -193,90 +191,68 @@ export function parseUnifiedDiff(rawDiff: string): DiffFileChange[] {
   return files
 }
 
+import { diffLines } from 'diff'
+
 /**
- * Longest-common-subsequence line diff between two file revisions.
- * Common prefix and suffix are trimmed first, which is what makes this cheap for the
- * usual case (a small edit inside a large file); the LCS table is only ever built over
- * the differing middle. Files whose differing region is still too large fall back to a
- * whole-block replace, which is accurate — just less granular.
+ * Myers line diff between two file revisions using the standard `diff` engine.
+ * Generates exact per-line add/del/context blocks with 1-based line numbering.
  */
 export function computeLineDiff(before: string, after: string): DiffLine[] {
-  // An empty side has zero lines, not one empty line: a newly created file must read as
-  // pure additions, not "one blank line deleted, three added".
-  const beforeLines = before ? before.split(/\r?\n/) : []
-  const afterLines = after ? after.split(/\r?\n/) : []
+  if (!before && !after) return []
 
+  const beforeNorm = before || ''
+  const afterNorm = after || ''
+
+  if (beforeNorm === afterNorm) {
+    const lines = beforeNorm.split(/\r?\n/)
+    return lines.map((content, idx) => ({
+      type: 'context',
+      content,
+      oldLineNumber: idx + 1,
+      newLineNumber: idx + 1,
+    }))
+  }
+
+  const changes = diffLines(beforeNorm, afterNorm)
   const result: DiffLine[] = []
   let oldNo = 1
   let newNo = 1
 
-  // Common prefix
-  let start = 0
-  while (start < beforeLines.length && start < afterLines.length && beforeLines[start] === afterLines[start]) {
-    result.push({ type: 'context', content: beforeLines[start], oldLineNumber: oldNo++, newLineNumber: newNo++ })
-    start++
-  }
-
-  // Common suffix (never overlapping the prefix already consumed)
-  let endBack = 0
-  while (
-    endBack < beforeLines.length - start &&
-    endBack < afterLines.length - start &&
-    beforeLines[beforeLines.length - 1 - endBack] === afterLines[afterLines.length - 1 - endBack]
-  ) {
-    endBack++
-  }
-
-  const midBefore = beforeLines.slice(start, beforeLines.length - endBack)
-  const midAfter = afterLines.slice(start, afterLines.length - endBack)
-
-  if (midBefore.length * midAfter.length > MAX_LCS_LINES * MAX_LCS_LINES || midBefore.length + midAfter.length > MAX_LCS_LINES * 2) {
-    for (const content of midBefore) {
-      result.push({ type: 'del', content, oldLineNumber: oldNo++, newLineNumber: null })
+  for (const change of changes) {
+    const rawVal = change.value
+    const lines = rawVal.split(/\r?\n/)
+    if (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop()
     }
-    for (const content of midAfter) {
-      result.push({ type: 'add', content, oldLineNumber: null, newLineNumber: newNo++ })
-    }
-  } else {
-    const n = midBefore.length
-    const m = midAfter.length
-    // lcs[i][j] = length of the LCS of midBefore[i..] and midAfter[j..], flattened.
-    const width = m + 1
-    const lcs = new Int32Array((n + 1) * width)
-    for (let i = n - 1; i >= 0; i--) {
-      for (let j = m - 1; j >= 0; j--) {
-        lcs[i * width + j] =
-          midBefore[i] === midAfter[j]
-            ? lcs[(i + 1) * width + (j + 1)] + 1
-            : Math.max(lcs[(i + 1) * width + j], lcs[i * width + (j + 1)])
+
+    if (change.added) {
+      for (const line of lines) {
+        result.push({
+          type: 'add',
+          content: line,
+          oldLineNumber: null,
+          newLineNumber: newNo++,
+        })
+      }
+    } else if (change.removed) {
+      for (const line of lines) {
+        result.push({
+          type: 'del',
+          content: line,
+          oldLineNumber: oldNo++,
+          newLineNumber: null,
+        })
+      }
+    } else {
+      for (const line of lines) {
+        result.push({
+          type: 'context',
+          content: line,
+          oldLineNumber: oldNo++,
+          newLineNumber: newNo++,
+        })
       }
     }
-
-    let i = 0
-    let j = 0
-    while (i < n && j < m) {
-      if (midBefore[i] === midAfter[j]) {
-        result.push({ type: 'context', content: midBefore[i], oldLineNumber: oldNo++, newLineNumber: newNo++ })
-        i++
-        j++
-      } else if (lcs[(i + 1) * width + j] >= lcs[i * width + (j + 1)]) {
-        result.push({ type: 'del', content: midBefore[i], oldLineNumber: oldNo++, newLineNumber: null })
-        i++
-      } else {
-        result.push({ type: 'add', content: midAfter[j], oldLineNumber: null, newLineNumber: newNo++ })
-        j++
-      }
-    }
-    while (i < n) {
-      result.push({ type: 'del', content: midBefore[i++], oldLineNumber: oldNo++, newLineNumber: null })
-    }
-    while (j < m) {
-      result.push({ type: 'add', content: midAfter[j++], oldLineNumber: null, newLineNumber: newNo++ })
-    }
-  }
-
-  for (let k = beforeLines.length - endBack; k < beforeLines.length; k++) {
-    result.push({ type: 'context', content: beforeLines[k], oldLineNumber: oldNo++, newLineNumber: newNo++ })
   }
 
   return result

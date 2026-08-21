@@ -1,4 +1,5 @@
 import path from 'node:path'
+import ignore, { type Ignore } from 'ignore'
 
 export const DEFAULT_IGNORED_DIRS = new Set([
   '.git',
@@ -118,6 +119,20 @@ export function isSecretFile(filePath: string): boolean {
   }
 
   return false
+}
+
+/**
+ * Creates an ignore filter engine with custom workspace rules.
+ */
+export function createWorkspaceIgnoreFilter(customRules: string[] = []): Ignore {
+  const ig = ignore()
+  const validRules = customRules
+    .map((r) => r.trim())
+    .filter((r) => r && !r.startsWith('#'))
+  if (validRules.length > 0) {
+    ig.add(validRules)
+  }
+  return ig
 }
 
 /**
@@ -260,20 +275,16 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
 }
 
 /**
- * Simple .gitignore / .cursorignore line matcher.
+ * Universal .gitignore / .cursorignore matcher backed by git-standard ignore parser.
  */
 export function matchesIgnorePatterns(relPath: string, patterns: string[]): boolean {
   if (!relPath || !patterns || patterns.length === 0) return false
-  const normalized = relPath.replace(/\\/g, '/').toLowerCase()
+  const normalized = relPath.replace(/\\/g, '/').replace(/^\//, '')
 
-  for (const pattern of patterns) {
-    const p = pattern.trim().toLowerCase()
-    if (!p || p.startsWith('#')) continue
-
-    const cleanP = p.replace(/^\//, '').replace(/\/$/, '')
-    if (normalized === cleanP || normalized.startsWith(cleanP + '/') || normalized.endsWith('/' + cleanP)) {
-      return true
-    }
+  try {
+    const ig = createWorkspaceIgnoreFilter(patterns)
+    return ig.ignores(normalized)
+  } catch {
+    return false
   }
-  return false
 }

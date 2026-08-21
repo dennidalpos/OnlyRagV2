@@ -54,42 +54,51 @@ _LANG_PATTERNS = {
     "greek": re.compile(r'[\u0370-\u03ff]'),
 }
 
-_LATIN_STOP_WORDS = {
-    "italian": {"di", "da", "in", "con", "su", "per", "tra", "fra", "il", "lo", "la", "gli", "del", "della", "dei", "delle", "questo", "quello", "sono", "anche", "come", "più", "dati", "documento", "sezione", "totale", "tabella"},
-    "english": {"the", "and", "that", "was", "for", "with", "they", "this", "from", "will", "would", "there", "their", "total", "invoice", "document", "date", "table", "section", "overview"},
-    "french": {"les", "des", "dans", "pour", "avec", "tout", "faire", "cette", "sont", "nous", "vous", "ils", "document", "tableau"},
-    "german": {"der", "die", "das", "und", "den", "von", "mit", "sich", "des", "auf", "für", "ist", "dem", "nicht", "eine", "auch", "werden", "aus", "nach", "wird", "dokument", "tabelle"},
-    "spanish": {"los", "las", "unos", "unas", "del", "para", "por", "con", "sin", "sobre", "entre", "hasta", "desde", "este", "esta", "estos", "estas", "son", "como", "pero", "más", "documento"},
+_LANGDETECT_AVAILABLE = False
+try:
+    import langdetect
+    from langdetect import DetectorFactory
+    DetectorFactory.seed = 0
+    _LANGDETECT_AVAILABLE = True
+except ImportError:
+    _LANGDETECT_AVAILABLE = False
+
+_ISO_TO_LANG_NAME: Dict[str, str] = {
+    "it": "italian", "en": "english", "es": "spanish", "fr": "french",
+    "de": "german", "pt": "portuguese", "nl": "dutch", "ru": "russian",
+    "zh-cn": "chinese", "zh-tw": "chinese", "zh": "chinese", "ja": "japanese",
+    "ko": "korean", "ar": "arabic", "el": "greek", "pl": "polish",
+    "sv": "swedish", "da": "danish", "fi": "finnish", "no": "norwegian",
+    "tr": "turkish", "cs": "czech", "ro": "romanian", "hu": "hungarian",
+    "uk": "ukrainian", "hi": "hindi", "he": "hebrew"
 }
 
 
 def detect_block_language(text: str) -> Optional[str]:
-    """Classifies language of a text block based on Unicode character scripts and stop-word distributions.
+    """Classifies language of a text block based on Unicode character scripts and statistical language detection.
     Returns detected language name in lowercase (e.g. 'italian', 'english', 'chinese') or None if ambiguous/short."""
-    if not text or len(text.strip()) < 15:
+    if not text or len(text.strip()) < 10:
         return None
 
     cleaned = text.strip()
+
+    # 1. High-confidence Unicode script detection for non-Latin writing systems
     for lang, pattern in _LANG_PATTERNS.items():
         if pattern.search(cleaned):
             return lang
 
-    words = re.findall(r'\b[a-zA-Zàèéìòùáéíóúäöüßñç]+\b', cleaned.lower())
-    if len(words) < 3:
-        return None
-
-    word_set = set(words)
-    best_lang = None
-    max_matches = 0
-
-    for lang, stop_words in _LATIN_STOP_WORDS.items():
-        matches = len(word_set.intersection(stop_words))
-        if matches > max_matches:
-            max_matches = matches
-            best_lang = lang
-
-    if max_matches >= 2:
-        return best_lang
+    # 2. Universal statistical language detection
+    if _LANGDETECT_AVAILABLE:
+        try:
+            detected_code = langdetect.detect(cleaned)
+            norm_code = detected_code.lower().split("-")[0]
+            if detected_code.lower() in _ISO_TO_LANG_NAME:
+                return _ISO_TO_LANG_NAME[detected_code.lower()]
+            if norm_code in _ISO_TO_LANG_NAME:
+                return _ISO_TO_LANG_NAME[norm_code]
+            return detected_code.lower()
+        except Exception:
+            return None
 
     return None
 
@@ -169,13 +178,21 @@ def _batch_runs(runs: List["docx.text.run.Run"], max_chars: int = _TRANSLATE_BAT
     return batches
 
 
+import ftfy
+
 _TRANSLATE_MAX_ATTEMPTS = 2
 _TRANSLATE_RETRY_DELAY_SECONDS = 3.0
 
 
 def _smart_decode_pdf_text(text: str) -> str:
     """Normalizes unprintable control characters, non-breaking spaces, and fixes corrupted font encodings / replacement characters."""
-    t = text.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "")
+    if not text:
+        return ""
+    try:
+        t = ftfy.fix_text(text)
+    except Exception:
+        t = text
+    t = t.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "")
     # Prepositions with apostrophe before numbers: dall'1, all'1, nell'anno
     t = re.sub(r'\b(dall|all|nell|sull|coll|un|d|l)\ufffd(\d)', r"\1'\2", t, flags=re.IGNORECASE)
     # Apostrophe between letters: L'art, d'imposta

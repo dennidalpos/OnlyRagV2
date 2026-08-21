@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatClockTime, formatDateTime } from './timeFormat'
+import { formatClockTime, formatDateTime, formatRelativeTime } from './timeFormat'
 
 describe('timeFormat Unit Tests', () => {
   it('should format an ISO 8601 timestamp as local clock time', () => {
@@ -29,5 +29,17 @@ describe('timeFormat Unit Tests', () => {
     expect(formatClockTime(undefined)).toBe('—')
     expect(formatClockTime('')).toBe('—')
     expect(formatDateTime(null)).toBe('—')
+    expect(formatRelativeTime(undefined)).toBe('—')
+  })
+
+  it('should format relative timestamps with Intl.RelativeTimeFormat', () => {
+    const now = Date.now()
+    const fiveMinutesAgo = new Date(now - 5 * 60 * 1000).toISOString()
+    const formatted = formatRelativeTime(fiveMinutesAgo, 'en')
+    expect(formatted).toContain('5 minutes ago')
+
+    const yesterday = new Date(now - 24 * 3600 * 1000).toISOString()
+    const formattedYesterday = formatRelativeTime(yesterday, 'en')
+    expect(formattedYesterday).toContain('yesterday')
   })
 })

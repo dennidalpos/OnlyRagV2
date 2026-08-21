@@ -1,5 +1,6 @@
 import * as ts from 'typescript'
 import * as path from 'node:path'
+import levenshtein from 'fast-levenshtein'
 
 export interface ASTValidationResult {
   isValid: boolean
@@ -23,7 +24,7 @@ function normalizeLineEndings(text: string): string {
 }
 
 /**
- * Calculates normalized Levenshtein similarity distance between two string chunks.
+ * Calculates normalized Levenshtein similarity distance between two string chunks using fast-levenshtein.
  */
 function calculateSimilarity(a: string, b: string): number {
   const s1 = a.trim()
@@ -31,27 +32,9 @@ function calculateSimilarity(a: string, b: string): number {
   if (s1 === s2) return 1.0
   if (s1.length === 0 || s2.length === 0) return 0.0
 
-  const matrix: number[][] = []
-  for (let i = 0; i <= s1.length; i++) {
-    matrix[i] = [i]
-  }
-  for (let j = 0; j <= s2.length; j++) {
-    matrix[0][j] = j
-  }
-
-  for (let i = 1; i <= s1.length; i++) {
-    for (let j = 1; j <= s2.length; j++) {
-      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
-      )
-    }
-  }
-
+  const distance = levenshtein.get(s1, s2)
   const maxLength = Math.max(s1.length, s2.length)
-  return 1 - matrix[s1.length][s2.length] / maxLength
+  return 1 - distance / maxLength
 }
 
 /**

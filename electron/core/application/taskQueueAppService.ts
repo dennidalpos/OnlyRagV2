@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import PQueue from 'p-queue'
 import { TaskQueueDomain, TaskQueueItem } from '../domain/tasks/taskQueueDomain'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask } from './agentOrchestratorAppService'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
@@ -22,7 +23,7 @@ const AGENT_TASK_CONCURRENCY = 1
 
 export class TaskQueueAppService {
   private queue = new TaskQueueDomain<QueuedAgentTask>(AGENT_TASK_CONCURRENCY)
-  private isProcessing = false
+  private pQueue = new PQueue({ concurrency: AGENT_TASK_CONCURRENCY })
 
   public getMaxConcurrency(): number {
     return this.queue.getMaxConcurrency()
@@ -71,7 +72,13 @@ export class TaskQueueAppService {
       }
     }
 
-    this.processQueue().catch((err) => {
+    // Schedule into serial PQueue
+    this.pQueue.add(async () => {
+      const nextItem = this.queue.popNext()
+      if (nextItem) {
+        await this.executeTaskItem(nextItem)
+      }
+    }).catch((err) => {
       logger.log('ERROR', 'TaskQueueAppService', `Process queue error: ${err.message}`)
     })
 
@@ -82,36 +89,18 @@ export class TaskQueueAppService {
     if (taskId) {
       const res = this.queue.cancel(taskId)
       cancelActiveAgentTask(taskId)
-      this.processQueue().catch(() => {})
       return {
         success: res.cancelled,
         message: res.cancelled ? `Task ${taskId} cancelled.` : `Task ${taskId} not found.`,
       }
     }
 
+    this.pQueue.clear()
     const { cancelledCount } = this.queue.cancelAll()
     cancelActiveAgentTask()
     return {
       success: true,
       message: `All active and queued tasks cancelled (${cancelledCount} total).`,
-    }
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.isProcessing) return
-    this.isProcessing = true
-
-    try {
-      while (this.queue.canRunNext()) {
-        const nextItem = this.queue.popNext()
-        if (!nextItem) break
-
-        this.executeTaskItem(nextItem).catch((err) => {
-          logger.log('ERROR', 'TaskQueueAppService', `Unhandled execution failure for task ${nextItem.id}: ${err.message}`)
-        })
-      }
-    } finally {
-      this.isProcessing = false
     }
   }
 
@@ -130,8 +119,6 @@ export class TaskQueueAppService {
       this.queue.markFailed(id, err.message)
       logger.log('ERROR', 'TaskQueueAppService', `Task execution [${id}] failed: ${err.message}`)
       resolve({ success: false, summary: `Execution error: ${err.message}`, error: err.message })
-    } finally {
-      this.processQueue().catch(() => {})
     }
   }
 }

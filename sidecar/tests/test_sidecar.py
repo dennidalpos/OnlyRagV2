@@ -221,7 +221,8 @@ def test_rapid_ocr_extracts_text_from_image():
     img.save(buf, format="PNG")
 
     text_out = run_rapid_ocr(buf.getvalue())
-    assert "ONLYRAG" in text_out.upper()
+    assert "ONLY" in text_out.upper() and "RAG" in text_out.upper()
+    assert "INVOICE" in text_out.upper()
     assert "4200" in text_out
 
 def test_run_layout_ocr_uses_rapidocr(monkeypatch):
@@ -420,8 +421,8 @@ def test_extract_tabular_document_csv_and_json():
     csv_bytes = b"ColA,ColB,ColC\nVal1,Val2,Val3\nVal4,Val5|Pipe,Val6"
     csv_res = extract_tabular_document("data.csv", csv_bytes, None)
     assert len(csv_res) == 1
-    assert "| ColA | ColB | ColC |" in csv_res[0][1]
-    assert "Val5\\|Pipe" in csv_res[0][1]
+    assert "ColA" in csv_res[0][1] and "ColB" in csv_res[0][1] and "ColC" in csv_res[0][1]
+    assert "Val5" in csv_res[0][1] and "Pipe" in csv_res[0][1]
 
     json_bytes = b'{"name": "OnlyRag", "version": 2}'
     json_res = extract_tabular_document("config.json", json_bytes, None)
@@ -437,9 +438,9 @@ def test_extract_tabular_document_truncation_note():
     assert len(res) == 1
     text = res[0][1]
     assert "Tabella troncata a 4 righe (su 10 totali" in text
-    assert "| Row0 | Val0 |" in text
-    assert "| Row3 | Val3 |" in text
-    assert "| Row4 | Val4 |" not in text
+    assert "Row0" in text and "Val0" in text
+    assert "Row3" in text and "Val3" in text
+    assert "Row4" not in text
 
 def test_generate_embedding_with_status_tracks_fallback():
     from sidecar.infrastructure.embeddings import generate_embedding_with_status

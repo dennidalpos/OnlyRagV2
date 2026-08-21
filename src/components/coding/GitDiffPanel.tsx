@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { GitBranch, RefreshCw, CheckCircle2, FileCode } from 'lucide-react'
+import stripAnsi from 'strip-ansi'
 import {
   parseUnifiedDiff,
   summarizeDiff,
@@ -65,20 +66,11 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
   isFetchingGit,
   onRefreshGit,
 }) => {
-  // Strip ANSI escape sequences and control characters
-  const stripAnsi = (str: string) =>
-    str
-      .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
-      .replace(/\x1b\][^\x07]*\x07/g, '')
-      .replace(/\[\?[0-9]+[hl]/g, '')
-      .replace(/\]0;[^\x07\n]*/g, '')
-      .trim()
-
   const cleanStatusLines = gitStatusLines
-    .map(stripAnsi)
+    .map((str) => stripAnsi(str).trim())
     .filter((l) => l && !l.startsWith(']0;') && !l.includes('powershell.exe'))
 
-  const cleanDiffText = stripAnsi(gitDiffText)
+  const cleanDiffText = stripAnsi(gitDiffText).trim()
 
   // Parsed once per diff payload: the panel re-renders on every poll of the git status.
   const parsedFiles = useMemo(() => parseUnifiedDiff(cleanDiffText), [cleanDiffText])

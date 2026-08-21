@@ -76,6 +76,7 @@ describe('AboutModal & Credits Data Integrity Unit Tests', () => {
     expect(moduleNames).toContain('RapidOCR (ONNX Runtime)')
     expect(moduleNames).toContain('Pydantic')
     expect(moduleNames).toContain('HTTPX')
+    expect(moduleNames).toContain('ftfy')
 
     // UI & Editor
     expect(moduleNames).toContain('Monaco Editor')

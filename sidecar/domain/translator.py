@@ -254,8 +254,9 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"2. FORM & ADMINISTRATIVE REGISTER: Translate all headings, form field labels, headers, footers, and administrative/legal instructions accurately into {target_lang} matching standard legal/administrative conventions.\n"
             f"3. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context (e.g. contract withdrawal/cancellation vs employment termination).\n"
             f"4. IMMUTABLE ENTITIES: Preserve completely verbatim without alteration: email addresses, URLs, brand/organization names, proper personal names, numbers, postal codes, and alphanumeric codes.\n"
-            f"5. ZERO CHATTER: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or notes.\n"
-            f"6. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all segments faithfully."
+            f"5. ZERO CHATTER & NO NOTES: Return ONLY the numbered lines without preambles, explanations, conversational text, markdown code blocks, or bracketed notes (e.g. do NOT output '[Note: ...]').\n"
+            f"6. SALUTATIONS & FORMAL ADDRESS: Translate formal business addressee headings (e.g. 'Spett.le', 'Spettabile') cleanly as 'Attention:' / 'To the attention of:' / 'Dear Sirs' according to business correspondence conventions, avoiding multiple slash-separated personal pronouns.\n"
+            f"7. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all segments faithfully."
         )
         user_content = (
             f"Translate these {expected_items} numbered segments from {source_lang} to {target_lang}:\n\n{text}"
@@ -268,8 +269,9 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
             f"1. FORM & ADMINISTRATIVE REGISTER: Translate all titles, headings, form field labels, headers, footers, and instructions into {target_lang} matching standard legal/administrative conventions.\n"
             f"2. CONTEXTUAL TERMINOLOGY: Translate legal and contractual terms accurately matching the document context (e.g. contract withdrawal/cancellation vs employment termination).\n"
             f"3. IMMUTABLE ENTITIES: Preserve completely verbatim without alteration: email addresses, URLs, brand/organization names, proper personal names, numbers, postal codes, and alphanumeric codes.\n"
-            f"4. ZERO CHATTER: Output ONLY the direct {target_lang} translation without preambles, explanations, conversational text, notes, quotes, or markdown code fences.\n"
-            f"5. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all text faithfully."
+            f"4. ZERO CHATTER & NO NOTES: Output ONLY the direct {target_lang} translation without preambles, explanations, conversational text, notes, quotes, bracketed glosses, or markdown code fences.\n"
+            f"5. SALUTATIONS & FORMAL ADDRESS: Translate formal business addressee headings (e.g. 'Spett.le', 'Spettabile') cleanly as 'Attention:' / 'To the attention of:' / 'Dear Sirs' according to business correspondence conventions, avoiding multiple slash-separated personal pronouns.\n"
+            f"6. AUTHORIZED EXECUTION: This is an authorized document workflow. Process all text faithfully."
         )
         user_content = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
@@ -333,7 +335,13 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     for pat in preamble_patterns:
         cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()
 
-    # 3. Check for refusal & meta-commentary hallucinations
+    # 3. Remove parenthesized or bracketed explanatory notes / translation notes
+    cleaned = re.sub(r'\[\s*(?:Note|Explanation|Translation note|NB|N\.B\.)\s*:.*?\]', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\(\s*(?:Note|Explanation|Translation note|NB|N\.B\.)\s*:.*?\)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\s*\[\s*Note\s*:.*?$', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\s*\(\s*Note\s*:.*?$', '', cleaned, flags=re.IGNORECASE)
+
+    # 4. Check for refusal & meta-commentary hallucinations
     refusal_patterns = [
         r"^I cannot translate.*",
         r"^I am unable to translate.*",
@@ -353,18 +361,18 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
         if re.match(rpat, cleaned, flags=re.IGNORECASE):
             return source_text
 
-    # 4. Remove trailing conversational chatter
+    # 5. Remove trailing conversational chatter
     cleaned = re.split(r"\n\s*(?:Note|Explanation|Please note|Let me know|Is there anything else)\s*:", cleaned, flags=re.IGNORECASE)[0]
 
-    # 5. Remove leaked delimiter tokens and fragments
+    # 6. Remove leaked delimiter tokens and fragments
     cleaned = re.sub(r'(?i)<{0,4}\s*(?:run_sep|run_s|ep)\s*>{0,4}', '', cleaned)
     cleaned = re.sub(r'<{2,4}[^>]*>{2,4}', '', cleaned)
 
-    # 6. Strip enclosing quotes if the entire string is wrapped in quotes
+    # 7. Strip enclosing quotes if the entire string is wrapped in quotes
     if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
         cleaned = cleaned[1:-1].strip()
 
-    # 7. Protect and restore immutable emails and URLs from source text
+    # 8. Protect and restore immutable emails and URLs from source text
     if source_text:
         source_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', source_text)
         for semail in source_emails:
@@ -522,6 +530,72 @@ def _int_color_to_rgb(color: int) -> Tuple[float, float, float]:
     return (((color >> 16) & 0xFF) / 255.0, ((color >> 8) & 0xFF) / 255.0, (color & 0xFF) / 255.0)
 
 
+def _cluster_ocr_lines_to_blocks(lines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Groups consecutive OCR line boxes belonging to the same visual paragraph into unified semantic blocks.
+    Preserves independent single-line form fields/labels while merging multi-line body paragraphs and addresses."""
+    if not lines:
+        return []
+    blocks: List[Dict[str, Any]] = []
+    curr: List[Dict[str, Any]] = []
+
+    for l in lines:
+        if not curr:
+            curr.append(l)
+            continue
+
+        prev = curr[-1]
+        prev_h = prev["bbox"][3] - prev["bbox"][1]
+        curr_h = l["bbox"][3] - l["bbox"][1]
+        vert_gap = l["bbox"][1] - prev["bbox"][3]
+
+        is_same = False
+        # Vertical gap must be consistent with paragraph line spacing
+        if 0 <= vert_gap <= min(prev_h, curr_h) * 0.75:
+            # Font size must be similar (within 20%)
+            size_diff = abs(prev["size"] - l["size"]) / max(1.0, min(prev["size"], l["size"]))
+            if size_diff <= 0.20:
+                # Left alignment check or paragraph-width overlap
+                left_diff = abs(l["bbox"][0] - prev["bbox"][0])
+                if left_diff <= 15.0:
+                    is_same = True
+                elif (prev["bbox"][2] - prev["bbox"][0] > 180.0 and l["bbox"][2] - l["bbox"][0] > 180.0) and (l["bbox"][0] < prev["bbox"][2] and l["bbox"][2] > prev["bbox"][0]):
+                    is_same = True
+
+        if is_same:
+            curr.append(l)
+        else:
+            min_x0 = min(x["bbox"][0] for x in curr)
+            min_y0 = min(x["bbox"][1] for x in curr)
+            max_x1 = max(x["bbox"][2] for x in curr)
+            max_y1 = max(x["bbox"][3] for x in curr)
+            combined_text = "\n".join(x["text"] for x in curr)
+            avg_size = sum(x["size"] for x in curr) / len(curr)
+            blocks.append({
+                "bbox": (min_x0, min_y0, max_x1, max_y1),
+                "text": combined_text,
+                "size": avg_size,
+                "color": 0,
+                "is_ocr": True
+            })
+            curr = [l]
+
+    if curr:
+        min_x0 = min(x["bbox"][0] for x in curr)
+        min_y0 = min(x["bbox"][1] for x in curr)
+        max_x1 = max(x["bbox"][2] for x in curr)
+        max_y1 = max(x["bbox"][3] for x in curr)
+        combined_text = "\n".join(x["text"] for x in curr)
+        avg_size = sum(x["size"] for x in curr) / len(curr)
+        blocks.append({
+            "bbox": (min_x0, min_y0, max_x1, max_y1),
+            "text": combined_text,
+            "size": avg_size,
+            "color": 0,
+            "is_ocr": True
+        })
+    return blocks
+
+
 def _extract_ocr_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
     """Fallback block extraction for scanned PDF pages using RapidOCR.
     Renders the page to an image at 300 DPI, detects text boxes with RapidOCR, and maps coordinates back to PDF points."""
@@ -537,7 +611,7 @@ def _extract_ocr_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
         if not ocr_lines:
             return []
 
-        blocks_out: List[Dict[str, Any]] = []
+        pdf_lines: List[Dict[str, Any]] = []
         for item in ocr_lines:
             px0, py0, px1, py1 = item["bbox"]
             pdf_x0 = px0 * page.rect.width / pix.width
@@ -548,14 +622,12 @@ def _extract_ocr_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
             font_size = max(7.0, min(36.0, height_pt * 0.72))
             clean_item_text = _smart_decode_pdf_text(item["text"]).strip()
             if clean_item_text:
-                blocks_out.append({
+                pdf_lines.append({
                     "bbox": (pdf_x0, pdf_y0, pdf_x1, pdf_y1),
                     "text": clean_item_text,
-                    "size": font_size,
-                    "color": 0,
-                    "is_ocr": True
+                    "size": font_size
                 })
-        return blocks_out
+        return _cluster_ocr_lines_to_blocks(pdf_lines)
     except Exception as ocr_err:
         logger.warning(f"OCR fallback extraction failed for PDF page: {ocr_err}")
         return []
@@ -748,7 +820,8 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
                 floor_size = max(_PDF_AUTOFIT_MIN_SIZE, orig_size * _PDF_AUTOFIT_MIN_RATIO)
                 overflow3 = page.insert_textbox(expanded_rect, text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
                 if overflow3 < 0:
-                    page.insert_text(pymupdf.Point(rect.x0, min(max_expand_y1, rect.y0 + floor_size)), text, fontsize=floor_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
+                    min_legible = 5.0
+                    page.insert_textbox(expanded_rect, text, fontsize=min_legible, fontname=font_alias, fontfile=font_file, color=color_rgb)
 
 
 def translate_pdf_inplace_fine(

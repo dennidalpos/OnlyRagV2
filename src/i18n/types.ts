@@ -374,12 +374,12 @@ export interface TranslationSchema {
     exportError: string
     translateInplace: string
     translateInplaceModalTitle: string
-    translateInplaceWarning: string
     translateInplaceTargetDirNotice: string
-    translateInplaceBackupLabel: string
     translateInplaceTargetDirLabel: string
     translateInplaceTargetDirPlaceholder: string
+    translateInplaceTargetDirRequired: string
     translateInplaceBrowse: string
+    translateInplaceBrowseTitle: string
     translateInplaceConfirm: string
     textCheckBadge: string
     textCheckToggle: string

@@ -168,6 +168,14 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     url: 'https://opencv.org',
   },
   {
+    name: 'ftfy',
+    version: '>= v6.2.0',
+    description: 'Universal Unicode text repair, mojibake decoding, and character normalization.',
+    license: 'Apache-2.0',
+    category: 'aiAndVector',
+    url: 'https://github.com/rspeer/ftfy',
+  },
+  {
     name: 'WordFreq & SymSpell',
     version: '>= v3.1 / v6.7',
     description: 'Multilingual token frequency scoring, spell checking, and OCR error correction.',
@@ -351,8 +359,6 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
-
   const repoUrl = APP_REPOSITORY_URL
 
   const handleCopyRepo = async () => {
@@ -387,6 +393,8 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       )
     })
   }, [selectedCategory, searchQuery])
+
+  if (!isOpen) return null
 
   return (
     <div

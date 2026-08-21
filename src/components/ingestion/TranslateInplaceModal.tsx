@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Languages, AlertTriangle, X, Loader2, Folder } from 'lucide-react'
+import { Languages, Info, X, Loader2, Folder, AlertCircle } from 'lucide-react'
 import { LANGUAGES } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
 
@@ -15,7 +15,7 @@ interface TranslateInplaceModalProps {
     phase?: string
   } | null
   onClose: () => void
-  onConfirm: (sourceLang: string, targetLang: string, backupOriginal: boolean, targetDir?: string) => void
+  onConfirm: (sourceLang: string, targetLang: string, targetDir: string) => void
 }
 
 export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
@@ -30,7 +30,6 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   const { t } = useTranslation()
   const [sourceLang, setSourceLang] = useState('Italian')
   const [targetLang, setTargetLang] = useState('English')
-  const [backupOriginal, setBackupOriginal] = useState<boolean>(true)
   const [targetDir, setTargetDir] = useState<string>(defaultTargetDir || '')
 
   useEffect(() => {
@@ -44,12 +43,14 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   const handleSelectTargetDir = async () => {
     if (!window.electronAPI) return
     const dir = await window.electronAPI.openDirectoryDialog({
-      title: 'Seleziona cartella per il file tradotto',
+      title: t('ingestion.translateInplaceBrowseTitle'),
     })
     if (dir) {
       setTargetDir(dir)
     }
   }
+
+  const isFormValid = Boolean(targetDir.trim()) && sourceLang !== targetLang
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true">
@@ -69,19 +70,17 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
             onClick={onClose}
             disabled={isTranslating}
             aria-label={t('common.close')}
-            className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg transition-colors focus-ring disabled:opacity-50"
+            className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg transition-colors focus-ring disabled:opacity-50 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-200/90 leading-relaxed">
-              {targetDir
-                ? t('ingestion.translateInplaceTargetDirNotice')
-                : t('ingestion.translateInplaceWarning')}
+          <div className="p-3 rounded-xl bg-sky-950/40 border border-sky-800/50 flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-sky-200/90 leading-relaxed">
+              {t('ingestion.translateInplaceTargetDirNotice')}
             </p>
           </div>
 
@@ -95,7 +94,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
                 value={sourceLang}
                 disabled={isTranslating}
                 onChange={(e) => setSourceLang(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono disabled:opacity-50"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono disabled:opacity-50 cursor-pointer"
               >
                 {LANGUAGES.map((lang) => (
                   <option key={lang} value={lang}>{lang}</option>
@@ -111,7 +110,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
                 value={targetLang}
                 disabled={isTranslating}
                 onChange={(e) => setTargetLang(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono disabled:opacity-50"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none text-xs focus-ring font-mono disabled:opacity-50 cursor-pointer"
               >
                 {LANGUAGES.map((lang) => (
                   <option key={lang} value={lang}>{lang}</option>
@@ -120,26 +119,19 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
             </div>
           </div>
 
-          {/* Backup Original Option */}
-          <div className="flex items-center gap-2.5 pt-1">
-            <input
-              type="checkbox"
-              id="translate-inplace-backup"
-              checked={backupOriginal}
-              disabled={isTranslating || Boolean(targetDir)}
-              onChange={(e) => setBackupOriginal(e.target.checked)}
-              className="w-4 h-4 rounded bg-slate-950 border border-slate-700 text-sky-500 focus:ring-sky-500/50 cursor-pointer disabled:opacity-50"
-            />
-            <label htmlFor="translate-inplace-backup" className="text-xs text-slate-300 cursor-pointer select-none">
-              {t('ingestion.translateInplaceBackupLabel')}
-            </label>
-          </div>
-
-          {/* Target Folder Option */}
+          {/* Mandatory Target Folder Option */}
           <div className="space-y-1.5 pt-1">
-            <label className="block text-[11px] font-bold uppercase text-slate-400" htmlFor="translate-inplace-target-dir">
-              {t('ingestion.translateInplaceTargetDirLabel')}
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold uppercase text-slate-300" htmlFor="translate-inplace-target-dir">
+                {t('ingestion.translateInplaceTargetDirLabel')}
+              </label>
+              {!targetDir.trim() && (
+                <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {t('common.required' as any) || 'Obbligatoria'}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -153,7 +145,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
                 type="button"
                 onClick={handleSelectTargetDir}
                 disabled={isTranslating}
-                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-all focus-ring flex items-center gap-1.5 shrink-0"
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-all focus-ring flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <Folder className="w-3.5 h-3.5" />
                 <span>{t('ingestion.translateInplaceBrowse')}</span>
@@ -163,13 +155,18 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
                   type="button"
                   onClick={() => setTargetDir('')}
                   disabled={isTranslating}
-                  className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
                   title="Resetta cartella"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
+            {!targetDir.trim() && (
+              <p className="text-[11px] text-amber-400/90 pt-0.5">
+                {t('ingestion.translateInplaceTargetDirRequired')}
+              </p>
+            )}
           </div>
 
           {/* Live Streaming Translation Progress */}
@@ -209,15 +206,15 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
             type="button"
             onClick={onClose}
             disabled={isTranslating}
-            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 disabled:opacity-50"
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 disabled:opacity-50 cursor-pointer"
           >
             {t('common.cancel')}
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(sourceLang, targetLang, backupOriginal, targetDir || undefined)}
-            disabled={isTranslating || sourceLang === targetLang}
-            className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2"
+            onClick={() => onConfirm(sourceLang, targetLang, targetDir)}
+            disabled={isTranslating || !isFormValid}
+            className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2 cursor-pointer shadow-md shadow-sky-950/40"
           >
             {isTranslating ? (
               <>
@@ -233,3 +230,4 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
     </div>
   )
 }
+

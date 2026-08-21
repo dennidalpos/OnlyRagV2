@@ -934,14 +934,14 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         translateProgress={ing.translateProgress}
         defaultTargetDir={settings?.translationOutputFolder || ''}
         onClose={() => setTranslateInplaceDoc(null)}
-        onConfirm={async (sourceLang, targetLang, backupOriginal, targetDir) => {
+        onConfirm={async (sourceLang, targetLang, targetDir) => {
           if (!translateInplaceDoc) return
           await ing.handleTranslateInplace(
             translateInplaceDoc.id,
             sourceLang,
             targetLang,
             settings?.translationModel || settings?.defaultModel,
-            backupOriginal,
+            false,
             targetDir
           )
           setTranslateInplaceDoc(null)

@@ -417,7 +417,7 @@ const report = await analyzeLogs()
 | :--- | :--- | :--- | :--- | :--- |
 | `ingest:file` | `ingestFile(...)` | `filePath, visionModel?, visionPrompt?, normalizeWithLlm?, normalizationModel?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Ingestione documento con parsing PyMuPDF, OCR e normalizzazione LLM opzionale. |
 | `ingest:update` | `updateIngestedDocument(docId, md)` | `docId: string, markdownContent: string` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Aggiornamento manuale del Markdown estratto e re-indicizzazione dei vettori in LanceDB. |
-| `ingest:translate-inplace` | `translateDocumentInplace(...)` | `docId, sourceLang, targetLang, model?, backupOriginal?, targetDir?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Traduzione in-place PDF/DOCX preservando il Markdown originale indicizzato nel RAG. |
+| `ingest:translate-inplace` | `translateDocumentInplace(...)` | `docId, sourceLang, targetLang, model?, backupOriginal?, targetDir?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Traduzione documento PDF/DOCX con salvataggio nella cartella di destinazione e preservazione del file originale. |
 | `ingest:page-preview` | `getDocumentPagePreview(...)` | `docId: string, pageNumber: number` | `PagePreviewData \| null` | Rendering raster ad alta risoluzione della pagina sorgente per la preview a due pannelli. |
 | `ingest:list` | `getIngestedDocuments()` | `none` | `IngestedDocument[]` | Elenco di tutti i documenti indicizzati in LanceDB. |
 | `ingest:delete` | `deleteIngestedDocument(docId)` | `docId: string` | `{ success: boolean }` | Eliminazione del documento e dei relativi vettori da LanceDB. |

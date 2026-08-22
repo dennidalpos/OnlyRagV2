@@ -89,6 +89,29 @@ describe('ResilientModelDispatcher Unit Tests', () => {
     await expect(ResilientModelDispatcher.executeWithFallback(plan, sessionOpts)).rejects.toThrow('Network error')
   })
 
+  it('should escalate to heavy tier when primary and fallback are identical but heavyEscalationModel is set', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockRejectedValueOnce(new Error('Primary OOM'))
+      .mockResolvedValueOnce('Heavy tier recovered output')
+
+    const plan = {
+      primaryModel: 'llama3.2:3b',
+      fallbackModel: 'llama3.2:3b',
+      heavyEscalationModel: 'qwen2.5-coder:14b',
+      runtimeOpts: baseRuntimeOpts,
+    }
+
+    const onFallback = vi.fn()
+    const sessionOpts = { prompt: 'Task prompt', isCancelled: () => false }
+
+    const res = await ResilientModelDispatcher.executeWithFallback(plan, sessionOpts, onFallback)
+
+    expect(res.output).toBe('Heavy tier recovered output')
+    expect(res.usedModel).toBe('qwen2.5-coder:14b')
+    expect(res.isEscalated).toBe(true)
+    expect(mockFetch).toHaveBeenCalled()
+  })
+
   it('should use intermediateModel when primary fails and intermediate succeeds', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockRejectedValueOnce(new Error('Deep model timeout'))

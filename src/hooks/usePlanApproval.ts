@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AgentPlan, AppSettings, PlanMilestone, InterviewQuestion, UserInterviewAnswer } from '../types'
+import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
 
 export type { AgentPlan } from '../types'
@@ -208,6 +209,7 @@ export function usePlanApproval({
           return copy
         })
         setIsGeneratingPlan(false)
+        soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
         return finalPlan
       } catch (err: any) {
         logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
@@ -329,6 +331,7 @@ export function usePlanApproval({
           if (interviewRes?.hasQuestions && interviewRes.questions && interviewRes.questions.length > 0) {
             setInterviewQuestions(interviewRes.questions)
             setIsInterviewActive(true)
+            soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
             return null
           }
         } catch (err: any) {

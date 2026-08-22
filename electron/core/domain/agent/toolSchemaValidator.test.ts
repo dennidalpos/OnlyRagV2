@@ -125,4 +125,54 @@ describe('ToolSchemaValidator Unit Tests', () => {
     expect(res.sanitizedToolCall.parameters.replacements?.[0]?.targetContent).toBe('old')
     expect(res.sanitizedToolCall.parameters.replacements?.[0]?.replacementContent).toBe('new')
   })
+
+  it('should validate and coerce create_directory parameters and detect missing dirPath', () => {
+    const valid = validateAndSanitize({
+      tool: 'create_directory',
+      parameters: { path: 'src/utils' } as any,
+    })
+    expect(valid.valid).toBe(true)
+    expect(valid.sanitizedToolCall.parameters.dirPath).toBe('src/utils')
+
+    const invalid = validateAndSanitize({
+      tool: 'create_directory',
+      parameters: {} as any,
+    })
+    expect(invalid.valid).toBe(false)
+    expect(invalid.errors[0]).toContain('dirPath')
+  })
+
+  it('should validate and coerce copy_file and move_file sourcePath and targetPath', () => {
+    const validCopy = validateAndSanitize({
+      tool: 'copy_file',
+      parameters: { source: 'src/a.ts', destination: 'src/b.ts' } as any,
+    })
+    expect(validCopy.valid).toBe(true)
+    expect(validCopy.sanitizedToolCall.parameters.sourcePath).toBe('src/a.ts')
+    expect(validCopy.sanitizedToolCall.parameters.targetPath).toBe('src/b.ts')
+
+    const invalidMove = validateAndSanitize({
+      tool: 'move_file',
+      parameters: { source: 'src/a.ts' } as any,
+    })
+    expect(invalidMove.valid).toBe(false)
+    expect(invalidMove.errors[0]).toContain('targetPath')
+  })
+
+  it('should validate list_files_recursive default and maxDepth bounds', () => {
+    const resDefault = validateAndSanitize({
+      tool: 'list_files_recursive',
+      parameters: {} as any,
+    })
+    expect(resDefault.valid).toBe(true)
+    expect(resDefault.sanitizedToolCall.parameters.dirPath).toBe('.')
+
+    const resDepth = validateAndSanitize({
+      tool: 'list_files_recursive',
+      parameters: { dirPath: 'src', maxDepth: '10' } as any,
+    })
+    expect(resDepth.valid).toBe(true)
+    expect(resDepth.sanitizedToolCall.parameters.maxDepth).toBe(6) // clamped to 6
+  })
 })
+

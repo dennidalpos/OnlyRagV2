@@ -1,7 +1,7 @@
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
-import type { ComplexityTier } from '../domain/agent/complexityEvaluator'
+import type { ModelTier } from '../domain/agent/complexityEvaluator'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
@@ -74,5 +74,5 @@ export interface ModelSelection {
   fallbackModel: string
   heavyEscalationModel: string | undefined
   runtimeOpts: OllamaRuntimeOptions
-  complexityTier: ComplexityTier
+  complexityTier: ModelTier
 }

@@ -47,7 +47,16 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 }) => {
   const { t } = useTranslation()
   const [step, setStep] = useState<number>(1)
-  const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(diagnostics)
+  const [enableSystemRamOffloading, setEnableSystemRamOffloading] = useState<boolean>(
+    Boolean(settings.enableSystemRamOffloading)
+  )
+  const [enableSoundEffects, setEnableSoundEffects] = useState<boolean>(
+    settings.enableSoundEffects !== false
+  )
+  const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(
+    diagnostics,
+    enableSystemRamOffloading
+  )
 
   // Derived directly from diagnostics so it reacts to onRefreshDiagnostics() without stale state
   const downloadedModels = diagnostics?.ollama.models ?? []
@@ -444,10 +453,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }
 
   const handleAutoApplyRecommended = () => {
+    const recHeavy =
+      recommendations.heavyEscalationTierModels.find((m) => m.isRecommended)?.modelName || ''
     setSelectedFast(recFast)
     setSelectedStandard(recStandard)
     setSelectedDeep(recDeep)
-    setSelectedHeavy('')
+    setSelectedHeavy(recHeavy)
     setSelectedChat(recChat)
     setSelectedTranslation(recTrans)
     setSelectedVision(recVision)
@@ -465,7 +476,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       complexityFastModel: recFast,
       complexityStandardModel: recStandard,
       complexityDeepModel: recDeep,
-      complexityHeavyModel: '',
+      complexityHeavyModel: recHeavy,
       codingModel: recStandard,
       chatModel: recChat,
       translationModel: recTrans,
@@ -473,6 +484,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       embeddingModel: recEmbedding,
       hardwareProfile: 'Auto',
       ocrEngine: 'native_cuda',
+      enableSystemRamOffloading,
+      enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
     setStep(6)
@@ -495,6 +508,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       embeddingModel: selectedEmbedding,
       hardwareProfile,
       ocrEngine,
+      enableSystemRamOffloading,
+      enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
     onClose()
@@ -670,6 +685,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               onSelectOcrEngine={setOcrEngine}
               maxToolCallSteps={settings.maxToolCallSteps ?? 50}
               onChangeMaxToolCallSteps={(val) => onUpdateSettings({ maxToolCallSteps: val })}
+              enableSystemRamOffloading={enableSystemRamOffloading}
+              onToggleSystemRamOffloading={setEnableSystemRamOffloading}
+              enableSoundEffects={enableSoundEffects}
+              onToggleSoundEffects={setEnableSoundEffects}
             />
           )}
 

@@ -261,6 +261,13 @@ export async function runAgentOrchestratorLoop(
       finalizeSession,
     })
     if (dispatchOutcome.outcome === 'return') return dispatchOutcome.result
+    if (
+      dispatchOutcome.data.targetModel &&
+      dispatchOutcome.data.heavyEscalationModel &&
+      dispatchOutcome.data.targetModel === dispatchOutcome.data.heavyEscalationModel
+    ) {
+      mutableFlags.currentOverriddenModel = dispatchOutcome.data.targetModel
+    }
     const {
       streamedOutput,
       hasRecentToolFailure,

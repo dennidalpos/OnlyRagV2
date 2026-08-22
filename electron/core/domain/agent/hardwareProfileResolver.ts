@@ -1,6 +1,6 @@
 import os from 'node:os'
 import type { HardwareProfile } from '../../../../src/types'
-import type { ComplexityTier } from './complexityEvaluator'
+import type { ModelTier } from './complexityEvaluator'
 import { resolveEffectiveTier } from '../../../../src/services/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
@@ -52,7 +52,7 @@ export class HardwareProfileResolver {
   static resolveOllamaOptions(
     profile: HardwareProfile = 'Auto',
     env?: HardwareEnvironment,
-    tier?: ComplexityTier
+    tier?: ModelTier
   ): OllamaRuntimeOptions {
     const cpuCores = env?.cpuCount || os.cpus()?.length || 4
     const safeCpuThreads = Math.max(1, cpuCores - 1)
@@ -74,20 +74,20 @@ export class HardwareProfileResolver {
       const ramGB = env.systemRamGB || 0
       if (effectiveTier === 'Low' && ramGB >= 16) {
         effectiveTier = 'Medium'
-      } else if (effectiveTier === 'Medium' && ramGB >= 32 && tier === 'deep_reasoning') {
+      } else if (effectiveTier === 'Medium' && ramGB >= 32 && (tier === 'deep_reasoning' || tier === 'heavy')) {
         effectiveTier = 'High'
       }
     }
 
     // Generation cap scales with the tier's expected answer size, not with the hardware:
     // a small model on a fast task still only has to emit one compact tool call.
-    const numPredict = tier === 'fast' ? 4096 : tier === 'deep_reasoning' ? 8192 : 6144
+    const numPredict = tier === 'fast' ? 4096 : (tier === 'deep_reasoning' || tier === 'heavy') ? 8192 : 6144
 
     // Base profile configurations with hardware-constrained context windows.
     // num_thread is set on every tier: a Medium/High profile can still be running on a
     // CPU-only or low-VRAM machine, where leaving Ollama's thread count unset costs throughput.
     if (effectiveTier === 'Low') {
-      const isDeep = tier === 'deep_reasoning'
+      const isDeep = tier === 'deep_reasoning' || tier === 'heavy'
       return {
         num_ctx: isDeep ? 8192 : 4096,
         temperature: 0.1,
@@ -102,7 +102,7 @@ export class HardwareProfileResolver {
 
     if (effectiveTier === 'Medium') {
       const isFast = tier === 'fast'
-      const isDeep = tier === 'deep_reasoning'
+      const isDeep = tier === 'deep_reasoning' || tier === 'heavy'
       return {
         num_ctx: isFast ? 4096 : isDeep ? 8192 : 8192,
         temperature: 0.1,
@@ -117,7 +117,7 @@ export class HardwareProfileResolver {
 
     // High tier
     const isFast = tier === 'fast'
-    const isDeep = tier === 'deep_reasoning'
+    const isDeep = tier === 'deep_reasoning' || tier === 'heavy'
     return {
       num_ctx: isFast ? 8192 : isDeep ? 32768 : 16384,
       temperature: 0.1,

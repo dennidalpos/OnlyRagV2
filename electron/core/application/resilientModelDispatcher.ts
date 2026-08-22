@@ -204,6 +204,15 @@ export class ResilientModelDispatcher {
       }
 
       if (primaryModel === fallbackModel || !fallbackModel) {
+        if (heavyEscalationModel && heavyEscalationModel !== primaryModel) {
+          return this.escalateToHeavyTier(
+            heavyEscalationModel,
+            sessionOpts,
+            runtimeOpts,
+            primaryErr.message,
+            onFallbackTriggered
+          )
+        }
         throw primaryErr
       }
 

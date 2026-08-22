@@ -16,6 +16,8 @@ import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTur
 
 /** Complexity-routes the turn to a model, then resolves the tier's hardware-tuned runtime options. */
 export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailure: boolean, errorCountInHistory: number): ModelSelection {
+  const cachedGpu = getCachedGpuInfo()
+  const memInfo = getMemoryInfo()
   const routedComplexity = evaluateTaskComplexity(ctx.userTask, {
     attachedFilesCount: ctx.payload.pinnedFiles?.length || 0,
     contextSizeChars: ctx.payload.activeFile?.content?.length || 0,
@@ -23,6 +25,9 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
     availableModels: ctx.availableModels,
     hasRecentToolFailure,
     errorCountInHistory,
+    vramTotalMB: cachedGpu?.vramTotalMB,
+    systemRamGB: memInfo?.totalRAMGB,
+    enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
   })
   if (routedComplexity.isEscalated && ctx.stepCount > 1) {
     ctx.emitLog('info', `⚡ Complexity Escalated: ${routedComplexity.modelName}`, routedComplexity.reasoning)
@@ -52,13 +57,12 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
     ctx.session.ollamaContextModel = undefined
   }
 
-  const cachedGpu = getCachedGpuInfo()
   const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
     ctx.settings.hardwareProfile,
     {
       hasGpu: cachedGpu?.hasNvidiaGpu,
       vramTotalMB: cachedGpu?.vramTotalMB,
-      systemRamGB: getMemoryInfo().totalRAMGB,
+      systemRamGB: memInfo.totalRAMGB,
       cpuCount: os.cpus()?.length,
       enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
     },

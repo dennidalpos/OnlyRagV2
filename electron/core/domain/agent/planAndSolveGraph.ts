@@ -183,7 +183,7 @@ export class GoalDecompositionPlanner {
       const activeM = this.getActiveMilestone()
       if (activeM) {
         lines.push(
-          `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus strictly on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Execute ONLY the actions required for this specific milestone.\n2. Do NOT jump ahead to subsequent milestones.\n3. Do NOT invoke "finish" until this active milestone and all prior milestones are completed and verified.`
+          `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus strictly on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Execute ONLY the actions required for this specific milestone.\n2. Do NOT jump ahead to subsequent milestones.\n3. Do NOT invoke "finish" until this active milestone and all prior milestones are completed and verified.\n4. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command or tool mentioned in this milestone fails or is blocked (e.g. naming restrictions, uppercase letters, or tool timeouts), DO NOT repeat the failing command. Adapt IMMEDIATELY: fix parameters (e.g. lowercase name) or construct the required files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx).`
         )
       }
     }
@@ -228,16 +228,11 @@ export class GoalDecompositionPlanner {
 
     const blocks: RawBlock[] = []
     let currentBlock: RawBlock | null = null
-    let inCodeBlock = false
 
     for (const rawLine of rawLines) {
-      if (rawLine.trim().startsWith('```')) {
-        inCodeBlock = !inCodeBlock
-        continue
-      }
-      if (inCodeBlock) continue
-
       const trimmed = rawLine.trim()
+      // Skip markdown code fence delimiters (```markdown, ```, etc.) without discarding plan lines inside
+      if (trimmed.startsWith('```')) continue
       if (!trimmed || trimmed.startsWith('#')) continue
 
       const isIndented = /^\s{2,}/.test(rawLine) || rawLine.startsWith('\t')

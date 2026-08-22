@@ -508,6 +508,8 @@ export interface TranslationSchema {
     queueLiveStatusQueued: string
     wordWrap: string
     wordWrapDesc: string
+    soundEffects: string
+    soundEffectsDesc: string
   }
   about: {
     title: string

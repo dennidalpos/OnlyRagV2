@@ -2,6 +2,7 @@ import { dialog, BrowserWindow } from 'electron'
 import { logger } from '../../diagnostics'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { systemStorageRepository } from '../infrastructure/filesystem/systemStorageRepository'
+import { estimateModelWeightGB } from '../../../src/services/hardwareRecommendationEngine'
 
 export interface DiskSpaceCheckResult {
   allowed: boolean
@@ -17,32 +18,8 @@ export class SystemAppService {
   }
 
   estimateModelSizeBytes(modelName: string): number {
-    const name = modelName.toLowerCase()
-    let sizeGB = 4.8
-
-    if (name.includes('nomic')) {
-      sizeGB = 0.3
-    } else if (name.includes('mxbai')) {
-      sizeGB = 0.7
-    } else if (name.includes('bge-m3')) {
-      sizeGB = 1.1
-    } else if (name.includes('embed') || name.includes('minilm')) {
-      sizeGB = 0.5
-    } else if (name.includes('1b') || name.includes('1.5b')) {
-      sizeGB = 1.2
-    } else if (name.includes('3b') || name.includes('moondream') || name.includes('phi')) {
-      sizeGB = 2.2
-    } else if (name.includes('7b') || name.includes('8b') || name.includes('llava') || name.includes('minicpm')) {
-      sizeGB = 4.8
-    } else if (name.includes('11b') || name.includes('14b')) {
-      sizeGB = 8.5
-    } else if (name.includes('32b') || name.includes('33b')) {
-      sizeGB = 20.0
-    } else if (name.includes('70b')) {
-      sizeGB = 40.0
-    }
-
-    return sizeGB * 1024 * 1024 * 1024
+    const weightGB = estimateModelWeightGB(modelName)
+    return Math.round(weightGB * 1024 * 1024 * 1024)
   }
 
   getDiskFreeSpace(targetPath?: string): { freeBytes: number; totalBytes: number } {

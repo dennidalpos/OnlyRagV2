@@ -1,6 +1,6 @@
 import { PromptCompiler } from './promptCompiler'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
-import type { ComplexityTier } from './complexityEvaluator'
+import type { ModelTier } from './complexityEvaluator'
 import type { AppSettings } from '../../../../src/types'
 import type { AgentMode } from './agentTypes'
 
@@ -11,7 +11,7 @@ export interface PromptAssemblerInput {
   stepCount: number
   maxSteps: number
   /** Drives which of the family-agnostic coding prompts is selected (see promptPresets.ts). */
-  complexityTier: ComplexityTier
+  complexityTier: ModelTier
   workspacePath?: string | null
   isStandaloneMode?: boolean
   activeFile?: { name: string; path: string; content: string } | null

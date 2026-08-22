@@ -329,6 +329,61 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
     }
 
+    case 'list_files_recursive': {
+      if (!rawParams.dirPath) {
+        rawParams.dirPath = '.'
+      } else {
+        rawParams.dirPath = String(rawParams.dirPath)
+      }
+      if (rawParams.maxDepth !== undefined) {
+        const parsed = Number(rawParams.maxDepth)
+        rawParams.maxDepth = isNaN(parsed) ? 3 : Math.max(1, Math.min(6, Math.floor(parsed)))
+      }
+      break
+    }
+
+    case 'create_directory': {
+      const targetDir = rawParams.dirPath || rawParams.filePath
+      if (!targetDir) {
+        errors.push("Missing required parameter 'dirPath' for create_directory")
+      } else {
+        rawParams.dirPath = String(targetDir)
+      }
+      break
+    }
+
+    case 'copy_file': {
+      const src = rawParams.sourcePath || rawParams.filePath
+      const dst = rawParams.targetPath || rawParams.destination
+      if (!src) {
+        errors.push("Missing required parameter 'sourcePath' for copy_file")
+      } else {
+        rawParams.sourcePath = String(src)
+      }
+      if (!dst) {
+        errors.push("Missing required parameter 'targetPath' for copy_file")
+      } else {
+        rawParams.targetPath = String(dst)
+      }
+      break
+    }
+
+    case 'move_file': {
+      const src = rawParams.sourcePath || rawParams.filePath
+      const dst = rawParams.targetPath || rawParams.destination
+      if (!src) {
+        errors.push("Missing required parameter 'sourcePath' for move_file")
+      } else {
+        rawParams.sourcePath = String(src)
+      }
+      if (!dst) {
+        errors.push("Missing required parameter 'targetPath' for move_file")
+      } else {
+        rawParams.targetPath = String(dst)
+      }
+      break
+    }
+
     case 'grep_search': {
       if (!rawParams.query) {
         errors.push("Missing required parameter 'query' for grep_search")

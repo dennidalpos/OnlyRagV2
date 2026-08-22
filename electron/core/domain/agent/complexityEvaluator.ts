@@ -2,6 +2,8 @@ import { encode } from 'gpt-tokenizer'
 import type { AppSettings } from '../../../../src/types'
 import {
   calculateRealUsableVram,
+  calculateUsableSystemRamGB,
+  calculateHybridUsableMemoryGB,
   classifyTierFromSafeBudget,
   resolveEffectiveTier,
   CPU_INFERENCE_WEIGHT_BUDGET_GB,
@@ -13,6 +15,7 @@ import {
   FAST_TIER_CATALOG,
   STANDARD_TIER_CATALOG,
   DEEP_REASONING_TIER_CATALOG,
+  HEAVY_ESCALATION_TIER_CATALOG,
 } from '../../../../src/services/hardwareModelCatalog'
 
 export type ComplexityTier = 'fast' | 'standard' | 'deep_reasoning'
@@ -20,7 +23,7 @@ export type ComplexityTier = 'fast' | 'standard' | 'deep_reasoning'
 export type ModelTier = ComplexityTier | 'heavy'
 
 export interface ComplexityRouteResult {
-  tier: ComplexityTier
+  tier: ModelTier
   tierName: string
   modelName: string
   reasoning: string
@@ -37,8 +40,10 @@ export interface ComplexityEvaluationContext {
   errorCountInHistory?: number
   consecutiveSuccessCount?: number
   vramTotalMB?: number
+  systemRamGB?: number
   hardwareProfile?: 'Low' | 'Medium' | 'High' | 'Auto'
   safeVramBudgetGB?: number
+  enableSystemRamOffloading?: boolean
 }
 
 export function findMatchingInstalledModel(target: string, available: string[]): string | null {
@@ -134,6 +139,11 @@ export function evaluateTaskComplexity(
   const vramTotalMB = context.vramTotalMB
   const hardwareProfile: 'Low' | 'Medium' | 'High' | 'Auto' = context.hardwareProfile || activeSettings?.hardwareProfile || 'Auto'
 
+  const enableSystemRamOffloading = Boolean(
+    context.enableSystemRamOffloading ?? activeSettings?.enableSystemRamOffloading
+  )
+  const systemRamGB = context.systemRamGB || 16
+
   const hasGpu = vramTotalMB !== undefined && vramTotalMB > 0
   const safeVramBudgetGB: number = context.safeVramBudgetGB !== undefined
     ? context.safeVramBudgetGB
@@ -141,14 +151,18 @@ export function evaluateTaskComplexity(
       ? calculateRealUsableVram(vramTotalMB as number)
       : TIER_NOMINAL_SAFE_BUDGET_GB[resolveEffectiveTier(hardwareProfile)]
 
+  const effectiveBudgetGB = enableSystemRamOffloading && hasGpu
+    ? calculateHybridUsableMemoryGB(vramTotalMB || 0, systemRamGB)
+    : safeVramBudgetGB
+
   const profileTier: HardwareProfileTier = hardwareProfile !== 'Auto'
     ? resolveEffectiveTier(hardwareProfile)
-    : classifyTierFromSafeBudget(safeVramBudgetGB, hasGpu)
+    : classifyTierFromSafeBudget(effectiveBudgetGB, hasGpu)
 
   const modelBudgetGB = profileTier === 'legacy'
-    ? CPU_INFERENCE_WEIGHT_BUDGET_GB
-    : safeVramBudgetGB > 0
-      ? safeVramBudgetGB
+    ? (enableSystemRamOffloading ? calculateUsableSystemRamGB(systemRamGB) : CPU_INFERENCE_WEIGHT_BUDGET_GB)
+    : effectiveBudgetGB > 0
+      ? effectiveBudgetGB
       : TIER_NOMINAL_SAFE_BUDGET_GB[profileTier]
   const chainTarget = { profileTier, budgetGB: modelBudgetGB }
 
@@ -231,28 +245,54 @@ export function evaluateTaskComplexity(
     }
   }
 
-  const tierCatalog = tier === 'fast'
-    ? FAST_TIER_CATALOG
-    : tier === 'deep_reasoning'
-      ? DEEP_REASONING_TIER_CATALOG
-      : STANDARD_TIER_CATALOG
+  const isHeavyEscalationTurn =
+    Boolean(activeSettings?.complexityHeavyModel) &&
+    isEscalated &&
+    errorCountInHistory >= 2
+
+  const tierCatalog = isHeavyEscalationTurn
+    ? HEAVY_ESCALATION_TIER_CATALOG
+    : tier === 'fast'
+      ? FAST_TIER_CATALOG
+      : tier === 'deep_reasoning'
+        ? DEEP_REASONING_TIER_CATALOG
+        : STANDARD_TIER_CATALOG
   const candidateFallbacks = [...buildFallbackChain(tierCatalog, chainTarget), defaultStandard]
 
-  const configuredModel = tier === 'fast'
-    ? activeSettings?.complexityFastModel
-    : tier === 'deep_reasoning'
-      ? activeSettings?.complexityDeepModel
-      : defaultStandard
+  const configuredModel = isHeavyEscalationTurn
+    ? activeSettings?.complexityHeavyModel
+    : tier === 'fast'
+      ? activeSettings?.complexityFastModel
+      : tier === 'deep_reasoning'
+        ? activeSettings?.complexityDeepModel
+        : defaultStandard
   const preferredModel = configuredModel || candidateFallbacks[0]
 
   const { model: selectedModel, isFallback } = resolveModelWithFallback(preferredModel, candidateFallbacks, availableModels)
 
+  const tierName = isHeavyEscalationTurn
+    ? 'Heavy Escalation Tier'
+    : tier === 'fast'
+      ? 'Fast Tier'
+      : tier === 'deep_reasoning'
+        ? (isEscalated ? 'Escalated Deep Reasoning Tier' : 'Deep Reasoning Tier')
+        : 'Standard Tier'
+
+  if (isHeavyEscalationTurn) {
+    reasoning = `Auto-healing: Escalation a Heavy Tier (${selectedModel}) per task ad alta complessità o errori ripetuti`
+  }
+
+  const resolvedTier: ModelTier =
+    isHeavyEscalationTurn || (Boolean(activeSettings?.complexityHeavyModel) && selectedModel === activeSettings?.complexityHeavyModel)
+      ? 'heavy'
+      : tier
+
   return {
-    tier,
-    tierName: tier === 'fast' ? 'Fast Tier' : tier === 'deep_reasoning' ? (isEscalated ? 'Escalated Deep Reasoning Tier' : 'Deep Reasoning Tier') : 'Standard Tier',
+    tier: resolvedTier,
+    tierName,
     modelName: selectedModel,
     reasoning,
-    isEscalated,
+    isEscalated: isEscalated || isHeavyEscalationTurn,
     isFallback,
   }
 }

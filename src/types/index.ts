@@ -218,6 +218,8 @@ export interface AppSettings {
   autoInstallMinScore?: number
   // Internationalization
   language?: 'it' | 'en'
+  // Sound Effects
+  enableSoundEffects?: boolean
   // Editor & Display Options
   editorWordWrap?: boolean
 }

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench } from 'lucide-react'
 import { AppSettings } from '../../types'
-import { ComplexityRouteResult } from '../../services/complexityRouterService'
+import { ComplexityRouteResult, ModelTier } from '../../services/complexityRouterService'
 import { ModelBadge } from '../common/ModelBadge'
 import { useTranslation } from '../../i18n'
 
@@ -14,6 +14,8 @@ interface CodingHeaderProps {
   complexity: ComplexityRouteResult
   /** Model actually driving the agent: complexity.modelName when routing is on, otherwise the fixed coding model. */
   activeModel: string
+  /** Live executing tier during agent turns (optional) */
+  activeTier?: ModelTier | null
   onOpenDiagnosticsModal?: () => void
   onOpenSkillHubModal?: () => void
 }
@@ -25,6 +27,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   activeSkills = [],
   complexity,
   activeModel,
+  activeTier,
   onOpenDiagnosticsModal,
   onOpenSkillHubModal,
 }: CodingHeaderProps & { _onUpdateSettings?: any }) => {
@@ -185,9 +188,38 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         {/* Model Badge with Complexity Router Tier */}
         <ModelBadge
           modelName={activeModel}
-          tier={settings?.useComplexityRouting ? complexity.tier : undefined}
-          tierName={complexity.tierName}
-          tooltip={settings?.useComplexityRouting ? `Complexity Router: ${complexity.tierName} (${activeModel}) — ${complexity.reasoning}` : `Coding Model: ${activeModel}`}
+          tier={
+            activeTier ||
+            (settings?.useComplexityRouting
+              ? complexity.tier
+              : activeModel === settings?.complexityHeavyModel
+              ? 'heavy'
+              : activeModel === settings?.complexityDeepModel
+              ? 'deep_reasoning'
+              : activeModel === settings?.complexityFastModel
+              ? 'fast'
+              : activeModel === settings?.complexityStandardModel
+              ? 'standard'
+              : undefined)
+          }
+          tierName={
+            activeTier === 'heavy' || activeModel === settings?.complexityHeavyModel
+              ? 'Heavy Escalation Tier'
+              : activeTier === 'deep_reasoning' || activeModel === settings?.complexityDeepModel
+              ? 'Deep Reasoning Tier'
+              : activeTier === 'fast' || activeModel === settings?.complexityFastModel
+              ? 'Fast Tier'
+              : activeTier === 'standard' || activeModel === settings?.complexityStandardModel
+              ? 'Standard Tier'
+              : settings?.useComplexityRouting
+              ? complexity.tierName
+              : undefined
+          }
+          tooltip={
+            settings?.useComplexityRouting
+              ? `Complexity Router: ${activeTier || complexity.tierName} (${activeModel}) — ${complexity.reasoning}`
+              : `Coding Model: ${activeModel}`
+          }
         />
       </div>
     </header>

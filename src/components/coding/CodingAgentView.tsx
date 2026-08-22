@@ -81,7 +81,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     activeRequest: activeSkillInstallRequest,
     approveInstall: approveSkillInstall,
     rejectInstall: rejectSkillInstall,
-  } = useSkillInstallApproval()
+  } = useSkillInstallApproval(settings)
 
   const routedComplexity = useMemo(() => {
     const promptForRouting = c.isExecuting ? lastExecutedPrompt : c.agentPrompt
@@ -90,12 +90,31 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
       contextSizeChars: c.editorContent.length,
       settings,
       availableModels: diagnostics?.ollama?.models,
+      vramTotalMB: diagnostics?.gpu?.vramTotalMB,
+      systemRamGB: diagnostics?.memory?.totalRAMGB,
+      enableSystemRamOffloading: settings?.enableSystemRamOffloading,
     })
-  }, [settings, c.isExecuting, lastExecutedPrompt, c.agentPrompt, c.pinnedFiles.size, c.editorContent.length, diagnostics?.ollama?.models])
+  }, [
+    settings,
+    c.isExecuting,
+    lastExecutedPrompt,
+    c.agentPrompt,
+    c.pinnedFiles.size,
+    c.editorContent.length,
+    diagnostics?.ollama?.models,
+    diagnostics?.gpu?.vramTotalMB,
+    diagnostics?.memory?.totalRAMGB,
+  ])
 
-  const activeModelName = settings?.useComplexityRouting
+  const activeModelName = (c.isExecuting && c.currentLiveModel)
+    ? c.currentLiveModel
+    : settings?.useComplexityRouting
     ? routedComplexity.modelName
     : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+
+  const activeComplexityTier = (c.isExecuting && c.currentLiveTier)
+    ? c.currentLiveTier
+    : routedComplexity.tier
 
   const hasPendingUnconsolidatedMilestones = useMemo(() => {
     if (c.isExecuting) return false
@@ -164,6 +183,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         activeSkills={c.activeSkills}
         complexity={routedComplexity}
         activeModel={activeModelName}
+        activeTier={activeComplexityTier}
         onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
         onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
       />

@@ -508,6 +508,8 @@ export const en: TranslationSchema = {
     queueLiveStatusQueued: 'Queued',
     wordWrap: 'Word wrap',
     wordWrapDesc: 'Enables automatic word wrap for long lines in Monaco editors, previews, and text log viewers.',
+    soundEffects: 'Notification Sound Effects',
+    soundEffectsDesc: 'Subtle synthetic audio feedback cues for execution errors, interactive user prompts, and task completion.',
   },
   about: {
     title: 'About OnlyRag V2',

@@ -508,6 +508,8 @@ export const it: TranslationSchema = {
     queueLiveStatusQueued: 'In coda',
     wordWrap: 'A capo automatico',
     wordWrapDesc: 'Attiva il ritorno a capo automatico delle righe lunghe negli editor Monaco, anteprime e visualizzatori di testo.',
+    soundEffects: 'Effetti Sonori di Notifica',
+    soundEffectsDesc: 'Segnali acustici sintetici non invasivi per errori di esecuzione, richieste interattive e completamento dei task.',
   },
   about: {
     title: 'Informazioni su OnlyRag V2',

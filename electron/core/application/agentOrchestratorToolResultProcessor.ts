@@ -86,6 +86,10 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     distilledOutput
   )
 
+  if (!isToolFailure && ctx.flags.currentOverriddenModel) {
+    ctx.flags.currentOverriddenModel = null
+  }
+
   if (isMutating && !isToolFailure) {
     await recordMutationSideEffects(ctx, targetParam)
   }

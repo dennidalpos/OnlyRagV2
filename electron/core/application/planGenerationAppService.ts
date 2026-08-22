@@ -29,7 +29,7 @@ const PLAN_SYSTEM_PROMPT =
   'STRICT MICRO-TASK ARCHITECTURE FOR SMALL LANGUAGE MODELS (SLMs):\n' +
   '1. ATOMICITY (1 ACTION = 1 MICRO-TASK): Every single item MUST represent exactly ONE discrete, isolated action (e.g. create a specific file, install dependencies, implement one specific component, run build/typecheck). NEVER bundle multiple files or entire architectural layers into a single broad macro-step.\n' +
   '2. SEQUENTIAL WORKFLOW (Typically 5 to 15 granular microtasks):\n' +
-  '   - Scaffolding & Config first (e.g. `package.json`, `vite.config.ts`, `tsconfig.json`)\n' +
+  '   - Scaffolding & Config first: Prefer direct file creation (`package.json`, `vite.config.ts`, `tsconfig.json`, `index.html`) using write_file, or modern lowercase commands. NEVER generate deprecated commands (e.g. do NOT use `create-react-app`) and NEVER use uppercase project names (e.g. do NOT use `create-react-app ProjectDashboardTask`).\n' +
   '   - Core styles & utilities (e.g. `src/styles/globals.css`, `src/utils/helpers.ts`)\n' +
   '   - Individual discrete UI components (1 component per microtask: e.g. `src/components/Sidebar.tsx`, then `src/components/TaskCard.tsx`)\n' +
   '   - Pages & Views (1 page per microtask: e.g. `src/pages/Dashboard.tsx`, then `src/pages/Tasks.tsx`)\n' +

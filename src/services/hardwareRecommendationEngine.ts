@@ -461,11 +461,14 @@ export function isOllamaModelInstalled(targetModel: string, downloadedModels: st
  * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments
  * strictly bound by net usable VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
  */
-export function analyzeHardwareAndRecommend(diagnostics: DiagnosticsData | null): HardwareRecommendations {
+export function analyzeHardwareAndRecommend(
+  diagnostics: DiagnosticsData | null,
+  enableSystemRamOffloading: boolean = false
+): HardwareRecommendations {
   const { profileTier, profileName, vramTotalMB, systemRamGB, safeVramBudgetGB, gpuSummary, ramSummary } =
     resolveHardwareProfile(diagnostics)
 
-  const enrich = buildModelEnricher(diagnostics, vramTotalMB, systemRamGB, profileTier)
+  const enrich = buildModelEnricher(diagnostics, vramTotalMB, systemRamGB, profileTier, enableSystemRamOffloading)
 
   return {
     profileTier,
@@ -559,7 +562,8 @@ function buildModelEnricher(
   diagnostics: DiagnosticsData | null,
   vramTotalMB: number,
   systemRamGB: number,
-  profileTier: HardwareProfileTier
+  profileTier: HardwareProfileTier,
+  enableSystemRamOffloading: boolean = false
 ) {
   return (item: RawModelCatalogEntry, tier?: ModelTier): ModelRecommendation => {
     const assessment = assessModelHardwareCompatibility(
@@ -567,15 +571,24 @@ function buildModelEnricher(
       vramTotalMB,
       systemRamGB,
       4096,
-      diagnostics?.ollama.modelDetails?.[item.modelName]
+      diagnostics?.ollama.modelDetails?.[item.modelName],
+      enableSystemRamOffloading
     )
+    const isRecommendedByProfile = item.recommendedForProfiles.includes(profileTier)
+    const isRecommended =
+      isRecommendedByProfile ||
+      (enableSystemRamOffloading &&
+        tier === 'heavy' &&
+        assessment.isCompatible &&
+        item.recommendedForProfiles.includes('highend'))
+
     return {
       modelName: item.modelName,
       displayName: item.displayName,
       family: item.family,
       sizeBytesApprox: item.sizeBytesApprox,
       description: item.description,
-      isRecommended: item.recommendedForProfiles.includes(profileTier),
+      isRecommended,
       tier,
       footprintGB: assessment.footprintGB,
       isHardwareCompatible: assessment.isCompatible,
@@ -607,7 +620,7 @@ interface EnvTuningContext {
  * user's environment, so the cache type is now only produced for GPU hosts.
  */
 function buildAttentionVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
-  if (!ctx.hasGpu) {
+  if (!ctx.hasGpu || ctx.profileTier === 'legacy') {
     return [
       {
         name: 'OLLAMA_FLASH_ATTENTION',

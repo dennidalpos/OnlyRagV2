@@ -586,6 +586,11 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       // OLLAMA_KV_CACHE_TYPE is only honoured by Ollama when flash attention is enabled.
       expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_KV_CACHE_TYPE')).toBeUndefined()
       expect(cpuEnv.variables.find((v) => v.name === 'OLLAMA_GPU_OVERHEAD')).toBeUndefined()
+
+      // Legacy GPU (e.g. 2GB VRAM) also sets flash attention to 0
+      const legacyGpuEnv = getRecommendedOllamaEnvVars(createMockDiagnostics(true, 2048, 8))
+      expect(legacyGpuEnv.profileTier).toBe('legacy')
+      expect(legacyGpuEnv.variables.find((v) => v.name === 'OLLAMA_FLASH_ATTENTION')?.value).toBe('0')
     })
 
     it('should clamp concurrency by physical core count, not by VRAM alone', () => {
@@ -634,6 +639,20 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       const withOffload = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 32, 4096, undefined, true)
       expect(withOffload.isCompatible).toBe(true)
       expect(withOffload.warning).toContain('Offloading ibrido')
+    })
+
+    it('should recommend 14B model in heavyEscalationTierModels when enableSystemRamOffloading is true on midrange GPU', () => {
+      const diag = createMockDiagnostics(true, 8192, 32)
+      const withoutOffload = analyzeHardwareAndRecommend(diag, false)
+      const heavy14bWithout = withoutOffload.heavyEscalationTierModels.find((m) => m.modelName.includes('14b'))
+      expect(heavy14bWithout?.isRecommended).toBe(false)
+      expect(heavy14bWithout?.isHardwareCompatible).toBe(false)
+
+      const withOffload = analyzeHardwareAndRecommend(diag, true)
+      const heavy14bWith = withOffload.heavyEscalationTierModels.find((m) => m.modelName.includes('14b'))
+      expect(heavy14bWith?.isRecommended).toBe(true)
+      expect(heavy14bWith?.isHardwareCompatible).toBe(true)
+      expect(heavy14bWith?.compatibilityStatus).toBe('tight_vram')
     })
   })
 })

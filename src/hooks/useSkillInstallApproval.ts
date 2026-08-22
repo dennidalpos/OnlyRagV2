@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
-import { SkillInstallApprovalRequest } from '../types'
+import { SkillInstallApprovalRequest, AppSettings } from '../types'
+import { soundEffectsService } from '../services/soundEffectsService'
 
 /**
  * Pending hub skill install confirmations raised by the agent loop when the
  * `autoInstallHubSkills` policy is set to 'prompt'. Requests are queued so a second
  * one never silently replaces a request the user has not answered yet.
  */
-export function useSkillInstallApproval() {
+export function useSkillInstallApproval(settings?: AppSettings) {
   const [pendingRequests, setPendingRequests] = useState<SkillInstallApprovalRequest[]>([])
 
   useEffect(() => {
     if (!window.electronAPI?.onAgentSkillInstallRequest) return
     return window.electronAPI.onAgentSkillInstallRequest((req: SkillInstallApprovalRequest) => {
       if (!req?.requestId) return
+      soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
       setPendingRequests((prev) => (prev.some((p) => p.requestId === req.requestId) ? prev : [...prev, req]))
     })
-  }, [])
+  }, [settings?.enableSoundEffects])
 
   const respond = useCallback((requestId: string, approved: boolean) => {
     window.electronAPI?.respondAgentSkillInstall?.(requestId, approved)

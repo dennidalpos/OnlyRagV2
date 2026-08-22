@@ -170,4 +170,27 @@ Here is the microtask execution plan:
     expect(parsed[6].id).toBe('m-7')
     expect(parsed[6].title).toBe('Run tsc --noEmit')
   })
+
+  it('should parse checklist plans wrapped inside markdown code blocks without skipping them', () => {
+    const rawFencedPlan = '```markdown\n' +
+      '- [ ] 1-1: Create a new React project using `npx create-react-app ProjectDashboardTask`\n' +
+      '- [ ] 1-2: Install Tailwind CSS\n' +
+      '- [ ] 1-3: Create src/pages/Dashboard.tsx\n' +
+      '- [ ] 1-4: Create src/pages/Tasks.tsx\n' +
+      '```\n' +
+      '22. 🛑 Completamento dell\'ultimo task, riepilogo finale e arresto dell\'agente (invoke "finish")'
+
+    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawFencedPlan)
+    expect(parsed.length).toBe(5)
+    expect(parsed[0].id).toBe('m-1')
+    expect(parsed[0].title).toContain('Create a new React project')
+    expect(parsed[1].id).toBe('m-2')
+    expect(parsed[1].title).toContain('Install Tailwind CSS')
+    expect(parsed[2].id).toBe('m-3')
+    expect(parsed[2].title).toContain('Dashboard.tsx')
+    expect(parsed[3].id).toBe('m-4')
+    expect(parsed[3].title).toContain('Tasks.tsx')
+    expect(parsed[4].id).toBe('m-5')
+    expect(parsed[4].title).toContain('Completamento dell\'ultimo task')
+  })
 })

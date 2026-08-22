@@ -45,10 +45,15 @@ export class ProjectRegistryAppService {
 
     // 4. Safely clean up the internal .onlyrag folder inside the removed workspace directory,
     // ensuring zero application residue (sessions, tracker, logs) while NEVER touching user repo files.
-    if (projectPath && typeof projectPath === 'string') {
+    if (projectPath && typeof projectPath === 'string' && projectPath.trim().length > 0) {
       try {
         const onlyragDir = path.join(projectPath, '.onlyrag')
-        if (fs.existsSync(onlyragDir)) {
+        // Strict guard: ensure path ends with '.onlyrag', is strictly a child directory, and exists
+        if (
+          path.basename(onlyragDir) === '.onlyrag' &&
+          onlyragDir !== projectPath &&
+          fs.existsSync(onlyragDir)
+        ) {
           await fs.promises.rm(onlyragDir, { recursive: true, force: true })
           logger.log('INFO', 'ProjectRegistryAppService', `Purged internal .onlyrag metadata at ${onlyragDir}`)
         }

@@ -65,6 +65,10 @@ describe('blocking dev-server command detection', () => {
     expect(isBlockingDevServerCommand('tsc --noEmit')).toBe(false)
     expect(isBlockingDevServerCommand('git status')).toBe(false)
     expect(isBlockingDevServerCommand('npm install')).toBe(false)
+    expect(isBlockingDevServerCommand('npm install react react-dom tailwindcss postcss autoprefixer vite')).toBe(false)
+    expect(isBlockingDevServerCommand('npm i -D vite @vitejs/plugin-react')).toBe(false)
+    expect(isBlockingDevServerCommand('pnpm add -D vite')).toBe(false)
+    expect(isBlockingDevServerCommand('yarn add vite')).toBe(false)
   })
 })
 

@@ -118,6 +118,34 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     expect(res.modelName).toBe('qwen2.5-coder:3b')
   })
 
+  it('should allow 14B model on 8GB GPU when enableSystemRamOffloading is true and RAM is sufficient', () => {
+    const ctxHybrid: ComplexityEvaluationContext = {
+      vramTotalMB: 8192,
+      systemRamGB: 32,
+      enableSystemRamOffloading: true,
+      availableModels: ['qwen2.5-coder:14b', 'qwen2.5-coder:7b'],
+    }
+    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxHybrid)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('qwen2.5-coder:14b')
+  })
+
+  it('should route to configured complexityHeavyModel when errorCountInHistory >= 2', () => {
+    const ctxHeavy: ComplexityEvaluationContext = {
+      hasRecentToolFailure: true,
+      errorCountInHistory: 2,
+      settings: {
+        complexityHeavyModel: 'qwen2.5-coder:14b',
+      } as any,
+      availableModels: ['qwen2.5-coder:14b', 'qwen2.5-coder:7b'],
+    }
+    const res = evaluateTaskComplexity('Fix the build error', ctxHeavy)
+    expect(res.tier).toBe('heavy')
+    expect(res.tierName).toBe('Heavy Escalation Tier')
+    expect(res.modelName).toBe('qwen2.5-coder:14b')
+    expect(res.isEscalated).toBe(true)
+  })
+
   it('should find matching installed models accurately with fuzzy tags', () => {
     const available = ['qwen2.5-coder:7b', 'llama3.1:8b', 'deepseek-r1:8b']
     expect(findMatchingInstalledModel('qwen2.5-coder:7b', available)).toBe('qwen2.5-coder:7b')

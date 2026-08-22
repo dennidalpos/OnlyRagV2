@@ -6,10 +6,10 @@ import {
   CODING_TOOLS_BLOCK,
   detectModelFamily,
 } from './promptPresets'
-import type { ComplexityTier } from './complexityEvaluator'
+import type { ComplexityTier, ModelTier } from './complexityEvaluator'
 import type { AppSettings } from '../../../../src/types'
 
-export type { ModelFamily, FeatureModule, ComplexityTier }
+export type { ModelFamily, FeatureModule, ComplexityTier, ModelTier }
 
 type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
 
@@ -54,9 +54,9 @@ export class PromptCompiler {
 
   /**
    * Compiles the coding-agent system prompt, family-agnostic and scaled by
-   * complexity tier (fast/standard/deep_reasoning) instead of model family —
+   * complexity tier (fast/standard/deep_reasoning/heavy) instead of model family —
    * see DEFAULT_CODING_TIER_PROMPTS. Custom overrides are keyed by tier
-   * ("coding:fast", "coding:standard", "coding:deep_reasoning") the same way
+   * ("coding:fast", "coding:standard", "coding:deep_reasoning", "coding:heavy") the same way
    * family-based modules key by family.
    *
    * When `toolCallingCapable` is true, the prose AVAILABLE AGENT TOOLS block
@@ -65,11 +65,11 @@ export class PromptCompiler {
    * repeating it in text would double-send the same schema (AGT2).
    */
   static compileCodingPrompt(
-    tier: ComplexityTier,
+    tier: ModelTier,
     variables: Record<string, string> = {},
     settings?: AppSettings,
     toolCallingCapable = false
-  ): { prompt: string; tier: ComplexityTier; isCustom: boolean } {
+  ): { prompt: string; tier: ModelTier; isCustom: boolean } {
     const overrideKey = `coding:${tier}`
 
     let template = ''
@@ -79,7 +79,8 @@ export class PromptCompiler {
       template = settings.customPromptOverrides[overrideKey]
       isCustom = true
     } else {
-      template = DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard
+      const baseTier: ComplexityTier = tier === 'heavy' ? 'deep_reasoning' : tier
+      template = DEFAULT_CODING_TIER_PROMPTS[baseTier] || DEFAULT_CODING_TIER_PROMPTS.standard
     }
 
     const effectiveVariables = {
@@ -104,8 +105,9 @@ export class PromptCompiler {
   /**
    * Get default coding template for a given complexity tier, without variable substitution.
    */
-  static getDefaultCodingTemplate(tier: ComplexityTier): string {
-    return DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard
+  static getDefaultCodingTemplate(tier: ModelTier): string {
+    const baseTier: ComplexityTier = tier === 'heavy' ? 'deep_reasoning' : tier
+    return DEFAULT_CODING_TIER_PROMPTS[baseTier] || DEFAULT_CODING_TIER_PROMPTS.standard
   }
 }
 

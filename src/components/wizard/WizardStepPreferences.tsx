@@ -1,5 +1,5 @@
 import React from 'react'
-import { Sliders, Cpu, Scan, Check, Layers } from 'lucide-react'
+import { Sliders, Cpu, Scan, Check, Layers, Volume2, VolumeX } from 'lucide-react'
 import { HardwareProfile } from '../../types'
 import { useTranslation } from '../../i18n'
 import { getHardwareProfileDefs } from '../../constants/hardwareProfiles'
@@ -11,6 +11,10 @@ export interface WizardStepPreferencesProps {
   onSelectOcrEngine: (engine: 'native_cuda' | 'vision_model') => void
   maxToolCallSteps: number
   onChangeMaxToolCallSteps: (steps: number) => void
+  enableSystemRamOffloading?: boolean
+  onToggleSystemRamOffloading?: (enabled: boolean) => void
+  enableSoundEffects?: boolean
+  onToggleSoundEffects?: (enabled: boolean) => void
 }
 
 export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
@@ -20,6 +24,10 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
   onSelectOcrEngine,
   maxToolCallSteps,
   onChangeMaxToolCallSteps,
+  enableSystemRamOffloading = false,
+  onToggleSystemRamOffloading,
+  enableSoundEffects = true,
+  onToggleSoundEffects,
 }) => {
   const { t } = useTranslation()
 
@@ -34,6 +42,38 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
         <p className="text-xs text-slate-400 mt-1">
           {t('hardwareWizard.runtimePrefsDesc')}
         </p>
+      </div>
+
+      {/* Hybrid System RAM Offloading (GPU + RAM) */}
+      <div className="space-y-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+              <Cpu className="w-4 h-4" /> {t('settings.enableSystemRamOffloadingTitle')}
+            </h4>
+            <p className="text-[11px] text-slate-400 leading-relaxed max-w-xl">
+              {t('settings.enableSystemRamOffloadingDesc')}
+            </p>
+          </div>
+          {onToggleSystemRamOffloading && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enableSystemRamOffloading}
+              onClick={() => onToggleSystemRamOffloading(!enableSystemRamOffloading)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-ring ${
+                enableSystemRamOffloading ? 'bg-cyan-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  enableSystemRamOffloading ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Hardware Profile Selector — shares copy with Settings > HardwareProfileSelector */}
@@ -190,6 +230,39 @@ export const WizardStepPreferences: React.FC<WizardStepPreferencesProps> = ({
               {t('hardwareWizard.visionModelOcrDesc')}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Sound Effects Preference */}
+      <div className="space-y-3 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+              {enableSoundEffects ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+              {t('settings.soundEffects')}
+            </h4>
+            <p className="text-[11px] text-slate-400 leading-relaxed max-w-xl">
+              {t('settings.soundEffectsDesc')}
+            </p>
+          </div>
+          {onToggleSoundEffects && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enableSoundEffects}
+              onClick={() => onToggleSoundEffects(!enableSoundEffects)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-ring ${
+                enableSoundEffects ? 'bg-cyan-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  enableSoundEffects ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          )}
         </div>
       </div>
     </div>

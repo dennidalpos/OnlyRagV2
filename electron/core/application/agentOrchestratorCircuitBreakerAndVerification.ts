@@ -8,7 +8,7 @@ export async function runCircuitBreaker(
   isToolFailure: boolean
 ): Promise<ToolResultProcessingOutcome | null> {
   const cbRes = ctx.circuitBreaker.recordStep(isMutating, isToolFailure)
-  if (!cbRes.shouldBreak || !ctx.isUnlimitedSteps) return null
+  if (!cbRes.shouldBreak) return null
 
   const escalation = ResilientModelDispatcher.getNextEscalationModel(ctx.targetModel, {
     fastModel: ctx.fallbackModel,
@@ -27,6 +27,8 @@ export async function runCircuitBreaker(
     ctx.circuitBreaker.reset()
     return null
   }
+
+  if (!ctx.isUnlimitedSteps) return null
 
   // No escalation model left to try: the breaker is forcing a hard pause, which means the task
   // did not complete -- must never be reported as a success.

@@ -15,7 +15,7 @@ async function dispatchToLlm(
   turnPrompt: string,
   contextReuseDecision: OllamaContextReuseDecision,
   wasCompacted: boolean
-): Promise<{ streamedOutput: string } | { error: string }> {
+): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
   let lastDispatchEscalated = false
   try {
     const dispatchRes = await ResilientModelDispatcher.executeWithFallback(
@@ -69,7 +69,7 @@ async function dispatchToLlm(
       ctx.emitLog('info', `🔺 Heavy Tier active (${dispatchRes?.usedModel || 'heavy'}): VRAM eviction applied before escalation.`)
     }
     ctx.session.activeHttpRequest = null
-    return { streamedOutput: dispatchRes?.output || '' }
+    return { streamedOutput: dispatchRes?.output || '', usedModel: dispatchRes?.usedModel }
   } catch (err: any) {
     return { error: err.message }
   }
@@ -127,9 +127,11 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
     return { outcome: 'return', result: { success: false, summary: 'Task cancelled' } }
   }
 
+  const effectiveUsedModel = dispatchResult.usedModel || selection.targetModel
+
   ctx.emitLog('info', `AI Agent (${ctx.agentMode.toUpperCase()} Step ${ctx.stepCount}):`, dispatchResult.streamedOutput, {
     category: 'agent_thought',
-    modelName: selection.targetModel,
+    modelName: effectiveUsedModel,
   })
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logLlmResponse(ctx.sessionId, ctx.stepCount, dispatchResult.streamedOutput)
@@ -142,7 +144,7 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
       hasRecentToolFailure,
       errorCountInHistory,
       compiledHistoryBlock,
-      targetModel: selection.targetModel,
+      targetModel: effectiveUsedModel,
       intermediateModel: selection.intermediateModel,
       fallbackModel: selection.fallbackModel,
       heavyEscalationModel: selection.heavyEscalationModel,

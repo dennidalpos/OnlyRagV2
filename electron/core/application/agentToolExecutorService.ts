@@ -67,11 +67,29 @@ function isLongRunningCommand(command: string): boolean {
  * long-running-install pattern) for zero useful signal -- observed in production logs blocking
  * the same session twice, 10 minutes each, with no error the model could learn from.
  */
-function isBlockingDevServerCommand(command: string): boolean {
-  const cmd = command.toLowerCase()
+function isBlockingDevServerSubcommand(subcmd: string): boolean {
+  const cmd = subcmd.trim().toLowerCase()
+  if (!cmd) return false
+
+  // If this subcommand is an install command (npm install, pnpm add, yarn add, bun i, etc.),
+  // it is NOT a dev server even if "vite" or "next" is in the package arguments!
+  if (/^(npm|pnpm|yarn|bun)\s+(install|i|add)\b/.test(cmd)) {
+    return false
+  }
+
+  // Pure build, test, lint, format or typecheck commands are not dev servers
+  if (
+    /^(npm|pnpm|yarn|bun)\s+(run\s+)?(build|test|lint|typecheck|check|format)\b/.test(cmd) ||
+    /^(npx\s+)?(tsc|eslint|prettier|vitest\s+run|jest\s+--runInBand)\b/.test(cmd) ||
+    /^(npx\s+)?vite\s+build\b/.test(cmd) ||
+    /^(npx\s+)?next\s+build\b/.test(cmd)
+  ) {
+    return false
+  }
+
   return (
     /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|preview)\b/.test(cmd) ||
-    (/\bvite\b/.test(cmd) && !/\bbuild\b/.test(cmd)) ||
+    (/^(npx\s+)?vite(\.js|\.cmd|\.exe)?(\s+(dev|serve|preview))?$/i.test(cmd)) ||
     (/\bnext\s+(dev|start)\b/.test(cmd)) ||
     /\bng\s+serve\b/.test(cmd) ||
     /\bwebpack(-dev-server)?\s+serve\b/.test(cmd) ||
@@ -80,6 +98,11 @@ function isBlockingDevServerCommand(command: string): boolean {
     /-m\s+http\.server\b/.test(cmd) ||
     /--watch(all)?\b/.test(cmd)
   )
+}
+
+function isBlockingDevServerCommand(command: string): boolean {
+  const subcommands = command.split(/[;&|]/)
+  return subcommands.some((sub) => isBlockingDevServerSubcommand(sub))
 }
 
 /**
@@ -1112,6 +1135,14 @@ Do not retry the same installation. Continue without this tool or ask the user t
             const missingDepDirective = isMissingDependency
               ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation or runtime failed because an imported module/package is missing. Install the missing dependency via run_command (e.g. 'npm install <package-name>') or add it to 'package.json' before re-running.`
               : ''
+            const isNpmNamingRestriction =
+              lowerOut.includes('npm naming restrictions') ||
+              lowerOut.includes('can no longer contain capital letters') ||
+              lowerOut.includes('name can only contain url-friendly') ||
+              lowerOut.includes('name is invalid')
+            const npmNamingDirective = isNpmNamingRestriction
+              ? `\n\n[NPM NAMING RESTRICTION DIRECTIVE]\nProject/package name is invalid because npm packages cannot contain uppercase letters or spaces. DO NOT repeat the command with capital letters. Either run with an all-lowercase name (e.g. 'project-dashboard-task') or construct the files directly using write_file (e.g. 'package.json', 'vite.config.ts', 'index.html', 'src/App.tsx').`
+              : ''
             const interactivePromptDirective = res.interruptedByPrompt
               ? `\n\n[INTERACTIVE PROMPT DIRECTIVE]\nThe command was aborted because it requested interactive user input (e.g. a [y/n] confirmation or password prompt), which run_command cannot answer. Re-run using the tool's non-interactive flag (e.g. -y, --yes, --force, --batch) so it completes without prompting.`
               : ''
@@ -1120,7 +1151,7 @@ Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''}${
 Captured Error Stack Trace & Failure Output:
 \`\`\`
 ${rawOutput.slice(0, 4000)}
-\`\`\`${permsDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${interactivePromptDirective}
+\`\`\`${permsDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${npmNamingDirective}${interactivePromptDirective}
 
 AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or timed out. DO NOT ask the user vague clarification questions. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the command autonomously.`
             return {

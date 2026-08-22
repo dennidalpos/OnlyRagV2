@@ -108,7 +108,11 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   ctx.state.stagnationStreak++
   const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
-  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'. You MUST run a verification command via run_command or read a different file to break out of this loop.`
+  const isCommand = parsedTool.tool === 'run_command'
+  const escapeDirective = isCommand
+    ? `\n[CRITICAL ESCAPE STRATEGY]: If a scaffolding or build command failed or is blocked, DO NOT repeat it. Instead, switch IMMEDIATELY to constructing or editing the required files directly with write_file (e.g. write package.json, vite.config.ts, src/App.tsx), or run a read/verification tool.`
+    : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
+  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'.${escapeDirective}`
 
   ctx.episodicCompactor.recordStep(
     {

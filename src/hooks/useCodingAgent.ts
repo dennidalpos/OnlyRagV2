@@ -12,6 +12,8 @@ import { useGuestOsDiagnostics } from './useGuestOsDiagnostics'
 import { useAgentApprovals } from './useAgentApprovals'
 import { useAgentPromptQueue, type QueuedPrompt } from './useAgentPromptQueue'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
+import { soundEffectsService } from '../services/soundEffectsService'
+import type { ModelTier } from '../services/complexityRouterService'
 import { logger } from '../lib/logger'
 
 export type { QueuedPrompt }
@@ -71,6 +73,8 @@ export function useCodingAgent(settings?: AppSettings) {
   const [currentStep, setCurrentStep] = useState<number>(0)
   const [maxSteps, setMaxSteps] = useState<number | string>(50)
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
+  const [currentLiveModel, setCurrentLiveModel] = useState<string | null>(null)
+  const [currentLiveTier, setCurrentLiveTier] = useState<ModelTier | null>(null)
 
   // Modular Approvals Hook
   const {
@@ -263,8 +267,37 @@ export function useCodingAgent(settings?: AppSettings) {
     const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog) => {
       setActionLogs((prev) => [...prev, log])
 
+      if (log.modelName) {
+        setCurrentLiveModel(log.modelName)
+      } else if ((log as any).meta?.modelName) {
+        setCurrentLiveModel((log as any).meta.modelName)
+      }
+
+      if ((log as any).complexityTier) {
+        setCurrentLiveTier((log as any).complexityTier)
+      } else if ((log as any).meta?.complexityTier) {
+        setCurrentLiveTier((log as any).meta.complexityTier)
+      }
+
       if (log.type === 'terminal' && log.detail) {
         appendTerminalLogs(`\n${log.detail}\n`)
+        if (
+          log.detail.includes('Exit Code: 1') ||
+          log.detail.includes('error') ||
+          log.detail.includes('Cannot create a project') ||
+          log.detail.includes('Error:')
+        ) {
+          soundEffectsService.play('error', settings?.enableSoundEffects !== false)
+        }
+      }
+
+      if (
+        log.type === 'info' &&
+        (log.detail?.includes('Circuit Breaker Triggered') ||
+          log.message.includes('LLM Stream error') ||
+          (log as any).category === 'system_alert')
+      ) {
+        soundEffectsService.play('error', settings?.enableSoundEffects !== false)
       }
 
       if (log.type === 'tool_call' && log.message.includes('run_command')) {
@@ -313,6 +346,9 @@ export function useCodingAgent(settings?: AppSettings) {
 
     const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
       setPendingApproval(req)
+      if (req) {
+        soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
+      }
     })
 
     const unsubSkills = window.electronAPI.onAgentSkillsMatched?.((data: { skills: string[] }) => {
@@ -327,6 +363,9 @@ export function useCodingAgent(settings?: AppSettings) {
     })
 
     const unsubDone = window.electronAPI.onAgentDone?.((res: { success: boolean; summary: string }) => {
+      soundEffectsService.play(res?.success === false ? 'error' : 'completion', settings?.enableSoundEffects !== false)
+      setCurrentLiveModel(null)
+      setCurrentLiveTier(null)
       closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
       setIsExecuting(false)
       setStreamingText('')
@@ -360,10 +399,12 @@ export function useCodingAgent(settings?: AppSettings) {
       unsubChangeMetrics?.()
       unsubDone?.()
     }
-  }, [dequeueNextPrompt, appendTerminalLogs, purgeFileReferences, setPendingApproval])
+  }, [dequeueNextPrompt, appendTerminalLogs, purgeFileReferences, setPendingApproval, settings?.enableSoundEffects])
 
   const handleCancelAgent = () => {
     setIsExecuting(false)
+    setCurrentLiveModel(null)
+    setCurrentLiveTier(null)
     if (window.electronAPI) {
       if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
@@ -654,6 +695,8 @@ export function useCodingAgent(settings?: AppSettings) {
     movePromptInQueue,
     actionLogs,
     isExecuting,
+    currentLiveModel,
+    currentLiveTier,
     currentStep,
     maxSteps,
     activeSkills,

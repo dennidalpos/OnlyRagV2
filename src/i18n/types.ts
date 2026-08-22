@@ -510,6 +510,15 @@ export interface TranslationSchema {
     wordWrapDesc: string
     soundEffects: string
     soundEffectsDesc: string
+    generalPreferencesSection: string
+    systemDirectoriesTitle: string
+    systemDirectoriesDesc: string
+    appLogsFolderTitle: string
+    appLogsFolderDesc: string
+    hardwareRuntimeSection: string
+    modelsWeightsSection: string
+    ollamaManagementDesc: string
+    agentLimitsSection: string
   }
   about: {
     title: string

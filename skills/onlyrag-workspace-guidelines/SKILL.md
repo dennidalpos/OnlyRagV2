@@ -28,7 +28,7 @@ description: Official architecture guidelines, LanceDB embedded vector database 
 Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain $\rightarrow$ Infrastructure** pattern:
 - **Presentation (`electron/core/presentation/`, `src/components/`)**: UI rendering, user input validation, IPC channel dispatchers. No business logic or direct DB access.
 - **Application (`electron/core/application/`, `src/hooks/`)**: Use cases and workflow orchestration (`agentOrchestratorAppService.ts`, `skillAppService.ts`, `ingestionService.ts`). Coordinates domain models and infrastructure repositories.
-- **Domain (`electron/core/domain/`)**: Pure domain models, scoring heuristics, and parsing rules (`skillMatcher.ts`, `toolParser.ts`, `complexityEvaluator.ts`, `tokenBudgeter.ts`). Zero dependencies on Electron, UI, or external ORMs.
+- **Domain (`electron/core/domain/`)**: Pure domain models, scoring heuristics, and parsing rules (`skillMatcher.ts`, `toolParser.ts`, `complexityEvaluator.ts`, `contextWindowCalculator.ts`). Zero dependencies on Electron, UI, or external ORMs.
 - **Infrastructure (`electron/core/infrastructure/`)**: Persistence implementations, disk I/O, subprocess execution, HTTP adapters (`fileSystemRepository.ts`, `skillRepository.ts`, `webClient.ts`, `terminalProcess.ts`).
 
 ## 4. Local AI Coding Agent Studio

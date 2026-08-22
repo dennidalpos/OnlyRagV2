@@ -69,7 +69,7 @@ export const MODULE_VARIABLES: Record<FeatureModule, PromptVariableMeta[]> = {
   ],
 }
 
-export const SAMPLE_PREVIEW_VARS: Record<FeatureModule, Record<string, string>> = {
+const SAMPLE_PREVIEW_VARS: Record<FeatureModule, Record<string, string>> = {
   coding: {
     userTask: 'Implement secure JWT authentication and token refresh middleware',
     workspacePath: 'D:/Projects/OnlyRagWorkspace',
@@ -95,7 +95,7 @@ export const SAMPLE_PREVIEW_VARS: Record<FeatureModule, Record<string, string>> 
 }
 
 /** Tier picker options for the coding module (family-agnostic — see promptPresets.ts / B2). */
-export const CODING_TIERS: { id: ComplexityTier; name: string; description: string }[] = [
+const CODING_TIERS: { id: ComplexityTier; name: string; description: string }[] = [
   { id: 'fast', name: 'Fast Tier', description: 'Terse, action-oriented guidance for small/fast models on simple tasks.' },
   { id: 'standard', name: 'Standard Tier', description: 'Balanced default guidance for most coding tasks.' },
   { id: 'deep_reasoning', name: 'Deep Reasoning Tier', description: 'Most explicit guidance with worked examples, for complex multi-step tasks.' },
@@ -135,20 +135,6 @@ export const getEffectivePrompt = (
   return { prompt: defaultPrompt, family: activeFamily, isCustom: false }
 }
 
-/** Effective coding prompt, selected by complexity tier instead of model family (see B2). */
-export const getEffectiveCodingPrompt = (
-  tier: ComplexityTier,
-  settings: AppSettings
-): { prompt: string; tier: ComplexityTier; isCustom: boolean } => {
-  const overrideKey = `coding:${tier}`
-  const customOverride = settings.customPromptOverrides?.[overrideKey]
-
-  if (customOverride && customOverride.trim()) {
-    return { prompt: customOverride, tier, isCustom: true }
-  }
-
-  return { prompt: DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard, tier, isCustom: false }
-}
 
 export const compilePromptWithSampleVars = (
   rawTemplate: string,

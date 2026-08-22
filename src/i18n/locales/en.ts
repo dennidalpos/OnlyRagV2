@@ -72,6 +72,8 @@ export const en: TranslationSchema = {
     sidecarLanceDb: 'LanceDB Sidecar',
     ollamaLocal: 'Ollama Server',
     gpuVram: 'GPU VRAM',
+    systemRam: 'System RAM',
+    hybridRamTooltip: 'Hybrid Offloading (GPU + RAM): {used} GB used, {free} GB remaining of {total} GB total ({percent}%)',
     cpuOnly: 'CPU Only',
     installLaunchOllama: 'Launch / Install Ollama',
     logsConsole: 'Logs Console',

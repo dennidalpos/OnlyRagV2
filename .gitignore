@@ -42,6 +42,7 @@ export/
 # Coding-Agent Runtime State (generated per-session, machine/session specific)
 .onlyrag/
 userdata_dev/
+.system_generated/
 
 # Environment & Secrets (Preserve example template)
 .env

@@ -1,5 +1,6 @@
 import React from 'react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics } from '../../types'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, InterviewQuestion, UserInterviewAnswer } from '../../types'
+import { AgentPlan } from '../../hooks/usePlanApproval'
 import { AgentMode } from './CodingAgentView'
 import { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
@@ -57,6 +58,20 @@ interface AgentActionLogPanelProps {
   showWorkspaceSidebar?: boolean
   onToggleWorkspaceSidebar?: () => void
   filesCount?: number
+  // Plan Flow Props
+  plan?: AgentPlan | null
+  isGeneratingPlan?: boolean
+  countdownSeconds?: number
+  isAutoProceedPaused?: boolean
+  autoProceedEnabled?: boolean
+  interviewQuestions?: InterviewQuestion[]
+  isInterviewActive?: boolean
+  isAnalyzingInterview?: boolean
+  onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
+  onSkipInterview?: () => void
+  onApprovePlan?: () => void
+  onRejectPlan?: () => void
+  onTogglePauseAutoProceed?: () => void
 }
 
 export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
@@ -103,6 +118,19 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   showWorkspaceSidebar,
   onToggleWorkspaceSidebar,
   filesCount,
+  plan,
+  isGeneratingPlan,
+  countdownSeconds,
+  isAutoProceedPaused,
+  autoProceedEnabled,
+  interviewQuestions,
+  isInterviewActive,
+  isAnalyzingInterview,
+  onConfirmInterview,
+  onSkipInterview,
+  onApprovePlan,
+  onRejectPlan,
+  onTogglePauseAutoProceed,
 }) => {
   const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } =
     useAgentTimelineScroll(actionLogs, streamingText, isExecuting, autoScroll, onToggleAutoScroll)
@@ -152,6 +180,19 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         isScrolledUp={isScrolledUp}
         onScroll={handleScroll}
         onScrollToBottom={() => scrollToBottom(true)}
+        plan={plan}
+        isGeneratingPlan={isGeneratingPlan}
+        countdownSeconds={countdownSeconds}
+        isAutoProceedPaused={isAutoProceedPaused}
+        autoProceedEnabled={autoProceedEnabled}
+        interviewQuestions={interviewQuestions}
+        isInterviewActive={isInterviewActive}
+        isAnalyzingInterview={isAnalyzingInterview}
+        onConfirmInterview={onConfirmInterview}
+        onSkipInterview={onSkipInterview}
+        onApprovePlan={onApprovePlan}
+        onRejectPlan={onRejectPlan}
+        onTogglePauseAutoProceed={onTogglePauseAutoProceed}
       />
 
       <PromptComposer

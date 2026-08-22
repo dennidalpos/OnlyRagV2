@@ -14,5 +14,3 @@ export function App() {
     </ErrorBoundary>
   )
 }
-
-export default App

@@ -90,6 +90,19 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           showWorkspaceSidebar={showWorkspaceSidebar}
           onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
           filesCount={c.files.length}
+          plan={planApproval.currentPlan}
+          isGeneratingPlan={planApproval.isGeneratingPlan}
+          countdownSeconds={planApproval.countdownSeconds}
+          isAutoProceedPaused={planApproval.isAutoProceedPaused}
+          autoProceedEnabled={planApproval.autoProceed}
+          interviewQuestions={planApproval.interviewQuestions}
+          isInterviewActive={planApproval.isInterviewActive}
+          isAnalyzingInterview={planApproval.isAnalyzingInterview}
+          onConfirmInterview={planApproval.confirmInterviewAnswers}
+          onSkipInterview={planApproval.skipInterviewWithRecommended}
+          onApprovePlan={planApproval.handleApprovePlan}
+          onRejectPlan={planApproval.handleRejectPlan}
+          onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused((prev) => !prev)}
         />
       </div>
     </div>

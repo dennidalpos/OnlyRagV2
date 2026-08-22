@@ -54,6 +54,18 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
   const [isCopyingDebugBundle, setIsCopyingDebugBundle] = useState<boolean>(false)
   const [isCopied, setIsCopied] = useState<boolean>(false)
 
+  // ESC Key Listener for Accessibility
+  React.useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   const handleCopyAiDebugBundle = async () => {
     if (isCopyingDebugBundle) return
     setIsCopyingDebugBundle(true)

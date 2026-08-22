@@ -4,7 +4,7 @@ import type { SlmAnomalyRecord } from '../../types'
 
 type Severity = 'CRITICAL' | 'ERROR' | 'WARNING'
 
-export function getSeverityStyles(severity: string): { badge: string; icon: React.ReactNode } {
+function getSeverityStyles(severity: string): { badge: string; icon: React.ReactNode } {
   switch (severity as Severity) {
     case 'CRITICAL':
       return {

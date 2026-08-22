@@ -28,11 +28,16 @@ export const SkillInstallApprovalModal: React.FC<SkillInstallApprovalModalProps>
   if (!request) return null
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="skill-install-modal-title"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+    >
       <div className="w-full max-w-md rounded-2xl border border-indigo-500/50 bg-[#0f172a] shadow-2xl text-slate-200 font-sans">
         <div className="flex items-center gap-2 p-4 border-b border-slate-800">
           <Package className="w-4 h-4 text-indigo-400" />
-          <h2 className="text-sm font-bold text-indigo-300">{t('coding.skillInstallTitle')}</h2>
+          <h2 id="skill-install-modal-title" className="text-sm font-bold text-indigo-300">{t('coding.skillInstallTitle')}</h2>
         </div>
 
         <div className="p-4 space-y-3 text-xs">

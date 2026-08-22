@@ -112,17 +112,19 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     }
   }
 
+  const handleGeneratePlanFromPrompt = async () => {
+    if (!c.agentPrompt.trim()) return
+    await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
+  }
+
   const handleInitiateTaskExecution = () => {
     if (!c.agentPrompt.trim()) return
     setLastExecutedPrompt(c.agentPrompt)
-    c.handleAgentExecute()
-  }
-
-  const handleGeneratePlanFromPrompt = async () => {
-    if (!c.agentPrompt.trim()) return
-    setActiveDockTab('plan')
-    setIsBottomDockOpen(true)
-    await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
+    if (c.agentMode === 'plan') {
+      handleGeneratePlanFromPrompt()
+    } else {
+      c.handleAgentExecute()
+    }
   }
 
   const handleDockMouseDown = (e: React.MouseEvent) => {

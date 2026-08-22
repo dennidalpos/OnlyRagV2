@@ -17,6 +17,8 @@
  * the existing cross-layer re-export convention in src/constants/promptPresets.ts.
  */
 
+import { diffLines } from 'diff'
+
 export type DiffLineType = 'add' | 'del' | 'context'
 
 export interface DiffLine {
@@ -191,7 +193,6 @@ export function parseUnifiedDiff(rawDiff: string): DiffFileChange[] {
   return files
 }
 
-import { diffLines } from 'diff'
 
 /**
  * Myers line diff between two file revisions using the standard `diff` engine.

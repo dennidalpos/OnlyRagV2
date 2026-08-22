@@ -90,7 +90,7 @@ describe('AboutModal & Credits Data Integrity Unit Tests', () => {
     expect(moduleNames).toContain('Anthropic Agent Skills')
     expect(moduleNames).toContain('LobeHub Marketplace')
     expect(moduleNames).toContain('Turndown & Cheerio')
-    expect(moduleNames).toContain('Gray-Matter')
+    expect(moduleNames).toContain('js-yaml')
     expect(moduleNames).toContain('JsonRepair')
     expect(moduleNames).toContain('GPT-Tokenizer')
   })

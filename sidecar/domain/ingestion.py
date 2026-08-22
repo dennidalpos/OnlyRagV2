@@ -488,27 +488,12 @@ def _split_oversized_text(text: str, max_chars: int = 1000, overlap: int = 100) 
         start = end - overlap if end < len(text) else end
     return [c for c in chunks if c]
 
-_RECURSIVE_CHUNKER: Optional[Any] = None
-
-def _get_recursive_chunker():
-    global _RECURSIVE_CHUNKER
-    if _RECURSIVE_CHUNKER is None:
-        try:
-            from chonkie import RecursiveChunker
-            _RECURSIVE_CHUNKER = RecursiveChunker(tokenizer="character", chunk_size=800, min_characters_per_chunk=24)
-        except Exception as e:
-            logger.debug(f"chonkie RecursiveChunker initialization: {e}")
-            _RECURSIVE_CHUNKER = False
-    return _RECURSIVE_CHUNKER
-
-
 def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int, str, str]]:
     """
-    Header-Aware Semantic Chunking using chonkie RecursiveChunker:
+    Header-Aware Semantic Chunking:
     Preserves Markdown structural hierarchy, section context prefixes, and code blocks.
     Returns list of (chunk_index, chunk_text, section_header).
     """
-    chunker = _get_recursive_chunker()
     raw_chunks: List[Tuple[int, str, str]] = []
     header_path: List[str] = [filename]
     chunk_index = 0
@@ -526,18 +511,6 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
         if not buf_text:
             return
 
-        if chunker:
-            try:
-                sub_chunks = chunker.chunk(buf_text)
-                for sc in sub_chunks:
-                    if sc.text and sc.text.strip():
-                        raw_chunks.append((chunk_index, context_prefix + sc.text.strip(), curr_section_header))
-                        chunk_index += 1
-                return
-            except Exception:
-                pass
-
-        # Robust Fallback chunking
         if len(buf_text) > 800:
             pieces = _split_oversized_text(buf_text, max_chars=800, overlap=100)
             for p in pieces:

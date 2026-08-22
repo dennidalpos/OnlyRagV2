@@ -468,8 +468,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                               c.handleCopyMessage(msg.id, msg.text)
                               toast.info(t('chat.msgCopied'))
                             }}
-                            className="p-1 hover:text-slate-200 rounded transition-colors focus-ring"
+                            className="p-1 hover:text-slate-200 rounded transition-colors focus-ring cursor-pointer"
                             title={t('chat.copyMsg')}
+                            aria-label={t('chat.copyMsg')}
                           >
                             {isCopied ? (
                               <Check className="w-3 h-3 text-emerald-400" />
@@ -540,8 +541,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                                             toast.info(t('chat.citationCopied'))
                                             setTimeout(() => setCopiedCitationIdx(null), 2000)
                                           }}
-                                          className="p-0.5 text-slate-400 hover:text-slate-200 transition-colors"
+                                          className="p-0.5 text-slate-400 hover:text-slate-200 transition-colors focus-ring rounded cursor-pointer"
                                           title={t('chat.copyCitation')}
+                                          aria-label={t('chat.copyCitation')}
                                         >
                                           {copiedCitationIdx === `${msg.id}-${idx}` ? (
                                             <Check className="w-2.5 h-2.5 text-emerald-400" />

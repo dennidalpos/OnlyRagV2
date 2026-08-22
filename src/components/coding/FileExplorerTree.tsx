@@ -178,7 +178,8 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
               type="button"
               onClick={handlePinClick}
               title={isPinned ? 'Rimuovi dal contesto agente (Unpin)' : 'Includi nel contesto agente (Pin)'}
-              className={`p-0.5 rounded transition-colors ${
+              aria-label={isPinned ? `Rimuovi ${item.name} dal contesto` : `Includi ${item.name} nel contesto`}
+              className={`p-0.5 rounded transition-colors focus-ring cursor-pointer ${
                 isPinned ? 'text-cyan-300 hover:bg-cyan-900/60' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
               }`}
             >

@@ -10,7 +10,7 @@
  * empty states.
  *
  * Zero business logic: all data fetching is delegated to the hook.
- * Follows the same panel conventions as ActivitiesPanel (dark theme,
+ * Follows OnlyRag V2 panel design conventions (dark theme,
  * rounded-2xl cards, lucide-react icons, font-mono telemetry rows).
  */
 

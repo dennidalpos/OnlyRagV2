@@ -75,7 +75,8 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         <button
           type="button"
           onClick={onOpenSkillHubModal}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-bold border transition-all cursor-pointer shadow-sm ${
+          aria-label={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')}: ${activeSkills.join(', ')}` : 'Apri Skill Hub & Marketplace'}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-bold border transition-all focus-ring cursor-pointer shadow-sm ${
             activeSkills.length > 0
               ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60'
               : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
@@ -96,21 +97,24 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           <button
             type="button"
             onClick={onOpenDiagnosticsModal || (() => setIsSystemPopoverOpen((prev) => !prev))}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-medium border transition-colors shadow-sm cursor-pointer ${
-            allCoreToolsAvailable
-              ? 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:text-slate-100'
-              : 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-500/40 text-amber-300'
-          }`}
-          title="Visualizza Diagnostica, Telemetria e Toolchain di Sistema"
-        >
-          {allCoreToolsAvailable ? (
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-          ) : (
-            <AlertCircle className="w-3 h-3 text-amber-400" />
-          )}
-          <span className="hidden sm:inline">System</span>
-          <Cpu className="w-3 h-3 text-slate-400" />
-        </button>
+            aria-label="Visualizza Diagnostica, Telemetria e Toolchain di Sistema"
+            aria-haspopup={onOpenDiagnosticsModal ? 'dialog' : undefined}
+            aria-expanded={!onOpenDiagnosticsModal ? isSystemPopoverOpen : undefined}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-medium border transition-colors focus-ring shadow-sm cursor-pointer ${
+              allCoreToolsAvailable
+                ? 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:text-slate-100'
+                : 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-500/40 text-amber-300'
+            }`}
+            title="Visualizza Diagnostica, Telemetria e Toolchain di Sistema"
+          >
+            {allCoreToolsAvailable ? (
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-3 h-3 text-amber-400" />
+            )}
+            <span className="hidden sm:inline">System</span>
+            <Cpu className="w-3 h-3 text-slate-400" />
+          </button>
 
           {isSystemPopoverOpen && (
             <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl z-50 text-xs font-sans space-y-2.5 animate-in fade-in zoom-in-95 duration-150">

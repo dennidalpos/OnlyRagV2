@@ -36,7 +36,7 @@ Questo documento costituisce la fonte di verità sulle dipendenze esterne utiliz
 | **`jsonrepair`** | `^3.15.0` | Riparazione e normalizzazione tollerante di payload JSON malformati, troncati o contenenti commenti generati dagli LLM locali nel Tool Calling Loop. |
 | **`cheerio`** | `^1.2.0` | Parsing DOM lato server per l'estrazione pulita del testo da pagine web nel tool agentico `fetch_web_content`. |
 | **`turndown`** | `^7.2.4` | Conversione deterministica da HTML a Markdown strutturato per l'indicizzazione e la consultazione web. |
-| **`gray-matter`** | `^4.0.3` | Parsing ed estrazione dei metadati YAML frontmatter nei manifesti delle skill agentiche (`SKILL.md`). |
+| **`js-yaml`** | `^4.1.0` | Parsing ed estrazione dei metadati YAML frontmatter nei manifesti delle skill agentiche (`SKILL.md`) e serializzazione YAML. |
 | **`ignore`** | `^7.0.6` | Rispetto rigoroso dei pattern standard `.gitignore` durante la scansione e l'esplorazione ricorsiva del workspace. |
 | **`strip-ansi`** | `^7.2.0` | Rimozione dei codici di escape ANSI di colore e formattazione dai log shell prima della persistenza su disco e dell'invio all'LLM. |
 | **`gpt-tokenizer`** | `^4.0.0` | Calcolo deterministico dei token reali BPE (`o200k_base`) per la selezione ottimale del `num_ctx` Ollama (`contextWindowCalculator.ts`). |

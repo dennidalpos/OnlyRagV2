@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 import os
 import sys
+import json
+import datetime
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
@@ -268,9 +270,6 @@ class LogAnalyzer:
             export_dir = Path(resolved_path).parent
             export_dir.mkdir(parents=True, exist_ok=True)
 
-            import json as _json
-            import datetime
-
             payload = {
                 "generated_at": datetime.datetime.now().isoformat(),
                 "scanned_files": report.scanned_files,
@@ -291,7 +290,7 @@ class LogAnalyzer:
             }
 
             Path(resolved_path).write_text(
-                _json.dumps(payload, indent=2, ensure_ascii=False),
+                json.dumps(payload, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
             logger.info("LogAnalyzer: diagnostics report exported to '%s'.", resolved_path)

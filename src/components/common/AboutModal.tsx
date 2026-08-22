@@ -292,12 +292,12 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     url: 'https://github.com/mixmark-io/turndown',
   },
   {
-    name: 'Gray-Matter',
-    version: 'v4.0.3',
-    description: 'YAML frontmatter parser and serializer for Skill manifests and provenance tracking.',
+    name: 'js-yaml',
+    version: 'v4.1.0',
+    description: 'Universal YAML parser and serializer for Skill manifests (SKILL.md) and provenance tracking.',
     license: 'MIT',
     category: 'skillsAndEcosystem',
-    url: 'https://github.com/jonschlinkert/gray-matter',
+    url: 'https://github.com/nodeca/js-yaml',
   },
   {
     name: 'JsonRepair',

@@ -348,7 +348,7 @@ export function calculateTotalModelFootprintGB(
 /**
  * Assesses model compatibility against detected hardware and safe usable VRAM budget.
  */
-export function evaluateModelHardwareFit(
+export function assessModelHardwareCompatibility(
   modelName: string,
   vramTotalMB: number,
   totalRamGB: number,
@@ -421,8 +421,6 @@ export function evaluateModelHardwareFit(
     warning: 'RAM di sistema insufficiente per eseguire questo modello su CPU.',
   }
 }
-
-export const assessModelHardwareCompatibility = evaluateModelHardwareFit
 
 /**
  * Accurately determines if a target Ollama model tag is installed locally.

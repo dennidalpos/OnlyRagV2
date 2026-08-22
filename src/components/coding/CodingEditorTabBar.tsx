@@ -38,7 +38,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
 
   return (
     <div className="bg-slate-900/90 border-b border-slate-800 px-2 pt-1 flex items-center justify-between text-xs shrink-0 overflow-x-auto select-none">
-      <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+      <div className="flex items-center gap-1 overflow-x-auto py-0.5" role="tablist" aria-label="File aperti">
         {/* File Tabs */}
         {openFiles.map((file: WorkspaceFile) => {
           const isActive = selectedFile?.path === file.path
@@ -68,8 +68,9 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
               <button
                 type="button"
                 onClick={(e) => onCloseFile(file, e)}
-                className="p-0.5 hover:bg-slate-800 hover:text-slate-100 text-slate-400 rounded transition-colors focus-ring"
+                className="p-0.5 hover:bg-slate-800 hover:text-slate-100 text-slate-400 rounded transition-colors focus-ring cursor-pointer"
                 title={t('common.close')}
+                aria-label={`${t('common.close')} ${file.name}`}
               >
                 <X className="w-3 h-3" />
               </button>

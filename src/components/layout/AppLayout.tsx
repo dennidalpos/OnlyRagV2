@@ -8,6 +8,7 @@ import {
   Settings,
   Zap,
   Cpu,
+  HardDrive,
   Terminal,
   Info,
   Globe,
@@ -346,6 +347,30 @@ export const AppLayout: React.FC = () => {
                 {diagnostics?.gpu.hasNvidiaGpu
                   ? `${diagnostics.gpu.vramUsedMB}/${diagnostics.gpu.vramTotalMB} MB`
                   : t('sidebar.cpuOnly')}
+              </span>
+            </div>
+
+            {/* Hybrid Offloading RAM metric (used / remaining) */}
+            <div
+              className="flex items-center justify-between text-[11px]"
+              title={
+                diagnostics?.memory
+                  ? t('sidebar.hybridRamTooltip')
+                      .replace('{used}', String(diagnostics.memory.usedRAMGB))
+                      .replace('{free}', String(diagnostics.memory.freeRAMGB))
+                      .replace('{total}', String(diagnostics.memory.totalRAMGB))
+                      .replace('{percent}', String(diagnostics.memory.ramUsagePercent))
+                  : 'Offloading Ibrido su RAM di Sistema (Hybrid GPU + RAM)'
+              }
+            >
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <HardDrive className="w-3 h-3 text-sky-400" />
+                {t('sidebar.systemRam')}
+              </span>
+              <span className="font-mono text-slate-200 text-[10px]">
+                {diagnostics?.memory
+                  ? `${diagnostics.memory.usedRAMGB}/${diagnostics.memory.freeRAMGB} GB`
+                  : '--/-- GB'}
               </span>
             </div>
           </div>

@@ -98,7 +98,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
                       key={optIndex}
                       type="button"
                       onClick={() => handleSelectOption(q.id, opt)}
-                      className={`text-left px-3 py-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-2 ${
+                      className={`text-left px-3 py-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-2 focus-ring cursor-pointer ${
                         isSelected
                           ? 'bg-cyan-950/60 border-cyan-500/80 text-cyan-200 shadow-sm shadow-cyan-950'
                           : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
@@ -151,7 +151,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
                     onChange={(e) => handleCustomChange(q.id, e.target.value)}
                     onFocus={() => setActiveCustomIds((prev) => ({ ...prev, [q.id]: true }))}
                     placeholder="Es. usa una specifica libreria o impostazione..."
-                    className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-md text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-md text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus-ring"
                   />
                 </div>
               </div>
@@ -166,7 +166,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
           type="button"
           disabled={isGenerating}
           onClick={onSkipWithRecommended}
-          className="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-all"
+          className="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-all focus-ring cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Salta e usa consigliati
         </button>
@@ -175,7 +175,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
           type="button"
           disabled={isGenerating}
           onClick={handleConfirm}
-          className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-950/50 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+          className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-950/50 transition-all flex items-center justify-center gap-1.5 active:scale-95 focus-ring cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span>Conferma e Genera Piano</span>
           <ArrowRight className="w-3.5 h-3.5" />

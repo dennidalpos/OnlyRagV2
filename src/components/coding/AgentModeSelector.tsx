@@ -10,8 +10,28 @@ interface AgentModeSelectorProps {
 export const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({ agentMode, setAgentMode }) => {
   const { t } = useTranslation()
 
+  const modes: AgentMode[] = ['plan', 'ask', 'agent']
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const currentIdx = modes.indexOf(agentMode)
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      const nextMode = modes[(currentIdx + 1) % modes.length]
+      setAgentMode(nextMode)
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const prevMode = modes[(currentIdx - 1 + modes.length) % modes.length]
+      setAgentMode(prevMode)
+    }
+  }
+
   return (
-    <div className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px] shrink-0" role="radiogroup" aria-label="Agent Mode">
+    <div
+      className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px] shrink-0"
+      role="radiogroup"
+      aria-label="Agent Mode"
+      onKeyDown={handleKeyDown}
+    >
       <button
         type="button"
         role="radio"

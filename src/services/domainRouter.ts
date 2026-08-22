@@ -23,7 +23,7 @@ export interface DomainCentroidProfile {
  * Medical / Clinical Domain Centroid (IT, EN, ES, FR, DE)
  * Covers pharmacology, anatomy, diagnostics, pathology, clinical workflows and bio-medical roots.
  */
-export const MEDICAL_CENTROID_WEIGHTS: Record<string, number> = {
+const MEDICAL_CENTROID_WEIGHTS: Record<string, number> = {
   // Morphemes & Clinical Roots (Latin / Greek international stems)
   'cillin': 3.5, 'mycin': 3.5, 'prazol': 3.5, 'statin': 3.5, 'algia': 3.0,
   'ectomi': 3.0, 'pnea': 3.0, 'cardia': 3.0, 'faring': 3.0, 'laring': 3.0,
@@ -50,7 +50,7 @@ export const MEDICAL_CENTROID_WEIGHTS: Record<string, number> = {
  * Legal & Compliance Domain Centroid (IT, EN, ES, FR, DE)
  * Covers contracts, statutory law, civil/penal codes, liability, litigation, GDPR, jurisprudence.
  */
-export const LEGAL_CENTROID_WEIGHTS: Record<string, number> = {
+const LEGAL_CENTROID_WEIGHTS: Record<string, number> = {
   // Morphemes & Jurisprudential Roots
   'giuris': 3.2, 'juris': 3.2, 'decret': 3.0, 'decree': 3.0, 'normat': 3.0, 'illecit': 3.2,
   'clausol': 3.2, 'clause': 3.2, 'klausel': 3.2, 'sanzi': 2.8, 'sanct': 2.8,
@@ -160,7 +160,7 @@ export function calculateCentroidSimilarity(
   return score
 }
 
-export const CHITCHAT_PATTERNS: RegExp[] = [
+const CHITCHAT_PATTERNS: RegExp[] = [
   /^ciao\b/i, /^salve\b/i, /^buongiorno\b/i, /^buonasera\b/i, /^come va\b/i, /^come stai\b/i,
   /^chi sei\b/i, /^cosa puoi fare\b/i, /^hello\b/i, /^hi\b/i, /^hey\b/i, /^good morning\b/i,
   /^how are you\b/i, /^who are you\b/i, /^what can you do\b/i, /^thanks\b/i, /^grazie\b/i,

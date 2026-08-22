@@ -72,6 +72,8 @@ export interface TranslationSchema {
     sidecarLanceDb: string
     ollamaLocal: string
     gpuVram: string
+    systemRam: string
+    hybridRamTooltip: string
     cpuOnly: string
     installLaunchOllama: string
     logsConsole: string

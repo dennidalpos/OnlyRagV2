@@ -38,6 +38,18 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
     }
   }, [isOpen, defaultTargetDir])
 
+  // ESC Key Listener for Accessibility
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isTranslating) {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isTranslating, onClose])
+
   if (!isOpen) return null
 
   const handleSelectTargetDir = async () => {
@@ -53,7 +65,12 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   const isFormValid = Boolean(targetDir.trim()) && sourceLang !== targetLang
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="translate-inplace-modal-title"
+    >
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -61,7 +78,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
               <Languages className="w-4 h-4 text-sky-400" />
             </div>
             <div className="min-w-0">
-              <h2 className="font-bold text-slate-100 text-sm">{t('ingestion.translateInplaceModalTitle')}</h2>
+              <h2 id="translate-inplace-modal-title" className="font-bold text-slate-100 text-sm">{t('ingestion.translateInplaceModalTitle')}</h2>
               <p className="text-[11px] text-slate-400 font-mono truncate">{filename}</p>
             </div>
           </div>

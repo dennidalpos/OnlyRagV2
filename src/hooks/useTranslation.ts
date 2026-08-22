@@ -254,6 +254,7 @@ export function useDocumentTranslation(settings?: AppSettings) {
     } catch (err: unknown) {
       const normalized = normalizeError(err, 'Translation')
       logger.error('TranslationView', `Error translating document: ${normalized.message}`)
+      setTranslationError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
     } finally {
       setIsTranslating(false)
     }
@@ -288,6 +289,7 @@ export function useDocumentTranslation(settings?: AppSettings) {
     setTotalChunks(0)
     setSelectedDoc(null)
     setExportMessage(null)
+    setTranslationError(null)
   }
 
   return {
@@ -307,6 +309,7 @@ export function useDocumentTranslation(settings?: AppSettings) {
     totalChunks,
     exportMessage,
     translationError,
+    setTranslationError,
     viewMode,
     setViewMode,
     syncScroll,

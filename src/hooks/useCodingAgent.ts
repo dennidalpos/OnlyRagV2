@@ -53,13 +53,8 @@ export function useCodingAgent(settings?: AppSettings) {
   )
 
   const setAgentMode = useCallback((newMode: AgentMode) => {
-    setAgentModeState((prev) => {
-      if (prev !== newMode) {
-        addActionLog('info', `Modalità agente impostata su: ${newMode.toUpperCase()}`)
-      }
-      return newMode
-    })
-  }, [addActionLog])
+    setAgentModeState(newMode)
+  }, [])
 
   useEffect(() => {
     if (isExecuting) {

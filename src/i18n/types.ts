@@ -547,6 +547,13 @@ export interface TranslationSchema {
     tabAiAndVector: string
     tabUiAndEditor: string
     tabSkills: string
+    acknowledgmentsTitle: string
+    acknowledgmentsSubtitle: string
+    acknowledgmentsOllama: string
+    acknowledgmentsLanceDb: string
+    acknowledgmentsAnthropic: string
+    acknowledgmentsMicrosoft: string
+    acknowledgmentsOpenWeights: string
     contactsTitle: string
     contactsSubtitle: string
     githubIssues: string

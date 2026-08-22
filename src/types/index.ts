@@ -678,6 +678,7 @@ export interface SlmAnomalyRecord {
   line_number: number
   snippet: string
   count: number
+  remediation?: string
 }
 
 export interface SlmLogDiagnosticReport {

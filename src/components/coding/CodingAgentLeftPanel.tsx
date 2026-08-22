@@ -21,6 +21,7 @@ interface CodingAgentLeftPanelProps {
   onOpenPromptHistorySearch?: () => void
   autoScroll: boolean
   onToggleAutoScroll: () => void
+  onSelectRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
@@ -41,6 +42,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
   onOpenPromptHistorySearch,
   autoScroll,
   onToggleAutoScroll,
+  onSelectRightTab,
   onUpdateSettings,
 }) => {
   return (
@@ -98,6 +100,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           showWorkspaceSidebar={showWorkspaceSidebar}
           onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
           filesCount={c.files.length}
+          onOpenRightTab={onSelectRightTab}
           plan={planApproval.currentPlan}
           isGeneratingPlan={planApproval.isGeneratingPlan}
           countdownSeconds={planApproval.countdownSeconds}

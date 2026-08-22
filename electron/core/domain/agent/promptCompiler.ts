@@ -38,7 +38,10 @@ export class PromptCompiler {
     let template = ''
     let isCustom = false
 
-    if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
+    if (settings?.customPromptOverrides && settings.customPromptOverrides[module]) {
+      template = settings.customPromptOverrides[module]
+      isCustom = true
+    } else if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
       template = settings.customPromptOverrides[overrideKey]
       isCustom = true
     } else {
@@ -56,8 +59,7 @@ export class PromptCompiler {
    * Compiles the coding-agent system prompt, family-agnostic and scaled by
    * complexity tier (fast/standard/deep_reasoning/heavy) instead of model family —
    * see DEFAULT_CODING_TIER_PROMPTS. Custom overrides are keyed by tier
-   * ("coding:fast", "coding:standard", "coding:deep_reasoning", "coding:heavy") the same way
-   * family-based modules key by family.
+   * ("coding:fast", "coding:standard", "coding:deep_reasoning", "coding:heavy") or direct "coding".
    *
    * When `toolCallingCapable` is true, the prose AVAILABLE AGENT TOOLS block
    * is omitted: the model already receives the structured tool schema via
@@ -75,7 +77,10 @@ export class PromptCompiler {
     let template = ''
     let isCustom = false
 
-    if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
+    if (settings?.customPromptOverrides && settings.customPromptOverrides['coding']) {
+      template = settings.customPromptOverrides['coding']
+      isCustom = true
+    } else if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
       template = settings.customPromptOverrides[overrideKey]
       isCustom = true
     } else {

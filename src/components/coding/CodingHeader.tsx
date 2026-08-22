@@ -76,8 +76,39 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         <span className="text-slate-400 font-medium truncate max-w-xs">{t('coding.headerTitle')}</span>
       </div>
 
-      {/* Right: Actions, System Popover, Skills & Quick Model Selector */}
+      {/* Right: Quick Model Selector, System Prompt, Skills & Toolchain Popover */}
       <div className="flex items-center gap-2 text-xs">
+        {/* Quick Coding Model Selector with Fallback */}
+        <QuickModelSelector
+          currentModel={activeModel || settings?.codingModel || 'qwen2.5-coder:7b'}
+          fallbackModel={settings?.codingFallbackModel}
+          installedModels={installedModels}
+          presetOptions={[
+            'qwen2.5-coder:7b',
+            'qwen3:8b',
+            'qwen2.5-coder:14b',
+            'qwen3:14b',
+            'gpt-oss:20b',
+            'codestral:22b',
+            'qwen2.5-coder:32b',
+            'deepseek-coder:6.7b',
+            'llama3.1:8b',
+          ]}
+          onSelectModel={(newModel) => {
+            onUpdateSettings?.({
+              codingModel: newModel,
+            })
+          }}
+          onSelectFallbackModel={(fallback) => {
+            onUpdateSettings?.({
+              codingFallbackModel: fallback,
+            })
+          }}
+          icon={Code}
+          featureLabel="AI Coding Agent"
+          variant="cyan"
+        />
+
         {/* System Prompt Customization Trigger */}
         {onOpenPromptModal && (
           <button
@@ -85,7 +116,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
             onClick={onOpenPromptModal}
             aria-label={t('common.systemPrompt')}
             title={t('common.systemPrompt')}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 cursor-pointer shadow-sm"
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
@@ -97,7 +128,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           type="button"
           onClick={onOpenSkillHubModal}
           aria-label={activeSkills.length > 0 ? `${t('coding.activeSkillsTitle')}: ${activeSkills.join(', ')}` : 'Apri Skill Hub & Marketplace'}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-bold border transition-all focus-ring cursor-pointer shadow-sm ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-sans font-bold border transition-all focus-ring cursor-pointer shadow-sm ${
             activeSkills.length > 0
               ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60'
               : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
@@ -120,7 +151,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
             onClick={() => setIsSystemPopoverOpen(!isSystemPopoverOpen)}
             aria-label="Stato Toolchain Host"
             title="Stato Toolchain Host (Git, Node, Python, Ollama)"
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
               allCoreToolsAvailable
                 ? 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-100/10 hover:border-slate-700'
                 : 'bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/50'
@@ -159,21 +190,21 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
-                  <span className="text-slate-400">Node.js</span>
+                  <span className="text-slate-400">Node</span>
                   <span className={`text-[10px] font-bold ${hasNode ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {hasNode ? 'OK' : 'Mancante'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Python</span>
-                  <span className={`text-[10px] font-bold ${hasPy ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {hasPy ? 'OK' : 'Opzionale'}
+                  <span className={`text-[10px] font-bold ${hasPy ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {hasPy ? 'OK' : 'Mancante'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Ollama</span>
                   <span className={`text-[10px] font-bold ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hasOllama ? 'Attivo' : 'Offline'}
+                    {hasOllama ? 'OK' : 'Mancante'}
                   </span>
                 </div>
                 {hasDocker !== undefined && (
@@ -186,7 +217,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
                 )}
                 {hasUv !== undefined && (
                   <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
-                    <span className="text-slate-400">uv</span>
+                    <span className="text-slate-400">Uv</span>
                     <span className={`text-[10px] font-bold ${hasUv ? 'text-emerald-400' : 'text-slate-500'}`}>
                       {hasUv ? 'OK' : 'N/A'}
                     </span>
@@ -204,37 +235,6 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
             </div>
           )}
         </div>
-
-        {/* Quick Coding Model Selector with Fallback */}
-        <QuickModelSelector
-          currentModel={activeModel || settings?.codingModel || 'qwen2.5-coder:7b'}
-          fallbackModel={settings?.codingFallbackModel}
-          installedModels={installedModels}
-          presetOptions={[
-            'qwen2.5-coder:7b',
-            'qwen3:8b',
-            'qwen2.5-coder:14b',
-            'qwen3:14b',
-            'gpt-oss:20b',
-            'codestral:22b',
-            'qwen2.5-coder:32b',
-            'deepseek-coder:6.7b',
-            'llama3.1:8b',
-          ]}
-          onSelectModel={(newModel) => {
-            onUpdateSettings?.({
-              codingModel: newModel,
-            })
-          }}
-          onSelectFallbackModel={(fallback) => {
-            onUpdateSettings?.({
-              codingFallbackModel: fallback,
-            })
-          }}
-          icon={Code}
-          featureLabel="AI Coding Agent"
-          variant="cyan"
-        />
       </div>
     </header>
   )

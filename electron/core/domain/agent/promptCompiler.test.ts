@@ -61,7 +61,7 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
     expect(deep).toContain('DEEP REASONING')
   })
 
-  it('should support custom user prompt overrides keyed by tier if configured in settings', () => {
+  it('should support custom user prompt overrides keyed by tier or direct module name', () => {
     const customPrompt = 'CUSTOM OVERRIDE: {userTask} in mode {agentMode}'
     const { prompt, isCustom } = PromptCompiler.compileCodingPrompt(
       'standard',
@@ -75,6 +75,33 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
 
     expect(isCustom).toBe(true)
     expect(prompt).toBe('CUSTOM OVERRIDE: Test task in mode PLAN')
+
+    // Direct 'coding' key
+    const directCoding = PromptCompiler.compileCodingPrompt(
+      'standard',
+      { userTask: 'Build feature', agentMode: 'AGENT' },
+      {
+        customPromptOverrides: {
+          coding: 'DIRECT CODING: {userTask}',
+        },
+      } as any
+    )
+    expect(directCoding.isCustom).toBe(true)
+    expect(directCoding.prompt).toBe('DIRECT CODING: Build feature')
+
+    // Direct 'chat' key
+    const directChat = PromptCompiler.compilePrompt(
+      'chat',
+      'llama3.2',
+      {},
+      {
+        customPromptOverrides: {
+          chat: 'DIRECT CHAT PROMPT',
+        },
+      } as any
+    )
+    expect(directChat.isCustom).toBe(true)
+    expect(directChat.prompt).toBe('DIRECT CHAT PROMPT')
   })
 
   it('should still resolve family-based prompts (chat) unaffected by the coding tier change', () => {

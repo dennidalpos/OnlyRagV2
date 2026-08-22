@@ -22,6 +22,7 @@ import {
   Check,
   GripVertical,
   WrapText,
+  X,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData, IngestedDocument } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -259,27 +260,6 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Quick Chat RAG & Text Check Model Selector */}
-          <QuickModelSelector
-            currentModel={settings?.chatModel || settings?.defaultModel || 'llama3.2'}
-            fallbackModel={settings?.chatFallbackModel}
-            installedModels={diagnostics?.ollama?.models || []}
-            presetOptions={['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b']}
-            onSelectModel={(newModel) => {
-              onUpdateSettings?.({
-                chatModel: newModel,
-              })
-            }}
-            onSelectFallbackModel={(fallback) => {
-              onUpdateSettings?.({
-                chatFallbackModel: fallback,
-              })
-            }}
-            icon={FileText}
-            featureLabel="RAG & Text Check"
-            variant="cyan"
-          />
-
           {/* Quick Vision OCR Model Selector */}
           <QuickModelSelector
             currentModel={settings?.visionModel || 'llama3.2-vision:11b'}
@@ -300,22 +280,6 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
             featureLabel="Vision & OCR"
             variant="amber"
           />
-
-          {/* Optional LLM Text Check Toggle */}
-          <button
-            type="button"
-            onClick={() => onUpdateSettings?.({ normalizeWithLlm: !settings?.normalizeWithLlm })}
-            aria-label={t('ingestion.textCheckToggle')}
-            title={t('ingestion.textCheckTooltip', { model: settings?.chatModel || settings?.defaultModel || 'llama3.2' })}
-            className={`px-3 py-1.5 border text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 ${
-              settings?.normalizeWithLlm
-                ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-700/80 text-emerald-300 shadow-sm'
-                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${settings?.normalizeWithLlm ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
-            <span>{t('ingestion.textCheckToggle')}</span>
-          </button>
 
           <button
             type="button"
@@ -494,12 +458,23 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
 
       {/* Upload Error Alert */}
       {ing.uploadError && !ing.ingestionProgress.active && (
-        <div className="mx-4 mt-3 p-3 bg-rose-950/50 border border-rose-800/60 rounded-xl flex items-start gap-2.5 shrink-0" role="alert">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <div className="text-xs font-semibold text-rose-300">{t('ingestion.ingestionError')}</div>
-            <div className="text-[11px] text-rose-400/80 mt-0.5 font-mono">{ing.uploadError}</div>
+        <div className="mx-4 mt-3 p-3 bg-rose-950/50 border border-rose-800/60 rounded-xl flex items-start justify-between gap-2.5 shrink-0" role="alert">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-rose-300">{t('ingestion.ingestionError')}</div>
+              <div className="text-[11px] text-rose-400/80 mt-0.5 font-mono break-words">{ing.uploadError}</div>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => ing.setUploadError(null)}
+            aria-label={t('common.close')}
+            title={t('common.close')}
+            className="text-rose-400 hover:text-rose-200 p-1 rounded-lg hover:bg-rose-900/60 transition-colors shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -550,12 +525,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
           aria-label={t('coding.resizePanels')}
           onMouseDown={handleSidebarMouseDown}
           onKeyDown={handleSidebarKeyDown}
-          className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
-            isSidebarResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+          className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+            isSidebarResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
           }`}
           title={t('coding.resizePanels')}
         >
-          <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isSidebarResizing ? 'opacity-100 text-slate-950' : ''}`} />
+          <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isSidebarResizing ? 'opacity-100 text-slate-950' : ''}`} />
         </div>
 
         {/* Center: Dual-Pane Comparison Viewer */}
@@ -897,12 +872,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
                 aria-label={t('coding.resizePanels')}
                 onMouseDown={handlePreviewMouseDown}
                 onKeyDown={handlePreviewKeyDown}
-                className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
-                  isPreviewResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+                className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+                  isPreviewResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
                 }`}
                 title={t('coding.resizePanels')}
               >
-                <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isPreviewResizing ? 'opacity-100 text-slate-950' : ''}`} />
+                <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isPreviewResizing ? 'opacity-100 text-slate-950' : ''}`} />
               </div>
 
               {/* Right Pane: Editor Markdown (Monaco Editor) */}

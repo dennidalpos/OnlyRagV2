@@ -1,6 +1,3 @@
 {
-  "todos": [
-    "Uniformazione del posizionamento e denominazione dei controlli equivalenti tra i moduli (System Prompt, menu strumenti e icone di azione)",
-    "Verifica e ottimizzazione della gestione centralizzata dei messaggi di errore e remediation visiva su tutti i flussi applicativi"
-  ]
+  "todos": []
 }

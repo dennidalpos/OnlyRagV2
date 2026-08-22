@@ -20,6 +20,7 @@ import { CodingEditorContent } from './CodingEditorContent'
 import { CodingTerminal } from './CodingTerminal'
 import { GitDiffPanel } from './GitDiffPanel'
 import { PlanPanel } from './PlanPanel'
+import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
@@ -212,12 +213,12 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               aria-label={t('coding.resizePanels')}
               onMouseDown={handleExplorerMouseDown}
               onKeyDown={handleExplorerKeyDown}
-              className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring z-20 ${
-                isExplorerResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+              className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring z-20 ${
+                isExplorerResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
               }`}
               title={t('coding.resizePanels')}
             >
-              <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isExplorerResizing ? 'opacity-100 text-slate-950' : ''}`} />
+              <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isExplorerResizing ? 'opacity-100 text-slate-950' : ''}`} />
             </div>
           </>
         )}
@@ -240,6 +241,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
           autoScroll={autoScroll}
           onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
+          onSelectRightTab={handleSelectTab}
           onUpdateSettings={onUpdateSettings}
         />
 
@@ -254,12 +256,12 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           aria-label={t('coding.resizePanels')}
           onMouseDown={handleMouseDown}
           onKeyDown={handleKeyDown}
-          className={`w-1.5 hover:w-2 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
-            isResizing ? 'bg-cyan-500 w-2 ring-2 ring-cyan-500/50' : ''
+          className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+            isResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
           }`}
           title={t('coding.resizePanels')}
         >
-          <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`} />
+          <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`} />
         </div>
 
         {/* Right Column: Unified Full-Height Workspace Area */}
@@ -338,6 +340,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                 onUpdatePlanText={planApproval.handleUpdatePlanText}
                 completedStepCount={c.currentStep}
               />
+            )}
+
+            {activeRightTab === 'slm_diagnostics' && (
+              <SlmDiagnosticsPanel />
             )}
           </div>
         </div>

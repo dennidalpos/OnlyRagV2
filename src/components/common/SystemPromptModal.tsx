@@ -3,12 +3,10 @@ import { AppSettings } from '../../types'
 import {
   FeatureModule,
   ModelFamily,
-  MODEL_FAMILIES,
   DEFAULT_FAMILY_PROMPTS,
   DEFAULT_CODING_TIER_PROMPTS,
   detectModelFamily,
 } from '../../constants/promptPresets'
-import { type ComplexityTier } from '../../services/complexityRouterService'
 import {
   Sliders,
   RotateCcw,
@@ -18,11 +16,6 @@ import {
   Check,
   Info,
   Copy,
-  Download,
-  Upload,
-  Eye,
-  Edit3,
-  AlertCircle,
   Plus,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
@@ -69,46 +62,15 @@ export const MODULE_VARIABLES: Record<FeatureModule, PromptVariableMeta[]> = {
   ],
 }
 
-const SAMPLE_PREVIEW_VARS: Record<FeatureModule, Record<string, string>> = {
-  coding: {
-    userTask: 'Implement secure JWT authentication and token refresh middleware',
-    workspacePath: 'D:/Projects/OnlyRagWorkspace',
-    agentMode: 'agent',
-    stepCount: '1',
-    MAX_STEPS: '50',
-  },
-  chat: {
-    userMsgText: 'What are the main security guidelines for local tool execution?',
-    contextStr: '[Doc: SecurityGuide.md]\nAll shell commands must run inside isolated workspace with path traversal checks.',
-  },
-  translation: {
-    sourceLang: 'Italian',
-    targetLang: 'English',
-    chunkText: 'OnlyRag supporta modelli LLM locali con accelerazione hardware GPU e indicizzazione vettoriale LanceDB.',
-  },
-  vision: {
-    filename: 'quarterly_report_2026.pdf',
-    currentPage: '1',
-    numPages: '8',
-    activePageContent: '[Document Title: Q2 Financial Statement - Operating Margin: +24%]',
-  },
-}
-
-/** Tier picker options for the coding module (family-agnostic — see promptPresets.ts / B2). */
-const CODING_TIERS: { id: ComplexityTier; name: string; description: string }[] = [
-  { id: 'fast', name: 'Fast Tier', description: 'Terse, action-oriented guidance for small/fast models on simple tasks.' },
-  { id: 'standard', name: 'Standard Tier', description: 'Balanced default guidance for most coding tasks.' },
-  { id: 'deep_reasoning', name: 'Deep Reasoning Tier', description: 'Most explicit guidance with worked examples, for complex multi-step tasks.' },
-]
-
 type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
 
 /**
- * Effective prompt for family-based modules (chat/translation/vision).
- * The coding module is family-agnostic — see getEffectiveCodingPrompt.
+ * Effective prompt resolver for any module.
+ * Prioritizes direct module custom override, then family/tier-keyed custom override,
+ * falling back to the canonical default prompt.
  */
 export const getEffectivePrompt = (
-  module: FamilyBasedModule,
+  module: FeatureModule,
   activeModelName: string | undefined,
   settings: AppSettings
 ): { prompt: string; family: ModelFamily; isCustom: boolean } => {
@@ -120,27 +82,62 @@ export const getEffectivePrompt = (
       ? (selectedOverride as ModelFamily)
       : detectedFamily
 
-  const overrideKey = `${module}:${activeFamily}`
-  const customOverride = settings.customPromptOverrides?.[overrideKey]
+  // Check direct module override first
+  const customModuleOverride = settings.customPromptOverrides?.[module]
+  if (customModuleOverride && customModuleOverride.trim()) {
+    return { prompt: customModuleOverride, family: activeFamily, isCustom: true }
+  }
 
-  if (customOverride && customOverride.trim()) {
-    return { prompt: customOverride, family: activeFamily, isCustom: true }
+  // Check family/tier-keyed override
+  const overrideKey = `${module}:${activeFamily}`
+  const customFamilyOverride = settings.customPromptOverrides?.[overrideKey]
+  if (customFamilyOverride && customFamilyOverride.trim()) {
+    return { prompt: customFamilyOverride, family: activeFamily, isCustom: true }
+  }
+
+  if (module === 'coding') {
+    const defaultPrompt = DEFAULT_CODING_TIER_PROMPTS.standard || ''
+    return { prompt: defaultPrompt, family: activeFamily, isCustom: false }
   }
 
   const defaultPrompt =
-    DEFAULT_FAMILY_PROMPTS[module]?.[activeFamily] ||
-    DEFAULT_FAMILY_PROMPTS[module]?.generic ||
+    DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.[activeFamily] ||
+    DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.generic ||
     ''
 
   return { prompt: defaultPrompt, family: activeFamily, isCustom: false }
 }
 
-
 export const compilePromptWithSampleVars = (
   rawTemplate: string,
   module: FeatureModule
 ): string => {
-  const vars = SAMPLE_PREVIEW_VARS[module] || {}
+  const sampleVars: Record<FeatureModule, Record<string, string>> = {
+    coding: {
+      userTask: 'Implement secure JWT authentication and token refresh middleware',
+      workspacePath: 'D:/Projects/OnlyRagWorkspace',
+      agentMode: 'agent',
+      stepCount: '1',
+      MAX_STEPS: '50',
+    },
+    chat: {
+      userMsgText: 'What are the main security guidelines for local tool execution?',
+      contextStr: '[Doc: SecurityGuide.md]\nAll shell commands must run inside isolated workspace with path traversal checks.',
+    },
+    translation: {
+      sourceLang: 'Italian',
+      targetLang: 'English',
+      chunkText: 'OnlyRag supporta modelli LLM locali con accelerazione hardware GPU e indicizzazione vettoriale LanceDB.',
+    },
+    vision: {
+      filename: 'quarterly_report_2026.pdf',
+      currentPage: '1',
+      numPages: '8',
+      activePageContent: '[Document Title: Q2 Financial Statement - Operating Margin: +24%]',
+    },
+  }
+
+  const vars = sampleVars[module] || {}
   let compiled = rawTemplate
   for (const [key, value] of Object.entries(vars)) {
     compiled = compiled.replaceAll(`{${key}}`, value)
@@ -160,45 +157,33 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   const { t } = useTranslation()
   const isCoding = module === 'coding'
   const detectedFamily = detectModelFamily(activeModelName)
-  const currentOverrideVariant = settings.selectedFamilyOverrides?.[module] || (isCoding ? 'standard' : 'auto')
-
-  // "variant" is a family id for chat/translation/vision, or a ComplexityTier id for coding.
-  const [selectedVariant, setSelectedVariant] = useState<string>(currentOverrideVariant)
-  const effectiveVariant: string = isCoding
-    ? (selectedVariant || 'standard')
-    : (selectedVariant === 'auto' ? detectedFamily : selectedVariant)
 
   const [promptText, setPromptText] = useState<string>('')
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
-  const [importStatus, setImportStatus] = useState<{ success?: boolean; message?: string } | null>(null)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const defaultTemplateFor = (variant: string): string => {
+  const getDefaultPrompt = (): string => {
     if (isCoding) {
-      return DEFAULT_CODING_TIER_PROMPTS[variant as ComplexityTier] || DEFAULT_CODING_TIER_PROMPTS.standard
+      return DEFAULT_CODING_TIER_PROMPTS.standard
     }
-    return DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.[variant as ModelFamily] || DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.generic || ''
+    return (
+      DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.[detectedFamily] ||
+      DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.generic ||
+      ''
+    )
   }
 
-  // Sync state when modal opens or model/variant/module changes
+  // Load current prompt on open or model/module changes
   useEffect(() => {
     if (isOpen) {
-      const curVariant = settings.selectedFamilyOverrides?.[module] || (isCoding ? 'standard' : 'auto')
-      setSelectedVariant(curVariant)
-      const activeVar = isCoding ? curVariant : (curVariant === 'auto' ? detectedFamily : curVariant)
-      const overrideKey = `${module}:${activeVar}`
-      const customVal = settings.customPromptOverrides?.[overrideKey]
-      setPromptText(customVal !== undefined ? customVal : defaultTemplateFor(activeVar))
-      setActiveTab('editor')
-      setImportStatus(null)
+      const effective = getEffectivePrompt(module, activeModelName, settings)
+      setPromptText(effective.prompt)
     }
   }, [isOpen, module, activeModelName, settings])
 
-  // ESC Key Listener for Accessibility
+  // ESC key listener for accessibility
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -212,25 +197,30 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
 
   if (!isOpen) return null
 
-  const handleVariantChange = (variant: string) => {
-    setSelectedVariant(variant)
-    const targetVariant = isCoding ? variant : (variant === 'auto' ? detectedFamily : variant)
-    const overrideKey = `${module}:${targetVariant}`
-    const customVal = settings.customPromptOverrides?.[overrideKey]
-    setPromptText(customVal !== undefined ? customVal : defaultTemplateFor(targetVariant))
-
-    const updatedSelectedOverrides = {
-      ...(settings.selectedFamilyOverrides || {}),
-      [module]: variant,
-    }
-    onUpdateSettings({ selectedFamilyOverrides: updatedSelectedOverrides })
-  }
+  const isCustomized = (() => {
+    const customMod = settings.customPromptOverrides?.[module]
+    const customKey = settings.customPromptOverrides?.[`${module}:${detectedFamily}`]
+    const customTier = settings.customPromptOverrides?.[`coding:standard`]
+    return Boolean(
+      (customMod && customMod.trim()) ||
+      (customKey && customKey.trim()) ||
+      (isCoding && customTier && customTier.trim())
+    )
+  })()
 
   const handleSavePrompt = () => {
-    const overrideKey = `${module}:${effectiveVariant}`
-    const updatedPromptOverrides = {
-      ...(settings.customPromptOverrides || {}),
-      [overrideKey]: promptText,
+    const updatedPromptOverrides = { ...(settings.customPromptOverrides || {}) }
+
+    // Save under primary module key
+    updatedPromptOverrides[module] = promptText
+
+    // Also populate family/standard key for complete backward compatibility
+    if (isCoding) {
+      updatedPromptOverrides['coding:standard'] = promptText
+      updatedPromptOverrides['coding:fast'] = promptText
+      updatedPromptOverrides['coding:deep_reasoning'] = promptText
+    } else {
+      updatedPromptOverrides[`${module}:${detectedFamily}`] = promptText
     }
 
     onUpdateSettings({ customPromptOverrides: updatedPromptOverrides })
@@ -238,37 +228,19 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
     setTimeout(() => setSaveSuccess(false), 2500)
   }
 
-  const handleResetCurrentPrompt = () => {
-    const overrideKey = `${module}:${effectiveVariant}`
+  const handleResetToDefault = () => {
     const updatedPromptOverrides = { ...(settings.customPromptOverrides || {}) }
-    delete updatedPromptOverrides[overrideKey]
+    delete updatedPromptOverrides[module]
 
-    setPromptText(defaultTemplateFor(effectiveVariant))
-    onUpdateSettings({ customPromptOverrides: updatedPromptOverrides })
-
-    setSaveSuccess(true)
-    setTimeout(() => setSaveSuccess(false), 2500)
-  }
-
-  const handleResetAllModulePrompts = () => {
-    const updatedPromptOverrides = { ...(settings.customPromptOverrides || {}) }
     for (const key of Object.keys(updatedPromptOverrides)) {
       if (key.startsWith(`${module}:`)) {
         delete updatedPromptOverrides[key]
       }
     }
 
-    const updatedSelectedOverrides = { ...(settings.selectedFamilyOverrides || {}) }
-    delete updatedSelectedOverrides[module]
-
-    const resetVariant = isCoding ? 'standard' : 'auto'
-    setSelectedVariant(resetVariant)
-    setPromptText(defaultTemplateFor(isCoding ? 'standard' : detectedFamily))
-
-    onUpdateSettings({
-      customPromptOverrides: updatedPromptOverrides,
-      selectedFamilyOverrides: updatedSelectedOverrides,
-    })
+    const defaultPrompt = getDefaultPrompt()
+    setPromptText(defaultPrompt)
+    onUpdateSettings({ customPromptOverrides: updatedPromptOverrides })
 
     setSaveSuccess(true)
     setTimeout(() => setSaveSuccess(false), 2500)
@@ -276,32 +248,11 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
 
   const handleCopyPrompt = async () => {
     try {
-      const textToCopy = activeTab === 'preview'
-        ? compilePromptWithSampleVars(promptText, module)
-        : promptText
-      await navigator.clipboard.writeText(textToCopy)
+      await navigator.clipboard.writeText(promptText)
       setCopySuccess(true)
       setTimeout(() => setCopySuccess(false), 2000)
     } catch (err) {
       logger.error('SystemPromptModal', `Failed copying prompt to clipboard: ${(err as any)?.message || err}`)
-    }
-  }
-
-  /**
-   * Scrolls the textarea so the caret's line is visible. Focusing + setSelectionRange alone
-   * does not reliably scroll a textarea to a programmatically-moved caret across browsers,
-   * so inserting a variable near the end of a long prompt could move the cursor past the
-   * visible viewport without the user ever seeing what was actually inserted.
-   */
-  const scrollCaretIntoView = (ta: HTMLTextAreaElement, caretPos: number) => {
-    const lineNumber = ta.value.substring(0, caretPos).split('\n').length - 1
-    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 18
-    const caretTop = lineNumber * lineHeight
-    const caretBottom = caretTop + lineHeight
-    if (caretTop < ta.scrollTop) {
-      ta.scrollTop = caretTop
-    } else if (caretBottom > ta.scrollTop + ta.clientHeight) {
-      ta.scrollTop = caretBottom - ta.clientHeight
     }
   }
 
@@ -316,104 +267,28 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
       setTimeout(() => {
         ta.focus()
         ta.setSelectionRange(caretPos, caretPos)
-        scrollCaretIntoView(ta, caretPos)
       }, 0)
     } else {
       setPromptText((prev) => prev + (prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' ') + varName)
     }
   }
 
-  const handleExportJson = () => {
-    const exportData = {
-      app: 'OnlyRagV2',
-      version: '1.0.0',
-      exportedAt: new Date().toISOString(),
-      customPromptOverrides: settings.customPromptOverrides || {},
-      selectedFamilyOverrides: settings.selectedFamilyOverrides || {},
-    }
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `onlyrag_system_prompts_${new Date().toISOString().slice(0, 10)}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string)
-        if (parsed && (parsed.customPromptOverrides || parsed.selectedFamilyOverrides)) {
-          const mergedPromptOverrides = {
-            ...(settings.customPromptOverrides || {}),
-            ...(parsed.customPromptOverrides || {}),
-          }
-          const mergedFamilyOverrides = {
-            ...(settings.selectedFamilyOverrides || {}),
-            ...(parsed.selectedFamilyOverrides || {}),
-          }
-
-          onUpdateSettings({
-            customPromptOverrides: mergedPromptOverrides,
-            selectedFamilyOverrides: mergedFamilyOverrides,
-          })
-
-          const overrideKey = `${module}:${effectiveVariant}`
-          if (mergedPromptOverrides[overrideKey] !== undefined) {
-            setPromptText(mergedPromptOverrides[overrideKey])
-          }
-
-          setImportStatus({ success: true, message: t('systemPrompt.importSuccess') })
-          setTimeout(() => setImportStatus(null), 3000)
-        } else {
-          setImportStatus({ success: false, message: t('systemPrompt.importError') })
-          setTimeout(() => setImportStatus(null), 3000)
-        }
-      } catch {
-        setImportStatus({ success: false, message: t('systemPrompt.importError') })
-        setTimeout(() => setImportStatus(null), 3000)
-      }
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }
-
-  const activeFamilyMeta = MODEL_FAMILIES.find((f) => f.id === effectiveVariant)
-  const activeTierMeta = CODING_TIERS.find((tr) => tr.id === effectiveVariant)
-  const isCustomized = !!settings.customPromptOverrides?.[`${module}:${effectiveVariant}`]
   const moduleVars = MODULE_VARIABLES[module] || []
-  const compiledPreviewText = compilePromptWithSampleVars(promptText, module)
+  const wordCount = promptText.trim() ? promptText.trim().split(/\s+/).length : 0
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="system-prompt-modal-title"
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
     >
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
-        {/* Hidden file input for import */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleImportJson}
-          accept=".json,application/json"
-          className="hidden"
-        />
-
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-              <Sliders className="w-5 h-5 text-cyan-400" />
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm">
+              <Sliders className="w-5 h-5" />
             </div>
             <div>
               <h2 id="system-prompt-modal-title" className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -425,226 +300,61 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportJson}
-              title={t('systemPrompt.exportJson')}
-              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5 focus-ring"
-            >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('systemPrompt.exportJson')}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title={t('systemPrompt.importJson')}
-              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded-xl transition-colors text-xs flex items-center gap-1.5 focus-ring"
-            >
-              <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('systemPrompt.importJson')}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={t('common.close')}
-              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close')}
+            className="p-2 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-colors focus-ring active:scale-95 cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Import notification feedback */}
-          {importStatus && (
-            <div
-              className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-                importStatus.success
-                  ? 'bg-emerald-950/70 border-emerald-800 text-emerald-300'
-                  : 'bg-rose-950/70 border-rose-800 text-rose-300'
-              }`}
-            >
-              {importStatus.success ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              <span>{importStatus.message}</span>
-            </div>
-          )}
-
-          {/* Active Model & Detected Family Bar (informational only for coding — see below) */}
-          <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Active Model & Custom Status Bar */}
+          <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
+              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
               <span className="text-slate-400">{t('systemPrompt.activeModel')}:</span>
               <span className="font-mono text-slate-200 font-semibold">{activeModelName || t('common.none')}</span>
-            </div>
-
-            {!isCoding && (
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400">{t('systemPrompt.detectedFamily')}:</span>
-                <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/60 text-[11px]">
-                  {MODEL_FAMILIES.find((f) => f.id === detectedFamily)?.name || detectedFamily}
+              {!isCoding && detectedFamily !== 'generic' && (
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">
+                  ({detectedFamily})
                 </span>
-              </div>
-            )}
-          </div>
-
-          {isCoding && (
-            <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-900/50 text-[11px] text-cyan-300 flex items-center gap-2">
-              <Info className="w-4 h-4 shrink-0 text-cyan-400" />
-              <span>{t('systemPrompt.codingTierNotice')}</span>
+              )}
             </div>
-          )}
 
-          {/* Family / Tier Preset Selector Dropdown */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <label htmlFor="system-prompt-variant-select" className="font-semibold text-slate-300">
-                {isCoding ? t('systemPrompt.complexityTierPreset') : t('systemPrompt.familyPreset')}:
-              </label>
-              {isCustomized && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 font-mono font-bold border border-amber-800/50">
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              {isCustomized ? (
+                <span className="px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 font-bold border border-amber-800/60">
                   {t('systemPrompt.customBadge')}
                 </span>
-              )}
-            </div>
-
-            <select
-              id="system-prompt-variant-select"
-              value={selectedVariant}
-              onChange={(e) => handleVariantChange(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus-ring font-mono"
-            >
-              {isCoding ? (
-                CODING_TIERS.map((tr) => (
-                  <option key={tr.id} value={tr.id}>
-                    {tr.name}
-                  </option>
-                ))
               ) : (
-                <>
-                  <option value="auto">
-                    ✨ Auto-Detect ({MODEL_FAMILIES.find((f) => f.id === detectedFamily)?.name})
-                  </option>
-
-                  <optgroup label="Text & Coding Models">
-                    {MODEL_FAMILIES.filter((f) => f.category === 'text_coder').map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </optgroup>
-
-                  <optgroup label="Vision & Multimodal Models">
-                    {MODEL_FAMILIES.filter((f) => f.category === 'vision').map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </optgroup>
-
-                  <optgroup label="Vector Embedding Models">
-                    {MODEL_FAMILIES.filter((f) => f.category === 'embedding').map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </optgroup>
-
-                  <optgroup label="Fallback">
-                    <option value="generic">Generic / Fallback</option>
-                  </optgroup>
-                </>
+                <span className="px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 font-medium border border-slate-700/60">
+                  Standard
+                </span>
               )}
-            </select>
-
-            {isCoding
-              ? activeTierMeta && <p className="text-[11px] text-slate-400 italic px-1">{activeTierMeta.description}</p>
-              : activeFamilyMeta && <p className="text-[11px] text-slate-400 italic px-1">{activeFamilyMeta.description}</p>}
-          </div>
-
-          {/* Mode Switcher Tabs (Editor vs Compiled Preview) */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab('editor')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  activeTab === 'editor'
-                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                {t('systemPrompt.editTab')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('preview')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  activeTab === 'preview'
-                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                {t('systemPrompt.previewTab')}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleCopyPrompt}
-                className="text-[11px] text-slate-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
-                title={t('common.copy')}
-              >
-                {copySuccess ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                    <Check className="w-3 h-3" /> {t('common.copied')}
-                  </span>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3" /> {t('common.copy')}
-                  </>
-                )}
-              </button>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {activeTab === 'preview' ? `${compiledPreviewText.length} chars (compiled)` : `${promptText.length} chars`}
-              </span>
+              <span className="text-slate-500">•</span>
+              <span className="text-slate-400">{promptText.length} caratteri ({wordCount} parole)</span>
             </div>
           </div>
 
-          {/* Main Body (Editor or Compiled Preview) */}
-          {activeTab === 'editor' ? (
-            <div className="space-y-1.5 flex-1 flex flex-col">
-              <textarea
-                ref={textareaRef}
-                id="system-prompt-editor-text"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                rows={10}
-                aria-label={t('systemPrompt.promptText')}
-                className="w-full flex-1 min-h-[220px] bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 focus-ring resize-y leading-relaxed"
-                placeholder={t('systemPrompt.systemPromptPlaceholder')}
-              />
-            </div>
-          ) : (
-            <div className="space-y-2 flex-1 flex flex-col">
-              <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-900/50 text-[11px] text-cyan-300 flex items-center gap-2">
-                <Info className="w-4 h-4 shrink-0 text-cyan-400" />
-                <span>{t('systemPrompt.previewDescription')}</span>
-              </div>
-              <div className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-300 leading-relaxed max-h-[300px] overflow-y-auto whitespace-pre-wrap select-text">
-                {compiledPreviewText}
-              </div>
-            </div>
-          )}
+          {/* System Prompt Textarea */}
+          <div className="space-y-1.5 flex-1 flex flex-col">
+            <textarea
+              ref={textareaRef}
+              id="system-prompt-editor-text"
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              rows={12}
+              aria-label={t('systemPrompt.promptText')}
+              className="w-full flex-1 min-h-[260px] bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 focus-ring resize-y leading-relaxed"
+              placeholder={t('systemPrompt.systemPromptPlaceholder')}
+            />
+          </div>
 
-          {/* Interactive Variable Validation & Insertion Badges */}
+          {/* Interactive Variable Insertion Chips */}
           <div className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800/80 text-[11px] space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-semibold text-slate-300">
@@ -662,19 +372,17 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
                     key={v.name}
                     type="button"
                     onClick={() => handleInsertVariable(v.name)}
-                    title={`${v.description} (${isPresent ? 'Presente' : v.required ? 'Mancante consigliato' : 'Opzionale'})`}
-                    className={`px-2 py-1 rounded-md font-mono text-[10px] flex items-center gap-1 transition-all border ${
+                    title={`${v.description} (${isPresent ? 'Presente nel prompt' : 'Clicca per inserire'})`}
+                    className={`px-2 py-1 rounded-md font-mono text-[10px] flex items-center gap-1 transition-all border cursor-pointer ${
                       isPresent
                         ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/50'
-                        : v.required
-                        ? 'bg-amber-950/60 text-amber-300 border-amber-800/60 hover:bg-amber-900/60'
-                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-cyan-500/40 hover:text-cyan-200'
                     }`}
                   >
                     {isPresent ? (
                       <Check className="w-2.5 h-2.5 text-emerald-400" />
                     ) : (
-                      <Plus className="w-2.5 h-2.5 text-amber-400" />
+                      <Plus className="w-2.5 h-2.5 text-slate-400" />
                     )}
                     <span>{v.name}</span>
                   </button>
@@ -689,20 +397,31 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleResetCurrentPrompt}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-rose-400 hover:text-rose-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
-              title={t('systemPrompt.resetFamily')}
+              onClick={handleResetToDefault}
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-rose-400 hover:text-rose-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              title={t('common.reset')}
             >
-              <RotateCcw className="w-3 h-3" /> {t('systemPrompt.resetFamily')}
+              <RotateCcw className="w-3 h-3" />
+              <span>Ripristina Predefinito</span>
             </button>
 
             <button
               type="button"
-              onClick={handleResetAllModulePrompts}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-rose-400 text-xs font-medium rounded-xl transition-all"
-              title={t('systemPrompt.resetAllModule')}
+              onClick={handleCopyPrompt}
+              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-slate-100 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              title={t('common.copy')}
             >
-              {t('systemPrompt.resetAllModule')}
+              {copySuccess ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span className="text-emerald-400">{t('common.copied')}</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3 text-slate-400" />
+                  <span>{t('common.copy')}</span>
+                </>
+              )}
             </button>
           </div>
 
@@ -716,7 +435,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium rounded-xl transition-all"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium rounded-xl transition-all cursor-pointer active:scale-95"
             >
               {t('common.close')}
             </button>
@@ -724,9 +443,10 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             <button
               type="button"
               onClick={handleSavePrompt}
-              className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95"
+              className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95 cursor-pointer"
             >
-              <Save className="w-3.5 h-3.5 fill-current" /> {t('systemPrompt.savePrompt')}
+              <Save className="w-3.5 h-3.5 fill-current" />
+              <span>{t('systemPrompt.savePrompt')}</span>
             </button>
           </div>
         </div>

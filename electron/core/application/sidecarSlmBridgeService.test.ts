@@ -17,7 +17,11 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import http from 'node:http'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 import type { AddressInfo } from 'node:net'
+import { sidecarSlmBridgeService } from './sidecarSlmBridgeService'
 
 // ---------------------------------------------------------------------------
 // Minimal mock sidecar HTTP server
@@ -223,6 +227,56 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
       const res = await callAnalyzeLogs(`http://127.0.0.1:${deadPort}`) as any
       expect(res).toBeDefined()
       expect(res.status === 0 || res.error).toBeTruthy()
+    })
+  })
+
+  // ── 4. Native Electron log analyzer fallback ────────────────────────────
+
+  describe('Native Electron log analyzer fallback', () => {
+    const testDir = path.join(os.tmpdir(), `slm-diag-test-${Date.now()}`)
+
+    beforeAll(() => {
+      fs.mkdirSync(testDir, { recursive: true })
+      const sampleLog = [
+        '[INFO] Application started successfully',
+        '[ERROR] CUDA out of memory. Tried to allocate 4.00 GiB on device 0',
+        '{"tool_name": "read_file", "arguments": {"filePath": "app.ts"}}',
+        '{"tool_name": "read_file", "arguments": {"filePath": "app.ts"}}',
+        '{"tool_name": "read_file", "arguments": {"filePath": "app.ts"}}',
+        '{"tool_name": "read_file", "arguments": {"filePath": "app.ts"}}',
+        '{"malformed_tool_json": {"nested": "value_without_closing_brace_which_is_too_long_and_truncated_by_model_context_limit_exceeded_xyz_1234567890',
+        '[WARN] Ollama connect refused 11434',
+        '[INFO] Turn completed',
+      ].join('\n')
+
+      fs.writeFileSync(path.join(testDir, 'sample_session.log'), sampleLog, 'utf8')
+    })
+
+    afterAll(() => {
+      try {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      } catch {
+        // ignore
+      }
+    })
+
+    it('scans candidate log files and detects CUDA_OOM, TOOL_LOOP, TRUNCATED_JSON with actionable remediation', () => {
+      const report = sidecarSlmBridgeService.analyzeLogsNativeFallback([testDir])
+      expect(report).toBeDefined()
+      expect(report.scanned_files.length).toBeGreaterThanOrEqual(1)
+      expect(report.anomalies.length).toBeGreaterThanOrEqual(3)
+      expect(report.has_critical).toBe(true)
+
+      const types = report.anomalies.map((a) => a.anomaly_type)
+      expect(types.some((t) => t.includes('CUDA_OOM'))).toBe(true)
+      expect(types.some((t) => t.includes('TOOL_LOOP'))).toBe(true)
+      expect(types.some((t) => t.includes('TRUNCATED_JSON'))).toBe(true)
+
+      // Verify every anomaly includes remediation guidance
+      for (const a of report.anomalies) {
+        expect(a.remediation).toBeDefined()
+        expect(a.remediation?.length).toBeGreaterThan(5)
+      }
     })
   })
 })

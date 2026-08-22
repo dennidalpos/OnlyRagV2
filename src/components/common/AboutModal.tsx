@@ -101,6 +101,14 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     category: 'core',
     url: 'https://github.com/sindresorhus/p-queue',
   },
+  {
+    name: 'TypeScript Compiler API',
+    version: 'v5.x AST Engine',
+    description: 'Programmatic AST parsing for code symbol extraction and structural repo mapping.',
+    license: 'Apache-2.0',
+    category: 'core',
+    url: 'https://github.com/microsoft/TypeScript',
+  },
 
   // AI, Vector Store & Sidecar
   {
@@ -110,6 +118,22 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     license: 'Apache-2.0',
     category: 'aiAndVector',
     url: 'https://lancedb.com',
+  },
+  {
+    name: 'Apache Arrow',
+    version: 'Columnar Standard',
+    description: 'Zero-copy in-memory columnar data structure backing LanceDB storage engine.',
+    license: 'Apache-2.0',
+    category: 'aiAndVector',
+    url: 'https://arrow.apache.org',
+  },
+  {
+    name: 'FlashRank',
+    version: '>= v0.2.0',
+    description: 'Ultra-fast in-process re-ranking engine for dense vector retrieval scoring.',
+    license: 'Apache-2.0',
+    category: 'aiAndVector',
+    url: 'https://github.com/PrithivirajDamodaran/FlashRank',
   },
   {
     name: 'Ollama',
@@ -660,6 +684,46 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Special Acknowledgments & Open Standards */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/90 space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <Award className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-100">
+                  {t('about.acknowledgmentsTitle')}
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  {t('about.acknowledgmentsSubtitle')}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+                <strong className="text-cyan-400 block mb-0.5 font-semibold">Ollama</strong>
+                {t('about.acknowledgmentsOllama')}
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+                <strong className="text-cyan-400 block mb-0.5 font-semibold">LanceDB</strong>
+                {t('about.acknowledgmentsLanceDb')}
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+                <strong className="text-cyan-400 block mb-0.5 font-semibold">Anthropic</strong>
+                {t('about.acknowledgmentsAnthropic')}
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+                <strong className="text-cyan-400 block mb-0.5 font-semibold">Microsoft Monaco &amp; TypeScript</strong>
+                {t('about.acknowledgmentsMicrosoft')}
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 sm:col-span-2">
+                <strong className="text-cyan-400 block mb-0.5 font-semibold">Open-Weights Ecosystem</strong>
+                {t('about.acknowledgmentsOpenWeights')}
+              </div>
+            </div>
           </div>
 
           {/* Contacts & Community Links */}

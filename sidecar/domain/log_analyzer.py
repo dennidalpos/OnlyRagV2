@@ -32,12 +32,13 @@ logger = logging.getLogger("PythonSidecar")
 
 @dataclass
 class AnomalyRecord:
-    anomaly_type: str       # "TRUNCATED_JSON" | "VRAM_THRASH" | "TOOL_LOOP"
+    anomaly_type: str       # "TRUNCATED_JSON" | "VRAM_THRASH" | "TOOL_LOOP" | "CIRCUIT_BREAKER" | "OLLAMA_TIMEOUT"
     severity: str           # "WARNING" | "ERROR" | "CRITICAL"
     log_file: str
     line_number: int
     snippet: str
     count: int = 1
+    remediation: str = ""
 
 
 @dataclass
@@ -66,13 +67,15 @@ class LogDiagnosticReport:
 # 1. Truncated JSON: line contains an opening brace/bracket but no matching close
 _TRUNCATED_JSON_RE = re.compile(r'(\{|\[)[^}\]]{80,}$')
 
-# 2. VRAM Thrashing indicators
+# 2. VRAM Thrashing & Infrastructure Failure indicators
 _VRAM_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r'CUDA out of memory|RuntimeError.*CUDA', re.IGNORECASE), "CUDA_OOM"),
     (re.compile(r'HTTP 504|Gateway Timeout|timed out', re.IGNORECASE), "GATEWAY_TIMEOUT"),
     (re.compile(r'"response"\s*:\s*""', re.IGNORECASE), "EMPTY_RESPONSE"),
     (re.compile(r'vram.{0,20}(exceeded|full)|out of vram|gpu.*memory.*full', re.IGNORECASE), "VRAM_EXCEEDED"),
     (re.compile(r'Ollama(?!_)\w*.*?(timed out|timeout(?!\s*:))|connect.*refused.*11434', re.IGNORECASE), "OLLAMA_TIMEOUT"),
+    (re.compile(r'Circuit breaker tripped|Recursion limit reached|Infinite loop detected', re.IGNORECASE), "CIRCUIT_BREAKER"),
+    (re.compile(r'EPERM: operation not permitted|EACCES: permission denied', re.IGNORECASE), "FS_PERMISSIONS"),
 ]
 
 # 3. Tool calling loop: identical "tool_name": "X" appearing 3+ times in close proximity
@@ -101,9 +104,11 @@ def resolve_log_paths() -> list[Path]:
         local = os.environ.get("LOCALAPPDATA", "")
         if roaming:
             candidates.append(Path(roaming) / "onlyrag-v2" / "logs")
+            candidates.append(Path(roaming) / "OnlyRagV2" / "logs")
         if local:
             candidates.append(Path(local) / "OnlyRagV2" / "data")
             candidates.append(Path(local) / "OnlyRagV2" / "logs")
+            candidates.append(Path(local) / "onlyrag-v2" / "logs")
     else:
         candidates.append(Path.home() / ".onlyragv2" / "logs")
         candidates.append(Path.home() / ".onlyragv2" / "data")
@@ -128,8 +133,24 @@ def _collect_log_files(paths: Iterable[Path]) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
-# Anomaly Detectors
+# Anomaly Detectors & Remediation Helpers
 # ---------------------------------------------------------------------------
+
+def _get_remediation(anomaly_type: str) -> str:
+    if "CUDA_OOM" in anomaly_type or "VRAM_EXCEEDED" in anomaly_type:
+        return "Memoria VRAM GPU esaurita. Riduci il context window (num_ctx: 8192/4096) o seleziona un modello con quantizzazione più compatta (es. q4_k_m)."
+    if "TRUNCATED_JSON" in anomaly_type:
+        return "Risposta JSON del modello troncata o non valida. Aumenta num_ctx o passa a un modello coding dedicato (es. qwen2.5-coder:7b)."
+    if "TOOL_LOOP" in anomaly_type:
+        return "Loop di chiamate identiche rilevato. Riformula il prompt o interrompi l'agente per evitare consumo inutile di token."
+    if "GATEWAY_TIMEOUT" in anomaly_type or "OLLAMA_TIMEOUT" in anomaly_type:
+        return "Connessione a Ollama o Sidecar scaduta o rifiutata. Verifica che il demone Ollama sia attivo sulla porta 11434."
+    if "CIRCUIT_BREAKER" in anomaly_type:
+        return "Intervento del Circuit Breaker di sicurezza: l'esecuzione è stata arrestata per prevenire loop infiniti."
+    if "FS_PERMISSIONS" in anomaly_type:
+        return "Errore di permessi nel filesystem (EPERM/EACCES). Assicurati che OnlyRag abbia i permessi di scrittura nella cartella del workspace."
+    return "Controlla i log completi e verifica la corretta configurazione dell'ambiente di esecuzione."
+
 
 def _detect_truncated_json(
     lines: list[str],
@@ -144,6 +165,7 @@ def _detect_truncated_json(
                 log_file=file_path,
                 line_number=i,
                 snippet=line.strip()[:120],
+                remediation=_get_remediation("TRUNCATED_JSON"),
             ))
     return records
 
@@ -156,12 +178,14 @@ def _detect_vram_thrashing(
     for i, line in enumerate(lines, start=1):
         for pattern, sub_type in _VRAM_PATTERNS:
             if pattern.search(line):
+                full_type = f"VRAM_THRASH:{sub_type}"
                 records.append(AnomalyRecord(
-                    anomaly_type=f"VRAM_THRASH:{sub_type}",
-                    severity="CRITICAL" if sub_type in ("CUDA_OOM", "VRAM_EXCEEDED") else "ERROR",
+                    anomaly_type=full_type,
+                    severity="CRITICAL" if sub_type in ("CUDA_OOM", "VRAM_EXCEEDED", "CIRCUIT_BREAKER") else "ERROR",
                     log_file=file_path,
                     line_number=i,
                     snippet=line.strip()[:120],
+                    remediation=_get_remediation(full_type),
                 ))
                 break  # one match per line
     return records
@@ -198,6 +222,7 @@ def _detect_tool_loops(
                         line_number=start + 1,
                         snippet=f"Tool '{tool_name}' called {count}x in {_LOOP_WINDOW}-line window.",
                         count=count,
+                        remediation=_get_remediation("TOOL_LOOP"),
                     ))
     return records
 
@@ -284,6 +309,7 @@ class LogAnalyzer:
                         "line_number": a.line_number,
                         "snippet": a.snippet,
                         "count": a.count,
+                        "remediation": a.remediation,
                     }
                     for a in report.anomalies
                 ],

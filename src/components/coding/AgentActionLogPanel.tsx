@@ -60,6 +60,7 @@ interface AgentActionLogPanelProps {
   showWorkspaceSidebar?: boolean
   onToggleWorkspaceSidebar?: () => void
   filesCount?: number
+  onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
   // Plan Flow Props
   plan?: AgentPlan | null
   isGeneratingPlan?: boolean
@@ -123,6 +124,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   showWorkspaceSidebar,
   onToggleWorkspaceSidebar,
   filesCount,
+  onOpenRightTab,
   plan,
   isGeneratingPlan,
   countdownSeconds,
@@ -190,6 +192,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         setAgentPrompt={setAgentPrompt}
         activeModelName={activeModelName}
         onOpenFile={onOpenFile}
+        onOpenRightTab={onOpenRightTab}
         isExecuting={isExecuting}
         streamingText={streamingText}
         scrollContainerRef={scrollContainerRef}

@@ -14,7 +14,7 @@
  * rounded-2xl cards, lucide-react icons, font-mono telemetry rows).
  */
 
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { AlertCircle, RefreshCw, ScanLine, Loader2 } from 'lucide-react'
 import { useSlmOrchestration } from '../../hooks/useSlmOrchestration'
 import type { SlmLogDiagnosticReport } from '../../types'
@@ -38,6 +38,13 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
     const report = await analyzeLogs(extraLogPaths)
     onScanComplete?.(report)
   }, [analyzeLogs, extraLogPaths, onScanComplete])
+
+  // Auto-scan on mount if no report is currently loaded
+  useEffect(() => {
+    if (!lastReport && !isAnalyzingLogs && !analyzeLogsError) {
+      handleScan()
+    }
+  }, [lastReport, isAnalyzingLogs, analyzeLogsError, handleScan])
 
   return (
     <div className="flex-1 h-full flex flex-col bg-[#0b0f17] select-text font-sans text-slate-200 overflow-y-auto">

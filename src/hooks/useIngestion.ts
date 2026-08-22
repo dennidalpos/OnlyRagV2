@@ -398,9 +398,6 @@ export function useIngestion(settings?: AppSettings) {
     let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
     let ocrTech = 'PyMuPDF Text Extraction'
 
-    const chatRagModel = settings?.chatModel || settings?.defaultModel || 'llama3.2'
-    const normalizeWithLlm = Boolean(settings?.normalizeWithLlm)
-
     if (ext === 'pdf') {
       detectedCategory = 'PDF (Ibrido / Scansione / Testo)'
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
@@ -423,16 +420,12 @@ export function useIngestion(settings?: AppSettings) {
       ocrTech = 'UTF-8 Control Character Sanitizer'
     }
 
-    if (normalizeWithLlm) {
-      ocrTech += ` + Controllo Testo (${chatRagModel})`
-    }
-
     setIngestionProgress({
       active: true,
       fileName: baseName,
       fileCategory: detectedCategory,
       pipeline: initialPipeline,
-      modelName: normalizeWithLlm ? chatRagModel : (settings?.visionModel || 'llama3.2-vision'),
+      modelName: settings?.visionModel || 'llama3.2-vision',
       ocrTechnology: ocrTech,
       step: 'Pre-elaborazione, Fast-Routing e classificazione del file...',
       percent: 20,
@@ -450,8 +443,7 @@ export function useIngestion(settings?: AppSettings) {
         targetFilePath,
         settings?.visionModel,
         undefined,
-        normalizeWithLlm,
-        chatRagModel
+        false
       )
 
       if (isCancelledRef.current) return
@@ -489,7 +481,8 @@ export function useIngestion(settings?: AppSettings) {
       setTimeout(() => setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 }), 2000)
     } catch (err: any) {
       if (!isCancelledRef.current) {
-        setUploadError(err.message || 'Error ingesting file')
+        const normalized = normalizeError(err, 'Ingestion')
+        setUploadError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
         setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
       }
     } finally {
@@ -512,7 +505,8 @@ export function useIngestion(settings?: AppSettings) {
         }
       }
     } catch (err: any) {
-      logger.error('IngestionView', `Native file dialog error: ${err.message}`)
+      const normalized = normalizeError(err, 'Native Dialog')
+      logger.error('IngestionView', `Native file dialog error: ${normalized.message}`)
     }
   }
 
@@ -538,7 +532,8 @@ export function useIngestion(settings?: AppSettings) {
         setSaveStatus({ success: false, message: res.error || 'Errore durante il salvataggio del documento' })
       }
     } catch (err: any) {
-      setSaveStatus({ success: false, message: err.message || 'Eccezione salvataggio documento' })
+      const normalized = normalizeError(err, 'Ingestion Save')
+      setSaveStatus({ success: false, message: normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message })
     } finally {
       setIsSaving(false)
       setTimeout(() => {
@@ -564,6 +559,7 @@ export function useIngestion(settings?: AppSettings) {
     handleTranslateInplace,
     isUploading,
     uploadError,
+    setUploadError,
     syncScroll,
     setSyncScroll,
     ingestionProgress,

@@ -184,3 +184,14 @@ flowchart TD
 - **Esposizione dello Stato via IPC (`agent:get-plan-state`)**: Il frontend può leggere in ogni momento lo stato di completamento reale (verified/in_progress/failed) persistito dal backend, invece di stimare il progresso da un'euristica basata sul conteggio degli step.
 - **Disaccoppiamento Invio/Generazione**: L'invio di un prompt esegue sempre direttamente il task (`c.handleAgentExecute()`); la generazione del piano è un'azione esplicita separata (icona dedicata "Genera piano" nel composer, disponibile in ogni `agentMode`), non più agganciata automaticamente ad ogni invio quando `requirePlanApproval` è attivo.
 - **Consolidamento Automatico del Residuo**: Alla generazione di un nuovo piano, i milestone non verificati del piano approvato precedente vengono inclusi come contesto di riconciliazione nella richiesta al modello, così il nuovo piano assorbe lo stato pregresso invece di ripartire da zero.
+
+---
+
+## 6. SLM Log Diagnostics & Resilient Fallback Engine
+
+OnlyRag V2 include un motore diagnostico avanzato di analisi anomalie nei log di sistema per identificare in tempo reale criticità di esecuzione (CUDA OOM, VRAM budget exceeded, JSON troncati, timeout Ollama, loop ricorsivi di tool, circuit breaker di stagnazione e permessi filesystem).
+
+- **Architettura a Doppio Motore Resiliente**:
+  1. **Primary Engine (Python FastAPI Sidecar — `/agent/logs/analyze`)**: Scansiona in parallelo i log applicativi con finestre scorrevoli di rilevamento pattern e calcolo metriche.
+  2. **Native Electron Node.js Fallback Engine (`SidecarSlmBridgeService.analyzeLogsNativeFallback`)**: Se il sidecar Python è offline, in fase di riavvio o non raggiungibile, il processo Electron Main esegue una scansione diretta su disco dei log (`.onlyrag/logs`, `%APPDATA%/onlyrag-v2/logs`, `%LOCALAPPDATA%/OnlyRagV2/logs`, `temp`), garantendo **zero downtime e disponibilità al 100% della diagnostica**.
+- **Actionable Remediation**: Ogni record di anomalia rilevato include una guida di ripristino contestuale (`remediation`), visualizzabile sia nella modale di diagnostica di sistema (`SystemDiagnosticsModal.tsx`) sia nella scheda dedicata del workspace `Diagnostica Log` (`SlmDiagnosticsPanel.tsx`), con supporto a filtri per severità (`CRITICAL`, `ERROR`, `WARNING`), ricerca testuale rapida ed export report Markdown.

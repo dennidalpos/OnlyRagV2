@@ -14,6 +14,7 @@ interface AgentTimelineProps {
   setAgentPrompt: (prompt: string) => void
   activeModelName?: string
   onOpenFile?: (file: WorkspaceFile) => void
+  onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
   isExecuting: boolean
   streamingText: string
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
@@ -43,6 +44,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   setAgentPrompt,
   activeModelName,
   onOpenFile,
+  onOpenRightTab,
   isExecuting,
   streamingText,
   scrollContainerRef,
@@ -78,13 +80,12 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
 
   // Only the messages actually near the viewport are mounted: a long-running session can
   // accumulate hundreds of entries, and every one of them was previously kept in the DOM for
-  // the life of the session. Item heights vary a lot (a one-line "Explored workspace" badge vs
-  // an expanded command output block), so sizes are measured dynamically instead of assumed.
+  // the life of the session. Item heights vary a lot (a one-line badge vs expanded output).
   const rowVirtualizer = useVirtualizer({
     count: actionLogs.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: () => 90,
-    overscan: 6,
+    estimateSize: () => 36,
+    overscan: 10,
     getItemKey: (index) => actionLogs[index].id,
   })
 
@@ -92,7 +93,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     <div
       ref={scrollContainerRef}
       onScroll={onScroll}
-      className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs font-mono relative"
+      className="flex-1 overflow-y-auto p-3 space-y-1.5 text-xs font-mono relative"
     >
       {/* Floating Scroll-to-Bottom Button */}
       {isScrolledUp && (
@@ -160,16 +161,14 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                {/* Bottom padding (not margin) so it counts toward the measured row height the
-                    virtualizer positions the next row from — space-y-* can't reach absolutely
-                    positioned siblings the way it did the plain list this replaced. */}
-                <div className="pb-3.5">
+                <div className="pb-1.5">
                   <AgentTimelineMessage
                     log={log}
                     isExpanded={expandedLogIds.has(log.id)}
                     onToggleExpand={toggleExpand}
                     activeModelName={activeModelName}
                     onOpenFile={onOpenFile}
+                    onOpenRightTab={onOpenRightTab}
                   />
                 </div>
               </div>

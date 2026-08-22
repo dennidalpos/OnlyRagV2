@@ -164,13 +164,13 @@ function renderMarkdownContent(text: string): React.ReactNode {
 
   return <div className="space-y-1 text-xs leading-relaxed text-slate-200 font-sans">{elements}</div>
 }
-
 interface AgentTimelineMessageProps {
   log: AgentActionLog
   isExpanded: boolean
   onToggleExpand: (id: string) => void
   activeModelName?: string
   onOpenFile?: (file: WorkspaceFile) => void
+  onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
 }
 
 export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
@@ -179,6 +179,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   onToggleExpand,
   activeModelName,
   onOpenFile,
+  onOpenRightTab,
 }) => {
   const { t } = useTranslation()
   const [isCopied, setIsCopied] = React.useState(false)
@@ -188,15 +189,13 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   if (resolved.category === 'user_prompt') {
     const text = log.message.replace(/^User Prompt:\s*/i, '')
     return (
-      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-950/70 via-blue-950/40 to-slate-900/90 border border-indigo-500/40 text-slate-100 font-sans text-xs space-y-1.5 shadow-lg">
-        <div className="flex items-center justify-between border-b border-indigo-500/20 pb-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
-              <User className="w-3 h-3" />
-            </div>
-            <span className="font-bold text-xs text-indigo-300">{t('coding.userRole')}</span>
+      <div className="py-2 px-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-slate-100 font-sans text-xs space-y-1 shadow-sm">
+        <div className="flex items-center justify-between text-[11px] text-indigo-400">
+          <div className="flex items-center gap-1.5 font-bold">
+            <User className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{t('coding.userRole')}</span>
           </div>
-          <span className="text-[10px] text-indigo-400/70 font-mono">{formatClockTime(log.timestamp)}</span>
+          <span className="text-[10px] text-indigo-400/60 font-mono">{formatClockTime(log.timestamp)}</span>
         </div>
         <div className="whitespace-pre-wrap leading-relaxed text-slate-100 font-medium">{text}</div>
       </div>
@@ -207,15 +206,13 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   if (resolved.category === 'agent_question') {
     const qText = log.message.replace(/^❓\s*AI Agent Question:\s*/i, '').replace(/^Agent Question:\s*/i, '')
     return (
-      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/50 to-slate-900/90 border-2 border-amber-500/70 text-amber-100 font-sans text-xs space-y-2 shadow-xl animate-in fade-in duration-200">
-        <div className="flex items-center justify-between border-b border-amber-500/30 pb-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-            <span className="font-bold text-xs text-amber-300">{t('coding.agentQuestion')}</span>
+      <div className="py-2 px-3 rounded-xl bg-amber-950/40 border border-amber-500/60 text-amber-100 font-sans text-xs space-y-1.5 shadow-md animate-in fade-in duration-150">
+        <div className="flex items-center justify-between border-b border-amber-500/30 pb-1">
+          <div className="flex items-center gap-1.5 font-bold text-amber-300">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>{t('coding.agentQuestion')}</span>
           </div>
-          <span className="text-[10px] text-amber-400/80 font-mono">{formatClockTime(log.timestamp)}</span>
+          <span className="text-[10px] text-amber-400/70 font-mono">{formatClockTime(log.timestamp)}</span>
         </div>
         <div className="whitespace-pre-wrap leading-relaxed font-semibold text-amber-200">{qText}</div>
       </div>
@@ -232,16 +229,16 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     }
 
     return (
-      <div className="p-4 rounded-2xl bg-gradient-to-b from-emerald-950/40 via-slate-900/90 to-slate-950/95 border-2 border-emerald-500/60 text-slate-100 font-sans text-xs space-y-3 shadow-xl animate-in fade-in duration-200">
-        <div className="flex items-center justify-between border-b border-emerald-500/30 pb-2">
+      <div className="p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/60 text-slate-100 font-sans text-xs space-y-2.5 shadow-lg animate-in fade-in duration-200">
+        <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1.5">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shadow-sm shadow-emerald-500/20">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <div className="w-4 h-4 rounded-full bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shadow-sm">
+              <CheckCircle2 className="w-3 h-3" />
             </div>
             <span className="font-bold text-xs text-emerald-300">
               Report Finale di Implementazione
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold">
+            <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold">
               {getStepModelName(log.message, activeModelName)}
             </span>
           </div>
@@ -250,7 +247,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
             <button
               type="button"
               onClick={handleCopy}
-              className="p-1 px-2 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-[10px] text-emerald-200 flex items-center gap-1 font-mono transition-all active:scale-95 cursor-pointer"
+              className="p-0.5 px-2 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-[10px] text-emerald-200 flex items-center gap-1 font-mono transition-all active:scale-95 cursor-pointer"
               title="Copia Report"
             >
               {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -269,24 +266,24 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     const isLoopWarning = log.message.includes('Loop') || log.message.includes('Oscillation') || log.message.includes('Intervention')
     return (
       <div
-        className={`p-3.5 rounded-2xl border text-xs space-y-2 shadow-lg animate-in fade-in duration-200 ${
+        className={`py-1.5 px-2.5 rounded-lg border text-xs space-y-1 shadow-sm font-sans ${
           isLoopWarning
-            ? 'bg-amber-950/40 border-amber-500/60 text-amber-200'
-            : 'bg-rose-950/40 border-rose-500/60 text-rose-200'
+            ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+            : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
         }`}
       >
-        <div className="flex items-center justify-between border-b pb-1.5 border-slate-800/80">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between text-[10px]">
+          <div className="flex items-center gap-1.5 font-bold">
             <AlertTriangle className={`w-3.5 h-3.5 ${isLoopWarning ? 'text-amber-400' : 'text-rose-400'}`} />
-            <span className="font-bold text-xs uppercase tracking-wide">
-              {isLoopWarning ? 'Loop Intervention Warning' : 'System Diagnostic Alert'}
+            <span className="uppercase tracking-wide">
+              {isLoopWarning ? 'Loop Intervention' : 'System Alert'}
             </span>
           </div>
-          <span className="text-[10px] opacity-70 font-mono">{formatClockTime(log.timestamp)}</span>
+          <span className="opacity-60 font-mono">{formatClockTime(log.timestamp)}</span>
         </div>
-        <div className="whitespace-pre-wrap leading-relaxed">{renderMarkdownContent(log.message)}</div>
+        <div className="text-[11px] leading-relaxed">{log.message}</div>
         {log.detail && (
-          <div className="mt-1.5 p-2 rounded-xl bg-black/50 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto max-h-48 whitespace-pre-wrap">
+          <div className="mt-1 p-2 rounded bg-black/40 border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-40 whitespace-pre-wrap">
             {log.detail}
           </div>
         )}
@@ -299,34 +296,51 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     const isPass = log.testRun ? log.testRun.isPass : !log.message.includes('FAIL') && (log.message.includes('PASS') || log.status === 'success')
     const summary = log.testRun?.summary || log.message
     return (
-      <div className="space-y-1.5 font-mono">
-        <button
-          type="button"
-          onClick={() => log.detail && onToggleExpand(log.id)}
-          className={`w-full text-left flex items-center justify-between py-1.5 px-2.5 rounded-xl transition-colors group border cursor-pointer ${
+      <div className="space-y-1 font-mono text-[11px]">
+        <div
+          className={`flex items-center justify-between py-1 px-2.5 rounded-lg border transition-colors ${
             isPass
-              ? 'bg-emerald-950/30 border-emerald-800/50 hover:bg-emerald-950/50'
-              : 'bg-rose-950/30 border-rose-800/50 hover:bg-rose-950/50'
+              ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-300'
+              : 'bg-rose-950/20 border-rose-800/40 text-rose-300'
           }`}
         >
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
             {isPass ? (
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             ) : (
               <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
             )}
-            <span className="font-sans font-medium text-slate-400">Tests</span>
-            <span className={`font-bold ${isPass ? 'text-emerald-300' : 'text-rose-300'}`}>
+            <span className="font-sans font-semibold text-slate-400 text-[10px] uppercase">Test</span>
+            <span className="font-bold truncate" title={summary}>
               {summary}
             </span>
           </div>
-          {log.detail && (
-            isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          )}
-        </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onOpenRightTab && (
+              <button
+                type="button"
+                onClick={() => onOpenRightTab('terminal')}
+                className="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300 hover:text-cyan-300 border border-slate-700/80 transition-colors cursor-pointer"
+                title="Apri Terminale"
+              >
+                Terminale
+              </button>
+            )}
+            {log.detail && (
+              <button
+                type="button"
+                onClick={() => onToggleExpand(log.id)}
+                className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                title={isExpanded ? 'Comprimi' : 'Espandi'}
+              >
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
+        </div>
 
         {isExpanded && log.detail && (
-          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail}
           </div>
         )}
@@ -351,44 +365,62 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         : 'text-cyan-400'
 
     return (
-      <div className="space-y-1.5 font-mono">
-        <div className="flex items-center justify-between text-xs py-1 px-2 rounded-xl bg-slate-900/60 border border-slate-800/80 group">
+      <div className="space-y-1 font-mono text-[11px]">
+        <div className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 group">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`font-sans font-medium text-xs ${verbColor}`}>{verb}</span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${badge.color}`}>
+            <span className={`font-sans font-semibold text-[10px] uppercase ${verbColor}`}>{verb}</span>
+            <span className={`px-1 py-0.2 rounded text-[9px] font-bold shrink-0 ${badge.color}`}>
               {badge.label}
             </span>
             <button
               type="button"
-              onClick={() => onOpenFile && onOpenFile({ name: fileName, path: targetPath, isDir: false })}
+              onClick={() => {
+                if (onOpenFile) onOpenFile({ name: fileName, path: targetPath, isDir: false })
+                if (onOpenRightTab) onOpenRightTab('editor')
+              }}
               className="font-bold text-slate-200 hover:text-cyan-300 transition-colors cursor-pointer rounded truncate"
               title={targetPath}
             >
               {fileName}
             </button>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenFile) onOpenFile({ name: fileName, path: targetPath, isDir: false })
+                if (onOpenRightTab) onOpenRightTab('editor')
+              }}
+              className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+              title="Apri file in Monaco Editor"
+            >
+              Visualizza
+            </button>
+            {onOpenRightTab && (
+              <button
+                type="button"
+                onClick={() => onOpenRightTab('git_diff')}
+                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                title="Visualizza Git Diff"
+              >
+                Diff
+              </button>
+            )}
             {log.detail && (
               <button
                 type="button"
                 onClick={() => onToggleExpand(log.id)}
-                className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-0.5 px-1.5 py-0.5 rounded cursor-pointer"
+                className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                title={isExpanded ? 'Comprimi' : 'Espandi'}
               >
-                {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => onOpenFile && onOpenFile({ name: fileName, path: targetPath, isDir: false })}
-              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-            >
-              Diff / View
-            </button>
           </div>
         </div>
 
         {isExpanded && log.detail && (
-          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail}
           </div>
         )}
@@ -400,26 +432,41 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   if (resolved.category === 'command_execution') {
     const cmdText = log.target || log.message.replace(/^Ran\s+/, '').replace(/^Executed command:\s*/, '')
     return (
-      <div className="space-y-1.5 font-mono">
-        <button
-          type="button"
-          onClick={() => log.detail && onToggleExpand(log.id)}
-          className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1.5 px-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 transition-colors group cursor-pointer"
-        >
-          <div className="flex items-center gap-2 text-xs min-w-0">
+      <div className="space-y-1 font-mono text-[11px]">
+        <div className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 group">
+          <div className="flex items-center gap-2 min-w-0">
             <Terminal className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span className="text-slate-400 font-sans font-medium">Ran</span>
-            <span className="font-bold text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
+            <span className="text-slate-400 font-sans font-semibold text-[10px] uppercase">Cmd</span>
+            <span className="font-bold text-slate-200 truncate max-w-xs" title={cmdText}>
               {cmdText}
             </span>
           </div>
-          {log.detail && (
-            isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          )}
-        </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onOpenRightTab && (
+              <button
+                type="button"
+                onClick={() => onOpenRightTab('terminal')}
+                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                title="Apri Terminale"
+              >
+                Terminale
+              </button>
+            )}
+            {log.detail && (
+              <button
+                type="button"
+                onClick={() => onToggleExpand(log.id)}
+                className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                title={isExpanded ? 'Comprimi' : 'Espandi'}
+              >
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
+        </div>
 
         {isExpanded && (
-          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             <div className="text-slate-500 mb-1">workspace &gt; {cmdText}</div>
             {log.detail || log.message}
           </div>
@@ -433,26 +480,29 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     const action = log.verb || 'Search'
     const queryOrUrl = log.target || log.message
     return (
-      <div className="space-y-1.5 font-mono">
-        <button
-          type="button"
-          onClick={() => log.detail && onToggleExpand(log.id)}
-          className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1.5 px-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 transition-colors group cursor-pointer"
-        >
-          <div className="flex items-center gap-2 text-xs min-w-0">
+      <div className="space-y-1 font-mono text-[11px]">
+        <div className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 group">
+          <div className="flex items-center gap-2 min-w-0">
             <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="text-slate-400 font-sans font-medium">{action}</span>
-            <span className="font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate">
+            <span className="text-slate-400 font-sans font-semibold text-[10px] uppercase">{action}</span>
+            <span className="font-bold text-slate-200 truncate max-w-xs" title={queryOrUrl}>
               {queryOrUrl}
             </span>
           </div>
           {log.detail && (
-            isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <button
+              type="button"
+              onClick={() => onToggleExpand(log.id)}
+              className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer shrink-0"
+              title={isExpanded ? 'Comprimi' : 'Espandi'}
+            >
+              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
           )}
-        </button>
+        </div>
 
         {isExpanded && log.detail && (
-          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail}
           </div>
         )}
@@ -465,24 +515,29 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     const action = log.verb || 'Explored'
     const target = log.target || extractBaseName(log.message) || 'workspace'
     return (
-      <div className="space-y-1.5 font-mono">
-        <button
-          type="button"
-          onClick={() => onToggleExpand(log.id)}
-          className="w-full text-left flex items-center justify-between text-slate-300 hover:text-slate-100 py-1.5 px-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 transition-colors group cursor-pointer"
-        >
-          <div className="flex items-center gap-2 text-xs min-w-0">
+      <div className="space-y-1 font-mono text-[11px]">
+        <div className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 group">
+          <div className="flex items-center gap-2 min-w-0">
             <FolderTree className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-slate-400 font-sans font-medium">{action}</span>
-            <span className="font-bold text-slate-200 group-hover:text-amber-300 transition-colors truncate">
+            <span className="text-slate-400 font-sans font-semibold text-[10px] uppercase">{action}</span>
+            <span className="font-bold text-slate-200 truncate max-w-xs" title={target}>
               {target}
             </span>
           </div>
-          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-        </button>
+          {log.detail && (
+            <button
+              type="button"
+              onClick={() => onToggleExpand(log.id)}
+              className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer shrink-0"
+              title={isExpanded ? 'Comprimi' : 'Espandi'}
+            >
+              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
 
         {isExpanded && (
-          <div className="p-3 rounded-xl bg-[#030712] border border-slate-800 text-[11px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-64">
+          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail || log.message}
           </div>
         )}
@@ -490,34 +545,44 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
     )
   }
 
-  // 9. Agent Thought / Assistant Response Bubble
+  // 9. Agent Thought / Intermediate Reasoning / Assistant Note (Compact Collapsible Row)
+  const isMultiLine = log.message.includes('\n') || log.message.length > 90
+  const firstLine = log.message.split('\n')[0].replace(/^[#*`\- ]+/, '').trim()
+  const modelTag = log.modelName || getStepModelName(log.message, activeModelName)
+
   return (
-    <div className="p-3.5 rounded-2xl bg-[#0e1422] border border-slate-800/90 text-slate-200 font-sans text-xs leading-relaxed space-y-2 shadow-md">
-      <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
-            <Bot className="w-3 h-3" />
-          </div>
-          <span className="font-bold text-xs text-emerald-400">{t('coding.agentRole')}</span>
-          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold">
-            {log.modelName || getStepModelName(log.message, activeModelName)}
+    <div className="space-y-1 font-sans text-xs">
+      <div
+        onClick={() => (isMultiLine || log.detail) && onToggleExpand(log.id)}
+        className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg border transition-all ${
+          isMultiLine || log.detail ? 'cursor-pointer hover:bg-slate-900/80' : ''
+        } bg-[#0c121e]/80 border-slate-800/80 text-slate-300`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Bot className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase shrink-0">Passo</span>
+          <span className="text-[11px] text-slate-200 truncate font-medium max-w-sm" title={log.message}>
+            {firstLine || 'Ragionamento agente...'}
           </span>
         </div>
-        <span className="text-[10px] text-slate-400 font-mono">{formatClockTime(log.timestamp)}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[9px] font-mono">
+            {modelTag}
+          </span>
+          <span className="text-[10px] text-slate-400 font-mono">{formatClockTime(log.timestamp)}</span>
+          {(isMultiLine || log.detail) && (
+            <span className="text-slate-400">
+              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </span>
+          )}
+        </div>
       </div>
-      <div className="whitespace-pre-wrap leading-relaxed">{renderMarkdownContent(log.message)}</div>
-      {log.detail && (
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => onToggleExpand(log.id)}
-            className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono font-semibold cursor-pointer"
-          >
-            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            {isExpanded ? t('common.close') : t('common.viewDetails')}
-          </button>
-          {isExpanded && (
-            <pre className="mt-1.5 p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-60 leading-relaxed">
+
+      {isExpanded && (
+        <div className="p-3 rounded-xl bg-[#090d16] border border-slate-800 text-xs text-slate-200 space-y-2 animate-in fade-in duration-100">
+          <div className="whitespace-pre-wrap leading-relaxed">{renderMarkdownContent(log.message)}</div>
+          {log.detail && (
+            <pre className="mt-1.5 p-2 bg-slate-950 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-56 leading-relaxed">
               {log.detail}
             </pre>
           )}

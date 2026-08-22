@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   GripVertical,
   WrapText,
+  X,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
@@ -403,15 +404,26 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
           </div>
         )}
 
-        {/* Cross-Module Task Lock Feedback Banner */}
+        {/* Cross-Module Task Lock / Translation Error Feedback Banner */}
         {tr.translationError && (
           <div
             role="alert"
             aria-live="assertive"
-            className="px-4 py-2 bg-amber-950/80 border-b border-amber-800 text-amber-300 text-xs font-semibold flex items-center gap-2"
+            className="px-4 py-2 bg-amber-950/80 border-b border-amber-800 text-amber-300 text-xs font-semibold flex items-center justify-between gap-2"
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span>{tr.translationError}</span>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>{tr.translationError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => tr.setTranslationError(null)}
+              aria-label={t('common.close')}
+              title={t('common.close')}
+              className="text-amber-400 hover:text-amber-200 p-1 rounded-lg hover:bg-amber-900/60 transition-colors shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
@@ -486,12 +498,12 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
                 aria-label={t('coding.resizePanels')}
                 onMouseDown={handleLeftEditorMouseDown}
                 onKeyDown={handleLeftEditorKeyDown}
-                className={`w-1.5 hover:w-2 hover:bg-sky-500 bg-slate-800/80 cursor-col-resize transition-all shrink-0 flex items-center justify-center group focus-ring ${
-                  isLeftEditorResizing ? 'bg-sky-500 w-2 ring-2 ring-sky-500/50' : ''
+                className={`w-1 hover:bg-sky-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+                  isLeftEditorResizing ? 'bg-sky-500 ring-2 ring-sky-500/50' : ''
                 }`}
                 title={t('coding.resizePanels')}
               >
-                <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isLeftEditorResizing ? 'opacity-100 text-slate-950' : ''}`} />
+                <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isLeftEditorResizing ? 'opacity-100 text-slate-950' : ''}`} />
               </div>
 
               <div className={`flex-1 min-w-0 bg-[#080c14] flex flex-col ${isLeftEditorResizing ? 'pointer-events-none select-none' : ''}`}>

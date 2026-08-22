@@ -122,6 +122,11 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 * **Motivazione Tecnica:** Gli agenti di sviluppo locale non devono avviare server di sviluppo bloccanti a ciclo infinito (`run_command npm run dev`), ma devono consentire all'utente di visionare immediatamente le pagine web e le SPA statiche create nel loro browser predefinito.
 * **Soluzione Implementata:** Tool deterministico `open_in_browser` validato da `validatePathSafety`, integrato con le API native sicure di Electron (`electron.shell.openPath` per file HTML locali e `electron.shell.openExternal` per URL HTTP/HTTPS).
 
+### 3.8. Resilient SLM Log Diagnostics & Native Node.js Fallback Scanner
+* **Moduli:** [`sidecarSlmBridgeService.ts`](../electron/core/application/sidecarSlmBridgeService.ts), [`log_analyzer.py`](../sidecar/domain/log_analyzer.py), [`SlmDiagnosticsPanel.tsx`](../src/components/coding/SlmDiagnosticsPanel.tsx)
+* **Motivazione Tecnica:** Durante l'esecuzione di carichi pesanti su hardware locale o in caso di crash/riavvio del runtime Python, la diagnostica di sistema non deve mai andare offline o bloccare l'interfaccia utente.
+* **Soluzione Implementata:** Architettura a doppio scanner con fallback nativo: se l'endpoint REST del sidecar (`/agent/logs/analyze`) non risponde, il servizio Electron Main esegue una scansione in Node.js ad alte prestazioni con buffering di 500 righe per file su tutti i percorsi standard di log (`.onlyrag/logs`, `%APPDATA%/onlyrag-v2/logs`, `%LOCALAPPDATA%/OnlyRagV2/logs`, directory temporanee di sistema), correlando anomalie e fornendo suggerimenti correttivi immediati (`remediation`).
+
 ---
 
 ## 4. Mappatura delle Sostituzioni (Refactoring da Logiche Artigianali a Librerie Standard)

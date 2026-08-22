@@ -167,6 +167,9 @@ class TestLogAnalyzerExport:
             assert "has_critical" in data
             assert "summary" in data
             assert isinstance(data["anomalies"], list)
+            if data["anomalies"]:
+                assert "remediation" in data["anomalies"][0]
+                assert len(data["anomalies"][0]["remediation"]) > 0
 
     def test_analyze_and_export_no_anomalies_clean_log(self):
         with tempfile.TemporaryDirectory() as tmpdir:

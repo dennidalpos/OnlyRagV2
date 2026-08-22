@@ -85,6 +85,32 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(res.isCustom).toBe(true)
   })
 
+  it('should support direct module-level custom prompt overrides for all modules', () => {
+    const directSettings: AppSettings = {
+      defaultModel: 'qwen2.5-coder:7b',
+      hardwareProfile: 'Auto',
+      ocrEngine: 'native_cuda',
+      ollamaHost: 'http://127.0.0.1:11434',
+      customPromptOverrides: {
+        chat: 'My customized chat prompt',
+        coding: 'My customized coding prompt',
+        translation: 'My customized translation prompt',
+      },
+    }
+
+    const chatRes = getEffectivePrompt('chat', 'qwen2.5-coder:7b', directSettings)
+    expect(chatRes.prompt).toBe('My customized chat prompt')
+    expect(chatRes.isCustom).toBe(true)
+
+    const codingRes = getEffectivePrompt('coding', 'qwen2.5-coder:7b', directSettings)
+    expect(codingRes.prompt).toBe('My customized coding prompt')
+    expect(codingRes.isCustom).toBe(true)
+
+    const transRes = getEffectivePrompt('translation', 'qwen2.5-coder:7b', directSettings)
+    expect(transRes.prompt).toBe('My customized translation prompt')
+    expect(transRes.isCustom).toBe(true)
+  })
+
   it('should compile prompt with variable substitution in PromptCompiler', () => {
     const compiled = PromptCompiler.compilePrompt(
       'translation',

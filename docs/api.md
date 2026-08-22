@@ -382,13 +382,46 @@ const report = await analyzeLogs()
 
 ---
 
-### 2.4. Canali Sistema & Diagnostica (`system:*` / `diagnostics:*`)
+### 1.7. SLM Log Diagnostics & Anomaly Analysis
+* **Endpoint:** `POST /agent/logs/analyze`
+* **Content-Type:** `application/json`
+* **Request Body:**
+```json
+{
+  "extra_paths": ["C:/custom/logs/"]
+}
+```
+* **Risposta (200 OK):**
+```json
+{
+  "scanned_files": [".onlyrag/logs/session.log", "logs/app.log"],
+  "total_lines_scanned": 1420,
+  "anomalies": [
+    {
+      "anomaly_type": "CUDA_OOM",
+      "severity": "CRITICAL",
+      "log_file": "logs/app.log",
+      "line_number": 42,
+      "snippet": "CUDA out of memory. Tried to allocate 4.00 GiB",
+      "count": 1,
+      "remediation": "Riduci il context window (num_ctx: 4096) o seleziona un modello quantizzato (Q4_K_M) nelle impostazioni."
+    }
+  ],
+  "has_critical": true,
+  "summary": "Analisi completata: 2 file scansionati, 1 anomalia rilevata."
+}
+```
+
+---
+
+### 2.4. Canali Sistema & Diagnostica (`system:*` / `diagnostics:*` / `agent:logs-*`)
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
 | `system:get-diagnostics`| `none` | `DiagnosticsData` | Ispezione di CPU, RAM, VRAM, GPU NVML e capienza disco. |
 | `system:read-logs` | `none` | `string[]` | Lettura dei log applicativi da disco. |
 | `system:clear-logs` | `none` | `{ success: boolean }` | Pulizia del buffer in memoria e azzeramento del file fisico `logs/app.log`. |
+| `agent:logs-analyze` | `extraPaths?: string[]` | `SlmLogDiagnosticReport` | Scansione anomalie log con sidecar e fallback automatico in Node.js su disco. |
 | `diagnostics:open-logs-folder` | `none` | `{ success: boolean, path: string }` | Apre la cartella locale dei log (`logs/`) sul file system host Windows. |
 
 ---
@@ -415,7 +448,7 @@ const report = await analyzeLogs()
 
 | Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- | :--- |
-| `ingest:file` | `ingestFile(...)` | `filePath, visionModel?, visionPrompt?, normalizeWithLlm?, normalizationModel?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Ingestione documento con parsing PyMuPDF, OCR e normalizzazione LLM opzionale. |
+| `ingest:file` | `ingestFile(...)` | `filePath, visionModel?, visionPrompt?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Ingestione documento ad alta velocità con parsing PyMuPDF, OCR e indicizzazione LanceDB. |
 | `ingest:update` | `updateIngestedDocument(docId, md)` | `docId: string, markdownContent: string` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Aggiornamento manuale del Markdown estratto e re-indicizzazione dei vettori in LanceDB. |
 | `ingest:translate-inplace` | `translateDocumentInplace(...)` | `docId, sourceLang, targetLang, model?, backupOriginal?, targetDir?` | `{ success: boolean, data?: IngestedDocument, error?: string }` | Traduzione documento PDF/DOCX con salvataggio nella cartella di destinazione e preservazione del file originale. |
 | `ingest:page-preview` | `getDocumentPagePreview(...)` | `docId: string, pageNumber: number` | `PagePreviewData \| null` | Rendering raster ad alta risoluzione della pagina sorgente per la preview a due pannelli. |

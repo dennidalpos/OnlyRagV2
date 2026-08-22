@@ -57,6 +57,9 @@ async function dispatchToLlm(
         lastDispatchEscalated = isHeavy
         const label = isHeavy ? '🔺 Heavy Tier Escalation' : '⚡ Resilient Fallback'
         ctx.emitLog('info', `${label}: ${fromModel} → ${toModel}`, `Triggered: ${reason}`)
+        if (ctx.settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logModelEscalation(ctx.sessionId, ctx.stepCount, fromModel, toModel, reason, label)
+        }
       },
       contextReuseDecision.reusedContext
         ? { prompt: contextReuseDecision.promptToSend, previousContext: contextReuseDecision.contextTokens! }

@@ -82,24 +82,11 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     ? await scanProjectMap(workspacePath)
     : ''
 
-  emitLog(
-    'info',
-    `Task received: "${userTask}"`,
-    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Workspace: ${workspacePath || 'Standalone'}`
-  )
-
-  if (settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionStart(sessionId, userTask, agentMode, settings.codingModel || settings.defaultModel || 'llama3.2', workspacePath)
-  }
-
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
   // Native tool-calling capability map (see ollamaToolCallingCapability.ts). Fetched once
   // per session; failures resolve to an empty map, which falls back to the family allow-list.
   const modelCapabilities = await ollamaAppService.getModelCapabilities(settings.ollamaHost)
 
-  // Warm-up: start loading the model the first turn will most likely use, without waiting
-  // for it. The load then overlaps with skill matching and prompt assembly below instead of
-  // running down the first turn's 45s initial-response timeout on a cold, CPU-only machine.
   const firstTurnComplexity = evaluateTaskComplexity(userTask, {
     attachedFilesCount: payload.pinnedFiles?.length || 0,
     contextSizeChars: payload.activeFile?.content?.length || 0,
@@ -108,9 +95,36 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     hasRecentToolFailure: false,
     errorCountInHistory: 0,
   })
+
   const warmUpModel = settings.useComplexityRouting
     ? firstTurnComplexity.modelName
     : settings.codingModel || settings.defaultModel || 'llama3.2'
+
+  emitLog(
+    'info',
+    `Task received: "${userTask}"`,
+    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${warmUpModel} (${firstTurnComplexity.tierName}) | Workspace: ${workspacePath || 'Standalone'}`
+  )
+
+  if (settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logSessionStart(
+      sessionId,
+      userTask,
+      agentMode,
+      warmUpModel,
+      workspacePath,
+      {
+        fastModel: settings.complexityFastModel,
+        standardModel: settings.complexityStandardModel || settings.codingModel || settings.defaultModel,
+        deepReasoningModel: settings.complexityDeepModel,
+        heavyModel: settings.complexityHeavyModel,
+        useComplexityRouting: settings.useComplexityRouting,
+        hardwareProfile: settings.hardwareProfile,
+      },
+      firstTurnComplexity
+    )
+  }
+
   void ollamaAppService.preloadModel(warmUpModel, settings.ollamaHost).catch(() => {})
 
   const skillMatchContext = {

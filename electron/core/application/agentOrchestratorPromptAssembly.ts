@@ -10,6 +10,7 @@ import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../d
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { skillAppService } from './skillAppService'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
@@ -32,6 +33,10 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
     : ctx.settings.useComplexityRouting
     ? routedComplexity.modelName
     : ctx.settings.codingModel || ctx.settings.defaultModel || 'llama3.2'
+
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logComplexityRouting(ctx.sessionId, ctx.stepCount, routedComplexity, targetModel)
+  }
 
   // Native tool-calling routing: when the primary model is detected as tool-calling capable
   // (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool

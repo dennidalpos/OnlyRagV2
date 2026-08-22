@@ -138,4 +138,36 @@ Here is my plan to solve the task:
     expect(compactState.isCompleted).toBe(false)
     expect(compactState.restorePoint).toBe('None (Session Initialized)')
   })
+
+  it('should flatten indented sub-bullets into discrete atomic microtasks', () => {
+    const rawOutput = `
+Here is the microtask execution plan:
+- [ ] 📦 Step 1: Scaffolding & Setup
+  - Initialize project with package.json
+  - Install tailwindcss and vite dependencies
+- [ ] 📐 Step 2: Architecture & Foundation
+  - Create src/App.tsx layout shell
+  - Create src/components/Sidebar.tsx navigation
+  - Create src/pages/Dashboard.tsx
+- [ ] 🧪 Step 3: Verification
+  - [ ] Run npm run build
+  - [ ] Run tsc --noEmit
+`
+    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawOutput)
+    expect(parsed.length).toBe(7)
+    expect(parsed[0].id).toBe('m-1')
+    expect(parsed[0].title).toBe('Initialize project with package.json')
+    expect(parsed[1].id).toBe('m-2')
+    expect(parsed[1].title).toBe('Install tailwindcss and vite dependencies')
+    expect(parsed[2].id).toBe('m-3')
+    expect(parsed[2].title).toBe('Create src/App.tsx layout shell')
+    expect(parsed[3].id).toBe('m-4')
+    expect(parsed[3].title).toBe('Create src/components/Sidebar.tsx navigation')
+    expect(parsed[4].id).toBe('m-5')
+    expect(parsed[4].title).toBe('Create src/pages/Dashboard.tsx')
+    expect(parsed[5].id).toBe('m-6')
+    expect(parsed[5].title).toBe('Run npm run build')
+    expect(parsed[6].id).toBe('m-7')
+    expect(parsed[6].title).toBe('Run tsc --noEmit')
+  })
 })

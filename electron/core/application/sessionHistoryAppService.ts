@@ -34,7 +34,13 @@ export class SessionHistoryAppService {
     const sessionIds = (await sessionHistoryRepository.listSessions(workspacePath)).map((s) => s.id)
     const cleared = await sessionHistoryRepository.clearSessions(workspacePath)
     await agentSessionStateRepository.clearAllSessionStates(workspacePath)
-    codingAgentLogger.clearAuditLog()
+    if (sessionIds.length > 0) {
+      for (const sid of sessionIds) {
+        codingAgentLogger.removeSessionFromAuditLog(sid)
+      }
+    } else if (!workspacePath) {
+      codingAgentLogger.clearAuditLog()
+    }
     await sidecarAppService.removePromptHistoryForSessions(sessionIds)
     return cleared
   }

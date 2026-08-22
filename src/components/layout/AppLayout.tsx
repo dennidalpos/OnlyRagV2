@@ -12,6 +12,9 @@ import {
   Terminal,
   Info,
   Globe,
+  Download,
+  Check,
+  X,
 } from 'lucide-react'
 // The five main views are code-split: only the tabs the user actually opens are
 // downloaded, instead of shipping every view inside the initial renderer chunk.
@@ -25,6 +28,7 @@ import { AboutModal } from '../common/AboutModal'
 import { OnlyRagLogo } from '../common/OnlyRagLogo'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
+import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
 import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
@@ -157,6 +161,23 @@ export const AppLayout: React.FC = () => {
   }, [language, setLanguage])
 
   const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, handleUpdateSettings)
+  const {
+    isDownloading: isModelDownloading,
+    modelName: downloadingModelName,
+    percent: downloadPercent,
+    mbCompleted: downloadMbCompleted,
+    mbTotal: downloadMbTotal,
+    status: downloadStatus,
+    lastCompletedModel,
+    cancelDownload: cancelModelDownload,
+  } = useModelDownloadProgress()
+
+  // Immediately refresh diagnostics when a model completes downloading
+  useEffect(() => {
+    if (lastCompletedModel) {
+      runDiagnosticsScan()
+    }
+  }, [lastCompletedModel, runDiagnosticsScan])
 
   const handleSelectTab = (tab: NavTab) => {
     setActiveTab(tab)
@@ -495,6 +516,76 @@ export const AppLayout: React.FC = () => {
         onRefreshDiagnostics={runDiagnosticsScan}
         isInitialSetup={!settings.hasCompletedInitialSetup}
       />
+
+      {/* Persistent Background Download Progress Banner / Pill */}
+      {(isModelDownloading || lastCompletedModel) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-6 z-40 max-w-sm bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-3.5 shadow-2xl shadow-cyan-950/40 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={`p-2 rounded-xl shrink-0 ${
+                  isModelDownloading ? 'bg-cyan-500/20 text-cyan-400 animate-pulse' : 'bg-emerald-500/20 text-emerald-400'
+                }`}
+              >
+                {isModelDownloading ? <Download className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-200 truncate">
+                  {isModelDownloading ? (
+                    <>
+                      {t('common.download')}: <span className="text-cyan-400 font-mono">{downloadingModelName}</span>
+                    </>
+                  ) : (
+                    <>
+                      {t('common.done')}: <span className="text-emerald-400 font-mono">{lastCompletedModel}</span>
+                    </>
+                  )}
+                </p>
+                <p className="text-[11px] text-slate-400 truncate">
+                  {isModelDownloading
+                    ? `${downloadPercent}% • ${downloadMbCompleted} / ${downloadMbTotal} MB (${downloadStatus || 'in corso'})`
+                    : 'Modello pronto all\'uso'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isWizardOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsWizardOpen(true)}
+                  className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium rounded-lg transition-all"
+                >
+                  {t('common.viewDetails')}
+                </button>
+              )}
+              {isModelDownloading && (
+                <button
+                  type="button"
+                  onClick={cancelModelDownload}
+                  title={t('common.cancel')}
+                  className="p-1 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-lg transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {isModelDownloading && (
+            <div className="w-full bg-slate-950/80 rounded-full h-1.5 overflow-hidden border border-slate-800">
+              <div
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${downloadPercent}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

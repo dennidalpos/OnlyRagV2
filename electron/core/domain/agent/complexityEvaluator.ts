@@ -1,3 +1,4 @@
+import { encode } from 'gpt-tokenizer'
 import type { AppSettings } from '../../../../src/types'
 import {
   calculateRealUsableVram,
@@ -16,15 +17,6 @@ import {
 
 export type ComplexityTier = 'fast' | 'standard' | 'deep_reasoning'
 
-/**
- * The full model-routing tier vocabulary, including the optional "heavy"
- * escalation tier (14B+ models, only reached via circuit-breaker escalation —
- * see resilientModelDispatcher.ts). Single source of truth for the tier
- * concept shared across complexityEvaluator.ts (task routing),
- * hardwareRecommendationEngine.ts (wizard model recommendations grouped by
- * tier), and resilientModelDispatcher.ts (fallback/escalation cascade),
- * instead of each independently hardcoding the same four tier names.
- */
 export type ModelTier = ComplexityTier | 'heavy'
 
 export interface ComplexityRouteResult {
@@ -47,164 +39,6 @@ export interface ComplexityEvaluationContext {
   vramTotalMB?: number
   hardwareProfile?: 'Low' | 'Medium' | 'High' | 'Auto'
   safeVramBudgetGB?: number
-}
-
-// Deep reasoning indicator keywords (EN + IT)
-const DEEP_KEYWORDS = [
-  'refactor',
-  'refactoring',
-  'debug',
-  'debugging',
-  'architecture',
-  'architettura',
-  'optimise',
-  'optimize',
-  'ottimizza',
-  'ottimizzazione',
-  'memory leak',
-  'perdita di memoria',
-  'stack trace',
-  'rewrite',
-  'riscrivi',
-  'overhaul',
-  'security audit',
-  'audit',
-  'audit di sicurezza',
-  'diagnosi',
-  'profiling',
-  'profiler',
-  'bottleneck',
-  'collo di bottiglia',
-  'deadlock',
-  'race condition',
-  'concorrenza',
-  'concurrency',
-  'flussi',
-  'pipeline',
-  'auto-healing',
-  'correzione complessa',
-  'test suite',
-  'test unitari',
-  'unit test',
-  'integration test',
-  'pytest',
-  'vitest',
-  'jest',
-  'benchmark',
-  'migration',
-  'migrazione',
-  'performance tuning',
-  'type check',
-  'type error',
-  'typescript error',
-  'dead code',
-  'dashboard',
-  'complexity router',
-  'tiers',
-  'routing',
-  'ipc',
-  'electron',
-  'lancedb',
-  'vector database',
-  'embedding',
-  'sidecar',
-  'fastapi',
-]
-
-// Fast tier indicator keywords (EN + IT) - Informational / Lookup queries
-const FAST_KEYWORDS = [
-  'what is',
-  'cos è',
-  'cosa è',
-  'che cos è',
-  'che cos\'è',
-  'che cosa è',
-  'explain',
-  'spiega',
-  'spiegami',
-  'how to',
-  'how does',
-  'come si fa',
-  'come fare',
-  'come si usa',
-  'define',
-  'definisci',
-  'where is',
-  'dove si trova',
-  'dove è',
-  'dov\'è',
-  'show status',
-  'check status',
-  'mostra stato',
-  'ciao',
-  'hello',
-  'help',
-  'aiuto',
-  'syntax for',
-  'sintassi per',
-  'differenza tra',
-  'difference between',
-  'a cosa serve',
-  'che serve',
-  'version',
-  'versione',
-]
-
-// Coding action imperatives that indicate active generation / modification
-const CODING_ACTION_KEYWORDS = [
-  'create',
-  'crea',
-  'implement',
-  'implementa',
-  'build',
-  'write',
-  'scrivi',
-  'add',
-  'aggiungi',
-  'modify',
-  'modifica',
-  'generate',
-  'genera',
-  'setup',
-  'inizializza',
-  'configure',
-  'configura',
-]
-
-// Technical code failure & stack trace signals (Multi-language)
-const CODE_FAILURE_PATTERNS = [
-  'traceback (most recent call last)',
-  'error: at ',
-  'syntaxerror:',
-  'typeerror:',
-  'referenceerror:',
-  'fatal error',
-  'panic:',
-  'exception in thread',
-  'assertionerror',
-  'diff --git',
-  '--- a/',
-  '+++ b/',
-  'test failed',
-  'tests failed',
-  'build failed',
-  'cannot find module',
-  'failed | ',
-  'fail | ',
-  'err!',
-  'sql syntax error',
-  'psscriptanalyzer',
-  'non-zero exit code',
-  'cargo build failed',
-  'go build:',
-]
-
-function matchesKeyword(text: string, keyword: string): boolean {
-  if (keyword.includes(' ') || keyword.includes("'")) {
-    return text.includes(keyword)
-  }
-  const regex = new RegExp(`(?:^|\\b|\\s)${keyword}(?:\\b|\\s|$)`, 'i')
-  return regex.test(text)
 }
 
 export function findMatchingInstalledModel(target: string, available: string[]): string | null {
@@ -277,11 +111,15 @@ function resolveModelWithFallback(
     }
   }
 
-  // Final fallback to the first available model if any exists
   const firstAvailable = availableModels[0] || preferredModel
   return { model: firstAvailable, isFallback: firstAvailable !== preferredModel }
 }
 
+/**
+ * Universal complexity evaluator based on objective structural metrics (BPE token budgeting via
+ * gpt-tokenizer, multi-file context, failure history, and hardware profiles), completely eliminating
+ * brittle, hardcoded word dictionaries.
+ */
 export function evaluateTaskComplexity(
   userPrompt: string,
   context: ComplexityEvaluationContext = {}
@@ -296,9 +134,6 @@ export function evaluateTaskComplexity(
   const vramTotalMB = context.vramTotalMB
   const hardwareProfile: 'Low' | 'Medium' | 'High' | 'Auto' = context.hardwareProfile || activeSettings?.hardwareProfile || 'Auto'
 
-  // Hardware classification is delegated to the shared ladder in hardwareProfileTiers.ts,
-  // so the router, the model matrix, the agent runtime options and the Ollama OS parameters
-  // all place a given machine in the same tier (they used to use four different ladders).
   const hasGpu = vramTotalMB !== undefined && vramTotalMB > 0
   const safeVramBudgetGB: number = context.safeVramBudgetGB !== undefined
     ? context.safeVramBudgetGB
@@ -310,9 +145,6 @@ export function evaluateTaskComplexity(
     ? resolveEffectiveTier(hardwareProfile)
     : classifyTierFromSafeBudget(safeVramBudgetGB, hasGpu)
 
-  // Weight ceiling a fallback candidate must respect. On `legacy` the binding constraint is
-  // CPU throughput, not memory: an 8GB CPU-only host can *hold* a 7B model but cannot run a
-  // multi-turn tool loop with it (see CPU_INFERENCE_WEIGHT_BUDGET_GB).
   const modelBudgetGB = profileTier === 'legacy'
     ? CPU_INFERENCE_WEIGHT_BUDGET_GB
     : safeVramBudgetGB > 0
@@ -337,49 +169,68 @@ export function evaluateTaskComplexity(
     }
   }
 
-  const text = userPrompt.toLowerCase().trim()
-  const wordCount = text.split(/\s+/).length
+  const promptText = userPrompt.trim()
+  let promptTokens = 0
+  try {
+    promptTokens = encode(promptText).length
+  } catch {
+    promptTokens = Math.ceil(promptText.length / 4)
+  }
 
-  // High complexity keyword match
-  const hasDeepKeyword = DEEP_KEYWORDS.some((kw) => matchesKeyword(text, kw))
+  // Structural stack trace / diff failure detection
+  const hasStackTraceOrDiff =
+    /(?:Traceback \(most recent call last\):|^\s*at\s+[\w\W]+:\d+:\d+|diff --git|---\s+a\/|\+\+\+\s+b\/|SyntaxError:|TypeError:|ReferenceError:|AssertionError)/m.test(
+      promptText
+    )
 
-  // Code failure / Stack trace signal
-  const hasFailurePattern = CODE_FAILURE_PATTERNS.some((pat) => text.includes(pat))
+  // Structural reasoning indicators based on architectural complexity keywords or volume
+  const hasStructuralReasoningDirectives =
+    /(?:refactor|architecture|optimiz|ottimizz|deadlock|memory leak|audit|concurr|concorren|race condition|benchmark|migrat)/i.test(
+      promptText
+    )
 
-  // Coding action match
-  const hasCodingAction = CODING_ACTION_KEYWORDS.some((kw) => matchesKeyword(text, kw))
-
-  // Fast tier indicator match
-  const hasFastKeyword = FAST_KEYWORDS.some((kw) => matchesKeyword(text, kw))
-  const isFastQuery = wordCount < 25 && attachedFilesCount === 0 && totalChars < 4000 && hasFastKeyword && !hasDeepKeyword && !hasFailurePattern && !hasCodingAction
+  const isCodingAction =
+    /^(?:create|crea|implement|implementa|build|write|scrivi|add|aggiungi|modify|modifica|generate|genera|setup|configure|configura)\b/i.test(
+      promptText
+    )
 
   let tier: ComplexityTier = 'standard'
   let reasoning = 'Query di codice e modifica file standard'
   let isEscalated = false
 
-  // Circuit breaker: auto-escalate on error, but de-escalate if 2 consecutive steps succeeded
   const shouldDeEscalate = !hasRecentToolFailure && consecutiveSuccessCount >= 2
 
   if (hasRecentToolFailure || (errorCountInHistory >= 1 && !shouldDeEscalate)) {
     tier = 'deep_reasoning'
     reasoning = 'Auto-healing: Escalation a Deep Reasoning a seguito di errori nei tool/comandi'
     isEscalated = true
-  } else if (hasFailurePattern) {
+  } else if (hasStackTraceOrDiff) {
     tier = 'deep_reasoning'
     reasoning = 'Rilevata stack trace, eccezione runtime o diff patch'
-  } else if (hasDeepKeyword || attachedFilesCount >= 3 || totalChars > 16000 || wordCount > 80) {
+  } else if (hasStructuralReasoningDirectives || attachedFilesCount >= 2 || totalChars > 16000 || promptTokens > 150) {
     tier = 'deep_reasoning'
-    reasoning = hasDeepKeyword
+    reasoning = hasStructuralReasoningDirectives
       ? 'Rilevata istruzione di architettura, refactoring profondo o ottimizzazione'
       : 'Rilevato contesto multi-file ad alto volume di token'
-  } else if (isFastQuery) {
-    tier = 'fast'
-    reasoning = 'Rilevata domanda concettuale rapida o lookup a bassa complessità'
+  } else if (
+    !isCodingAction &&
+    promptTokens <= 25 &&
+    attachedFilesCount === 0 &&
+    totalChars < 3000 &&
+    !hasStackTraceOrDiff &&
+    !hasStructuralReasoningDirectives
+  ) {
+    // Quick question / lookup query
+    const isQuickQuery =
+      /^(?:what|how|where|why|explain|define|cosa|come|dove|perch[eé]|spiega|definisci|mostra|ciao|hello|help|aiuto|\?)/i.test(
+        promptText
+      ) || promptTokens <= 8
+    if (isQuickQuery) {
+      tier = 'fast'
+      reasoning = 'Rilevata domanda concettuale rapida o lookup a bassa complessità'
+    }
   }
 
-  // Candidate cascades are derived from the model matrix (hardwareModelCatalog.ts) for the
-  // resolved profile, instead of six literal tag arrays that had to be hand-mirrored on
-  // every catalog change — and had silently drifted out of sync with it.
   const tierCatalog = tier === 'fast'
     ? FAST_TIER_CATALOG
     : tier === 'deep_reasoning'
@@ -387,8 +238,6 @@ export function evaluateTaskComplexity(
       : STANDARD_TIER_CATALOG
   const candidateFallbacks = [...buildFallbackChain(tierCatalog, chainTarget), defaultStandard]
 
-  // An explicit per-tier user assignment always wins; otherwise take the curated head of
-  // the cascade (the same model the setup wizard pre-selects for this hardware).
   const configuredModel = tier === 'fast'
     ? activeSettings?.complexityFastModel
     : tier === 'deep_reasoning'

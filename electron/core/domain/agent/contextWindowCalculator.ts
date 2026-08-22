@@ -47,6 +47,12 @@ export function calculateDynamicContextWindow(
     chosenBucket = bucket
   }
 
+  // When a standard 8192 tier is configured and total required tokens >= 3000,
+  // allocate 8192 directly to prevent a 4096 -> 8192 KV-cache invalidation on turn 2.
+  if (hardwareMaxCtx && hardwareMaxCtx === 8192 && totalRequiredTokens >= 3000) {
+    chosenBucket = 8192
+  }
+
   // Clamp within [MIN_CONTEXT_TOKENS, maxAllowed]
   return Math.max(MIN_CONTEXT_TOKENS, Math.min(chosenBucket, maxAllowed))
 }

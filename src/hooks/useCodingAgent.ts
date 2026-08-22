@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentActionLog, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, QueuedPromptRecord, AgentChangeMetrics } from '../types'
+import { AgentActionLog, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics } from '../types'
 import { AgentMode } from '../components/coding/CodingAgentView'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useSessionHistory } from './useSessionHistory'
@@ -9,34 +9,55 @@ import { useAgentTerminal } from './useAgentTerminal'
 import { useGitStatus } from './useGitStatus'
 import { useGrepSearch } from './useGrepSearch'
 import { useGuestOsDiagnostics } from './useGuestOsDiagnostics'
+import { useAgentApprovals } from './useAgentApprovals'
+import { useAgentPromptQueue, type QueuedPrompt } from './useAgentPromptQueue'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
 import { logger } from '../lib/logger'
 
-export type QueuedPrompt = QueuedPromptRecord
+export type { QueuedPrompt }
 
-/** Stable empty plan list, so a session without plans never re-triggers plan effects. */
 const EMPTY_PLANS: AgentPlan[] = []
 
 /**
- * Composition root of the Coding Agent Studio: owns the agent turn loop (prompt, action
- * log, approvals, metrics) and wires together the workspace, editor, terminal, git, grep
- * and session-history hooks that back the rest of the view.
+ * Composition root of the Coding Agent Studio: coordinates the agent loop, workspace, editor,
+ * terminal, git, grep, approvals, queue and session-history hooks.
  */
 export function useCodingAgent(settings?: AppSettings) {
-  const [agentMode, setAgentMode] = useState<AgentMode>('plan')
+  const [agentMode, setAgentModeState] = useState<AgentMode>('plan')
   const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan' | 'slm_diagnostics'>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 
-  // Agent Execution State. Declared first: the workspace hooks below report their events
-  // into the same action log through addActionLog.
+  // Agent Execution State
   const [agentPrompt, setAgentPrompt] = useState<string>('')
   const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
   const [isExecuting, setIsExecuting] = useState<boolean>(false)
 
-  // Mirrors isExecuting into the cross-module task lock so ingestion/translation can block
-  // starting their own task while the coding agent is mid-turn (see useGlobalTaskLock.ts).
-  // An effect (not scattered acquire/release calls at every isExecuting(false) call site)
-  // guarantees the lock is always released in sync with local state, however the turn ends.
+  const addActionLog = useCallback(
+    (type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
+      setActionLogs((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          type,
+          message,
+          detail,
+          timestamp: new Date().toLocaleTimeString(),
+          ...meta,
+        },
+      ])
+    },
+    []
+  )
+
+  const setAgentMode = useCallback((newMode: AgentMode) => {
+    setAgentModeState((prev) => {
+      if (prev !== newMode) {
+        addActionLog('info', `Modalità agente impostata su: ${newMode.toUpperCase()}`)
+      }
+      return newMode
+    })
+  }, [addActionLog])
+
   useEffect(() => {
     if (isExecuting) {
       acquireGlobalTaskLock('coding')
@@ -49,34 +70,26 @@ export function useCodingAgent(settings?: AppSettings) {
   const [streamingText, setStreamingText] = useState<string>('')
   const [currentStep, setCurrentStep] = useState<number>(0)
   const [maxSteps, setMaxSteps] = useState<number | string>(50)
-  /** Aggregate +/- size of the file changes applied by the running agent session. */
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
-  const [pendingApproval, setPendingApproval] = useState<{
-    sessionId: string
-    type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
-    target: string
-    contentOrCmd: string
-    replacement?: string
-    replacements?: { targetContent: string; replacementContent: string }[]
-    parameters?: Record<string, any>
-  } | null>(null)
 
-  const addActionLog = useCallback(
-    (type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
-      setActionLogs((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          timestamp: new Date().toISOString(),
-          type,
-          message,
-          detail,
-          ...meta,
-        },
-      ])
-    },
-    []
-  )
+  // Modular Approvals Hook
+  const {
+    pendingApproval,
+    setPendingApproval,
+    clearPendingApproval,
+  } = useAgentApprovals()
+
+  // Modular Prompt Queue Hook
+  const handleQueueNotice = useCallback((msg: string) => addActionLog('info', msg), [addActionLog])
+  const {
+    promptQueue,
+    addToPromptQueue,
+    removeFromPromptQueue,
+    editPromptInQueue,
+    movePromptInQueue,
+    dequeueNextPrompt,
+    clearPromptQueue,
+  } = useAgentPromptQueue(handleQueueNotice)
 
   // Attached RAG documents
   const [attachedDocIds, setAttachedDocIds] = useState<Set<string>>(new Set())
@@ -115,7 +128,6 @@ export function useCodingAgent(settings?: AppSettings) {
     handleToggleStandalone,
   } = useWorkspaceProjects(settings)
 
-  /** A path deleted from the workspace must also drop the documents ingested from it. */
   const handlePathPurged = useCallback((isInsideDeletedPath: (filePath: string) => boolean) => {
     setAttachedDocIds((prev) => {
       const next = new Set(prev)
@@ -158,8 +170,7 @@ export function useCodingAgent(settings?: AppSettings) {
       addActionLog(
         'terminal',
         `Command execution notice for "${command}":`,
-        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.
-${output.slice(0, 300)}`
+        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.\n${output.slice(0, 300)}`
       )
     },
     [addActionLog]
@@ -188,12 +199,11 @@ ${output.slice(0, 300)}`
   } = useGrepSearch(workspacePath, isStandaloneMode)
   const { guestOsInfo, isInspectingOs, loadGuestOsInfo } = useGuestOsDiagnostics()
 
-  // Session History (filesystem-backed, see useSessionHistory)
+  // Session History
   const {
     sessions: workspaceSessions,
     activeSession,
     activeSessionId,
-    isLoadingSessions,
     createSession,
     switchSession,
     deleteSession,
@@ -204,39 +214,26 @@ ${output.slice(0, 300)}`
     completeExecutedPrompt,
   } = useSessionHistory(workspacePath)
 
-  // Synchronize actionLogs, metrics, and state with the active session whenever workspace or session changes
   const prevSessionIdRef = useRef<string>('')
   useEffect(() => {
     if (activeSessionId !== prevSessionIdRef.current) {
       prevSessionIdRef.current = activeSessionId
       setActionLogs(activeSession?.actionLogs || [])
       setStreamingText('')
-      setPendingApproval(null)
+      clearPendingApproval()
       setCurrentStep(0)
     }
-  }, [activeSessionId, activeSession])
+  }, [activeSessionId, activeSession, clearPendingApproval])
 
-  // The agent:done / agent:log listeners are registered once, so they reach the current
-  // history callback through a ref instead of re-subscribing on every render.
   const completeExecutedPromptRef = useRef(completeExecutedPrompt)
   useEffect(() => {
     completeExecutedPromptRef.current = completeExecutedPrompt
   }, [completeExecutedPrompt])
 
-  // Prompt Queue State
-  const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([])
-  const promptQueueRef = useRef<QueuedPrompt[]>([])
-  useEffect(() => {
-    promptQueueRef.current = promptQueue
-  }, [promptQueue])
-
-  /** ExecutedPrompt record open for the running agent task, closed by the agent:done handler. */
   const runningExecutedPromptRef = useRef<{ sessionId: string; promptId: string } | null>(null)
-  /** Live step count and change metrics, readable from the IPC listeners registered once. */
   const currentStepRef = useRef<number>(0)
   const changeMetricsRef = useRef<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
 
-  // 5-Second Real-Time Shell Command Monitoring Tab State
   const shellCommandTimerRef = useRef<NodeJS.Timeout | null>(null)
   const previousTabRef = useRef<string | null>(null)
   const autoOpenedTerminalRef = useRef<boolean>(false)
@@ -259,40 +256,31 @@ ${output.slice(0, 300)}`
     })
   }
 
+  // Subscribe to Agent IPC Events
   useEffect(() => {
     if (!window.electronAPI) return
 
     const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog) => {
-      setStreamingText('')
-      setActionLogs((prev) => {
-        const filtered = prev.filter((l) => l.id !== log.id)
-        return [...filtered, log].slice(-500)
-      })
+      setActionLogs((prev) => [...prev, log])
 
-      // Real-time synchronization of terminal logs & 5-second trigger for live shell monitoring tab
-      if (log.type === 'terminal' || log.message.includes('run_command') || log.message.startsWith('Ran ') || log.message.includes('Executing terminal command')) {
-        if (log.message) {
-          appendTerminalLogs(log.detail ? `${log.message}\n${log.detail}` : log.message)
-        }
-
-        // Start 5-second trigger timer for auto-opening terminal monitoring tab
-        if (!shellCommandTimerRef.current) {
-          if (activeTabRef.current !== 'terminal') {
-            previousTabRef.current = activeTabRef.current
-          }
-          shellCommandTimerRef.current = setTimeout(() => {
-            setActiveTab('terminal')
-            autoOpenedTerminalRef.current = true
-            shellCommandTimerRef.current = null
-          }, 5000)
-        }
+      if (log.type === 'terminal' && log.detail) {
+        appendTerminalLogs(`\n${log.detail}\n`)
       }
 
-      // Clear shell command 5s timer if command completes
-      if (
-        log.message.includes('Command exited with code') ||
-        log.message.includes('Finished running terminal command')
-      ) {
+      if (log.type === 'tool_call' && log.message.includes('run_command')) {
+        if (shellCommandTimerRef.current) {
+          clearTimeout(shellCommandTimerRef.current)
+          shellCommandTimerRef.current = null
+        }
+        shellCommandTimerRef.current = setTimeout(() => {
+          if (activeTabRef.current !== 'terminal') {
+            previousTabRef.current = activeTabRef.current
+            autoOpenedTerminalRef.current = true
+            setActiveTab('terminal')
+          }
+          shellCommandTimerRef.current = null
+        }, 5000)
+      } else if (log.type === 'tool_call' || log.type === 'info') {
         if (shellCommandTimerRef.current) {
           clearTimeout(shellCommandTimerRef.current)
           shellCommandTimerRef.current = null
@@ -304,59 +292,21 @@ ${output.slice(0, 300)}`
           previousTabRef.current = null
         }
       }
-
-      // 2. Refresh & purge references on file write/replace/delete operations
-      if (log.verb === 'Deleted' || log.message.includes('Successfully deleted')) {
-        const match = log.message.match(/Successfully deleted (?:file|directory)?\s*(.+)/i)
-        const targetPath = log.target || (match ? match[1].trim() : '')
-        if (targetPath && (log.verb === 'Deleted' || log.message.includes('Successfully deleted'))) {
-          purgeFileReferences(targetPath)
-        }
-        if (workspacePath) {
-          loadWorkspaceFiles(workspacePath)
-        }
-      } else if (
-        log.category === 'file_mutation' ||
-        log.verb === 'Created' ||
-        log.verb === 'Edited' ||
-        log.verb === 'Moved' ||
-        log.verb === 'Copied' ||
-        log.message.includes('Successfully wrote file') ||
-        log.message.includes('Successfully replaced') ||
-        log.message.includes('Applied')
-      ) {
-        if (workspacePath) {
-          loadWorkspaceFiles(workspacePath)
-        }
-      }
     })
 
     const unsubFileDeleted = window.electronAPI.onWorkspaceFileDeleted?.((data: { filePath: string }) => {
-      if (data?.filePath) {
-        purgeFileReferences(data.filePath)
-      }
-    })
-
-    const unsubDocDeleted = window.electronAPI.onIngestDocumentDeleted?.((data: { docId: string }) => {
-      if (data?.docId) {
-        setAttachedDocIds((prev) => {
-          const next = new Set(prev)
-          next.delete(data.docId)
-          return next
-        })
-      }
+      purgeFileReferences(data.filePath)
     })
 
     const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data: { step: number; chunk: string }) => {
-      if (!data?.chunk) return
-      setStreamingText((prev) => prev + data.chunk)
+      if (data.chunk) {
+        setStreamingText((prev) => prev + data.chunk)
+      }
     })
 
-    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps: number; maxStepsLabel: string }) => {
-      if (data?.step !== undefined) {
-        currentStepRef.current = data.step
-        setCurrentStep(data.step)
-      }
+    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string }) => {
+      currentStepRef.current = data.step
+      setCurrentStep(data.step)
       if (data?.maxStepsLabel !== undefined) setMaxSteps(data.maxStepsLabel)
       else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
     })
@@ -381,7 +331,6 @@ ${output.slice(0, 300)}`
       setIsExecuting(false)
       setStreamingText('')
 
-      // Clear 5-second timer & automatically restore tab on task completion
       if (shellCommandTimerRef.current) {
         clearTimeout(shellCommandTimerRef.current)
         shellCommandTimerRef.current = null
@@ -392,10 +341,9 @@ ${output.slice(0, 300)}`
         autoOpenedTerminalRef.current = false
         previousTabRef.current = null
       }
-      if (promptQueueRef.current.length > 0) {
-        const [nextItem, ...remaining] = promptQueueRef.current
-        setPromptQueue(remaining)
-        promptQueueRef.current = remaining
+
+      const nextItem = dequeueNextPrompt()
+      if (nextItem) {
         setTimeout(() => {
           executeTask(nextItem.prompt)
         }, 300)
@@ -405,7 +353,6 @@ ${output.slice(0, 300)}`
     return () => {
       unsubLog?.()
       unsubFileDeleted?.()
-      unsubDocDeleted?.()
       unsubStreamToken?.()
       unsubStep?.()
       unsubApproval?.()
@@ -413,7 +360,7 @@ ${output.slice(0, 300)}`
       unsubChangeMetrics?.()
       unsubDone?.()
     }
-  }, [])
+  }, [dequeueNextPrompt, appendTerminalLogs, purgeFileReferences, setPendingApproval])
 
   const handleCancelAgent = () => {
     setIsExecuting(false)
@@ -425,7 +372,6 @@ ${output.slice(0, 300)}`
     addActionLog('info', 'Esecuzione interrotta dall\'utente.')
   }
 
-  /** Stops the running task and resets the per-session view state before switching context. */
   const resetSessionViewState = () => {
     if (isExecuting && window.electronAPI) {
       if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
@@ -436,15 +382,14 @@ ${output.slice(0, 300)}`
     setAgentPrompt('')
     setActiveSkills([])
     setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
-    setPendingApproval(null)
+    clearPendingApproval()
   }
 
   const handleCreateSession = () => {
     resetSessionViewState()
     createSession()
     setActionLogs([])
-    setPromptQueue([])
-    promptQueueRef.current = []
+    clearPromptQueue()
     setAttachedDocIds(new Set())
     setPinnedFiles(new Map())
   }
@@ -455,45 +400,36 @@ ${output.slice(0, 300)}`
     switchSession(sessionId)
   }
 
-  /**
-   * Cross-project jump (from the prompt history search modal): a session belonging to a
-   * different project first requires switching the active project, whose session list only
-   * finishes loading asynchronously (see useSessionHistory's workspacePath-keyed effect) --
-   * the target session is applied once that load settles, overriding whatever session it
-   * auto-selected in the meantime.
-   */
-  const pendingSessionJumpRef = useRef<{ projectPath: string; sessionId: string } | null>(null)
-
-  const jumpToProjectAndSession = useCallback(
-    (projectPath: string, sessionId: string) => {
-      if (projectPath === workspacePath) {
-        handleSwitchSession(sessionId)
-        return
-      }
-      pendingSessionJumpRef.current = { projectPath, sessionId }
-      handleSelectProject(projectPath)
-    },
-    [workspacePath, activeSessionId, handleSelectProject]
-  )
-
-  useEffect(() => {
-    const pending = pendingSessionJumpRef.current
-    if (!pending || workspacePath !== pending.projectPath || isLoadingSessions) return
-    pendingSessionJumpRef.current = null
-    handleSwitchSession(pending.sessionId)
-  }, [workspacePath, isLoadingSessions])
-
-  const handleDeleteSession = async (sessionId: string) => {
-    if (sessionId === activeSessionId) resetSessionViewState()
-    await deleteSession(sessionId)
+  const jumpToProjectAndSession = (targetWorkspacePath: string, sessionId: string) => {
+    if (targetWorkspacePath === workspacePath) {
+      handleSwitchSession(sessionId)
+      return
+    }
+    resetSessionViewState()
+    handleSelectProject(targetWorkspacePath)
+    setTimeout(() => {
+      switchSession(sessionId)
+    }, 150)
   }
 
-  const handleClearSessionHistory = async () => {
+  const handleDeleteSession = (sessionId: string) => {
+    if (sessionId === activeSessionId) {
+      resetSessionViewState()
+      setActionLogs([])
+      clearPromptQueue()
+      setAttachedDocIds(new Set())
+      setPinnedFiles(new Map())
+    }
+    deleteSession(sessionId)
+  }
+
+  const handleClearSessionHistory = () => {
     resetSessionViewState()
-    await clearSessions()
+    clearSessions()
     setActionLogs([])
-    setPromptQueue([])
-    promptQueueRef.current = []
+    clearPromptQueue()
+    setAttachedDocIds(new Set())
+    setPinnedFiles(new Map())
   }
 
   const handleRenameSession = (sessionId: string, newTitle: string) => {
@@ -502,7 +438,6 @@ ${output.slice(0, 300)}`
 
   const handleNewSession = handleCreateSession
 
-  /** Plan history of the active session, persisted with the session itself. */
   const activeSessionPlans = activeSession?.plans || EMPTY_PLANS
   const updateActiveSessionPlans = useCallback(
     (updater: (prev: AgentPlan[]) => AgentPlan[]) => {
@@ -512,7 +447,6 @@ ${output.slice(0, 300)}`
     [activeSessionId, updateSessionPlans]
   )
 
-  /** Closes the ExecutedPrompt record of the running task with its final outcome and metrics. */
   const closeRunningExecutedPrompt = (outcome: ExecutedPromptOutcome, summary?: string) => {
     const running = runningExecutedPromptRef.current
     if (!running) return
@@ -598,35 +532,30 @@ ${output.slice(0, 300)}`
         userTask: taskPrompt,
         initialUserTask,
         agentMode: effectiveMode,
-        workspacePath: workspacePath || undefined,
+        workspacePath: isStandaloneMode ? null : workspacePath,
         isStandaloneMode,
         activeModel,
         contextFiles,
-        attachedDocs,
         pinnedFiles: resolvedPinnedFiles,
-        activeFile: selectedFile ? { name: selectedFile.name, path: selectedFile.path, content: editorContent } : null,
+        attachedDocs,
         settings,
       })
-      if (res && res.success === false) {
-        const reason = res.summary || res.error || 'Failed scheduling task'
-        addActionLog('info', `Agent Scheduling Error: ${reason}`)
-        closeRunningExecutedPrompt('failed', reason)
+
+      if (!res?.success) {
+        closeRunningExecutedPrompt('failed', res?.error)
         setIsExecuting(false)
+        addActionLog('info', `Errore avvio task: ${res?.error || 'Errore sconosciuto'}`)
       }
     } catch (err: any) {
-      addActionLog('info', `Agent Scheduling Error: ${err.message}`)
-      closeRunningExecutedPrompt('failed', err.message)
+      closeRunningExecutedPrompt('failed', err?.message)
       setIsExecuting(false)
+      addActionLog('info', `Errore esecuzione: ${err.message}`)
     }
   }
 
-  const handleAgentExecute = async (overridePrompt?: string | unknown, overrideMode?: AgentMode) => {
-    if (overrideMode) {
-      setAgentMode(overrideMode)
-    }
-    const rawPrompt = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
-    const text = (rawPrompt || '').trim()
-    if (!text) return
+  const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode) => {
+    const text = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
+    if (!text.trim()) return
 
     const isOverride = typeof overridePrompt === 'string'
     if (isExecuting) {
@@ -639,56 +568,15 @@ ${output.slice(0, 300)}`
     await executeTask(text, overrideMode)
   }
 
-  const addToPromptQueue = (text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    const item: QueuedPrompt = {
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      prompt: trimmed,
-      createdAt: new Date().toISOString(),
-    }
-    setPromptQueue((prev) => [...prev, item])
-    addActionLog('info', `Nuovo prompt aggiunto alla coda (#${promptQueueRef.current.length + 1}): "${trimmed.slice(0, 80)}..."`)
-  }
-
-  const removeFromPromptQueue = (id: string) => {
-    setPromptQueue((prev) => prev.filter((p) => p.id !== id))
-  }
-
-  const editPromptInQueue = (id: string, newPrompt: string) => {
-    setPromptQueue((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, prompt: newPrompt } : p))
-    )
-  }
-
-  const movePromptInQueue = (fromIndex: number, toIndex: number) => {
-    setPromptQueue((prev) => {
-      if (toIndex < 0 || toIndex >= prev.length) return prev
-      const copy = [...prev]
-      const [moved] = copy.splice(fromIndex, 1)
-      copy.splice(toIndex, 0, moved)
-      return copy
-    })
-  }
-
-  // Approving/rejecting no longer re-executes the action from the renderer: it only answers
-  // the main-process orchestrator loop, which is paused mid-step waiting for exactly this
-  // response (see requestApproval in agentOrchestratorAppService.ts). The loop performs the
-  // tool call itself through the same path every other step uses, then keeps running --
-  // isExecuting must stay true and untouched here, driven onward by the agent:log /
-  // agent:step-update / agent:done events already wired in the effect above.
   const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])
 
   const handleApproveAction = async (approvedHunkIndices?: number[]) => {
     if (!pendingApproval || !window.electronAPI?.respondToAgentApproval) return
     const current = pendingApproval
-    setPendingApproval(null)
+    clearPendingApproval()
     const partialNote = approvedHunkIndices ? ` (${approvedHunkIndices.length} hunk selezionati)` : ''
     addActionLog('tool_call', `User approved ${current.type}: ${current.target}${partialNote}`)
     await window.electronAPI.respondToAgentApproval(current.sessionId, true, approvedHunkIndices)
-    // Best-effort refresh of the currently open editor tab if it was the approved target --
-    // the write itself now happens asynchronously in the main process, so this is a short
-    // grace period rather than the synchronous re-open the old renderer-side execution allowed.
     if (FILE_MUTATION_APPROVAL_TYPES.has(current.type) && selectedFile && selectedFile.path === current.target) {
       setTimeout(() => handleOpenFile(selectedFile), 400)
     }
@@ -697,7 +585,7 @@ ${output.slice(0, 300)}`
   const handleRejectAction = async () => {
     if (!pendingApproval) return
     const current = pendingApproval
-    setPendingApproval(null)
+    clearPendingApproval()
     addActionLog('info', `User rejected ${current.type}: ${current.target}`)
     await window.electronAPI?.respondToAgentApproval?.(current.sessionId, false)
   }

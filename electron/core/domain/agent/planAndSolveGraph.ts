@@ -197,8 +197,6 @@ export class GoalDecompositionPlanner {
     // Strip thinking tags from reasoning models (e.g. DeepSeek-R1, Qwen) so internal thoughts don't pollute milestones
     const sanitizedText = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
 
-    const milestones: PlanMilestone[] = []
-
     // 1. Try extracting <plan>...</plan> JSON or structured checklist
     const planBlockMatch = sanitizedText.match(/<plan>([\s\S]*?)<\/plan>/i)
     const sourceText = planBlockMatch ? planBlockMatch[1] : sanitizedText
@@ -220,39 +218,105 @@ export class GoalDecompositionPlanner {
       } catch {}
     }
 
-    // 2. Markdown checklist parser e.g. "- [ ] Step 1", "1. [ ] Step 1", or "1. Step 1"
-    const lines = sourceText.split(/\r?\n/)
-    let counter = 1
+    // 2. Markdown checklist & micro-task parser with automatic sub-bullet flattening
+    const rawLines = sourceText.split(/\r?\n/)
+    interface RawBlock {
+      topTitle: string
+      topStatus: PlanMilestone['status']
+      children: Array<{ title: string; status: PlanMilestone['status'] }>
+    }
 
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      const checkMatch = line.match(/^(?:[-*]|\d+\.)\s*\[([ xX>!])\]\s*(.+)$/)
-      if (checkMatch) {
-        const flag = checkMatch[1].toLowerCase()
-        const body = checkMatch[2].trim()
+    const blocks: RawBlock[] = []
+    let currentBlock: RawBlock | null = null
+    let inCodeBlock = false
+
+    for (const rawLine of rawLines) {
+      if (rawLine.trim().startsWith('```')) {
+        inCodeBlock = !inCodeBlock
+        continue
+      }
+      if (inCodeBlock) continue
+
+      const trimmed = rawLine.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+
+      const isIndented = /^\s{2,}/.test(rawLine) || rawLine.startsWith('\t')
+
+      if (isIndented && currentBlock) {
+        // Match sub-bullet or indented checkbox
+        const subMatch = rawLine.match(/^\s*(?:[-*+]|\d+[\.)])\s*(?:\[([ xX>!])\]\s*)?(.+)$/)
+        if (subMatch) {
+          const flag = (subMatch[1] || '').toLowerCase()
+          let status: PlanMilestone['status'] = 'pending'
+          if (flag === 'x') status = 'verified'
+          else if (flag === '>') status = 'in_progress'
+          else if (flag === '!') status = 'failed'
+          else if (currentBlock.topStatus !== 'pending') status = currentBlock.topStatus
+
+          const body = subMatch[2].trim().replace(/\*\*/g, '')
+          if (body.length > 2 && !body.startsWith('http')) {
+            currentBlock.children.push({ title: body, status })
+            continue
+          }
+        }
+      }
+
+      // Check top-level checklist item
+      const topCheckMatch = trimmed.match(/^(?:[-*+]|\d+[\.)])\s*\[([ xX>!])\]\s*(.+)$/)
+      if (topCheckMatch) {
+        const flag = (topCheckMatch[1] || '').toLowerCase()
         let status: PlanMilestone['status'] = 'pending'
         if (flag === 'x') status = 'verified'
         else if (flag === '>') status = 'in_progress'
         else if (flag === '!') status = 'failed'
 
-        milestones.push({
-          id: `m-${counter++}`,
-          title: body.replace(/\*\*/g, ''),
-          status,
-        })
+        const body = topCheckMatch[2].trim().replace(/\*\*/g, '')
+        currentBlock = { topTitle: body, topStatus: status, children: [] }
+        blocks.push(currentBlock)
         continue
       }
 
-      const numMatch = line.match(/^(\d+)\.\s+(.+)$/)
-      if (numMatch && !line.includes('```')) {
-        const body = numMatch[2].trim()
-        if (body.length > 5 && !body.startsWith('http')) {
+      // Check top-level numbered item
+      const topNumMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/)
+      if (topNumMatch) {
+        const body = topNumMatch[2].trim().replace(/\*\*/g, '')
+        if (body.length > 3 && !body.startsWith('http')) {
+          currentBlock = { topTitle: body, topStatus: 'pending', children: [] }
+          blocks.push(currentBlock)
+          continue
+        }
+      }
+
+      // Check top-level bullet item
+      const topBulletMatch = trimmed.match(/^[-*+]\s+(.+)$/)
+      if (topBulletMatch) {
+        const body = topBulletMatch[1].trim().replace(/\*\*/g, '')
+        if (body.length > 3 && !body.startsWith('http')) {
+          currentBlock = { topTitle: body, topStatus: 'pending', children: [] }
+          blocks.push(currentBlock)
+          continue
+        }
+      }
+    }
+
+    // Flatten blocks into discrete PlanMilestone items
+    const milestones: PlanMilestone[] = []
+    let counter = 1
+    for (const block of blocks) {
+      if (block.children.length > 0) {
+        for (const child of block.children) {
           milestones.push({
             id: `m-${counter++}`,
-            title: body.replace(/\*\*/g, ''),
-            status: 'pending',
+            title: child.title,
+            status: child.status,
           })
         }
+      } else {
+        milestones.push({
+          id: `m-${counter++}`,
+          title: block.topTitle,
+          status: block.topStatus,
+        })
       }
     }
 

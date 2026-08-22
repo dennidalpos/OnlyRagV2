@@ -16,36 +16,38 @@ import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
 import { logger } from '../../diagnostics'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AppSettings } from '../../../src/types'
 
 // The exact line format below is mandatory, not stylistic: GoalDecompositionPlanner.parsePlanFromText
-// (planAndSolveGraph.ts) only recognizes "- [ ] text" / "N. text" lines. A prompt that only
-// describes the desired tone (as this one used to) lets a local model answer with prose and bold
-// section headers instead, which the parser cannot turn into milestones -- the plan tab then has
-// nothing to render but raw text. The inline example is here because local models follow a shown
-// format far more reliably than a described one.
+// (planAndSolveGraph.ts) recognizes "- [ ] text" / "N. text" lines and nested sub-bullets.
+// Microtasks ensure Small Language Models (SLMs, 7B/8B) only ever focus on ONE atomic action per turn
+// (e.g. 1 file, 1 CLI command, 1 build verification), preventing context overflow and JSON corruption.
 const PLAN_SYSTEM_PROMPT =
-  "You are an expert AI Coding Assistant. Analyze the user's request and generate a strictly sequential, single-responsibility Implementation Plan " +
-  'in MARKDOWN CHECKLIST format, ONE ITEM PER LINE, strictly adhering to this format:\n\n' +
-  '- [ ] 📦 Step 1: Scaffolding & Toolchain Setup (<initialization, package.json, dependencies, build config>)\n' +
-  '- [ ] 📐 Step 2: Architecture & Foundation (<base styles, design tokens, entrypoint layout shell>)\n' +
-  '- [ ] 🧩 Step 3: Core Implementation (<specific discrete components, pages, services or business logic>)\n' +
-  '- [ ] 🧪 Step 4: Verification & Quality (<build execution, typecheck, test runner validation>)\n' +
-  '- [ ] 🛑 Step 5: Final Review & Report (<validation of all user criteria, usage instructions, invoke finish>)\n\n' +
-  'CRITICAL MICRO-STEP DIRECTIVES:\n' +
-  '1. FLAT CHECKLIST ONLY: Output 4-6 flat checklist items in "- [ ] <text>" format. NEVER use nested sub-bullet lists (no indented dashes or sub-tasks).\n' +
-  '2. ACTIONABLE & SEQUENTIAL: Each step must be a concrete, isolated action. Step 1 MUST always be scaffolding/setup if the project requires initialization. Step 4 MUST always be verification. Step 5 MUST always be final review/finish.\n' +
-  '3. AUTONOMOUS SPECIFICATION: Specify exact file paths (e.g. package.json, src/App.tsx, src/components/Sidebar.tsx) and standard libraries directly in the items.\n' +
-  '4. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, Spanish if Spanish, German if German, etc.).\n' +
-  'Output ONLY the markdown checklist lines. No conversational preambles or explanations outside the checklist.'
+  "You are an expert AI Coding Assistant and Software Architect. Analyze the user's request and decompose it into a " +
+  'strictly sequential, fine-grained Implementation Plan of ATOMIC MICRO-TASKS in MARKDOWN CHECKLIST format.\n\n' +
+  'STRICT MICRO-TASK ARCHITECTURE FOR SMALL LANGUAGE MODELS (SLMs):\n' +
+  '1. ATOMICITY (1 ACTION = 1 MICRO-TASK): Every single item MUST represent exactly ONE discrete, isolated action (e.g. create a specific file, install dependencies, implement one specific component, run build/typecheck). NEVER bundle multiple files or entire architectural layers into a single broad macro-step.\n' +
+  '2. SEQUENTIAL WORKFLOW (Typically 5 to 15 granular microtasks):\n' +
+  '   - Scaffolding & Config first (e.g. `package.json`, `vite.config.ts`, `tsconfig.json`)\n' +
+  '   - Core styles & utilities (e.g. `src/styles/globals.css`, `src/utils/helpers.ts`)\n' +
+  '   - Individual discrete UI components (1 component per microtask: e.g. `src/components/Sidebar.tsx`, then `src/components/TaskCard.tsx`)\n' +
+  '   - Pages & Views (1 page per microtask: e.g. `src/pages/Dashboard.tsx`, then `src/pages/Tasks.tsx`)\n' +
+  '   - Assembly & Integration (e.g. `src/App.tsx`, router wiring)\n' +
+  '   - Verification & Quality (e.g. `npm run build`, `tsc --noEmit`, test validation)\n' +
+  '   - Final Review & Completion (invoke finish)\n' +
+  '3. FORMAT: Output strictly as a checklist in "- [ ] m-N: <Action & exact relative file path>" format. One item per line.\n' +
+  '4. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, etc.).\n' +
+  'Output ONLY the markdown checklist lines. No conversational preambles, notes or explanations outside the checklist.'
 
 const FALLBACK_PLAN_TEXT = (prompt: string) =>
-  `🎯 Piano di Esecuzione per: ${prompt}\n\n` +
-  '- [ ] 📦 Step 1: Inizializzazione progetto e configurazione dipendenze\n' +
-  '- [ ] 📐 Step 2: Architettura di base, layout shell e stili\n' +
-  '- [ ] ✏️ Step 3: Implementazione componenti, pagine e logica applicativa\n' +
-  '- [ ] 🧪 Step 4: Verifica di compilazione, build e controlli di tipo\n' +
-  '- [ ] 🛑 Step 5: Revisione finale dei requisiti e chiusura del task'
+  `🎯 Piano di Esecuzione a Microtask per: ${prompt}\n\n` +
+  '- [ ] 📦 m-1: Inizializzazione progetto e configurazione dipendenze (`package.json` / configurazione)\n' +
+  '- [ ] 📐 m-2: Configurazione stili di base e design tokens\n' +
+  '- [ ] 🧩 m-3: Creazione layout shell ed entrypoint principale\n' +
+  '- [ ] ✏️ m-4: Implementazione componenti UI e logica applicativa\n' +
+  '- [ ] 🧪 m-5: Verifica di compilazione e build (`npm run build` / typecheck)\n' +
+  '- [ ] 🛑 m-6: Revisione finale dei requisiti e chiusura del task'
 
 export interface PlanGenerationRequest {
   prompt: string
@@ -108,6 +110,9 @@ export class PlanGenerationAppService {
 
     const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt)
     const milestones = GoalDecompositionPlanner.parsePlanFromText(planText)
+    if (req.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logPlanGeneration('plan-flow', req.prompt, milestones.length, 'plan')
+    }
     return { planText, milestones }
   }
 

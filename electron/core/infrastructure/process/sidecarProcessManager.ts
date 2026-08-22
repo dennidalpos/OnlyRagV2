@@ -219,20 +219,46 @@ export class SidecarProcessManager {
       return false
     }
 
+    this.attachSidecarProcessLogs()
+    return await this.waitForSidecarHealth()
+  }
+
+  private writeSidecarLog(level: 'INFO' | 'WARN' | 'ERROR', msg: string) {
+    try {
+      const logDir = path.dirname(logger.getLogFilePath())
+      const logPath = path.join(logDir, 'sidecar.log')
+      if (fs.existsSync(logPath)) {
+        const stats = fs.statSync(logPath)
+        if (stats.size > 10 * 1024 * 1024) {
+          const log1 = path.join(logDir, 'sidecar.1.log')
+          if (fs.existsSync(log1)) fs.unlinkSync(log1)
+          fs.renameSync(logPath, log1)
+        }
+      }
+      const timestamp = new Date().toISOString()
+      fs.appendFileSync(logPath, `[${timestamp}] [${level}] ${msg}\n`, 'utf-8')
+    } catch {}
+  }
+
+  private attachSidecarProcessLogs() {
+    if (!sidecarProcess) return
+
     sidecarProcess.stdout?.on('data', (data) => {
       const msg = data.toString().trim()
+      this.writeSidecarLog('INFO', msg)
       if (
         msg.includes('GET /health HTTP/1.1" 200') ||
         msg.includes('GET /documents HTTP/1.1" 200') ||
         msg.includes('GET /docs HTTP/1.1" 200')
       ) {
-        return // Suppress redundant periodic polling stdout access logs
+        return // Suppress redundant periodic polling stdout access logs in main diagnostics logger
       }
       logger.log('INFO', 'SidecarProcess', msg)
     })
 
     sidecarProcess.stderr?.on('data', (data) => {
       const msg = data.toString().trim()
+      this.writeSidecarLog('WARN', msg)
       if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200')) {
         return
       }
@@ -240,6 +266,7 @@ export class SidecarProcessManager {
     })
 
     sidecarProcess.on('close', (code) => {
+      this.writeSidecarLog('WARN', `Python sidecar process exited with code ${code}`)
       logger.log('WARN', 'Sidecar', `Python sidecar process exited with code ${code}`)
       sidecarProcess = null
       if (this.state.status !== 'online') {
@@ -248,12 +275,11 @@ export class SidecarProcessManager {
     })
 
     sidecarProcess.on('error', (err) => {
+      this.writeSidecarLog('ERROR', `Python sidecar process failed to start: ${err.message}`)
       logger.log('ERROR', 'Sidecar', `Python sidecar process failed to start: ${err.message}`)
       sidecarProcess = null
       this.state = { status: 'offline', error: err.message }
     })
-
-    return await this.waitForSidecarHealth()
   }
 
   stopPythonSidecar() {

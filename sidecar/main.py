@@ -25,7 +25,7 @@ from sidecar.schemas import (
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
-from sidecar.infrastructure.db import lance_db, get_existing_tables
+from sidecar.infrastructure.db import lance_db, get_existing_tables, safe_open_table, run_db_maintenance
 from sidecar.infrastructure.ocr import run_vision_ocr, run_layout_ocr, detect_gpu_acceleration
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
@@ -47,8 +47,9 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
-    logger.info("FastAPI Sidecar starting up. Launching background vocabulary sync worker...")
+    logger.info("FastAPI Sidecar starting up. Launching background vocabulary sync & DB maintenance...")
     asyncio.create_task(background_vocab_sync_startup())
+    asyncio.create_task(asyncio.to_thread(run_db_maintenance))
     yield
     logger.info("FastAPI Sidecar shutting down.")
 
@@ -93,6 +94,11 @@ def health_check():
         "chunks_count": chunk_count,
         "python_version": sys.version
     }
+
+@app.post("/db/maintenance")
+async def db_maintenance():
+    """Triggers dataset compaction and vacuuming of obsolete versions across all LanceDB tables."""
+    return await asyncio.to_thread(run_db_maintenance)
 
 @app.post("/ingest", response_model=IngestResponse)
 async def ingest_document(

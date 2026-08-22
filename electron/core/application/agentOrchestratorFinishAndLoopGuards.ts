@@ -12,12 +12,15 @@ import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from '
  */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
   if (ctx.agentMode === 'agent') {
-    const pendingMilestonesCount = ctx.goalPlanner.getMilestones().filter((m) => m.status !== 'verified').length
+    const nonFinishPendingMilestones = ctx.goalPlanner.getMilestones().filter(
+      (m) => m.status !== 'verified' && !/finish|completamento|arresto|riepilogo|final report/i.test(m.title)
+    )
+    const pendingMilestonesCount = nonFinishPendingMilestones.length
 
     // Critical Early-Finish Defense:
-    // If the model tries to finish immediately at step 1 or 2 with 0 file mutations and multiple pending milestones (>1),
+    // If the model tries to finish immediately at step 1 or 2 with 0 file mutations and pending work milestones (>0),
     // and has not executed any mutating tool, block it and force it to take action.
-    const isPrematureStart = ctx.stepCount <= 2 && !ctx.flags.hasFileMutations && pendingMilestonesCount > 1
+    const isPrematureStart = ctx.stepCount <= 2 && !ctx.flags.hasFileMutations && pendingMilestonesCount > 0
     if (isPrematureStart && !ctx.surfacedDodReasons.has('premature_start')) {
       ctx.surfacedDodReasons.add('premature_start')
       const zeroMutationIntervention = `[CRITICAL EXECUTION ERROR: PREMATURE FINISH WITH ZERO WORK DONE]\nYou have NOT created or modified any files yet in this workspace (0 files touched).\nYou are STRICTLY FORBIDDEN from calling the "finish" tool at this stage.\nDirectives:\n1. You MUST begin implementing the first milestone immediately.\n2. Create the necessary project files (e.g. package.json, src/App.tsx, index.html) using "write_file" or scaffold with "run_command".\n3. DO NOT invoke "finish" until your implementation is written and verified.`

@@ -195,6 +195,8 @@ export interface AppSettings {
   ocrEngine: 'native_cuda' | 'vision_model'
   normalizeWithLlm?: boolean
   ollamaHost: string
+  /** Ollama deployment mode: 'local' (same PC: 127.0.0.1:11434) or 'remote' (network server). Default: 'local' */
+  ollamaMode?: 'local' | 'remote'
   customWorkspacePath?: string
   noWorkspaceMode?: boolean
   /** Default folder for the translation module's exported documents; unset falls back to the interactive save dialog. */
@@ -202,13 +204,6 @@ export interface AppSettings {
   // Family & Module System Prompt Customizations
   customPromptOverrides?: Record<string, string> // key: `${module}:${family}` -> prompt string
   selectedFamilyOverrides?: Record<string, string> // key: module -> family string or 'auto'
-  // Legacy / Advanced Complexity Routing Settings
-  useComplexityRouting?: boolean
-  complexityFastModel?: string
-  complexityStandardModel?: string
-  complexityDeepModel?: string
-  /** Heavy escalation model (14B+) used when all lighter tiers fail on complex tasks */
-  complexityHeavyModel?: string
   // Concurrency & Task Queue Settings
   maxToolCallSteps?: number // Range: 10-200, default 50
   // Coding Agent Audit & Debug Logging
@@ -492,7 +487,7 @@ export interface IElectronAPI {
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
   checkDiskSpace: (models: string[]) => Promise<{ allowed: boolean; requiredGB: number; freeGB: number; missingGB: number; error?: string }>
-  applyOllamaEnvironmentVariables: (variables: { name: string; value: string }[], restartOllama?: boolean) => Promise<{ success: boolean; appliedCount: number; message: string; error?: string }>
+  testOllamaConnection: (host?: string) => Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }>
   openExternalUrl?: (url: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>

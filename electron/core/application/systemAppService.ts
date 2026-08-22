@@ -1,6 +1,5 @@
 import { dialog, BrowserWindow } from 'electron'
 import { logger } from '../../diagnostics'
-import { taskRunner } from '../infrastructure/process/taskRunner'
 import { systemStorageRepository } from '../infrastructure/filesystem/systemStorageRepository'
 import { estimateModelWeightGB } from '../../../src/services/hardwareRecommendationEngine'
 
@@ -61,74 +60,12 @@ export class SystemAppService {
         missingGB,
       }
     } catch (err: any) {
-      logger.log('ERROR', 'SystemApp', `Failed disk space check: ${err.message}`)
+      logger.log('ERROR', 'SystemApp', `Disk space check failed: ${err.message}`)
       return {
-        allowed: true,
+        allowed: false,
         requiredGB: 0,
-        freeGB: 100,
+        freeGB: 0,
         missingGB: 0,
-        error: err.message,
-      }
-    }
-  }
-
-  async applyOllamaEnvironmentVariables(
-    variables: { name: string; value: string }[],
-    restartOllama: boolean = false
-  ): Promise<{ success: boolean; appliedCount: number; message: string; error?: string }> {
-    if (!Array.isArray(variables) || variables.length === 0) {
-      return { success: false, appliedCount: 0, message: 'Nessuna variabile fornita' }
-    }
-
-    try {
-      logger.log('INFO', 'SystemApp', `Applying ${variables.length} Ollama environment variable(s)`)
-
-      if (process.platform === 'win32') {
-        const psCommands: string[] = []
-        for (const v of variables) {
-          if (v && v.name && v.value !== undefined) {
-            // Update current process env
-            process.env[v.name] = v.value
-            // Build PowerShell command to persist User environment variable
-            const safeName = v.name.replace(/'/g, "''")
-            const safeVal = String(v.value).replace(/'/g, "''")
-            psCommands.push(`[System.Environment]::SetEnvironmentVariable('${safeName}', '${safeVal}', 'User')`)
-          }
-        }
-
-        if (restartOllama) {
-          psCommands.push(`Stop-Process -Name "ollama*" -Force -ErrorAction SilentlyContinue`)
-          psCommands.push(`Start-Sleep -Seconds 1`)
-          psCommands.push(`if (Test-Path "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama app.exe") { Start-Process -FilePath "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama app.exe" } elseif (Get-Command ollama -ErrorAction SilentlyContinue) { Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden }`)
-        }
-
-        const scriptPayload = psCommands.join('; ')
-        const execRes = await taskRunner.executePowerShellCommand(scriptPayload)
-
-        if (!execRes.success && execRes.error) {
-          logger.log('WARN', 'SystemApp', `PowerShell set env warning: ${execRes.error}`)
-        }
-      } else {
-        // Linux / macOS in-memory fallback
-        for (const v of variables) {
-          if (v && v.name && v.value !== undefined) {
-            process.env[v.name] = String(v.value)
-          }
-        }
-      }
-
-      const restartMsg = restartOllama ? ' e demone Ollama riavviato' : '. Riavvia l\'app Ollama per rendere attive le modifiche'
-      return {
-        success: true,
-        appliedCount: variables.length,
-        message: `Impostate con successo ${variables.length} variabili d'ambiente utente${restartMsg}.`,
-      }
-    } catch (err: any) {
-      logger.log('ERROR', 'SystemApp', `Failed applying environment variables: ${err.message}`)
-      return {
-        success: false,
-        appliedCount: 0,
-        message: `Errore durante l'impostazione delle variabili: ${err.message}`,
         error: err.message,
       }
     }

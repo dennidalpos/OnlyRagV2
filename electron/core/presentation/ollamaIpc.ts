@@ -48,4 +48,8 @@ export function registerOllamaIpcHandlers() {
   ipcMain.handle('ollama:unload-model', async (_, modelName: string, host?: string) => {
     return ollamaAppService.unloadModel(modelName, host)
   })
+
+  ipcMain.handle('ollama:test-connection', async (_, host?: string) => {
+    return ollamaAppService.testConnection(host)
+  })
 }

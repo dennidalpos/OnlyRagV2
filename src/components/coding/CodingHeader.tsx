@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench } from 'lucide-react'
+import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { ComplexityRouteResult, ModelTier } from '../../services/complexityRouterService'
 import { QuickModelSelector } from '../common/QuickModelSelector'
@@ -19,6 +19,7 @@ interface CodingHeaderProps {
   activeTier?: ModelTier | null
   onOpenDiagnosticsModal?: () => void
   onOpenSkillHubModal?: () => void
+  onOpenPromptModal?: () => void
 }
 
 export const CodingHeader: React.FC<CodingHeaderProps> = ({
@@ -32,6 +33,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   activeTier,
   onOpenDiagnosticsModal,
   onOpenSkillHubModal,
+  onOpenPromptModal,
 }) => {
   const { t } = useTranslation()
   const [isSystemPopoverOpen, setIsSystemPopoverOpen] = useState<boolean>(false)
@@ -76,6 +78,20 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
 
       {/* Right: Actions, System Popover, Skills & Quick Model Selector */}
       <div className="flex items-center gap-2 text-xs">
+        {/* System Prompt Customization Trigger */}
+        {onOpenPromptModal && (
+          <button
+            type="button"
+            onClick={onOpenPromptModal}
+            aria-label={t('common.systemPrompt')}
+            title={t('common.systemPrompt')}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 cursor-pointer shadow-sm"
+          >
+            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
+          </button>
+        )}
+
         {/* Active Skills Badge / Trigger */}
         <button
           type="button"
@@ -208,7 +224,6 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           onSelectModel={(newModel) => {
             onUpdateSettings?.({
               codingModel: newModel,
-              complexityStandardModel: newModel,
             })
           }}
           onSelectFallbackModel={(fallback) => {

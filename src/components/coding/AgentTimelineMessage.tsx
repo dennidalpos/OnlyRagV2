@@ -24,16 +24,23 @@ import {
 } from './agentLogMessageUtils'
 
 function formatInlineMarkdown(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g)
+  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g)
   return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
+    if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
       return (
-        <strong key={i} className="text-slate-100 font-semibold">
+        <strong key={i} className="text-slate-100 font-bold">
           {part.slice(2, -2)}
         </strong>
       )
     }
-    if (part.startsWith('`') && part.endsWith('`')) {
+    if (part.startsWith('*') && part.endsWith('*') && part.length >= 2 && !part.startsWith('**')) {
+      return (
+        <em key={i} className="text-slate-200 italic">
+          {part.slice(1, -1)}
+        </em>
+      )
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
       return (
         <code
           key={i}
@@ -48,63 +55,114 @@ function formatInlineMarkdown(text: string): React.ReactNode {
 }
 
 function renderMarkdownContent(text: string): React.ReactNode {
-  const lines = text.split('\n')
-  return (
-    <div className="space-y-1 text-xs leading-relaxed text-slate-200 font-sans">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim()
-        if (!trimmed) {
-          return <div key={idx} className="h-1" />
-        }
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h4 key={idx} className="text-xs font-bold text-cyan-300 pt-2 pb-0.5 border-b border-slate-800 flex items-center gap-1.5">
-              <span>{formatInlineMarkdown(trimmed.slice(4))}</span>
-            </h4>
-          )
-        }
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h3 key={idx} className="text-sm font-bold text-slate-100 pt-2 pb-0.5 border-b border-slate-800">
-              {formatInlineMarkdown(trimmed.slice(3))}
-            </h3>
-          )
-        }
-        if (trimmed.startsWith('# ')) {
-          return (
-            <h2 key={idx} className="text-base font-extrabold text-slate-100 pt-2.5 pb-1 border-b border-slate-700">
-              {formatInlineMarkdown(trimmed.slice(2))}
-            </h2>
-          )
-        }
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <div key={idx} className="flex items-start gap-2 ml-2 my-0.5">
-              <span className="text-cyan-400 mt-0.5 text-[10px] shrink-0">✦</span>
-              <span className="text-slate-200">{formatInlineMarkdown(trimmed.slice(2))}</span>
-            </div>
-          )
-        }
-        if (/^\d+\.\s/.test(trimmed)) {
-          const match = trimmed.match(/^(\d+\.)\s*(.+)/)
-          return (
-            <div key={idx} className="flex items-start gap-2 ml-2 my-0.5">
-              <span className="text-cyan-400 font-mono font-bold text-[10px] shrink-0">{match?.[1]}</span>
-              <span className="text-slate-200">{formatInlineMarkdown(match?.[2] || trimmed)}</span>
-            </div>
-          )
-        }
-        if (trimmed === '---' || trimmed === '***') {
-          return <hr key={idx} className="my-2 border-slate-800" />
-        }
-        return (
-          <p key={idx} className="text-slate-300 my-0.5 leading-relaxed">
-            {formatInlineMarkdown(trimmed)}
-          </p>
+  if (!text) return null
+  const lines = text.split(/\r?\n/)
+  const elements: React.ReactNode[] = []
+
+  let inCodeBlock = false
+  let codeBlockLang = ''
+  let codeBlockLines: string[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i]
+    const trimmed = rawLine.trim()
+
+    // Fenced code block detection
+    if (trimmed.startsWith('```')) {
+      if (inCodeBlock) {
+        const codeText = codeBlockLines.join('\n')
+        elements.push(
+          <div key={`code-${i}`} className="my-2 rounded-xl bg-[#030712] border border-slate-800 overflow-hidden shadow-inner font-mono text-xs">
+            {codeBlockLang && (
+              <div className="px-3 py-1 bg-slate-900 border-b border-slate-800 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
+                {codeBlockLang}
+              </div>
+            )}
+            <pre className="p-3 overflow-x-auto text-slate-200 text-[11px] leading-relaxed whitespace-pre">
+              <code>{codeText}</code>
+            </pre>
+          </div>
         )
-      })}
-    </div>
-  )
+        inCodeBlock = false
+        codeBlockLines = []
+        codeBlockLang = ''
+      } else {
+        inCodeBlock = true
+        codeBlockLang = trimmed.slice(3).trim()
+        codeBlockLines = []
+      }
+      continue
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(rawLine)
+      continue
+    }
+
+    if (!trimmed) {
+      elements.push(<div key={`spacer-${i}`} className="h-1" />)
+      continue
+    }
+
+    if (trimmed.startsWith('### ')) {
+      elements.push(
+        <h4 key={`h4-${i}`} className="text-xs font-bold text-cyan-300 pt-2 pb-0.5 border-b border-slate-800 flex items-center gap-1.5">
+          <span>{formatInlineMarkdown(trimmed.slice(4))}</span>
+        </h4>
+      )
+    } else if (trimmed.startsWith('## ')) {
+      elements.push(
+        <h3 key={`h3-${i}`} className="text-sm font-bold text-slate-100 pt-2 pb-0.5 border-b border-slate-800">
+          {formatInlineMarkdown(trimmed.slice(3))}
+        </h3>
+      )
+    } else if (trimmed.startsWith('# ')) {
+      elements.push(
+        <h2 key={`h2-${i}`} className="text-base font-extrabold text-slate-100 pt-2.5 pb-1 border-b border-slate-700">
+          {formatInlineMarkdown(trimmed.slice(2))}
+        </h2>
+      )
+    } else if (trimmed.startsWith('> ')) {
+      elements.push(
+        <blockquote key={`quote-${i}`} className="pl-3 py-0.5 border-l-2 border-cyan-500/50 text-slate-300 bg-cyan-950/10 rounded-r-lg my-1 text-xs italic">
+          {formatInlineMarkdown(trimmed.slice(2))}
+        </blockquote>
+      )
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      elements.push(
+        <div key={`li-${i}`} className="flex items-start gap-2 ml-2 my-0.5">
+          <span className="text-cyan-400 mt-0.5 text-[10px] shrink-0">✦</span>
+          <span className="text-slate-200">{formatInlineMarkdown(trimmed.slice(2))}</span>
+        </div>
+      )
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      const match = trimmed.match(/^(\d+\.)\s*(.+)/)
+      elements.push(
+        <div key={`oli-${i}`} className="flex items-start gap-2 ml-2 my-0.5">
+          <span className="text-cyan-400 font-mono font-bold text-[10px] shrink-0">{match?.[1]}</span>
+          <span className="text-slate-200">{formatInlineMarkdown(match?.[2] || trimmed)}</span>
+        </div>
+      )
+    } else if (trimmed === '---' || trimmed === '***') {
+      elements.push(<hr key={`hr-${i}`} className="my-2 border-slate-800" />)
+    } else {
+      elements.push(
+        <p key={`p-${i}`} className="text-slate-300 my-0.5 leading-relaxed">
+          {formatInlineMarkdown(trimmed)}
+        </p>
+      )
+    }
+  }
+
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    elements.push(
+      <div key="unclosed-code" className="my-2 rounded-xl bg-[#030712] border border-slate-800 p-3 overflow-x-auto font-mono text-[11px] text-slate-200">
+        <pre><code>{codeBlockLines.join('\n')}</code></pre>
+      </div>
+    )
+  }
+
+  return <div className="space-y-1 text-xs leading-relaxed text-slate-200 font-sans">{elements}</div>
 }
 
 interface AgentTimelineMessageProps {

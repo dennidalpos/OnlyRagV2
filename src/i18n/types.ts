@@ -58,6 +58,7 @@ export interface TranslationSchema {
     moduleNameIngestion: string
     moduleNameTranslation: string
     crossModuleTaskBlocked: string
+    systemPrompt: string
   }
   navigation: {
     ingestion: string

@@ -118,7 +118,7 @@ export function evaluateTaskComplexity(
       : TIER_NOMINAL_SAFE_BUDGET_GB[profileTier]
   const chainTarget = { profileTier, budgetGB: modelBudgetGB }
 
-  const defaultStandard = activeSettings?.complexityStandardModel || activeSettings?.codingModel || activeSettings?.defaultModel || 'qwen2.5-coder:7b'
+  const defaultStandard = activeSettings?.codingModel || activeSettings?.defaultModel || 'qwen2.5-coder:7b'
 
   if (!userPrompt || typeof userPrompt !== 'string' || !userPrompt.trim()) {
     const { model, isFallback } = resolveModelWithFallback(
@@ -182,7 +182,7 @@ export function evaluateTaskComplexity(
   }
 
   const candidateFallbacks = [...buildFallbackChain(STANDARD_TIER_CATALOG, chainTarget), defaultStandard]
-  const preferredModel = activeSettings?.codingModel || activeSettings?.complexityStandardModel || defaultStandard || candidateFallbacks[0]
+  const preferredModel = activeSettings?.codingModel || defaultStandard || candidateFallbacks[0]
 
   const { model: selectedModel, isFallback } = resolveModelWithFallback(preferredModel, candidateFallbacks, availableModels)
 

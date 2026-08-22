@@ -25,6 +25,11 @@ import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
+import {
+  ONLYRAG_MONACO_THEME_NAME,
+  defineOnlyRagMonacoTheme,
+  getStandardMonacoOptions,
+} from '../../lib/monacoTheme'
 
 interface TranslationViewProps {
   settings?: AppSettings
@@ -100,12 +105,12 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
           <button
             type="button"
             onClick={() => tr.setIsPromptModalOpen(true)}
-            aria-label={t('translation.systemPrompt')}
-            title={t('translation.systemPrompt')}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 text-sky-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5"
+            aria-label={t('common.systemPrompt')}
+            title={t('common.systemPrompt')}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 text-sky-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
           >
             <Sliders className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden sm:inline">{t('translation.systemPrompt')}</span>
+            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
           </button>
 
           {tr.isTranslating ? (
@@ -428,33 +433,21 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
           ) : tr.viewMode === 'diff' ? (
             <DiffEditor
               height="100%"
-              theme="onlyrag-dark"
-              beforeMount={(monaco) => {
-                monaco.editor.defineTheme('onlyrag-dark', {
-                  base: 'vs-dark',
-                  inherit: true,
-                  rules: [],
-                  colors: {
-                    'editor.background': '#020617',
-                    'editor.lineHighlightBackground': '#0f172a60',
-                    'editorGutter.background': '#020617',
-                    'diffEditor.insertedTextBackground': '#064e3b60',
-                    'diffEditor.insertedLineBackground': '#064e3b35',
-                    'diffEditor.removedTextBackground': '#88133760',
-                    'diffEditor.removedLineBackground': '#88133735',
-                  },
-                })
-              }}
+              theme={ONLYRAG_MONACO_THEME_NAME}
+              beforeMount={defineOnlyRagMonacoTheme}
               original={tr.selectedDoc?.extractedMarkdown || ''}
               modified={tr.translatedMarkdown}
               language="markdown"
-              options={{ fontSize: 13, automaticLayout: true, wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off' }}
+              options={getStandardMonacoOptions({
+                wordWrap: settings?.editorWordWrap !== false,
+                renderSideBySide: true,
+              })}
             />
           ) : (
-            <div className="h-full flex">
+            <div className="h-full flex bg-[#080c14]">
               <div
                 style={{ width: `${leftEditorWidth}px` }}
-                className="border-r border-slate-800 bg-slate-950 flex flex-col shrink-0"
+                className="border-r border-slate-800 bg-[#080c14] flex flex-col shrink-0"
               >
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-sky-300">
@@ -465,26 +458,19 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
                     {tr.selectedDoc.filename}
                   </span>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 bg-[#080c14]">
                   <Editor
                     height="100%"
-                    theme="onlyrag-dark"
-                    beforeMount={(monaco) => {
-                      monaco.editor.defineTheme('onlyrag-dark', {
-                        base: 'vs-dark',
-                        inherit: true,
-                        rules: [],
-                        colors: {
-                          'editor.background': '#020617',
-                          'editor.lineHighlightBackground': '#0f172a60',
-                          'editorGutter.background': '#020617',
-                        },
-                      })
-                    }}
+                    theme={ONLYRAG_MONACO_THEME_NAME}
+                    beforeMount={defineOnlyRagMonacoTheme}
                     language="markdown"
                     value={tr.selectedDoc?.extractedMarkdown || ''}
                     onMount={tr.handleLeftEditorDidMount}
-                    options={{ fontSize: 13, readOnly: true, automaticLayout: true, minimap: { enabled: false }, wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off' }}
+                    options={getStandardMonacoOptions({
+                      readOnly: true,
+                      minimap: false,
+                      wordWrap: settings?.editorWordWrap !== false,
+                    })}
                   />
                 </div>
               </div>
@@ -508,7 +494,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
                 <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isLeftEditorResizing ? 'opacity-100 text-slate-950' : ''}`} />
               </div>
 
-              <div className={`flex-1 min-w-0 bg-slate-950 flex flex-col ${isLeftEditorResizing ? 'pointer-events-none select-none' : ''}`}>
+              <div className={`flex-1 min-w-0 bg-[#080c14] flex flex-col ${isLeftEditorResizing ? 'pointer-events-none select-none' : ''}`}>
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-sky-300">
                     <Languages className="w-3.5 h-3.5 text-sky-400" />
@@ -518,27 +504,19 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
                     {tr.translatedMarkdown ? `${tr.translatedMarkdown.length} chars` : tr.isTranslating ? t('translation.translating') : '—'}
                   </span>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 bg-[#080c14]">
                   <Editor
                     height="100%"
-                    theme="onlyrag-dark"
-                    beforeMount={(monaco) => {
-                      monaco.editor.defineTheme('onlyrag-dark', {
-                        base: 'vs-dark',
-                        inherit: true,
-                        rules: [],
-                        colors: {
-                          'editor.background': '#020617',
-                          'editor.lineHighlightBackground': '#0f172a60',
-                          'editorGutter.background': '#020617',
-                        },
-                      })
-                    }}
+                    theme={ONLYRAG_MONACO_THEME_NAME}
+                    beforeMount={defineOnlyRagMonacoTheme}
                     language="markdown"
                     value={tr.translatedMarkdown}
                     onChange={(val) => tr.setTranslatedMarkdown(val || '')}
                     onMount={tr.handleEditorDidMount}
-                    options={{ fontSize: 13, automaticLayout: true, minimap: { enabled: false }, wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off' }}
+                    options={getStandardMonacoOptions({
+                      minimap: false,
+                      wordWrap: settings?.editorWordWrap !== false,
+                    })}
                   />
                 </div>
               </div>

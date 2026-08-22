@@ -83,7 +83,6 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               onChange={(e) => {
                 onUpdateSettings({
                   codingModel: e.target.value,
-                  complexityStandardModel: e.target.value,
                 })
               }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus-ring font-mono font-semibold"

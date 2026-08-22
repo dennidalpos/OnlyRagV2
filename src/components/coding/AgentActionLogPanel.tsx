@@ -39,6 +39,8 @@ interface AgentActionLogPanelProps {
   onEditPromptInQueue?: (id: string, newPrompt: string) => void
   onOpenPromptModal?: () => void
   onOpenSkillHubModal?: () => void
+  onOpenDiagnosticsModal?: () => void
+  onOpenPromptHistorySearch?: () => void
   onResetSession?: () => void
   onCompactContext?: () => void
   onGeneratePlan?: () => void
@@ -72,6 +74,7 @@ interface AgentActionLogPanelProps {
   onApprovePlan?: () => void
   onRejectPlan?: () => void
   onTogglePauseAutoProceed?: () => void
+  onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
 export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
@@ -99,6 +102,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onEditPromptInQueue,
   onOpenPromptModal,
   onOpenSkillHubModal,
+  onOpenDiagnosticsModal,
+  onOpenPromptHistorySearch,
   onResetSession,
   onCompactContext,
   onGeneratePlan,
@@ -131,7 +136,19 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onApprovePlan,
   onRejectPlan,
   onTogglePauseAutoProceed,
+  onUpdateSettings,
 }) => {
+  const autoInstallHubSkills = settings?.autoInstallHubSkills || 'auto'
+  const handleToggleAutoInstallSkills = onUpdateSettings
+    ? () => {
+        const nextVal = autoInstallHubSkills === 'auto' ? 'disabled' : 'auto'
+        onUpdateSettings({
+          autoInstallHubSkills: nextVal,
+          enableSkillRouter: nextVal === 'auto',
+        })
+      }
+    : undefined
+
   const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } =
     useAgentTimelineScroll(actionLogs, streamingText, isExecuting, autoScroll, onToggleAutoScroll)
 
@@ -216,6 +233,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         onTogglePinFile={onTogglePinFile}
         onOpenSkillHubModal={onOpenSkillHubModal}
         onOpenPromptModal={onOpenPromptModal}
+        onOpenDiagnosticsModal={onOpenDiagnosticsModal}
+        onOpenPromptHistorySearch={onOpenPromptHistorySearch}
         promptQueue={promptQueue}
         onRemoveFromQueue={onRemoveFromQueue}
         onEditPromptInQueue={onEditPromptInQueue}
@@ -225,6 +244,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         maxContextLimit={maxContextLimit}
         isContextHeavy={isContextHeavy}
         onCompactContext={onCompactContext}
+        autoInstallHubSkills={autoInstallHubSkills}
+        onToggleAutoInstallSkills={handleToggleAutoInstallSkills}
       />
     </div>
   )

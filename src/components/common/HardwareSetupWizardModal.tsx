@@ -73,7 +73,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 
   // Model State across all Functional Slots
   const [selectedCoding, setSelectedCoding] = useState<string>(
-    settings.codingModel || settings.complexityStandardModel || settings.defaultModel || recCoding
+    settings.codingModel || settings.defaultModel || recCoding
   )
   const [selectedCodingFallback, setSelectedCodingFallback] = useState<string | undefined>(
     settings.codingFallbackModel
@@ -136,9 +136,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   // Sync settings only when modal initially opens
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
-      if (settings.codingModel || settings.complexityStandardModel || settings.defaultModel) {
+      if (settings.codingModel || settings.defaultModel) {
         setSelectedCoding(
-          settings.codingModel || settings.complexityStandardModel || settings.defaultModel
+          settings.codingModel || settings.defaultModel
         )
       }
       setSelectedCodingFallback(settings.codingFallbackModel)
@@ -166,7 +166,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     onUpdateSettings({
       defaultModel: selectedCoding || settings.defaultModel,
       codingModel: selectedCoding || settings.codingModel,
-      complexityStandardModel: selectedCoding || settings.complexityStandardModel,
       codingFallbackModel: selectedCodingFallback,
       chatModel: selectedChat || settings.chatModel,
       chatFallbackModel: selectedChatFallback,
@@ -434,7 +433,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     onUpdateSettings({
       defaultModel: recCoding,
       codingModel: recCoding,
-      complexityStandardModel: recCoding,
       chatModel: recChat,
       translationModel: recTrans,
       visionModel: recVision,
@@ -452,7 +450,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     onUpdateSettings({
       defaultModel: selectedCoding,
       codingModel: selectedCoding,
-      complexityStandardModel: selectedCoding,
       codingFallbackModel: selectedCodingFallback,
       chatModel: selectedChat,
       chatFallbackModel: selectedChatFallback,

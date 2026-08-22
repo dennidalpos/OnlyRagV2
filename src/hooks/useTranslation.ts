@@ -6,6 +6,7 @@ import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
+import { normalizeError } from '../lib/errors/errorNormalizer'
 
 export const LANGUAGES = [
   'English',
@@ -250,8 +251,9 @@ export function useDocumentTranslation(settings?: AppSettings) {
         accumulatedResults += (accumulatedResults ? '\n\n' : '') + (currentChunkTranslation || chunk)
         setTranslatedMarkdown(accumulatedResults)
       }
-    } catch (err: any) {
-      logger.error('TranslationView', `Error translating document: ${err.message}`)
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Translation')
+      logger.error('TranslationView', `Error translating document: ${normalized.message}`)
     } finally {
       setIsTranslating(false)
     }
@@ -267,8 +269,9 @@ export function useDocumentTranslation(settings?: AppSettings) {
       } else {
         setExportMessage(res.error || res.message || t('translation.exportCancelled'))
       }
-    } catch (err: any) {
-      setExportMessage(t('translation.exportError', { message: err.message }))
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Translation Export')
+      setExportMessage(t('translation.exportError', { message: normalized.message }))
     } finally {
       setTimeout(() => setExportMessage(null), 5000)
     }

@@ -415,19 +415,16 @@ export const apiService = {
     }
   },
 
-  async applyOllamaEnvironmentVariables(
-    variables: { name: string; value: string }[],
-    restartOllama: boolean = false
-  ): Promise<{ success: boolean; appliedCount: number; message: string; error?: string }> {
-    if (!window.electronAPI?.applyOllamaEnvironmentVariables) {
-      return { success: false, appliedCount: 0, message: 'Electron API non disponibile' }
+  async testOllamaConnection(host?: string): Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }> {
+    if (!window.electronAPI?.testOllamaConnection) {
+      return { success: false, error: 'Electron API non disponibile' }
     }
     try {
-      logger.info('ApiService:System', `Applying ${variables.length} environment variables (restart=${restartOllama})`)
-      return await window.electronAPI.applyOllamaEnvironmentVariables(variables, restartOllama)
+      logger.info('ApiService:Ollama', `Testing connection to Ollama host: ${host || 'default'}`)
+      return await window.electronAPI.testOllamaConnection(host)
     } catch (err: any) {
-      logger.error('ApiService:System', `Failed applying environment variables: ${err.message}`)
-      return { success: false, appliedCount: 0, message: err.message, error: err.message }
+      logger.error('ApiService:Ollama', `Failed testing connection to Ollama: ${err.message}`)
+      return { success: false, error: err.message }
     }
   },
 }

@@ -131,23 +131,23 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
             }
           }
         }}
-        style={{ paddingLeft: `${Math.max(6, level * 14 + 6)}px` }}
-        className={`group py-1 pr-2 rounded-md cursor-pointer flex items-center justify-between text-[11px] font-mono transition-colors focus-ring ${
+        style={{ paddingLeft: `${Math.max(8, level * 16 + 8)}px` }}
+        className={`group py-1.5 pr-2.5 rounded-lg cursor-pointer flex items-center justify-between text-[11px] font-mono transition-all focus-ring my-0.5 ${
           isSelected
-            ? 'bg-cyan-950/70 text-cyan-200 border-l-2 border-cyan-400 font-semibold'
+            ? 'bg-cyan-950/70 text-cyan-200 border-l-2 border-cyan-400 font-semibold shadow-inner'
             : isPinned
-            ? 'bg-cyan-950/30 text-cyan-300 hover:bg-slate-900/80'
+            ? 'bg-cyan-950/25 text-cyan-300 hover:bg-slate-900/90'
             : 'text-slate-300 hover:bg-slate-900/80 hover:text-slate-100'
         }`}
         title={item.path}
       >
-        <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+        <div className="flex items-center gap-2 truncate min-w-0 flex-1">
           {item.isDir ? (
             <span className="text-slate-500 group-hover:text-slate-300 transition-colors shrink-0">
               {isLoading ? (
-                <span className="animate-pulse">...</span>
+                <span className="animate-pulse text-cyan-400 text-[10px]">...</span>
               ) : isOpen ? (
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
               ) : (
                 <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
               )}
@@ -158,9 +158,9 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
 
           {item.isDir ? (
             isOpen ? (
-              <FolderOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <FolderOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
             ) : (
-              <Folder className="w-3.5 h-3.5 text-sky-400/80 shrink-0" />
+              <Folder className="w-3.5 h-3.5 text-cyan-500/80 shrink-0" />
             )
           ) : (
             getFileIcon(item.name, isPinned)
@@ -179,11 +179,11 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
               onClick={handlePinClick}
               title={isPinned ? 'Rimuovi dal contesto agente (Unpin)' : 'Includi nel contesto agente (Pin)'}
               aria-label={isPinned ? `Rimuovi ${item.name} dal contesto` : `Includi ${item.name} nel contesto`}
-              className={`p-0.5 rounded transition-colors focus-ring cursor-pointer ${
-                isPinned ? 'text-cyan-300 hover:bg-cyan-900/60' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
+              className={`p-1 rounded-md transition-colors focus-ring cursor-pointer ${
+                isPinned ? 'text-cyan-300 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800/60' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
               }`}
             >
-              {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+              {isPinned ? <PinOff className="w-3 h-3 text-cyan-300" /> : <Pin className="w-3 h-3" />}
             </button>
           </div>
         )}
@@ -194,14 +194,14 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
         <div
           role="group"
           aria-label={`Contenuto cartella ${item.name}`}
-          className="relative ml-2 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5"
+          className="relative ml-3 pl-1 border-l border-slate-800/80 space-y-0.5 mt-0.5"
         >
           {children.length === 0 && !isLoading ? (
             <div
-              style={{ paddingLeft: `${Math.max(6, (level + 1) * 14 + 6)}px` }}
+              style={{ paddingLeft: `${Math.max(8, (level + 1) * 16 + 8)}px` }}
               className="py-1 text-[10px] text-slate-500 italic font-mono"
             >
-              (vuota)
+              (cartella vuota)
             </div>
           ) : (
             children.map((child) => (

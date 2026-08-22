@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { logger } from '../../lib/logger'
+import { normalizeError, NormalizedError } from '../../lib/errors/errorNormalizer'
 import { AlertTriangle, RefreshCw, Copy, Check } from 'lucide-react'
 
 interface Props {
@@ -11,6 +12,7 @@ interface State {
   error: Error | null
   errorInfo: ErrorInfo | null
   copied: boolean
+  normalized: NormalizedError | null
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -19,10 +21,12 @@ export class ErrorBoundary extends Component<Props, State> {
     error: null,
     errorInfo: null,
     copied: false,
+    normalized: null,
   }
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null, copied: false }
+    const normalized = normalizeError(error, 'React UI')
+    return { hasError: true, error, errorInfo: null, copied: false, normalized }
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
@@ -39,11 +43,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleCopyError = async (): Promise<void> => {
     const errorDetails = [
-      `Error: ${this.state.error?.toString() || 'Unknown Error'}`,
+      `Error Category: ${this.state.normalized?.category || 'UNKNOWN'}`,
+      `Message: ${this.state.normalized?.message || this.state.error?.message || 'Unknown'}`,
+      this.state.normalized?.remediation ? `Remediation: ${this.state.normalized.remediation}` : '',
       `Component Stack: ${this.state.errorInfo?.componentStack || 'N/A'}`,
       `User Agent: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'}`,
       `Time: ${new Date().toISOString()}`,
-    ].join('\n\n')
+    ].filter(Boolean).join('\n\n')
 
     try {
       await navigator.clipboard.writeText(errorDetails)
@@ -56,6 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render(): ReactNode {
     if (this.state.hasError) {
+      const { normalized, error } = this.state
       return (
         <div
           role="alert"
@@ -68,15 +75,15 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-slate-100">Application Error Caught</h2>
+              <h2 className="text-lg font-bold text-slate-100">{normalized?.title || 'Application Error Caught'}</h2>
               <p className="text-xs text-slate-400 mt-1">
-                An unhandled rendering exception occurred. The error details have been logged to the system console.
+                {normalized?.remediation || 'Si è verificata un’eccezione imprevista nell’interfaccia. I dettagli sono registrati nella console.'}
               </p>
             </div>
 
-            {this.state.error && (
+            {(normalized?.message || error) && (
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-left font-mono text-[11px] text-rose-300 overflow-x-auto max-h-32">
-                {this.state.error.toString()}
+                {normalized?.message || error?.toString()}
               </div>
             )}
 

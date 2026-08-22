@@ -96,14 +96,12 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     errorCountInHistory: 0,
   })
 
-  const warmUpModel = settings.useComplexityRouting
-    ? firstTurnComplexity.modelName
-    : settings.codingModel || settings.defaultModel || 'llama3.2'
+  const warmUpModel = settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
 
   emitLog(
     'info',
     `Task received: "${userTask}"`,
-    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${warmUpModel} (${firstTurnComplexity.tierName}) | Workspace: ${workspacePath || 'Standalone'}`
+    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${warmUpModel} | Workspace: ${workspacePath || 'Standalone'}`
   )
 
   if (settings.enableCodingAgentDebugLog) {
@@ -114,11 +112,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
       warmUpModel,
       workspacePath,
       {
-        fastModel: settings.complexityFastModel,
-        standardModel: settings.complexityStandardModel || settings.codingModel || settings.defaultModel,
-        deepReasoningModel: settings.complexityDeepModel,
-        heavyModel: settings.complexityHeavyModel,
-        useComplexityRouting: settings.useComplexityRouting,
+        standardModel: settings.codingModel || settings.defaultModel,
         hardwareProfile: settings.hardwareProfile,
       },
       firstTurnComplexity

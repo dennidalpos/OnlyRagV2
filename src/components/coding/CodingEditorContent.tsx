@@ -5,6 +5,11 @@ import { AppSettings } from '../../types'
 import { useCodingAgent } from '../../hooks/useCodingAgent'
 import { useTranslation } from '../../i18n'
 import { getLanguageFromExtension, getBreadcrumbParts } from './codingEditorUtils'
+import {
+  ONLYRAG_MONACO_THEME_NAME,
+  defineOnlyRagMonacoTheme,
+  getStandardMonacoOptions,
+} from '../../lib/monacoTheme'
 
 interface CodingEditorContentProps {
   c: ReturnType<typeof useCodingAgent>
@@ -24,12 +29,13 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
   onShowWorkspaceSidebar,
 }) => {
   const { t } = useTranslation()
+  const isWordWrap = settings?.editorWordWrap !== false
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#0d121d] relative">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#080c14] relative">
       {/* Breadcrumbs Navigation Bar */}
       {c.selectedFile && (
-        <div className="px-4 py-1.5 bg-[#0e131f] border-b border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400 shrink-0">
+        <div className="px-4 py-1.5 bg-[#0b101b] border-b border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400 shrink-0">
           <div className="flex items-center gap-1 truncate">
             {getBreadcrumbParts(c.selectedFile.path, t('common.noFileOpen')).map((part, idx, arr) => (
               <React.Fragment key={idx}>
@@ -54,43 +60,38 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
       )}
 
       {/* Editor Content Area */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden bg-[#080c14]">
         {c.selectedFile ? (
           isDiffMode ? (
             <DiffEditor
               height="100%"
-              theme="vs-dark"
+              theme={ONLYRAG_MONACO_THEME_NAME}
+              beforeMount={defineOnlyRagMonacoTheme}
               language={getLanguageFromExtension(c.selectedFile?.name)}
               original={c.originalContent || ''}
               modified={c.editorContent}
-              options={{
-                fontSize: 13,
-                automaticLayout: true,
-                fontFamily: 'Fira Code, Cascadia Code, monospace',
-                minimap: { enabled: false },
+              options={getStandardMonacoOptions({
+                wordWrap: isWordWrap,
+                minimap: false,
                 renderSideBySide: false,
-                wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off',
-              }}
+              })}
             />
           ) : (
             <Editor
               height="100%"
-              theme="vs-dark"
+              theme={ONLYRAG_MONACO_THEME_NAME}
+              beforeMount={defineOnlyRagMonacoTheme}
               language={getLanguageFromExtension(c.selectedFile?.name)}
               value={c.editorContent}
               onChange={(val) => {
                 c.setEditorContent(val || '')
                 c.setIsSaved(false)
               }}
-              options={{
-                fontSize: 13,
-                minimap: { enabled: true },
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                fontFamily: 'Fira Code, Cascadia Code, monospace',
-                wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off',
+              options={getStandardMonacoOptions({
+                wordWrap: isWordWrap,
+                minimap: true,
                 lineNumbers: 'on',
-              }}
+              })}
             />
           )
         ) : (
@@ -103,7 +104,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
             <button
               type="button"
               onClick={onShowWorkspaceSidebar}
-              className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs transition-colors"
+              className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
             >
               {t('coding.filesTab')}
             </button>

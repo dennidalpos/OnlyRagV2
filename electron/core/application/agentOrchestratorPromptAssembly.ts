@@ -1,6 +1,6 @@
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import os from 'node:os'
-import { evaluateTaskComplexity, findMatchingInstalledModel } from '../domain/agent/complexityEvaluator'
+import { findMatchingInstalledModel } from '../domain/agent/complexityEvaluator'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
@@ -14,46 +14,30 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { skillAppService } from './skillAppService'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
-/** Complexity-routes the turn to a model, then resolves the tier's hardware-tuned runtime options. */
-export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailure: boolean, errorCountInHistory: number): ModelSelection {
+/** Resolves the coding model and hardware-tuned runtime options for the turn. */
+export function selectModelForTurn(ctx: TurnDispatchContext, _hasRecentToolFailure: boolean, _errorCountInHistory: number): ModelSelection {
   const cachedGpu = getCachedGpuInfo()
   const memInfo = getMemoryInfo()
-  const routedComplexity = evaluateTaskComplexity(ctx.userTask, {
-    attachedFilesCount: ctx.payload.pinnedFiles?.length || 0,
-    contextSizeChars: ctx.payload.activeFile?.content?.length || 0,
-    settings: ctx.settings,
-    availableModels: ctx.availableModels,
-    hasRecentToolFailure,
-    errorCountInHistory,
-    vramTotalMB: cachedGpu?.vramTotalMB,
-    systemRamGB: memInfo?.totalRAMGB,
-    enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
-    agentMode: ctx.agentMode,
-  })
-  if (routedComplexity.isEscalated && ctx.stepCount > 1) {
-    ctx.emitLog('info', `⚡ Complexity Escalated: ${routedComplexity.modelName}`, routedComplexity.reasoning)
-  }
 
-  const candidateCoding = ctx.settings.codingModel || ctx.settings.complexityStandardModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
+  const candidateCoding = ctx.settings.codingModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
   const targetModel: string = ctx.currentOverriddenModel
     ? ctx.currentOverriddenModel
     : findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
   if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logComplexityRouting(ctx.sessionId, ctx.stepCount, routedComplexity, targetModel)
+    codingAgentLogger.logComplexityRouting(
+      ctx.sessionId,
+      ctx.stepCount,
+      { tier: 'standard', tierName: 'Standard', modelName: targetModel, isEscalated: false, reasoning: 'Direct execution on primary coding model' },
+      targetModel
+    )
   }
 
   // Native tool-calling routing: when the primary model is detected as tool-calling capable
   // (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool
-  // catalog instead of relying solely on the prompt-engineered JSON convention. toolParser.ts
-  // still parses the result either way (see agentStreamTransport.ts's serializeNativeToolCall),
-  // so downstream tool execution is unaffected by which path produced the output.
+  // catalog instead of relying solely on the prompt-engineered JSON convention.
   const targetModelToolCallingCapable = supportsNativeToolCalling(targetModel, ctx.modelCapabilities)
   if (targetModelToolCallingCapable) {
-    // The native tool-calling /api/chat path doesn't populate `context` (see
-    // agentStreamTransport.ts), so any cached baseline from an earlier /api/generate turn
-    // would be stale. Clear it so a later turn that returns to the /api/generate path always
-    // starts from a full resend.
     ctx.session.ollamaContextModel = undefined
   }
 
@@ -66,31 +50,20 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
       cpuCount: os.cpus()?.length,
       enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
     },
-    routedComplexity.tier
+    'standard'
   )
 
-  const candidateStandard = ctx.settings.complexityStandardModel || ctx.settings.codingModel || ctx.settings.defaultModel
-  const intermediateModel = candidateStandard
-    ? (findMatchingInstalledModel(candidateStandard, ctx.availableModels) || candidateStandard)
-    : (findMatchingInstalledModel('qwen2.5-coder:7b', ctx.availableModels) || ctx.availableModels?.[0] || 'qwen2.5-coder:7b')
-
-  const candidateFallback = ctx.settings.codingFallbackModel || ctx.settings.complexityFastModel || ctx.settings.defaultModel
-  const fallbackModel = candidateFallback
-    ? (findMatchingInstalledModel(candidateFallback, ctx.availableModels) || candidateFallback)
-    : (findMatchingInstalledModel('qwen2.5-coder:7b', ctx.availableModels) || findMatchingInstalledModel('llama3.2:3b', ctx.availableModels) || ctx.availableModels?.[0] || 'qwen2.5-coder:7b')
-
-  const heavyEscalationModel = ctx.settings.complexityHeavyModel
-    ? (findMatchingInstalledModel(ctx.settings.complexityHeavyModel, ctx.availableModels) || ctx.settings.complexityHeavyModel)
-    : undefined
+  const candidateFallback = ctx.settings.codingFallbackModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
+  const fallbackModel = findMatchingInstalledModel(candidateFallback, ctx.availableModels) || candidateFallback
 
   return {
     targetModel,
     targetModelToolCallingCapable,
-    intermediateModel,
+    intermediateModel: targetModel,
     fallbackModel,
-    heavyEscalationModel,
+    heavyEscalationModel: undefined,
     runtimeOpts,
-    complexityTier: routedComplexity.tier,
+    complexityTier: 'standard',
   }
 }
 

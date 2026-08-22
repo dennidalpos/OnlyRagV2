@@ -15,9 +15,11 @@ import { PromptHistorySearchModal } from './PromptHistorySearchModal'
 import { useSkillInstallApproval } from '../../hooks/useSkillInstallApproval'
 import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
-import { CodingEditorTabBar } from './CodingEditorTabBar'
+import { CodingEditorTabBar, CodingRightTab } from './CodingEditorTabBar'
 import { CodingEditorContent } from './CodingEditorContent'
-import { CodingBottomDock, BottomDockTab } from './CodingBottomDock'
+import { CodingTerminal } from './CodingTerminal'
+import { GitDiffPanel } from './GitDiffPanel'
+import { PlanPanel } from './PlanPanel'
 import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
@@ -36,11 +38,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
   const [lastExecutedPrompt, setLastExecutedPrompt] = useState<string>('')
 
-  // Bottom dock state (Layout Opzione 1: Monaco Top + Dock Bottom)
-  const [isBottomDockOpen, setIsBottomDockOpen] = useState<boolean>(false)
-  const [activeDockTab, setActiveDockTab] = useState<BottomDockTab>('terminal')
-  const [dockHeight, setDockHeight] = useState<number>(220)
-  const [isDockResizing, setIsDockResizing] = useState<boolean>(false)
+  // Unified Right Workspace View
+  const [activeRightTab, setActiveRightTab] = useState<CodingRightTab>('editor')
 
   // Plan Hook Integration with Session Isolation
   const planApproval = usePlanApproval({
@@ -108,15 +107,11 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   const activeModelName = (c.isExecuting && c.currentLiveModel)
     ? c.currentLiveModel
-    : settings?.useComplexityRouting !== false
-    ? routedComplexity.modelName
     : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
 
   const activeComplexityTier = (c.isExecuting && c.currentLiveTier)
     ? c.currentLiveTier
-    : settings?.useComplexityRouting !== false
-    ? routedComplexity.tier
-    : null
+    : routedComplexity.tier
 
   const hasPendingUnconsolidatedMilestones = useMemo(() => {
     if (c.isExecuting) return false
@@ -135,6 +130,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   const handleGeneratePlanFromPrompt = async () => {
     if (!c.agentPrompt.trim()) return
+    setActiveRightTab('plan')
     await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
   }
 
@@ -148,31 +144,16 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     }
   }
 
-  const handleDockMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsDockResizing(true)
-    const startY = e.clientY
-    const startHeight = dockHeight
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = startY - moveEvent.clientY
-      const newHeight = Math.max(120, Math.min(500, startHeight + deltaY))
-      setDockHeight(newHeight)
+  const handleSelectTab = (tab: CodingRightTab) => {
+    setActiveRightTab(tab)
+    if (tab === 'git_diff') {
+      c.fetchGitStatusAndDiff()
     }
-
-    const onMouseUp = () => {
-      setIsDockResizing(false)
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
   }
 
-  const handleOpenDockTab = (tab: BottomDockTab) => {
-    setActiveDockTab(tab)
-    setIsBottomDockOpen(true)
+  const handleOpenFileTab = (file: typeof c.openFiles[0]) => {
+    c.handleOpenFile(file)
+    setActiveRightTab('editor')
   }
 
   return (
@@ -189,6 +170,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         activeTier={activeComplexityTier}
         onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
         onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
+        onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
       />
 
       {/* Main Workspace Split Layout */}
@@ -206,7 +188,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               files={c.files}
               selectedFilePath={c.selectedFile?.path || null}
               pinnedPaths={new Set(c.pinnedFiles.keys())}
-              onOpenFile={c.handleOpenFile}
+              onOpenFile={handleOpenFileTab}
               onTogglePinFile={c.handleTogglePinFile}
               onRefreshFiles={() => c.workspacePath && c.loadWorkspaceFiles(c.workspacePath)}
               workspaceSessions={c.workspaceSessions}
@@ -254,8 +236,11 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           onExecute={handleInitiateTaskExecution}
           onGeneratePlan={handleGeneratePlanFromPrompt}
           onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
+          onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
+          onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
           autoScroll={autoScroll}
           onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
+          onUpdateSettings={onUpdateSettings}
         />
 
         {/* Resizable Divider Handle */}
@@ -277,48 +262,84 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           <GripVertical className={`w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`} />
         </div>
 
-        {/* Right Column: Pure Monaco Code Editor + Bottom Tool Dock (Layout Opzione 1) */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
+        {/* Right Column: Unified Full-Height Workspace Area */}
+        <div className={`flex-1 flex flex-col overflow-hidden bg-[#090d16] min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
           <CodingEditorTabBar
             openFiles={c.openFiles}
             selectedFile={c.selectedFile}
             isSaved={c.isSaved}
-            onOpenFile={c.handleOpenFile}
+            onOpenFile={handleOpenFileTab}
             onCloseFile={c.handleCloseFile}
             isDiffMode={isDiffMode}
             setIsDiffMode={setIsDiffMode}
             onSaveFile={c.handleSaveFile}
-            isBottomDockOpen={isBottomDockOpen}
-            onToggleBottomDock={() => setIsBottomDockOpen((prev) => !prev)}
-            activeDockTab={activeDockTab}
-            onOpenDockTab={handleOpenDockTab}
+            activeTab={activeRightTab}
+            onSelectTab={handleSelectTab}
+            changedFilesCount={c.changeMetrics?.filesTouched || 0}
             planIsReady={planApproval.currentPlan?.status === 'ready'}
+            planIsInProgress={planApproval.isGeneratingPlan}
           />
 
-          <CodingEditorContent
-            c={c}
-            settings={settings}
-            isDiffMode={isDiffMode}
-            copiedPath={copiedPath}
-            onCopyPath={handleCopyPath}
-            onShowWorkspaceSidebar={() => setShowWorkspaceSidebar(true)}
-          />
+          {/* Active View Container */}
+          <div className="flex-1 overflow-hidden relative">
+            {activeRightTab === 'editor' && (
+              <CodingEditorContent
+                c={c}
+                settings={settings}
+                isDiffMode={isDiffMode}
+                copiedPath={copiedPath}
+                onCopyPath={handleCopyPath}
+                onShowWorkspaceSidebar={() => setShowWorkspaceSidebar(true)}
+              />
+            )}
 
-          {/* Collapsible & Resizable Bottom Tool Dock */}
-          <CodingBottomDock
-            isOpen={isBottomDockOpen}
-            onToggleOpen={() => setIsBottomDockOpen((prev) => !prev)}
-            activeDockTab={activeDockTab}
-            setActiveDockTab={setActiveDockTab}
-            c={c}
-            planApproval={planApproval}
-            settings={settings}
-            activeModelName={activeModelName}
-            autoScroll={autoScroll}
-            height={dockHeight}
-            isResizing={isDockResizing}
-            onMouseDownResize={handleDockMouseDown}
-          />
+            {activeRightTab === 'terminal' && (
+              <CodingTerminal
+                terminalLogs={c.terminalLogs}
+                terminalInput={c.terminalInput}
+                setTerminalInput={c.setTerminalInput}
+                onRunCommand={c.handleRunTerminalCommand}
+                onClearTerminal={c.handleClearTerminal}
+                isExecuting={c.isExecuting}
+                autoScroll={autoScroll}
+                navigateHistory={c.navigateHistory}
+                workspacePath={c.workspacePath}
+              />
+            )}
+
+            {activeRightTab === 'git_diff' && (
+              <GitDiffPanel
+                gitStatusLines={c.gitStatusLines}
+                gitDiffText={c.gitDiffText}
+                isFetchingGit={c.isFetchingGit}
+                onRefreshGit={c.fetchGitStatusAndDiff}
+              />
+            )}
+
+            {activeRightTab === 'plan' && (
+              <PlanPanel
+                plan={planApproval.currentPlan}
+                planHistory={planApproval.planHistory}
+                activePlanIndex={planApproval.activePlanIndex}
+                onSelectPlanVersion={planApproval.selectPlanVersion}
+                isGenerating={planApproval.isGeneratingPlan}
+                isExecuting={c.isExecuting}
+                countdownSeconds={planApproval.countdownSeconds}
+                isAutoProceedPaused={planApproval.isAutoProceedPaused}
+                autoProceedEnabled={settings?.autoProceedPlan !== false}
+                interviewQuestions={planApproval.interviewQuestions}
+                isInterviewActive={planApproval.isInterviewActive}
+                isAnalyzingInterview={planApproval.isAnalyzingInterview}
+                onConfirmInterview={planApproval.confirmInterviewAnswers}
+                onSkipInterview={planApproval.skipInterviewWithRecommended}
+                onApprove={planApproval.handleApprovePlan}
+                onReject={planApproval.handleRejectPlan}
+                onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused(!planApproval.isAutoProceedPaused)}
+                onUpdatePlanText={planApproval.handleUpdatePlanText}
+                completedStepCount={c.currentStep}
+              />
+            )}
+          </div>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react'
 import { AppSettings } from '../../types'
 import {
   Layers,
+  FileText,
   MessageSquare,
   Languages,
   Code,
@@ -261,7 +262,7 @@ export const AppLayout: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <Layers className="w-4 h-4" /> {t('navigation.ingestion')}
+              <FileText className="w-4 h-4" /> {t('navigation.ingestion')}
             </button>
 
             <button

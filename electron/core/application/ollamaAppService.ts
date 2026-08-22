@@ -61,6 +61,28 @@ export class OllamaAppService {
     return ollamaHttpClient.unloadModel(modelName, host)
   }
 
+  async testConnection(host?: string): Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }> {
+    const targetHost = host?.trim() || 'http://127.0.0.1:11434'
+    try {
+      const status = await checkOllamaStatus(targetHost)
+      if (status.status === 'online') {
+        return {
+          success: true,
+          modelsCount: status.modelsCount,
+        }
+      }
+      return {
+        success: false,
+        error: status.error || 'Server Ollama non raggiungibile',
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || 'Errore durante la connessione al server Ollama',
+      }
+    }
+  }
+
   benchmarkModel(modelName: string) {
     return ollamaHttpClient.benchmarkModel(modelName)
   }

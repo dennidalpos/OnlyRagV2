@@ -17,8 +17,11 @@ interface CodingAgentLeftPanelProps {
   onExecute: () => void
   onGeneratePlan: () => void
   onOpenSkillHubModal: () => void
+  onOpenDiagnosticsModal?: () => void
+  onOpenPromptHistorySearch?: () => void
   autoScroll: boolean
   onToggleAutoScroll: () => void
+  onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
 export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
@@ -34,8 +37,11 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
   onExecute,
   onGeneratePlan,
   onOpenSkillHubModal,
+  onOpenDiagnosticsModal,
+  onOpenPromptHistorySearch,
   autoScroll,
   onToggleAutoScroll,
+  onUpdateSettings,
 }) => {
   return (
     <div style={{ width: `${leftPanelWidth}px` }} className="flex flex-col border-r border-slate-800 bg-slate-950 shrink-0 overflow-hidden">
@@ -70,6 +76,8 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           onEditPromptInQueue={c.editPromptInQueue}
           onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
           onOpenSkillHubModal={onOpenSkillHubModal}
+          onOpenDiagnosticsModal={onOpenDiagnosticsModal}
+          onOpenPromptHistorySearch={onOpenPromptHistorySearch}
           onResetSession={() => {
             planApproval.resetPlanHistory()
             c.handleNewSession()
@@ -103,6 +111,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           onApprovePlan={planApproval.handleApprovePlan}
           onRejectPlan={planApproval.handleRejectPlan}
           onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused((prev) => !prev)}
+          onUpdateSettings={onUpdateSettings}
         />
       </div>
     </div>

@@ -9,6 +9,7 @@ import { resolveChatContextBudget, resolveChatThreadCount } from '../services/ch
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
+import { normalizeError } from '../lib/errors/errorNormalizer'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -458,14 +459,17 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           )
         )
       }
-    } catch (err: any) {
-      logger.error('ChatView', `Error during RAG generation: ${err.message}`)
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Chat RAG')
+      logger.error('ChatView', `Error during RAG generation: ${normalized.message}`)
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === botMsgId
             ? {
                 ...msg,
-                text: `Errore durante la connessione con Ollama LLM: ${err.message}. Verifica che Ollama sia attivo su http://localhost:11434.`,
+                text: normalized.remediation
+                  ? `${normalized.message}\n\n💡 ${normalized.remediation}`
+                  : normalized.message,
               }
             : msg
         )

@@ -116,8 +116,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
       {/* Header */}
       <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between z-10 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-            <MessageSquare className="w-5 h-5 text-cyan-400" />
+          <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shadow-sm">
+            <MessageSquare className="w-5 h-5 text-purple-400" />
           </div>
           <div>
             <h1 className="font-bold text-slate-100 text-sm tracking-wide">{t('chat.headerTitle')}</h1>
@@ -125,23 +125,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Autoscroll Toggle Button */}
-          <button
-            type="button"
-            onClick={() => c.setAutoScroll(!c.autoScroll)}
-            aria-pressed={c.autoScroll}
-            aria-label={c.autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
-            title={c.autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 ${
-              c.autoScroll
-                ? 'bg-cyan-950/90 text-cyan-300 border border-cyan-500/60 shadow-sm'
-                : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <ArrowDown className={`w-3.5 h-3.5 ${c.autoScroll ? 'text-cyan-400' : 'text-slate-400'}`} />
-            <span className="text-[11px] hidden sm:inline font-medium">Autoscroll</span>
-          </button>
-
           {/* Quick Chat Model Selector with Fallback */}
           <QuickModelSelector
             currentModel={settings.chatModel || settings.defaultModel || 'llama3.2'}
@@ -162,6 +145,54 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             featureLabel="RAG Chat"
             variant="purple"
           />
+
+          {/* New Chat Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (c.messages.length > 0) {
+                setShowResetConfirm(true)
+              } else {
+                c.handleNewChat()
+                toast.info(t('chat.newChatStarted'))
+              }
+            }}
+            aria-label={t('chat.newChat')}
+            title={t('chat.newChat')}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 text-slate-300 hover:text-purple-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">{t('chat.newChat')}</span>
+          </button>
+
+          {/* System Prompt Button */}
+          <button
+            type="button"
+            onClick={() => c.setIsPromptModalOpen(true)}
+            aria-label={t('common.systemPrompt')}
+            title={t('common.systemPrompt')}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 text-purple-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <Sliders className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
+          </button>
+
+          {/* Autoscroll Toggle Button */}
+          <button
+            type="button"
+            onClick={() => c.setAutoScroll(!c.autoScroll)}
+            aria-pressed={c.autoScroll}
+            aria-label={c.autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
+            title={c.autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all focus-ring active:scale-95 cursor-pointer ${
+              c.autoScroll
+                ? 'bg-purple-950/90 text-purple-300 border border-purple-500/60 shadow-sm'
+                : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ArrowDown className={`w-3.5 h-3.5 ${c.autoScroll ? 'text-purple-400' : 'text-slate-400'}`} />
+            <span className="text-[11px] hidden sm:inline font-medium">Autoscroll</span>
+          </button>
         </div>
       </div>
 
@@ -688,18 +719,39 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                             : t('chat.noDocsHint')}
                         </div>
 
-                        {/* System Prompt Trigger */}
-                        <div>
+                        {/* Section 2: Actions & System Prompt */}
+                        <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('common.actions')}</div>
+
                           <button
                             type="button"
                             onClick={() => {
                               setShowToolsMenu(false)
                               c.setIsPromptModalOpen(true)
                             }}
-                            className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-cyan-300 transition-colors focus-ring"
+                            className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-purple-300 transition-colors focus-ring cursor-pointer"
                           >
                             <span className="flex items-center gap-2">
-                              <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('chat.configurePrompt')}
+                              <Sliders className="w-3.5 h-3.5 text-purple-400" /> {t('common.systemPrompt')}
+                            </span>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowToolsMenu(false)
+                              if (c.messages.length > 0) {
+                                setShowResetConfirm(true)
+                              } else {
+                                c.handleNewChat()
+                                toast.info(t('chat.newChatStarted'))
+                              }
+                            }}
+                            className="w-full p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800/80 rounded-xl text-left flex items-center justify-between text-xs text-slate-300 hover:text-purple-300 transition-colors focus-ring cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2">
+                              <RotateCcw className="w-3.5 h-3.5 text-purple-400" /> {t('chat.newChat')}
                             </span>
                             <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                           </button>

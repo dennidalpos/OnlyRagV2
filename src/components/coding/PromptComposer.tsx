@@ -41,6 +41,8 @@ interface PromptComposerProps {
   onTogglePinFile?: (file: WorkspaceFile) => void
   onOpenSkillHubModal?: () => void
   onOpenPromptModal?: () => void
+  onOpenDiagnosticsModal?: () => void
+  onOpenPromptHistorySearch?: () => void
   promptQueue?: QueuedPrompt[]
   onRemoveFromQueue?: (id: string) => void
   onEditPromptInQueue?: (id: string, newPrompt: string) => void
@@ -50,6 +52,8 @@ interface PromptComposerProps {
   maxContextLimit?: number
   isContextHeavy?: boolean
   onCompactContext?: () => void
+  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  onToggleAutoInstallSkills?: () => void
 }
 
 export const PromptComposer: React.FC<PromptComposerProps> = ({
@@ -73,14 +77,18 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   onTogglePinFile,
   onOpenSkillHubModal,
   onOpenPromptModal,
+  onOpenDiagnosticsModal,
+  onOpenPromptHistorySearch,
   promptQueue = [],
   onRemoveFromQueue,
   changeMetrics,
   contextPercent = 0,
   estimatedTurnTokens = 0,
-  maxContextLimit = 7000,
+  maxContextLimit = 0,
   isContextHeavy = false,
   onCompactContext,
+  autoInstallHubSkills = 'auto',
+  onToggleAutoInstallSkills,
 }) => {
   const { t } = useTranslation()
   const [showToolsMenu, setShowToolsMenu] = useState(false)
@@ -235,6 +243,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               onToggleAttachDoc={onToggleAttachDoc}
               onOpenSkillHubModal={onOpenSkillHubModal}
               onOpenPromptModal={onOpenPromptModal}
+              onOpenDiagnosticsModal={onOpenDiagnosticsModal}
+              onOpenPromptHistorySearch={onOpenPromptHistorySearch}
+              autoInstallHubSkills={autoInstallHubSkills}
+              onToggleAutoInstallSkills={onToggleAutoInstallSkills}
             />
 
             {/* Autoscroll Toggle Mini Button */}

@@ -1,6 +1,6 @@
 import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
 import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
-import { ResilientModelDispatcher } from './resilientModelDispatcher'
+import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeOrGrowContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
@@ -16,61 +16,37 @@ async function dispatchToLlm(
   contextReuseDecision: OllamaContextReuseDecision,
   wasCompacted: boolean
 ): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
-  let lastDispatchEscalated = false
   try {
-    const dispatchRes = await ResilientModelDispatcher.executeWithFallback(
-      {
-        primaryModel: selection.targetModel,
-        intermediateModel: selection.intermediateModel,
-        fallbackModel: selection.fallbackModel,
-        heavyEscalationModel: selection.heavyEscalationModel,
-        runtimeOpts: selection.runtimeOpts,
-      },
-      {
-        prompt: turnPrompt,
-        keepAlive: '30m',
-        ollamaEndpoint: ctx.settings.ollamaHost,
-        toolCallingCapable: selection.targetModelToolCallingCapable,
-        toolCatalog: selection.targetModelToolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
-        onTokenChunk: (chunk) => {
-          if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-            ctx.session.targetWindow.webContents.send('agent:stream-token', { step: ctx.stepCount, chunk })
-          }
-        },
-        isCancelled: () => !ctx.isSessionActive(),
-        onHttpRequestCreated: (req) => {
-          ctx.session.activeHttpRequest = req
-        },
-        onContextReceived: (contextTokens, respondingModel) => {
-          // Only cache when this turn's prompt matched assembled.stableSection/historyBlock
-          // exactly — HeuristicContextCompactor rewrites that structure on compaction, so the
-          // returned tokens wouldn't correspond to the cached baseline shape (AGT1).
-          if (wasCompacted) return
-          ctx.session.ollamaContextTokens = contextTokens
-          ctx.session.ollamaContextModel = respondingModel
-          ctx.session.ollamaContextStableSection = assembled.stableSection
-          ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
-        },
-      },
-      (fromModel, toModel, reason) => {
-        const isHeavy = toModel === selection.heavyEscalationModel
-        lastDispatchEscalated = isHeavy
-        const label = isHeavy ? '🔺 Heavy Tier Escalation' : '⚡ Resilient Fallback'
-        ctx.emitLog('info', `${label}: ${fromModel} → ${toModel}`, `Triggered: ${reason}`)
-        if (ctx.settings.enableCodingAgentDebugLog) {
-          codingAgentLogger.logModelEscalation(ctx.sessionId, ctx.stepCount, fromModel, toModel, reason, label)
+    const streamedOutput = await AgentStreamTransport.streamCompletion({
+      targetModel: selection.targetModel,
+      prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
+      runtimeOpts: selection.runtimeOpts,
+      keepAlive: '30m',
+      ollamaEndpoint: ctx.settings.ollamaHost,
+      toolCallingCapable: selection.targetModelToolCallingCapable,
+      toolCatalog: selection.targetModelToolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
+      previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
+      onTokenChunk: (chunk) => {
+        if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+          ctx.session.targetWindow.webContents.send('agent:stream-token', { step: ctx.stepCount, chunk })
         }
       },
-      contextReuseDecision.reusedContext
-        ? { prompt: contextReuseDecision.promptToSend, previousContext: contextReuseDecision.contextTokens! }
-        : undefined
-    )
-    if (dispatchRes?.isEscalated || lastDispatchEscalated) {
-      ctx.emitLog('info', `🔺 Heavy Tier active (${dispatchRes?.usedModel || 'heavy'}): VRAM eviction applied before escalation.`)
-    }
+      isCancelled: () => !ctx.isSessionActive(),
+      onHttpRequestCreated: (req) => {
+        ctx.session.activeHttpRequest = req
+      },
+      onContextReceived: (contextTokens, respondingModel) => {
+        if (wasCompacted) return
+        ctx.session.ollamaContextTokens = contextTokens
+        ctx.session.ollamaContextModel = respondingModel
+        ctx.session.ollamaContextStableSection = assembled.stableSection
+        ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
+      },
+    })
     ctx.session.activeHttpRequest = null
-    return { streamedOutput: dispatchRes?.output || '', usedModel: dispatchRes?.usedModel }
+    return { streamedOutput, usedModel: selection.targetModel }
   } catch (err: any) {
+    ctx.session.activeHttpRequest = null
     return { error: err.message }
   }
 }

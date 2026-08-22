@@ -15,6 +15,7 @@ import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from
 import { soundEffectsService } from '../services/soundEffectsService'
 import type { ModelTier } from '../services/complexityRouterService'
 import { logger } from '../lib/logger'
+import { normalizeError } from '../lib/errors/errorNormalizer'
 
 export type { QueuedPrompt }
 
@@ -187,6 +188,7 @@ export function useCodingAgent(settings?: AppSettings) {
     appendTerminalLogs,
     handleRunTerminalCommand,
     handleClearTerminal,
+    navigateHistory,
   } = useAgentTerminal({ workspacePath, onCommandNotice: handleCommandNotice })
 
   const { gitStatusLines, gitDiffText, isFetchingGit, fetchGitStatusAndDiff } = useGitStatus(workspacePath)
@@ -583,14 +585,16 @@ export function useCodingAgent(settings?: AppSettings) {
       })
 
       if (!res?.success) {
-        closeRunningExecutedPrompt('failed', res?.error)
+        const normalized = normalizeError(res?.error || 'Errore sconosciuto', 'Coding Agent')
+        closeRunningExecutedPrompt('failed', normalized.message)
         setIsExecuting(false)
-        addActionLog('info', `Errore avvio task: ${res?.error || 'Errore sconosciuto'}`)
+        addActionLog('info', `Errore avvio task: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
       }
-    } catch (err: any) {
-      closeRunningExecutedPrompt('failed', err?.message)
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Coding Agent')
+      closeRunningExecutedPrompt('failed', normalized.message)
       setIsExecuting(false)
-      addActionLog('info', `Errore esecuzione: ${err.message}`)
+      addActionLog('info', `Errore esecuzione: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
     }
   }
 
@@ -715,6 +719,7 @@ export function useCodingAgent(settings?: AppSettings) {
     handleSaveFile,
     handleRunTerminalCommand,
     handleClearTerminal,
+    navigateHistory,
     handleAgentExecute,
     handleCancelAgent,
     workspaceSessions,

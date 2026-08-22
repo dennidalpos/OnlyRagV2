@@ -34,6 +34,11 @@ import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
+import {
+  ONLYRAG_MONACO_THEME_NAME,
+  defineOnlyRagMonacoTheme,
+  getStandardMonacoOptions,
+} from '../../lib/monacoTheme'
 
 interface IngestionViewProps {
   settings?: AppSettings
@@ -315,12 +320,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
           <button
             type="button"
             onClick={() => ing.setIsPromptModalOpen(true)}
-            aria-label={t('chat.configurePrompt')}
-            title={t('chat.configurePrompt')}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95"
+            aria-label={t('common.systemPrompt')}
+            title={t('common.systemPrompt')}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
           >
             <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">{t('chat.configurePrompt')}</span>
+            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
           </button>
 
           <input
@@ -901,7 +906,7 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
               </div>
 
               {/* Right Pane: Editor Markdown (Monaco Editor) */}
-              <div className={`flex-1 min-w-0 bg-slate-950 flex flex-col overflow-hidden ${isPreviewResizing ? 'pointer-events-none select-none' : ''}`}>
+              <div className={`flex-1 min-w-0 bg-[#080c14] flex flex-col overflow-hidden ${isPreviewResizing ? 'pointer-events-none select-none' : ''}`}>
                 <div className="h-10 px-4 bg-slate-900/90 border-b border-slate-800 text-xs font-semibold text-slate-300 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-cyan-300">
                     <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
@@ -919,23 +924,20 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
                   </div>
                 </div>
 
-                <div className="flex-1 bg-slate-950">
+                <div className="flex-1 bg-[#080c14]">
                   <Editor
                     height="100%"
-                    theme="vs-dark"
+                    theme={ONLYRAG_MONACO_THEME_NAME}
+                    beforeMount={defineOnlyRagMonacoTheme}
                     language="markdown"
                     value={ing.markdownContent}
                     onChange={(val) => ing.setMarkdownContent(val || '')}
                     onMount={ing.handleEditorDidMount}
-                    options={{
-                      fontSize: 13,
-                      minimap: { enabled: false },
-                      wordWrap: settings?.editorWordWrap !== false ? 'on' : 'off',
-                      automaticLayout: true,
-                      fontFamily: 'Fira Code, monospace',
+                    options={getStandardMonacoOptions({
+                      minimap: false,
+                      wordWrap: settings?.editorWordWrap !== false,
                       lineNumbers: 'on',
-                      scrollBeyondLastLine: false,
-                    }}
+                    })}
                   />
                 </div>
               </div>

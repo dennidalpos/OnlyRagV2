@@ -82,18 +82,21 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   return (
     <aside
       style={width ? { width: `${width}px` } : undefined}
-      className={`${width ? '' : 'w-72'} border-r border-slate-800/80 bg-[#090d16] flex flex-col h-full shrink-0 z-20 select-text font-sans overflow-hidden`}
+      className={`${width ? '' : 'w-72'} border-r border-slate-800/80 bg-[#080c14] flex flex-col h-full shrink-0 z-20 select-text font-sans overflow-hidden`}
     >
       {/* Top Header */}
-      <div className="h-10 px-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/80 text-xs font-bold text-slate-200">
-        <span className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
-          <FolderOpen className="w-3.5 h-3.5" /> Workspace Explorer
+      <div className="h-11 px-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/90 text-xs font-bold text-slate-200 backdrop-blur-sm">
+        <span className="flex items-center gap-2 text-cyan-400 text-xs font-bold">
+          <div className="w-5 h-5 rounded-md bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm">
+            <FolderOpen className="w-3 h-3" />
+          </div>
+          <span>Workspace Explorer</span>
         </span>
         <button
           type="button"
           onClick={onClose}
           aria-label={t('common.close')}
-          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition-colors"
+          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition-colors cursor-pointer"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -110,21 +113,21 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
       />
 
       {/* Quick Search Filter Bar */}
-      <div className="px-2 py-1.5 border-b border-slate-800/60 bg-slate-950/40">
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 border border-slate-800 rounded-lg text-xs">
-          <Search className="w-3 h-3 text-slate-500 shrink-0" />
+      <div className="px-2.5 py-2 border-b border-slate-800/60 bg-slate-950/60">
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900/90 border border-slate-800 focus-within:border-cyan-500/50 rounded-xl text-xs transition-colors shadow-inner">
+          <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
           <input
             type="text"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            placeholder="Filtra file..."
+            placeholder="Filtra file nel workspace..."
             className="w-full bg-transparent text-[11px] text-slate-200 placeholder:text-slate-500 outline-none font-mono"
           />
           {searchFilter && (
             <button
               type="button"
               onClick={() => setSearchFilter('')}
-              className="text-slate-500 hover:text-slate-300 p-0.5"
+              className="text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer"
             >
               <X className="w-3 h-3" />
             </button>
@@ -136,29 +139,32 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
       <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 text-xs">
         {/* Section 1: Pinned Context Files (shown if any files are pinned) */}
         {pinnedPaths.size > 0 && (
-          <div className="py-1">
+          <div className="py-1.5 bg-cyan-950/10">
             <button
               type="button"
               onClick={() => setPinnedExpanded((prev) => !prev)}
-              className="w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider hover:text-slate-200 hover:bg-slate-900/40 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider hover:text-slate-200 hover:bg-slate-900/40 transition-colors"
             >
-              <span className="flex items-center gap-1 text-cyan-400">
+              <span className="flex items-center gap-1.5 text-cyan-400">
                 {pinnedExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 <Pin className="w-3 h-3" />
-                <span>Nel Contesto ({pinnedPaths.size})</span>
+                <span>Nel Contesto</span>
+              </span>
+              <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 font-mono text-[9px] font-bold border border-cyan-500/30">
+                {pinnedPaths.size}
               </span>
             </button>
 
             {pinnedExpanded && (
-              <div className="px-2 py-1 space-y-0.5">
+              <div className="px-2.5 py-1 space-y-1">
                 {pinnedFilesList.map((file) => (
                   <div
                     key={file.path}
                     onClick={() => onOpenFile(file)}
-                    className="flex items-center justify-between px-2 py-1 bg-cyan-950/30 hover:bg-cyan-950/60 border border-cyan-900/40 rounded-md text-[11px] font-mono text-cyan-200 cursor-pointer group transition-colors"
+                    className="flex items-center justify-between px-2.5 py-1.5 bg-cyan-950/40 hover:bg-cyan-950/70 border border-cyan-900/50 rounded-lg text-[11px] font-mono text-cyan-200 cursor-pointer group transition-colors shadow-sm"
                     title={file.path}
                   >
-                    <span className="truncate flex-1">{file.name}</span>
+                    <span className="truncate flex-1 font-medium">{file.name}</span>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -166,7 +172,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                         onTogglePinFile(file)
                       }}
                       title="Rimuovi dal contesto"
-                      className="p-0.5 text-slate-400 hover:text-rose-400 transition-colors shrink-0 ml-1"
+                      className="p-0.5 text-slate-400 hover:text-rose-400 transition-colors shrink-0 ml-1.5"
                     >
                       <PinOff className="w-3 h-3" />
                     </button>

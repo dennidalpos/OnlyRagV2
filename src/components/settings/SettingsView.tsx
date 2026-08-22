@@ -24,7 +24,7 @@ import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
 import { OcrEngineSelector } from './OcrEngineSelector'
 import { AgentExecutionLimitsConfig } from './AgentExecutionLimitsConfig'
-import { OllamaEnvParamsCard } from './OllamaEnvParamsCard'
+import { OllamaServerConfig } from './OllamaServerConfig'
 import { useSettingsManager } from '../../hooks/useSettingsManager'
 import { useTranslation, Language } from '../../i18n'
 import { apiService } from '../../services/api'
@@ -67,13 +67,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     <div className="flex-1 h-full overflow-y-auto p-8 space-y-9 bg-slate-950 select-text">
       {/* Page Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
-            <Settings className="w-7 h-7 text-cyan-400" /> {t('settings.title')}
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {t('settings.description')}
-          </p>
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-sm shrink-0">
+            <Settings className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">
+              {t('settings.title')}
+            </h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              {t('settings.description')}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -287,9 +292,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onUpdateSettings={onUpdateSettings}
         />
 
-        {/* Ollama Client OS Parameters */}
-        <OllamaEnvParamsCard
-          diagnostics={diagnostics}
+        {/* Ollama Server Configuration (Local vs Remote Network Server) */}
+        <OllamaServerConfig
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
           onRefreshDiagnostics={onRefreshDiagnostics}
         />
 

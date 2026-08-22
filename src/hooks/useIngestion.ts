@@ -5,6 +5,7 @@ import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
+import { normalizeError } from '../lib/errors/errorNormalizer'
 
 export interface IngestionProgressState {
   active: boolean
@@ -301,8 +302,9 @@ export function useIngestion(settings?: AppSettings) {
       } else {
         setExportStatus({ active: false, message: res.error || res.message || t('ingestion.exportCancelled'), isError: true })
       }
-    } catch (err: any) {
-      setExportStatus({ active: false, message: t('ingestion.exportError', { message: err.message }), isError: true })
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Ingestion')
+      setExportStatus({ active: false, message: t('ingestion.exportError', { message: normalized.message }), isError: true })
     } finally {
       setTimeout(() => {
         setExportStatus(null)
@@ -330,8 +332,9 @@ export function useIngestion(settings?: AppSettings) {
           setMarkdownContent('')
         }
       }
-    } catch (err: any) {
-      logger.error('IngestionView', `Error deleting document ${filename || id}: ${err.message}`)
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Ingestion')
+      logger.error('IngestionView', `Error deleting document ${filename || id}: ${normalized.message}`)
     }
   }
 
@@ -363,8 +366,9 @@ export function useIngestion(settings?: AppSettings) {
       } else {
         setTranslateInplaceStatus({ success: false, message: res.error || t('ingestion.translateInplaceError', { message: 'unknown error' }) })
       }
-    } catch (err: any) {
-      setTranslateInplaceStatus({ success: false, message: t('ingestion.translateInplaceError', { message: err.message }) })
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'Translation')
+      setTranslateInplaceStatus({ success: false, message: t('ingestion.translateInplaceError', { message: normalized.message }) })
     } finally {
       setIsTranslatingInplace(false)
       setTimeout(() => setTranslateInplaceStatus(null), 5000)

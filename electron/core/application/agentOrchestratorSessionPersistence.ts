@@ -3,7 +3,6 @@ import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryComp
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { AgentSession } from './agentOrchestratorAppService'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
-import { PlanManager } from '../domain/agent/planManager'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
@@ -75,7 +74,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
     // Only the plan's completion flag is persisted: every other field of the compact
     // state is a projection of planMilestones, which is already stored below.
     const isPlanCompleted = goalPlanner.hasPlan()
-      ? PlanManager.getCompactStateFromMilestones(goalPlanner.getMilestones(), userTask).isCompleted
+      ? goalPlanner.getCompactState(userTask).isCompleted
       : false
 
     await agentSessionStateRepository.saveSessionState({

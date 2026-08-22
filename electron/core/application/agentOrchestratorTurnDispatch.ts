@@ -62,11 +62,11 @@ async function dispatchToLlm(
         ? { prompt: contextReuseDecision.promptToSend, previousContext: contextReuseDecision.contextTokens! }
         : undefined
     )
-    if (dispatchRes.isEscalated || lastDispatchEscalated) {
-      ctx.emitLog('info', `🔺 Heavy Tier active (${dispatchRes.usedModel}): VRAM eviction applied before escalation.`)
+    if (dispatchRes?.isEscalated || lastDispatchEscalated) {
+      ctx.emitLog('info', `🔺 Heavy Tier active (${dispatchRes?.usedModel || 'heavy'}): VRAM eviction applied before escalation.`)
     }
     ctx.session.activeHttpRequest = null
-    return { streamedOutput: dispatchRes.output }
+    return { streamedOutput: dispatchRes?.output || '' }
   } catch (err: any) {
     return { error: err.message }
   }

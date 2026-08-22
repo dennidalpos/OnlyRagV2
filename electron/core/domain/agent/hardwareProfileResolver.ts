@@ -40,6 +40,7 @@ export interface HardwareEnvironment {
   vramTotalMB?: number
   systemRamGB?: number
   cpuCount?: number
+  enableSystemRamOffloading?: boolean
 }
 
 export class HardwareProfileResolver {
@@ -58,23 +59,25 @@ export class HardwareProfileResolver {
 
     // Hardware classification is delegated to the shared 5-tier ladder in
     // hardwareProfileTiers.ts, so the runtime options, the model matrix, the complexity
-    // router and the Ollama OS parameters all agree on what a given machine is. This file
-    // used to carry its own thresholds (safe budget >= 7.5 / >= 3.0), which is why a 6GB
-    // laptop GPU was `entry` for the model recommendations but `Medium` here.
-    //
-    // `entry` (a dedicated 4-7GB GPU) maps to the `Medium` bucket, not `Low`: it has real
-    // VRAM headroom, unlike a `legacy` CPU-only host. chatContextBudget.ts — the sibling
-    // module for the same 5-tier ladder — already gives `entry` the same maxNumCtx ceiling
-    // (8192) as `midrange`, distinct from `legacy`'s 4096; this resolver used to lump
-    // `entry` in with `legacy` instead, an undetected drift from that established pattern
-    // (no test pinned the `entry` case either way).
+    // router and the Ollama OS parameters all agree on what a given machine is.
     const hardwareTier = resolveEffectiveTier(profile, env)
-    const effectiveTier: 'Low' | 'Medium' | 'High' =
+    let effectiveTier: 'Low' | 'Medium' | 'High' =
       hardwareTier === 'legacy'
         ? 'Low'
         : hardwareTier === 'entry' || hardwareTier === 'midrange'
           ? 'Medium'
           : 'High'
+
+    // When Hybrid System RAM Offloading is enabled and system RAM is plentiful,
+    // upgrade effective runtime headroom to allow larger context windows and hybrid execution.
+    if (env?.enableSystemRamOffloading && profile === 'Auto') {
+      const ramGB = env.systemRamGB || 0
+      if (effectiveTier === 'Low' && ramGB >= 16) {
+        effectiveTier = 'Medium'
+      } else if (effectiveTier === 'Medium' && ramGB >= 32 && tier === 'deep_reasoning') {
+        effectiveTier = 'High'
+      }
+    }
 
     // Generation cap scales with the tier's expected answer size, not with the hardware:
     // a small model on a fast task still only has to emit one compact tool call.

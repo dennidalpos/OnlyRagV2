@@ -23,6 +23,8 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
     expect(prompt).toContain('[x] **Inspect workspace files**')
     expect(prompt).toContain('[>] **Implement feature in main.ts**')
     expect(prompt).toContain('[ ] **Run verification tests**')
+    expect(prompt).toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
+    expect(prompt).toContain('Implement feature in main.ts')
   })
 
   it('should parse markdown checklist plans from LLM text', () => {
@@ -94,5 +96,46 @@ Here is my plan to solve the task:
     expect(milestones[2].title).toBe('Add state management')
     expect(milestones[2].status).toBe('pending')
     expect(planner.getProgressSummary().completed).toBe(1)
+  })
+
+  it('should compute compact state directly from milestones', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Create auth types', status: 'pending' },
+      { id: 'm-2', title: 'Configure JWT middleware', status: 'verified' },
+    ])
+
+    const compactState = planner.getCompactState('Add Authentication Feature')
+    expect(compactState.objective).toBe('Add Authentication Feature')
+    expect(compactState.restorePoint).toBe('m-2: Configure JWT middleware')
+    expect(compactState.activeMicroTask).toBe('m-1: Create auth types')
+    expect(compactState.pendingMicroTasks).toHaveLength(1)
+    expect(compactState.pendingMicroTasks[0]).toBe('m-1: Create auth types')
+    expect(compactState.completedCount).toBe(1)
+    expect(compactState.totalCount).toBe(2)
+    expect(compactState.isCompleted).toBe(false)
+  })
+
+  it('should mark plan as completed when every milestone is verified', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Task 1', status: 'verified' },
+      { id: 'm-2', title: 'Task 2', status: 'verified' },
+    ])
+    const compactState = planner.getCompactState()
+
+    expect(compactState.isCompleted).toBe(true)
+    expect(compactState.pendingMicroTasks).toHaveLength(0)
+    expect(compactState.activeMicroTask).toBe('None (Plan Completed)')
+  })
+
+  it('should handle an empty milestone list in compact state', () => {
+    const planner = new GoalDecompositionPlanner()
+    const compactState = planner.getCompactState('Empty Objective')
+
+    expect(compactState.totalCount).toBe(0)
+    expect(compactState.completedCount).toBe(0)
+    expect(compactState.isCompleted).toBe(false)
+    expect(compactState.restorePoint).toBe('None (Session Initialized)')
   })
 })

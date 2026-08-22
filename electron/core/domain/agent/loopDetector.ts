@@ -1,11 +1,16 @@
 import crypto from 'node:crypto'
 import type { AgentToolCall } from './agentTypes'
-import { CycleOscillationDetectorAndReproOracle } from './cycleOscillationDetector'
 
 export interface LoopCheckResult {
   isLooping: boolean
   consecutiveDuplicateCount: number
   suggestedIntervention?: string
+}
+
+export interface CycleDetectionResult {
+  isOscillating: boolean
+  cycleLength?: number
+  suggestedDirective?: string
 }
 
 interface TargetActionRecord {
@@ -20,8 +25,9 @@ interface TargetActionRecord {
 export class AgentActionLoopDetector {
   private signatureHistory: string[] = []
   private targetHistory: TargetActionRecord[] = []
-  private cycleDetector = new CycleOscillationDetectorAndReproOracle()
+  private actionSequence: string[] = []
   private readonly maxRepeatsAllowed: number
+  private readonly maxHistoryLength = 20
 
   constructor(maxRepeatsAllowed = 2) {
     this.maxRepeatsAllowed = maxRepeatsAllowed
@@ -112,7 +118,7 @@ export class AgentActionLoopDetector {
     }
 
     // 1.5 Multi-step Cycle Oscillation Check (k-mer cycle detection)
-    const cycleRes = this.cycleDetector.recordAndDetectCycle(toolCall.tool, toolCall.parameters || {})
+    const cycleRes = this.recordAndDetectCycle(toolCall.tool, toolCall.parameters || {})
     if (cycleRes.isOscillating) {
       return {
         isLooping: true,
@@ -165,6 +171,37 @@ export class AgentActionLoopDetector {
   }
 
   /**
+   * Detects multi-step cycle oscillations (e.g. A -> B -> A -> B or A -> B -> C -> A -> B -> C).
+   */
+  public recordAndDetectCycle(toolName: string, params: Record<string, any>): CycleDetectionResult {
+    const target = params.filePath || params.command || params.targetContent || params.url || ''
+    const actionKey = `${toolName}:${target}`
+    this.actionSequence.push(actionKey)
+
+    if (this.actionSequence.length > this.maxHistoryLength) {
+      this.actionSequence.shift()
+    }
+
+    const n = this.actionSequence.length
+    for (let k = 2; k <= 4; k++) {
+      if (n >= k * 2) {
+        const pattern1 = this.actionSequence.slice(n - k).join('|')
+        const pattern2 = this.actionSequence.slice(n - 2 * k, n - k).join('|')
+
+        if (pattern1 === pattern2) {
+          return {
+            isOscillating: true,
+            cycleLength: k,
+            suggestedDirective: `[OSCILLATION DETECTED] You are trapped in an oscillating loop of length ${k}. You MUST STOP repeating these edits. Re-read the target file with read_file, run a test command with run_command, or re-evaluate your plan strategy.`,
+          }
+        }
+      }
+    }
+
+    return { isOscillating: false }
+  }
+
+  /**
    * Resets history for a specific target or all targets.
    * Call this after an intervention is issued so that the model's next attempt
    * to fix/modify the target file is evaluated cleanly against the new strategy.
@@ -179,11 +216,12 @@ export class AgentActionLoopDetector {
   }
 
   /**
-   * Resets signature and target history.
+   * Resets signature, target, and cycle history.
    */
   public reset(): void {
     this.signatureHistory = []
     this.targetHistory = []
+    this.actionSequence = []
   }
 
   /**

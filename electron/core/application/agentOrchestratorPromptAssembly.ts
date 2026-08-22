@@ -55,6 +55,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
       vramTotalMB: cachedGpu?.vramTotalMB,
       systemRamGB: getMemoryInfo().totalRAMGB,
       cpuCount: os.cpus()?.length,
+      enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
     },
     routedComplexity.tier
   )

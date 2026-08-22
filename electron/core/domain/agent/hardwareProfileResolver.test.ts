@@ -94,4 +94,16 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     expect(deepHighOpts.num_ctx).toBe(32768)
     expect(deepHighOpts.maxContextChars).toBe(64000)
   })
+
+  it('should upgrade effective tier to Medium on GPU-less machine when enableSystemRamOffloading is true and RAM is >= 16GB', () => {
+    const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
+      hasGpu: false,
+      vramTotalMB: 0,
+      systemRamGB: 32,
+      cpuCount: 8,
+      enableSystemRamOffloading: true,
+    })
+    expect(opts.num_ctx).toBe(8192)
+    expect(opts.maxContextChars).toBe(28000)
+  })
 })

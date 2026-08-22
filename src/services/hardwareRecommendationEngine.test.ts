@@ -622,4 +622,18 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       expect(env.variables.find((v) => v.name === 'OLLAMA_CONTEXT_LENGTH')?.value).toBe('16384')
     })
   })
+
+  describe('Hybrid System RAM Offloading Compatibility', () => {
+    it('should allow 14B model on 8GB GPU when enableSystemRamOffloading is true and system RAM is sufficient', () => {
+      // 8GB GPU (safe VRAM ~4.5GB), 32GB System RAM (safe RAM ~22.4GB).
+      // Model 14B requires ~9GB footprint.
+      const withoutOffload = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 32, 4096, undefined, false)
+      expect(withoutOffload.isCompatible).toBe(false)
+      expect(withoutOffload.compatibilityStatus).toBe('exceeds_vram')
+
+      const withOffload = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 32, 4096, undefined, true)
+      expect(withOffload.isCompatible).toBe(true)
+      expect(withOffload.warning).toContain('Offloading ibrido')
+    })
+  })
 })

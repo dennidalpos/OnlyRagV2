@@ -348,12 +348,13 @@ export function calculateTotalModelFootprintGB(
 /**
  * Assesses model compatibility against detected hardware and safe usable VRAM budget.
  */
-export function assessModelHardwareCompatibility(
+export function evaluateModelHardwareFit(
   modelName: string,
   vramTotalMB: number,
   totalRamGB: number,
   contextTargetTokens: number = 4096,
-  details?: RunningModelDetails
+  details?: RunningModelDetails,
+  enableSystemRamOffloading: boolean = false
 ): {
   isCompatible: boolean
   footprintGB: number
@@ -363,6 +364,7 @@ export function assessModelHardwareCompatibility(
 } {
   const footprintGB = calculateTotalModelFootprintGB(modelName, contextTargetTokens, true, details)
   const safeVramBudgetGB = calculateRealUsableVram(vramTotalMB)
+  const safeRamBudget = calculateUsableSystemRamGB(totalRamGB)
   const hasGpu = vramTotalMB > 0
 
   if (hasGpu && safeVramBudgetGB > 0) {
@@ -381,19 +383,28 @@ export function assessModelHardwareCompatibility(
         compatibilityStatus: 'tight_vram',
         warning: 'Uso VRAM elevato: possibile rallentamento o swap con contesti lunghi.',
       }
+    } else if (enableSystemRamOffloading && footprintGB <= safeVramBudgetGB + safeRamBudget) {
+      return {
+        isCompatible: true,
+        footprintGB,
+        safeVramBudgetGB,
+        compatibilityStatus: 'tight_vram',
+        warning: 'Offloading ibrido su RAM di sistema attivo: i layer eccedenti saranno allocati ed eseguiti in RAM.',
+      }
     } else {
       return {
         isCompatible: false,
         footprintGB,
         safeVramBudgetGB,
         compatibilityStatus: 'exceeds_vram',
-        warning: 'VRAM insufficiente: rischio elevato di Out-Of-Memory (OOM) o blocco driver.',
+        warning: enableSystemRamOffloading
+          ? 'Memoria combinata (VRAM + RAM) insufficiente per eseguire questo modello.'
+          : "VRAM insufficiente: rischio elevato di Out-Of-Memory (OOM). Abilita l'Offloading su RAM nelle impostazioni per usare modelli più grandi.",
       }
     }
   }
 
   // CPU execution / No GPU
-  const safeRamBudget = calculateUsableSystemRamGB(totalRamGB)
   if (footprintGB <= safeRamBudget) {
     return {
       isCompatible: true,
@@ -410,6 +421,8 @@ export function assessModelHardwareCompatibility(
     warning: 'RAM di sistema insufficiente per eseguire questo modello su CPU.',
   }
 }
+
+export const assessModelHardwareCompatibility = evaluateModelHardwareFit
 
 /**
  * Accurately determines if a target Ollama model tag is installed locally.

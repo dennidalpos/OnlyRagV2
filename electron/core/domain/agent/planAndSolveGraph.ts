@@ -7,6 +7,16 @@ export interface PlanMilestone {
   notes?: string
 }
 
+export interface CompactPlanState {
+  objective: string
+  restorePoint: string
+  activeMicroTask: string
+  pendingMicroTasks: string[]
+  completedCount: number
+  totalCount: number
+  isCompleted: boolean
+}
+
 export class GoalDecompositionPlanner {
   private milestones: PlanMilestone[] = []
 
@@ -94,6 +104,39 @@ export class GoalDecompositionPlanner {
     }
   }
 
+  public getCompactState(customObjective?: string): CompactPlanState {
+    return GoalDecompositionPlanner.getCompactStateFromMilestones(this.milestones, customObjective)
+  }
+
+  public static getCompactStateFromMilestones(
+    milestones: ReadonlyArray<PlanMilestone>,
+    customObjective?: string
+  ): CompactPlanState {
+    const totalCount = milestones.length
+    const completedMilestones = milestones.filter((m) => m.status === 'verified')
+    const pendingMilestones = milestones.filter((m) => m.status !== 'verified')
+    const completedCount = completedMilestones.length
+    const isCompleted = totalCount > 0 && pendingMilestones.length === 0
+
+    const lastCompleted = completedMilestones.length > 0 ? completedMilestones[completedMilestones.length - 1] : null
+    const restorePoint = lastCompleted ? `${lastCompleted.id}: ${lastCompleted.title}` : 'None (Session Initialized)'
+
+    const activeMilestone = pendingMilestones.length > 0 ? pendingMilestones[0] : null
+    const activeMicroTask = activeMilestone ? `${activeMilestone.id}: ${activeMilestone.title}` : 'None (Plan Completed)'
+
+    const pendingMicroTasks = pendingMilestones.map((m) => `${m.id}: ${m.title}`)
+
+    return {
+      objective: customObjective || 'Execution Plan',
+      restorePoint,
+      activeMicroTask,
+      pendingMicroTasks,
+      completedCount,
+      totalCount,
+      isCompleted,
+    }
+  }
+
   public getPlanMarkdown(): string {
     if (this.milestones.length === 0) return ''
     const lines: string[] = ['# Execution Plan', '', '## Execution Checklist']
@@ -136,6 +179,13 @@ export class GoalDecompositionPlanner {
       lines.push(
         '\n[ALL CHECKLIST MILESTONES COMPLETED - ACTION REQUIRED]\nAll operational checklist tasks are 100% completed and verified. DO NOT execute any more file edits or commands.\nIMMEDIATELY invoke the "finish" tool and provide a comprehensive final summary report (resoconto finale in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion'
       )
+    } else {
+      const activeM = this.getActiveMilestone()
+      if (activeM) {
+        lines.push(
+          `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus strictly on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Execute ONLY the actions required for this specific milestone.\n2. Do NOT jump ahead to subsequent milestones.\n3. Do NOT invoke "finish" until this active milestone and all prior milestones are completed and verified.`
+        )
+      }
     }
 
     return lines.join('\n')

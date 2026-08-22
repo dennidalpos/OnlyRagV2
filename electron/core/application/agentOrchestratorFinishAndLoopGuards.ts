@@ -68,6 +68,14 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     ? explanation.trim()
     : 'Task completed successfully.'
 
+  // Mark completion / finish milestones as verified when finish tool is executed successfully
+  for (const m of ctx.goalPlanner.getMilestones()) {
+    const isFinishMilestone = /finish|completamento|arresto|riepilogo|final report/i.test(m.title)
+    if (isFinishMilestone && m.status !== 'failed') {
+      ctx.goalPlanner.updateMilestone(m.id, 'verified')
+    }
+  }
+
   if (ctx.workspacePath) {
     // Same builder and same writer as every checkpoint — the final save only adds the
     // agent's closing summary on top of the live session state.

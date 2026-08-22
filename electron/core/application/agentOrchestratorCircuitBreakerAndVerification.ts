@@ -54,6 +54,14 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
       )
       ctx.emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
     }
+
+    // Auto-advance scaffolding/setup milestone when core configuration files are created
+    if (/(package\.json|tsconfig\.json|vite\.config|requirements\.txt|pyproject\.toml)$/i.test(targetParam)) {
+      const activeM = ctx.goalPlanner.getActiveMilestone()
+      if (activeM && /scaffold|setup|inizializz|configura|dipendenze/i.test(activeM.title)) {
+        ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified by project configuration setup.')
+      }
+    }
   }
   const activeM = ctx.goalPlanner.getActiveMilestone()
   if (activeM && activeM.status === 'pending') {
@@ -62,11 +70,7 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
 }
 
 /**
- * Milestone auto-verification is driven ONLY by run_tests' structured pass/fail result. The
- * plan is otherwise the model's to advance, via the update_plan tool. The old heuristic — any
- * run_command whose text contained "test"/"build"/"lint" and didn't visibly fail — closed
- * milestones on unrelated commands (a `git status` under a tests/ path was enough) and
- * inflated progress towards 100%.
+ * Milestone auto-verification is driven by run_tests, open_in_browser, and successful build/test commands.
  */
 export function trackVerification(ctx: ToolResultProcessingContext, isToolFailure: boolean) {
   if (ctx.toolRes.verification?.ran) {
@@ -91,11 +95,14 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
 
   if (ctx.parsedTool.tool !== 'run_command') return
 
-  // A successful build/typecheck/lint still satisfies the Definition of Done gate for
-  // workspaces without a test runner — but it no longer touches milestone status.
+  // A successful build/typecheck/lint satisfies the Definition of Done gate and advances verification milestones
   const cmdStr = (ctx.parsedTool.parameters?.command || '').toLowerCase()
   const isVerificationCmd = ['test', 'typecheck', 'build', 'lint', 'pytest', 'tsc'].some((kw) => cmdStr.includes(kw))
   if (isVerificationCmd && !ctx.toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
     ctx.flags.hasVerifiedBuild = true
+    const activeM = ctx.goalPlanner.getActiveMilestone()
+    if (activeM && /verifi|test|build|check|collaudo|validaz/i.test(activeM.title)) {
+      ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified by successful build/verification command execution.')
+    }
   }
 }

@@ -487,6 +487,8 @@ export const en: TranslationSchema = {
     hardwareProfileHighName: 'High (Performance)',
     hardwareProfileHighDesc: 'Maximum context window and concurrency (12GB+ VRAM).',
     hardwareProfileTargetLabel: 'Target',
+    enableSystemRamOffloadingTitle: 'Hybrid System RAM Offloading (GPU + RAM)',
+    enableSystemRamOffloadingDesc: 'Enables running larger models (14B, 32B) by distributing excess model layers into system RAM (DDR4/DDR5) beyond physical GPU VRAM.',
     toolCallStepsTitle: 'Tool Call Step Limit (Agent Loops)',
     toolCallStepsDesc: 'Maximum number of consecutive tool steps (read, refactor, commands) the agent may take before requesting confirmation.',
     toolCallStepsUnlimited: '∞ Unlimited',

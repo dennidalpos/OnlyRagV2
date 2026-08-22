@@ -306,7 +306,7 @@ Now I will actually read the App file.
     expect(result?.parameters.filePath).toBe('src/App.tsx')
   })
 
-  it('should fallback to parsing tool call inside <think> when none exists outside', () => {
+  it('should ignore tool call blocks enclosed completely within <think> tags to avoid accidental execution of hypothetical examples', () => {
     const raw = `<think>
 I need to write index.html:
 \`\`\`json
@@ -321,10 +321,7 @@ I need to write index.html:
 \`\`\`
 </think>`
     const result = parseAgentToolCall(raw)
-    expect(result).not.toBeNull()
-    expect(result?.tool).toBe('write_file')
-    expect(result?.parameters.filePath).toBe('index.html')
-    expect(result?.parameters.content).toContain('Canvas App')
+    expect(result).toBeNull()
   })
 
   it('should parse markdown code block with HTML filename comment as write_file tool call', () => {

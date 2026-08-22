@@ -143,6 +143,16 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
 }
 
 /**
+ * Calculates combined hybrid memory budget (Usable VRAM + Usable System RAM)
+ * when System RAM Offloading is enabled.
+ */
+export function calculateHybridUsableMemoryGB(vramTotalMB: number, systemRamGB: number): number {
+  const usableVram = calculateRealUsableVram(vramTotalMB)
+  const usableRam = calculateUsableSystemRamGB(systemRamGB)
+  return Math.round((usableVram + usableRam) * 100) / 100
+}
+
+/**
  * Weight ceiling for a model that must run on CPU. This is a *throughput* bound, not a
  * memory bound: an 8GB CPU-only host can technically hold a 4.7GB model inside its
  * `calculateUsableSystemRamGB` budget, but it will emit a couple of tokens per second,

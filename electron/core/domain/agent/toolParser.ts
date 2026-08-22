@@ -70,25 +70,6 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
     }
   }
 
-  // Auto-recover raw markdown shell code blocks (e.g. ```bash ... ``` or ```powershell ... ```)
-  if (!jsonStr.startsWith('{')) {
-    const bashMatch = cleanText.match(/```(?:bash|sh|powershell|cmd|shell|zsh)\s*([\s\S]*?)\s*```/i)
-    if (bashMatch) {
-      const rawCmd = bashMatch[1]
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith('#'))
-        .join('; ')
-      if (rawCmd) {
-        return {
-          tool: 'run_command',
-          parameters: { command: rawCmd },
-          explanation: 'Extracted shell command from markdown code block',
-        }
-      }
-    }
-  }
-
   if (jsonStr) {
     const parsed = sanitizeAndParseJson(jsonStr)
     // Accept both the prompt-engineered "tool" key and the native / OpenAI-style
@@ -161,11 +142,11 @@ function parseFencedCodeBlockFallback(rawText: string): AgentToolCall | null {
 function parseShellCodeBlockFallback(rawText: string): AgentToolCall | null {
   if (!rawText || typeof rawText !== 'string') return null
 
-  const shellBlockRegex = /```(?:bash|sh|powershell|cmd)\s*\n([\s\S]*?)```/gi
+  const shellBlockRegex = /```(?:bash|sh|powershell|cmd|shell|zsh)\s*\n?([\s\S]*?)```/gi
   const match = shellBlockRegex.exec(rawText)
   if (match) {
     const commands = match[1]
-      .split('\n')
+      .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith('#') && !l.startsWith('//'))
       .join('; ')
@@ -234,23 +215,18 @@ function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
 export function parseAgentToolCall(text: string): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 
-  // 1. First attempt: Strip <think>...</think> and <thought>...</thought> reasoning blocks
+  // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>) to prevent
+  // accidental capture of sample tool calls generated in model reasoning traces
   const cleanText = text
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
     .trim()
 
-  const hasThoughtBlocks = cleanText !== text.trim()
-
   const candidate =
     extractToolCallFromText(cleanText) ||
-    (hasThoughtBlocks ? extractToolCallFromText(text) : null) ||
     parseFencedCodeBlockFallback(cleanText) ||
-    (hasThoughtBlocks ? parseFencedCodeBlockFallback(text) : null) ||
     parseShellCodeBlockFallback(cleanText) ||
-    (hasThoughtBlocks ? parseShellCodeBlockFallback(text) : null) ||
-    parseDiffCodeBlockFallback(cleanText) ||
-    (hasThoughtBlocks ? parseDiffCodeBlockFallback(text) : null)
+    parseDiffCodeBlockFallback(cleanText)
 
   if (!candidate) return null
 

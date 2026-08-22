@@ -25,22 +25,27 @@ import type { AppSettings } from '../../../src/types'
 // nothing to render but raw text. The inline example is here because local models follow a shown
 // format far more reliably than a described one.
 const PLAN_SYSTEM_PROMPT =
-  "You are an expert AI Coding Assistant. Analyze the user's request and generate a structured Implementation Plan " +
+  "You are an expert AI Coding Assistant. Analyze the user's request and generate a strictly sequential, single-responsibility Implementation Plan " +
   'in MARKDOWN CHECKLIST format, ONE ITEM PER LINE, strictly adhering to this format:\n\n' +
-  '- [ ] 🎯 Goal: <brief description>\n' +
-  '- [ ] 🔍 Analysis: <autonomous technical decisions and standard technology selections>\n' +
-  '- [ ] ✏️ Implementation: <specific file creations or modifications>\n' +
-  '- [ ] 🧪 Verification: <testing, build checks, or preview verification>\n\n' +
-  'AUTONOMOUS TECHNICAL SPECIFICATION DIRECTIVE: Define all architectural choices, sensible libraries, and exact filenames (e.g. index.html, App.tsx, standard CSS/JS, build commands) directly in the plan. ' +
-  'DO NOT generate vague or exploratory tasks that would require asking questions to the user: produce a complete, self-contained plan that the agent can execute autonomously until 100% completion.\n' +
-  'CRITICAL LANGUAGE DIRECTIVE: Write the milestone titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, Spanish if Spanish, German if German, etc.).\n' +
-  'Output 4-6 checklist items. Do not output conversational preambles or paragraphs outside the checklist: ONLY lines in the "- [ ] <text>" format.'
+  '- [ ] 📦 Step 1: Scaffolding & Toolchain Setup (<initialization, package.json, dependencies, build config>)\n' +
+  '- [ ] 📐 Step 2: Architecture & Foundation (<base styles, design tokens, entrypoint layout shell>)\n' +
+  '- [ ] 🧩 Step 3: Core Implementation (<specific discrete components, pages, services or business logic>)\n' +
+  '- [ ] 🧪 Step 4: Verification & Quality (<build execution, typecheck, test runner validation>)\n' +
+  '- [ ] 🛑 Step 5: Final Review & Report (<validation of all user criteria, usage instructions, invoke finish>)\n\n' +
+  'CRITICAL MICRO-STEP DIRECTIVES:\n' +
+  '1. FLAT CHECKLIST ONLY: Output 4-6 flat checklist items in "- [ ] <text>" format. NEVER use nested sub-bullet lists (no indented dashes or sub-tasks).\n' +
+  '2. ACTIONABLE & SEQUENTIAL: Each step must be a concrete, isolated action. Step 1 MUST always be scaffolding/setup if the project requires initialization. Step 4 MUST always be verification. Step 5 MUST always be final review/finish.\n' +
+  '3. AUTONOMOUS SPECIFICATION: Specify exact file paths (e.g. package.json, src/App.tsx, src/components/Sidebar.tsx) and standard libraries directly in the items.\n' +
+  '4. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, Spanish if Spanish, German if German, etc.).\n' +
+  'Output ONLY the markdown checklist lines. No conversational preambles or explanations outside the checklist.'
 
 const FALLBACK_PLAN_TEXT = (prompt: string) =>
   `🎯 Piano di Esecuzione per: ${prompt}\n\n` +
-  "1. 🔍 Analisi del contesto del progetto e identificazione dei file rilevanti\n" +
-  '2. ✏️ Implementazione delle modifiche richieste e refactoring atomico\n' +
-  '3. 🧪 Verifica di correttezza tramite build e controlli di tipo'
+  '- [ ] 📦 Step 1: Inizializzazione progetto e configurazione dipendenze\n' +
+  '- [ ] 📐 Step 2: Architettura di base, layout shell e stili\n' +
+  '- [ ] ✏️ Step 3: Implementazione componenti, pagine e logica applicativa\n' +
+  '- [ ] 🧪 Step 4: Verifica di compilazione, build e controlli di tipo\n' +
+  '- [ ] 🛑 Step 5: Revisione finale dei requisiti e chiusura del task'
 
 export interface PlanGenerationRequest {
   prompt: string
@@ -78,7 +83,9 @@ export class PlanGenerationAppService {
    */
   async generatePlanText(req: PlanGenerationRequest): Promise<PlanGenerationResult> {
     const model = req.model || req.settings.codingModel || req.settings.defaultModel || 'qwen2.5-coder:7b'
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(req.settings.hardwareProfile)
+    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(req.settings.hardwareProfile, {
+      enableSystemRamOffloading: req.settings.enableSystemRamOffloading,
+    })
     const residueBlock = buildResidueReconciliationBlock(req.pendingResidueMilestones)
     const fullPrompt =
       `${PLAN_SYSTEM_PROMPT}\n\nGenera un piano d'azione sintetico per il seguente task:\n\n${req.prompt}${residueBlock}`

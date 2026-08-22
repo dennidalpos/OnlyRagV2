@@ -487,6 +487,8 @@ export const it: TranslationSchema = {
     hardwareProfileHighName: 'High (Prestazioni)',
     hardwareProfileHighDesc: 'Massima ampiezza di contesto e concorrenza (12GB+ VRAM).',
     hardwareProfileTargetLabel: 'Target',
+    enableSystemRamOffloadingTitle: 'Offloading Ibrido su RAM di Sistema (Hybrid GPU + RAM)',
+    enableSystemRamOffloadingDesc: 'Consente di eseguire modelli di grandi dimensioni (14B, 32B) allocando i layer eccedenti nella RAM di sistema (DDR4/DDR5) oltre alla VRAM GPU.',
     toolCallStepsTitle: 'Limite Passaggi Tool Call (Agent Loops)',
     toolCallStepsDesc: 'Numero massimo di passaggi consecutivi di tool (lettura, refactoring, comandi) consentiti all’agente prima di richiedere conferma.',
     toolCallStepsUnlimited: '∞ Illimitato',

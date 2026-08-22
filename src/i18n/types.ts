@@ -487,6 +487,8 @@ export interface TranslationSchema {
     hardwareProfileHighName: string
     hardwareProfileHighDesc: string
     hardwareProfileTargetLabel: string
+    enableSystemRamOffloadingTitle: string
+    enableSystemRamOffloadingDesc: string
     toolCallStepsTitle: string
     toolCallStepsDesc: string
     toolCallStepsUnlimited: string

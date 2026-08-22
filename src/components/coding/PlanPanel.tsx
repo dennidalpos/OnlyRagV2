@@ -78,7 +78,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   if (isExecuting && stepsForThisPlan > 0) {
     autoStepCompletedIndex = Math.min(totalItems, stepsForThisPlan - 1)
   } else if (plan?.status === 'approved' && stepsForThisPlan > 0) {
-    autoStepCompletedIndex = Math.min(Math.max(0, totalItems - 1), stepsForThisPlan - 1)
+    autoStepCompletedIndex = Math.min(totalItems, stepsForThisPlan)
   }
 
   const completedItemsCount = parsedChecklist.reduce((acc, item, idx) => {

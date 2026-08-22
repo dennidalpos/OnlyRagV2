@@ -65,6 +65,38 @@ export const HardwareProfileSelector: React.FC<HardwareProfileSelectorProps> = (
           </button>
         ))}
       </div>
+
+      {/* Hybrid System RAM Offloading Switch */}
+      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-4">
+        <div className="space-y-0.5 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-200">
+              {t('settings.enableSystemRamOffloadingTitle')}
+            </span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">
+              Hybrid GPU + RAM
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            {t('settings.enableSystemRamOffloadingDesc')}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={Boolean(settings.enableSystemRamOffloading)}
+          onClick={() => onUpdateSettings({ enableSystemRamOffloading: !settings.enableSystemRamOffloading })}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            settings.enableSystemRamOffloading ? 'bg-cyan-500' : 'bg-slate-700'
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              settings.enableSystemRamOffloading ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
     </div>
   )
 }

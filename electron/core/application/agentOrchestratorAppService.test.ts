@@ -58,7 +58,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.error).toBe('Task prompt is required')
   })
 
-  it('should execute finish tool call and complete session successfully', async () => {
+  it('should execute finish tool call and complete session successfully, marking milestones verified', async () => {
     vi.mocked(ResilientModelDispatcher.executeWithFallback).mockResolvedValueOnce({
       output: '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "All tasks done perfectly." }\n}\n```',
       usedModel: 'llama3.2',

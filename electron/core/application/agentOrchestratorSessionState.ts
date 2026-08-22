@@ -82,7 +82,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   }
   const surfacedDodReasons = new Set<string>()
   const loopDetector = new AgentActionLoopDetector(2)
-  const circuitBreaker = new StagnationCircuitBreaker(10, 5)
+  const circuitBreaker = new StagnationCircuitBreaker(12, 5)
   const executionGuard = new TransactionalExecutionGuard(workspacePath || process.cwd())
 
   // Restore session state if resuming an existing session

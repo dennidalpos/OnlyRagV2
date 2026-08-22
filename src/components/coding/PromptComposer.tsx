@@ -189,7 +189,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   <button
                     type="button"
                     onClick={() => onTogglePinFile(file)}
-                    className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer"
+                    aria-label={`Rimuovi ${file.name} dal contesto`}
+                    className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer focus-ring rounded"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -208,7 +209,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleAttachDoc(doc.id)}
-                  className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer"
+                  aria-label={`Rimuovi allegato ${doc.filename}`}
+                  className="hover:text-rose-400 p-0.5 transition-colors cursor-pointer focus-ring rounded"
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
@@ -255,7 +257,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               onClick={onToggleAutoScroll}
               aria-label={autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
               title={autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer focus-ring ${
                 autoScroll
                   ? 'text-cyan-400 bg-cyan-950/60 border border-cyan-800/60'
                   : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
@@ -271,7 +273,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 onClick={onResetSession}
                 aria-label={t('common.reset')}
                 title={t('common.reset')}
-                className="p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-colors cursor-pointer focus-ring"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -285,7 +287,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.generatePlanFromPrompt')}
                 title={t('coding.generatePlanFromPrompt')}
-                className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer focus-ring"
               >
                 <ClipboardList className="w-3.5 h-3.5" />
                 {hasPendingUnconsolidatedMilestones && (
@@ -316,7 +318,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   type="button"
                   onClick={onCompactContext}
                   title="Compatta il contesto della sessione"
-                  className="p-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 hover:bg-amber-900 cursor-pointer"
+                  aria-label="Compatta il contesto della sessione"
+                  className="p-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 hover:bg-amber-900 cursor-pointer focus-ring"
                 >
                   <Minimize2 className="w-2.5 h-2.5" />
                 </button>
@@ -335,7 +338,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 onClick={onCancel}
                 aria-label={t('coding.stopTask')}
                 title={t('coding.stopTask')}
-                className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-lg shadow-rose-950/50 active:scale-95 shrink-0 cursor-pointer"
+                className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-lg shadow-rose-950/50 active:scale-95 shrink-0 cursor-pointer focus-ring"
               >
                 <Square className="w-3 h-3 fill-current" />
               </button>
@@ -348,7 +351,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.queuedPrompts', { count: queueLength })}
                 title={t('coding.queuedPrompts', { count: queueLength })}
-                className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0 cursor-pointer"
+                className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0 cursor-pointer focus-ring"
               >
                 <ListPlus className="w-3.5 h-3.5" />
                 <span className="text-[11px]">+</span>
@@ -360,7 +363,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 disabled={!agentPrompt.trim()}
                 aria-label={t('coding.runTask')}
                 title={t('coding.runTask')}
-                className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0 cursor-pointer"
+                className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0 cursor-pointer focus-ring"
               >
                 <ArrowUp className="w-3.5 h-3.5 font-bold" />
               </button>

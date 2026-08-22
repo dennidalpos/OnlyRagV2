@@ -67,11 +67,27 @@ export class PromptCompiler {
    * repeating it in text would double-send the same schema (AGT2).
    */
   static compileCodingPrompt(
-    tier: ModelTier,
-    variables: Record<string, string> = {},
-    settings?: AppSettings,
+    tierOrVariables: ModelTier | string | Record<string, string> = 'standard',
+    variablesOrSettings: Record<string, string> | AppSettings = {},
+    settingsOrToolCallingCapable?: AppSettings | boolean,
     toolCallingCapable = false
   ): { prompt: string; tier: ModelTier; isCustom: boolean } {
+    let tier: ModelTier = 'standard'
+    let variables: Record<string, string> = {}
+    let settings: AppSettings | undefined = undefined
+    let isNativeToolCalling = false
+
+    if (typeof tierOrVariables === 'string') {
+      tier = tierOrVariables as ModelTier
+      variables = (variablesOrSettings as Record<string, string>) || {}
+      settings = typeof settingsOrToolCallingCapable === 'object' ? settingsOrToolCallingCapable : undefined
+      isNativeToolCalling = typeof settingsOrToolCallingCapable === 'boolean' ? settingsOrToolCallingCapable : toolCallingCapable
+    } else {
+      variables = tierOrVariables || {}
+      settings = (variablesOrSettings as AppSettings) || undefined
+      isNativeToolCalling = typeof settingsOrToolCallingCapable === 'boolean' ? settingsOrToolCallingCapable : false
+    }
+
     const overrideKey = `coding:${tier}`
 
     let template = ''
@@ -84,13 +100,12 @@ export class PromptCompiler {
       template = settings.customPromptOverrides[overrideKey]
       isCustom = true
     } else {
-      const baseTier: ComplexityTier = tier === 'heavy' ? 'deep_reasoning' : tier
-      template = DEFAULT_CODING_TIER_PROMPTS[baseTier] || DEFAULT_CODING_TIER_PROMPTS.standard
+      template = DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard || DEFAULT_FAMILY_PROMPTS.chat.generic
     }
 
     const effectiveVariables = {
       ...variables,
-      CODING_TOOLS_BLOCK: toolCallingCapable ? '' : CODING_TOOLS_BLOCK,
+      CODING_TOOLS_BLOCK: isNativeToolCalling ? '' : CODING_TOOLS_BLOCK,
     }
 
     return {
@@ -108,11 +123,10 @@ export class PromptCompiler {
   }
 
   /**
-   * Get default coding template for a given complexity tier, without variable substitution.
+   * Get default coding template, without variable substitution.
    */
-  static getDefaultCodingTemplate(tier: ModelTier): string {
-    const baseTier: ComplexityTier = tier === 'heavy' ? 'deep_reasoning' : tier
-    return DEFAULT_CODING_TIER_PROMPTS[baseTier] || DEFAULT_CODING_TIER_PROMPTS.standard
+  static getDefaultCodingTemplate(_tier?: ModelTier | string): string {
+    return DEFAULT_CODING_TIER_PROMPTS.standard
   }
 }
 

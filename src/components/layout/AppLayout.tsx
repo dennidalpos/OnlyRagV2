@@ -38,9 +38,13 @@ export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings
 
 /** Shown only while a view chunk is being fetched for the first time. */
 const ViewChunkFallback: React.FC = () => (
-  <div className="h-full w-full flex items-center justify-center text-slate-400 text-xs font-sans gap-2">
-    <span className="w-3 h-3 rounded-full border-2 border-cyan-500/60 border-t-transparent animate-spin" />
-    Caricamento vista...
+  <div
+    role="status"
+    aria-live="polite"
+    className="h-full w-full flex flex-col items-center justify-center text-slate-400 text-xs font-sans gap-3 animate-in fade-in duration-150"
+  >
+    <div className="w-6 h-6 rounded-full border-2 border-cyan-500/80 border-t-transparent animate-spin shadow-sm shadow-cyan-950" />
+    <span className="font-medium text-slate-300">Caricamento interfaccia...</span>
   </div>
 )
 

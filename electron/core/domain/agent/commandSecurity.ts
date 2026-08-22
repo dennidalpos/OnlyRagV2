@@ -1,3 +1,5 @@
+import { sanitizePowerShellCommand } from './shellStreamGuard'
+
 export interface SecurityCheckResult {
   isAllowed: boolean
   blockedReason?: string
@@ -37,19 +39,7 @@ export function checkCommandSecurity(rawCmd: string): SecurityCheckResult {
   }
 
   // Cross-platform Unix -> PowerShell command translation
-  let sanitized = trimmed
-  if (/^rm\s+-rf\s+(.+)$/i.test(sanitized)) {
-    const target = sanitized.replace(/^rm\s+-rf\s+/i, '').trim()
-    sanitized = `Remove-Item -Recurse -Force "${target}"`
-  } else if (/^mkdir\s+-p\s+(.+)$/i.test(sanitized)) {
-    const dir = sanitized.replace(/^mkdir\s+-p\s+/i, '').trim()
-    sanitized = `New-Item -ItemType Directory -Path "${dir}" -Force`
-  } else if (/^touch\s+(.+)$/i.test(sanitized)) {
-    const file = sanitized.replace(/^touch\s+/i, '').trim()
-    sanitized = `New-Item -ItemType File -Path "${file}" -Force`
-  } else if (sanitized === 'ls -la' || sanitized === 'ls -l' || sanitized === 'ls') {
-    sanitized = 'Get-ChildItem'
-  }
+  const sanitized = sanitizePowerShellCommand(trimmed)
 
   return {
     isAllowed: true,

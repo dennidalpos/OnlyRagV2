@@ -26,7 +26,7 @@ export function getNonInteractiveEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.Process
 
 /**
  * Sanitizes Unix-style bash shell commands for execution on Windows PowerShell.
- * Converts bash brace expansions (e.g., mkdir -p src/{a,b}), touch, and chained && commands.
+ * Converts bash brace expansions (e.g., mkdir -p src/{a,b}), touch, rm -rf, ls, and chained && commands.
  */
 export function sanitizePowerShellCommand(cmd: string): string {
   if (!cmd || typeof cmd !== 'string') return cmd
@@ -39,7 +39,7 @@ export function sanitizePowerShellCommand(cmd: string): string {
     return `New-Item -ItemType Directory -Force -Path ${paths}`
   })
 
-  // 2. Standard mkdir -p path -> New-Item -ItemType Directory -Force -Path "path"
+  // 2. Standard mkdir -p path -> New-Item -ItemType Directory -Force -Path "dirPath"
   clean = clean.replace(/\bmkdir\s+-p\s+([^\s;&|]+)/gi, (_m, dirPath) => {
     return `New-Item -ItemType Directory -Force -Path "${dirPath}"`
   })
@@ -49,7 +49,17 @@ export function sanitizePowerShellCommand(cmd: string): string {
     return `New-Item -ItemType File -Force -Path "${filePath}"`
   })
 
-  // 4. Convert cd dir && command -> Set-Location "dir"; command
+  // 4. Convert rm -rf target -> Remove-Item -Recurse -Force "target"
+  clean = clean.replace(/\brm\s+-rf\s+([^\s;&|]+)/gi, (_m, target) => {
+    return `Remove-Item -Recurse -Force "${target}"`
+  })
+
+  // 5. Convert ls / ls -la / ls -l -> Get-ChildItem
+  if (/^ls(\s+-[a-zA-Z]+)?$/i.test(clean)) {
+    clean = 'Get-ChildItem'
+  }
+
+  // 6. Convert cd dir && command -> Set-Location "dir"; command
   clean = clean.replace(/\bcd\s+([^\s;&|]+)\s*&&\s*/gi, (_m, dir) => {
     return `Set-Location "${dir}"; `
   })

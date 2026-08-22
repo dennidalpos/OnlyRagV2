@@ -160,8 +160,17 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                 {pinnedFilesList.map((file) => (
                   <div
                     key={file.path}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Apri ${file.name}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onOpenFile(file)
+                      }
+                    }}
                     onClick={() => onOpenFile(file)}
-                    className="flex items-center justify-between px-2.5 py-1.5 bg-cyan-950/40 hover:bg-cyan-950/70 border border-cyan-900/50 rounded-lg text-[11px] font-mono text-cyan-200 cursor-pointer group transition-colors shadow-sm"
+                    className="flex items-center justify-between px-2.5 py-1.5 bg-cyan-950/40 hover:bg-cyan-950/70 border border-cyan-900/50 rounded-lg text-[11px] font-mono text-cyan-200 cursor-pointer group transition-colors shadow-sm focus-ring"
                     title={file.path}
                   >
                     <span className="truncate flex-1 font-medium">{file.name}</span>
@@ -172,7 +181,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                         onTogglePinFile(file)
                       }}
                       title="Rimuovi dal contesto"
-                      className="p-0.5 text-slate-400 hover:text-rose-400 transition-colors shrink-0 ml-1.5"
+                      aria-label={`Rimuovi ${file.name} dal contesto`}
+                      className="p-0.5 text-slate-400 hover:text-rose-400 transition-colors shrink-0 ml-1.5 focus-ring rounded"
                     >
                       <PinOff className="w-3 h-3" />
                     </button>
@@ -189,7 +199,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             <button
               type="button"
               onClick={() => setFilesExpanded((prev) => !prev)}
-              className="flex items-center gap-1 text-slate-300 hover:text-cyan-300 transition-colors flex-1 text-left"
+              className="flex items-center gap-1 text-slate-300 hover:text-cyan-300 transition-colors flex-1 text-left focus-ring rounded p-0.5"
             >
               {filesExpanded ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
               <Folder className="w-3 h-3 text-cyan-400" />
@@ -200,7 +210,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                 type="button"
                 onClick={onRefreshFiles}
                 title="Aggiorna albero file"
-                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded transition-colors"
+                aria-label="Aggiorna albero file"
+                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded transition-colors focus-ring"
               >
                 <RefreshCw className="w-3 h-3" />
               </button>
@@ -208,7 +219,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                 type="button"
                 onClick={onAddProject}
                 title="Apri altra cartella"
-                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded transition-colors"
+                aria-label="Apri altra cartella"
+                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 rounded transition-colors focus-ring"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -236,7 +248,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             <button
               type="button"
               onClick={() => setSessionsExpanded((prev) => !prev)}
-              className="flex items-center gap-1 text-slate-300 hover:text-indigo-300 transition-colors flex-1 text-left"
+              className="flex items-center gap-1 text-slate-300 hover:text-indigo-300 transition-colors flex-1 text-left focus-ring rounded p-0.5"
             >
               {sessionsExpanded ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
               <History className="w-3 h-3 text-indigo-400" />
@@ -247,7 +259,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                 type="button"
                 onClick={onOpenPromptHistorySearch}
                 title="Cerca tra tutti i prompt passati"
-                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-indigo-300 rounded transition-colors"
+                aria-label="Cerca tra tutti i prompt passati"
+                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-indigo-300 rounded transition-colors focus-ring"
               >
                 <Search className="w-3 h-3" />
               </button>
@@ -255,7 +268,8 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                 type="button"
                 onClick={onCreateSession}
                 title="Nuova Sessione"
-                className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
+                aria-label="Nuova Sessione"
+                className="p-1 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 rounded transition-colors focus-ring"
               >
                 <Plus className="w-3 h-3" />
               </button>

@@ -72,37 +72,50 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     expect(res3.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
   })
 
-  it('should detect file edit thrashing when 2 distinct edits target the same file in a row, regardless of tool mix', () => {
-    // A write_file followed by a distinct replace_file_content on the same file: the merged
-    // check is tool-agnostic across the edit-class tools, so this must trip just as readily as
-    // two of the same tool would.
+  it('should detect file edit thrashing when 4 distinct edits target the same file in a row, regardless of tool mix', () => {
     const call1: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/config.ts', content: 'port = 3000' } }
     const call2: AgentToolCall = {
       tool: 'replace_file_content',
       parameters: { filePath: 'src/config.ts', targetContent: 'port = 3000', replacementContent: 'port = 8080' },
     }
+    const call3: AgentToolCall = {
+      tool: 'replace_file_content',
+      parameters: { filePath: 'src/config.ts', targetContent: 'port = 8080', replacementContent: 'port = 9000' },
+    }
+    const call4: AgentToolCall = {
+      tool: 'replace_file_content',
+      parameters: { filePath: 'src/config.ts', targetContent: 'port = 9000', replacementContent: 'port = 9090' },
+    }
 
     const res1 = detector.recordAndCheck(call1)
     expect(res1.isLooping).toBe(false)
-
     const res2 = detector.recordAndCheck(call2)
-    expect(res2.isLooping).toBe(true)
-    expect(res2.suggestedIntervention).toContain('[CRITICAL FILE EDIT LOOP: 2 EDITS ON src/config.ts WITHOUT VERIFICATION]')
-    expect(res2.suggestedIntervention).toContain('DO NOT edit "src/config.ts" again in your next step.')
+    expect(res2.isLooping).toBe(false)
+    const res3 = detector.recordAndCheck(call3)
+    expect(res3.isLooping).toBe(false)
+
+    const res4 = detector.recordAndCheck(call4)
+    expect(res4.isLooping).toBe(true)
+    expect(res4.suggestedIntervention).toContain('[CRITICAL FILE EDIT LOOP: 4 EDITS ON src/config.ts WITHOUT VERIFICATION]')
+    expect(res4.suggestedIntervention).toContain('DO NOT edit "src/config.ts" again in your next step.')
   })
 
   it('should detect redundant write_file loops when same target is written multiple times', () => {
     const call1: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'content 1' } }
     const call2: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'content 2' } }
+    const call3: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'content 3' } }
+    const call4: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'content 4' } }
 
     detector.recordAndCheck(call1)
-    const res2 = detector.recordAndCheck(call2)
+    detector.recordAndCheck(call2)
+    detector.recordAndCheck(call3)
+    const res4 = detector.recordAndCheck(call4)
 
-    expect(res2.isLooping).toBe(true)
-    expect(res2.suggestedIntervention).toContain('[CRITICAL FILE EDIT LOOP: 2 EDITS ON src/App.tsx WITHOUT VERIFICATION]')
+    expect(res4.isLooping).toBe(true)
+    expect(res4.suggestedIntervention).toContain('[CRITICAL FILE EDIT LOOP: 4 EDITS ON src/App.tsx WITHOUT VERIFICATION]')
   })
 
-  it('should detect redundant read loops when same target is read 3+ consecutive times', () => {
+  it('should detect redundant read loops when same target is read 4+ consecutive times', () => {
     const call1: AgentToolCall = {
       tool: 'read_file',
       parameters: { filePath: 'src/App.tsx', startLine: 1, endLine: 50 },
@@ -115,32 +128,39 @@ describe('AgentActionLoopDetector Unit Tests', () => {
       tool: 'read_file',
       parameters: { filePath: 'src/App.tsx', startLine: 1, endLine: 100 },
     }
+    const call4: AgentToolCall = {
+      tool: 'read_file',
+      parameters: { filePath: 'src/App.tsx', startLine: 1, endLine: 200 },
+    }
 
     detector.recordAndCheck(call1)
     detector.recordAndCheck(call2)
-    const res3 = detector.recordAndCheck(call3)
+    detector.recordAndCheck(call3)
+    const res4 = detector.recordAndCheck(call4)
 
-    expect(res3.isLooping).toBe(true)
-    expect(res3.suggestedIntervention).toContain('[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON src/App.tsx]')
+    expect(res4.isLooping).toBe(true)
+    expect(res4.suggestedIntervention).toContain('[CRITICAL READ LOOP INTERVENTION: REPEATED READS ON src/App.tsx]')
   })
 
   it('should reset target history cleanly allowing fresh edit attempt after intervention', () => {
     const call1: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'a', replacementContent: 'b' } }
     const call2: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'c', replacementContent: 'd' } }
     const call3: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'e', replacementContent: 'f' } }
+    const call4: AgentToolCall = { tool: 'replace_file_content', parameters: { filePath: 'src/App.tsx', targetContent: 'g', replacementContent: 'h' } }
 
     detector.recordAndCheck(call1)
     detector.recordAndCheck(call2)
-    const res3 = detector.recordAndCheck(call3)
-    expect(res3.isLooping).toBe(true)
+    detector.recordAndCheck(call3)
+    const res4 = detector.recordAndCheck(call4)
+    expect(res4.isLooping).toBe(true)
 
     // Reset target after intervention
     detector.resetTarget('src/App.tsx')
 
     // Next corrective action (e.g. write_file) should not be blocked immediately
     const correctiveCall: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: '// clean rewrite' } }
-    const res4 = detector.recordAndCheck(correctiveCall)
-    expect(res4.isLooping).toBe(false)
+    const res5 = detector.recordAndCheck(correctiveCall)
+    expect(res5.isLooping).toBe(false)
   })
 
   it('should reset history cleanly', () => {

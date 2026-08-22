@@ -1,7 +1,10 @@
 import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { ToolExecutionResult } from './agentToolExecutorService'
-import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
-import { extractErrorDiagnostics, formatDiagnosticPrompt } from '../domain/agent/astStackTraceExtractor'
+import {
+  DiagnosticOutputReducer,
+  extractErrorDiagnostics,
+  formatDiagnosticPrompt,
+} from '../domain/agent/diagnosticOutputReducer'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'

@@ -50,7 +50,7 @@ describe('commandSecurity Domain Unit Tests', () => {
 
     const res4 = checkCommandSecurity('mkdir -p src/components/test')
     expect(res4.isAllowed).toBe(true)
-    expect(res4.sanitizedCommand).toBe('New-Item -ItemType Directory -Path "src/components/test" -Force')
+    expect(res4.sanitizedCommand).toBe('New-Item -ItemType Directory -Force -Path "src/components/test"')
   })
 
   it('should allow normal commands like npm run typecheck or vitest', () => {

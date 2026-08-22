@@ -49,16 +49,14 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
     expect(prompts[0]).toContain('AGENT')
   })
 
-  it('should scale verbosity/guidance by complexity tier (fast < standard < deep_reasoning)', () => {
+  it('should compile the unified coding prompt with core directives and anti-stub rules', () => {
     const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
-    const fast = PromptCompiler.compileCodingPrompt('fast', vars).prompt
-    const standard = PromptCompiler.compileCodingPrompt('standard', vars).prompt
-    const deep = PromptCompiler.compileCodingPrompt('deep_reasoning', vars).prompt
+    const compiled = PromptCompiler.compileCodingPrompt('standard', vars).prompt
 
-    expect(fast.length).toBeLessThan(standard.length)
-    expect(standard.length).toBeLessThan(deep.length)
-    expect(deep).toContain('FEW-SHOT EXAMPLES')
-    expect(deep).toContain('DEEP REASONING')
+    expect(compiled).toContain('Task')
+    expect(compiled).toContain('D:/app')
+    expect(compiled).toContain('AGENT')
+    expect(compiled).toContain('COMPLETE PRODUCTION CODE')
   })
 
   it('should support custom user prompt overrides keyed by tier or direct module name', () => {

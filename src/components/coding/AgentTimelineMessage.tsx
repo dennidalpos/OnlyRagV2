@@ -549,13 +549,24 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
   const isMultiLine = log.message.includes('\n') || log.message.length > 90
   const firstLine = log.message.split('\n')[0].replace(/^[#*`\- ]+/, '').trim()
   const modelTag = log.modelName || getStepModelName(log.message, activeModelName)
+  const isInteractive = isMultiLine || Boolean(log.detail)
 
   return (
     <div className="space-y-1 font-sans text-xs">
       <div
-        onClick={() => (isMultiLine || log.detail) && onToggleExpand(log.id)}
+        role={isInteractive ? 'button' : undefined}
+        tabIndex={isInteractive ? 0 : undefined}
+        aria-expanded={isInteractive ? isExpanded : undefined}
+        aria-label={isInteractive ? `Passo di ragionamento: ${firstLine || 'Ragionamento agente'}` : undefined}
+        onKeyDown={(e) => {
+          if (isInteractive && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            onToggleExpand(log.id)
+          }
+        }}
+        onClick={() => isInteractive && onToggleExpand(log.id)}
         className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg border transition-all ${
-          isMultiLine || log.detail ? 'cursor-pointer hover:bg-slate-900/80' : ''
+          isInteractive ? 'cursor-pointer hover:bg-slate-900/80 focus-ring' : ''
         } bg-[#0c121e]/80 border-slate-800/80 text-slate-300`}
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -570,7 +581,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
             {modelTag}
           </span>
           <span className="text-[10px] text-slate-400 font-mono">{formatClockTime(log.timestamp)}</span>
-          {(isMultiLine || log.detail) && (
+          {isInteractive && (
             <span className="text-slate-400">
               {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </span>

@@ -45,8 +45,7 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
   - **Agent Mode**: Fully autonomous multi-turn loop with automated error recovery.
 - **Deterministic Workhorse Model Architecture**:
   - **Workhorse Model (Primary)**: The agent operates deterministically on the user's primary development model (`codingModel`, e.g. `qwen2.5-coder:7b`, `qwen3:8b`, `deepseek-r1:8b`), keeping it loaded in VRAM and retaining KV-cache continuity across turns (zero VRAM thrashing).
-  - **Reactive Fallback on OOM / Crash**: Swapping occurs exclusively when a fatal physical error happens (`CUDA out of memory`, Ollama socket crash) via `ResilientModelDispatcher`, which evicts VRAM, reduces context window (`num_ctx = 4096`), and degrades safely to `codingFallbackModel` (e.g. `llama3.2:3b`).
-  - **Prompt-Only Complexity Guidance**: `evaluateTaskComplexity` calibrates system prompt instructions and reasoning directives without altering the loaded model weights.
+  - **Unified Coding Prompt Architecture**: Single unified, high-performance system prompt containing core execution directives, anti-stub rules, and tool formatting rules without artificial complexity tier fragmentation.
   - **Exact Tag Resolution**: Resolves target model names to exact local Ollama tags (`findMatchingInstalledModel`).
   - **Single Hardware Ladder**: `hardwareProfileTiers.ts` is the only place host tiers (`legacy`/`entry`/`midrange`/`highend`/`extreme`), the safe-VRAM formula, the usable-RAM budget, the CPU throughput ceiling and minimum-hardware detection are defined. The model matrix, the complexity router, the agent runtime options and the Ollama OS parameters all consume it — never re-derive a VRAM threshold locally.
   - **Catalog-Derived Cascades**: Fallback chains come from `hardwareModelCatalog.buildFallbackChain` (curated pick first, then within-budget largest-first, then over-budget smallest-first). Never hardcode model tag arrays in the router.

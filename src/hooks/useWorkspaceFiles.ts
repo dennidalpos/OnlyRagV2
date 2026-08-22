@@ -167,8 +167,9 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
   )
 
   useEffect(() => {
+    resetWorkspaceFiles()
     void loadWorkspaceFiles(workspacePath)
-  }, [workspacePath, isStandaloneMode, loadWorkspaceFiles])
+  }, [workspacePath, isStandaloneMode, loadWorkspaceFiles, resetWorkspaceFiles])
 
   useEffect(() => {
     if (!window.electronAPI?.onAgentChangeMetrics) return

@@ -530,6 +530,20 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   }, [isGenerating])
 
   const deleteConversation = useCallback((id: string) => {
+    if (activeConversationId === id) {
+      if (streamThrottleTimer.current) {
+        clearInterval(streamThrottleTimer.current)
+        streamThrottleTimer.current = null
+      }
+      if (isGenerating && window.electronAPI?.cancelOllamaStream) {
+        window.electronAPI.cancelOllamaStream().catch(() => {})
+      }
+      setIsGenerating(false)
+      isGeneratingRef.current = false
+      setInput('')
+      setShowMentions(false)
+    }
+
     setConversations((prev) => {
       const remaining = prev.filter((c) => c.id !== id)
       if (remaining.length === 0) {
@@ -554,7 +568,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       }
       return remaining
     })
-  }, [activeConversationId])
+  }, [activeConversationId, isGenerating])
 
   const renameConversation = useCallback((id: string, newTitle: string) => {
     if (!newTitle.trim()) return

@@ -314,13 +314,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                     return (
                       <div
                         key={conv.id}
+                        role={isEditing ? undefined : 'button'}
+                        tabIndex={isEditing ? undefined : 0}
+                        aria-pressed={isEditing ? undefined : isActive}
+                        aria-label={isEditing ? undefined : `${conv.title} (${conv.messages?.length || 0} messaggi)`}
+                        onKeyDown={(e) => {
+                          if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
+                            e.preventDefault()
+                            c.loadConversation(conv.id)
+                            toast.info(t('chat.conversationLoaded'))
+                          }
+                        }}
                         onClick={() => {
                           if (!isEditing) {
                             c.loadConversation(conv.id)
                             toast.info(t('chat.conversationLoaded'))
                           }
                         }}
-                        className={`group relative p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                        className={`group relative p-2.5 rounded-xl border text-xs cursor-pointer transition-all focus-ring ${
                           isActive
                             ? 'bg-cyan-950/80 border-cyan-600/80 text-cyan-200 shadow-md shadow-cyan-950/40'
                             : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
@@ -333,19 +344,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                               value={editingTitle}
                               onChange={(e) => setEditingTitle(e.target.value)}
                               autoFocus
-                              className="flex-1 px-2 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-xs text-slate-100 focus:outline-none"
+                              aria-label={t('chat.renameConversation')}
+                              className="flex-1 px-2 py-1 bg-slate-950 border border-cyan-500 rounded-lg text-xs text-slate-100 focus:outline-none focus-ring"
                             />
                             <button
                               type="submit"
-                              className="p-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-md"
+                              className="p-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-md focus-ring"
                               title={t('chat.saveTitle')}
+                              aria-label={t('chat.saveTitle')}
                             >
                               <Check className="w-3 h-3" />
                             </button>
                             <button
                               type="button"
                               onClick={() => setEditingConvId(null)}
-                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md"
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md focus-ring"
+                              title={t('common.cancel')}
+                              aria-label={t('common.cancel')}
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -370,8 +385,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                               <button
                                 type="button"
                                 onClick={(e) => handleStartRename(conv.id, conv.title, e)}
-                                className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors"
+                                className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors focus-ring"
                                 title={t('chat.renameConversation')}
+                                aria-label={t('chat.renameConversation')}
                               >
                                 <Edit2 className="w-3 h-3" />
                               </button>
@@ -382,8 +398,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                                   c.deleteConversation(conv.id)
                                   toast.info(t('chat.conversationDeleted'))
                                 }}
-                                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
+                                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors focus-ring"
                                 title={t('chat.deleteConversation')}
+                                aria-label={t('chat.deleteConversation')}
                               >
                                 <Trash2 className="w-3 h-3" />
                               </button>

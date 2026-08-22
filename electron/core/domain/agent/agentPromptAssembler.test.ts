@@ -151,9 +151,9 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       expect(turn1.stableSection).not.toContain('THIS_IS_TURN_2_HISTORY_MARKER')
     })
 
-    it('should change stableSection when the complexity tier or pinned files change', () => {
+    it('should change stableSection when pinned files or task prompt change', () => {
       const standard = assembleTurnPrompt({ ...baseInput, stepCount: 1, toolOutputHistory: [] })
-      const deep = assembleTurnPrompt({ ...baseInput, complexityTier: 'deep_reasoning', stepCount: 1, toolOutputHistory: [] })
+      const differentTask = assembleTurnPrompt({ ...baseInput, userTask: 'Different task requirement', stepCount: 1, toolOutputHistory: [] })
       const withPinned = assembleTurnPrompt({
         ...baseInput,
         stepCount: 1,
@@ -161,7 +161,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
         pinnedFilesContextStr: '[EXPLICIT REFERENCED FILE: helper.ts]',
       })
 
-      expect(standard.stableSection).not.toBe(deep.stableSection)
+      expect(standard.stableSection).not.toBe(differentTask.stableSection)
       expect(standard.stableSection).not.toBe(withPinned.stableSection)
     })
 

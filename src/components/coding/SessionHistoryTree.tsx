@@ -133,16 +133,27 @@ export const SessionHistoryTree: React.FC<SessionHistoryTreeProps> = ({
                         if (e.key === 'Enter') commitRename(session.id)
                         else if (e.key === 'Escape') setEditingSessionId(null)
                       }}
-                      className="flex-1 bg-slate-950 border border-indigo-500 rounded px-2 py-0.5 text-[11px] text-slate-100 outline-none"
+                      aria-label={t('common.edit')}
+                      className="flex-1 bg-slate-950 border border-indigo-500 rounded px-2 py-0.5 text-[11px] text-slate-100 outline-none focus-ring"
                       autoFocus
                     />
-                    <button type="button" onClick={() => commitRename(session.id)} className="p-1 text-emerald-400 hover:bg-slate-800 rounded">
+                    <button
+                      type="button"
+                      onClick={() => commitRename(session.id)}
+                      aria-label={t('common.save')}
+                      className="p-1 text-emerald-400 hover:bg-slate-800 rounded focus-ring"
+                    >
                       <Check className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
                   <>
-                    <button type="button" onClick={() => onSwitchSession(session.id)} className="flex items-center gap-1.5 text-left truncate flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onSwitchSession(session.id)}
+                      aria-label={`${session.title} (${isActive ? t('common.active') : ''})`}
+                      className="flex items-center gap-1.5 text-left truncate flex-1 min-w-0 focus-ring rounded"
+                    >
                       <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
                       <span className="truncate min-w-0">
                         <span className="block font-semibold truncate text-[11px]">{session.title}</span>
@@ -160,12 +171,19 @@ export const SessionHistoryTree: React.FC<SessionHistoryTreeProps> = ({
                           setEditingTitleText(session.title)
                         }}
                         title={t('common.edit')}
-                        className="p-1 hover:text-cyan-300 rounded"
+                        aria-label={`${t('common.edit')} ${session.title}`}
+                        className="p-1 hover:text-cyan-300 rounded focus-ring"
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
                       {sessions.length > 1 && (
-                        <button type="button" onClick={() => onDeleteSession(session.id)} title={t('common.delete')} className="p-1 hover:text-rose-400 rounded">
+                        <button
+                          type="button"
+                          onClick={() => onDeleteSession(session.id)}
+                          title={t('common.delete')}
+                          aria-label={`${t('common.delete')} ${session.title}`}
+                          className="p-1 hover:text-rose-400 rounded focus-ring"
+                        >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       )}

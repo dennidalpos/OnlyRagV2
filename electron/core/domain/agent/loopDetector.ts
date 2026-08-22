@@ -127,35 +127,37 @@ export class AgentActionLoopDetector {
       }
     }
 
-    // 2. File Edit Thrashing Check: >=2 edit-class operations (write_file, replace_file_content,
-    // multi_replace_file_content) on the same file within the last 4 actions. This used to be two
-    // separate, overlapping checks -- a looser "3 edits in 6" rule covering all three tools and a
-    // stricter "2 write_file's in 4" rule covering only write_file -- which meant a real stuck
-    // session could ride out whichever threshold happened to be slower to fire. One tool-agnostic,
-    // fast-firing rule is both simpler and harder to dodge.
+    // 2. File Edit Thrashing Check: >=4 edit-class operations on the same file within the last 6 actions.
+    // Gives the agent runway for legitimate multi-step edits (create, import patch, style patch)
+    // while catching infinite mutation loops.
     if (target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(toolCall.tool)) {
-      const recentTargets = this.targetHistory.slice(-4)
+      const recentTargets = this.targetHistory.slice(-6)
       const sameFileEdits = recentTargets.filter(
         (rec) => rec.target === target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(rec.tool)
       ).length
 
-      if (sameFileEdits >= 2) {
+      if (sameFileEdits >= 4) {
+        const isConfigFile = /(package\.json|tsconfig\.json|vite\.config|requirements\.txt|pyproject\.toml|Cargo\.toml|go\.mod)$/i.test(target)
+        const configDirectives = isConfigFile
+          ? `\n3. The file "${target}" is ALREADY created on disk. DO NOT edit "${target}" again. Proceed IMMEDIATELY to implementing source code components in src/ (e.g. src/App.tsx, components, pages) or use update_plan.`
+          : ''
+
         return {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
-          suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.`,
+          suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.${configDirectives}`,
         }
       }
     }
 
-    // 3. Consecutive Read Loop Check (e.g. >=3 consecutive read/inspect calls on same target without action)
+    // 3. Consecutive Read Loop Check: >=4 consecutive read/inspect calls on same target without action
     if (target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(toolCall.tool)) {
-      const recentTargets = this.targetHistory.slice(-4)
+      const recentTargets = this.targetHistory.slice(-5)
       const consecutiveReads = recentTargets.filter(
         (rec) => rec.target === target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(rec.tool)
       ).length
 
-      if (consecutiveReads >= 3) {
+      if (consecutiveReads >= 4) {
         return {
           isLooping: true,
           consecutiveDuplicateCount: consecutiveReads,
@@ -187,8 +189,9 @@ export class AgentActionLoopDetector {
       if (n >= k * 2) {
         const pattern1 = this.actionSequence.slice(n - k).join('|')
         const pattern2 = this.actionSequence.slice(n - 2 * k, n - k).join('|')
+        const hasDistinctActions = new Set(this.actionSequence.slice(n - k)).size > 1
 
-        if (pattern1 === pattern2) {
+        if (pattern1 === pattern2 && hasDistinctActions) {
           return {
             isOscillating: true,
             cycleLength: k,

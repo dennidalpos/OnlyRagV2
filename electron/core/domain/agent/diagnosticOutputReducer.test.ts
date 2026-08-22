@@ -39,4 +39,22 @@ describe('DiagnosticOutputReducer Unit Tests', () => {
     expect(distilled).toContain('AssertionError: expected true to be false')
     expect(distilled).toContain('Test Files: 1 failed')
   })
+
+  it('should extract error location and message from terminal output', () => {
+    const output = `npm ERR! Test failed. See logs.
+TypeError: Cannot read property 'id' of undefined
+    at processTask (d:/GITHUB/OnlyRagV2/src/main.ts:42:15)`
+
+    const frame = DiagnosticOutputReducer.extractErrorDiagnostics(output)
+    expect(frame).not.toBeNull()
+    expect(frame?.filePath).toBe('d:/GITHUB/OnlyRagV2/src/main.ts')
+    expect(frame?.lineNumber).toBe(42)
+    expect(frame?.errorMessage).toContain("Cannot read property 'id'")
+
+    if (frame) {
+      const prompt = DiagnosticOutputReducer.formatDiagnosticPrompt(frame)
+      expect(prompt).toContain('At d:/GITHUB/OnlyRagV2/src/main.ts:42')
+      expect(prompt).toContain("Cannot read property 'id'")
+    }
+  })
 })

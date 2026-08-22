@@ -148,15 +148,8 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(codingReq.map((v) => v.name)).toContain('{workspacePath}')
   })
 
-  it('should resolve the coding prompt by complexity tier, family-agnostic (B2)', () => {
-    const compiledFast = PromptCompiler.compileCodingPrompt('fast', {
-      userTask: 'Create a component',
-      workspacePath: 'D:/test',
-      agentMode: 'AGENT',
-      stepCount: '1',
-      MAX_STEPS: '20',
-    })
-    const compiledDeep = PromptCompiler.compileCodingPrompt('deep_reasoning', {
+  it('should resolve the unified coding prompt, family-agnostic (B2)', () => {
+    const compiled = PromptCompiler.compileCodingPrompt('standard', {
       userTask: 'Create a component',
       workspacePath: 'D:/test',
       agentMode: 'AGENT',
@@ -164,12 +157,10 @@ describe('SystemPromptModal & Family Detection Tests', () => {
       MAX_STEPS: '20',
     })
 
-    expect(compiledFast.tier).toBe('fast')
-    expect(compiledDeep.tier).toBe('deep_reasoning')
-    // Same model, different tier -> different prompt content (verbosity scales by tier, not family).
-    expect(compiledFast.prompt).not.toBe(compiledDeep.prompt)
-    expect(compiledFast.prompt).toContain('Create a component')
-    expect(compiledDeep.prompt).toContain('Create a component')
+    expect(compiled.prompt).toContain('Create a component')
+    expect(compiled.prompt).toContain('D:/test')
+    expect(compiled.prompt).toContain('AGENT')
+    expect(compiled.prompt).toContain('COMPLETE PRODUCTION CODE')
   })
 
   it('should include explicit attachment grounding and no-attachment directives in chat prompt presets', () => {

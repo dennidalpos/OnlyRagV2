@@ -35,17 +35,16 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
       ctx.emitLog('info', `⚡ ExecutionGuard: ${stagCheck.reason}`)
     }
 
-    // Auto-advance scaffolding/setup milestone when core configuration files are created
-    if (/(package\.json|tsconfig\.json|vite\.config|requirements\.txt|pyproject\.toml)$/i.test(targetParam)) {
-      const activeM = ctx.goalPlanner.getActiveMilestone()
-      if (activeM && /scaffold|setup|inizializz|configura|dipendenze/i.test(activeM.title)) {
-        ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified by project configuration setup.')
-      }
+    // Transition pending milestone to in_progress on active file mutation
+    const activeM = ctx.goalPlanner.getActiveMilestone()
+    if (activeM && activeM.status === 'pending') {
+      ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
     }
-  }
-  const activeM = ctx.goalPlanner.getActiveMilestone()
-  if (activeM && activeM.status === 'pending') {
-    ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
+  } else {
+    const activeM = ctx.goalPlanner.getActiveMilestone()
+    if (activeM && activeM.status === 'pending') {
+      ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
+    }
   }
 }
 

@@ -37,7 +37,14 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+      <div
+        role="progressbar"
+        aria-valuenow={progressPercent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Avanzamento checklist operativa"
+        className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800"
+      >
         <div
           className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500"
           style={{ width: `${progressPercent}%` }}

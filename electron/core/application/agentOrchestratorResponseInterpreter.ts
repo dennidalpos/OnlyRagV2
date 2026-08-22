@@ -15,9 +15,10 @@ export type { ResponseInterpreterState, ResponseInterpreterContext, ResponseInte
  * or failed, so re-planning never resets progress to 0%.
  */
 async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
-  const hasExplicitPlanBlock = ctx.streamedOutput.includes('<plan>')
-  if (!ctx.goalPlanner.hasPlan() && (hasExplicitPlanBlock || ctx.streamedOutput.includes('- [ ]') || ctx.streamedOutput.includes('1. '))) {
-    const extractedMilestones = GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput)
+  const outputText = ctx.streamedOutput || ''
+  const hasExplicitPlanBlock = outputText.includes('<plan>')
+  if (!ctx.goalPlanner.hasPlan() && (hasExplicitPlanBlock || outputText.includes('- [ ]') || outputText.includes('1. '))) {
+    const extractedMilestones = GoalDecompositionPlanner.parsePlanFromText(outputText)
     if (extractedMilestones.length >= 2) {
       // A brand-new plan can only ever start pending: parsePlanFromText's checkbox status
       // (verified/in_progress/failed) is meant for RE-parsing a plan that was already running
@@ -44,7 +45,7 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
 }
 
 async function handleMissingToolCall(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
-  const { streamedOutput } = ctx
+  const streamedOutput = ctx.streamedOutput || ''
   const hasToolCallAttempt =
     streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
 

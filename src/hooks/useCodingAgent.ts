@@ -248,6 +248,13 @@ export function useCodingAgent(settings?: AppSettings) {
     loadGuestOsInfo()
   }, [])
 
+  useEffect(() => {
+    setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
+    setStreamingText('')
+    clearPendingApproval()
+    setCurrentStep(0)
+  }, [workspacePath, clearPendingApproval])
+
   const toggleAttachDoc = (docId: string) => {
     setAttachedDocIds((prev) => {
       const next = new Set(prev)

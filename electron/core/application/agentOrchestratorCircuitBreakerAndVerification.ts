@@ -1,4 +1,3 @@
-import { ResilientModelDispatcher } from './resilientModelDispatcher'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 /** Returns a `return` outcome if the stagnation circuit breaker trips into a hard stop. */
@@ -10,28 +9,7 @@ export async function runCircuitBreaker(
   const cbRes = ctx.circuitBreaker.recordStep(isMutating, isToolFailure)
   if (!cbRes.shouldBreak) return null
 
-  const escalation = ResilientModelDispatcher.getNextEscalationModel(ctx.targetModel, {
-    fastModel: ctx.fallbackModel,
-    standardModel: ctx.intermediateModel,
-    deepReasoningModel: ctx.settings.complexityDeepModel || ctx.intermediateModel,
-    heavyEscalationModel: ctx.heavyEscalationModel,
-  })
-
-  if (escalation && escalation.nextModel !== ctx.targetModel) {
-    ctx.emitLog(
-      'info',
-      `🔺 Circuit Breaker Escalation (${cbRes.reason}): Evicting VRAM & switching model ${ctx.targetModel} → ${escalation.nextModel} [${escalation.tierLabel}]`
-    )
-    await ResilientModelDispatcher.evictVram(['*'], ctx.settings.ollamaHost)
-    ctx.flags.currentOverriddenModel = escalation.nextModel
-    ctx.circuitBreaker.reset()
-    return null
-  }
-
-  if (!ctx.isUnlimitedSteps) return null
-
-  // No escalation model left to try: the breaker is forcing a hard pause, which means the task
-  // did not complete -- must never be reported as a success.
+  // The circuit breaker is forcing a pause/intervention due to stagnation/looping
   const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
   ctx.emitLog('info', cbMsg)
   ctx.emitDone(false, cbRes.suggestedAction || cbMsg)

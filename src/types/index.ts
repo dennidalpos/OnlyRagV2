@@ -178,8 +178,15 @@ export interface AppSettings {
   medicalModel?: string
   legalModel?: string
   codingModel?: string
+  /** Optional fallback model for auto-healing on OOM or critical crashes during coding agent execution */
+  codingFallbackModel?: string
   visionModel?: string
+  visionFallbackModel?: string
   embeddingModel?: string
+  chatFallbackModel?: string
+  translationFallbackModel?: string
+  medicalFallbackModel?: string
+  legalFallbackModel?: string
   allowTerminalExecution?: boolean
   allowFileModifications?: boolean
   hardwareProfile: HardwareProfile
@@ -195,7 +202,7 @@ export interface AppSettings {
   // Family & Module System Prompt Customizations
   customPromptOverrides?: Record<string, string> // key: `${module}:${family}` -> prompt string
   selectedFamilyOverrides?: Record<string, string> // key: module -> family string or 'auto'
-  // Complexity-Based Routing Settings
+  // Legacy / Advanced Complexity Routing Settings
   useComplexityRouting?: boolean
   complexityFastModel?: string
   complexityStandardModel?: string

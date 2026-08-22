@@ -12,10 +12,7 @@ import {
 } from '../../../../src/services/hardwareProfileTiers'
 import {
   buildFallbackChain,
-  FAST_TIER_CATALOG,
   STANDARD_TIER_CATALOG,
-  DEEP_REASONING_TIER_CATALOG,
-  HEAVY_ESCALATION_TIER_CATALOG,
 } from '../../../../src/services/hardwareModelCatalog'
 
 export type ComplexityTier = 'fast' | 'standard' | 'deep_reasoning'
@@ -44,56 +41,11 @@ export interface ComplexityEvaluationContext {
   hardwareProfile?: 'Low' | 'Medium' | 'High' | 'Auto'
   safeVramBudgetGB?: number
   enableSystemRamOffloading?: boolean
+  agentMode?: 'plan' | 'ask' | 'agent'
 }
 
-export function findMatchingInstalledModel(target: string, available: string[]): string | null {
-  if (!target || !available || available.length === 0) return null
-  const clean = target.toLowerCase().trim()
-  const cleanBase = clean.split(':')[0]
-  const cleanTag = clean.includes(':') ? clean.split(':')[1] : ''
-  const cleanWithoutNamespace = clean.includes('/') ? clean.split('/')[1] : clean
-
-  // 1. Exact case-insensitive match
-  for (const m of available) {
-    const mClean = m.toLowerCase().trim()
-    if (mClean === clean) return m
-  }
-
-  // 2. :latest tag equivalence
-  for (const m of available) {
-    const mClean = m.toLowerCase().trim()
-    if (mClean === `${clean}:latest` || `${mClean}:latest` === clean) return m
-    if (!cleanTag && mClean.split(':')[0] === cleanBase && mClean.endsWith(':latest')) return m
-  }
-
-  // 3. Namespace strip match (e.g. "adrienbrault/biomistral-7b" vs a bare "biomistral-7b" tag)
-  for (const m of available) {
-    const mClean = m.toLowerCase().trim()
-    const mWithoutNamespace = mClean.includes('/') ? mClean.split('/')[1] : mClean
-    if (mWithoutNamespace === cleanWithoutNamespace) return m
-  }
-
-  // 4. Base model match with compatible quant/instruction tag
-  for (const m of available) {
-    const mClean = m.toLowerCase().trim()
-    const mBase = mClean.split(':')[0]
-    const mTag = mClean.includes(':') ? mClean.split(':')[1] : ''
-    if (mBase === cleanBase) {
-      if (!cleanTag || cleanTag === 'latest') return m
-      if (mTag && (mTag.startsWith(cleanTag) || cleanTag.startsWith(mTag) || mTag.includes(cleanTag) || cleanTag.includes(mTag))) return m
-    }
-  }
-
-  // 5. Substring base model match (e.g. qwen2.5-coder matching qwen2.5-coder:7b-instruct-q4_k_m)
-  for (const m of available) {
-    const mClean = m.toLowerCase().trim()
-    if (mClean.includes(cleanBase) || cleanBase.includes(mClean.split(':')[0])) {
-      return m
-    }
-  }
-
-  return null
-}
+import { findMatchingInstalledModel, isOllamaModelInstalled } from './modelTagMatcher'
+export { findMatchingInstalledModel, isOllamaModelInstalled }
 
 function resolveModelWithFallback(
   preferredModel: string,
@@ -122,8 +74,8 @@ function resolveModelWithFallback(
 
 /**
  * Universal complexity evaluator based on objective structural metrics (BPE token budgeting via
- * gpt-tokenizer, multi-file context, failure history, and hardware profiles), completely eliminating
- * brittle, hardcoded word dictionaries.
+ * gpt-tokenizer, multi-file context, failure history, execution mode and hardware profiles), completely
+ * eliminating brittle, hardcoded word dictionaries.
  */
 export function evaluateTaskComplexity(
   userPrompt: string,
@@ -191,22 +143,15 @@ export function evaluateTaskComplexity(
     promptTokens = Math.ceil(promptText.length / 4)
   }
 
-  // Structural stack trace / diff failure detection
+  // Structural stack trace / diff failure detection (language-independent compiler & git formats)
   const hasStackTraceOrDiff =
     /(?:Traceback \(most recent call last\):|^\s*at\s+[\w\W]+:\d+:\d+|diff --git|---\s+a\/|\+\+\+\s+b\/|SyntaxError:|TypeError:|ReferenceError:|AssertionError)/m.test(
       promptText
     )
 
-  // Structural reasoning indicators based on architectural complexity keywords or volume
-  const hasStructuralReasoningDirectives =
-    /(?:refactor|architecture|optimiz|ottimizz|deadlock|memory leak|audit|concurr|concorren|race condition|benchmark|migrat)/i.test(
-      promptText
-    )
-
-  const isCodingAction =
-    /^(?:create|crea|implement|implementa|build|write|scrivi|add|aggiungi|modify|modifica|generate|genera|setup|configure|configura)\b/i.test(
-      promptText
-    )
+  // Structural volume indicators (token budgeting via gpt-tokenizer, multi-file attachments, large context)
+  const isLargeContextOrMultiFile =
+    attachedFilesCount >= 2 || totalChars > 16000 || promptTokens > 150
 
   let tier: ComplexityTier = 'standard'
   let reasoning = 'Query di codice e modifica file standard'
@@ -221,78 +166,38 @@ export function evaluateTaskComplexity(
   } else if (hasStackTraceOrDiff) {
     tier = 'deep_reasoning'
     reasoning = 'Rilevata stack trace, eccezione runtime o diff patch'
-  } else if (hasStructuralReasoningDirectives || attachedFilesCount >= 2 || totalChars > 16000 || promptTokens > 150) {
+  } else if (isLargeContextOrMultiFile) {
     tier = 'deep_reasoning'
-    reasoning = hasStructuralReasoningDirectives
-      ? 'Rilevata istruzione di architettura, refactoring profondo o ottimizzazione'
-      : 'Rilevato contesto multi-file ad alto volume di token'
+    reasoning = 'Rilevato contesto multi-file o alto volume di token'
   } else if (
-    !isCodingAction &&
-    promptTokens <= 25 &&
+    context.agentMode === 'ask' &&
+    promptTokens <= 20 &&
     attachedFilesCount === 0 &&
-    totalChars < 3000 &&
-    !hasStackTraceOrDiff &&
-    !hasStructuralReasoningDirectives
+    totalChars < 1000 &&
+    !hasStackTraceOrDiff
   ) {
-    // Quick question / lookup query
-    const isQuickQuery =
-      /^(?:what|how|where|why|explain|define|cosa|come|dove|perch[eé]|spiega|definisci|mostra|ciao|hello|help|aiuto|\?)/i.test(
-        promptText
-      ) || promptTokens <= 8
-    if (isQuickQuery) {
-      tier = 'fast'
-      reasoning = 'Rilevata domanda concettuale rapida o lookup a bassa complessità'
-    }
+    // Standalone quick lookup query in ask mode
+    tier = 'fast'
+    reasoning = 'Rilevata consultazione rapida a basso volume di token'
   }
 
-  const isHeavyEscalationTurn =
-    Boolean(activeSettings?.complexityHeavyModel) &&
-    isEscalated &&
-    errorCountInHistory >= 2
-
-  const tierCatalog = isHeavyEscalationTurn
-    ? HEAVY_ESCALATION_TIER_CATALOG
-    : tier === 'fast'
-      ? FAST_TIER_CATALOG
-      : tier === 'deep_reasoning'
-        ? DEEP_REASONING_TIER_CATALOG
-        : STANDARD_TIER_CATALOG
-  const candidateFallbacks = [...buildFallbackChain(tierCatalog, chainTarget), defaultStandard]
-
-  const configuredModel = isHeavyEscalationTurn
-    ? activeSettings?.complexityHeavyModel
-    : tier === 'fast'
-      ? activeSettings?.complexityFastModel
-      : tier === 'deep_reasoning'
-        ? activeSettings?.complexityDeepModel
-        : defaultStandard
-  const preferredModel = configuredModel || candidateFallbacks[0]
+  const candidateFallbacks = [...buildFallbackChain(STANDARD_TIER_CATALOG, chainTarget), defaultStandard]
+  const preferredModel = activeSettings?.codingModel || activeSettings?.complexityStandardModel || defaultStandard || candidateFallbacks[0]
 
   const { model: selectedModel, isFallback } = resolveModelWithFallback(preferredModel, candidateFallbacks, availableModels)
 
-  const tierName = isHeavyEscalationTurn
-    ? 'Heavy Escalation Tier'
+  const tierName = tier === 'deep_reasoning'
+    ? 'Deep Reasoning'
     : tier === 'fast'
       ? 'Fast Tier'
-      : tier === 'deep_reasoning'
-        ? (isEscalated ? 'Escalated Deep Reasoning Tier' : 'Deep Reasoning Tier')
-        : 'Standard Tier'
-
-  if (isHeavyEscalationTurn) {
-    reasoning = `Auto-healing: Escalation a Heavy Tier (${selectedModel}) per task ad alta complessità o errori ripetuti`
-  }
-
-  const resolvedTier: ModelTier =
-    isHeavyEscalationTurn || (Boolean(activeSettings?.complexityHeavyModel) && selectedModel === activeSettings?.complexityHeavyModel)
-      ? 'heavy'
-      : tier
+      : 'Standard Tier'
 
   return {
-    tier: resolvedTier,
+    tier,
     tierName,
     modelName: selectedModel,
     reasoning,
-    isEscalated: isEscalated || isHeavyEscalationTurn,
+    isEscalated,
     isFallback,
   }
 }

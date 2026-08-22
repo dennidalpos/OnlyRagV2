@@ -24,8 +24,8 @@ Un modello puo' comparire come consigliato per un tier solo se `assessModelHardw
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`legacy`** | Solo CPU (AVX2), iGPU Intel/AMD | 0 GB (Integrata) | Offload RAM completo, tetto CPU $\le 3.0\text{ GB}$ | 8 – 16 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `qwen3:4b`, `moondream:latest`, `nomic-embed-text:latest` | 15 – 20 GB |
 | **`entry`** | GPU NVIDIA GTX 1660 / RTX 3050, Laptop 4–6GB | 4 – 6 GB | $\le 3.0\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:3b`, `qwen3:4b`, `moondream:latest`, `nomic-embed-text:latest` | 20 – 30 GB |
-| **`midrange`** | GPU NVIDIA RTX 2070, RTX 3070, RTX 4060 8GB | 8 – 11 GB | $\le 4.5\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:7b` *(o Q4_K_M)*, `deepseek-r1:7b` *(distill Qwen)*, `moondream:latest`, `nomic-embed-text:latest` | 35 – 50 GB |
-| **`highend`**| GPU NVIDIA RTX 3060 12GB, RTX 4070 12GB, RTX 4080 16GB | 12 – 16 GB | $\le 10.5\text{ GB}$ | 32 – 64 GB | `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `qwen2.5-coder:14b` / `deepseek-r1:14b`, `llava:7b`, `bge-m3:latest` | 60 – 90 GB |
+| **`midrange`** | GPU NVIDIA RTX 2070, RTX 3070, RTX 4060 8GB | 8 – 11 GB | $\le 4.5\text{ GB}$ | 16 – 32 GB | `qwen2.5-coder:1.5b`, `qwen2.5-coder:7b` *(o Q4_K_M)*, `qwen3:8b` *(reasoning + tool calling)*, `moondream:latest`, `nomic-embed-text:latest` | 35 – 50 GB |
+| **`highend`**| GPU NVIDIA RTX 3060 12GB, RTX 4070 12GB, RTX 4080 16GB | 12 – 16 GB | $\le 10.5\text{ GB}$ | 32 – 64 GB | `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `qwen2.5-coder:14b`, `llava:7b`, `bge-m3:latest` | 60 – 90 GB |
 | **`extreme`** | GPU NVIDIA RTX 3090 / 4090 (24GB), Multi-GPU, A100/H100 | 24 – 48+ GB | $\ge 16.5\text{ GB}$ | 64 – 128 GB | `qwen2.5-coder:14b`, `gpt-oss:20b`, `codestral:22b`, `qwen3-coder:30b` *(48GB+)*, `llama3.2-vision:11b` | 120 – 250 GB |
 
 > [!NOTE]
@@ -34,13 +34,13 @@ Un modello puo' comparire come consigliato per un tier solo se `assessModelHardw
 
 > [!IMPORTANT]
 > **Ottimizzazione GPU da 8GB (es. RTX 2070 / RTX 3070 / RTX 4060):**
-> Con VRAM netta sicura di $4.5\text{ GB}$ (dopo riserva DWM di $1.5\text{ GB}$ e margine di sicurezza del $25\%$), i modelli **`qwen2.5-coder:7b`** (4.7 GB) e le sue quantizzazioni **`qwen2.5-coder:7b-instruct-q4_k_m`** (4.4 GB) e **`deepseek-r1:7b`** (4.7 GB, distillato su Qwen Math/Code) operano stabilmente in VRAM offrendo massima precisione architetturale per il coding senza rischiare crash OOM.
+> Con VRAM netta sicura di $4.5\text{ GB}$ (dopo riserva DWM di $1.5\text{ GB}$ e margine di sicurezza del $25\%$), i modelli **`qwen2.5-coder:7b`** (4.7 GB) e le sue quantizzazioni **`qwen2.5-coder:7b-instruct-q4_k_m`** (4.4 GB) o **`qwen3:8b`** (5.2 GB, con supporto nativo al tool calling) operano stabilmente in VRAM offrendo massima precisione architetturale per il coding agent senza rischiare crash OOM o loop di comandi non supportati.
 
 > [!NOTE]
 > **Impatto sistema in tempo reale:** la formula $Footprint_{\text{Totale}} = W_{\text{mem}} + KV_{\text{mem}} + Overhead_{\text{CUDA}}$ (§3) e' calcolata da `assessModelHardwareCompatibility` in `hardwareRecommendationEngine.ts` ed **e' gia' esposta in UI**: `ModelOptionCard.tsx` mostra i badge 🟡 "Tight VRAM" / 🔴 "Exceeds VRAM" (l'assenza di badge indica lo stato 🟢 ottimale) in ogni step del Setup Wizard (Chat, Traduzione, Medical, Legal, Coding Tiers, Multimodal) tramite il campo `compatibilityStatus` di `ModelRecommendation`.
 
 > [!NOTE]
-> **Modelli specialistici Medical & Legal:** entrambi i domini hanno un catalogo dedicato gia' popolato su tutti i 5 tier (`MEDICAL_TIER_CATALOG` / `LEGAL_TIER_CATALOG` in `hardwareModelCatalog.ts`) con fallback agnostico `llama3.2:3b` su legacy/entry/midrange e modelli specializzati (`biomistral`/`llama3.1:8b`/`mistral-small3.2:24b`) su highend/extreme, gia' selezionabili dal tab dedicato del Setup Wizard (`WizardStepGeneralLlms.tsx`).
+> **Modelli specialistici Medical & Legal:** entrambi i domini hanno un catalogo dedicato gia' popolato su tutti i 5 tier (`MEDICAL_TIER_CATALOG` / `LEGAL_TIER_CATALOG` in `hardwareModelCatalog.ts`) con fallback agnostico `llama3.2:3b` su legacy/entry/midrange e modelli specializzati (`biomistral`/`llama3.1:8b`/`mistral-small3.2:24b`) su highend/extreme, selezionabili dalla suite consigliata del Setup Wizard a 3 step (`WizardStepRecommendedModels.tsx`) e dalle Impostazioni.
 
 ---
 

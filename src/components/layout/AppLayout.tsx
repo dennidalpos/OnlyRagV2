@@ -451,7 +451,7 @@ export const AppLayout: React.FC = () => {
         <div id="panel-ingestion" role="tabpanel" aria-labelledby="tab-ingestion" className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}>
           {visitedTabs.has('ingestion') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <IngestionView settings={settings} onUpdateSettings={handleUpdateSettings} />
+              <IngestionView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
             </Suspense>
           )}
         </div>
@@ -465,7 +465,7 @@ export const AppLayout: React.FC = () => {
         <div id="panel-translation" role="tabpanel" aria-labelledby="tab-translation" className={`h-full w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}>
           {visitedTabs.has('translation') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <TranslationView settings={settings} onUpdateSettings={handleUpdateSettings} />
+              <TranslationView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
             </Suspense>
           )}
         </div>
@@ -558,7 +558,8 @@ export const AppLayout: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsWizardOpen(true)}
-                  className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium rounded-lg transition-all"
+                  aria-label={t('common.viewDetails')}
+                  className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium rounded-lg transition-all focus-ring active:scale-95"
                 >
                   {t('common.viewDetails')}
                 </button>
@@ -568,7 +569,8 @@ export const AppLayout: React.FC = () => {
                   type="button"
                   onClick={cancelModelDownload}
                   title={t('common.cancel')}
-                  className="p-1 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-lg transition-all"
+                  aria-label={t('common.cancel')}
+                  className="p-1 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-lg transition-all focus-ring active:scale-95"
                 >
                   <X className="w-4 h-4" />
                 </button>

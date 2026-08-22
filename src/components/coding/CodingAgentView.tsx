@@ -108,13 +108,15 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   const activeModelName = (c.isExecuting && c.currentLiveModel)
     ? c.currentLiveModel
-    : settings?.useComplexityRouting
+    : settings?.useComplexityRouting !== false
     ? routedComplexity.modelName
     : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
 
   const activeComplexityTier = (c.isExecuting && c.currentLiveTier)
     ? c.currentLiveTier
-    : routedComplexity.tier
+    : settings?.useComplexityRouting !== false
+    ? routedComplexity.tier
+    : null
 
   const hasPendingUnconsolidatedMilestones = useMemo(() => {
     if (c.isExecuting) return false
@@ -181,6 +183,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         settings={settings}
         onUpdateSettings={onUpdateSettings}
         activeSkills={c.activeSkills}
+        installedModels={diagnostics?.ollama?.models || []}
         complexity={routedComplexity}
         activeModel={activeModelName}
         activeTier={activeComplexityTier}

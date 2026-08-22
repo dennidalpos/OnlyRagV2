@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
-import { ModelBadge } from '../common/ModelBadge'
+import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useChatEngine } from '../../hooks/useChatEngine'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
@@ -142,10 +142,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             <span className="text-[11px] hidden sm:inline font-medium">Autoscroll</span>
           </button>
 
-          {/* Active Chat Model Badge */}
-          <ModelBadge
-            modelName={settings.chatModel || settings.defaultModel || 'llama3.2'}
-            tooltip={`Chat Model: ${settings.chatModel || settings.defaultModel || 'llama3.2'}`}
+          {/* Quick Chat Model Selector with Fallback */}
+          <QuickModelSelector
+            currentModel={settings.chatModel || settings.defaultModel || 'llama3.2'}
+            fallbackModel={settings.chatFallbackModel}
+            installedModels={diagnostics?.ollama?.models || []}
+            presetOptions={['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b', 'phi3.5:3.8b']}
+            onSelectModel={(newModel) => {
+              onUpdateSettings?.({
+                chatModel: newModel,
+              })
+            }}
+            onSelectFallbackModel={(fallback) => {
+              onUpdateSettings?.({
+                chatFallbackModel: fallback,
+              })
+            }}
+            icon={MessageSquare}
+            featureLabel="RAG Chat"
+            variant="purple"
           />
         </div>
       </div>

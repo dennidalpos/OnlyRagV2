@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { ComplexityRouteResult, ModelTier } from '../../services/complexityRouterService'
-import { ModelBadge } from '../common/ModelBadge'
+import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useTranslation } from '../../i18n'
 
 interface CodingHeaderProps {
@@ -10,6 +10,7 @@ interface CodingHeaderProps {
   settings?: AppSettings
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
   activeSkills?: string[]
+  installedModels?: string[]
   /** Routed complexity for the last submitted (or, while idle, currently drafted) prompt — computed once by the parent. */
   complexity: ComplexityRouteResult
   /** Model actually driving the agent: complexity.modelName when routing is on, otherwise the fixed coding model. */
@@ -23,14 +24,15 @@ interface CodingHeaderProps {
 export const CodingHeader: React.FC<CodingHeaderProps> = ({
   guestOsInfo,
   settings,
-  _onUpdateSettings,
+  onUpdateSettings,
   activeSkills = [],
+  installedModels = [],
   complexity,
   activeModel,
   activeTier,
   onOpenDiagnosticsModal,
   onOpenSkillHubModal,
-}: CodingHeaderProps & { _onUpdateSettings?: any }) => {
+}) => {
   const { t } = useTranslation()
   const [isSystemPopoverOpen, setIsSystemPopoverOpen] = useState<boolean>(false)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -72,7 +74,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         <span className="text-slate-400 font-medium truncate max-w-xs">{t('coding.headerTitle')}</span>
       </div>
 
-      {/* Right: Actions, System Popover, Skills & Model Badge */}
+      {/* Right: Actions, System Popover, Skills & Quick Model Selector */}
       <div className="flex items-center gap-2 text-xs">
         {/* Active Skills Badge / Trigger */}
         <button
@@ -99,61 +101,63 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
         <div className="relative" ref={popoverRef}>
           <button
             type="button"
-            onClick={onOpenDiagnosticsModal || (() => setIsSystemPopoverOpen((prev) => !prev))}
-            aria-label="Visualizza Diagnostica, Telemetria e Toolchain di Sistema"
-            aria-haspopup={onOpenDiagnosticsModal ? 'dialog' : undefined}
-            aria-expanded={!onOpenDiagnosticsModal ? isSystemPopoverOpen : undefined}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-sans font-medium border transition-colors focus-ring shadow-sm cursor-pointer ${
+            onClick={() => setIsSystemPopoverOpen(!isSystemPopoverOpen)}
+            aria-label="Stato Toolchain Host"
+            title="Stato Toolchain Host (Git, Node, Python, Ollama)"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium border transition-colors focus-ring ${
               allCoreToolsAvailable
-                ? 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:text-slate-100'
-                : 'bg-amber-950/40 hover:bg-amber-900/40 border-amber-500/40 text-amber-300'
+                ? 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-100/10 hover:border-slate-700'
+                : 'bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/50'
             }`}
-            title="Visualizza Diagnostica, Telemetria e Toolchain di Sistema"
           >
+            <Wrench className={`w-3 h-3 ${allCoreToolsAvailable ? 'text-cyan-400' : 'text-amber-400'}`} />
+            <span className="font-mono text-[10px]">OS Tools</span>
             {allCoreToolsAvailable ? (
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
             ) : (
-              <AlertCircle className="w-3 h-3 text-amber-400" />
+              <AlertCircle className="w-3 h-3 text-amber-400 animate-pulse" />
             )}
-            <span className="hidden sm:inline">System</span>
-            <Cpu className="w-3 h-3 text-slate-400" />
           </button>
 
+          {/* Toolchain Flyout Card */}
           {isSystemPopoverOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl z-50 text-xs font-sans space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <span className="font-bold text-slate-200 flex items-center gap-1.5 text-xs">
-                  <Wrench className="w-3.5 h-3.5 text-cyan-400" /> Toolchain & Runtime
+            <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-950 border border-slate-800 shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Toolchain di Sistema
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">
-                  {guestOsInfo?.platform || 'Windows'}
-                </span>
+                <button
+                  type="button"
+                  onClick={onOpenDiagnosticsModal}
+                  className="text-[10px] text-cyan-400 hover:underline cursor-pointer"
+                >
+                  Dettagli
+                </button>
               </div>
 
-              {/* Tool list grid */}
-              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
+              <div className="space-y-1.5 text-xs font-mono">
+                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Git</span>
-                  <span className={`text-[10px] font-bold ${hasGit ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {hasGit ? 'OK' : 'N/A'}
+                  <span className={`text-[10px] font-bold ${hasGit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {hasGit ? 'OK' : 'Mancante'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Node</span>
-                  <span className={`text-[10px] font-bold ${hasNode ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {hasNode ? 'OK' : 'N/A'}
+                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
+                  <span className="text-slate-400">Node.js</span>
+                  <span className={`text-[10px] font-bold ${hasNode ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {hasNode ? 'OK' : 'Mancante'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
+                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Python</span>
                   <span className={`text-[10px] font-bold ${hasPy ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {hasPy ? 'OK' : 'N/A'}
+                    {hasPy ? 'OK' : 'Opzionale'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
+                <div className="flex items-center justify-between px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-850">
                   <span className="text-slate-400">Ollama</span>
                   <span className={`text-[10px] font-bold ${hasOllama ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hasOllama ? 'OK' : 'OFF'}
+                    {hasOllama ? 'Attivo' : 'Offline'}
                   </span>
                 </div>
                 {hasDocker !== undefined && (
@@ -166,7 +170,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
                 )}
                 {hasUv !== undefined && (
                   <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded-lg border border-slate-800">
-                    <span className="text-slate-400">UV</span>
+                    <span className="text-slate-400">uv</span>
                     <span className={`text-[10px] font-bold ${hasUv ? 'text-emerald-400' : 'text-slate-500'}`}>
                       {hasUv ? 'OK' : 'N/A'}
                     </span>
@@ -185,41 +189,36 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
           )}
         </div>
 
-        {/* Model Badge with Complexity Router Tier */}
-        <ModelBadge
-          modelName={activeModel}
-          tier={
-            activeTier ||
-            (settings?.useComplexityRouting
-              ? complexity.tier
-              : activeModel === settings?.complexityHeavyModel
-              ? 'heavy'
-              : activeModel === settings?.complexityDeepModel
-              ? 'deep_reasoning'
-              : activeModel === settings?.complexityFastModel
-              ? 'fast'
-              : activeModel === settings?.complexityStandardModel
-              ? 'standard'
-              : undefined)
-          }
-          tierName={
-            activeTier === 'heavy' || activeModel === settings?.complexityHeavyModel
-              ? 'Heavy Escalation Tier'
-              : activeTier === 'deep_reasoning' || activeModel === settings?.complexityDeepModel
-              ? 'Deep Reasoning Tier'
-              : activeTier === 'fast' || activeModel === settings?.complexityFastModel
-              ? 'Fast Tier'
-              : activeTier === 'standard' || activeModel === settings?.complexityStandardModel
-              ? 'Standard Tier'
-              : settings?.useComplexityRouting
-              ? complexity.tierName
-              : undefined
-          }
-          tooltip={
-            settings?.useComplexityRouting
-              ? `Complexity Router: ${activeTier || complexity.tierName} (${activeModel}) — ${complexity.reasoning}`
-              : `Coding Model: ${activeModel}`
-          }
+        {/* Quick Coding Model Selector with Fallback */}
+        <QuickModelSelector
+          currentModel={activeModel || settings?.codingModel || 'qwen2.5-coder:7b'}
+          fallbackModel={settings?.codingFallbackModel}
+          installedModels={installedModels}
+          presetOptions={[
+            'qwen2.5-coder:7b',
+            'qwen3:8b',
+            'qwen2.5-coder:14b',
+            'qwen3:14b',
+            'gpt-oss:20b',
+            'codestral:22b',
+            'qwen2.5-coder:32b',
+            'deepseek-coder:6.7b',
+            'llama3.1:8b',
+          ]}
+          onSelectModel={(newModel) => {
+            onUpdateSettings?.({
+              codingModel: newModel,
+              complexityStandardModel: newModel,
+            })
+          }}
+          onSelectFallbackModel={(fallback) => {
+            onUpdateSettings?.({
+              codingFallbackModel: fallback,
+            })
+          }}
+          icon={Code}
+          featureLabel="AI Coding Agent"
+          variant="cyan"
         />
       </div>
     </header>

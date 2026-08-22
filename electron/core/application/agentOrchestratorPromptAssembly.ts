@@ -1,6 +1,6 @@
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import os from 'node:os'
-import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
+import { evaluateTaskComplexity, findMatchingInstalledModel } from '../domain/agent/complexityEvaluator'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
@@ -28,16 +28,16 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
     vramTotalMB: cachedGpu?.vramTotalMB,
     systemRamGB: memInfo?.totalRAMGB,
     enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
+    agentMode: ctx.agentMode,
   })
   if (routedComplexity.isEscalated && ctx.stepCount > 1) {
     ctx.emitLog('info', `⚡ Complexity Escalated: ${routedComplexity.modelName}`, routedComplexity.reasoning)
   }
 
+  const candidateCoding = ctx.settings.codingModel || ctx.settings.complexityStandardModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
   const targetModel: string = ctx.currentOverriddenModel
     ? ctx.currentOverriddenModel
-    : ctx.settings.useComplexityRouting
-    ? routedComplexity.modelName
-    : ctx.settings.codingModel || ctx.settings.defaultModel || 'llama3.2'
+    : findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logComplexityRouting(ctx.sessionId, ctx.stepCount, routedComplexity, targetModel)
@@ -69,12 +69,26 @@ export function selectModelForTurn(ctx: TurnDispatchContext, hasRecentToolFailur
     routedComplexity.tier
   )
 
+  const candidateStandard = ctx.settings.complexityStandardModel || ctx.settings.codingModel || ctx.settings.defaultModel
+  const intermediateModel = candidateStandard
+    ? (findMatchingInstalledModel(candidateStandard, ctx.availableModels) || candidateStandard)
+    : (findMatchingInstalledModel('qwen2.5-coder:7b', ctx.availableModels) || ctx.availableModels?.[0] || 'qwen2.5-coder:7b')
+
+  const candidateFallback = ctx.settings.codingFallbackModel || ctx.settings.complexityFastModel || ctx.settings.defaultModel
+  const fallbackModel = candidateFallback
+    ? (findMatchingInstalledModel(candidateFallback, ctx.availableModels) || candidateFallback)
+    : (findMatchingInstalledModel('qwen2.5-coder:7b', ctx.availableModels) || findMatchingInstalledModel('llama3.2:3b', ctx.availableModels) || ctx.availableModels?.[0] || 'qwen2.5-coder:7b')
+
+  const heavyEscalationModel = ctx.settings.complexityHeavyModel
+    ? (findMatchingInstalledModel(ctx.settings.complexityHeavyModel, ctx.availableModels) || ctx.settings.complexityHeavyModel)
+    : undefined
+
   return {
     targetModel,
     targetModelToolCallingCapable,
-    intermediateModel: ctx.settings.complexityStandardModel || ctx.settings.codingModel || ctx.settings.defaultModel || 'llama3.2',
-    fallbackModel: ctx.settings.complexityFastModel || ctx.settings.defaultModel || 'llama3.2',
-    heavyEscalationModel: ctx.settings.complexityHeavyModel || undefined,
+    intermediateModel,
+    fallbackModel,
+    heavyEscalationModel,
     runtimeOpts,
     complexityTier: routedComplexity.tier,
   }

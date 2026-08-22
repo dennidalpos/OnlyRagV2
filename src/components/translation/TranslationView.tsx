@@ -18,9 +18,9 @@ import {
   GripVertical,
   WrapText,
 } from 'lucide-react'
-import { AppSettings } from '../../types'
+import { AppSettings, DiagnosticsData } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
-import { ModelBadge } from '../common/ModelBadge'
+import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
@@ -28,10 +28,11 @@ import { useResizablePanel } from '../../hooks/useResizablePanel'
 
 interface TranslationViewProps {
   settings?: AppSettings
+  diagnostics?: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
-export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUpdateSettings }) => {
+export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
   const { t } = useTranslation()
   const tr = useDocumentTranslation(settings)
   const toast = useToast()
@@ -64,10 +65,25 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Active Translation Model Badge */}
-          <ModelBadge
-            modelName={settings?.translationModel || settings?.defaultModel || 'llama3.2'}
-            tooltip={`Translation Model: ${settings?.translationModel || settings?.defaultModel || 'llama3.2'}`}
+          {/* Quick Translation Model Selector */}
+          <QuickModelSelector
+            currentModel={settings?.translationModel || settings?.defaultModel || 'llama3.2'}
+            fallbackModel={settings?.translationFallbackModel}
+            installedModels={diagnostics?.ollama?.models || []}
+            presetOptions={['qwen2.5:7b', 'llama3.1:8b', 'llama3.2:3b', 'mistral:7b', 'gemma2:9b']}
+            onSelectModel={(newModel) => {
+              onUpdateSettings?.({
+                translationModel: newModel,
+              })
+            }}
+            onSelectFallbackModel={(fallback) => {
+              onUpdateSettings?.({
+                translationFallbackModel: fallback,
+              })
+            }}
+            icon={Languages}
+            featureLabel="Traduzione Documenti"
+            variant="sky"
           />
 
           <button
@@ -372,7 +388,11 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
 
         {/* Translation Export Status Feedback Banner */}
         {tr.exportMessage && (
-          <div className="px-4 py-2 bg-sky-950/80 border-b border-sky-800 text-sky-300 text-xs font-semibold flex items-center gap-2">
+          <div
+            role="status"
+            aria-live="polite"
+            className="px-4 py-2 bg-sky-950/80 border-b border-sky-800 text-sky-300 text-xs font-semibold flex items-center gap-2"
+          >
             <Download className="w-3.5 h-3.5 text-sky-400" />
             <span>{tr.exportMessage}</span>
           </div>
@@ -380,7 +400,11 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, onUp
 
         {/* Cross-Module Task Lock Feedback Banner */}
         {tr.translationError && (
-          <div className="px-4 py-2 bg-amber-950/80 border-b border-amber-800 text-amber-300 text-xs font-semibold flex items-center gap-2">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="px-4 py-2 bg-amber-950/80 border-b border-amber-800 text-amber-300 text-xs font-semibold flex items-center gap-2"
+          >
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
             <span>{tr.translationError}</span>
           </div>

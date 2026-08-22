@@ -328,7 +328,7 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen',
     sizeBytesApprox: '5.2 GB',
     description: 'Current-generation 8B reasoning model for stack-trace analysis on 8GB GPUs',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['midrange'],
   },
   {
     modelName: 'qwen3:14b',
@@ -344,7 +344,7 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'deepseek-r1',
     sizeBytesApprox: '4.7 GB',
     description: 'Qwen 2.5-Coder/Math distilled reasoning model for deep algorithmic problem solving',
-    recommendedForProfiles: ['midrange'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'deepseek-r1:7b-qwen-distill-q4_k_m',

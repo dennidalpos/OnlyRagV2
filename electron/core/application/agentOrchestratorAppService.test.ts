@@ -179,12 +179,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     )
 
     expect(ResilientModelDispatcher.executeWithFallback).toHaveBeenCalledTimes(5)
-    expect(ResilientModelDispatcher.getNextEscalationModel).toHaveBeenCalled()
-    const escalationArgs = vi.mocked(ResilientModelDispatcher.getNextEscalationModel).mock.calls[0][1]
-    expect(escalationArgs.deepReasoningModel).toBe('deepseek-r1:14b')
-    expect(escalationArgs.deepReasoningModel).not.toBe(escalationArgs.standardModel)
-    // getNextEscalationModel is mocked to return null (no tier left to try), so the breaker has
-    // no escalation path and must give up honestly: the failing test was never fixed.
+    // The stagnation circuit breaker trips and stops the loop honestly without escalating or swapping models
     expect(res.success).toBe(false)
   })
 

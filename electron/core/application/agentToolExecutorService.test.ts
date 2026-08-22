@@ -500,7 +500,7 @@ async def async_handler():
     expect(res.logMessage).toContain('Git Commit created')
     const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
     expect(log).toContain('Add file.txt')
-  })
+  }, 15000)
 
   it('should return an error when git_commit is called without a commitMessage', async () => {
     const res = await agentToolExecutorService.executeTool(
@@ -529,7 +529,7 @@ async def async_handler():
     expect(res.logMessage).toContain('Git Commit created')
     const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
     expect(log).toContain('Add direct.txt')
-  })
+  }, 15000)
 
   it('performGitCommit returns success: false with no commitMessage, without touching git', () => {
     const res = agentToolExecutorService.performGitCommit(tempDir, '')

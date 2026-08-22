@@ -1,118 +1,107 @@
-# Piano di Refactoring Universale & Checklist Esecutiva
+# Universal Refactor Plan & Architecture Specification — OnlyRag V2
 
-Piano di implementazione per il perfezionamento di **Ingestione Doc** (traduzione in-place universale) e **Coding Agent Studio** (intervista pre-flight Claude Code, sincronizzazione plan e tool browser).
-
----
-
-## 📋 Checklist delle Attività
-
-### Fase 1: Ingestione Doc & Traduzione In-Place Universale
-- [x] **1.1. Rimozione Regex Buggata e Anti-Hardcoding in `sidecar/domain/translator.py`**:
-  - Eliminare la regex difettosa `(?:run_sep|run_s|ep)` che corrompe le parole contenenti 'ep' (es. Telepass -> Telass).
-  - Rimuovere tutte le regex euristiche su parole/lingue singole in `_smart_decode_pdf_text`.
-  - Normalizzare universalmente il testo con `unicodedata.normalize('NFKC')` e `ftfy.fix_text()`.
-- [x] **1.2. Token Placeholder Masking per Entità Immutabili**:
-  - Mascherare email (RFC regex standard), URL e codici strutturati con token `__PROT_ENT_N__` prima dell'invio a Ollama e ripristinarli al 100% dopo la traduzione.
-- [x] **1.3. Batching Strutturato Multi-Riga**:
-  - Sostituire il batching riga per riga (`[1]`, `[2]`) con un formato a tag deterministici `<seg id="K">...</seg>` che preserva fedelmente ritorni a capo (`\n`), indirizzi completi e tabelle.
-- [x] **1.4. Validazione & Test Unitari Traduzione**:
-  - Eseguire i test `pytest sidecar/tests/test_translator.py` e verificare la traduzione del PDF `Richiesta cessazione contratto telepass.pdf`.
+Documento architetturale completo e traccia di riferimento del refactoring di OnlyRag V2 per l'eliminazione dell'overengineering, l'adozione dell'architettura **Workhorse Model deterministica** con gestione resiliente dei fallback e la riorganizzazione dell'interfaccia utente.
 
 ---
 
-### Fase 2: Coding Agent Studio — Intervista Pre-Flight Stile Claude Code
-- [x] **2.1. Creazione Servizio Intervista `electron/core/application/agentInterviewAppService.ts`**:
-  - Analizzare il prompt per rilevare scelte architetturali/tecniche ambigue.
-  - Generare 1-3 domande mirate con schema JSON strutturato (opzioni con badge "(Consigliato)" + opzione write-in).
-  - Validare e sanificare l'output JSON con `jsonrepair`.
-- [x] **2.2. Integrazione nel Flusso Plan (`planGenerationAppService.ts` e IPC `electron/preload.ts`)**:
-  - Esporre IPC per l'intervista preliminare e fondere le risposte dell'utente nel prompt arricchito per la generazione del piano.
-- [x] **2.3. Integrazione UI nel Frontend (`src/components/coding/` e `src/hooks/usePlanApproval.ts`)**:
-  - Visualizzare le domande prima dell'approvazione del piano con chip di selezione e campo personalizzato.
+## 1. Motivazione & Diagnosi delle Criticità Iniziali
+
+### 1.1. Overengineering del Complexity Router Multi-Tier
+Nel design precedente, il sistema implementava 4 livelli di complessità proattivi (*🟢 Fast, 🔵 Standard, 🟣 Deep Reasoning, 🔶 Heavy*) che venivano ricalcolati dinamicamente ad ogni turno agentico:
+* **Problema di VRAM Thrashing:** A ogni cambio di tier, Ollama doveva scaricare il modello corrente dalla VRAM ed effettuare il warm-up del nuovo modello GGUF. Questo causava freeze di 3-8 secondi tra i turni, perdita della KV-cache in VRAM e consumo elevato di I/O.
+* **Escalation Incontrollata al Tier Heavy (14B):** Su errori ripetuti o fallimenti di comandi (`hasRecentToolFailure`, `errorCountInHistory >= 2`), il router scavalcava il modello selezionato dall'utente forzando l'escalation al tier *Heavy* (`qwen2.5-coder:14b`), eccedendo la VRAM sicura su GPU da 8GB e innescando blocchi e oscillazioni.
+* **Disallineamento UI:** Il badge dei tier nella vista di coding non rispecchiava sempre il modello effettivamente configurato.
+
+### 1.2. Wizard e Impostazioni Frammentate
+* Il Setup Wizard iniziale era distribuito su 6 passaggi ridondanti con sottomoduli dedicati per ciascun tier (`WizardStepCodingTiers`, `WizardStepGeneralLlms`, `WizardStepMultimodal`, `WizardStepPreferences`).
+* Assenza di un meccanismo rapido di cambio modello direttamente dalle barre superiori dei moduli (*Header*) senza dover accedere ogni volta alla pagina Impostazioni.
 
 ---
 
-### Fase 3: Coding Agent Studio — Sincronizzazione Plan e Risoluzione Loop Trap
-- [x] **3.1. Riconciliazione Stato e Prompt di Ripresa Turno**:
-  - In `agentOrchestratorPromptAssembly.ts` e `agentOrchestratorSessionState.ts`, includere lo stato dei file già scritti per evitare che l'agente riesegua lo step 1 e inneschi loop trap.
-- [x] **3.2. Flessibilità Definition-of-Done per Progetti Statici**:
-  - Adeguare `TransactionalExecutionGuard` e `trackVerification` per consentire la verifica e chiusura su progetti web statici (es. singolo file `index.html`).
+## 2. Nuova Architettura: Deterministic Workhorse & Resilient Fallback
+
+### 2.1. Principio del Modello di Lavoro Fisso ("Workhorse Model")
+1. **Unico Modello Principale di Sviluppo:** L'utente o l'hardware recommendation engine imposta un singolo modello primario ottimale per la propria GPU (es. `qwen2.5-coder:7b`, `qwen3:8b`, `deepseek-r1:8b`).
+2. **Zero VRAM Swapping:** Il modello rimane allocato in VRAM per l'intera durata della sessione di coding. La KV-cache dei turni precedenti viene conservata intatta, abilitando risposte sub-secondo ad altissima efficienza.
+3. **Nessuna Escalation Proattiva a 14B:** L'orchestratore non altera il modello durante la sessione in base a conteggi di errori o token.
+
+### 2.2. Fallback Reattivo di Auto-Healing su Crash / OOM
+Il cambio modello avviene **esclusivamente** come meccanismo reattivo di emergenza all'interno di `ResilientModelDispatcher.executeWithFallback`:
+* Se e solo se il modello primario genera un errore fisico fatale (`CUDA out of memory`, timeout del processo Ollama o crash del socket di streaming), il dispatcher:
+  1. Esegue il dump atomico della VRAM (`POST /api/generate` con `keep_alive: 0`).
+  2. Dimezza la context window (`num_ctx = 4096`).
+  3. Re-instrada la richiesta verso il modello di fallback configurato (`codingFallbackModel`, es. `llama3.2:3b`).
+* Il fallback può essere liberamente modificato o disattivato dall'utente in qualsiasi momento.
 
 ---
 
-### Fase 4: Coding Agent Studio — Tool `open_in_browser`
-- [x] **4.1. Implementazione Tool in `agentToolExecutorService.ts`**:
-  - Aggiungere il tool `open_in_browser` con validazione `validatePathSafety` e integrazione con `electron.shell.openPath` / `electron.shell.openExternal`.
-- [x] **4.2. Aggiornamento Catalogo Schemi e Prompt**:
-  - Registrare `open_in_browser` in `ollamaToolSchemaCatalog.ts` e nelle istruzioni operative dell'agente.
+## 3. Rimodellazione dei Componenti Frontend
+
+### 3.1. Selettore Rapido Universale (`QuickModelSelector.tsx`)
+Un componente compatto, interattivo e conforme agli standard di accessibilità (`role="listbox"`, `aria-*`, focus ring):
+* Integrato negli header di:
+  * **AI Coding Agent Studio** ([`CodingHeader.tsx`](file:///d:/GITHUB/OnlyRagV2/src/components/coding/CodingHeader.tsx))
+  * **RAG Chat & Knowledge** ([`ChatView.tsx`](file:///d:/GITHUB/OnlyRagV2/src/components/chat/ChatView.tsx))
+  * **Document Translation** ([`TranslationView.tsx`](file:///d:/GITHUB/OnlyRagV2/src/components/translation/TranslationView.tsx))
+  * **Ingestion & Text Check** ([`IngestionView.tsx`](file:///d:/GITHUB/OnlyRagV2/src/components/ingestion/IngestionView.tsx))
+* Funzionalità:
+  * Indicazione istantanea del modello primario attivo.
+  * Badge di stato installazione: `✓ Pronto` per i modelli già scaricati in locale, `⬇ Da scaricare` per i modelli selezionati ma assenti.
+  * Badge del fallback configurato (`🛡️ <fallback>`).
+  * Dropdown con preset raccomandati e possibilità di impostare o disattivare il fallback OOM al volo.
+
+### 3.2. Riorganizzazione Impostazioni Assegnazione Modelli (`ModelAssignmentGrid.tsx`)
+La griglia di configurazione è stata ristrutturata in 4 schede logico-funzionali:
+1. **AI Coding Agent Studio:** Modello Principale di Sviluppo (Workhorse) + Modello di Fallback (Auto-Healing OOM).
+2. **RAG Chat & Document Translation:** Modello Chat RAG (+ Fallback) e Modello Traduzione (+ Fallback).
+3. **Ingestion, Vision OCR & Vector Store:** Modello Multimodale Vision OCR e Modello Vector Embedding LanceDB.
+4. **Domini Specialistici:** Modelli dedicati per ambito Medico-Sanitario e Giuridico-Normativo.
+
+### 3.3. Setup Wizard a 3 Step Semplificato (`HardwareSetupWizardModal.tsx`)
+Flusso snello e guidato:
+* **Step 1 — Rilevamento Hardware:** Scansione VRAM GPU, CPU, RAM e stato del server Ollama con pulsante "Configurazione Rapida Consigliata (1-Click)".
+* **Step 2 — Suite Modelli Consigliati (`WizardStepRecommendedModels.tsx`):** Selezione intuitiva della suite funzionale consigliata in base al profilo di calcolo rilevato.
+* **Step 3 — Riepilogo & Download Batch (`WizardStepSummaryAndDownload.tsx`):** Verifica preventiva dello spazio su disco, visualizzazione dei modelli mancanti e download sequenziale automatico con barra di avanzamento.
 
 ---
 
-### Fase 5: Verifica Completa & Allineamento Documentazione
-- [x] **5.1. Esecuzione Suite di Test Seriale**:
-  - Pytest sidecar, Vitest frontend/electron (`npm run test:unit-only`, `npm run test:agent`, `npm run typecheck`).
-- [x] **5.2. Aggiornamento Documentazione `/docs/` e Pulizia `PROJECT_STATUS.json`**:
-  - Sincronizzare `docs/libraries-and-domain-implementations.md`, `docs/architecture.md`, `docs/modules.md`.
+## 4. Rimodellazione dei Servizi Backend & Domain (Electron)
+
+### 4.1. Assemblaggio Prompt & Target Model (`agentOrchestratorPromptAssembly.ts`)
+* `selectModelForTurn` assegna determiniscamente `ctx.settings.codingModel || 'qwen2.5-coder:7b'` come `targetModel`.
+* Eliminato il bypass `useComplexityRouting ? routedComplexity.modelName` che causava cambi di modello non richiesti.
+* La valutazione di complessità (`evaluateTaskComplexity`) viene mantenuta unicamente per calibrare le direttive del prompt di sistema (es. step di ragionamento su compiti ampi), senza mai alterare i pesi del modello caricato.
+
+### 4.2. Rimozione Escalation dal Stagnation Circuit Breaker (`agentOrchestratorCircuitBreakerAndVerification.ts`)
+* In caso di stallo o loop persistente, `runCircuitBreaker` non esegue più lo swap forzato del modello verso un tier 14B.
+* Il circuit breaker arresta in sicurezza l'iterazione o inietta la direttiva di auto-interruzione, lasciando il controllo all'utente.
+
+### 4.3. Disaccoppiamento e Pulizia File Obsoleti
+* Eliminati i file wizard non più utilizzati:
+  * `src/components/wizard/WizardStepCodingTiers.tsx`
+  * `src/components/wizard/WizardStepGeneralLlms.tsx`
+  * `src/components/wizard/WizardStepMultimodal.tsx`
+  * `src/components/wizard/WizardStepPreferences.tsx`
 
 ---
 
-### Fase 6: Coding Agent Studio — Refactoring Completo UI/UX & Architettura
-- [x] **6.1. Header & System Specs Streamlining**:
-  - In `CodingHeader.tsx`, sostituire i 10+ badge statici con un indicatore di stato compatto (`🟢 System Ready ▾`) dotato di popover/tooltip con specifiche runtime e tool hardware.
-- [x] **6.2. Workspace Explorer & File Tree Moderno**:
-  - In `WorkspaceExplorer.tsx`, `FileExplorerTree.tsx` e `WorkspaceExplorerProjectSwitcher.tsx`:
-    - Eliminare le card nidificate e i selettori doppi.
-    - Implementare guide verticali di profondità (`tree guides`), icone contestuali per estensione via `lucide-react`, barra di filtro rapido e gestione pulita dei file pinnati.
-  - Eliminare il file morto `WorkspaceExplorerTreeSection.tsx`.
-- [x] **6.3. Timeline & Collapsible Tool Execution**:
-  - In `AgentTimeline.tsx`, `AgentTimelineMessage.tsx` e `AgentActionLogPanel.tsx`:
-    - Raggruppare i passaggi dei tool in badge compatti espandibili al click (`✓ Read file`, `⚡ Ran command`).
-    - Collassare il blocco di ragionamento (*CoT*) e ottimizzare la virtualizzazione.
-  - Eliminare il componente duplicato `AgentSessionHeaderBar.tsx`.
-- [x] **6.4. Prompt Composer con Context Pills & Auto-Resize**:
-  - In `PromptComposer.tsx`: textarea ad auto-espansione, pill rimovibili per file pinnati e documenti allegati, selettore di modalità a 3 stati (`Agent` | `Ask` | `Plan`) e token gauge compatto.
-- [x] **6.5. Separazione Editor & Bottom Tool Dock (Opzione 1)**:
-  - Creare `CodingBottomDock.tsx` per ospitare Terminale PTY, Piano dei task, Git Diff e Diagnostica con tab e resize dedicato.
-  - In `CodingEditorTabBar.tsx` e `CodingEditorContent.tsx`, dedicare la tab bar superiore esclusivamente ai file di codice Monaco aperti.
-  - In `CodingAgentView.tsx`, assemblare il layout a 3 colonne con Bottom Dock inferiore.
-- [x] **6.6. Verifica Seriale, Test & Sync Documentazione**:
-  - Eseguire typecheck, suite di test e aggiornare `/docs/`.
+## 5. Matrice di Verifica & Test Eseguiti
+
+Tutte le verifiche sono state eseguite in modalità rigorosamente sequenziale (*Strict Serial Execution*):
+
+| Suite di Verifica | Comando | Esito | Note |
+| :--- | :--- | :--- | :--- |
+| **TypeScript Typecheck** | `npm run typecheck` | **PASS (0 errori)** | Piena conformità tipi e rimozione unused imports. |
+| **Vitest Fast Suite** | `npm run test:fast` | **PASS (90/90 files, 652/652 tests)** | Copertura completa domain, application, UI e parser. |
+| **Pytest Sidecar FastAPI** | `.venv/pytest sidecar/tests -q` | **PASS (42/42 tests)** | Endpoint di ingestion, LanceDB e ricerca vettoriale. |
+| **Lint & Code Quality** | `.\scripts\lint_format.ps1 -Fast` | **PASS** | Verifica stili, formattazione e vincoli PowerShell. |
+| **Vite Production Build** | `npx vite build` | **PASS** | Compilazione di tutti i bundle di produzione. |
 
 ---
 
-### Fase 7: Coding Agent Studio — Streamlining UI/UX, Eliminazione Overengineering & Unified Dock
-- [x] **7.1. Backend Data Contract & Structured Events (Anti-Hardcoding)**:
-  - Estendere `AgentActionLog` in `src/types/index.ts` ed `electron/core/domain/agent/agentTypes.ts` con campi strutturati (`category`, `verb`, `target`, `status`, `testRun`, `modelName`).
-  - Aggiornare `agentOrchestratorToolResultProcessor.ts`, `agentOrchestratorTurnDispatch.ts`, `agentOrchestratorFinishAndLoopGuards.ts`, `agentOrchestratorAskAutoHealing.ts` per emettere log già strutturati.
-  - Sostituite 446 righe di regex-scraping fragile in `agentLogMessageUtils.ts` con un resolver deterministico e tipizzato a monte.
-- [x] **7.2. Single Header & Omni-Composer Ergonomico (Stile Cursor / Claude Code)**:
-  - Consolidato il layout del pannello sinistro in un singolo header integrato (`WorkspaceExplorer` toggle, session selector e step badge).
-  - Creato Omni-Composer (`PromptComposer.tsx`) con prompt queue chips galleggianti, context pills rimovibili (`📌 File`, `📄 RAG`), textarea ad auto-espansione, barra di stato contesto/token discreta e selettore di modalità a pillola segmentata (`[⚡ Agent] [📋 Plan] [💬 Ask]`).
-- [x] **7.3. Timeline a Turni & Action Groups Collassabili**:
-  - Riprogettato `AgentTimelineMessage.tsx` con rendering Markdown standard, Action Cards dedicate (File Mutation, Command Execution con output collassabile, Test Run con badge PASS/FAIL, User Prompt bubbles, System Alert cards).
-- [x] **7.4. Dock Inferiore Snello & Spostamento Diagnostica / Telemetria**:
-  - Ridotto `CodingBottomDock.tsx` a 3 tab operative: `Terminal` (PowerShell ConPTY), `Changes` (Git diff), `Plan` (Milestones e checklist).
-  - Spostato il monitoraggio telemetrico, toolchain e log SLM in un modale dedicato (`SystemDiagnosticsModal.tsx`) accessibile da `CodingHeader.tsx`.
-- [x] **7.5. Unificazione Flusso Monaco Diff**:
-  - Flusso coerente di visualizzazione ed apertura diff cliccando sui file modificati sia dalla timeline che dalla tab Changes.
-- [x] **7.6. Verifica Seriale dei Test & Aggiornamento Documentazione**:
-  - Eseguiti typecheck e suite completa Vitest (89/89 test files PASS, 624/624 test passati) e documentazione sincronizzata in `/docs/`.
+## 6. Registro Storico Sessioni & Diagnostica Log
 
----
-
-### Fase 8: Coding Agent Studio — Unificazione Domain Logic, Guardrails & AI Debug Diagnostic Bundle
-- [x] **8.1. Unificazione Tool Schema Catalog & Parameter Normalization**:
-  - Centralizzati in `toolSchemaValidator.ts` gli alias di tutti gli strumenti (`TOOL_NAME_ALIASES`) e dei parametri (`normalizeToolParams`, `normalizeToolName`, `validateAndSanitize`).
-  - Semplificato drasticamente `toolParser.ts` eliminando oltre 200 righe di verifiche di fallback duplicate.
-- [x] **8.2. Unificazione Guardrail & Circuit Breakers (`agentExecutionGuard.ts`)**:
-  - Creato il motore coordinatore `AgentExecutionGuard` per loop detection crittografica SHA-256, stagnation circuit breaker e verifica della Definition of Done (`TransactionalExecutionGuard`).
-  - Rimossa logica orfana non utilizzata (`generateReproTestTemplate` in `cycleOscillationDetector.ts`).
-- [x] **8.3. AI Debug Diagnostic Bundle**:
-  - Implementato `aiDebugBundleService.ts` per generare report Markdown diagnostici ad alta densità per assistenti AI (Claude, Antigravity, ChatGPT, DeepSeek) con specifiche host, toolchain, prompt originale, tabella turni, errori puliti da codici ANSI e `git diff` unificato.
-  - Integrato pulsante 1-click **"📋 Copia per AI Agent"** in `SystemDiagnosticsModal.tsx`.
-- [x] **8.4. Verifica Seriale Completa**:
-  - `npm run typecheck` $\rightarrow$ 0 errori.
-  - `npm run test:fast` $\rightarrow$ 89/89 test files PASS (624/624 test passati).
-
-
-
+### Analisi Sessione `session-1787428626914-agy7`
+* **Task Utente:** Creazione e scaffolding di un'applicazione React + Tailwind CSS con layout responsive mobile-first.
+* **Causa Anomalia Rilevata nei Log:** Nei primi step si è verificato un errore di scaffolding/comando, che ha portato `errorCountInHistory` a 2. Il vecchio meccanismo di `evaluateTaskComplexity` e `runCircuitBreaker` ha interpretato questo conteggio come segnale di auto-healing forzando l'escalation a `qwen2.5-coder:14b` dal turno 5 al turno 9.
+* **Risoluzione Definitiva:** Con il blocco del target model in `selectModelForTurn` e la rimozione dello swap nel circuit breaker, l'agente rimane saldamente sul modello impostato dall'utente per tutta la sessione.

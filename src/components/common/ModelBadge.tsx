@@ -37,7 +37,7 @@ export const ModelBadge: React.FC<ModelBadgeProps> = ({
     badgeStyle = 'bg-amber-950/70 text-amber-300 border-amber-800/80 shadow-sm'
   }
 
-  const titleText = tooltip || (tier && tierName ? `${tierName}: ${modelName}` : `Modello: ${modelName}`)
+  const titleText = tooltip || (tier && tierName ? `${tierName}: ${modelName}` : tier ? `${tier.toUpperCase()}: ${modelName}` : `Modello: ${modelName}`)
 
   return (
     <div
@@ -48,7 +48,7 @@ export const ModelBadge: React.FC<ModelBadgeProps> = ({
     >
       <IconComponent className="w-3.5 h-3.5 shrink-0 text-current" />
       <span className="truncate max-w-[150px]">{modelName}</span>
-      {tier && tierName && (
+      {tier && (
         <span className="text-[10px] uppercase tracking-wider opacity-85 border-l border-current/30 pl-1.5 ml-0.5 font-bold">
           {tier === 'deep_reasoning' ? 'Deep' : tier}
         </span>

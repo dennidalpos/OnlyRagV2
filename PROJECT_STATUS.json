@@ -1,3 +1,6 @@
 {
-  "todos": []
+  "todos": [
+    "Verifica runtime interattiva del cambio modello al volo tramite QuickModelSelector in ambiente Electron live",
+    "Monitoraggio stabilità allocazione KV-cache e auto-healing su sessioni di coding multi-step prolungate"
+  ]
 }

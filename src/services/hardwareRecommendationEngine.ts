@@ -422,40 +422,7 @@ export function assessModelHardwareCompatibility(
   }
 }
 
-/**
- * Accurately determines if a target Ollama model tag is installed locally.
- */
-export function isOllamaModelInstalled(targetModel: string, downloadedModels: string[]): boolean {
-  if (!targetModel || !downloadedModels || downloadedModels.length === 0) return false
-  const targetClean = targetModel.trim().toLowerCase()
-  const targetBase = targetClean.split(':')[0]
-  const targetTag = targetClean.includes(':') ? targetClean.split(':')[1] : ''
-  const targetWithoutNamespace = targetClean.includes('/') ? targetClean.split('/')[1] : targetClean
-
-  return downloadedModels.some((installed) => {
-    const instClean = installed.trim().toLowerCase()
-    // 1. Exact match
-    if (instClean === targetClean) return true
-
-    // 2. Default tag ':latest' equivalence
-    if (targetTag === '' || targetTag === 'latest') {
-      if (instClean === targetBase || instClean === `${targetBase}:latest`) return true
-    }
-    const instBase = instClean.split(':')[0]
-    const instTag = instClean.includes(':') ? instClean.split(':')[1] : ''
-    if (instTag === '' || instTag === 'latest') {
-      if (targetClean === instBase || targetClean === `${instBase}:latest`) return true
-    }
-
-    // 3. Namespace strip match
-    const instWithoutNamespace = instClean.includes('/') ? instClean.split('/')[1] : instClean
-    if (targetWithoutNamespace === instWithoutNamespace) return true
-    if (targetWithoutNamespace.split(':')[0] === instWithoutNamespace && (targetTag === '' || targetTag === 'latest')) return true
-    if (instWithoutNamespace.split(':')[0] === targetWithoutNamespace && (instTag === '' || instTag === 'latest')) return true
-
-    return false
-  })
-}
+export { isOllamaModelInstalled } from './complexityRouterService'
 
 /**
  * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments

@@ -6,32 +6,38 @@ import {
 } from './complexityEvaluator'
 
 describe('Complexity Evaluator Domain Unit Tests', () => {
-  it('should route short lookup queries to fast tier', () => {
-    const res = evaluateTaskComplexity('what is the syntax for useEffect hook in React?')
+  it('should route short lookup queries in non-agent mode to fast tier', () => {
+    const res = evaluateTaskComplexity('what is the syntax for useEffect?', { agentMode: 'ask' })
     expect(res.tier).toBe('fast')
     expect(res.tierName).toBe('Fast Tier')
     expect(res.isEscalated).toBe(false)
   })
 
-  it('should route Italian quick questions to fast tier', () => {
-    const res = evaluateTaskComplexity('spiegami come si usa useState')
-    expect(res.tier).toBe('fast')
-    expect(res.tierName).toContain('Fast')
+  it('should route any prompt in agent mode to at least standard tier for reliable coding and tool calling', () => {
+    const res1 = evaluateTaskComplexity('riprova', { agentMode: 'agent' })
+    expect(res1.tier).toBe('standard')
+
+    const res2 = evaluateTaskComplexity('continua', { agentMode: 'agent' })
+    expect(res2.tier).toBe('standard')
+
+    const res3 = evaluateTaskComplexity('Create a new UserCard component', { agentMode: 'agent' })
+    expect(res3.tier).toBe('standard')
   })
 
-  it('should route standard coding instructions to standard tier', () => {
-    const res = evaluateTaskComplexity('Create a new UserCard component with avatar and status badge')
-    expect(res.tier).toBe('standard')
-    expect(res.tierName).toBe('Standard Tier')
+  it('should route multi-file or large token prompts to deep reasoning tier', () => {
+    const resMulti = evaluateTaskComplexity('Refactor state logic', { attachedFilesCount: 2 })
+    expect(resMulti.tier).toBe('deep_reasoning')
+    expect(resMulti.tierName).toContain('Deep Reasoning')
+
+    const longPrompt = 'A'.repeat(800) + ' ' + 'B'.repeat(800)
+    const resTokens = evaluateTaskComplexity(longPrompt, { contextSizeChars: 20000 })
+    expect(resTokens.tier).toBe('deep_reasoning')
   })
 
-  it('should route deep keywords like architecture, deadlock or memory leak to deep reasoning tier', () => {
-    const res1 = evaluateTaskComplexity('Refactor the state architecture to prevent memory leak')
-    expect(res1.tier).toBe('deep_reasoning')
-    expect(res1.tierName).toContain('Deep Reasoning')
-
-    const res2 = evaluateTaskComplexity('Analizza questo deadlock nella gestione dei task concorrenti')
-    expect(res2.tier).toBe('deep_reasoning')
+  it('should route stack traces or diffs to deep reasoning tier', () => {
+    const trace = 'Traceback (most recent call last):\n  File "app.py", line 12, in <module>\nTypeError: unsupported operand'
+    const resTrace = evaluateTaskComplexity(trace)
+    expect(resTrace.tier).toBe('deep_reasoning')
   })
 
   it('should auto-escalate to deep reasoning on tool failure or error stack traces', () => {
@@ -42,7 +48,7 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     const res = evaluateTaskComplexity('Fix the component', ctx)
     expect(res.tier).toBe('deep_reasoning')
     expect(res.isEscalated).toBe(true)
-    expect(res.tierName).toBe('Escalated Deep Reasoning Tier')
+    expect(res.tierName).toBe('Deep Reasoning')
   })
 
   it('should de-escalate back to standard when consecutiveSuccessCount >= 2 via circuit breaker', () => {
@@ -56,94 +62,17 @@ describe('Complexity Evaluator Domain Unit Tests', () => {
     expect(res.isEscalated).toBe(false)
   })
 
-  it('should scale deep reasoning fallbacks to coding models on mid-range VRAM profiles (8GB GPU)', () => {
-    const ctxMid: ComplexityEvaluationContext = {
-      safeVramBudgetGB: 4.5,
-      vramTotalMB: 8192,
-      availableModels: ['deepseek-r1:7b', 'deepseek-r1:14b'],
-    }
-    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxMid)
-    expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('deepseek-r1:7b')
-  })
-
-  it('should scale deep reasoning fallbacks to lightweight models on legacy/CPU profiles (< 6GB)', () => {
-    const ctxLow: ComplexityEvaluationContext = {
-      safeVramBudgetGB: 1.5,
-      vramTotalMB: 0,
-      availableModels: ['deepseek-r1:1.5b', 'deepseek-r1:14b'],
-    }
-    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxLow)
-    expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('deepseek-r1:1.5b')
-  })
-
-  it('should allow larger reasoning models on extreme VRAM profiles (24GB+)', () => {
-    const ctxExtreme: ComplexityEvaluationContext = {
-      safeVramBudgetGB: 16.5,
-      vramTotalMB: 24576,
-      availableModels: ['qwen2.5-coder:32b', 'deepseek-r1:32b', 'qwen2.5-coder:14b'],
-    }
-    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxExtreme)
-    expect(res.tier).toBe('deep_reasoning')
-    // A 32B-class reasoning model, i.e. far above what the mid-range profile is offered.
-    // Which 32B tag wins is decided by findMatchingInstalledModel's loose base match, not by
-    // the cascade order — the cascade's own budget ordering is covered directly in
-    // hardwareModelCatalog.test.ts (buildFallbackChain).
-    expect(res.modelName).toBe('deepseek-r1:32b')
-  })
-
-  it('should prefer the curated head of the catalog cascade when it is installed', () => {
-    const ctxExtreme: ComplexityEvaluationContext = {
-      safeVramBudgetGB: 16.5,
-      vramTotalMB: 24576,
-      availableModels: ['gpt-oss:20b', 'qwen2.5-coder:14b'],
-    }
-    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxExtreme)
-    expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('gpt-oss:20b')
-    expect(res.isFallback).toBe(false)
-  })
-
-  it('should keep a CPU-only host on models it can actually run, not merely hold in RAM', () => {
-    // 32GB of system RAM would "fit" a 14B model, but a CPU-only tool loop needs the
-    // CPU throughput budget instead (CPU_INFERENCE_WEIGHT_BUDGET_GB).
-    const ctxCpu: ComplexityEvaluationContext = {
-      hardwareProfile: 'Auto',
-      vramTotalMB: 0,
-      availableModels: ['qwen2.5-coder:14b', 'qwen2.5-coder:3b'],
-    }
-    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxCpu)
-    expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('qwen2.5-coder:3b')
-  })
-
-  it('should allow 14B model on 8GB GPU when enableSystemRamOffloading is true and RAM is sufficient', () => {
-    const ctxHybrid: ComplexityEvaluationContext = {
-      vramTotalMB: 8192,
-      systemRamGB: 32,
-      enableSystemRamOffloading: true,
-      availableModels: ['qwen2.5-coder:14b', 'qwen2.5-coder:7b'],
-    }
-    const res = evaluateTaskComplexity('Refactor memory architecture and optimize thread lockups', ctxHybrid)
-    expect(res.tier).toBe('deep_reasoning')
-    expect(res.modelName).toBe('qwen2.5-coder:14b')
-  })
-
-  it('should route to configured complexityHeavyModel when errorCountInHistory >= 2', () => {
-    const ctxHeavy: ComplexityEvaluationContext = {
-      hasRecentToolFailure: true,
-      errorCountInHistory: 2,
+  it('should maintain the workhorse coding model across evaluations', () => {
+    const ctxCoding: ComplexityEvaluationContext = {
       settings: {
-        complexityHeavyModel: 'qwen2.5-coder:14b',
+        codingModel: 'qwen2.5-coder:7b',
       } as any,
-      availableModels: ['qwen2.5-coder:14b', 'qwen2.5-coder:7b'],
+      availableModels: ['qwen2.5-coder:7b', 'deepseek-r1:14b'],
+      attachedFilesCount: 2,
     }
-    const res = evaluateTaskComplexity('Fix the build error', ctxHeavy)
-    expect(res.tier).toBe('heavy')
-    expect(res.tierName).toBe('Heavy Escalation Tier')
-    expect(res.modelName).toBe('qwen2.5-coder:14b')
-    expect(res.isEscalated).toBe(true)
+    const res = evaluateTaskComplexity('Refactor state logic', ctxCoding)
+    expect(res.tier).toBe('deep_reasoning')
+    expect(res.modelName).toBe('qwen2.5-coder:7b')
   })
 
   it('should find matching installed models accurately with fuzzy tags', () => {

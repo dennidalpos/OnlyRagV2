@@ -11,18 +11,12 @@ import {
   ChevronLeft,
   X,
   Check,
-  Code,
-  MessageSquare,
-  Eye,
-  Sliders,
+  Sparkles,
   Download,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { WizardStepHardware } from '../wizard/WizardStepHardware'
-import { WizardStepCodingTiers } from '../wizard/WizardStepCodingTiers'
-import { WizardStepGeneralLlms } from '../wizard/WizardStepGeneralLlms'
-import { WizardStepMultimodal } from '../wizard/WizardStepMultimodal'
-import { WizardStepPreferences } from '../wizard/WizardStepPreferences'
+import { WizardStepRecommendedModels } from '../wizard/WizardStepRecommendedModels'
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
 import { logger } from '../../lib/logger'
 
@@ -47,73 +41,54 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 }) => {
   const { t } = useTranslation()
   const [step, setStep] = useState<number>(1)
-  const [enableSystemRamOffloading, setEnableSystemRamOffloading] = useState<boolean>(
-    Boolean(settings.enableSystemRamOffloading)
-  )
-  const [enableSoundEffects, setEnableSoundEffects] = useState<boolean>(
-    settings.enableSoundEffects !== false
-  )
+  const enableSystemRamOffloading = Boolean(settings.enableSystemRamOffloading)
+  const enableSoundEffects = settings.enableSoundEffects !== false
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(
     diagnostics,
     enableSystemRamOffloading
   )
 
-  // Derived directly from diagnostics so it reacts to onRefreshDiagnostics() without stale state
   const downloadedModels = diagnostics?.ollama.models ?? []
 
-  const recFast =
-    recommendations.fastTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.fastTierModels[0].modelName
-  const recStandard =
+  const recCoding =
     recommendations.standardTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.standardTierModels[0].modelName
-  const recDeepCurated =
-    recommendations.deepReasoningTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.deepReasoningTierModels[0].modelName
-  // Standard and Deep Reasoning must default to distinct models: if the curated pick collides
-  // with the Standard tier's, fall back to the next Deep Reasoning candidate that still fits
-  // the detected hardware budget, then to any distinct candidate as a last resort.
-  const recDeep =
-    recDeepCurated !== recStandard
-      ? recDeepCurated
-      : recommendations.deepReasoningTierModels.find(
-          (m) => m.modelName !== recStandard && m.compatibilityStatus !== 'exceeds_vram'
-        )?.modelName ||
-        recommendations.deepReasoningTierModels.find((m) => m.modelName !== recStandard)
-          ?.modelName ||
-        recDeepCurated
+    recommendations.standardTierModels[0]?.modelName ||
+    'qwen2.5-coder:7b'
   const recChat =
     recommendations.chatTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.chatTierModels[0].modelName
+    recommendations.chatTierModels[0]?.modelName ||
+    'llama3.1:8b'
   const recTrans =
     recommendations.translationTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.translationTierModels[0].modelName
+    recommendations.translationTierModels[0]?.modelName ||
+    'qwen2.5:7b'
   const recVision =
     recommendations.visionTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.visionTierModels[0].modelName
+    recommendations.visionTierModels[0]?.modelName ||
+    'llama3.2-vision:11b'
   const recEmbedding =
     recommendations.embeddingTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.embeddingTierModels[0].modelName
+    recommendations.embeddingTierModels[0]?.modelName ||
+    'nomic-embed-text'
 
   // Model State across all Functional Slots
-  // Pre-selection: prefer already saved settings, then recommended model. No substring guessing.
-  const [selectedFast, setSelectedFast] = useState<string>(
-    settings.complexityFastModel || recFast
+  const [selectedCoding, setSelectedCoding] = useState<string>(
+    settings.codingModel || settings.complexityStandardModel || settings.defaultModel || recCoding
   )
-  const [selectedStandard, setSelectedStandard] = useState<string>(
-    settings.complexityStandardModel ||
-      settings.codingModel ||
-      settings.defaultModel ||
-      recStandard
-  )
-  const [selectedDeep, setSelectedDeep] = useState<string>(
-    settings.complexityDeepModel || recDeep
+  const [selectedCodingFallback, setSelectedCodingFallback] = useState<string | undefined>(
+    settings.codingFallbackModel
   )
   const [selectedChat, setSelectedChat] = useState<string>(
     settings.chatModel || recChat
   )
+  const [selectedChatFallback, setSelectedChatFallback] = useState<string | undefined>(
+    settings.chatFallbackModel
+  )
   const [selectedTranslation, setSelectedTranslation] = useState<string>(
     settings.translationModel || recTrans
+  )
+  const [selectedTranslationFallback, setSelectedTranslationFallback] = useState<string | undefined>(
+    settings.translationFallbackModel
   )
   const [selectedMedical, setSelectedMedical] = useState<string>(
     settings.medicalModel || ''
@@ -127,14 +102,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const [selectedEmbedding, setSelectedEmbedding] = useState<string>(
     settings.embeddingModel || recEmbedding
   )
-  const [selectedHeavy, setSelectedHeavy] = useState<string>(
-    settings.complexityHeavyModel || ''
-  )
 
   // Runtime Preferences State
-  const [useComplexityRouting, setUseComplexityRouting] = useState<boolean>(
-    settings.useComplexityRouting !== false
-  )
   const [hardwareProfile, setHardwareProfile] = useState<HardwareProfile>(
     settings.hardwareProfile || 'Auto'
   )
@@ -167,23 +136,22 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   // Sync settings only when modal initially opens
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
-      if (settings.complexityFastModel) setSelectedFast(settings.complexityFastModel)
-      if (settings.complexityStandardModel || settings.codingModel || settings.defaultModel) {
-        setSelectedStandard(
-          settings.complexityStandardModel || settings.codingModel || settings.defaultModel
+      if (settings.codingModel || settings.complexityStandardModel || settings.defaultModel) {
+        setSelectedCoding(
+          settings.codingModel || settings.complexityStandardModel || settings.defaultModel
         )
       }
-      if (settings.complexityDeepModel) setSelectedDeep(settings.complexityDeepModel)
-      setSelectedHeavy(settings.complexityHeavyModel || '')
+      setSelectedCodingFallback(settings.codingFallbackModel)
       if (settings.chatModel) setSelectedChat(settings.chatModel)
+      setSelectedChatFallback(settings.chatFallbackModel)
       if (settings.translationModel) setSelectedTranslation(settings.translationModel)
+      setSelectedTranslationFallback(settings.translationFallbackModel)
       setSelectedMedical(settings.medicalModel || '')
       setSelectedLegal(settings.legalModel || '')
       if (settings.visionModel) setSelectedVision(settings.visionModel)
       if (settings.embeddingModel) setSelectedEmbedding(settings.embeddingModel)
       if (settings.hardwareProfile) setHardwareProfile(settings.hardwareProfile)
       if (settings.ocrEngine) setOcrEngine(settings.ocrEngine)
-      setUseComplexityRouting(settings.useComplexityRouting !== false)
       setPullErrorDetail(null)
       setFailedModelIndex(null)
       setSkippedModels([])
@@ -192,44 +160,46 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       setStep(1)
     }
     prevIsOpenRef.current = isOpen
-  }, [isOpen])
+  }, [isOpen, settings])
 
   const handleCloseWithSave = useCallback(() => {
     onUpdateSettings({
-      defaultModel: selectedStandard || settings.defaultModel,
-      useComplexityRouting,
-      complexityFastModel: selectedFast || settings.complexityFastModel,
-      complexityStandardModel: selectedStandard || settings.complexityStandardModel,
-      complexityDeepModel: selectedDeep || settings.complexityDeepModel,
-      complexityHeavyModel: selectedHeavy || settings.complexityHeavyModel,
-      codingModel: selectedStandard || settings.codingModel,
+      defaultModel: selectedCoding || settings.defaultModel,
+      codingModel: selectedCoding || settings.codingModel,
+      complexityStandardModel: selectedCoding || settings.complexityStandardModel,
+      codingFallbackModel: selectedCodingFallback,
       chatModel: selectedChat || settings.chatModel,
+      chatFallbackModel: selectedChatFallback,
       translationModel: selectedTranslation || settings.translationModel,
+      translationFallbackModel: selectedTranslationFallback,
       medicalModel: selectedMedical || settings.medicalModel,
       legalModel: selectedLegal || settings.legalModel,
       visionModel: selectedVision || settings.visionModel,
       embeddingModel: selectedEmbedding || settings.embeddingModel,
       hardwareProfile,
       ocrEngine,
+      enableSystemRamOffloading,
+      enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
     onClose()
   }, [
     onUpdateSettings,
-    selectedStandard,
-    settings,
-    useComplexityRouting,
-    selectedFast,
-    selectedDeep,
-    selectedHeavy,
+    selectedCoding,
+    selectedCodingFallback,
     selectedChat,
+    selectedChatFallback,
     selectedTranslation,
+    selectedTranslationFallback,
     selectedMedical,
     selectedLegal,
     selectedVision,
     selectedEmbedding,
     hardwareProfile,
     ocrEngine,
+    enableSystemRamOffloading,
+    enableSoundEffects,
+    settings,
     onClose,
   ])
 
@@ -276,30 +246,29 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     return isOllamaModelInstalled(modelName, downloadedModels)
   }
 
-  // Calculate unique missing models (exclude empty heavy slot — it is optional)
+  // Calculate unique missing models
   const uniqueSelectedModels = Array.from(
     new Set([
-      selectedFast,
-      selectedStandard,
-      selectedDeep,
-      // Heavy is optional: only include if explicitly assigned
-      ...(selectedHeavy ? [selectedHeavy] : []),
+      selectedCoding,
+      ...(selectedCodingFallback ? [selectedCodingFallback] : []),
       selectedChat,
+      ...(selectedChatFallback ? [selectedChatFallback] : []),
       selectedTranslation,
+      ...(selectedTranslationFallback ? [selectedTranslationFallback] : []),
       selectedMedical,
       selectedLegal,
       selectedVision,
       selectedEmbedding,
     ])
-  ).filter((m) => !!m && m.trim().length > 0)
+  ).filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0))
 
   const missingModels = uniqueSelectedModels
     .filter((m) => !isModelDownloaded(m.trim()))
     .filter((m) => !skippedModels.includes(m.trim()))
 
-  // Check Disk Space when entering Step 6
+  // Check Disk Space when entering Step 3 (Summary & Download)
   useEffect(() => {
-    if (step === 6 && missingModels.length > 0 && window.electronAPI?.checkDiskSpace) {
+    if (step === 3 && missingModels.length > 0 && window.electronAPI?.checkDiskSpace) {
       setIsCheckingDisk(true)
       window.electronAPI
         .checkDiskSpace(missingModels)
@@ -317,13 +286,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   if (!isOpen) return null
 
   const isAllSlotsPopulated =
-    !!selectedFast.trim() &&
-    !!selectedStandard.trim() &&
-    !!selectedDeep.trim() &&
-    !!selectedChat.trim() &&
-    !!selectedTranslation.trim() &&
-    !!selectedVision.trim() &&
-    !!selectedEmbedding.trim()
+    Boolean(selectedCoding.trim()) &&
+    Boolean(selectedChat.trim()) &&
+    Boolean(selectedTranslation.trim()) &&
+    Boolean(selectedVision.trim()) &&
+    Boolean(selectedEmbedding.trim())
 
   const handleLaunchOrInstallOllama = async () => {
     if (!window.electronAPI?.installOrLaunchOllama) return
@@ -453,17 +420,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }
 
   const handleAutoApplyRecommended = () => {
-    const recHeavy =
-      recommendations.heavyEscalationTierModels.find((m) => m.isRecommended)?.modelName || ''
-    setSelectedFast(recFast)
-    setSelectedStandard(recStandard)
-    setSelectedDeep(recDeep)
-    setSelectedHeavy(recHeavy)
+    setSelectedCoding(recCoding)
     setSelectedChat(recChat)
     setSelectedTranslation(recTrans)
     setSelectedVision(recVision)
     setSelectedEmbedding(recEmbedding)
-    setUseComplexityRouting(true)
     setHardwareProfile('Auto')
     setOcrEngine('native_cuda')
     setPullErrorDetail(null)
@@ -471,13 +432,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     setSkippedModels([])
     setDiskCheck(null)
     onUpdateSettings({
-      defaultModel: recStandard,
-      useComplexityRouting: true,
-      complexityFastModel: recFast,
-      complexityStandardModel: recStandard,
-      complexityDeepModel: recDeep,
-      complexityHeavyModel: recHeavy,
-      codingModel: recStandard,
+      defaultModel: recCoding,
+      codingModel: recCoding,
+      complexityStandardModel: recCoding,
       chatModel: recChat,
       translationModel: recTrans,
       visionModel: recVision,
@@ -488,20 +445,19 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
-    setStep(6)
+    setStep(3)
   }
 
   const handleFinalSave = () => {
     onUpdateSettings({
-      defaultModel: selectedStandard,
-      useComplexityRouting,
-      complexityFastModel: selectedFast,
-      complexityStandardModel: selectedStandard,
-      complexityDeepModel: selectedDeep,
-      complexityHeavyModel: selectedHeavy || '',
-      codingModel: selectedStandard,
+      defaultModel: selectedCoding,
+      codingModel: selectedCoding,
+      complexityStandardModel: selectedCoding,
+      codingFallbackModel: selectedCodingFallback,
       chatModel: selectedChat,
+      chatFallbackModel: selectedChatFallback,
       translationModel: selectedTranslation,
+      translationFallbackModel: selectedTranslationFallback,
       medicalModel: selectedMedical,
       legalModel: selectedLegal,
       visionModel: selectedVision,
@@ -535,15 +491,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                 className="text-base font-bold text-slate-100 flex items-center gap-2"
               >
                 {t('hardwareWizard.title')}{' '}
-                <span className="text-cyan-400">— {t('hardwareWizard.stepIndicator', { step })}</span>
+                <span className="text-cyan-400">— Step {step} di 3</span>
               </h2>
               <p className="text-xs text-slate-400">
-                {step === 1 && t('hardwareWizard.step1Subtitle')}
-                {step === 2 && t('hardwareWizard.step2Subtitle')}
-                {step === 3 && t('hardwareWizard.step3Subtitle')}
-                {step === 4 && t('hardwareWizard.step4Subtitle')}
-                {step === 5 && t('hardwareWizard.step5Subtitle')}
-                {step === 6 && t('hardwareWizard.step6Subtitle')}
+                {step === 1 && 'Scansione profilo hardware e stato del runtime Ollama'}
+                {step === 2 && 'Selezione della suite di modelli raccomandata (Workhorse & Fallback)'}
+                {step === 3 && 'Riepilogo finale e download batch dei modelli mancanti'}
               </p>
             </div>
           </div>
@@ -561,16 +514,13 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           </div>
         </div>
 
-        {/* Interactive Step Navigation Bar (Stepper) */}
+        {/* 3-Step Stepper Navigation */}
         <div className="bg-slate-950/90 border-b border-slate-800 px-4 py-2.5">
-          <nav aria-label="Wizard Steps" className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+          <nav aria-label="Wizard Steps" className="grid grid-cols-3 gap-2">
             {[
-              { id: 1, label: t('hardwareWizard.navHardware'), icon: Cpu, desc: t('hardwareWizard.step1Subtitle') },
-              { id: 2, label: t('hardwareWizard.navCoding'), icon: Code, desc: t('hardwareWizard.step2Subtitle') },
-              { id: 3, label: t('hardwareWizard.navChatLlm'), icon: MessageSquare, desc: t('hardwareWizard.step3Subtitle') },
-              { id: 4, label: t('hardwareWizard.navMultimodal'), icon: Eye, desc: t('hardwareWizard.step4Subtitle') },
-              { id: 5, label: t('hardwareWizard.navPreferences'), icon: Sliders, desc: t('hardwareWizard.step5Subtitle') },
-              { id: 6, label: t('hardwareWizard.navDownload'), icon: Download, desc: t('hardwareWizard.step6Subtitle') },
+              { id: 1, label: '1. Scansione Hardware', icon: Cpu, desc: 'Rilevamento GPU e RAM' },
+              { id: 2, label: '2. Modelli Consigliati', icon: Sparkles, desc: 'Suite Workhorse & Fallback' },
+              { id: 3, label: '3. Download & Avvio', icon: Download, desc: 'Riepilogo e Setup' },
             ].map((st) => {
               const isCurrent = step === st.id
               const isCompleted = step > st.id
@@ -583,17 +533,17 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                   }}
                   disabled={isPullingModels}
                   aria-current={isCurrent ? 'step' : undefined}
-                  className={`px-2 py-1.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none focus-ring ${
+                  className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer select-none focus-ring ${
                     isCurrent
                       ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-400/40'
                       : isCompleted
                       ? 'bg-slate-900/80 text-emerald-300/90 border-emerald-800/40 hover:bg-slate-850 hover:text-emerald-200'
                       : 'bg-slate-900/40 text-slate-400 border-slate-800/80 hover:bg-slate-800/70 hover:text-slate-200 hover:border-slate-700'
                   }`}
-                  title={t('hardwareWizard.goToStepTooltip', { desc: st.desc, step: st.id })}
+                  title={st.desc}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
                       isCurrent
                         ? 'bg-cyan-400 text-slate-950 font-black'
                         : isCompleted
@@ -601,7 +551,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
                         : 'bg-slate-800 text-slate-400'
                     }`}
                   >
-                    {isCompleted ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : st.id}
+                    {isCompleted ? <Check className="w-3 h-3 stroke-[3]" /> : st.id}
                   </div>
                   <span className="truncate">{st.label}</span>
                 </button>
@@ -610,8 +560,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           </nav>
         </div>
 
-        {/* Wizard Step Content */}
-        <div className="p-6 overflow-y-auto flex-1 relative">
+        {/* Modal Main Body */}
+        <div className="p-5 flex-1 overflow-y-auto">
           {step === 1 && (
             <WizardStepHardware
               diagnostics={diagnostics}
@@ -625,86 +575,60 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           )}
 
           {step === 2 && (
-            <WizardStepCodingTiers
-              useComplexityRouting={useComplexityRouting}
-              onToggleComplexityRouting={setUseComplexityRouting}
-              selectedFast={selectedFast}
-              onSelectFast={setSelectedFast}
-              selectedStandard={selectedStandard}
-              onSelectStandard={setSelectedStandard}
-              selectedDeep={selectedDeep}
-              onSelectDeep={setSelectedDeep}
-              selectedHeavy={selectedHeavy}
-              onSelectHeavy={setSelectedHeavy}
-              fastTierModels={recommendations.fastTierModels}
-              standardTierModels={recommendations.standardTierModels}
-              deepReasoningTierModels={recommendations.deepReasoningTierModels}
-              heavyEscalationTierModels={recommendations.heavyEscalationTierModels}
+            <WizardStepRecommendedModels
               downloadedModels={downloadedModels}
-              isModelDownloaded={isModelDownloaded}
+              selectedCoding={selectedCoding}
+              selectedCodingFallback={selectedCodingFallback}
+              onChangeCoding={setSelectedCoding}
+              onChangeCodingFallback={setSelectedCodingFallback}
+              codingPresetOptions={[
+                'qwen2.5-coder:7b',
+                'qwen3:8b',
+                'qwen2.5-coder:14b',
+                'qwen3:14b',
+                'gpt-oss:20b',
+                'codestral:22b',
+                'qwen2.5-coder:32b',
+                'deepseek-coder:6.7b',
+                'llama3.1:8b',
+              ]}
+              selectedChat={selectedChat}
+              selectedChatFallback={selectedChatFallback}
+              onChangeChat={setSelectedChat}
+              onChangeChatFallback={setSelectedChatFallback}
+              chatPresetOptions={['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b']}
+              selectedTranslation={selectedTranslation}
+              selectedTranslationFallback={selectedTranslationFallback}
+              onChangeTranslation={setSelectedTranslation}
+              onChangeTranslationFallback={setSelectedTranslationFallback}
+              translationPresetOptions={['qwen2.5:7b', 'llama3.1:8b', 'aya-expanse:8b', 'gemma2:2b', 'gemma2:9b']}
+              selectedVision={selectedVision}
+              onChangeVision={setSelectedVision}
+              visionPresetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b']}
+              selectedEmbedding={selectedEmbedding}
+              onChangeEmbedding={setSelectedEmbedding}
+              embeddingPresetOptions={['nomic-embed-text', 'bge-m3', 'bge-large', 'all-minilm']}
+              selectedMedical={selectedMedical}
+              onChangeMedical={(m) => setSelectedMedical(m || '')}
+              medicalPresetOptions={['adrienbrault/biomistral-7b:Q4_K_M', 'meditron:7b']}
+              selectedLegal={selectedLegal}
+              onChangeLegal={(m) => setSelectedLegal(m || '')}
+              legalPresetOptions={['llama3.1:8b', 'mistral:7b', 'command-r:35b']}
             />
           )}
 
           {step === 3 && (
-            <WizardStepGeneralLlms
-              selectedChat={selectedChat}
-              onSelectChat={setSelectedChat}
-              selectedTranslation={selectedTranslation}
-              onSelectTranslation={setSelectedTranslation}
-              selectedMedical={selectedMedical}
-              onSelectMedical={setSelectedMedical}
-              selectedLegal={selectedLegal}
-              onSelectLegal={setSelectedLegal}
-              chatTierModels={recommendations.chatTierModels}
-              translationTierModels={recommendations.translationTierModels}
-              medicalTierModels={recommendations.medicalTierModels}
-              legalTierModels={recommendations.legalTierModels}
-              downloadedModels={downloadedModels}
-              isModelDownloaded={isModelDownloaded}
-            />
-          )}
-
-          {step === 4 && (
-            <WizardStepMultimodal
-              selectedVision={selectedVision}
-              onSelectVision={setSelectedVision}
-              selectedEmbedding={selectedEmbedding}
-              onSelectEmbedding={setSelectedEmbedding}
-              visionTierModels={recommendations.visionTierModels}
-              embeddingTierModels={recommendations.embeddingTierModels}
-              downloadedModels={downloadedModels}
-              isModelDownloaded={isModelDownloaded}
-            />
-          )}
-
-          {step === 5 && (
-            <WizardStepPreferences
-              hardwareProfile={hardwareProfile}
-              onSelectHardwareProfile={setHardwareProfile}
-              ocrEngine={ocrEngine}
-              onSelectOcrEngine={setOcrEngine}
-              maxToolCallSteps={settings.maxToolCallSteps ?? 50}
-              onChangeMaxToolCallSteps={(val) => onUpdateSettings({ maxToolCallSteps: val })}
-              enableSystemRamOffloading={enableSystemRamOffloading}
-              onToggleSystemRamOffloading={setEnableSystemRamOffloading}
-              enableSoundEffects={enableSoundEffects}
-              onToggleSoundEffects={setEnableSoundEffects}
-            />
-          )}
-
-          {step === 6 && (
             <WizardStepSummaryAndDownload
-              selectedFast={selectedFast}
-              selectedStandard={selectedStandard}
-              selectedDeep={selectedDeep}
-              selectedHeavy={selectedHeavy}
+              selectedCoding={selectedCoding}
+              selectedCodingFallback={selectedCodingFallback}
               selectedChat={selectedChat}
+              selectedChatFallback={selectedChatFallback}
               selectedTranslation={selectedTranslation}
+              selectedTranslationFallback={selectedTranslationFallback}
               selectedMedical={selectedMedical}
               selectedLegal={selectedLegal}
               selectedVision={selectedVision}
               selectedEmbedding={selectedEmbedding}
-              useComplexityRouting={useComplexityRouting}
               hardwareProfile={hardwareProfile}
               ocrEngine={ocrEngine}
               isAllSlotsPopulated={isAllSlotsPopulated}
@@ -723,65 +647,71 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           )}
         </div>
 
-        {/* Wizard Footer Navigation */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
-            disabled={step === 1 || isPullingModels}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 disabled:opacity-40 text-slate-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 focus-ring"
-          >
-            <ChevronLeft className="w-4 h-4" /> {t('hardwareWizard.backBtn')}
-          </button>
+        {/* Modal Footer Controls */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
+          <div>
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={() => setStep((s) => s - 1)}
+                disabled={isPullingModels}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all border border-slate-800 flex items-center gap-1.5 focus-ring active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" /> {t('common.back')}
+              </button>
+            )}
+          </div>
 
-          {step < 6 ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCloseWithSave}
+              disabled={isPullingModels}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-medium rounded-xl transition-all border border-slate-800 focus-ring active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {t('hardwareWizard.saveAndExit')}
+            </button>
+
+            {step < 3 ? (
               <button
                 type="button"
-                onClick={handleCloseWithSave}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
-                title={t('hardwareWizard.saveAndExitTooltip')}
+                onClick={() => setStep((s) => s + 1)}
+                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-lg shadow-cyan-950/40 active:scale-95 cursor-pointer"
               >
-                <Check className="w-3.5 h-3.5 text-emerald-400" /> {t('hardwareWizard.saveAndExit')}
+                {t('common.next')} <ChevronRight className="w-4 h-4" />
               </button>
+            ) : (
               <button
                 type="button"
-                onClick={() => setStep((s) => Math.min(6, s + 1))}
-                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-md shadow-cyan-950/40 active:scale-95"
+                onClick={() => {
+                  if (missingModels.length > 0) {
+                    handleStartBulkPull(0)
+                  } else {
+                    handleFinalSave()
+                  }
+                }}
+                disabled={isPullingModels || !isAllSlotsPopulated}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 focus-ring shadow-lg shadow-emerald-950/40 active:scale-95 disabled:cursor-not-allowed cursor-pointer"
               >
-                {t('hardwareWizard.nextBtn')} <ChevronRight className="w-4 h-4" />
+                {isPullingModels ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    <span>{t('hardwareWizard.installingOllama')}</span>
+                  </>
+                ) : missingModels.length > 0 ? (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>{t('hardwareWizard.confirmDownloadBtn')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{t('hardwareWizard.finishBtn')}</span>
+                  </>
+                )}
               </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {missingModels.length > 0 && !isPullingModels && (
-                <button
-                  type="button"
-                  onClick={handleFinalSave}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-medium rounded-xl transition-all focus-ring"
-                >
-                  {t('hardwareWizard.skipDownloadBtn')}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleStartBulkPull()}
-                disabled={
-                  !isAllSlotsPopulated ||
-                  isPullingModels ||
-                  (missingModels.length > 0 && !!diskCheck && !diskCheck.allowed)
-                }
-                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50 focus-ring active:scale-95"
-              >
-                <Check className="w-4 h-4" />{' '}
-                {isPullingModels
-                  ? `${t('common.loading')}...`
-                  : missingModels.length > 0
-                  ? t('hardwareWizard.confirmDownloadBtn')
-                  : t('hardwareWizard.finishBtn')}
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

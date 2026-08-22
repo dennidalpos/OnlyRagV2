@@ -134,6 +134,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="approval-modal-title"
+      aria-describedby="approval-modal-desc"
       className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     >
       <div className="bg-slate-900 border border-amber-500/50 rounded-2xl p-6 max-w-3xl w-full shadow-2xl space-y-4">
@@ -144,7 +145,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
           </h3>
         </div>
 
-        <p className="text-xs text-slate-300">
+        <p id="approval-modal-desc" className="text-xs text-slate-300">
           {t('coding.pendingApprovalDesc')}
         </p>
 

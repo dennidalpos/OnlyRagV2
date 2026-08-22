@@ -18,7 +18,7 @@ describe('hardwareModelCatalog — fallback chain construction', () => {
 
   it('should put the profile-curated model at the head of the cascade', () => {
     expect(buildFallbackChain(DEEP_REASONING_TIER_CATALOG, { profileTier: 'midrange', budgetGB: 4.5 })[0])
-      .toBe('deepseek-r1:7b')
+      .toBe('qwen3:8b')
     expect(buildFallbackChain(DEEP_REASONING_TIER_CATALOG, { profileTier: 'highend', budgetGB: 10.5 })[0])
       .toBe('qwen2.5-coder:14b')
     expect(buildFallbackChain(DEEP_REASONING_TIER_CATALOG, { profileTier: 'extreme', budgetGB: 16.5 })[0])

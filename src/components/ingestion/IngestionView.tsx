@@ -1,6 +1,5 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { AppSettings } from '../../types'
 import {
   FileText,
   Upload,
@@ -24,8 +23,9 @@ import {
   GripVertical,
   WrapText,
 } from 'lucide-react'
+import { AppSettings, DiagnosticsData, IngestedDocument } from '../../types'
 import { SystemPromptModal } from '../common/SystemPromptModal'
-import { ModelBadge } from '../common/ModelBadge'
+import { QuickModelSelector } from '../common/QuickModelSelector'
 import { DocumentListTable } from './DocumentListTable'
 import { VectorSearchPanel } from './VectorSearchPanel'
 import { SourcePagePreview } from './SourcePagePreview'
@@ -34,14 +34,14 @@ import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
-import { IngestedDocument } from '../../types'
 
 interface IngestionViewProps {
   settings?: AppSettings
+  diagnostics?: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
-export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdateSettings }) => {
+export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
   const { t } = useTranslation()
   const ing = useIngestion(settings)
   const toast = useToast()
@@ -226,7 +226,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
     >
       {/* Drag & Drop Visual Overlay */}
       {isDraggingOver && (
-        <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm border-2 border-dashed border-cyan-400 flex flex-col items-center justify-center p-8 transition-all animate-in fade-in pointer-events-none">
+        <div
+          role="region"
+          aria-live="polite"
+          aria-label={t('ingestion.dropzoneRelease')}
+          className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm border-2 border-dashed border-cyan-400 flex flex-col items-center justify-center p-8 transition-all animate-in fade-in pointer-events-none"
+        >
           <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-400 mb-4 shadow-xl shadow-cyan-950/50">
             <Upload className="w-8 h-8 animate-bounce" />
           </div>
@@ -249,23 +254,47 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, onUpdate
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Active Chat RAG & Text Check Model Badge */}
-          <ModelBadge
-            modelName={settings?.chatModel || settings?.defaultModel || 'llama3.2'}
-            tier={settings?.normalizeWithLlm ? "heavy" : "standard"}
-            tierName={settings?.normalizeWithLlm ? "Text Check (Chat RAG)" : "Chat RAG"}
-            tooltip={t('ingestion.textCheckTooltip', { model: settings?.chatModel || settings?.defaultModel || 'llama3.2' })}
+          {/* Quick Chat RAG & Text Check Model Selector */}
+          <QuickModelSelector
+            currentModel={settings?.chatModel || settings?.defaultModel || 'llama3.2'}
+            fallbackModel={settings?.chatFallbackModel}
+            installedModels={diagnostics?.ollama?.models || []}
+            presetOptions={['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b']}
+            onSelectModel={(newModel) => {
+              onUpdateSettings?.({
+                chatModel: newModel,
+              })
+            }}
+            onSelectFallbackModel={(fallback) => {
+              onUpdateSettings?.({
+                chatFallbackModel: fallback,
+              })
+            }}
+            icon={FileText}
+            featureLabel="RAG & Text Check"
+            variant="cyan"
           />
 
-          {/* Active Vision Model Badge */}
-          {settings?.visionModel && (
-            <ModelBadge
-              modelName={settings.visionModel}
-              tier="fast"
-              tierName="Vision"
-              tooltip={`Vision & OCR: ${settings.visionModel}`}
-            />
-          )}
+          {/* Quick Vision OCR Model Selector */}
+          <QuickModelSelector
+            currentModel={settings?.visionModel || 'llama3.2-vision:11b'}
+            fallbackModel={settings?.visionFallbackModel}
+            installedModels={diagnostics?.ollama?.models || []}
+            presetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b']}
+            onSelectModel={(newModel) => {
+              onUpdateSettings?.({
+                visionModel: newModel,
+              })
+            }}
+            onSelectFallbackModel={(fallback) => {
+              onUpdateSettings?.({
+                visionFallbackModel: fallback,
+              })
+            }}
+            icon={Eye}
+            featureLabel="Vision & OCR"
+            variant="amber"
+          />
 
           {/* Optional LLM Text Check Toggle */}
           <button

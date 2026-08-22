@@ -284,7 +284,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
 
     const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('deepseek-r1:7b')
+    expect(recDeep?.modelName).toBe('qwen3:8b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')

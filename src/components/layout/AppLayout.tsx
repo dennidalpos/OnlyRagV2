@@ -142,51 +142,13 @@ export const AppLayout: React.FC = () => {
     }
 
     setSettings((prev) => {
-      let updated = { ...prev, ...newSettings }
+      const updated = { ...prev, ...newSettings }
 
-      // Automatic System Prompt Synchronization:
-      // When a model changes for a module (coding, chat, translation, vision), clear manual prompt overrides
-      // for that module so it automatically switches to the new model's optimal system prompt.
-      // If the user manually edits the system prompt in SystemPromptModal, it remains stored until the model is changed again.
-      const moduleModelMap: Record<string, keyof AppSettings> = {
-        coding: 'codingModel',
-        chat: 'chatModel',
-        translation: 'translationModel',
-        vision: 'visionModel',
-      }
-
-      let customOverrides = { ...(updated.customPromptOverrides || {}) }
-      let familyOverrides = { ...(updated.selectedFamilyOverrides || {}) }
-
-      for (const [moduleKey, settingKey] of Object.entries(moduleModelMap)) {
-        const newModelVal = newSettings[settingKey]
-        const prevModelVal = prev[settingKey]
-
-        if (newModelVal !== undefined && newModelVal !== prevModelVal) {
-          for (const k of Object.keys(customOverrides)) {
-            if (k.startsWith(`${moduleKey}:`)) {
-              delete customOverrides[k]
-            }
-          }
-          familyOverrides[moduleKey] = 'auto'
-        }
-      }
-
-      if (newSettings.defaultModel !== undefined && newSettings.defaultModel !== prev.defaultModel) {
-        for (const [moduleKey, settingKey] of Object.entries(moduleModelMap)) {
-          if (!prev[settingKey] && !newSettings[settingKey]) {
-            for (const k of Object.keys(customOverrides)) {
-              if (k.startsWith(`${moduleKey}:`)) {
-                delete customOverrides[k]
-              }
-            }
-            familyOverrides[moduleKey] = 'auto'
-          }
-        }
-      }
-
-      updated.customPromptOverrides = customOverrides
-      updated.selectedFamilyOverrides = familyOverrides
+      // Prompt overrides deliberately survive a model change. They used to be wiped here, because
+      // the old per-family keys meant a prompt tuned for one family leaked onto another. Prompts
+      // are now one per module and model-agnostic — adaptation happens through Ollama's reported
+      // capabilities — so there is nothing to resynchronize, and wiping would only destroy the
+      // user's edits. Resetting a prompt is an explicit action in the configuration modal.
 
       queueMicrotask(() => {
         try {

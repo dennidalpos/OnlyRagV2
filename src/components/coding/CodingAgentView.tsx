@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { SystemPromptModal } from '../common/SystemPromptModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { CodingAgentLeftPanel } from './CodingAgentLeftPanel'
 import { useCodingAgent } from '../../hooks/useCodingAgent'
@@ -326,12 +326,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
       {/* System Prompt Customization Modal */}
       {settings && onUpdateSettings && (
-        <SystemPromptModal
+        <PromptConfigurationModal
           isOpen={c.isPromptModalOpen}
           onClose={() => c.setIsPromptModalOpen(false)}
-          module="coding"
-          moduleTitle={t('coding.title')}
-          activeModelName={settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'}
+          initialNodeId="coding:master"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
         />

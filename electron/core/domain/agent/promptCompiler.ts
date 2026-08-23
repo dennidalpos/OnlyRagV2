@@ -1,117 +1,151 @@
-import {
-  ModelFamily,
-  FeatureModule,
-  DEFAULT_FAMILY_PROMPTS,
-  DEFAULT_CODING_PROMPT,
-  CODING_TOOLS_BLOCK,
-  detectModelFamily,
-} from './promptPresets'
+import type { FeatureModule } from './promptPresets'
 import type { AppSettings } from '../../../../src/types'
+import {
+  PROMPT_HIERARCHY,
+  findPromptNode,
+  partialNodesForModule,
+  rootNodeForModule,
+  type PromptNode,
+  type PromptNodeId,
+} from './promptHierarchyRegistry'
+import { renderPromptTemplate, collapseBlankRuns } from './promptTemplateEngine'
 
-export type { ModelFamily }
+export type { FeatureModule }
 
-type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
+export interface CompileOptions {
+  /** Values for the template's `{{variables}}`. */
+  variables?: Record<string, unknown>
+  settings?: AppSettings
+  /**
+   * Capabilities the active model reports to Ollama (`/api/tags` -> ["completion","tools"]).
+   * This is the only thing prompt assembly adapts to: there is no per-model-family branching.
+   */
+  capabilities?: readonly string[]
+}
+
+export interface CompiledPrompt {
+  prompt: string
+  /** True when any node contributing to this prompt carries a user override. */
+  isCustom: boolean
+}
+
+/**
+ * Resolves one node's template: the user's override when present and non-empty, otherwise the
+ * factory default. One key per node, so nothing can shadow anything else.
+ */
+export function resolveNodeTemplate(
+  nodeId: PromptNodeId,
+  settings?: AppSettings
+): { template: string; isCustom: boolean } {
+  const node = findPromptNode(nodeId)
+  if (!node) return { template: '', isCustom: false }
+
+  const override = settings?.customPromptOverrides?.[nodeId]
+  if (override && override.trim()) return { template: override, isCustom: true }
+
+  return { template: node.defaultValue, isCustom: false }
+}
+
+function isOmitted(node: PromptNode, capabilities: readonly string[]): boolean {
+  return Boolean(node.omittedWhenCapability && capabilities.includes(node.omittedWhenCapability))
+}
 
 export class PromptCompiler {
   /**
-   * Compiles and resolves the system prompt template for chat/translation/vision —
-   * modules that still vary by model family (see DEFAULT_FAMILY_PROMPTS).
-   * For the coding module, use compileCodingPrompt instead (family-agnostic).
+   * Compiles a module's system prompt from its root node plus whichever child nodes the template
+   * still references as partials.
    */
-  static compilePrompt(
-    module: FamilyBasedModule,
-    modelName: string,
-    variables: Record<string, string> = {},
-    settings?: AppSettings
-  ): { prompt: string; family: ModelFamily; isCustom: boolean } {
-    const selectedOverride = settings?.selectedFamilyOverrides?.[module]
-    const detectedFamily = detectModelFamily(modelName)
-    const activeFamily: ModelFamily =
-      selectedOverride && selectedOverride !== 'auto'
-        ? (selectedOverride as ModelFamily)
-        : detectedFamily
+  static compileModulePrompt(module: FeatureModule, options: CompileOptions = {}): CompiledPrompt {
+    const { variables = {}, settings, capabilities = [] } = options
 
-    const overrideKey = `${module}:${activeFamily}`
+    const root = rootNodeForModule(module)
+    if (!root) return { prompt: '', isCustom: false }
 
-    let template = ''
-    let isCustom = false
+    const resolvedRoot = resolveNodeTemplate(root.id, settings)
+    let isCustom = resolvedRoot.isCustom
 
-    if (settings?.customPromptOverrides && settings.customPromptOverrides[module]) {
-      template = settings.customPromptOverrides[module]
-      isCustom = true
-    } else if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
-      template = settings.customPromptOverrides[overrideKey]
-      isCustom = true
-    } else {
-      template = DEFAULT_FAMILY_PROMPTS[module]?.[activeFamily] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
+    const partials: Record<string, string> = {}
+    for (const child of partialNodesForModule(module)) {
+      if (isOmitted(child, capabilities)) {
+        // AGT2: the schema is already on the wire via the native `tools` parameter.
+        partials[child.partialName as string] = ''
+        continue
+      }
+      const resolvedChild = resolveNodeTemplate(child.id, settings)
+      partials[child.partialName as string] = resolvedChild.template
+      isCustom = isCustom || resolvedChild.isCustom
     }
 
-    return {
-      prompt: substituteVariables(template, variables),
-      family: activeFamily,
-      isCustom,
+    const view: Record<string, unknown> = {
+      ...variables,
+      nativeToolCalling: capabilities.includes('tools'),
+      nativeVision: capabilities.includes('vision'),
     }
+
+    const prompt = collapseBlankRuns(renderPromptTemplate(resolvedRoot.template, view, partials)).trim()
+    return { prompt, isCustom }
   }
 
   /**
-   * Compiles the coding-agent system prompt. Family-agnostic and tier-free: the coding module
-   * runs on the single configured `codingModel`, so there is one prompt. Custom overrides are
-   * read from the "coding" key.
-   *
-   * When `toolCallingCapable` is true, the prose AVAILABLE AGENT TOOLS block
-   * is omitted: the model already receives the structured tool schema via
-   * the native `tools` API parameter (see ollamaToolSchemaCatalog.ts), so
-   * repeating it in text would double-send the same schema (AGT2).
+   * Coding-agent entrypoint. Kept as a named method because the turn assembler calls it on every
+   * step and passes the capability as a boolean it already computed.
    */
   static compileCodingPrompt(
-    variables: Record<string, string> = {},
+    variables: Record<string, unknown> = {},
     settings?: AppSettings,
     toolCallingCapable = false
-  ): { prompt: string; isCustom: boolean } {
-    const override = settings?.customPromptOverrides?.['coding']
-    const isCustom = Boolean(override && override.trim())
-    const template = isCustom ? (override as string) : DEFAULT_CODING_PROMPT
-
-    const effectiveVariables = {
-      ...variables,
-      CODING_TOOLS_BLOCK: toolCallingCapable ? '' : CODING_TOOLS_BLOCK,
-    }
-
-    return {
-      prompt: collapseBlankRuns(substituteVariables(template, effectiveVariables)),
-      isCustom,
-    }
+  ): CompiledPrompt {
+    return PromptCompiler.compileModulePrompt('coding', {
+      variables,
+      settings,
+      capabilities: toolCallingCapable ? ['tools'] : [],
+    })
   }
 
-  /**
-   * Get default template for a given module and model family without variable substitution.
-   */
-  static getDefaultTemplate(module: FamilyBasedModule, family: ModelFamily): string {
-    return DEFAULT_FAMILY_PROMPTS[module]?.[family] || DEFAULT_FAMILY_PROMPTS[module]?.generic || ''
-  }
-
-  /**
-   * Get default coding template, without variable substitution.
-   */
-  static getDefaultCodingTemplate(): string {
-    return DEFAULT_CODING_PROMPT
+  /** Factory default for a node, with no variable substitution. */
+  static getDefaultTemplate(nodeId: PromptNodeId): string {
+    return findPromptNode(nodeId)?.defaultValue ?? ''
   }
 }
 
 /**
- * Collapses runs of 3+ newlines to a single blank line. Placeholders that resolve to '' (most
- * often {CODING_TOOLS_BLOCK} on native tool-calling models) otherwise leave gaping holes in the
- * prompt, which is pure wasted context on a small window.
+ * The prompt a module will actually send, given current settings.
+ *
+ * Model name is deliberately NOT a parameter: prompts no longer vary by model family. Callers that
+ * need capability-driven adaptation pass `capabilities`.
  */
-function collapseBlankRuns(text: string): string {
-  return text.replace(/\n{3,}/g, '\n\n')
+export function getEffectivePrompt(
+  module: FeatureModule,
+  settings?: AppSettings,
+  options: Omit<CompileOptions, 'settings'> = {}
+): CompiledPrompt {
+  return PromptCompiler.compileModulePrompt(module, { ...options, settings })
 }
 
-function substituteVariables(template: string, variables: Record<string, string>): string {
-  let compiled = template
-  for (const [key, value] of Object.entries(variables)) {
-    const placeholder = `{${key}}`
-    compiled = compiled.replaceAll(placeholder, value !== undefined && value !== null ? String(value) : '')
+/**
+ * Renders a template with the registry's sample values, for the modal's preview pane.
+ * Never used on the wire.
+ */
+export function compilePromptWithSampleVars(rawTemplate: string, nodeId: PromptNodeId): string {
+  const node = findPromptNode(nodeId)
+  if (!node) return rawTemplate
+
+  const samples: Record<string, string> = {}
+  for (const variable of node.variables) samples[variable.name] = variable.sample
+
+  const partials: Record<string, string> = {}
+  for (const child of partialNodesForModule(node.module)) {
+    partials[child.partialName as string] = child.defaultValue
   }
-  return compiled
+
+  try {
+    return collapseBlankRuns(renderPromptTemplate(rawTemplate, samples, partials)).trim()
+  } catch {
+    // A half-typed template is the normal state of a live editor; show the raw text instead of
+    // blanking the preview pane.
+    return rawTemplate
+  }
 }
+
+export { PROMPT_HIERARCHY, findPromptNode }
+export type { PromptNode, PromptNodeId }

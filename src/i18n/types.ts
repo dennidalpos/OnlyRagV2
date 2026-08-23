@@ -555,28 +555,46 @@ export interface TranslationSchema {
     noResults: string
     clearSearch: string
   }
-  systemPrompt: {
+  promptConfig: {
     title: string
     subtitle: string
-    activeModel: string
-    detectedFamily: string
-    familyPreset: string
-    codingTierNotice: string
+    searchPlaceholder: string
+    categoryCoding: string
+    categoryChat: string
+    categoryTranslation: string
+    categoryImages: string
+    nodeCodingMaster: string
+    nodeCodingMasterDesc: string
+    nodeCodingDirectives: string
+    nodeCodingDirectivesDesc: string
+    nodeCodingTools: string
+    nodeCodingToolsDesc: string
+    nodeChat: string
+    nodeChatDesc: string
+    nodeTranslation: string
+    nodeTranslationDesc: string
+    nodeImageAnalysis: string
+    nodeImageAnalysisDesc: string
     customBadge: string
-    promptText: string
-    variablesLegend: string
-    resetFamily: string
-    resetAllModule: string
-    savePrompt: string
-    systemPromptPlaceholder: string
+    defaultBadge: string
     editTab: string
     previewTab: string
     previewDescription: string
-    exportJson: string
-    importJson: string
-    importSuccess: string
-    importError: string
+    variablesLegend: string
     clickToInsert: string
+    savePrompt: string
+    saved: string
+    resetNode: string
+    resetNodeConfirm: string
+    tokenCount: string
+    capabilityOmitted: string
+    notWiredYet: string
+    issueSyntax: string
+    issueEmpty: string
+    issueMissingPartial: string
+    issueDuplicatePartial: string
+    issueUnknownVariable: string
+    saveBlocked: string
   }
   vectorSearch: {
     modalTitle: string

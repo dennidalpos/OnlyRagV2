@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DiagnosticsData, AppSettings } from '../types'
-import { FeatureModule } from '../constants/promptPresets'
+import type { PromptNodeId } from '../constants/promptConfig'
 
 export function useSettingsManager(
   diagnostics: DiagnosticsData | null,
@@ -11,7 +11,7 @@ export function useSettingsManager(
   const [pullModelInput, setPullModelInput] = useState('')
   const [isPulling, setIsPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState('')
-  const [activePromptModalModule, setActivePromptModalModule] = useState<FeatureModule | null>(null)
+  const [activePromptNodeId, setActivePromptNodeId] = useState<PromptNodeId | null>(null)
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
 
   const handlePullModel = async () => {
@@ -56,8 +56,8 @@ export function useSettingsManager(
     setPullModelInput,
     isPulling,
     pullMessage,
-    activePromptModalModule,
-    setActivePromptModalModule,
+    activePromptNodeId,
+    setActivePromptNodeId,
     isWizardOpen,
     setIsWizardOpen,
     handlePullModel,

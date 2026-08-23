@@ -28,7 +28,7 @@ describe('AppSettingsDomain Unit Tests', () => {
       ollamaHost: 'http://localhost:11434',
       language: 'en',
       hasCompletedInitialSetup: true,
-      customPromptOverrides: { 'coding:qwen': 'custom prompt' },
+      customPromptOverrides: { 'coding:master': 'custom prompt' },
     }
 
     const sanitized = sanitizeAppSettings(custom)
@@ -38,7 +38,33 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(sanitized.ocrEngine).toBe('vision_model')
     expect(sanitized.language).toBe('en')
     expect(sanitized.hasCompletedInitialSetup).toBe(true)
-    expect(sanitized.customPromptOverrides).toEqual({ 'coding:qwen': 'custom prompt' })
+    expect(sanitized.customPromptOverrides).toEqual({ 'coding:master': 'custom prompt' })
+  })
+
+  it('drops prompt override keys that do not name a prompt node', () => {
+    // Leftovers from the retired per-model-family scheme address prompts that no longer exist;
+    // keeping them would silently do nothing while still looking like saved customisation.
+    const sanitized = sanitizeAppSettings({
+      customPromptOverrides: {
+        'coding:qwen': 'legacy family prompt',
+        vision: 'legacy module prompt',
+        chat: 'still a real node',
+        'coding:tools': 'also real',
+        'chat:llama': 'legacy',
+      },
+    })
+
+    expect(sanitized.customPromptOverrides).toEqual({
+      chat: 'still a real node',
+      'coding:tools': 'also real',
+    })
+  })
+
+  it('drops non-string prompt override values', () => {
+    const sanitized = sanitizeAppSettings({
+      customPromptOverrides: { chat: 42 as unknown as string, translation: 'ok' },
+    })
+    expect(sanitized.customPromptOverrides).toEqual({ translation: 'ok' })
   })
 
   it('should merge partial updates cleanly onto current settings', () => {

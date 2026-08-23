@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
+import { PromptConfigurationModal } from './PromptConfigurationModal'
 import { ToggleSwitch } from '../common/ToggleSwitch'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { HardwareProfileSelector } from './HardwareProfileSelector'
@@ -82,6 +83,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => s.setActivePromptNodeId('coding:master')}
+            aria-label={t('promptConfig.title')}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors focus-ring flex items-center gap-2 active:scale-95 shadow-sm"
+          >
+            <Sliders className="w-4 h-4 text-cyan-400" /> {t('promptConfig.title')}
+          </button>
+
           <button
             type="button"
             onClick={handleOpenWizard}
@@ -466,6 +476,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           settings={settings}
           onUpdateSettings={onUpdateSettings}
           onRefreshDiagnostics={onRefreshDiagnostics}
+        />
+      )}
+
+      {s.activePromptNodeId && (
+        <PromptConfigurationModal
+          isOpen
+          onClose={() => s.setActivePromptNodeId(null)}
+          initialNodeId={s.activePromptNodeId}
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
         />
       )}
     </div>

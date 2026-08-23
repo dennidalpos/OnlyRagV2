@@ -31,6 +31,7 @@
   "author": "Danny Perondi <https://github.com/dennidalpos>",
   "license": "MIT",
   "dependencies": {
+    "@types/mustache": "^4.2.6",
     "cheerio": "^1.2.0",
     "depcheck": "^1.4.7",
     "diff": "^9.0.0",
@@ -38,6 +39,7 @@
     "ignore": "^7.0.6",
     "js-yaml": "^4.1.0",
     "jsonrepair": "^3.15.0",
+    "mustache": "^4.2.0",
     "node-pty": "^1.1.0",
     "p-queue": "^9.3.3",
     "p-retry": "^8.0.0",

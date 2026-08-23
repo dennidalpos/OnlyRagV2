@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { SystemPromptModal } from '../common/SystemPromptModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useToast } from '../common/Toast'
@@ -538,12 +538,10 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
       </div>
 
       {settings && onUpdateSettings && (
-        <SystemPromptModal
+        <PromptConfigurationModal
           isOpen={tr.isPromptModalOpen}
           onClose={() => tr.setIsPromptModalOpen(false)}
-          module="translation"
-          moduleTitle={t('translation.title')}
-          activeModelName={settings.translationModel || settings.defaultModel || 'llama3.2'}
+          initialNodeId="translation"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
         />

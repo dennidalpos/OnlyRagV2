@@ -1,4 +1,5 @@
 import type { AppSettings, HardwareProfile } from '../../../../src/types'
+import { PROMPT_NODE_IDS, type PromptNodeId } from '../agent/promptHierarchyRegistry'
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultModel: '',
@@ -125,12 +126,17 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     sanitized.autoProceedDelaySeconds = raw.autoProceedDelaySeconds
   }
 
-  // Optional record maps
+  // Prompt overrides are keyed by prompt node id. Anything else is a leftover from the retired
+  // per-model-family scheme ('chat:qwen', 'vision', ...) and is dropped rather than migrated:
+  // those keys addressed prompts that no longer exist.
   if (raw.customPromptOverrides && typeof raw.customPromptOverrides === 'object') {
-    sanitized.customPromptOverrides = { ...raw.customPromptOverrides }
-  }
-  if (raw.selectedFamilyOverrides && typeof raw.selectedFamilyOverrides === 'object') {
-    sanitized.selectedFamilyOverrides = { ...raw.selectedFamilyOverrides }
+    const overrides: Record<string, string> = {}
+    for (const [key, value] of Object.entries(raw.customPromptOverrides)) {
+      if (typeof value === 'string' && PROMPT_NODE_IDS.includes(key as PromptNodeId)) {
+        overrides[key] = value
+      }
+    }
+    sanitized.customPromptOverrides = overrides
   }
 
   return sanitized

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AppSettings, DiagnosticsData, IngestedDocument, ChatMessage, ChatConversation, CitationSource } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
-import { getEffectivePrompt } from '../components/common/SystemPromptModal'
+import { getEffectivePrompt } from '../constants/promptConfig'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from '../services/chatContextBudget'
@@ -381,8 +381,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         .join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
 
       const modelToUse = routingResult.modelName
-      const effectivePromptObj = getEffectivePrompt('chat', modelToUse, settings)
-      const effectiveSystemPrompt = effectivePromptObj.prompt
+      const effectiveSystemPrompt = getEffectivePrompt('chat', settings).prompt
 
       const now = new Date()
       const formattedDate = now.toLocaleDateString(undefined, {

@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData, IngestedDocument } from '../../types'
-import { SystemPromptModal } from '../common/SystemPromptModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { DocumentListTable } from './DocumentListTable'
 import { VectorSearchPanel } from './VectorSearchPanel'
@@ -922,12 +922,10 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
       </div>
 
       {settings && onUpdateSettings && (
-        <SystemPromptModal
+        <PromptConfigurationModal
           isOpen={ing.isPromptModalOpen}
           onClose={() => ing.setIsPromptModalOpen(false)}
-          module="vision"
-          moduleTitle={t('ingestion.title')}
-          activeModelName={settings?.visionModel || 'llama3.2-vision'}
+          initialNodeId="images:analysis"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
         />

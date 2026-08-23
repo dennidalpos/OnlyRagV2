@@ -203,9 +203,12 @@ export interface AppSettings {
   noWorkspaceMode?: boolean
   /** Default folder for the translation module's exported documents; unset falls back to the interactive save dialog. */
   translationOutputFolder?: string
-  // Family & Module System Prompt Customizations
-  customPromptOverrides?: Record<string, string> // key: `${module}:${family}` -> prompt string
-  selectedFamilyOverrides?: Record<string, string> // key: module -> family string or 'auto'
+  /**
+   * User-edited system prompts, keyed by prompt node id ('coding:master', 'chat', ...).
+   * One key per editable node — see electron/core/domain/agent/promptHierarchyRegistry.ts.
+   * An override replaces the factory default until the user resets that node.
+   */
+  customPromptOverrides?: Record<string, string>
   // Concurrency & Task Queue Settings
   maxToolCallSteps?: number // Range: 10-200, default 50
   // Coding Agent Audit & Debug Logging

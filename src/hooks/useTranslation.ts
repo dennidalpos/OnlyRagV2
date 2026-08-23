@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { IngestedDocument, AppSettings } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
-import { getEffectivePrompt } from '../components/common/SystemPromptModal'
+import { getEffectivePrompt } from '../constants/promptConfig'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
@@ -217,10 +217,14 @@ export function useDocumentTranslation(settings?: AppSettings) {
       let accumulatedResults = ''
 
       const modelToUse = settings?.translationModel || settings?.defaultModel || 'llama3.2'
-      const effectiveSystemPrompt = settings ? getEffectivePrompt('translation', modelToUse, settings).prompt : ''
-      const systemInstruction = effectiveSystemPrompt && effectiveSystemPrompt.trim().length > 0
-        ? `${effectiveSystemPrompt}\n\nStrict Directives:\n1. Translate the input text from ${sourceLang} to ${targetLang}.\n2. Preserve all Markdown headings (#, ##), code blocks (\`\`\`), table grids, HTML tags, and formula syntax intact.\n3. Output ONLY the translated content without meta comments or greetings.`
-        : `You are an expert technical translator. Translate the following text from ${sourceLang} to ${targetLang}.\nPreserve all Markdown headings, bullet points, tables, code blocks (\`\`\`), and formatting unchanged.\nOutput ONLY the translated content without meta comments, preamble, or conversational notes.`
+
+      // The language pair goes in as template variables. It used to be appended as a second
+      // "Strict Directives" block that restated markdown preservation and the no-preamble rule
+      // the prompt already carried, so every chunk shipped those rules twice — and the template's
+      // own {sourceLang}/{targetLang} placeholders went out to the model unsubstituted.
+      const systemInstruction = getEffectivePrompt('translation', settings, {
+        variables: { sourceLang, targetLang },
+      }).prompt
 
       for (let i = 0; i < chunks.length; i++) {
         if (abortTranslationRef.current) {

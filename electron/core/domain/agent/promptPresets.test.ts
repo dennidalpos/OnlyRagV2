@@ -1,20 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_FAMILY_PROMPTS } from './promptPresets'
+import {
+  DEFAULT_CHAT_PROMPT,
+  DEFAULT_TRANSLATION_PROMPT,
+  DEFAULT_IMAGE_ANALYSIS_PROMPT,
+  DEFAULT_CODING_PROMPT,
+  CODING_CORE_DIRECTIVES,
+  CODING_TOOLS_BLOCK,
+} from './promptPresets'
+import { ALL_PROMPT_NODES } from './promptHierarchyRegistry'
 
 /**
- * The chat presets are static: they are assembled into every chat turn regardless of whether a
- * document is attached. Any instruction about the "nothing selected" case therefore reaches the
- * model even when a document IS attached, and a small model cannot reliably pick the right
- * branch — llama3.2:3b answered "no document is selected, pick one from the left sidebar" to 3
- * of 5 questions while the retrieval had already returned two excerpts of the attached PDF.
+ * The chat prompt is static: it is assembled into every chat turn regardless of whether a document
+ * is attached. Any instruction about the "nothing selected" case therefore reaches the model even
+ * when a document IS attached, and a small model cannot reliably pick the right branch —
+ * llama3.2:3b answered "no document is selected, pick one from the left sidebar" to 3 of 5
+ * questions while the retrieval had already returned two excerpts of the attached PDF.
  *
- * The state-specific directive belongs to the block useChatEngine assembles per turn, which is
- * the only place that knows the actual state. These tests keep the branch from creeping back.
+ * The state-specific directive belongs to the block useChatEngine assembles per turn, which is the
+ * only place that knows the actual state.
  */
-
-const CHAT_PRESETS = Object.entries(DEFAULT_FAMILY_PROMPTS.chat)
-
-/** Phrases that only make sense when nothing is attached. */
 const ABSENCE_INSTRUCTION_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'no-documents branch', pattern: /when no documents?\b/i },
   { label: 'no-attachments branch', pattern: /no attachments? (are|is) (currently )?selected/i },
@@ -22,20 +26,71 @@ const ABSENCE_INSTRUCTION_PATTERNS: Array<{ label: string; pattern: RegExp }> = 
   { label: '@filename fallback hint', pattern: /mention '@filename'|use '@filename'/i },
 ]
 
-describe('chat presets carry no "nothing is attached" branch', () => {
-  it('defines at least one preset per model family', () => {
-    expect(CHAT_PRESETS.length).toBeGreaterThan(0)
-  })
-
+describe('chat prompt carries no "nothing is attached" branch', () => {
   for (const { label, pattern } of ABSENCE_INSTRUCTION_PATTERNS) {
-    it(`no chat preset contains the ${label}`, () => {
-      const offenders = CHAT_PRESETS.filter(([, prompt]) => pattern.test(prompt)).map(([family]) => family)
-      expect(offenders).toEqual([])
+    it(`does not contain the ${label}`, () => {
+      expect(pattern.test(DEFAULT_CHAT_PROMPT)).toBe(false)
     })
   }
+})
 
-  it('still points every preset at the provided context', () => {
-    const missing = CHAT_PRESETS.filter(([, prompt]) => !/context/i.test(prompt)).map(([family]) => family)
-    expect(missing).toEqual([])
+/**
+ * The per-family matrix these prompts replaced drifted apart: 7 of its 23 real chat presets never
+ * named the document context block, and 9 of 23 translation presets — `generic` among them — never
+ * asked for Markdown preservation. With one prompt per module that class of omission can only
+ * happen once, so it is worth pinning down.
+ */
+describe('core directives survive in the consolidated prompts', () => {
+  it('the chat prompt names the document context block and the temporal anchor', () => {
+    expect(DEFAULT_CHAT_PROMPT).toContain('[INDEXED DOCUMENT CONTEXT (LanceDB)]')
+    expect(DEFAULT_CHAT_PROMPT).toContain('[TEMPORAL CONTEXT]')
+    expect(DEFAULT_CHAT_PROMPT).toContain('CRITICAL LANGUAGE DIRECTIVE')
+  })
+
+  it('the translation prompt preserves Markdown and forbids preambles', () => {
+    expect(DEFAULT_TRANSLATION_PROMPT).toMatch(/PRESERVE ALL MARKDOWN FORMATTING/i)
+    expect(DEFAULT_TRANSLATION_PROMPT).toMatch(/Output ONLY the translated markdown content/i)
+    expect(DEFAULT_TRANSLATION_PROMPT).toContain('{{sourceLang}}')
+    expect(DEFAULT_TRANSLATION_PROMPT).toContain('{{targetLang}}')
+  })
+
+  it('the image analysis prompt demands OCR fidelity and flags illegible regions', () => {
+    expect(DEFAULT_IMAGE_ANALYSIS_PROMPT).toMatch(/OCR fidelity/i)
+    expect(DEFAULT_IMAGE_ANALYSIS_PROMPT).toMatch(/illegible or cut off/i)
+    expect(DEFAULT_IMAGE_ANALYSIS_PROMPT).toContain('CRITICAL LANGUAGE DIRECTIVE')
+  })
+
+  it('the coding directives keep the anti-loop and verification gates', () => {
+    expect(CODING_CORE_DIRECTIVES).toMatch(/NEVER SURRENDER/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/VERIFY FOR REAL/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/ONE MILESTONE AT A TIME/)
+  })
+
+  it('the tool block still advertises the finish tool', () => {
+    expect(CODING_TOOLS_BLOCK).toContain('- finish:')
+  })
+})
+
+describe('template wiring', () => {
+  it('the coding master references both child nodes as partials', () => {
+    expect(DEFAULT_CODING_PROMPT).toContain('{{> directives}}')
+    expect(DEFAULT_CODING_PROMPT).toContain('{{> tools}}')
+  })
+
+  it('gates the tool partial on the native tool-calling capability', () => {
+    expect(DEFAULT_CODING_PROMPT).toMatch(/\{\{\^nativeToolCalling\}\}.*\{\{> tools\}\}.*\{\{\/nativeToolCalling\}\}/s)
+  })
+
+  it('no default carries legacy single-brace placeholders', () => {
+    for (const node of ALL_PROMPT_NODES) {
+      expect(node.defaultValue, `${node.id} still uses {singleBrace} syntax`).not.toMatch(/(^|[^{]){[a-zA-Z_][a-zA-Z0-9_]*}/)
+    }
+  })
+
+  it('no default mentions a specific model brand', () => {
+    const brands = /\b(Qwen|Llama|DeepSeek|Mistral|Gemma|Phi-\d|Granite|Hermes|Nemotron|SmolLM|EXAONE|StarCoder|LLaVA|MiniCPM|Moondream)\b/
+    for (const node of ALL_PROMPT_NODES) {
+      expect(node.defaultValue, `${node.id} names a model brand`).not.toMatch(brands)
+    }
   })
 })

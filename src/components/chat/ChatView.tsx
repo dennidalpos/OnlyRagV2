@@ -25,7 +25,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { SystemPromptModal } from '../common/SystemPromptModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useChatEngine } from '../../hooks/useChatEngine'
 import { useToast } from '../common/Toast'
@@ -868,12 +868,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
       </div>
 
       {onUpdateSettings && (
-        <SystemPromptModal
+        <PromptConfigurationModal
           isOpen={c.isPromptModalOpen}
           onClose={() => c.setIsPromptModalOpen(false)}
-          module="chat"
-          moduleTitle={t('chat.title')}
-          activeModelName={settings.chatModel || settings.defaultModel || 'llama3.2'}
+          initialNodeId="chat"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
         />

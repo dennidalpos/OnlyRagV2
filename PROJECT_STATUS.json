@@ -1,5 +1,9 @@
 {
   "todos": [
-    "Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato."
+    "Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato.",
+    "Decidere il destino del nodo prompt 'images:analysis': nessuna pipeline lo invia a un modello (il prompt vision era gia configurabile ma inutilizzato prima del refactor). O collegarlo all'inferenza vision nell'ingestion, o rimuoverlo dall'albero.",
+    "Valutare la sostituzione del client Ollama artigianale (ollamaHttpClient.ts, agentStreamTransport.ts) con il pacchetto ufficiale ollama, verificando che il riuso di context (AGT1) resti possibile.",
+    "Valutare zod per il sanitizer appSettingsDomain.ts.",
+    "Debito pre-esistente rilevato da knip: 4 file orfani (electron/core/domain/sidecar/sidecarTypes.ts, src/components/diagnostics/OllamaEnvApprovalModal.tsx, src/components/diagnostics/OllamaEnvParamsModal.tsx, src/components/wizard/ModelOptionCard.tsx), la dipendenza inutilizzata p-retry e 9 export morti."
   ]
 }

@@ -1,6 +1,5 @@
 {
   "todos": [
-    "Consolidamento e commit del working tree verificato (store impostazioni filesystem, smoke test bundle main process, miglioramenti UI timeline e tema Monaco, allineamento documentazione).",
-    "Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato."
+    "Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato."
   ]
 }

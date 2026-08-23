@@ -2,7 +2,6 @@ import React from 'react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import {
   Settings,
-  RefreshCw,
   Download,
   Trash2,
   Zap,
@@ -80,35 +79,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {t('settings.description')}
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => s.setActivePromptNodeId('coding:master')}
-            aria-label={t('promptConfig.title')}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors focus-ring flex items-center gap-2 active:scale-95 shadow-sm"
-          >
-            <Sliders className="w-4 h-4 text-cyan-400" /> {t('promptConfig.title')}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleOpenWizard}
-            aria-label={t('settings.hardwareWizard')}
-            className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring flex items-center gap-2 shadow-lg shadow-cyan-950/50 active:scale-95"
-          >
-            <Zap className="w-4 h-4 fill-current" /> {t('settings.hardwareWizard')}
-          </button>
-
-          <button
-            type="button"
-            onClick={onRefreshDiagnostics}
-            aria-label={t('settings.hardwareScan')}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors focus-ring flex items-center gap-2 active:scale-95 shadow-sm"
-          >
-            <RefreshCw className="w-4 h-4 text-cyan-400" /> {t('settings.hardwareScan')}
-          </button>
         </div>
       </div>
 
@@ -289,11 +259,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* SEZIONE 2: HARDWARE, GPU & RUNTIME AI                                     */}
       {/* ========================================================================= */}
       <section className="space-y-4">
-        <div className="flex items-center gap-2.5 px-1">
-          <Cpu className="w-4.5 h-4.5 text-amber-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-            2. {t('settings.hardwareRuntimeSection')}
-          </h2>
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2.5">
+            <Cpu className="w-4.5 h-4.5 text-amber-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
+              2. {t('settings.hardwareRuntimeSection')}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenWizard}
+            aria-label={t('settings.hardwareWizard')}
+            className="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring flex items-center gap-1.5 shadow-md shadow-cyan-950/40 active:scale-95 cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" /> {t('settings.hardwareWizard')}
+          </button>
         </div>
 
         {/* Hardware Profile Selector */}
@@ -320,11 +300,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* SEZIONE 3: MODELLI AI & GESTIONE PESI LOCALI                             */}
       {/* ========================================================================= */}
       <section className="space-y-4">
-        <div className="flex items-center gap-2.5 px-1">
-          <Sparkles className="w-4.5 h-4.5 text-cyan-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-            3. {t('settings.modelsWeightsSection')}
-          </h2>
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-4.5 h-4.5 text-cyan-400" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
+              3. {t('settings.modelsWeightsSection')}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => s.setActivePromptNodeId('coding:master')}
+            aria-label={t('promptConfig.title')}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors focus-ring flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
+          >
+            <Sliders className="w-3.5 h-3.5 text-cyan-400" /> {t('promptConfig.title')}
+          </button>
         </div>
 
         {/* Per-Section Model Assignment Grid */}

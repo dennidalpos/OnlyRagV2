@@ -118,6 +118,37 @@ describe('compilePromptWithSampleVars', () => {
     expect(compiled).toContain('AVAILABLE AGENT TOOLS')
   })
 
+  it('compiles preview for all 6 prompt nodes without errors', () => {
+    // 1. coding:master
+    const codingMaster = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:master'), 'coding:master')
+    expect(codingMaster).toContain('AGENT')
+    expect(codingMaster).toContain('EXECUTION RULES')
+    expect(codingMaster).toContain('AVAILABLE AGENT TOOLS')
+
+    // 2. coding:directives
+    const codingDirectives = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:directives'), 'coding:directives')
+    expect(codingDirectives).toContain('LANGUAGE:')
+    expect(codingDirectives).toContain('D:/Projects/OnlyRagWorkspace')
+
+    // 3. coding:tools
+    const codingTools = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:tools'), 'coding:tools')
+    expect(codingTools).toContain('AVAILABLE AGENT TOOLS')
+
+    // 4. chat
+    const chatPrompt = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('chat'), 'chat')
+    expect(chatPrompt).toContain('RAG (Retrieval-Augmented Generation)')
+
+    // 5. translation
+    const translationPrompt = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('translation'), 'translation')
+    expect(translationPrompt).toContain('Italian')
+    expect(translationPrompt).toContain('English')
+
+    // 6. images:analysis
+    const imagePrompt = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('images:analysis'), 'images:analysis')
+    expect(imagePrompt).toContain('quarterly_report_2026.pdf')
+    expect(imagePrompt).toContain('Viewing Page 1 of 8')
+  })
+
   it('returns the raw text for a half-typed template instead of blanking the pane', () => {
     expect(compilePromptWithSampleVars('{{#unclosed}}', 'chat')).toBe('{{#unclosed}}')
   })

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
+import { Code, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useTranslation } from '../../i18n'
@@ -58,19 +58,19 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   const allCoreToolsAvailable = hasGit !== false && hasNode !== false && hasOllama !== false
 
   return (
-    <header className="h-12 px-4 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur flex items-center justify-between z-30 shrink-0 select-text font-sans">
-      {/* Left: App & Module Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs">
-        <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-sm">
-          <Code className="w-3.5 h-3.5 text-cyan-400" />
+    <header className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between z-10 shrink-0 select-text font-sans">
+      {/* Left: Module Branding */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-sm">
+          <Code className="w-5 h-5 text-cyan-400" />
         </div>
-        <span className="font-bold text-slate-100">{t('common.appName')}</span>
-        <ChevronRight className="w-3 h-3 text-slate-600" />
-        <span className="text-slate-400 font-medium truncate max-w-xs">{t('coding.headerTitle')}</span>
+        <div>
+          <h1 className="font-bold text-slate-100 text-sm tracking-wide">{t('coding.headerTitle')}</h1>
+        </div>
       </div>
 
       {/* Right: Quick Model Selector, System Prompt, Skills & Toolchain Popover */}
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-2.5 text-xs">
         {/* Quick Coding Model Selector with Fallback */}
         <QuickModelSelector
           currentModel={activeModel || settings?.codingModel || 'qwen2.5-coder:7b'}
@@ -87,6 +87,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
             'deepseek-coder:6.7b',
             'llama3.1:8b',
           ]}
+          intent="coding"
           onSelectModel={(newModel) => {
             onUpdateSettings?.({
               codingModel: newModel,

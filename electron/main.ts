@@ -1,6 +1,10 @@
 import { app, BrowserWindow, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+
+// Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/OnlyRag V2)
+app.name = 'OnlyRag V2'
+
 import { logger } from './diagnostics'
 import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'
 import { taskRunner } from './core/infrastructure/process/taskRunner'

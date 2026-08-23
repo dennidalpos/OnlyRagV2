@@ -93,17 +93,28 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
   const [savedFlash, setSavedFlash] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const editorRef = useRef<any>(null)
+  const prevNodeIdRef = useRef<PromptNodeId>(initialNodeId)
 
   const selectedNode = findPromptNode(selectedNodeId)
 
+  // Reset node selection and draft when modal opens
   useEffect(() => {
-    if (isOpen) setSelectedNodeId(initialNodeId)
+    if (isOpen) {
+      setSelectedNodeId(initialNodeId)
+      prevNodeIdRef.current = initialNodeId
+      setDraft(resolveNodeTemplate(initialNodeId, settings).template)
+      setTab('edit')
+    }
   }, [isOpen, initialNodeId])
 
+  // Sync draft when the user switches selected node in the sidebar
   useEffect(() => {
     if (!isOpen) return
-    setDraft(resolveNodeTemplate(selectedNodeId, settings).template)
-    setTab('edit')
+    if (prevNodeIdRef.current !== selectedNodeId) {
+      prevNodeIdRef.current = selectedNodeId
+      setDraft(resolveNodeTemplate(selectedNodeId, settings).template)
+      setTab('edit')
+    }
   }, [isOpen, selectedNodeId, settings])
 
   const isOverridden = (nodeId: PromptNodeId): boolean =>
@@ -129,8 +140,8 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
   }, [selectedNode, settings])
 
   const preview = useMemo(
-    () => (tab === 'preview' ? compilePromptWithSampleVars(draft, selectedNodeId) : ''),
-    [tab, draft, selectedNodeId]
+    () => (tab === 'preview' ? compilePromptWithSampleVars(draft, selectedNodeId, settings) : ''),
+    [tab, draft, selectedNodeId, settings]
   )
 
   const visibleCategories = useMemo(() => {
@@ -332,22 +343,39 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
               )}
 
               <div className="flex-1 min-h-0 m-5 rounded-xl border border-slate-800 overflow-hidden bg-[#080c14]">
-                <Editor
-                  height="100%"
-                  theme={ONLYRAG_MONACO_THEME_NAME}
-                  beforeMount={defineOnlyRagMonacoTheme}
-                  language="markdown"
-                  value={tab === 'edit' ? draft : preview}
-                  onChange={(value) => tab === 'edit' && setDraft(value || '')}
-                  onMount={(editor) => {
-                    editorRef.current = editor
-                  }}
-                  options={getStandardMonacoOptions({
-                    readOnly: tab === 'preview',
-                    wordWrap: true,
-                    minimap: false,
-                  })}
-                />
+                {tab === 'edit' ? (
+                  <Editor
+                    key={`edit-${selectedNodeId}`}
+                    height="100%"
+                    theme={ONLYRAG_MONACO_THEME_NAME}
+                    beforeMount={defineOnlyRagMonacoTheme}
+                    language="markdown"
+                    value={draft}
+                    onChange={(value) => setDraft(value || '')}
+                    onMount={(editor) => {
+                      editorRef.current = editor
+                    }}
+                    options={getStandardMonacoOptions({
+                      readOnly: false,
+                      wordWrap: true,
+                      minimap: false,
+                    })}
+                  />
+                ) : (
+                  <Editor
+                    key={`preview-${selectedNodeId}`}
+                    height="100%"
+                    theme={ONLYRAG_MONACO_THEME_NAME}
+                    beforeMount={defineOnlyRagMonacoTheme}
+                    language="markdown"
+                    value={preview}
+                    options={getStandardMonacoOptions({
+                      readOnly: true,
+                      wordWrap: true,
+                      minimap: false,
+                    })}
+                  />
+                )}
               </div>
 
               {selectedNode.variables.length > 0 && tab === 'edit' && (

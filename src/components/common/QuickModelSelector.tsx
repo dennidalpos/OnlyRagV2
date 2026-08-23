@@ -7,6 +7,11 @@ import {
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
+import {
+  type ModelIntent,
+  filterModelsByIntent,
+  isModelForIntent,
+} from '../../services/modelIntentClassifier'
 
 export interface QuickModelSelectorProps {
   /** Currently active model name for this functional feature */
@@ -17,6 +22,8 @@ export interface QuickModelSelectorProps {
   installedModels?: string[]
   /** Curated preset model options for this specific feature */
   presetOptions?: string[]
+  /** Functional intent to filter compatible models (e.g. 'vision', 'coding', 'chat', 'translation') */
+  intent?: ModelIntent
   /** Callback triggered when user selects a new active model */
   onSelectModel: (modelName: string) => void
   /** Optional callback to configure or change fallback model */
@@ -38,6 +45,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
   fallbackModel,
   installedModels = [],
   presetOptions = [],
+  intent,
   onSelectModel,
   onSelectFallbackModel,
   icon: IconComponent = Sparkles,
@@ -67,15 +75,25 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
     }
   }, [isOpen])
 
-  // Build combined unique model list
-  const allCandidateModels = Array.from(
-    new Set([
-      currentModel,
-      ...(fallbackModel ? [fallbackModel] : []),
-      ...presetOptions,
-      ...installedModels,
-    ].filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0)))
-  )
+  // Filter installed models and build candidate list by intent if specified
+  const filteredInstalledModels = intent
+    ? installedModels.filter((m) => isModelForIntent(m, intent))
+    : installedModels
+
+  const allCandidateModels = intent
+    ? filterModelsByIntent(installedModels, intent, {
+        includeCurrent: currentModel,
+        includeFallback: fallbackModel,
+        presetOptions,
+      })
+    : Array.from(
+        new Set([
+          currentModel,
+          ...(fallbackModel ? [fallbackModel] : []),
+          ...presetOptions,
+          ...installedModels,
+        ].filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0)))
+      )
 
   const variantStyles = {
     cyan: 'bg-cyan-950/60 border-cyan-500/40 text-cyan-200 hover:bg-cyan-900/60 hover:border-cyan-500/60',
@@ -133,7 +151,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
           <div className="px-3 py-1.5 text-[11px] font-sans text-slate-400 flex items-center justify-between">
             <span className="font-bold text-slate-200">{featureLabel}</span>
             <span className="text-[10px] text-slate-500 font-mono">
-              {installedModels.length} {t('common.ready').toLowerCase()}
+              {filteredInstalledModels.length} {t('common.ready').toLowerCase()}
             </span>
           </div>
 

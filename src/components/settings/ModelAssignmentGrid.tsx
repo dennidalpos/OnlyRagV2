@@ -13,6 +13,10 @@ import {
 import { DiagnosticsData, AppSettings } from '../../types'
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
+import {
+  type ModelIntent,
+  filterModelsByIntent,
+} from '../../services/modelIntentClassifier'
 
 interface ModelAssignmentGridProps {
   diagnostics: DiagnosticsData | null
@@ -30,13 +34,11 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
 
   const isModelInstalled = (name: string) => isOllamaModelInstalled(name, models)
 
-  const buildModelOptions = (currentValue: string, presetOptions: string[]) => {
-    const all = [
-      currentValue,
-      ...presetOptions,
-      ...models,
-    ].filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0))
-    return Array.from(new Set(all))
+  const buildModelOptions = (currentValue: string, presetOptions: string[], intent: ModelIntent) => {
+    return filterModelsByIntent(models, intent, {
+      includeCurrent: currentValue,
+      presetOptions,
+    })
   }
 
   const renderOption = (name: string, label: string) => {
@@ -89,7 +91,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             >
               {buildModelOptions(
                 settings.codingModel || '',
-                ['qwen2.5-coder:7b', 'qwen3:8b', 'qwen2.5-coder:14b', 'qwen3:14b', 'gpt-oss:20b', 'codestral:22b', 'qwen2.5-coder:32b', 'deepseek-coder:6.7b', 'llama3.1:8b']
+                ['qwen2.5-coder:7b', 'qwen3:8b', 'qwen2.5-coder:14b', 'qwen3:14b', 'gpt-oss:20b', 'codestral:22b', 'qwen2.5-coder:32b', 'deepseek-coder:6.7b', 'llama3.1:8b'],
+                'coding'
               ).map((m) => renderOption(m, m))}
             </select>
             <p className="text-[10px] text-slate-400 leading-tight">
@@ -114,7 +117,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <option value="">(Disattivato — Riprova sullo stesso modello)</option>
               {buildModelOptions(
                 settings.codingFallbackModel || '',
-                ['qwen2.5-coder:7b', 'llama3.2:3b', 'qwen2.5-coder:14b', 'qwen3:8b', 'codestral:22b']
+                ['qwen2.5-coder:7b', 'llama3.2:3b', 'qwen2.5-coder:14b', 'qwen3:8b', 'codestral:22b'],
+                'coding'
               )
                 .filter((m) => m !== (settings.codingModel || 'qwen2.5-coder:7b'))
                 .map((m) => renderOption(m, m))}
@@ -150,7 +154,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             >
               {buildModelOptions(
                 settings.chatModel || '',
-                ['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b', 'phi3.5:3.8b']
+                ['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b', 'phi3.5:3.8b'],
+                'chat'
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -168,7 +173,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <option value="">(Disattivato)</option>
               {buildModelOptions(
                 settings.chatFallbackModel || '',
-                ['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b']
+                ['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b'],
+                'chat'
               )
                 .filter((m) => m !== (settings.chatModel || 'llama3.1:8b'))
                 .map((m) => renderOption(m, m))}
@@ -198,7 +204,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             >
               {buildModelOptions(
                 settings.translationModel || '',
-                ['qwen2.5:7b', 'llama3.1:8b', 'aya-expanse:8b', 'gemma2:2b', 'gemma2:9b', 'qwen2.5:1.5b', 'mistral:7b']
+                ['qwen2.5:7b', 'llama3.1:8b', 'aya-expanse:8b', 'gemma2:2b', 'gemma2:9b', 'qwen2.5:1.5b', 'mistral:7b'],
+                'translation'
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -216,7 +223,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <option value="">(Disattivato)</option>
               {buildModelOptions(
                 settings.translationFallbackModel || '',
-                ['qwen2.5:7b', 'llama3.2:3b', 'llama3.1:8b']
+                ['qwen2.5:7b', 'llama3.2:3b', 'llama3.1:8b'],
+                'translation'
               )
                 .filter((m) => m !== (settings.translationModel || 'qwen2.5:7b'))
                 .map((m) => renderOption(m, m))}
@@ -254,7 +262,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             >
               {buildModelOptions(
                 settings.visionModel || '',
-                ['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b', 'moondream:latest']
+                ['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b', 'moondream:latest'],
+                'vision'
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -275,7 +284,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
             >
               {buildModelOptions(
                 settings.embeddingModel || '',
-                ['nomic-embed-text', 'bge-m3', 'bge-large', 'all-minilm', 'mxbai-embed-large']
+                ['nomic-embed-text', 'bge-m3', 'bge-large', 'all-minilm', 'mxbai-embed-large'],
+                'embedding'
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -312,7 +322,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
               {buildModelOptions(
                 settings.medicalModel || '',
-                ['adrienbrault/biomistral-7b:Q4_K_M', 'meditron:7b', 'meditron:70b', 'llama3.1:8b']
+                ['adrienbrault/biomistral-7b:Q4_K_M', 'meditron:7b', 'meditron:70b', 'llama3.1:8b'],
+                'medical'
               ).map((m) => renderOption(m, m))}
             </select>
           </div>
@@ -334,7 +345,8 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               <option value="">{`-- ${t('common.none')} (${t('settings.chatModel')}) --`}</option>
               {buildModelOptions(
                 settings.legalModel || '',
-                ['llama3.1:8b', 'mistral:7b', 'command-r:35b', 'command-r-plus:104b']
+                ['llama3.1:8b', 'mistral:7b', 'command-r:35b', 'command-r-plus:104b'],
+                'legal'
               ).map((m) => renderOption(m, m))}
             </select>
           </div>

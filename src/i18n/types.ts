@@ -301,6 +301,10 @@ export interface TranslationSchema {
   translation: {
     title: string
     subtitle: string
+    tabTextMarkdown: string
+    tabInplaceLayout: string
+    tabTextMarkdownDesc: string
+    tabInplaceLayoutDesc: string
     newTranslation: string
     systemPrompt: string
     stopTranslation: string
@@ -333,6 +337,28 @@ export interface TranslationSchema {
     exportSuccess: string
     exportCancelled: string
     exportError: string
+    inplaceTitle: string
+    inplaceSubtitle: string
+    inplaceSelectDoc: string
+    inplaceSelectDocPrompt: string
+    inplaceSupportedNotice: string
+    inplaceTargetDirNotice: string
+    inplaceTargetDirLabel: string
+    inplaceTargetDirPlaceholder: string
+    inplaceTargetDirRequired: string
+    inplaceBrowse: string
+    inplaceBrowseTitle: string
+    inplaceStartBtn: string
+    inplaceTranslating: string
+    inplacePhaseExtracting: string
+    inplacePhaseTranslatingBlocks: string
+    inplacePhaseReconstructing: string
+    inplacePhaseTranslatingRuns: string
+    inplaceSuccess: string
+    inplaceError: string
+    inplaceNoCompatibleDocs: string
+    inplacePreserveNotice: string
+    inplaceResetDir: string
   }
   ingestion: {
     title: string
@@ -375,21 +401,9 @@ export interface TranslationSchema {
     exportSuccess: string
     exportCancelled: string
     exportError: string
-    translateInplace: string
-    translateInplaceModalTitle: string
-    translateInplaceTargetDirNotice: string
-    translateInplaceTargetDirLabel: string
-    translateInplaceTargetDirPlaceholder: string
-    translateInplaceTargetDirRequired: string
-    translateInplaceBrowse: string
-    translateInplaceBrowseTitle: string
-    translateInplaceConfirm: string
     textCheckBadge: string
     textCheckToggle: string
     textCheckTooltip: string
-    translateInplaceInProgress: string
-    translateInplaceSuccess: string
-    translateInplaceError: string
     ocrNativeBadge: string
     ocrVisionBadge: string
     ocrGpuActive: string

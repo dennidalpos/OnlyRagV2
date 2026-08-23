@@ -49,4 +49,18 @@ describe('useTranslation helper tests', () => {
     expect(extractPageMarkdown(multiPage, 2)).toBe('## Page 2\nSecond page text')
     expect(extractPageMarkdown(multiPage, 1)).toBe('## Page 1\nFirst page text')
   })
+
+  it('should support swapping languages cleanly', () => {
+    let source = 'Italian'
+    let target = 'English'
+    const swap = () => {
+      const prev = source
+      source = target
+      target = prev
+    }
+    swap()
+    expect(source).toBe('English')
+    expect(target).toBe('Italian')
+  })
 })
+

@@ -1,7 +1,6 @@
 {
   "todos": [
     "[P1] Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato.",
-    "[P1] Validazione live della Vision OCR: ingerire un PDF scansionato e un'immagine raster con `ocrEngine: 'vision_model'`, verificando resa del prompt per pagina, qualita' della trascrizione e fallback su RapidOCR quando il modello non risponde.",
-    "[P2] Dare alla traduzione in-place una collocazione propria: oggi e' un'icona di riga in `DocumentListTable.tsx:112`, dentro l'elenco documenti di Ingestione. Non e' una variante della traduzione testuale - sono due strumenti per due scopi (layout preservato su docx/pdf, contro estrazione+traduzione snella su qualsiasi formato) e vanno presentati come tali, non come modalita' l'una dell'altra."
+    "[P1] Validazione live della Vision OCR: ingerire un PDF scansionato e un'immagine raster con `ocrEngine: 'vision_model'`, verificando resa del prompt per pagina, qualita' della trascrizione e fallback su RapidOCR quando il modello non risponde."
   ]
 }

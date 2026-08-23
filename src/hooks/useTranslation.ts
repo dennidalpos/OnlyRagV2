@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { IngestedDocument, AppSettings } from '../types'
+import { IngestedDocument, AppSettings, TranslateProgressPayload } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
@@ -332,4 +332,150 @@ export function useDocumentTranslation(settings?: AppSettings) {
     handleResetTranslation,
   }
 }
+
+export function useInplaceTranslation(settings?: AppSettings) {
+  const { t } = useI18n()
+  const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
+  const [sourceLang, setSourceLang] = useState('Italian')
+  const [targetLang, setTargetLang] = useState('English')
+  const [targetDir, setTargetDir] = useState<string>(settings?.translationOutputFolder || '')
+  const [isTranslating, setIsTranslating] = useState(false)
+  const [translateProgress, setTranslateProgress] = useState<TranslateProgressPayload | null>(null)
+  const [status, setStatus] = useState<{ success: boolean; message: string; filename?: string } | null>(null)
+
+  // Listen to live streaming translation progress from Electron / sidecar
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onTranslateProgress?.((payload) => {
+      setTranslateProgress(payload)
+    })
+    return () => {
+      unsubscribe?.()
+    }
+  }, [])
+
+  // Sync targetDir when settings change
+  useEffect(() => {
+    if (settings?.translationOutputFolder && !targetDir) {
+      setTargetDir(settings.translationOutputFolder)
+    }
+  }, [settings?.translationOutputFolder, targetDir])
+
+  // Mirrors isTranslating into the cross-module task lock
+  useEffect(() => {
+    if (isTranslating) {
+      acquireGlobalTaskLock('translation')
+      return () => releaseGlobalTaskLock('translation')
+    }
+    releaseGlobalTaskLock('translation')
+  }, [isTranslating])
+
+  const handleDocsUpdated = useCallback((docs: IngestedDocument[]) => {
+    setSelectedDoc((prev) => {
+      const compatibleDocs = docs.filter((d) => d.fileType === 'pdf' || d.fileType === 'docx')
+      if (!prev) return compatibleDocs.length > 0 ? compatibleDocs[0] : null
+      return compatibleDocs.find((d) => d.id === prev.id) || (compatibleDocs.length > 0 ? compatibleDocs[0] : null)
+    })
+  }, [])
+
+  const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
+    onDocsUpdated: handleDocsUpdated,
+  })
+
+  const compatibleDocs = documents.filter((d) => d.fileType === 'pdf' || d.fileType === 'docx')
+
+  const handleSwapLanguages = () => {
+    const prevSource = sourceLang
+    setSourceLang(targetLang)
+    setTargetLang(prevSource)
+  }
+
+  const handleSelectTargetDir = async () => {
+    if (!window.electronAPI?.openDirectoryDialog) return
+    const dir = await window.electronAPI.openDirectoryDialog({
+      title: t('translation.inplaceBrowseTitle'),
+    })
+    if (dir) {
+      setTargetDir(dir)
+    }
+  }
+
+  const handleStartInplaceTranslation = async (overrideDoc?: IngestedDocument) => {
+    const docToTranslate = overrideDoc || selectedDoc
+    if (!docToTranslate || isTranslating) return
+
+    const busyModule = peekGlobalTaskLock()
+    if (busyModule && busyModule !== 'translation') {
+      const message = busyModule === 'coding'
+        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
+        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameIngestion') })
+      setStatus({ success: false, message })
+      return
+    }
+
+    if (!targetDir.trim()) {
+      setStatus({ success: false, message: t('translation.inplaceTargetDirRequired') })
+      return
+    }
+
+    setIsTranslating(true)
+    setStatus(null)
+    setTranslateProgress(null)
+
+    try {
+      const modelToUse = settings?.translationModel || settings?.defaultModel
+      const res = await apiService.translateDocumentInplace(
+        docToTranslate.id,
+        sourceLang,
+        targetLang,
+        modelToUse,
+        false,
+        targetDir
+      )
+
+      if (res.success && res.data) {
+        setStatus({
+          success: true,
+          message: t('translation.inplaceSuccess', { filename: res.data.filename }),
+          filename: res.data.filename,
+        })
+        await fetchDocuments()
+      } else {
+        setStatus({
+          success: false,
+          message: res.error || t('translation.inplaceError', { message: 'unknown error' }),
+        })
+      }
+    } catch (err: unknown) {
+      const normalized = normalizeError(err, 'InplaceTranslation')
+      setStatus({
+        success: false,
+        message: t('translation.inplaceError', { message: normalized.message }),
+      })
+    } finally {
+      setIsTranslating(false)
+    }
+  }
+
+  return {
+    documents: compatibleDocs,
+    allDocuments: documents,
+    selectedDoc,
+    setSelectedDoc,
+    sourceLang,
+    setSourceLang,
+    targetLang,
+    setTargetLang,
+    targetDir,
+    setTargetDir,
+    isTranslating,
+    translateProgress,
+    status,
+    setStatus,
+    handleSwapLanguages,
+    handleSelectTargetDir,
+    handleStartInplaceTranslation,
+    fetchDocuments,
+  }
+}
+
 

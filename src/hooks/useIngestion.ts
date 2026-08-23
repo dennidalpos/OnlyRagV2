@@ -73,36 +73,10 @@ export function useIngestion(settings?: AppSettings) {
   const [syncScroll, setSyncScroll] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null)
-  const [isTranslatingInplace, setIsTranslatingInplace] = useState<boolean>(false)
-  const [translateInplaceStatus, setTranslateInplaceStatus] = useState<{ success: boolean; message: string } | null>(null)
-  const [translateProgress, setTranslateProgress] = useState<{
-    page?: number
-    totalPages?: number
-    percent?: number
-    phase?: string
-  } | null>(null)
 
-  useEffect(() => {
-    if (!window.electronAPI?.onTranslateProgress) return
-    const unsubscribe = window.electronAPI.onTranslateProgress((payload) => {
-      if (payload.type === 'progress') {
-        setTranslateProgress({
-          page: payload.page,
-          totalPages: payload.total_pages,
-          percent: payload.percent,
-          phase: payload.phase,
-        })
-      } else if (payload.type === 'done' || payload.type === 'error') {
-        setTranslateProgress(null)
-      }
-    })
-    return () => unsubscribe()
-  }, [])
-
-  // Mirrors this module's busy state (upload/ingest pipeline OR in-place translation) into
-  // the cross-module task lock so the coding agent/translation module can block starting
-  // their own task while ingestion is mid-flight (see globalTaskLock.ts).
-  const isIngestionBusy = isUploading || isTranslatingInplace
+  // Mirrors this module's busy state (upload/ingest pipeline) into the cross-module task lock
+  // so the coding agent/translation module can block starting their own task while ingestion is mid-flight.
+  const isIngestionBusy = isUploading
   useEffect(() => {
     if (isIngestionBusy) {
       acquireGlobalTaskLock('ingestion')
@@ -351,43 +325,6 @@ export function useIngestion(settings?: AppSettings) {
     }
   }
 
-  const handleTranslateInplace = async (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string) => {
-    if (!docId || isTranslatingInplace) return
-
-    const busyModule = peekGlobalTaskLock()
-    if (busyModule && busyModule !== 'ingestion') {
-      const message = busyModule === 'coding'
-        ? t('common.crossModuleTaskBlocked', { module: t('common.moduleNameCoding') })
-        : t('common.crossModuleTaskBlocked', { module: t('common.moduleNameTranslation') })
-      setTranslateInplaceStatus({ success: false, message })
-      return
-    }
-
-    setIsTranslatingInplace(true)
-    setTranslateInplaceStatus(null)
-
-    try {
-      const res = await apiService.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir)
-      if (res.success && res.data) {
-        if (selectedDoc?.id === docId) {
-          setSelectedDoc(res.data)
-          setMarkdownContent(res.data.extractedMarkdown)
-        }
-        setTranslateInplaceStatus({ success: true, message: t('ingestion.translateInplaceSuccess', { filename: res.data.filename }) })
-        notifyDocumentsChanged()
-        await fetchDocuments()
-      } else {
-        setTranslateInplaceStatus({ success: false, message: res.error || t('ingestion.translateInplaceError', { message: 'unknown error' }) })
-      }
-    } catch (err: unknown) {
-      const normalized = normalizeError(err, 'Translation')
-      setTranslateInplaceStatus({ success: false, message: t('ingestion.translateInplaceError', { message: normalized.message }) })
-    } finally {
-      setIsTranslatingInplace(false)
-      setTimeout(() => setTranslateInplaceStatus(null), 5000)
-    }
-  }
-
   const handleIngestPath = async (targetFilePath: string, displayName?: string) => {
     if (!targetFilePath || !targetFilePath.trim()) return
 
@@ -574,10 +511,6 @@ export function useIngestion(settings?: AppSettings) {
     isSaving,
     saveStatus,
     handleSaveDocument,
-    isTranslatingInplace,
-    translateInplaceStatus,
-    translateProgress,
-    handleTranslateInplace,
     isUploading,
     uploadError,
     setUploadError,

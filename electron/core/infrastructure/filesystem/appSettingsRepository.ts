@@ -28,16 +28,41 @@ export class AppSettingsRepository {
 
   public async loadSettings(): Promise<AppSettings | null> {
     const filePath = this.getStateFilePath()
-    if (!fs.existsSync(filePath)) {
+    let targetPath = filePath
+
+    if (!fs.existsSync(targetPath)) {
+      // Cross-folder fallback: check if settings exist under alternate AppData folder (OnlyRag V2 <-> onlyrag-v2)
+      try {
+        const appDataDir = app && typeof app.getPath === 'function' ? app.getPath('appData') : undefined
+        if (appDataDir) {
+          const alternateNames = ['OnlyRag V2', 'onlyrag-v2']
+          for (const alt of alternateNames) {
+            const candidate = path.join(appDataDir, alt, SETTINGS_FILE_NAME)
+            if (candidate !== targetPath && fs.existsSync(candidate)) {
+              logger.log('INFO', 'AppSettingsRepo', `Migrating existing settings from fallback location: ${candidate} -> ${targetPath}`)
+              targetPath = candidate
+              break
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!fs.existsSync(targetPath)) {
       return null
     }
 
     try {
-      const raw = await fs.promises.readFile(filePath, 'utf-8')
+      const raw = await fs.promises.readFile(targetPath, 'utf-8')
       const parsed = JSON.parse(raw)
-      return sanitizeAppSettings(parsed)
+      const sanitized = sanitizeAppSettings(parsed)
+      // If we read from a fallback location, save immediately to the canonical path
+      if (targetPath !== filePath) {
+        await this.saveSettings(sanitized)
+      }
+      return sanitized
     } catch (err: any) {
-      logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${filePath}: ${err.message}`)
+      logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${targetPath}: ${err.message}`)
       return null
     }
   }

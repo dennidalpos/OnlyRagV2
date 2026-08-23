@@ -10,6 +10,7 @@ import {
   Sliders,
   Loader2,
   FileText,
+  FileCheck2,
   RotateCcw,
   Copy,
   Check,
@@ -22,6 +23,7 @@ import {
 import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
+import { InplaceTranslationPanel } from './InplaceTranslationPanel'
 import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
@@ -40,6 +42,7 @@ interface TranslationViewProps {
 
 export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
   const { t } = useTranslation()
+  const [activeTool, setActiveTool] = useState<'markdown' | 'inplace'>('markdown')
   const tr = useDocumentTranslation(settings)
   const toast = useToast()
   const [copiedTranslation, setCopiedTranslation] = useState(false)
@@ -77,6 +80,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
             fallbackModel={settings?.translationFallbackModel}
             installedModels={diagnostics?.ollama?.models || []}
             presetOptions={['qwen2.5:7b', 'llama3.1:8b', 'llama3.2:3b', 'mistral:7b', 'gemma2:9b']}
+            intent="translation"
             onSelectModel={(newModel) => {
               onUpdateSettings?.({
                 translationModel: newModel,
@@ -92,17 +96,7 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
             variant="sky"
           />
 
-          <button
-            type="button"
-            onClick={tr.handleResetTranslation}
-            aria-label={t('translation.newTranslation')}
-            title={t('translation.newTranslation')}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 text-slate-300 hover:text-sky-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden sm:inline">{t('translation.newTranslation')}</span>
-          </button>
-
+          {/* System Prompt Customization Trigger */}
           <button
             type="button"
             onClick={() => tr.setIsPromptModalOpen(true)}
@@ -114,54 +108,112 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
             <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
           </button>
 
-          {tr.isTranslating ? (
-            <button
-              type="button"
-              onClick={() => tr.handleStopTranslation()}
-              aria-label={t('common.cancel')}
-              title={t('common.cancel')}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2 shadow-lg shadow-rose-950/40 animate-pulse"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-              <span>{t('translation.stopTranslation', { percent: progressPercent })}</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => tr.handleStartTranslation()}
-              disabled={!tr.selectedDoc}
-              aria-label={t('translation.startTranslation')}
-              className="px-4 py-2 bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2 shadow-lg shadow-sky-950/40"
-            >
-              <Play className="w-4 h-4" />
-              <span>{t('translation.startTranslation')}</span>
-            </button>
+          {activeTool === 'markdown' && (
+            <>
+              {/* New Translation Button */}
+              <button
+                type="button"
+                onClick={tr.handleResetTranslation}
+                aria-label={t('translation.newTranslation')}
+                title={t('translation.newTranslation')}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 text-slate-300 hover:text-sky-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden sm:inline">{t('translation.newTranslation')}</span>
+              </button>
+
+              {tr.isTranslating ? (
+                <button
+                  type="button"
+                  onClick={() => tr.handleStopTranslation()}
+                  aria-label={t('common.cancel')}
+                  title={t('common.cancel')}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2 shadow-lg shadow-rose-950/40 animate-pulse cursor-pointer"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>{t('translation.stopTranslation', { percent: progressPercent })}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => tr.handleStartTranslation()}
+                  disabled={!tr.selectedDoc}
+                  aria-label={t('translation.startTranslation')}
+                  className="px-4 py-2 bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-2 shadow-lg shadow-sky-950/40 cursor-pointer"
+                >
+                  <Play className="w-4 h-4" />
+                  <span>{t('translation.startTranslation')}</span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Active Translation Progress Bar Banner */}
-      {tr.isTranslating && (
-        <div className="px-4 py-3 bg-slate-900/95 border-b border-slate-800 shrink-0" role="status" aria-live="polite">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 text-xs text-slate-200">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
-              <span className="font-semibold">{tr.selectedDoc?.filename || t('common.document')}</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-sky-300 font-mono">
-                Chunk {tr.currentChunkIndex}/{tr.totalChunks} ({tr.sourceLang} &rarr; {tr.targetLang})
-              </span>
-            </div>
-            <span className="text-xs text-sky-300 font-mono font-bold">{progressPercent}%</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-sky-500 to-cyan-400 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
+      {/* Mode Switcher Tab Bar */}
+      <div className="px-4 py-2 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between z-10 shrink-0">
+        <div className="flex items-center gap-2" role="tablist" aria-label={t('translation.title')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTool === 'markdown'}
+            onClick={() => setActiveTool('markdown')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all focus-ring active:scale-95 cursor-pointer ${
+              activeTool === 'markdown'
+                ? 'bg-sky-950 text-sky-300 border border-sky-800 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>{t('translation.tabTextMarkdown')}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTool === 'inplace'}
+            onClick={() => setActiveTool('inplace')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all focus-ring active:scale-95 cursor-pointer ${
+              activeTool === 'inplace'
+                ? 'bg-sky-950 text-sky-300 border border-sky-800 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+            }`}
+          >
+            <FileCheck2 className="w-3.5 h-3.5" />
+            <span>{t('translation.tabInplaceLayout')}</span>
+          </button>
         </div>
-      )}
+
+        <span className="text-[11px] text-slate-400 hidden md:inline">
+          {activeTool === 'markdown' ? t('translation.tabTextMarkdownDesc') : t('translation.tabInplaceLayoutDesc')}
+        </span>
+      </div>
+
+      {activeTool === 'inplace' ? (
+        <InplaceTranslationPanel settings={settings} onUpdateSettings={onUpdateSettings} />
+      ) : (
+        <>
+          {/* Active Translation Progress Bar Banner */}
+          {tr.isTranslating && (
+            <div className="px-4 py-3 bg-slate-900/95 border-b border-slate-800 shrink-0" role="status" aria-live="polite">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-xs text-slate-200">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                  <span className="font-semibold">{tr.selectedDoc?.filename || t('common.document')}</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-sky-300 font-mono">
+                    Chunk {tr.currentChunkIndex}/{tr.totalChunks} ({tr.sourceLang} &rarr; {tr.targetLang})
+                  </span>
+                </div>
+                <span className="text-xs text-sky-300 font-mono font-bold">{progressPercent}%</span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-sky-500 to-cyan-400 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+          )}
 
       {/* Main Translation Workspace */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -536,6 +588,8 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
           )}
         </div>
       </div>
+    </>
+  )}
 
       {settings && onUpdateSettings && (
         <PromptConfigurationModal

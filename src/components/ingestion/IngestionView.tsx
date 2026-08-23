@@ -24,14 +24,13 @@ import {
   WrapText,
   X,
 } from 'lucide-react'
-import { AppSettings, DiagnosticsData, IngestedDocument } from '../../types'
+import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { OcrEngineBadge } from './OcrEngineBadge'
 import { DocumentListTable } from './DocumentListTable'
 import { VectorSearchPanel } from './VectorSearchPanel'
 import { SourcePagePreview } from './SourcePagePreview'
-import { TranslateInplaceModal } from './TranslateInplaceModal'
 import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
@@ -71,7 +70,6 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const dragCounterRef = useRef<number>(0)
   const [copiedMarkdown, setCopiedMarkdown] = useState(false)
-  const [translateInplaceDoc, setTranslateInplaceDoc] = useState<IngestedDocument | null>(null)
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -270,7 +268,8 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
                 currentModel={settings?.visionModel || 'llama3.2-vision:11b'}
                 fallbackModel={settings?.visionFallbackModel}
                 installedModels={diagnostics?.ollama?.models || []}
-                presetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b']}
+                presetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b', 'moondream:latest']}
+                intent="vision"
                 onSelectModel={(newModel) => {
                   onUpdateSettings?.({
                     visionModel: newModel,
@@ -419,26 +418,6 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
         </div>
       )}
 
-      {/* Translate In-Place Status Notification Banner */}
-      {ing.translateInplaceStatus && (
-        <div
-          role="status"
-          className={`px-4 py-2.5 border-b flex items-center justify-between text-xs font-semibold shrink-0 transition-all ${
-            ing.translateInplaceStatus.success
-              ? 'bg-emerald-950/80 border-emerald-800 text-emerald-300 shadow-md shadow-emerald-950/40'
-              : 'bg-rose-950/80 border-rose-800 text-rose-300'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {ing.translateInplaceStatus.success ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-400" />
-            )}
-            <span>{ing.translateInplaceStatus.message}</span>
-          </div>
-        </div>
-      )}
 
       {/* Export Status Notification Banner */}
       {ing.exportStatus && (
@@ -515,7 +494,6 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
             selectedDoc={ing.selectedDoc}
             onSelectDoc={ing.handleSelectDoc}
             onDeleteDoc={(docId: string, filename: string) => ing.handleDeleteDoc(docId, filename)}
-            onTranslateInplace={(doc) => setTranslateInplaceDoc(doc)}
           />
 
           <VectorSearchPanel embeddingModel={settings?.embeddingModel} />
@@ -937,27 +915,6 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
           onUpdateSettings={onUpdateSettings}
         />
       )}
-
-      <TranslateInplaceModal
-        isOpen={translateInplaceDoc !== null}
-        filename={translateInplaceDoc?.filename || ''}
-        isTranslating={ing.isTranslatingInplace}
-        translateProgress={ing.translateProgress}
-        defaultTargetDir={settings?.translationOutputFolder || ''}
-        onClose={() => setTranslateInplaceDoc(null)}
-        onConfirm={async (sourceLang, targetLang, targetDir) => {
-          if (!translateInplaceDoc) return
-          await ing.handleTranslateInplace(
-            translateInplaceDoc.id,
-            sourceLang,
-            targetLang,
-            settings?.translationModel || settings?.defaultModel,
-            false,
-            targetDir
-          )
-          setTranslateInplaceDoc(null)
-        }}
-      />
     </div>
   )
 }

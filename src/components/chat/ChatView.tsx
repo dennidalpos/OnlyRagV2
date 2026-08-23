@@ -131,6 +131,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             fallbackModel={settings.chatFallbackModel}
             installedModels={diagnostics?.ollama?.models || []}
             presetOptions={['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b', 'phi3.5:3.8b']}
+            intent="chat"
             onSelectModel={(newModel) => {
               onUpdateSettings?.({
                 chatModel: newModel,
@@ -145,6 +146,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             featureLabel="RAG Chat"
             variant="purple"
           />
+
+          {/* System Prompt Button */}
+          <button
+            type="button"
+            onClick={() => c.setIsPromptModalOpen(true)}
+            aria-label={t('common.systemPrompt')}
+            title={t('common.systemPrompt')}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 text-purple-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <Sliders className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
+          </button>
 
           {/* New Chat Button */}
           <button
@@ -163,18 +176,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
           >
             <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
             <span className="hidden sm:inline">{t('chat.newChat')}</span>
-          </button>
-
-          {/* System Prompt Button */}
-          <button
-            type="button"
-            onClick={() => c.setIsPromptModalOpen(true)}
-            aria-label={t('common.systemPrompt')}
-            title={t('common.systemPrompt')}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 text-purple-300 text-xs font-semibold rounded-xl transition-all focus-ring active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <Sliders className="w-3.5 h-3.5 text-purple-400" />
-            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
           </button>
 
           {/* Autoscroll Toggle Button */}

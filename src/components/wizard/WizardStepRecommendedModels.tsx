@@ -10,6 +10,10 @@ import {
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 import type { ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
+import {
+  type ModelIntent,
+  filterModelsByIntent,
+} from '../../services/modelIntentClassifier'
 
 export interface WizardStepRecommendedModelsProps {
   downloadedModels: string[]
@@ -85,13 +89,11 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
 
   const isModelInstalled = (name: string) => isOllamaModelInstalled(name, downloadedModels)
 
-  const buildOptions = (currentValue: string | undefined, presets: string[]) => {
-    const all = [
-      currentValue,
-      ...presets,
-      ...downloadedModels,
-    ].filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0))
-    return Array.from(new Set(all))
+  const buildOptions = (currentValue: string | undefined, presets: string[], intent: ModelIntent) => {
+    return filterModelsByIntent(downloadedModels, intent, {
+      includeCurrent: currentValue,
+      presetOptions: presets,
+    })
   }
 
   // A native <option> renders text only, so the VRAM verdict is appended to the label rather
@@ -152,7 +154,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               onChange={(e) => onChangeCoding(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono font-semibold focus-ring"
             >
-              {buildOptions(selectedCoding, codingPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedCoding, codingPresetOptions, 'coding').map((m) => renderOption(m))}
             </select>
           </div>
 
@@ -171,7 +173,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               className="w-full bg-slate-950 border border-amber-900/40 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono focus-ring"
             >
               <option value="">(Disattivato — Riprova sullo stesso)</option>
-              {buildOptions(selectedCodingFallback, codingPresetOptions)
+              {buildOptions(selectedCodingFallback, codingPresetOptions, 'coding')
                 .filter((m) => m !== selectedCoding)
                 .map((m) => renderOption(m))}
             </select>
@@ -199,7 +201,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               onChange={(e) => onChangeChat(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono font-semibold focus-ring"
             >
-              {buildOptions(selectedChat, chatPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedChat, chatPresetOptions, 'chat').map((m) => renderOption(m))}
             </select>
           </div>
 
@@ -215,7 +217,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               onChange={(e) => onChangeTranslation(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono font-semibold focus-ring"
             >
-              {buildOptions(selectedTranslation, translationPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedTranslation, translationPresetOptions, 'translation').map((m) => renderOption(m))}
             </select>
           </div>
         </div>
@@ -241,7 +243,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               onChange={(e) => onChangeVision(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono font-semibold focus-ring"
             >
-              {buildOptions(selectedVision, visionPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedVision, visionPresetOptions, 'vision').map((m) => renderOption(m))}
             </select>
           </div>
 
@@ -257,7 +259,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               onChange={(e) => onChangeEmbedding(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono font-semibold focus-ring"
             >
-              {buildOptions(selectedEmbedding, embeddingPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedEmbedding, embeddingPresetOptions, 'embedding').map((m) => renderOption(m))}
             </select>
           </div>
         </div>
@@ -284,7 +286,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono focus-ring"
             >
               <option value="">(Usa Modello RAG Chat)</option>
-              {buildOptions(selectedMedical, medicalPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedMedical, medicalPresetOptions, 'medical').map((m) => renderOption(m))}
             </select>
           </div>
 
@@ -301,7 +303,7 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono focus-ring"
             >
               <option value="">(Usa Modello RAG Chat)</option>
-              {buildOptions(selectedLegal, legalPresetOptions).map((m) => renderOption(m))}
+              {buildOptions(selectedLegal, legalPresetOptions, 'legal').map((m) => renderOption(m))}
             </select>
           </div>
         </div>

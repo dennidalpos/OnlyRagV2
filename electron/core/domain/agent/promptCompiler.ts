@@ -126,7 +126,11 @@ export function getEffectivePrompt(
  * Renders a template with the registry's sample values, for the modal's preview pane.
  * Never used on the wire.
  */
-export function compilePromptWithSampleVars(rawTemplate: string, nodeId: PromptNodeId): string {
+export function compilePromptWithSampleVars(
+  rawTemplate: string,
+  nodeId: PromptNodeId,
+  settings?: AppSettings
+): string {
   const node = findPromptNode(nodeId)
   if (!node) return rawTemplate
 
@@ -135,11 +139,18 @@ export function compilePromptWithSampleVars(rawTemplate: string, nodeId: PromptN
 
   const partials: Record<string, string> = {}
   for (const child of partialNodesForModule(node.module)) {
-    partials[child.partialName as string] = child.defaultValue
+    const override = settings?.customPromptOverrides?.[child.id]
+    partials[child.partialName as string] = (override && override.trim()) ? override : child.defaultValue
+  }
+
+  const view: Record<string, unknown> = {
+    ...samples,
+    nativeToolCalling: false,
+    nativeVision: true,
   }
 
   try {
-    return collapseBlankRuns(renderPromptTemplate(rawTemplate, samples, partials)).trim()
+    return collapseBlankRuns(renderPromptTemplate(rawTemplate, view, partials)).trim()
   } catch {
     // A half-typed template is the normal state of a live editor; show the raw text instead of
     // blanking the preview pane.

@@ -26,6 +26,12 @@ export type EmitLog = (
 export interface ResponseInterpreterState {
   noToolStreak: number
   stagnationStreak: number
+  /**
+   * Rounds of "verification failed, fix it and try again" already spent on this session.
+   * Bounded by MAX_VERIFICATION_FIX_CYCLES: a model that cannot fix the failure would otherwise
+   * spend the whole step budget rediscovering it. See verificationGatePolicy.ts.
+   */
+  verificationFixCycles: number
 }
 
 export interface ResponseInterpreterContext {

@@ -4,6 +4,8 @@ import path from 'node:path'
 import os from 'node:os'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask, respondToApproval } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
+import { runProjectVerification } from './agentOrchestratorVerificationRunner'
+import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import type { AppSettings } from '../../../src/types'
 
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
@@ -18,6 +20,11 @@ vi.mock('./ollamaAppService', () => ({
     getModelCapabilities: vi.fn().mockResolvedValue({}),
     preloadModel: vi.fn().mockResolvedValue({ success: true }),
   },
+}))
+
+// The real runner shells out to `npm run build`; what is under test here is the gate's wiring.
+vi.mock('./agentOrchestratorVerificationRunner', () => ({
+  runProjectVerification: vi.fn().mockResolvedValue({ hasVerificationCommand: false }),
 }))
 
 vi.mock('./skillAppService', () => ({
@@ -39,6 +46,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     // ran against another test's script — the failures surfaced far from their cause and
     // moved whenever the loop's step count changed. mockReset drains the queue too.
     vi.mocked(AgentStreamTransport.streamCompletion).mockReset()
+    vi.mocked(runProjectVerification).mockReset()
+    vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
   })
 
   afterEach(() => {
@@ -627,5 +636,85 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(false)
     expect(res.summary).toContain('Nessuna cartella di progetto / workspace specificata')
+  })
+
+  const verificationWriteJson =
+    '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "app.js", "content": "console.log(1)" }\n}\n```'
+  const verificationFinishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "All done." }\n}\n```'
+
+  function scriptTurns(...turns: string[]) {
+    let chain = vi.mocked(AgentStreamTransport.streamCompletion)
+    for (const turn of turns) chain = chain.mockResolvedValueOnce(turn)
+  }
+
+  describe('finish gate runs the project verification instead of waiving it', () => {
+    it('lets finish through when the verification passes', async () => {
+      vi.mocked(runProjectVerification).mockResolvedValue({
+        hasVerificationCommand: true,
+        passed: true,
+        command: 'npm run build',
+      })
+      scriptTurns(verificationWriteJson, verificationFinishJson)
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        null
+      )
+
+      expect(runProjectVerification).toHaveBeenCalled()
+      expect(res.success).toBe(true)
+      expect(res.summary).toBe('All done.')
+    })
+
+    it('blocks finish and closes the session as FAILED after the allowed rounds', async () => {
+      // The o3tx regression: the gate used to warn once, then let finish through, and the session
+      // reported COMPLETED on a project that never built.
+      vi.mocked(runProjectVerification).mockResolvedValue({
+        hasVerificationCommand: true,
+        passed: false,
+        command: 'npm run build',
+        failureDetail: "error TS2307: Cannot find module './main'",
+      })
+      scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        null
+      )
+
+      expect(res.success).toBe(false)
+      expect(res.summary).toContain('FAILED')
+      expect(res.summary).toContain('TS2307')
+      expect(vi.mocked(runProjectVerification).mock.calls.length).toBe(MAX_VERIFICATION_FIX_CYCLES)
+    })
+
+    it('gives the model its correction rounds before giving up', async () => {
+      // Fails twice, then the model fixes it and the third verification passes.
+      vi.mocked(runProjectVerification)
+        .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, failureDetail: 'boom 1' })
+        .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, failureDetail: 'boom 2' })
+        .mockResolvedValue({ hasVerificationCommand: true, passed: true, command: 'npm run build' })
+      scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        null
+      )
+
+      expect(res.success).toBe(true)
+      expect(res.summary).toBe('All done.')
+    })
+
+    it('proceeds when the project offers no verification command, instead of deadlocking', async () => {
+      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+      scriptTurns(verificationWriteJson, verificationFinishJson)
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        null
+      )
+
+      expect(res.success).toBe(true)
+    })
   })
 })

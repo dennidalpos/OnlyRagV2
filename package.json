@@ -25,6 +25,7 @@
   "license": "MIT",
   "dependencies": {
     "cheerio": "^1.2.0",
+    "depcheck": "^1.4.7",
     "diff": "^9.0.0",
     "fast-levenshtein": "^3.0.0",
     "ignore": "^7.0.6",

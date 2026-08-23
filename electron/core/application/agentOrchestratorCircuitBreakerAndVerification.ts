@@ -2,6 +2,11 @@ import path from 'node:path'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone } from '../domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import {
+  awaitingVerificationNote,
+  promotionNote,
+  selectMilestonesProvenByVerification,
+} from '../domain/agent/milestoneVerificationPromotion'
 import { scanCommandTouchedFiles } from '../infrastructure/filesystem/commandTouchedFilesScanner'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
@@ -79,12 +84,13 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
     return
   }
 
-  ctx.goalPlanner.updateMilestone(
-    activeM.id,
-    'verified',
-    `Verified: "${evidencePath}" was written for this milestone and every file it names is now on disk with content.`
+  // Deliberately NOT 'verified'. The file being on disk says it was written, never that it
+  // works: see milestoneVerificationPromotion.ts. A passing verification command promotes it.
+  ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress', awaitingVerificationNote(evidencePath))
+  ctx.emitLog(
+    'info',
+    `✏️ Milestone ${activeM.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`
   )
-  ctx.emitLog('info', `✅ Milestone ${activeM.id} verificata: scritto "${evidencePath}", tutti i file richiesti sono presenti.`)
 }
 
 /**
@@ -214,6 +220,34 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
 }
 
 /**
+ * Promotes every milestone the passing verification has just proven.
+ *
+ * One green build attests to all the files it compiled, so the promotion is plan-wide rather
+ * than limited to whichever milestone happened to be active — that narrow rule is what left
+ * earlier milestones stranded while a later one closed.
+ */
+export function promoteMilestonesProvenBy(
+  deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>,
+  verificationCommand: string
+) {
+  if (!deps.workspacePath) return
+  const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
+  const proven = selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), (m) =>
+    resolveMilestoneDeliverableStatus(m.title, probe)
+  )
+  if (proven.length === 0) return
+
+  for (const milestone of proven) {
+    deps.goalPlanner.updateMilestone(milestone.id, 'verified', promotionNote(verificationCommand))
+  }
+  const progress = deps.goalPlanner.getProgressSummary()
+  deps.emitLog(
+    'info',
+    `✅ ${proven.length} milestone verificate da "${verificationCommand}": ${proven.map((m) => m.id).join(', ')} (${progress.completed}/${progress.total}).`
+  )
+}
+
+/**
  * Milestone auto-verification is driven by run_tests, open_in_browser, and successful build/test commands.
  */
 export function trackVerification(ctx: ToolResultProcessingContext, isToolFailure: boolean) {
@@ -221,7 +255,7 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
     const activeM = ctx.goalPlanner.getActiveMilestone()
     if (ctx.toolRes.verification.passed) {
       ctx.flags.hasVerifiedBuild = true
-      if (activeM) ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified by a passing run_tests execution.')
+      promoteMilestonesProvenBy(ctx, 'run_tests')
     } else if (activeM) {
       ctx.goalPlanner.updateMilestone(activeM.id, 'failed', 'run_tests reported failures.')
     }
@@ -258,9 +292,6 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
   const isVerificationCmd = ['test', 'typecheck', 'build', 'lint', 'pytest', 'tsc'].some((kw) => cmdStr.includes(kw))
   if (isVerificationCmd && !ctx.toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
     ctx.flags.hasVerifiedBuild = true
-    const activeM = ctx.goalPlanner.getActiveMilestone()
-    if (activeM && /verifi|test|build|check|collaudo|validaz/i.test(activeM.title)) {
-      ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified by successful build/verification command execution.')
-    }
+    promoteMilestonesProvenBy(ctx, ctx.parsedTool.parameters?.command || 'verification command')
   }
 }

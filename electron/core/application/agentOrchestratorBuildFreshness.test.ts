@@ -24,7 +24,12 @@ function makeContext(command: string, flags: ToolResultMutableFlags): ToolResult
     workspacePath: tempDir,
     flags,
     sessionChangedFiles: new Map(),
-    goalPlanner: { getActiveMilestone: () => null },
+    goalPlanner: {
+      getActiveMilestone: () => null,
+      getMilestones: () => [],
+      updateMilestone: () => true,
+      getProgressSummary: () => ({ completed: 0, total: 0, percentage: 0 }),
+    },
     episodicCompactor: { recordStep: () => {} },
     emitLog: () => {},
     settings: {},

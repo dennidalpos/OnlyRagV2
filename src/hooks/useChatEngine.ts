@@ -388,7 +388,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const docContextBlock = boundedContext
         ? `[INDEXED DOCUMENT CONTEXT (LanceDB)]\n` +
-          `MANDATORY DIRECTIVE: The following excerpts constitute the actual parsed text of the user's selected documents and attachments. You have FULL access to this information. Always search, extract, and cite from this text to accurately answer any user question regarding files, documents, or attachments.\n\n` +
+          // The last sentence is load-bearing. The chat presets used to carry their own bullet
+          // scripting the "nothing selected" reply, and llama3.2:3b reached for it even with the
+          // document sitting in this very block — 4 refusals out of 4, while the citations panel
+          // showed the retrieved excerpts. That bullet is gone from the presets: the only
+          // instruction the model now sees is the one matching the state it is actually in.
+          `MANDATORY DIRECTIVE: The following excerpts constitute the actual parsed text of the user's selected documents and attachments. You have FULL access to this information. Always search, extract, and cite from this text to accurately answer any user question regarding files, documents, or attachments. A document IS selected and its text is right below: never answer that no document is attached, and never ask the user to select one.\n\n` +
           `${boundedContext}\n` +
           `[END DOCUMENT CONTEXT]`
         : `[ATTACHMENT CONTEXT STATUS]\n` +

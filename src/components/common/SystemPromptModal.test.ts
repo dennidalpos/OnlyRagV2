@@ -163,7 +163,7 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(compiled.prompt).toContain('COMPLETE CODE')
   })
 
-  it('should include explicit attachment grounding and no-attachment directives in chat prompt presets', () => {
+  it('grounds the chat preset in the injected context and leaves the absent-document case to the turn assembler', () => {
     const baseSettings: AppSettings = {
       defaultModel: 'llama3.2',
       hardwareProfile: 'Auto',
@@ -173,7 +173,13 @@ describe('SystemPromptModal & Family Detection Tests', () => {
 
     const res = getEffectivePrompt('chat', 'llama3.2', baseSettings)
     expect(res.prompt).toContain('INDEXED DOCUMENT CONTEXT')
-    expect(res.prompt).toContain('ATTACHMENT CONTEXT STATUS')
-    expect(res.prompt).toContain('analizza log')
+
+    // This test used to require the opposite: that the preset also script the "nothing is
+    // attached" reply. It does not any more, and must not. The preset is static, so that script
+    // reached the model with a document attached too, and llama3.2:3b then produced it verbatim
+    // for 3 of 5 questions while retrieval was returning excerpts of that same document. The
+    // absent-document directive now lives only in useChatEngine's per-turn block.
+    expect(res.prompt).not.toContain('ATTACHMENT CONTEXT STATUS')
+    expect(res.prompt).not.toMatch(/select a document from the (left )?sidebar/i)
   })
 })

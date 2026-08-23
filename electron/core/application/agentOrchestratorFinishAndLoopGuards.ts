@@ -4,6 +4,9 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import { resolveLoopEscapeAction } from '../domain/agent/loopEscapePolicy'
+import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
+import { runProjectVerification } from './agentOrchestratorVerificationRunner'
+import { promoteMilestonesProvenBy } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
 /**
@@ -42,10 +45,67 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
       return { outcome: 'continue' }
     }
 
+    // Blocking verification gate. The build requirement is no longer surfaced once and then
+    // waived: the project's own verification is RUN here, and a failure is handed back for the
+    // model to correct. See verificationGatePolicy.ts for why, and for the round limit.
+    const requireVerifiedBuild = (ctx.settings as any).verifyBeforeFinish !== false
+    if (requireVerifiedBuild && ctx.flags.hasFileMutations && !ctx.flags.hasVerifiedBuild) {
+      ctx.emitLog('info', '🔎 Verifica del progetto prima della chiusura...')
+      const run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk))
+      const decision = decideVerificationGate({
+        hasVerificationCommand: run.hasVerificationCommand,
+        passed: run.passed,
+        failureDetail: run.failureDetail,
+        cyclesSpent: ctx.state.verificationFixCycles,
+      })
+
+      if (decision.action === 'block_and_retry') {
+        ctx.state.verificationFixCycles = decision.cyclesSpent
+        ctx.episodicCompactor.recordStep(
+          { step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: `Verification failed (round ${decision.cyclesSpent})` },
+          decision.directive
+        )
+        ctx.emitLog('info', `🔒 Verifica fallita (giro ${decision.cyclesSpent}): chiusura rifiutata.`, decision.directive, {
+          category: 'system_alert',
+        })
+        if (ctx.settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', decision.directive)
+        }
+        return { outcome: 'continue' }
+      }
+
+      if (decision.action === 'fail_session') {
+        ctx.emitLog('info', '⛔ Verifica ancora fallita: sessione chiusa come FALLITA.', decision.summary, {
+          category: 'system_alert',
+        })
+        ctx.emitDone(false, decision.summary)
+        if (ctx.settings.enableCodingAgentDebugLog) {
+          codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, decision.summary)
+        }
+        await ctx.persistCurrentState()
+        ctx.finalizeSession()
+        return { outcome: 'return', result: { success: false, summary: decision.summary } }
+      }
+
+      if (decision.action === 'allow_finish') {
+        ctx.flags.hasVerifiedBuild = true
+        promoteMilestonesProvenBy(ctx, run.command || 'verification command')
+      } else {
+        ctx.emitLog('info', '⚠️ Nessun comando di verifica ricavabile dal progetto.', decision.warning, {
+          category: 'system_alert',
+        })
+      }
+    }
+
+    // Recomputed: a passing verification above may just have promoted milestones.
+    const pendingAfterVerification = ctx.goalPlanner.getMilestones().filter(
+      (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
+    ).length
+
     const dodCheck = ctx.executionGuard.validateTaskCompletion({
       requireVerifiedBuild: (ctx.settings as any).verifyBeforeFinish !== false,
       hasVerifiedBuild: ctx.flags.hasVerifiedBuild,
-      pendingMilestonesCount,
+      pendingMilestonesCount: pendingAfterVerification,
       hasFileMutations: ctx.flags.hasFileMutations,
     })
 

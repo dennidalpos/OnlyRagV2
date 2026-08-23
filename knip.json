@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@5/overview/configuration-schema.json",
+  "entry": [
+    "src/main.tsx",
+    "electron/main.ts",
+    "electron/preload.ts",
+    "src/components/chat/ChatView.tsx",
+    "src/components/coding/CodingAgentView.tsx",
+    "src/components/translation/TranslationView.tsx",
+    "src/components/ingestion/IngestionView.tsx",
+    "src/components/settings/SettingsView.tsx"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "electron/**/*.{ts,tsx}"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    "@tailwindcss/vite"
+  ]
+}

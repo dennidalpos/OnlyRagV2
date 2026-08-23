@@ -226,3 +226,5 @@ Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
   * **Responsabilità**: Suite di validazione per il sidecar Python (FastAPI health, markdown export, LanceDB vector search e Pytest test suite).
 * **`scripts/clean_workspace.ps1`**:
   * **Responsabilità**: Pulizia degli artifact di compilazione (`Repo`), dei log applicativi di sviluppo e dell'app installata (`Logs`), dei dati locali AppData (`UserData`), o factory reset completo (`Full`). Supporta inoltre il flag `-CleanLogs` in modalità Repo.
+* **`scripts/audit_codebase.ps1`**:
+  * **Responsabilità**: Esegue in modo seriale gli audit di qualità architetturale e code hygiene della codebase tramite `dpdm` (dipendenze circolari), `knip` (dead code, file orfani, export inutilizzati e dipendenze fantasma) e `skott` (analisi e visualizzazione del grafo di dipendenze con CLI report o Web UI interattiva). Supporta i parametri `-Fast`, `-Mode [All|Cycles|DeadCode|Graph]` e `-WebUI`.

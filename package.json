@@ -18,6 +18,8 @@
     "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/test_bundle_smoke.ps1 -Fast",
     "lint": "powershell -ExecutionPolicy Bypass -File ./scripts/lint_format.ps1 -Fast",
     "clean": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Repo",
+    "clean:logs": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Logs",
+    "clean:user": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode UserData",
     "clean:full": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Full",
     "package:win": "powershell -ExecutionPolicy Bypass -File ./scripts/build_package.ps1"
   },

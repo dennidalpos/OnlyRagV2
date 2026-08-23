@@ -225,4 +225,4 @@ Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
 * **`scripts/test_sidecar_health.ps1`**:
   * **Responsabilità**: Suite di validazione per il sidecar Python (FastAPI health, markdown export, LanceDB vector search e Pytest test suite).
 * **`scripts/clean_workspace.ps1`**:
-  * **Responsabilità**: Pulizia degli artifact di compilazione (`Repo`), dei dati locali AppData (`UserData`), o factory reset completo (`Full`).
+  * **Responsabilità**: Pulizia degli artifact di compilazione (`Repo`), dei log applicativi di sviluppo e dell'app installata (`Logs`), dei dati locali AppData (`UserData`), o factory reset completo (`Full`). Supporta inoltre il flag `-CleanLogs` in modalità Repo.

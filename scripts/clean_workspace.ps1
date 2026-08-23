@@ -1,23 +1,28 @@
 <#
 .SYNOPSIS
-    Script di pulizia repository e dati locali per OnlyRag V2 con Fail-Fast rigoroso.
+    Script di pulizia repository, dati locali e log per OnlyRag V2 con Fail-Fast rigoroso.
 .DESCRIPTION
-    Consente di eseguire la pulizia dei file temporanei, delle cache di build e/o del database vettoriale locale (AppData).
+    Consente di eseguire la pulizia dei file temporanei, delle cache di build, dei dati locali (AppData)
+    e/o dei log dell'applicazione (sia in sviluppo sia dell'app installata).
 .PARAMETER Mode
     Tipo di pulizia:
     - "Repo": Pulisce le cartelle di build (dist, build, pycache, sidecar_dist) mantenendo i dati utente.
-    - "UserData": Pulisce i dati locali dell'applicazione su PC (%LOCALAPPDATA%\OnlyRagV2, LanceDB, log, export).
-    - "Full": Esegue una pulizia completa sia del repository che dei dati locali dell'applicazione.
+    - "Logs": Pulisce tutti i log applicativi (%APPDATA%\onlyrag-v2\logs, %LOCALAPPDATA%\OnlyRagV2\logs, audit log, sidecar log).
+    - "UserData": Pulisce i dati locali dell'applicazione su PC (%LOCALAPPDATA%\OnlyRagV2, LanceDB, log, export, settings).
+    - "Full": Esegue una pulizia completa di repository, dati locali e log dell'applicazione.
+.PARAMETER CleanLogs
+    Switch opzionale per forzare la pulizia dei log applicativi anche in modalità Repo.
 .PARAMETER Fast
     Modalità sintetica per l'Agente AI (output conciso PASS/FAIL).
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet("Repo", "UserData", "Full")]
+    [ValidateSet("Repo", "UserData", "Logs", "Full")]
     [string]$Mode = "Repo",
 
-    [switch]$Fast
+    [switch]$CleanLogs = $false,
+    [switch]$Fast = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,27 +42,63 @@ try {
 
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
 
-    # 1. Arresto processi Sidecar o Python pendenti
+    # 1. Arresto processi Sidecar, Python ed Electron pendenti per sbloccare i file di log
     if (-not $Fast) {
-        Write-Host "`n[1/3] Verifica e arresto dei processi Sidecar in corso..." -ForegroundColor Yellow
+        Write-Host "`n[1/4] Verifica e arresto dei processi OnlyRag V2, Sidecar e Python in corso..." -ForegroundColor Yellow
     }
     try {
-        $runningProcesses = Get-Process -Name "sidecar", "python" -ErrorAction SilentlyContinue
+        $runningProcesses = Get-Process -Name "sidecar", "python", "electron", "OnlyRag V2" -ErrorAction SilentlyContinue
         if ($runningProcesses) {
             if (-not $Fast) {
                 Write-Host "Arresto di $($runningProcesses.Count) processi in corso..." -ForegroundColor Gray
             }
             $runningProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
         }
-        if (-not $Fast) { Write-Host "[OK] Processi verificati." -ForegroundColor Green }
+        if (-not $Fast) { Write-Host "[OK] Processi verificati e arrestati." -ForegroundColor Green }
     } catch {
         if (-not $Fast) { Write-Host "[WARN] Nessun processo da arrestare." -ForegroundColor Gray }
     }
 
-    # 2. Pulizia Artifact di Build & Cache nel Repository
+    # 2. Pulizia Log Applicativi (App installata, AppData e dev)
+    if ($Mode -eq "Logs" -or $Mode -eq "UserData" -or $Mode -eq "Full" -or $CleanLogs) {
+        if (-not $Fast) {
+            Write-Host "`n[2/4] Pulizia di tutti i file di log applicativi (sviluppo e app installata)..." -ForegroundColor Yellow
+        }
+
+        $logDirs = @(
+            (Join-Path $env:APPDATA "onlyrag-v2\logs"),
+            (Join-Path $env:LOCALAPPDATA "OnlyRagV2\logs"),
+            (Join-Path $env:USERPROFILE ".onlyragv2\logs"),
+            (Join-Path $env:USERPROFILE ".onlyrag_v2\logs"),
+            (Join-Path $rootDir "logs"),
+            (Join-Path $rootDir "userdata_dev\logs")
+        )
+
+        foreach ($logDir in $logDirs) {
+            if (Test-Path $logDir) {
+                if (-not $Fast) { Write-Host "Svuotamento directory log: $logDir" -ForegroundColor Gray }
+                Get-ChildItem -Path $logDir -File -Filter "*.log*" -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                    Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+                }
+                # Rimuovi eventuali file residui nella cartella log
+                Get-ChildItem -Path $logDir -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                    Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        # Pulizia log temporanei in TEMP
+        Get-ChildItem -Path $env:TEMP -Filter "onlyrag*.log" -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+        }
+
+        if (-not $Fast) { Write-Host "[OK] Log applicativi ripuliti con successo." -ForegroundColor Green }
+    }
+
+    # 3. Pulizia Artifact di Build & Cache nel Repository
     if ($Mode -eq "Repo" -or $Mode -eq "Full") {
         if (-not $Fast) {
-            Write-Host "`n[2/3] Pulizia cache ed artifact di build nel repository..." -ForegroundColor Yellow
+            Write-Host "`n[3/4] Pulizia cache ed artifact di build nel repository..." -ForegroundColor Yellow
         }
 
         # Cartelle target da rimuovere nel repository
@@ -125,10 +166,10 @@ try {
         if (-not $Fast) { Write-Host "[OK] Pulizia repository completata." -ForegroundColor Green }
     }
 
-    # 3. Pulizia Dati Utente Locali su PC (AppData, LanceDB Store, Log, Export)
+    # 4. Pulizia Dati Utente Locali su PC (AppData, LanceDB Store, Impostazioni, Export)
     if ($Mode -eq "UserData" -or $Mode -eq "Full") {
         if (-not $Fast) {
-            Write-Host "`n[3/3] Pulizia dati locali utente su PC (AppData)..." -ForegroundColor Yellow
+            Write-Host "`n[4/4] Pulizia dati locali utente su PC (AppData)..." -ForegroundColor Yellow
         }
 
         $localAppData = $env:LOCALAPPDATA
@@ -137,7 +178,8 @@ try {
         $targetsUserData = @(
             (Join-Path $localAppData "OnlyRagV2"),
             (Join-Path $roamingAppData "onlyrag-v2"),
-            (Join-Path $env:USERPROFILE ".onlyragv2")
+            (Join-Path $env:USERPROFILE ".onlyragv2"),
+            (Join-Path $env:USERPROFILE ".onlyrag_v2")
         )
 
         foreach ($userDataPath in $targetsUserData) {

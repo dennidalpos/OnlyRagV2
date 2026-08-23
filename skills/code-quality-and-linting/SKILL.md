@@ -22,7 +22,7 @@ description: Automated code quality, strict serial execution workflows, TypeScri
 - Scripts reside in `scripts/`, enforce `$ErrorActionPreference = "Stop"`, and output UTF-8 encoding:
   - `scripts/lint_format.ps1`: Validates TypeScript type safety, runs Vitest fast suite, and checks Python sidecar syntax (supports `-Fast`, `-Full`, and `-Format` parameters).
   - `scripts/test_sidecar_health.ps1`: Tests sidecar FastAPI health, markdown export, LanceDB vector search, and Pytest test suite (supports `-Fast` and `-Full` modes).
-  - `scripts/clean_workspace.ps1`: Cleans build artifacts (`Repo`), local AppData LanceDB/logs (`UserData`), or full factory reset (`Full`).
+  - `scripts/clean_workspace.ps1`: Cleans build artifacts (`Repo`), application logs (`Logs`), local AppData LanceDB/settings (`UserData`), or full factory reset (`Full`). Supports `-CleanLogs` switch.
   - `scripts/build_package.ps1`: Compiles Vite/Electron assets, PyInstaller sidecar executable, and generates the NSIS production installer.
   - `scripts/ci_runner.sh`: Cross-platform Bash script with `set -euo pipefail` Fail-Fast enforcement.
 - Provide concise, structured `PASS/FAIL` output for agent execution.

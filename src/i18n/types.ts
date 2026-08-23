@@ -390,6 +390,14 @@ export interface TranslationSchema {
     translateInplaceInProgress: string
     translateInplaceSuccess: string
     translateInplaceError: string
+    ocrNativeBadge: string
+    ocrVisionBadge: string
+    ocrGpuActive: string
+    ocrGpuActiveTooltip: string
+    ocrCpuOnly: string
+    ocrCpuOnlyTooltip: string
+    ocrGpuPresentUnused: string
+    ocrGpuPresentUnusedTooltip: string
   }
   diagnostics: {
     title: string
@@ -661,6 +669,7 @@ export interface TranslationSchema {
     ocrEngineSection: string
     nativeCudaOcr: string
     visionModelOcr: string
+    ocrEngineInplaceNotice: string
     initialWelcomeBadge: string
     localInstalledBadge: string
     step1Subtitle: string

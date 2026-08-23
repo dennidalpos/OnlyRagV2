@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { RunningModelInfo } from '../../domain/ollama/lifecycleCoordinator'
+import { consumeNdjsonChunk } from './ndjsonStreamParser'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -308,34 +309,22 @@ export class OllamaHttpClient {
           let parsedError: string | undefined
 
           res.on('data', (chunk) => {
-            buffer += chunk.toString()
             req.setTimeout(900000)
-
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              if (line.trim()) {
-                try {
-                  const parsed = JSON.parse(line)
-                  if (parsed.error) {
-                    parsedError = parsed.error
-                  }
-                  if (parsed.status) {
-                    lastStatus = parsed.status
-                    if (onProgress) {
-                      onProgress({
-                        status: parsed.status,
-                        completed: parsed.completed,
-                        total: parsed.total,
-                      })
-                    }
-                  }
-                } catch {
-                  // Partial chunk
+            buffer = consumeNdjsonChunk(buffer, chunk, (parsed) => {
+              if (parsed.error) {
+                parsedError = parsed.error
+              }
+              if (parsed.status) {
+                lastStatus = parsed.status
+                if (onProgress) {
+                  onProgress({
+                    status: parsed.status,
+                    completed: parsed.completed,
+                    total: parsed.total,
+                  })
                 }
               }
-            }
+            })
           })
 
           res.on('end', () => {
@@ -489,21 +478,18 @@ export class OllamaHttpClient {
 
           let buffer = ''
           res.on('data', (chunk) => {
-            buffer += chunk.toString()
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-            for (const line of lines) {
-              if (line.trim()) {
-                try {
-                  const parsed = JSON.parse(line)
-                  if (parsed.response) {
-                    onChunk(parsed.response)
-                  }
-                } catch (jsonErr: any) {
-                  logger.log('WARN', 'OllamaClient', `Partial JSON stream chunk skipped: ${jsonErr.message}`)
+            buffer = consumeNdjsonChunk(
+              buffer,
+              chunk,
+              (parsed) => {
+                if (parsed.response) {
+                  onChunk(parsed.response)
                 }
+              },
+              (jsonErr) => {
+                logger.log('WARN', 'OllamaClient', `Partial JSON stream chunk skipped: ${jsonErr.message}`)
               }
-            }
+            )
           })
           res.on('end', () => {
             this.activeOllamaReq = null

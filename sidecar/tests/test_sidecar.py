@@ -22,6 +22,11 @@ def test_health_endpoint():
     assert "vector_db" in data
     assert "documents_count" in data
     assert "chunks_count" in data
+    assert "ocr" in data
+    assert "provider" in data["ocr"]
+    assert "host_has_gpu" in data["ocr"]
+    assert isinstance(data["ocr"]["host_has_gpu"], bool)
+
 
 def test_text_sanitizer():
     dirty_text = "Hello\x00World\x07!\r\nLine 2\ufeff\n\n\n\n\nLine 3   "
@@ -312,8 +317,21 @@ def test_extract_pdf_document_parallelizes_ocr_pages(monkeypatch):
     finally:
         doc.close()
 
+def _render_pdf_page_content(doc, page, page_num, raw_text, md_tables, used_ocr, **kwargs):
+    from sidecar.domain.ingestion import prepare_pdf_page_work_item, render_prepared_pdf_page
+    work_item = prepare_pdf_page_work_item(
+        doc, page, page_num, raw_text, md_tables, used_ocr,
+        vision_model=kwargs.get("vision_model"),
+        vision_prompt=kwargs.get("vision_prompt"),
+        filename=kwargs.get("filename", ""),
+        num_pages=kwargs.get("num_pages", 1)
+    )
+    _, content = render_prepared_pdf_page(work_item)
+    return content
+
+
 def test_render_pdf_page_content_ocr_path(monkeypatch):
-    """render_pdf_page_content must route to run_layout_ocr when used_ocr=True."""
+    """prepare_pdf_page_work_item + render_prepared_pdf_page must route to run_layout_ocr when used_ocr=True."""
     import pymupdf
     from sidecar.domain import ingestion as ingestion_module
 
@@ -322,7 +340,7 @@ def test_render_pdf_page_content_ocr_path(monkeypatch):
     doc = pymupdf.open()
     try:
         page = doc.new_page(width=595, height=842)
-        result = ingestion_module.render_pdf_page_content(
+        result = _render_pdf_page_content(
             doc, page, page_num=1, raw_text="", md_tables=[], used_ocr=True
         )
         assert "OCR-extracted markdown" in result
@@ -619,10 +637,10 @@ def test_vocab_status_and_sync_endpoints():
     assert "status" in sync_data
 
 
-def test_opencv_deskew_and_inpaint():
+def test_opencv_deskew():
     import numpy as np
     import cv2
-    from sidecar.infrastructure.ocr import compute_deskew_angle, deskew_image, inpaint_raster_bounding_boxes
+    from sidecar.infrastructure.ocr import compute_deskew_angle, deskew_image
 
     # Create a synthetic white image with black text rectangle
     img = np.ones((200, 400, 3), dtype=np.uint8) * 255
@@ -638,14 +656,6 @@ def test_opencv_deskew_and_inpaint():
     # Test deskew function returns valid PNG bytes
     deskewed_bytes = deskew_image(png_bytes)
     assert len(deskewed_bytes) > 0
-
-    # Test inpainting over the black rectangle
-    inpainted_bytes = inpaint_raster_bounding_boxes(png_bytes, [(50, 80, 350, 120)])
-    assert len(inpainted_bytes) > 0
-    inpainted_arr = cv2.imdecode(np.frombuffer(inpainted_bytes, np.uint8), cv2.IMREAD_COLOR)
-    # The center of the previous black box should no longer be black (0,0,0)
-    center_val = inpainted_arr[100, 200]
-    assert np.mean(center_val) > 100
 
 
 def test_language_detection_and_target_skip():
@@ -839,7 +849,7 @@ def test_render_pdf_page_content_routes_scanned_page_to_vision(monkeypatch):
     doc.new_page(width=595, height=842)
     try:
         page = doc.load_page(0)
-        content = ingestion_module.render_pdf_page_content(
+        content = _render_pdf_page_content(
             doc, page, 1, "", [], True,
             vision_model="llama3.2-vision",
             vision_prompt="File {{filename}}, page {{currentPage}}/{{numPages}}",
@@ -851,3 +861,4 @@ def test_render_pdf_page_content_routes_scanned_page_to_vision(monkeypatch):
 
     assert "Vision transcription" in content
     assert captured["prompt"] == "File scan.pdf, page 1/4"
+

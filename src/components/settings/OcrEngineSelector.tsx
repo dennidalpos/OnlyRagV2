@@ -68,6 +68,11 @@ export const OcrEngineSelector: React.FC<OcrEngineSelectorProps> = ({
           )
         })}
       </div>
+
+      <p className="text-[11px] text-slate-400/90 leading-relaxed border-t border-slate-800/80 pt-3">
+        ℹ️ {t('hardwareWizard.ocrEngineInplaceNotice')}
+      </p>
     </div>
   )
 }
+

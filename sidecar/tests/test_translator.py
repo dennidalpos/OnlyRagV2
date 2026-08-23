@@ -826,3 +826,37 @@ def test_resolve_output_filepath_never_overwrites_original(tmp_path):
     assert out_target_dir != orig_file
     assert os.path.dirname(os.path.abspath(out_target_dir)) == os.path.abspath(target_dir)
     assert "manual_english.pdf" in out_target_dir
+
+
+def test_translate_texts_skips_segments_already_in_target_language(monkeypatch):
+    """Verifies that text segments already in the target language bypass the LLM translation call entirely."""
+    called_prompts = []
+
+    def fake_call_ollama(text, source_lang, target_lang, model, is_batch=False, expected_items=1):
+        called_prompts.append(text)
+        if is_batch:
+            return '<seg id="1">Traduzione di un testo in italiano</seg>'
+        return "Traduzione di un testo in italiano"
+
+    monkeypatch.setattr(translator_module, "_call_ollama_translate", fake_call_ollama)
+
+    # 1. Single segment already in target language (English -> English)
+    en_only = ["This is already an English sentence that does not need translation."]
+    res_single = translator_module._translate_texts_with_fallback(en_only, "Italian", "English", "llama3.2")
+    assert res_single == en_only
+    assert len(called_prompts) == 0
+
+    # 2. Batch with mixed languages when target is English:
+    # Segment 1 is Italian (needs translation), Segment 2 is English (should skip)
+    mixed = [
+        "Questo paragrafo è interamente scritto in lingua italiana.",
+        "This paragraph is already written in English and should be preserved."
+    ]
+    res_batch = translator_module._translate_texts_with_fallback(mixed, "Italian", "English", "llama3.2")
+    assert len(called_prompts) == 1
+    # Only segment 1 should have been sent in prompt
+    assert "Questo paragrafo" in called_prompts[0]
+    assert "This paragraph is already written" not in called_prompts[0]
+    assert res_batch[0] == "Traduzione di un testo in italiano"
+    assert res_batch[1] == "This paragraph is already written in English and should be preserved."
+

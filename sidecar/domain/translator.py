@@ -419,7 +419,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     ]
 
     if len(clean_texts) == 1:
-        if _should_skip_translation(clean_texts[0]):
+        if _should_skip_translation(clean_texts[0]) or is_block_in_target_lang(clean_texts[0], target_lang):
             return clean_texts
         masked_text, token_map = _mask_immutable_entities(clean_texts[0])
         single = _call_ollama_translate(masked_text, source_lang, target_lang, model, is_batch=False)
@@ -427,13 +427,13 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
         unmasked = _unmask_immutable_entities(cleaned, token_map)
         return [unmasked]
 
-    # Filter out non-translatable indices for batch call
+    # Filter out non-translatable or already-in-target-language indices for batch call
     active_indices: List[int] = []
     active_texts: List[str] = []
     token_maps: List[Dict[str, str]] = []
 
     for i, t in enumerate(clean_texts):
-        if not _should_skip_translation(t):
+        if not _should_skip_translation(t) and not is_block_in_target_lang(t, target_lang):
             masked, tmap = _mask_immutable_entities(t)
             active_indices.append(i)
             active_texts.append(masked)

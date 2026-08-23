@@ -32,8 +32,8 @@ async function dispatchToLlm(
         }
       },
       isCancelled: () => !ctx.isSessionActive(),
-      onHttpRequestCreated: (req) => {
-        ctx.session.activeHttpRequest = req
+      onCancelHandle: (abort) => {
+        ctx.session.activeCancelHandle = abort
       },
       onContextReceived: (contextTokens, respondingModel) => {
         if (wasCompacted) return
@@ -43,10 +43,10 @@ async function dispatchToLlm(
         ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
       },
     })
-    ctx.session.activeHttpRequest = null
+    ctx.session.activeCancelHandle = null
     return { streamedOutput, usedModel: selection.targetModel }
   } catch (err: any) {
-    ctx.session.activeHttpRequest = null
+    ctx.session.activeCancelHandle = null
     return { error: err.message }
   }
 }

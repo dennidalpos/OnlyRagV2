@@ -206,30 +206,6 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
 
     return page_num, sanitized
 
-def render_pdf_page_content(
-    doc: pymupdf.Document,
-    page: pymupdf.Page,
-    page_num: int,
-    raw_text: str,
-    md_tables: List[str],
-    used_ocr: bool,
-    vision_model: Optional[str] = None,
-    vision_prompt: Optional[str] = None,
-    filename: str = "",
-    num_pages: int = 1,
-    **kwargs: Any
-) -> str:
-    """Single-page convenience wrapper around prepare_pdf_page_work_item + render_prepared_pdf_page."""
-    work_item = prepare_pdf_page_work_item(
-        doc, page, page_num, raw_text, md_tables, used_ocr,
-        vision_model=vision_model,
-        vision_prompt=vision_prompt,
-        filename=filename,
-        num_pages=num_pages
-    )
-    _, page_content = render_prepared_pdf_page(work_item)
-    return page_content
-
 def extract_pdf_document(
     doc: pymupdf.Document,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,

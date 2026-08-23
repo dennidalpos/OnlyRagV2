@@ -25,7 +25,7 @@ from sidecar.schemas import (
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
 from sidecar.infrastructure.db import lance_db, get_existing_tables, safe_open_table, run_db_maintenance
-from sidecar.infrastructure.ocr import detect_gpu_acceleration
+from sidecar.infrastructure.ocr import detect_gpu_acceleration, get_ocr_runtime_info
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
     process_and_index_document,
@@ -82,6 +82,7 @@ def health_check():
         logger.error(f"Error checking LanceDB status: {e}")
 
     gpu_info = detect_gpu_acceleration()
+    ocr_info = get_ocr_runtime_info()
 
     return {
         "status": "online",
@@ -89,6 +90,7 @@ def health_check():
         "version": "2.3.0",
         "vector_db": "LanceDB Embedded",
         "gpu": gpu_info,
+        "ocr": ocr_info,
         "documents_count": doc_count,
         "chunks_count": chunk_count,
         "python_version": sys.version

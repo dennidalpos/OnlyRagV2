@@ -58,13 +58,21 @@ try {
         }
     }
 
-    # 2. Analisi Dead Code, Export Inutilizzati e File Orfani (knip)
+    # 2. Analisi Dead Code, Export Inutilizzati e File Orfani (knip + Python Sidecar)
     if ($Mode -eq "All" -or $Mode -eq "DeadCode") {
         if (-not $Fast) {
-            Write-Host "`n[2/3] Analisi di dead code e file orfani (knip)..." -ForegroundColor Yellow
+            Write-Host "`n[2/3] Analisi di dead code e file orfani (knip + Python Sidecar)..." -ForegroundColor Yellow
         }
         npx knip --no-exit-code
         if (-not $Fast) { Write-Host "[OK] Scansione dead code knip completata." -ForegroundColor Green }
+
+        $venvPython = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\python.exe"
+        if (Test-Path $venvPython) {
+            & $venvPython -m compileall -q sidecar
+            if ($LASTEXITCODE -eq 0 -and (-not $Fast)) {
+                Write-Host "[OK] Scansione sintassi e integrità Python sidecar completata." -ForegroundColor Green
+            }
+        }
     }
 
     # 3. Analisi Grafo delle Dipendenze (skott)

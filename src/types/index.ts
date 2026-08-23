@@ -17,6 +17,10 @@ export interface DiagnosticsData {
     documentsCount?: number
     chunksCount?: number
     error?: string
+    ocr?: {
+      provider: string
+      host_has_gpu: boolean
+    }
   }
   ollama: {
     status: 'online' | 'offline' | 'checking'

@@ -2,6 +2,7 @@ import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
+import { consumeNdjsonChunk } from './ndjsonStreamParser'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -13,7 +14,7 @@ export interface StreamSession {
   ollamaEndpoint?: string
   onTokenChunk?: (chunk: string) => void
   isCancelled: () => boolean
-  onHttpRequestCreated?: (req: http.ClientRequest) => void
+  onCancelHandle?: (abort: () => void) => void
   /**
    * When true (and toolCatalog is non-empty), routes through POST /api/chat
    * with a `tools` array instead of the prompt-engineered POST /api/generate
@@ -62,7 +63,7 @@ export class AgentStreamTransport {
       ollamaEndpoint,
       onTokenChunk,
       isCancelled,
-      onHttpRequestCreated,
+      onCancelHandle,
       previousContext,
       onContextReceived,
     } = session
@@ -171,27 +172,24 @@ export class AgentStreamTransport {
                   return
                 }
                 resetTokenStallTimer()
-                buffer += chunk.toString()
-                const lines = buffer.split('\n')
-                buffer = lines.pop() || ''
-                for (const line of lines) {
-                  if (line.trim()) {
-                    try {
-                      const parsed = JSON.parse(line)
-                      if (parsed.response) {
-                        fullText += parsed.response
-                        if (onTokenChunk) {
-                          onTokenChunk(parsed.response)
-                        }
+                buffer = consumeNdjsonChunk(
+                  buffer,
+                  chunk,
+                  (parsed) => {
+                    if (parsed.response) {
+                      fullText += parsed.response
+                      if (onTokenChunk) {
+                        onTokenChunk(parsed.response)
                       }
-                      if (parsed.done && Array.isArray(parsed.context) && onContextReceived) {
-                        onContextReceived(parsed.context, targetModel)
-                      }
-                    } catch (jsonErr: any) {
-                      logger.log('WARN', 'AgentStreamTransport', `Partial stream JSON parse skipped: ${jsonErr.message}`)
                     }
+                    if (parsed.done && Array.isArray(parsed.context) && onContextReceived) {
+                      onContextReceived(parsed.context, targetModel)
+                    }
+                  },
+                  (jsonErr) => {
+                    logger.log('WARN', 'AgentStreamTransport', `Partial stream JSON parse skipped: ${jsonErr.message}`)
                   }
-                }
+                )
               })
 
               res.on('end', () => {
@@ -210,8 +208,8 @@ export class AgentStreamTransport {
             }
           })
 
-          if (onHttpRequestCreated) {
-            onHttpRequestCreated(req)
+          if (onCancelHandle) {
+            onCancelHandle(() => req.destroy())
           }
 
           req.write(postData)
@@ -252,7 +250,7 @@ export class AgentStreamTransport {
    * parsed identically downstream by toolParser.ts.
    */
   private static async streamChatWithTools(session: StreamSession): Promise<string> {
-    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, isCancelled, onHttpRequestCreated, toolCatalog } = session
+    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, isCancelled, onCancelHandle, toolCatalog } = session
 
     const hostStr = ollamaEndpoint?.trim() || 'http://127.0.0.1:11434'
     let chatUrl: URL
@@ -350,13 +348,10 @@ export class AgentStreamTransport {
               return
             }
             resetTokenStallTimer()
-            buffer += chunk.toString()
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-            for (const line of lines) {
-              if (!line.trim()) continue
-              try {
-                const parsed = JSON.parse(line)
+            buffer = consumeNdjsonChunk(
+              buffer,
+              chunk,
+              (parsed) => {
                 const contentDelta = parsed?.message?.content
                 if (contentDelta) {
                   fullText += contentDelta
@@ -366,10 +361,11 @@ export class AgentStreamTransport {
                 if (Array.isArray(toolCalls) && toolCalls.length > 0 && toolCalls[0]?.function?.name) {
                   resolvedToolCall = serializeNativeToolCall(toolCalls[0].function.name, toolCalls[0].function.arguments || {})
                 }
-              } catch (jsonErr: any) {
+              },
+              (jsonErr) => {
                 logger.log('WARN', 'AgentStreamTransport', `Partial chat stream JSON parse skipped: ${jsonErr.message}`)
               }
-            }
+            )
           })
 
           res.on('end', () => {
@@ -388,8 +384,8 @@ export class AgentStreamTransport {
         }
       })
 
-      if (onHttpRequestCreated) {
-        onHttpRequestCreated(req)
+      if (onCancelHandle) {
+        onCancelHandle(() => req.destroy())
       }
 
       req.write(postData)

@@ -27,6 +27,7 @@ import {
 import { AppSettings, DiagnosticsData, IngestedDocument } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
+import { OcrEngineBadge } from './OcrEngineBadge'
 import { DocumentListTable } from './DocumentListTable'
 import { VectorSearchPanel } from './VectorSearchPanel'
 import { SourcePagePreview } from './SourcePagePreview'
@@ -260,37 +261,43 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Quick Vision OCR Model Selector */}
-          <QuickModelSelector
-            currentModel={settings?.visionModel || 'llama3.2-vision:11b'}
-            fallbackModel={settings?.visionFallbackModel}
-            installedModels={diagnostics?.ollama?.models || []}
-            presetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b']}
-            onSelectModel={(newModel) => {
-              onUpdateSettings?.({
-                visionModel: newModel,
-              })
-            }}
-            onSelectFallbackModel={(fallback) => {
-              onUpdateSettings?.({
-                visionFallbackModel: fallback,
-              })
-            }}
-            icon={Eye}
-            featureLabel="Vision & OCR"
-            variant="amber"
-          />
+          <OcrEngineBadge settings={settings} diagnostics={diagnostics} />
 
-          <button
-            type="button"
-            onClick={() => ing.setIsPromptModalOpen(true)}
-            aria-label={t('common.systemPrompt')}
-            title={t('common.systemPrompt')}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
-          >
-            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
-          </button>
+          {/* Quick Vision OCR Model Selector & Prompt (Vision mode only) */}
+          {settings?.ocrEngine === 'vision_model' && (
+            <>
+              <QuickModelSelector
+                currentModel={settings?.visionModel || 'llama3.2-vision:11b'}
+                fallbackModel={settings?.visionFallbackModel}
+                installedModels={diagnostics?.ollama?.models || []}
+                presetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b']}
+                onSelectModel={(newModel) => {
+                  onUpdateSettings?.({
+                    visionModel: newModel,
+                  })
+                }}
+                onSelectFallbackModel={(fallback) => {
+                  onUpdateSettings?.({
+                    visionFallbackModel: fallback,
+                  })
+                }}
+                icon={Eye}
+                featureLabel="Vision & OCR"
+                variant="amber"
+              />
+
+              <button
+                type="button"
+                onClick={() => ing.setIsPromptModalOpen(true)}
+                aria-label={t('common.systemPrompt')}
+                title={t('common.systemPrompt')}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold rounded-xl transition-all focus-ring flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
+              >
+                <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">{t('common.systemPrompt')}</span>
+              </button>
+            </>
+          )}
 
           <input
             type="file"

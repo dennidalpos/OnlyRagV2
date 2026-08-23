@@ -1,5 +1,4 @@
 import type { BrowserWindow } from 'electron'
-import type http from 'node:http'
 
 export interface ApprovalResponse {
   approved: boolean
@@ -11,7 +10,7 @@ export interface AgentSession {
   id: string
   isCancelled: boolean
   targetWindow: BrowserWindow | null
-  activeHttpRequest?: http.ClientRequest | null
+  activeCancelHandle?: (() => void) | null
   activeChildProcess?: any | null
   /** Global session watchdog. Cleared on every exit path so it can never outlive its own run. */
   timeoutHandle?: NodeJS.Timeout | null

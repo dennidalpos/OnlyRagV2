@@ -31,6 +31,10 @@ export class SidecarProcessManager {
     documentsCount?: number
     chunksCount?: number
     error?: string
+    ocr?: {
+      provider: string
+      host_has_gpu: boolean
+    }
   } = {
     status: 'checking',
   }
@@ -57,6 +61,7 @@ export class SidecarProcessManager {
                 endpoint: SIDECAR_BASE_URL,
                 documentsCount: data.documents_count || 0,
                 chunksCount: data.chunks_count || 0,
+                ocr: data.ocr,
               }
               resolve(true)
             } catch (err: any) {

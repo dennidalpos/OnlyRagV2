@@ -29,13 +29,13 @@ function cleanupSession(session: AgentSession) {
     clearTimeout(session.timeoutHandle)
     session.timeoutHandle = null
   }
-  if (session.activeHttpRequest) {
+  if (session.activeCancelHandle) {
     try {
-      session.activeHttpRequest.destroy()
+      session.activeCancelHandle()
     } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestrator', `Failed destroying active HTTP request during cleanup: ${err?.message}`)
+      logger.log('WARN', 'AgentOrchestrator', `Failed cancelling active stream during cleanup: ${err?.message}`)
     }
-    session.activeHttpRequest = null
+    session.activeCancelHandle = null
   }
   if (session.activeChildProcess) {
     try {
@@ -111,7 +111,7 @@ export async function runAgentOrchestratorLoop(
     id: sessionId,
     isCancelled: false,
     targetWindow: win,
-    activeHttpRequest: null,
+    activeCancelHandle: null,
     activeChildProcess: null,
   }
   activeAgentSessions.set(sessionId, session)

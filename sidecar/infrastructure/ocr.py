@@ -108,40 +108,6 @@ def deskew_image(image_bytes: bytes) -> bytes:
     return image_bytes
 
 
-def inpaint_raster_bounding_boxes(image_bytes: bytes, bboxes: List[Tuple[float, float, float, float]], inpaint_radius: int = 3) -> bytes:
-    """Removes text in bounding boxes (x0, y0, x1, y1) from a raster image using OpenCV Navier-Stokes/Telea inpainting,
-    preserving backgrounds and textures under the original text."""
-    if not bboxes:
-        return image_bytes
-    try:
-        import cv2
-        import numpy as np
-
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None:
-            return image_bytes
-
-        h, w = img.shape[:2]
-        mask = np.zeros((h, w), dtype=np.uint8)
-
-        for bbox in bboxes:
-            x0, y0, x1, y1 = bbox
-            ix0 = max(0, int(round(x0 - 2)))
-            iy0 = max(0, int(round(y0 - 2)))
-            ix1 = min(w, int(round(x1 + 2)))
-            iy1 = min(h, int(round(y1 + 2)))
-            if ix1 > ix0 and iy1 > iy0:
-                cv2.rectangle(mask, (ix0, iy0), (ix1, iy1), 255, -1)
-
-        inpainted = cv2.inpaint(img, mask, inpaintRadius=inpaint_radius, flags=cv2.INPAINT_TELEA)
-        is_success, buffer = cv2.imencode(".png", inpainted)
-        if is_success:
-            return buffer.tobytes()
-    except Exception as err:
-        logger.warning(f"Inpainting bounding boxes failed: {err}")
-    return image_bytes
-
 
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew: bool = True) -> bytes:
     """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing (optional), and downscaling only if exceeding max_dim."""
@@ -591,3 +557,14 @@ def detect_gpu_acceleration() -> Dict[str, Any]:
 
     _GPU_INFO_CACHE = info
     return info
+
+
+def get_ocr_runtime_info() -> Dict[str, Any]:
+    """Returns the active execution provider for RapidOCR alongside the host GPU presence."""
+    has_cuda_provider = _rapidocr_cuda_available()
+    gpu_info = detect_gpu_acceleration()
+    return {
+        "provider": "CUDAExecutionProvider" if has_cuda_provider else "CPUExecutionProvider",
+        "host_has_gpu": bool(gpu_info.get("has_cuda", False)),
+    }
+

@@ -95,14 +95,48 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext): Promise<R
 
   agentToolExecutorService.commitJournal()
   const summary = streamedOutput.trim() || 'Task completed successfully.'
-  ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
-  ctx.emitDone(true, summary)
+
+  // In CHAT mode a prose answer with no tool call IS the deliverable: the turn is done.
+  if (ctx.agentMode !== 'agent') {
+    ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
+    ctx.emitDone(true, summary)
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
+    }
+    await ctx.persistCurrentState()
+    ctx.finalizeSession()
+    return { outcome: 'return', result: { success: true, summary } }
+  }
+
+  // In AGENT mode it is the opposite. Reaching here means the model stopped issuing tool
+  // calls and never invoked `finish`, so the Definition of Done gate in
+  // agentOrchestratorFinishAndLoopGuards never ran — no final verification, no depcheck, no
+  // check that the plan is actually closed. This branch used to report success anyway:
+  // coding_agent_audit.log session-1787497654743-4enx ended "Status: COMPLETED" at step 86
+  // with four milestones abandoned, four never started and no closing report, purely because
+  // three consecutive responses had failed to parse as a tool call. A session that gave up is
+  // the one thing that must never be recorded as a session that finished.
+  const progress = ctx.goalPlanner.getProgressSummary()
+  const abandoned = ctx.goalPlanner.getMilestones().filter((m) => m.status === 'failed').length
+  const planState = ctx.goalPlanner.hasPlan()
+    ? ` Piano: ${progress.completed}/${progress.total} milestone verificate${abandoned > 0 ? `, ${abandoned} abbandonate` : ''}.`
+    : ''
+  const failureSummary =
+    `L'agente ha smesso di invocare tool senza mai chiamare "finish", quindi la verifica finale non e' stata eseguita.${planState}`
+
+  ctx.emitLog('info', `⚠️ Sessione chiusa senza finish: ${failureSummary}`, `Ultima risposta del modello: ${summary.slice(0, 300)}`)
+  ctx.emitDone(false, failureSummary)
   if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
+    codingAgentLogger.logSessionEnd(
+      ctx.sessionId,
+      ctx.stepCount,
+      false,
+      `${failureSummary}\n\nUltima risposta del modello (non interpretabile come tool call):\n${summary}`
+    )
   }
   await ctx.persistCurrentState()
   ctx.finalizeSession()
-  return { outcome: 'return', result: { success: true, summary } }
+  return { outcome: 'return', result: { success: false, summary: failureSummary } }
 }
 
 /**

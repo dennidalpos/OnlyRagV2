@@ -292,6 +292,37 @@ Here is the microtask execution plan:
       expect(plan[0].title).toBe('Typecheck pulito')
     })
 
+    it('refuses a directive whose command would write the workspace', () => {
+      // The planner of session-1787497654743-4enx declared `touch` and `echo > file` as proof
+      // for ten of fifteen milestones. Executed, they rewrote the agent's own source and then
+      // reported the milestone verified.
+      const plan = GoalDecompositionPlanner.parsePlanFromText(
+        '- [ ] m-1: Create `src/App.tsx` — verify: `touch src/App.tsx`\n' +
+        '- [ ] m-2: Configure Tailwind — verify: `npx tailwindcss init -p`'
+      )
+
+      expect(plan.map((m) => m.verificationCommand)).toEqual([undefined, undefined])
+      expect(plan[0].notes).toContain('touch src/App.tsx')
+      expect(plan[0].notes).toContain('refused')
+    })
+
+    it('keeps the milestone itself, and its title, when the command is refused', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Create `src/App.tsx` — verify: `touch src/App.tsx`')
+
+      expect(plan).toHaveLength(1)
+      expect(plan[0].title).toBe('Create `src/App.tsx`')
+    })
+
+    it('refuses an unsafe command arriving through the JSON plan payload too', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText(
+        '<plan>[{"id":"m-1","title":"Create src/App.tsx","verificationCommand":"echo x > src/App.tsx"},' +
+        '{"id":"m-2","title":"Build","verificationCommand":"npm run build"}]</plan>'
+      )
+
+      expect(plan[0].verificationCommand).toBeUndefined()
+      expect(plan[1].verificationCommand).toBe('npm run build')
+    })
+
     it('leaves a line that merely mentions verification untouched', () => {
       const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Verify the layout renders on tablet widths')
 

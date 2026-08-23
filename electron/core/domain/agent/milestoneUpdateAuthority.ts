@@ -15,6 +15,28 @@
 import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
 import type { PlanMilestone } from './planAndSolveGraph'
 
+/**
+ * Marker opening the note of a milestone the loop guard took away from the model.
+ *
+ * `failed` has two very different origins and they must not be treated alike. A milestone that
+ * failed its own verification command SHOULD be recoverable — the model fixes the code, runs
+ * the check again, and it passes. A milestone the system ABANDONED must not be: the guard
+ * told the model "stop working on it entirely" and moved the focus elsewhere precisely to
+ * break a loop, and letting the model write `verified` back over it undoes the escape. In
+ * session-1787497654743-4enx m-6 was abandoned at step 41 and reported verified at step 47.
+ */
+const ABANDONED_NOTE_PREFIX = 'Abandoned by the system'
+
+/** The note recorded on a milestone the loop guard abandons, in the form isSystemAbandoned reads. */
+export function abandonedMilestoneNote(blockedAttempts: number, target: string): string {
+  return `${ABANDONED_NOTE_PREFIX} after ${blockedAttempts} consecutive blocked attempts on '${target}'.`
+}
+
+/** True for a milestone the loop guard abandoned, as opposed to one that failed a check. */
+export function isSystemAbandoned(milestone: Pick<PlanMilestone, 'status' | 'notes'>): boolean {
+  return milestone.status === 'failed' && (milestone.notes || '').startsWith(ABANDONED_NOTE_PREFIX)
+}
+
 export type MilestoneUpdateVerdict =
   | { kind: 'apply'; status: PlanMilestone['status']; notes: string | undefined }
   | { kind: 'reject'; reason: string; directive: string }
@@ -57,6 +79,14 @@ export function resolveMilestoneUpdate(req: MilestoneUpdateRequest): MilestoneUp
       kind: 'reject',
       reason: `Milestone '${current.id}' is already verified and cannot be reopened`,
       directive: `[UPDATE_PLAN REJECTED: ALREADY VERIFIED] Milestone '${current.id}' has been verified against the workspace and will not be reopened.\nYou do NOT need to reopen a milestone to change a file — edit the file directly. Move on to the current active milestone.`,
+    }
+  }
+
+  if (isSystemAbandoned(current)) {
+    return {
+      kind: 'reject',
+      reason: `Milestone '${current.id}' was abandoned by the loop guard and cannot be reopened`,
+      directive: `[UPDATE_PLAN REJECTED: ABANDONED] Milestone '${current.id}' was abandoned by the system to break a loop, and stays abandoned — exactly as you were told when it happened.\nDo not report it, do not retry it. Execute your current active milestone instead, and describe what was left undone in your final report.`,
     }
   }
 

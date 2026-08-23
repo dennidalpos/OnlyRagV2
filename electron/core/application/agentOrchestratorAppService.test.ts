@@ -494,6 +494,44 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(m1.notes).toContain('Auto-verified by running: node -e "process.exit(0)"')
   })
 
+  it('never executes a verificationCommand that writes the workspace, even from a restored session', async () => {
+    // Plans parsed today drop such a command at ingestion, but a session persisted before that
+    // rule existed still carries it, and executing it is what rewrote src/App.tsx and
+    // src/pages/Tasks.tsx as UTF-16 garbage in session-1787497654743-4enx — after which the
+    // milestone was marked verified because the write had exited 0.
+    const sessionId = 'plan-verify-unsafe-session'
+    const sessionDir = path.join(tempDir, '.onlyrag', 'sessions')
+    fs.mkdirSync(sessionDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(sessionDir, `.agent_state_${sessionId}.json`),
+      JSON.stringify({
+        sessionId,
+        stepCount: 1,
+        initialUserTask: 'Build the app',
+        planMilestones: [
+          { id: 'm-1', title: 'Create `legacy.txt`', status: 'in_progress', verificationCommand: 'echo hello > legacy.txt' },
+          { id: 'm-2', title: 'Add tests', status: 'pending' },
+        ],
+      })
+    )
+
+    const updateJson =
+      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(updateJson)
+      .mockResolvedValueOnce(finishJson)
+      .mockResolvedValueOnce(finishJson)
+
+    await runAgentOrchestratorLoop({ userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId }, null)
+
+    expect(fs.existsSync(path.join(tempDir, 'legacy.txt'))).toBe(false)
+    const saved = JSON.parse(fs.readFileSync(path.join(sessionDir, `.agent_state_${sessionId}.json`), 'utf-8'))
+    const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
+    expect(m1.status).not.toBe('verified')
+    expect(m1.notes).toContain('refused')
+  })
+
   it('should set the milestone to failed when the model claims verified but its verificationCommand actually fails', async () => {
     const planJson =
       '<plan>[{"id":"m-1","title":"Scaffold project","verificationCommand":"node -e \\"process.exit(1)\\""},{"id":"m-2","title":"Add tests"}]</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
@@ -707,7 +745,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     it('proceeds when the project offers no verification command, instead of deadlocking', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
-      scriptTurns(verificationWriteJson, verificationFinishJson)
+      // Three turns, because the missing-build reason is surfaced to the model once before
+      // finish is let through: the second finish is the one that closes the session. The
+      // earlier two-turn version of this test only passed because a session that ran out of
+      // scripted responses used to be reported as a success.
+      scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
         { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
@@ -715,6 +757,49 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       )
 
       expect(res.success).toBe(true)
+      expect(res.summary).toBe('All done.')
+    })
+  })
+
+  describe('a session whose model stops issuing tool calls', () => {
+    // session-1787497654743-4enx closed "Status: COMPLETED" at step 86 after three responses
+    // that did not parse as tool calls, with four milestones abandoned, four never started and
+    // finish never invoked — so the whole Definition of Done gate was skipped and the result
+    // was still reported as a success.
+    const prose = 'Everything looks complete to me, the application should work now.'
+
+    it('closes the session as FAILED rather than COMPLETED', async () => {
+      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+      scriptTurns(verificationWriteJson, prose, prose, prose)
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        null
+      )
+
+      expect(res.success).toBe(false)
+      expect(res.summary).toContain('finish')
+    })
+
+    it('never runs the finish verification, because finish was never reached', async () => {
+      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+      scriptTurns(verificationWriteJson, prose, prose, prose)
+
+      await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir }, null)
+
+      expect(runProjectVerification).not.toHaveBeenCalled()
+    })
+
+    it('still completes an ASK-mode turn, where a prose answer is the deliverable', async () => {
+      scriptTurns(prose)
+
+      const res = await runAgentOrchestratorLoop(
+        { userTask: 'Explain what this project does', agentMode: 'ask', workspacePath: tempDir },
+        null
+      )
+
+      expect(res.success).toBe(true)
+      expect(res.summary).toContain('Everything looks complete')
     })
   })
 })

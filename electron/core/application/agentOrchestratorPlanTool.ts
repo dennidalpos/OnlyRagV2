@@ -1,4 +1,5 @@
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
+import { checkVerificationCommandSafety, unsafeVerificationNote } from '../domain/agent/verificationCommandSafety'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
 import { resolveMilestoneDeliverableStatus } from '../domain/agent/milestoneDeliverableResolver'
@@ -61,15 +62,27 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
     let effectiveStatus = nextStatus
     let effectiveNotes = notes
     let verificationRanLog: string | null = null
+    /** Set when the milestone's declared proof was refused without being executed. */
+    let refusedVerification: { command: string; note: string } | null = null
 
     if (nextStatus === 'verified' && targetMilestone?.verificationCommand) {
       const verifyCmd = targetMilestone.verificationCommand
-      const secCheck = checkCommandSecurity(verifyCmd)
-      if (!secCheck.isAllowed) {
+      // Re-checked here and not only at plan ingestion: a plan can arrive from a restored
+      // session or from the user editing the checklist in the UI, and executing a mutating
+      // "verification" is what rewrote the agent's own source in session-1787497654743-4enx.
+      const safety = checkVerificationCommandSafety(verifyCmd)
+      const secCheck = safety.isSafe ? checkCommandSecurity(verifyCmd) : null
+
+      if (!safety.isSafe) {
+        refusedVerification = {
+          command: verifyCmd,
+          note: unsafeVerificationNote(verifyCmd, safety.reason || 'it is not a check'),
+        }
+      } else if (secCheck && !secCheck.isAllowed) {
         effectiveStatus = 'failed'
         effectiveNotes = `Verification command blocked by security policy: ${secCheck.blockedReason}`
         verificationRanLog = `🔒 Verification command blocked: ${verifyCmd}`
-      } else {
+      } else if (secCheck) {
         const shell = agentToolExecutorService.getOrCreateShellSession(workspacePath)
         const verifyRes = await shell.execute(
           secCheck.sanitizedCommand,
@@ -89,37 +102,50 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       }
     }
 
-    // Evidence on disk outranks the model's self-report: see milestoneUpdateAuthority.ts.
-    // Checked after the verificationCommand run above, so a command that genuinely failed can
-    // still record a failure, and before the write, so a rejected update never lands.
-    const authorityVerdict = targetMilestone
-      ? resolveMilestoneUpdate({
-          current: targetMilestone,
-          requestedStatus: effectiveStatus,
-          requestedNotes: effectiveNotes,
-          deliverableStatus: workspacePath
-            ? resolveMilestoneDeliverableStatus(targetMilestone.title, createWorkspaceDeliverableProbe(workspacePath))
-            : 'not_applicable',
-        })
-      : null
-
-    if (authorityVerdict?.kind === 'reject') {
+    // A refused proof is its own answer, handled before the status machinery: the milestone
+    // keeps the status it had, so routing this through resolveMilestoneUpdate would come back
+    // as a "no-op" rejection and the model would never learn that its declared verification
+    // is the problem. The note goes on the milestone so the plan says so too.
+    if (refusedVerification && targetMilestone) {
       updateFailed = true
-      planFeedback = authorityVerdict.directive
-      planLog = `update_plan rejected: ${authorityVerdict.reason}`
-    } else if (goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes ?? `Set to '${effectiveStatus}' by the model at step ${stepCount}.`)) {
-      const progress = goalPlanner.getProgressSummary()
-      const mismatchNote =
-        effectiveStatus !== nextStatus
-          ? ` [Model claimed '${nextStatus}' but real verification set it to '${effectiveStatus}' — do not report this milestone done until it actually is.]`
-          : ''
-      planFeedback = `[PLAN UPDATED] Milestone '${milestoneRef}' is now ${effectiveStatus}.${mismatchNote} Progress: ${progress.completed}/${progress.total} verified (${progress.percentage}%).`
-      planLog = verificationRanLog || `📋 Plan updated: ${milestoneRef} → ${effectiveStatus} (${progress.completed}/${progress.total} verified)`
+      goalPlanner.updateMilestone(targetMilestone.id, targetMilestone.status, refusedVerification.note)
+      planFeedback =
+        `[UPDATE_PLAN REJECTED: VERIFICATION REFUSED] Milestone '${milestoneRef}' declares \`${refusedVerification.command}\` as its proof, and that command was NOT executed: ${refusedVerification.note}\n` +
+        `A verification command must be able to FAIL and must not write the workspace. Run a real check via run_command (a build, a test, a typecheck) and mark the milestone only after it passes.`
+      planLog = `🚫 Verifica rifiutata senza eseguirla: ${refusedVerification.command}`
     } else {
-      updateFailed = true
-      const known = goalPlanner.getMilestones().map((m) => `${m.id}: ${m.title}`).join(' | ')
-      planFeedback = `[UPDATE_PLAN REJECTED] No milestone matches '${milestoneRef}'. Known milestones: ${known}. Use the exact milestone id.`
-      planLog = `update_plan rejected: unknown milestone '${milestoneRef}'`
+      // Evidence on disk outranks the model's self-report: see milestoneUpdateAuthority.ts.
+      // Checked after the verificationCommand run above, so a command that genuinely failed can
+      // still record a failure, and before the write, so a rejected update never lands.
+      const authorityVerdict = targetMilestone
+        ? resolveMilestoneUpdate({
+            current: targetMilestone,
+            requestedStatus: effectiveStatus,
+            requestedNotes: effectiveNotes,
+            deliverableStatus: workspacePath
+              ? resolveMilestoneDeliverableStatus(targetMilestone.title, createWorkspaceDeliverableProbe(workspacePath))
+              : 'not_applicable',
+          })
+        : null
+
+      if (authorityVerdict?.kind === 'reject') {
+        updateFailed = true
+        planFeedback = authorityVerdict.directive
+        planLog = `update_plan rejected: ${authorityVerdict.reason}`
+      } else if (goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes ?? `Set to '${effectiveStatus}' by the model at step ${stepCount}.`)) {
+        const progress = goalPlanner.getProgressSummary()
+        const mismatchNote =
+          effectiveStatus !== nextStatus
+            ? ` [Model claimed '${nextStatus}' but real verification set it to '${effectiveStatus}' — do not report this milestone done until it actually is.]`
+            : ''
+        planFeedback = `[PLAN UPDATED] Milestone '${milestoneRef}' is now ${effectiveStatus}.${mismatchNote} Progress: ${progress.completed}/${progress.total} verified (${progress.percentage}%).`
+        planLog = verificationRanLog || `📋 Plan updated: ${milestoneRef} → ${effectiveStatus} (${progress.completed}/${progress.total} verified)`
+      } else {
+        updateFailed = true
+        const known = goalPlanner.getMilestones().map((m) => `${m.id}: ${m.title}`).join(' | ')
+        planFeedback = `[UPDATE_PLAN REJECTED] No milestone matches '${milestoneRef}'. Known milestones: ${known}. Use the exact milestone id.`
+        planLog = `update_plan rejected: unknown milestone '${milestoneRef}'`
+      }
     }
   }
 

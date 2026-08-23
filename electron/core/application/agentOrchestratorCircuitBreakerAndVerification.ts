@@ -10,6 +10,7 @@ import {
 import { scanCommandTouchedFiles } from '../infrastructure/filesystem/commandTouchedFilesScanner'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
+import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 /** Returns a `return` outcome if the stagnation circuit breaker trips into a hard stop. */
@@ -288,8 +289,15 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
   if (ctx.parsedTool.tool !== 'run_command') return
 
   // A successful build/typecheck/lint satisfies the Definition of Done gate and advances verification milestones
-  const cmdStr = (ctx.parsedTool.parameters?.command || '').toLowerCase()
-  const isVerificationCmd = ['test', 'typecheck', 'build', 'lint', 'pytest', 'tsc'].some((kw) => cmdStr.includes(kw))
+  const rawCmd = ctx.parsedTool.parameters?.command || ''
+  const cmdStr = rawCmd.toLowerCase()
+  // The keyword scan alone is a substring match on the command text, so `touch src/test.tsx`
+  // matches "test" and `echo "build ok" > out.log` matches "build" — both would have raised
+  // hasVerifiedBuild and promoted milestones plan-wide on a command that wrote the workspace
+  // and could not fail. The safety check is what makes the keyword mean what it reads as.
+  const isVerificationCmd =
+    ['test', 'typecheck', 'build', 'lint', 'pytest', 'tsc'].some((kw) => cmdStr.includes(kw)) &&
+    checkVerificationCommandSafety(rawCmd).isSafe
   if (isVerificationCmd && !ctx.toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
     ctx.flags.hasVerifiedBuild = true
     promoteMilestonesProvenBy(ctx, ctx.parsedTool.parameters?.command || 'verification command')

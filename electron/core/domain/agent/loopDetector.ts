@@ -39,6 +39,14 @@ interface SignatureOutcomeRecord {
   lastSucceeded: boolean
 }
 
+function accumulate(previous: SignatureOutcomeRecord | undefined, succeeded: boolean): SignatureOutcomeRecord {
+  return {
+    successes: (previous?.successes || 0) + (succeeded ? 1 : 0),
+    failures: (previous?.failures || 0) + (succeeded ? 0 : 1),
+    lastSucceeded: succeeded,
+  }
+}
+
 /**
  * Fingerprints agent tool invocations and tracks target-level semantic patterns
  * to detect and prevent infinite loops, oscillation traps, and redundant read loops.
@@ -49,6 +57,18 @@ export class AgentActionLoopDetector {
   private actionSequence: string[] = []
   /** Execution outcomes keyed by fingerprint, fed back by the orchestrator after each tool runs. */
   private outcomeBySignature = new Map<string, SignatureOutcomeRecord>()
+  /**
+   * The same outcomes keyed by target instead of by fingerprint.
+   *
+   * Not every loop rule here is a fingerprint rule. The file-edit thrashing check (section 2)
+   * fires on the TARGET PATH, so it catches a model rewriting one file with slightly different
+   * content each time — and every one of those calls has a fresh fingerprint, which left
+   * classifyRepeatOutcome answering `unknown` and the redundant-success exemption unable to
+   * apply. In session-1787497654743-4enx that is what abandoned m-3 and m-4: every write to
+   * src/styles/globals.css had SUCCEEDED, the guard told the model "this is NOT counted against
+   * you", and the milestone was marked FAILED two steps later anyway.
+   */
+  private outcomeByTarget = new Map<string, SignatureOutcomeRecord>()
   private readonly maxRepeatsAllowed: number
   private readonly maxHistoryLength = 20
 
@@ -84,19 +104,31 @@ export class AgentActionLoopDetector {
    */
   public recordOutcome(toolCall: AgentToolCall, succeeded: boolean): void {
     const signature = this.generateFingerprint(toolCall)
-    const previous = this.outcomeBySignature.get(signature)
-    this.outcomeBySignature.set(signature, {
-      successes: (previous?.successes || 0) + (succeeded ? 1 : 0),
-      failures: (previous?.failures || 0) + (succeeded ? 0 : 1),
-      lastSucceeded: succeeded,
-    })
+    this.outcomeBySignature.set(signature, accumulate(this.outcomeBySignature.get(signature), succeeded))
+
+    const target = this.extractTarget(toolCall)
+    if (target) {
+      this.outcomeByTarget.set(target, accumulate(this.outcomeByTarget.get(target), succeeded))
+    }
   }
 
-  /** Classifies a repeat by how its previous executions ended. */
+  /**
+   * Classifies a repeat by how its previous executions ended.
+   *
+   * The exact fingerprint answers first, because it is the precise question. When the
+   * parameters changed — the file-edit rule's whole reason to exist — the target's history is
+   * the honest fallback: "the last edit to this file worked" is exactly what the caller needs
+   * to know before deciding whether to punish the repeat as stagnation.
+   */
   public classifyRepeatOutcome(toolCall: AgentToolCall): RepeatOutcomeKind {
-    const record = this.outcomeBySignature.get(this.generateFingerprint(toolCall))
-    if (!record) return 'unknown'
-    return record.lastSucceeded ? 'succeeding' : 'failing'
+    const bySignature = this.outcomeBySignature.get(this.generateFingerprint(toolCall))
+    if (bySignature) return bySignature.lastSucceeded ? 'succeeding' : 'failing'
+
+    const target = this.extractTarget(toolCall)
+    const byTarget = target ? this.outcomeByTarget.get(target) : undefined
+    if (byTarget) return byTarget.lastSucceeded ? 'succeeding' : 'failing'
+
+    return 'unknown'
   }
 
   /**
@@ -204,11 +236,18 @@ export class AgentActionLoopDetector {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
           suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.${configDirectives}`,
+          // Edits that all landed are redundancy, not stagnation: the file exists and the
+          // milestone is reachable. Without this the caller cannot tell the two apart, and
+          // abandons a milestone whose work actually happened.
+          repeatOutcome: this.classifyRepeatOutcome(toolCall),
         }
       }
     }
 
-    // 3. Consecutive Read Loop Check: >=4 consecutive read/inspect calls on same target without action
+    // 3. Consecutive Read Loop Check: >=4 consecutive read/inspect calls on same target without action.
+    // Deliberately NOT given a repeatOutcome: a read that keeps succeeding has still produced
+    // nothing, so escalating it costs no work, whereas escalating a successful write throws
+    // away a deliverable that exists.
     if (target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(toolCall.tool)) {
       const recentTargets = this.targetHistory.slice(-5)
       const consecutiveReads = recentTargets.filter(
@@ -287,6 +326,7 @@ export class AgentActionLoopDetector {
     this.targetHistory = []
     this.actionSequence = []
     this.outcomeBySignature.clear()
+    this.outcomeByTarget.clear()
   }
 
   /**

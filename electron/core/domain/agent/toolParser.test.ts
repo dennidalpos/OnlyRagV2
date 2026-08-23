@@ -577,3 +577,42 @@ npm create vite@latest ./ -- --template react-ts
     expect(result).toBeNull()
   })
 })
+
+describe('parseAgentToolCall — several calls in one response', () => {
+  // Reproduces step 86 of coding_agent_audit.log session-1787497654743-4enx verbatim: three
+  // native-format calls separated by blank lines. The greedy first-brace-to-last-brace span
+  // covered all three, parsed as nothing, and the turn was recorded as "no tool call" —
+  // which, on an already exhausted noToolStreak, ended the session.
+  const THREE_NATIVE_CALLS = `{"name": "write_file", "arguments": {"filePath": "src/components/Sidebar.tsx", "content": "import React from 'react';\n\nfunction Sidebar() {\n  return (\n    <nav className=\\"flex flex-col\\">\n      <button>Home</button>\n    </nav>\n  );\n}\n\nexport default Sidebar;"}}
+
+{"name": "write_file", "arguments": {"filePath": "src/components/TaskCard.tsx", "content": "import React from 'react';\n\nfunction TaskCard() {\n  return <div />;\n}\n\nexport default TaskCard;"}}
+
+{"name": "update_plan", "arguments": {"milestoneId": "m-11", "status": "verified"}}`
+
+  it('executes the first call instead of discarding the whole turn', () => {
+    const result = parseAgentToolCall(THREE_NATIVE_CALLS)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('write_file')
+    expect(result?.parameters.filePath).toBe('src/components/Sidebar.tsx')
+  })
+
+  it('keeps the braces that belong to the file content out of the object boundary', () => {
+    const result = parseAgentToolCall(THREE_NATIVE_CALLS)
+    expect(result?.parameters.content).toContain('export default Sidebar;')
+    expect(result?.parameters.content).not.toContain('TaskCard')
+  })
+
+  it('handles several calls stacked inside one json fence', () => {
+    const raw = ['```json', '{"tool": "read_file", "parameters": {"filePath": "a.ts"}}', '{"tool": "read_file", "parameters": {"filePath": "b.ts"}}', '```'].join('\n')
+    const result = parseAgentToolCall(raw)
+    expect(result?.tool).toBe('read_file')
+    expect(result?.parameters.filePath).toBe('a.ts')
+  })
+
+  it('still repairs a single truncated object through the greedy fallback', () => {
+    const raw = '{"tool": "run_command", "parameters": {"command": "npm test"}'
+    const result = parseAgentToolCall(raw)
+    expect(result?.tool).toBe('run_command')
+    expect(result?.parameters.command).toBe('npm test')
+  })
+})

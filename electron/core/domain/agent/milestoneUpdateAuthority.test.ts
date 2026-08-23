@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMilestoneUpdate } from './milestoneUpdateAuthority'
+import { abandonedMilestoneNote, isSystemAbandoned, resolveMilestoneUpdate } from './milestoneUpdateAuthority'
 import type { PlanMilestone } from './planAndSolveGraph'
 
 function milestone(status: PlanMilestone['status'], notes?: string): PlanMilestone {
@@ -91,6 +91,50 @@ describe('resolveMilestoneUpdate', () => {
       current: milestone('in_progress'),
       requestedStatus: 'failed',
       deliverableStatus: 'not_applicable',
+    })
+
+    expect(verdict.kind).toBe('apply')
+  })
+})
+
+describe('a milestone the loop guard abandoned', () => {
+  // m-6 of session-1787497654743-4enx was abandoned at step 41 with "stop working on it
+  // entirely" and reported VERIFIED at step 47. Abandonment exists to break a loop; letting
+  // the model write over it undoes the escape and puts the false progress back in the plan.
+  const abandoned = milestone('failed', abandonedMilestoneNote(2, 'src/styles/globals.css'))
+
+  it('cannot be reopened as verified', () => {
+    const verdict = resolveMilestoneUpdate({
+      current: abandoned,
+      requestedStatus: 'verified',
+      deliverableStatus: 'satisfied',
+    })
+
+    expect(verdict.kind).toBe('reject')
+    expect(verdict.kind === 'reject' && verdict.directive).toContain('ABANDONED')
+  })
+
+  it('cannot be reopened as in_progress either', () => {
+    const verdict = resolveMilestoneUpdate({
+      current: abandoned,
+      requestedStatus: 'in_progress',
+      deliverableStatus: 'satisfied',
+    })
+
+    expect(verdict.kind).toBe('reject')
+  })
+
+  it('is recognised only by the note the guard writes', () => {
+    expect(isSystemAbandoned(abandoned)).toBe(true)
+    expect(isSystemAbandoned(milestone('failed', 'Verification command failed (exit 1): npm run build'))).toBe(false)
+    expect(isSystemAbandoned(milestone('in_progress', abandonedMilestoneNote(2, 'x')))).toBe(false)
+  })
+
+  it('leaves a milestone that merely failed its check recoverable', () => {
+    const verdict = resolveMilestoneUpdate({
+      current: milestone('failed', 'Verification command failed (exit 1): npm run build'),
+      requestedStatus: 'verified',
+      deliverableStatus: 'satisfied',
     })
 
     expect(verdict.kind).toBe('apply')

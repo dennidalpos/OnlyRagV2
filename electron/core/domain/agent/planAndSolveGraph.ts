@@ -1,3 +1,5 @@
+import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
+
 export interface PlanMilestone {
   id: string
   title: string
@@ -297,6 +299,22 @@ export class GoalDecompositionPlanner {
     return { title }
   }
 
+  /**
+   * Admits a declared verification command into the plan only if executing it could actually
+   * falsify the milestone. A refused command is dropped rather than kept and skipped, so no
+   * later code path can rediscover it and run it; the reason is recorded on the milestone so
+   * the plan states why this step carries no proof. See verificationCommandSafety.ts.
+   *
+   * Dropping the command never makes a milestone unfalsifiable: the entries that carry one
+   * also name their deliverable paths, which isFalsifiableMilestone accepts on their own.
+   */
+  private static adoptVerificationCommand(command?: string): Pick<PlanMilestone, 'verificationCommand' | 'notes'> {
+    if (!command) return {}
+    const verdict = checkVerificationCommandSafety(command)
+    if (verdict.isSafe) return { verificationCommand: command }
+    return { notes: unsafeVerificationNote(command, verdict.reason || 'it is not a check') }
+  }
+
   public static parsePlanFromText(text: string): PlanMilestone[] {
     if (!text || typeof text !== 'string') return []
 
@@ -318,7 +336,7 @@ export class GoalDecompositionPlanner {
             title: this.stripRedundantIdPrefix(item.title || item.step || item.name || `Milestone ${idx + 1}`),
             status: (item.status as any) || 'pending',
             falsifiableHypothesis: item.falsifiableHypothesis || item.hypothesis || undefined,
-            verificationCommand: item.verificationCommand || item.verify || undefined,
+            ...this.adoptVerificationCommand(item.verificationCommand || item.verify || undefined),
           }))
         }
       } catch {}
@@ -414,7 +432,7 @@ export class GoalDecompositionPlanner {
           id: `m-${counter++}`,
           title: this.stripRedundantIdPrefix(title),
           status: entry.status,
-          verificationCommand,
+          ...this.adoptVerificationCommand(verificationCommand),
         })
       }
     }

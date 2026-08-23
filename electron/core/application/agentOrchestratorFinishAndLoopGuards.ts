@@ -5,6 +5,7 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domain/agent/loopEscapePolicy'
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
+import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { promoteMilestonesProvenBy } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
@@ -184,7 +185,7 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
   ctx.goalPlanner.updateMilestone(
     stuckMilestone.id,
     'failed',
-    `Abandoned after ${ctx.state.stagnationStreak} consecutive blocked attempts on '${loopTarget || 'target'}'.`
+    abandonedMilestoneNote(ctx.state.stagnationStreak, loopTarget || 'target')
   )
 
   // The next milestone may legitimately need to touch the same file the model was just

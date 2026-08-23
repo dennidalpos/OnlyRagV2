@@ -265,5 +265,49 @@ describe('AgentActionLoopDetector Unit Tests', () => {
 
       expect(detector.classifyRepeatOutcome(installCall)).toBe('unknown')
     })
+
+    describe('rewriting one file with different content each time', () => {
+      // The file-edit thrashing rule fires on the TARGET, not the fingerprint, so every one of
+      // these calls is a fresh signature. classifyRepeatOutcome answered 'unknown', the
+      // redundant-success exemption never applied, and m-3 and m-4 of
+      // session-1787497654743-4enx were abandoned as FAILED over writes that had all landed.
+      const editCall = (content: string): AgentToolCall => ({
+        tool: 'write_file',
+        parameters: { filePath: 'src/styles/globals.css', content },
+      })
+
+      /** Four edits to one file, each with different content, each reported as successful. */
+      const thrashFile = (succeeded: boolean) => {
+        let last = detector.recordAndCheck(editCall('a'))
+        for (const content of ['b', 'c', 'd']) {
+          detector.recordOutcome(editCall(content), succeeded)
+          last = detector.recordAndCheck(editCall(content))
+        }
+        return last
+      }
+
+      it('is classified as succeeding once the edits are known to have landed', () => {
+        const last = thrashFile(true)
+
+        expect(last.isLooping).toBe(true)
+        expect(last.suggestedIntervention).toContain('CRITICAL FILE EDIT LOOP')
+        expect(last.repeatOutcome).toBe('succeeding')
+      })
+
+      it('stays failing when the edits to that file have been failing', () => {
+        expect(thrashFile(false).repeatOutcome).toBe('failing')
+      })
+
+      it('leaves a read loop on the stagnation ladder, since repeated reads produce nothing', () => {
+        const readCall: AgentToolCall = { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } }
+        let last = detector.recordAndCheck(readCall)
+        for (let i = 0; i < 4; i++) {
+          detector.recordOutcome(readCall, true)
+          last = detector.recordAndCheck(readCall)
+        }
+
+        expect(last.isLooping).toBe(true)
+      })
+    })
   })
 })

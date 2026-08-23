@@ -38,6 +38,52 @@ function sanitizeAndParseJson(raw: string): any {
   }
 }
 
+/**
+ * Returns the single JSON object starting at `startIdx`, ending at its matching brace.
+ *
+ * The raw-JSON scan below used to take everything from the first brace to the LAST brace in
+ * the response, which is one object only when the model emitted one. A model that emits
+ * several in a row — qwen2.5-coder:7b did exactly this at step 86 of
+ * coding_agent_audit.log session-1787497654743-4enx, three `{"name":..,"arguments":..}`
+ * objects separated by blank lines — produced a span that is not valid JSON at all, so the
+ * whole turn was recorded as "no tool call" and the session gave up two steps later.
+ *
+ * Quoted spans and escapes are tracked so a brace inside file content (`function App() {`,
+ * which is the common case for write_file) does not close the object early. Returns null on
+ * a truncated object, leaving the caller to fall back to its greedy span.
+ */
+function sliceBalancedObject(text: string, startIdx: number): string | null {
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (ch === '\\') {
+      escaped = true
+      continue
+    }
+    if (ch === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return text.slice(startIdx, i + 1).trim()
+    }
+  }
+
+  return null
+}
+
 function extractToolCallFromText(cleanText: string): AgentToolCall | null {
   if (!cleanText || typeof cleanText !== 'string') return null
 
@@ -47,7 +93,19 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
     cleanText.match(/```json\s*([\s\S]*?)\s*```/i) ||
     cleanText.match(/```\s*([\s\S]*?)\s*```/i)
 
+  // Candidates are tried in order until one yields a valid tool call, so a response holding
+  // several JSON objects still executes its first one instead of counting as no call at all.
+  const candidates: string[] = []
   let jsonStr = toolCallMatch ? toolCallMatch[1].trim() : ''
+
+  if (jsonStr) {
+    candidates.push(jsonStr)
+    const fencedFirstBrace = jsonStr.indexOf('{')
+    if (fencedFirstBrace !== -1) {
+      const balanced = sliceBalancedObject(jsonStr, fencedFirstBrace)
+      if (balanced && balanced !== jsonStr) candidates.push(balanced)
+    }
+  }
 
   if (!jsonStr) {
     // Try finding raw JSON object containing "tool"/'tool' (prompt-engineered format)
@@ -63,42 +121,50 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
       .find((idx) => idx !== -1) ?? -1
     if (toolIdx !== -1) {
       const firstBrace = cleanText.lastIndexOf('{', toolIdx)
-      const lastBrace = cleanText.lastIndexOf('}')
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        jsonStr = cleanText.slice(firstBrace, lastBrace + 1).trim()
+      if (firstBrace !== -1) {
+        // The balanced object first: it is the only candidate that is correct when the model
+        // emitted more than one call. The greedy span stays as the fallback for a truncated
+        // object, where there is no matching brace to find.
+        const balanced = sliceBalancedObject(cleanText, firstBrace)
+        if (balanced) candidates.push(balanced)
+        const lastBrace = cleanText.lastIndexOf('}')
+        if (lastBrace > firstBrace) {
+          const greedy = cleanText.slice(firstBrace, lastBrace + 1).trim()
+          if (greedy !== balanced) candidates.push(greedy)
+        }
       }
     }
   }
 
-  if (jsonStr) {
-    const parsed = sanitizeAndParseJson(jsonStr)
+  for (const candidate of candidates) {
+    const parsed = sanitizeAndParseJson(candidate)
     // Accept both the prompt-engineered "tool" key and the native / OpenAI-style
     // "name" key (used by tool-calling-capable models that echo their function
     // call as JSON text instead of populating the API's structured tool_calls).
     const rawToolName = parsed?.tool ?? (parsed?.arguments && typeof parsed?.name === 'string' ? parsed.name : undefined)
-    if (parsed && typeof rawToolName === 'string') {
-      const toolName = normalizeToolName(rawToolName)
-      if (!toolName) return null
+    if (!parsed || typeof rawToolName !== 'string') continue
 
-      const rawParams: Record<string, any> = {
-        ...parsed,
-        ...(parsed.parameters || parsed.arguments || parsed.args || parsed.params || {}),
-      }
+    const toolName = normalizeToolName(rawToolName)
+    if (!toolName) continue
 
-      const candidateCall: AgentToolCall = {
-        tool: toolName,
-        parameters: rawParams,
-        explanation: parsed.explanation || parsed.reason || parsed.summary || parsed.thought,
-      }
-
-      const validation = validateAndSanitize(candidateCall)
-      if (!validation.valid) {
-        logger.log('WARN', 'ToolParser', `Rejected ${toolName} call: ${validation.errors.join('; ')}`)
-        return null
-      }
-
-      return validation.sanitizedToolCall
+    const rawParams: Record<string, any> = {
+      ...parsed,
+      ...(parsed.parameters || parsed.arguments || parsed.args || parsed.params || {}),
     }
+
+    const candidateCall: AgentToolCall = {
+      tool: toolName,
+      parameters: rawParams,
+      explanation: parsed.explanation || parsed.reason || parsed.summary || parsed.thought,
+    }
+
+    const validation = validateAndSanitize(candidateCall)
+    if (!validation.valid) {
+      logger.log('WARN', 'ToolParser', `Rejected ${toolName} call: ${validation.errors.join('; ')}`)
+      continue
+    }
+
+    return validation.sanitizedToolCall
   }
 
   return null

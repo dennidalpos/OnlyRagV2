@@ -43,6 +43,7 @@ try {
     }
 
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
+    Push-Location $rootDir
 
     # 1. Analisi Dipendenze Circolari (dpdm)
     if ($Mode -eq "All" -or $Mode -eq "Cycles") {
@@ -91,4 +92,6 @@ try {
 } catch {
     Write-Host "`n[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+} finally {
+    Pop-Location
 }

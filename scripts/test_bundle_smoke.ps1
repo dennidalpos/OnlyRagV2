@@ -32,6 +32,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 try {
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
+    Push-Location $rootDir
 
     if (-not $Fast -or $Full) {
         Write-Host "=====================================================" -ForegroundColor Cyan
@@ -133,4 +134,6 @@ try {
 } catch {
     Write-Host "`n[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+} finally {
+    Pop-Location
 }

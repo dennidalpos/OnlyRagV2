@@ -27,6 +27,9 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 try {
+    $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
+    Push-Location $rootDir
+
     if (-not $Fast) {
         Write-Host "=====================================================" -ForegroundColor Cyan
         Write-Host " OnlyRag V2 - Build & NSIS Packaging Script" -ForegroundColor Cyan
@@ -138,4 +141,6 @@ try {
 } catch {
     Write-Host "`n[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+} finally {
+    Pop-Location
 }

@@ -38,6 +38,7 @@ try {
     }
 
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
+    Push-Location $rootDir
 
     # 1. JSON Configuration Syntax Check
     if (-not $Fast -or $Full -or $Format) {
@@ -148,4 +149,6 @@ try {
 } catch {
     Write-Host "`n[FATAL ERROR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+} finally {
+    Pop-Location
 }

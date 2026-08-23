@@ -86,11 +86,11 @@ export class SessionDebtTracker {
   }
 
   public compilePromptBlock(): string {
-    if (
-      this.data.completedTasks.length === 0 &&
-      this.data.unresolvedIssues.length === 0 &&
-      !this.data.summaryText
-    ) {
+    // Gate on what this block actually renders. summaryText used to count as content, but
+    // nothing below prints it -- and parseTrackerMarkdown sets it to the whole file, so any
+    // tracker on disk produced a bare "### PERSISTENT SESSION TRACKER" heading with nothing
+    // under it in every single turn's prompt (see coding_agent_audit.log, every step).
+    if (this.data.completedTasks.length === 0 && this.data.unresolvedIssues.length === 0) {
       return ''
     }
 

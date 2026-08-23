@@ -134,7 +134,7 @@ def _load_doc_record(doc_id: str) -> Dict[str, Any]:
     API boundary) if the documents table doesn't exist yet or the id isn't found."""
     validate_doc_id(doc_id)
     if DOCS_TABLE_NAME not in get_existing_tables():
-        raise ValueError("Documents table does not exist")
+        raise ValueError(f"Document {doc_id} not found in database")
     dtbl = lance_db.open_table(DOCS_TABLE_NAME)
     records = dtbl.search().where(f'id = "{doc_id}"', prefilter=True).limit(1).to_list()
     if not records:

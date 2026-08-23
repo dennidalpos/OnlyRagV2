@@ -17,6 +17,15 @@ export interface CompactPlanState {
   isCompleted: boolean
 }
 
+/**
+ * Recognises the plan's own closing milestone (the "write the final report and stop" entry
+ * the planner appends). It is the one milestone the finish tool owns: nothing else may mark
+ * it verified, and the Definition of Done gate must not count it as outstanding work.
+ */
+export function isCompletionMilestoneTitle(title: string): boolean {
+  return /finish|completamento|arresto|riepilogo|final report/i.test(title || '')
+}
+
 export class GoalDecompositionPlanner {
   private milestones: PlanMilestone[] = []
 

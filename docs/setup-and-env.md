@@ -164,6 +164,8 @@ npm test
 npm run test:sidecar
 ```
 
+La suite Python gira sempre su uno store LanceDB temporaneo isolato: `sidecar/tests/conftest.py` imposta `ONLYRAG_DATA_DIR` su una directory temporanea **prima** di qualsiasi import di `sidecar.config`, che risolve i percorsi dati a import-time. Senza quell'override i test scrivevano nello store reale dell'utente. Ogni tabella LanceDB viene inoltre eliminata fra un test e l'altro, perche' la connessione e' a livello di processo.
+
 ### Script di Automazione e Qualità (`scripts/`)
 ```powershell
 # Validazione completa seriale (TypeScript + Vitest + Pytest)

@@ -463,7 +463,7 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
     existing_tables = get_existing_tables()
 
     if DOCS_TABLE_NAME not in existing_tables:
-        raise ValueError("Documents table does not exist")
+        raise ValueError(f"Document {doc_id} not found in database")
 
     dtbl = lance_db.open_table(DOCS_TABLE_NAME)
     records = dtbl.search().where(f'id = "{doc_id}"', prefilter=True).limit(1).to_list()

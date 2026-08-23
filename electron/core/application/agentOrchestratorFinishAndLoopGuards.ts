@@ -2,6 +2,8 @@ import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
+import { resolveLoopEscapeAction } from '../domain/agent/loopEscapePolicy'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
 /**
@@ -13,7 +15,7 @@ import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from '
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
   if (ctx.agentMode === 'agent') {
     const nonFinishPendingMilestones = ctx.goalPlanner.getMilestones().filter(
-      (m) => m.status !== 'verified' && !/finish|completamento|arresto|riepilogo|final report/i.test(m.title)
+      (m) => m.status !== 'verified' && !isCompletionMilestoneTitle(m.title)
     )
     const pendingMilestonesCount = nonFinishPendingMilestones.length
 
@@ -73,8 +75,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
 
   // Mark completion / finish milestones as verified when finish tool is executed successfully
   for (const m of ctx.goalPlanner.getMilestones()) {
-    const isFinishMilestone = /finish|completamento|arresto|riepilogo|final report/i.test(m.title)
-    if (isFinishMilestone && m.status !== 'failed') {
+    if (isCompletionMilestoneTitle(m.title) && m.status !== 'failed') {
       ctx.goalPlanner.updateMilestone(m.id, 'verified')
     }
   }
@@ -101,6 +102,43 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
   return { outcome: 'return', result: { success: true, summary } }
 }
 
+/**
+ * Moves the plan's focus off the milestone the model is stuck on and onto the next one,
+ * returning the directive that tells the model what changed.
+ *
+ * The milestone is recorded as `failed`, not `verified`: the work genuinely did not happen,
+ * and progress percentages, the session tracker and the Definition of Done gate must all keep
+ * saying so. `getActiveMilestone` skips failed entries, so the very next prompt asks for a
+ * different deliverable — which is the whole point, since re-issuing the same ACTIVE MILESTONE
+ * line is what kept the model re-emitting the blocked tool call.
+ */
+function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: string | undefined): string | null {
+  const stuckMilestone = ctx.goalPlanner.getActiveMilestone()
+  if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone.title)) return null
+
+  ctx.goalPlanner.updateMilestone(
+    stuckMilestone.id,
+    'failed',
+    `Abandoned after ${ctx.state.stagnationStreak} consecutive blocked attempts on '${loopTarget || 'target'}'.`
+  )
+
+  // The next milestone may legitimately need to touch the same file the model was just
+  // blocked on, so the detector's memory of that target is cleared along with the focus.
+  ctx.loopDetector.resetTarget(loopTarget)
+
+  const nextMilestone = ctx.goalPlanner.getActiveMilestone()
+  ctx.emitLog(
+    'info',
+    `⏭️ Escape strutturale: milestone ${stuckMilestone.id} abbandonata dopo ${ctx.state.stagnationStreak} blocchi consecutivi.`,
+    nextMilestone ? `Nuova milestone attiva: ${nextMilestone.id}: ${nextMilestone.title}` : 'Nessuna milestone operativa rimasta.',
+    { category: 'system_alert' }
+  )
+
+  return nextMilestone
+    ? `\n\n[PLAN ADVANCED BY THE SYSTEM]\nMilestone "${stuckMilestone.id}: ${stuckMilestone.title}" has been marked FAILED and ABANDONED — stop working on it entirely.\nYour active milestone is now "${nextMilestone.id}: ${nextMilestone.title}". Execute THAT milestone in your next tool call.`
+    : `\n\n[PLAN ADVANCED BY THE SYSTEM]\nMilestone "${stuckMilestone.id}: ${stuckMilestone.title}" has been marked FAILED and ABANDONED. No operational milestones remain: invoke the "finish" tool now with a full final report describing what was and was not completed.`
+}
+
 /** Returns null when the call isn't a repeated/oscillating action, so the caller proceeds. */
 export async function handleLoopDetection(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome | null> {
   const loopCheck = ctx.loopDetector.recordAndCheck(parsedTool)
@@ -112,7 +150,16 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   const escapeDirective = isCommand
     ? `\n[CRITICAL ESCAPE STRATEGY]: If a scaffolding or build command failed or is blocked, DO NOT repeat it. Instead, switch IMMEDIATELY to constructing or editing the required files directly with write_file (e.g. write package.json, vite.config.ts, src/App.tsx), or run a read/verification tool.`
     : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
-  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'.${escapeDirective}`
+
+  const escapeAction = resolveLoopEscapeAction(ctx.state.stagnationStreak, {
+    canAdvanceMilestone: ctx.goalPlanner
+      .getMilestones()
+      .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)),
+    isUnlimitedSteps: ctx.isUnlimitedSteps,
+  })
+  const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
+
+  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'.${escapeDirective}${planAdvanceDirective || ''}`
 
   ctx.episodicCompactor.recordStep(
     {
@@ -139,7 +186,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
       enhancedIntervention
     )
   }
-  if (ctx.isUnlimitedSteps && ctx.state.stagnationStreak >= 20) {
+  if (escapeAction === 'abort') {
     // A hard stop here means the model never broke out of its loop -- this is the session
     // giving up, not completing the task, so it must never be recorded as a success.
     const stagSummary = `Pausa per stagnazione: raggiunti ${ctx.state.stagnationStreak} step consecutivi senza progresso.`

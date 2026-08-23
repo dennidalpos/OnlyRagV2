@@ -351,6 +351,7 @@ export async function runAgentOrchestratorLoop(
     }
 
     // Execute tool through tool executor service
+    const toolStartedAtMs = Date.now()
     const toolRes = await agentToolExecutorService.executeTool(
       toolCallForExecution,
       workspacePath,
@@ -365,6 +366,7 @@ export async function runAgentOrchestratorLoop(
     const processingOutcome = await runToolResultProcessing({
       toolRes,
       parsedTool,
+      toolStartedAtMs,
       stepCount: stepCountBox.value,
       sessionId,
       settings,

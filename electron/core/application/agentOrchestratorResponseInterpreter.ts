@@ -1,4 +1,5 @@
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import { capPlanMilestones } from '../domain/agent/planMilestoneCapper'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -18,7 +19,7 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
   const outputText = ctx.streamedOutput || ''
   const hasExplicitPlanBlock = outputText.includes('<plan>')
   if (!ctx.goalPlanner.hasPlan() && (hasExplicitPlanBlock || outputText.includes('- [ ]') || outputText.includes('1. '))) {
-    const extractedMilestones = GoalDecompositionPlanner.parsePlanFromText(outputText)
+    const extractedMilestones = capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(outputText))
     if (extractedMilestones.length >= 2) {
       // A brand-new plan can only ever start pending: parsePlanFromText's checkbox status
       // (verified/in_progress/failed) is meant for RE-parsing a plan that was already running
@@ -31,7 +32,7 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
     return
   }
   if (ctx.goalPlanner.hasPlan() && hasExplicitPlanBlock) {
-    const revisedMilestones = GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput)
+    const revisedMilestones = capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput))
     if (revisedMilestones.length >= 2) {
       ctx.goalPlanner.replacePlanPreservingProgress(revisedMilestones)
       const progress = ctx.goalPlanner.getProgressSummary()

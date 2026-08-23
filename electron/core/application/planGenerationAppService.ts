@@ -15,6 +15,7 @@
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
+import { capPlanMilestones, MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
 import { logger } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AppSettings } from '../../../src/types'
@@ -28,7 +29,7 @@ const PLAN_SYSTEM_PROMPT =
   'strictly sequential, fine-grained Implementation Plan of ATOMIC MICRO-TASKS in MARKDOWN CHECKLIST format.\n\n' +
   'STRICT MICRO-TASK ARCHITECTURE FOR SMALL LANGUAGE MODELS (SLMs):\n' +
   '1. ATOMICITY (1 ACTION = 1 MICRO-TASK): Every single item MUST represent exactly ONE discrete, isolated action (e.g. create a specific file, install dependencies, implement one specific component, run build/typecheck). NEVER bundle multiple files or entire architectural layers into a single broad macro-step.\n' +
-  '2. SEQUENTIAL WORKFLOW (Typically 5 to 15 granular microtasks):\n' +
+  '2. SEQUENTIAL WORKFLOW (5 to 15 granular microtasks — 15 is a HARD LIMIT; anything beyond it is merged automatically and loses its atomicity, so consolidate related actions yourself instead):\n' +
   '   - Scaffolding & Config first: Prefer direct file creation (`package.json`, `vite.config.ts`, `tsconfig.json`, `index.html`) using write_file, or modern lowercase commands. NEVER generate deprecated commands (e.g. do NOT use `create-react-app`) and NEVER use uppercase project names (e.g. do NOT use `create-react-app ProjectDashboardTask`).\n' +
   '   - Core styles & utilities (e.g. `src/styles/globals.css`, `src/utils/helpers.ts`)\n' +
   '   - Individual discrete UI components (1 component per microtask: e.g. `src/components/Sidebar.tsx`, then `src/components/TaskCard.tsx`)\n' +
@@ -109,7 +110,15 @@ export class PlanGenerationAppService {
     }
 
     const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt)
-    const milestones = GoalDecompositionPlanner.parsePlanFromText(planText)
+    const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
+    const milestones = capPlanMilestones(parsedMilestones)
+    if (milestones.length < parsedMilestones.length) {
+      logger.log(
+        'INFO',
+        'PlanGenerationAppService',
+        `Plan capped: ${parsedMilestones.length} milestones merged into ${milestones.length} (max ${MAX_PLAN_MILESTONES}).`
+      )
+    }
     if (req.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logPlanGeneration('plan-flow', req.prompt, milestones.length, 'plan')
     }
@@ -122,7 +131,7 @@ export class PlanGenerationAppService {
    * after manual edits in the frontend.
    */
   parsePlanText(planText: string): PlanMilestone[] {
-    return GoalDecompositionPlanner.parsePlanFromText(planText)
+    return capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(planText))
   }
 }
 

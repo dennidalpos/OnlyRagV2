@@ -1,5 +1,6 @@
 import type { AgentPlan } from '../../hooks/usePlanApproval'
 import { GoalDecompositionPlanner } from '../../../electron/core/domain/agent/planAndSolveGraph'
+import { capPlanMilestones } from '../../../electron/core/domain/agent/planMilestoneCapper'
 
 export interface PlanChecklistItem {
   id: string
@@ -23,7 +24,7 @@ export function parsePlanChecklist(plan: Pick<AgentPlan, 'planText' | 'milestone
 
   if (!plan?.planText || !plan.planText.trim()) return []
 
-  const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(plan.planText)
+  const parsedMilestones = capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(plan.planText))
   return parsedMilestones.map((m) => ({
     id: m.id,
     title: m.title,

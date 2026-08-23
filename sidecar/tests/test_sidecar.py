@@ -711,3 +711,38 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
+def test_list_stored_documents_includes_fallback_embedded_documents(monkeypatch):
+    """Documents indexed with fallback embeddings must stay visible and be flagged as such."""
+    import sidecar.services.search_service as search_service
+
+    stored_rows = [
+        {"id": "doc-1", "filename": "regular.pdf", "status": "indexed", "num_chunks": 4},
+        {"id": "doc-2", "filename": "degraded.pdf", "status": "indexed_fallback", "num_chunks": 2},
+        {"id": "doc-3", "filename": "broken.pdf", "status": "failed", "num_chunks": 0},
+    ]
+
+    class FakeTable:
+        def to_arrow(self):
+            raise RuntimeError("arrow unavailable")
+
+        def to_pandas(self):
+            class FakeFrame:
+                def to_dict(self, orient="records"):
+                    return stored_rows
+            return FakeFrame()
+
+    class FakeDb:
+        def open_table(self, name):
+            return FakeTable()
+
+    monkeypatch.setattr(search_service, "get_existing_tables", lambda: [search_service.DOCS_TABLE_NAME])
+    monkeypatch.setattr(search_service, "lance_db", FakeDb())
+
+    listed = search_service.list_stored_documents()
+    by_id = {d["id"]: d for d in listed}
+
+    assert set(by_id) == {"doc-1", "doc-2"}, "failed documents must stay hidden, fallback ones must not"
+    assert by_id["doc-1"]["status"] == "indexed"
+    assert by_id["doc-1"]["used_fallback_embeddings"] is False
+    assert by_id["doc-2"]["status"] == "indexed_fallback"
+    assert by_id["doc-2"]["used_fallback_embeddings"] is True

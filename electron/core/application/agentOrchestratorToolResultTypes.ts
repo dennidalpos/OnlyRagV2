@@ -27,6 +27,9 @@ export interface ToolResultMutableFlags {
 export interface ToolResultProcessingContext {
   toolRes: ToolExecutionResult
   parsedTool: AgentToolCall
+  /** Wall-clock ms captured immediately before the tool ran; used to attribute files a
+   *  shell command touched (see commandTouchedFilesScanner.ts). */
+  toolStartedAtMs: number
   stepCount: number
   sessionId: string
   settings: AppSettings

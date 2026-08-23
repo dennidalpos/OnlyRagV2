@@ -165,10 +165,16 @@ def list_stored_documents() -> List[Dict[str, Any]]:
         except Exception:
             df = tbl.to_pandas()
             records = df.to_dict(orient="records")
+        # Documents ingested with fallback embeddings carry status "indexed_fallback"
+        # (see ingest_service.doc_status). Both statuses are indexed and searchable, so both
+        # are listed; only the real status distinguishes them, and the renderer already keys
+        # its degraded-quality badge off it. Filtering on "indexed" alone silently hid every
+        # fallback-embedded document from every module in the app.
+        listable_statuses = {"indexed", "indexed_fallback"}
         clean_records: List[Dict[str, Any]] = []
         for r in records:
             status_val = str(r.get("status", "indexed")).lower()
-            if status_val == "indexed":
+            if status_val in listable_statuses:
                 clean_records.append({
                     "id": str(r.get("id", "")),
                     "filename": str(r.get("filename", "")),
@@ -177,9 +183,10 @@ def list_stored_documents() -> List[Dict[str, Any]]:
                     "num_pages": int(r.get("num_pages", 1)),
                     "num_chunks": int(r.get("num_chunks", 0)),
                     "extracted_markdown": str(r.get("extracted_markdown", "")),
-                    "status": "indexed",
+                    "status": status_val,
                     "ingested_at": str(r.get("ingested_at", "")),
-                    "file_type": str(r.get("file_type", "text"))
+                    "file_type": str(r.get("file_type", "text")),
+                    "used_fallback_embeddings": status_val == "indexed_fallback"
                 })
         return clean_records
     except Exception as e:

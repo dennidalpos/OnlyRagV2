@@ -62,7 +62,7 @@ OnlyRag V2 implementa due livelli di interfaccia:
 ---
 
 ### 1.4. Gestione Documenti Memorizzati
-* **`GET /documents`**: Lista tutti i documenti indicizzati in LanceDB con metadati completi.
+* **`GET /documents`**: Lista tutti i documenti indicizzati in LanceDB con metadati completi. Include sia `status: "indexed"` sia `status: "indexed_fallback"` (entrambi indicizzati e ricercabili) e restituisce `used_fallback_embeddings` per ciascun record, cosi' il renderer puo' segnalare la qualita' degradata degli embedding. Gli stati diversi da questi due (es. ingest fallito) restano esclusi.
 * **`DELETE /documents/{doc_id}`**: Elimina atomicamente il documento e tutti i relativi chunk vettoriali.
 * **`PUT /documents/{doc_id}`**: Aggiorna il contenuto Markdown e re-indicizza i chunk vettoriali. Corpo: `{ "markdown_content": "..." }`.
 * **`POST /documents/{doc_id}/translate-inplace`**: Traduce il documento **in-place** su file system o verso una cartella target (`target_dir`), con salvataggio compresso ad alta efficienza (`deflate=True, garbage=4, clean=True`), separando nettamente il flusso di esportazione file su disco dalla base di conoscenza RAG (il campo `extracted_markdown` e i vettori LanceDB del documento originale rimangono inalterati nella lingua sorgente originale).

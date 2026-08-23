@@ -6,7 +6,7 @@ import {
   formatDiagnosticPrompt,
 } from '../domain/agent/diagnosticOutputReducer'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { runCircuitBreaker, recordMutationSideEffects, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
+import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
@@ -95,6 +95,9 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   if (isMutating && !isToolFailure) {
     await recordMutationSideEffects(ctx, targetParam)
+  }
+  if (!isToolFailure) {
+    recordCommandTouchedFiles(ctx)
   }
   trackVerification(ctx, isToolFailure)
 

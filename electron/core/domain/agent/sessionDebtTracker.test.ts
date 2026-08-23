@@ -28,6 +28,31 @@ describe('SessionDebtTracker Domain Unit Tests', () => {
     expect(promptBlock).toContain('OAuth refresh token expiration bug')
   })
 
+  it('should emit no prompt block when only modified files are known, avoiding a bare heading', () => {
+    const tracker = new SessionDebtTracker({ modifiedFiles: ['src/App.tsx'] })
+    expect(tracker.compilePromptBlock()).toBe('')
+  })
+
+  it('should emit no prompt block for a tracker parsed off disk that lists only files', () => {
+    const markdown = [
+      '# SESSION TRACKER & UNRESOLVED DEBT REPORT',
+      '*Last Updated:* 2026-08-23T00:50:13.110Z',
+      '',
+      '## 1. Functional Changes & Completed Tasks',
+      '- No tasks completed yet.',
+      '',
+      '## 2. Modified & Created Files',
+      '- `package.json`',
+      '',
+      '## 3. Unresolved Issues, Errors & Known Debt',
+      '- None reported (all verified).',
+    ].join('\n')
+
+    const tracker = SessionDebtTracker.parseTrackerMarkdown(markdown)
+    expect(tracker.getData().modifiedFiles).toEqual(['package.json'])
+    expect(tracker.compilePromptBlock()).toBe('')
+  })
+
   it('should parse markdown report back into structured object', () => {
     const rawMarkdown = `# SESSION TRACKER & UNRESOLVED DEBT REPORT
 *Last Updated:* 2026-08-16T01:00:00.000Z

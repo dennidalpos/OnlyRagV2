@@ -96,6 +96,18 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
+  // Run context first, before anything else can fail. Without it a log line cannot be
+  // attributed to a run: dev and the installed package resolve app.getPath('userData') to the
+  // SAME folder (%APPDATA%/onlyrag-v2 — app.getName() reads `name`, not `productName`), so the
+  // two write into one app.log with nothing distinguishing them. Investigating "app.log is
+  // silent during my test sessions" then means guessing which build produced which line, and
+  // the only accidental tell today is whether the sidecar path points at the repo or at
+  // resources/. isPackaged and the PID make every future session attributable on sight.
+  logger.log(
+    'INFO',
+    'MainProcess',
+    `Run context: ${app.isPackaged ? 'PACKAGED' : 'DEV'} | version ${app.getVersion()} | pid ${process.pid} | exec ${process.execPath} | userData ${app.getPath('userData')}`
+  )
   logger.log('INFO', 'MainProcess', 'Electron App Ready. Creating window & initializing Sidecar...')
   
   // Clean startup residuals

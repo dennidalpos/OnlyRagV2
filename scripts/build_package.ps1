@@ -88,15 +88,30 @@ try {
 
     # Firma Authenticode: electron-builder logga l'invocazione di signtool anche quando nessun
     # certificato e' configurato, quindi l'unico controllo affidabile e' lo stato dell'artifact.
-    $signature = Get-AuthenticodeSignature -FilePath $nsisInstaller.FullName
-    $isSigned = $signature.Status -eq 'Valid'
-    $signatureLabel = if ($isSigned) { "firmato ($($signature.SignerCertificate.Subject))" } else { "NON firmato ($($signature.Status))" }
-
-    if (-not $isSigned) {
+    # Get-AuthenticodeSignature vive in Microsoft.PowerShell.Security, e in una shell non
+    # interattiva quel modulo non sempre si carica: lo step 4/4 moriva con "comando trovato nel
+    # modulo ... ma impossibile caricare il modulo" e buttava via un pacchetto costruito
+    # correttamente. Uno stato di firma NON DETERMINABILE non e' un pacchetto rotto, quindi
+    # blocca la build solo quando la firma e' stata richiesta esplicitamente.
+    $signature = $null
+    try {
+        $signature = Get-AuthenticodeSignature -FilePath $nsisInstaller.FullName -ErrorAction Stop
+    } catch {
         if ($RequireSignature) {
-            throw "[ERRORE] Installer non firmato (stato: $($signature.Status)). Imposta CSC_LINK e CSC_KEY_PASSWORD con il certificato di code signing e ripeti la build."
+            throw "[ERRORE] Impossibile verificare la firma dell'installer: $($_.Exception.Message)"
         }
-        Write-Host "[WARN] Installer NON firmato (stato: $($signature.Status)): all'avvio Windows SmartScreen mostrera' l'avviso 'Editore sconosciuto'. Per una build di distribuzione imposta CSC_LINK/CSC_KEY_PASSWORD ed esegui lo script con -RequireSignature." -ForegroundColor Yellow
+        Write-Host "[WARN] Stato della firma non verificabile in questo contesto ($($_.Exception.Message)). Il pacchetto e' stato prodotto comunque." -ForegroundColor Yellow
+    }
+
+    $signatureStatus = if ($signature) { $signature.Status } else { 'NonVerificabile' }
+    $isSigned = $signatureStatus -eq 'Valid'
+    $signatureLabel = if ($isSigned) { "firmato ($($signature.SignerCertificate.Subject))" } else { "NON firmato ($signatureStatus)" }
+
+    if (-not $isSigned -and $signature) {
+        if ($RequireSignature) {
+            throw "[ERRORE] Installer non firmato (stato: $signatureStatus). Imposta CSC_LINK e CSC_KEY_PASSWORD con il certificato di code signing e ripeti la build."
+        }
+        Write-Host "[WARN] Installer NON firmato (stato: $signatureStatus): all'avvio Windows SmartScreen mostrera' l'avviso 'Editore sconosciuto'. Per una build di distribuzione imposta CSC_LINK/CSC_KEY_PASSWORD ed esegui lo script con -RequireSignature." -ForegroundColor Yellow
     }
 
     if ($Fast) {

@@ -3,7 +3,7 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
-import { resolveLoopEscapeAction } from '../domain/agent/loopEscapePolicy'
+import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domain/agent/loopEscapePolicy'
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { promoteMilestonesProvenBy } from './agentOrchestratorCircuitBreakerAndVerification'
@@ -209,8 +209,48 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   const loopCheck = ctx.loopDetector.recordAndCheck(parsedTool)
   if (!loopCheck.isLooping || !loopCheck.suggestedIntervention) return null
 
-  ctx.state.stagnationStreak++
   const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
+
+  // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable
+  // exists. Escalating it would abandon a reachable milestone as FAILED (see
+  // resolveRedundantSuccessAction for the audit case). The exemption is bounded — past its
+  // advisory budget the repeat rejoins the stagnation ladder so the session still terminates.
+  ctx.state.redundantSuccessStreak = loopCheck.repeatOutcome === 'succeeding' ? ctx.state.redundantSuccessStreak + 1 : 0
+  const isExemptRedundantSuccess =
+    loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
+
+  if (isExemptRedundantSuccess) {
+    const redundancyIntervention = `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nYou are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}' again. Advance to the next unfinished step instead.`
+
+    ctx.episodicCompactor.recordStep(
+      {
+        step: ctx.stepCount,
+        tool: parsedTool.tool,
+        target: loopTarget,
+        status: 'BLOCKED',
+        summary: `Redundant repeat of a SUCCESSFUL action (${loopCheck.consecutiveDuplicateCount} repeats, Redundancy: ${ctx.state.redundantSuccessStreak})`,
+      },
+      redundancyIntervention
+    )
+    ctx.emitLog(
+      'info',
+      `♻️ Azione ridondante: ${parsedTool.tool} già riuscito, ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
+      'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.'
+    )
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logLoopIntervention(
+        ctx.sessionId,
+        ctx.stepCount,
+        parsedTool.tool,
+        loopTarget,
+        loopCheck.consecutiveDuplicateCount,
+        redundancyIntervention
+      )
+    }
+    return { outcome: 'continue' }
+  }
+
+  ctx.state.stagnationStreak++
   const isCommand = parsedTool.tool === 'run_command'
   const escapeDirective = isCommand
     ? `\n[CRITICAL ESCAPE STRATEGY]: If a scaffolding or build command failed or is blocked, DO NOT repeat it. Instead, switch IMMEDIATELY to constructing or editing the required files directly with write_file (e.g. write package.json, vite.config.ts, src/App.tsx), or run a read/verification tool.`

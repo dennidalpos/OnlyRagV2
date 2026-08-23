@@ -72,6 +72,11 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   const targetParam = extractTargetParam(parsedTool)
   const distilledOutput = distillOutput(toolRes, isToolFailure)
 
+  // Closes the loop detector's feedback path: it records INTENT before the tool runs, and only
+  // this line tells it what actually happened. Without it every repeat looks like a failing
+  // one, and a command that keeps succeeding gets its milestone abandoned as FAILED.
+  ctx.loopDetector.recordOutcome(parsedTool, !isToolFailure)
+
   emitChangeMetrics(ctx)
 
   const isMutating = ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool)

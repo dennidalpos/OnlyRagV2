@@ -17,6 +17,8 @@ import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
 import { MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
 import { compilePlanFromText } from '../domain/agent/planCompilation'
+import { resolveVerificationCommands } from '../domain/agent/projectVerificationResolver'
+import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
 import { logger } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AppSettings } from '../../../src/types'
@@ -39,7 +41,7 @@ const PLAN_SYSTEM_PROMPT =
   '   - Verification & Quality (e.g. `npm run build`, `tsc --noEmit`, test validation)\n' +
   '   - Final Review & Completion (invoke finish)\n' +
   '3. FALSIFIABILITY (EVERY ITEM MUST BE CHECKABLE): each microtask MUST name either an exact relative file path it produces or a command that verifies it. An item nobody could prove done or not done is NOT a step — it is an acceptance criterion of another step. Never emit "Design the two-column tablet layout", "Ensure buttons are 44x44 px" or "Fix every overflow issue" as items of their own: attach them to the microtask that writes the file they constrain (e.g. "- [ ] m-4: Create `src/components/Sidebar.tsx`; collapsible on tablet, 44x44 px tap targets, no horizontal overflow"). Any item left unfalsifiable is folded into its neighbour automatically.\n' +
-  '4. FORMAT: Output strictly as a checklist in "- [ ] m-N: <Action & exact relative file path>" format. One item per line.\n' +
+  '4. FORMAT: Output strictly as a checklist in "- [ ] m-N: <Action & exact relative file path>" format. One item per line. A microtask proven by a command appends the directive "— verify: `<command>`" at the END of its line, and the command MUST be copied verbatim from the VERIFICATION COMMANDS block below. Example: "- [ ] m-7: Verifica di compilazione dell\'intero progetto — verify: `npm run build`".\n' +
   '5. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, etc.).\n' +
   'Output ONLY the markdown checklist lines. No conversational preambles, notes or explanations outside the checklist.'
 
@@ -65,11 +67,52 @@ export interface PlanGenerationRequest {
    * instead of restarting from zero (see C7 / hasPendingUnconsolidatedMilestones).
    */
   pendingResidueMilestones?: PlanMilestone[]
+  /**
+   * The workspace the plan will run in. Used to resolve the project's real verification
+   * commands, so the plan declares proofs the Definition of Done gate can actually execute.
+   */
+  workspacePath?: string | null
 }
 
 export interface PlanGenerationResult {
   planText: string
   milestones: PlanMilestone[]
+}
+
+/**
+ * Tells the planner which verification commands actually exist, instead of letting it invent
+ * them. In session o3tx the model wrote three verification milestones of its own ("Run
+ * `npm run build`", "Run `tsc --noEmit`") for a project that declared neither; none of them
+ * could ever have run. The commands here are resolved from the workspace's own manifest by
+ * projectVerificationResolver — the same resolver the Definition of Done gate executes at
+ * finish — so a milestone's declared proof and the gate's actual check are the same string.
+ *
+ * An empty workspace legitimately offers none. The honest instruction then is that no command
+ * exists YET, not a licence to make one up: file-producing microtasks are proven by the paths
+ * they write (which the deliverable probe already checks), and only a script the plan itself
+ * declares in package.json may be cited later.
+ */
+function buildVerificationCommandsBlock(workspacePath?: string | null): string {
+  const commands = resolveVerificationCommands(readWorkspaceManifest(workspacePath))
+
+  if (commands.length === 0) {
+    return (
+      '\n\nVERIFICATION COMMANDS AVAILABLE IN THIS PROJECT: NONE.\n' +
+      'This workspace declares no runnable verification command yet. You are FORBIDDEN from inventing one: ' +
+      '`npm run build`, `npm test` and `tsc --noEmit` DO NOT EXIST here until a microtask creates them.\n' +
+      '- Every microtask that produces files is proven by the exact relative paths it writes — name them, and append NO "verify:" directive.\n' +
+      '- Only if an earlier microtask of THIS plan explicitly declares a script in `package.json` may a later microtask cite it as "— verify: `npm run <that exact script>`".'
+    )
+  }
+
+  const list = commands.map((c) => `- \`${c.command}\` (${c.kind}, from ${c.source})`).join('\n')
+  return (
+    '\n\nVERIFICATION COMMANDS AVAILABLE IN THIS PROJECT (resolved from its manifest — this is the COMPLETE list):\n' +
+    `${list}\n` +
+    'Any microtask proven by a command MUST cite one of these VERBATIM in its "— verify: `<command>`" directive. ' +
+    'You are FORBIDDEN from inventing, renaming or adapting a command that is not listed above. ' +
+    'Microtasks that only produce files are proven by the exact relative paths they write and carry no "verify:" directive.'
+  )
 }
 
 function buildResidueReconciliationBlock(residue?: PlanMilestone[]): string {
@@ -94,8 +137,9 @@ export class PlanGenerationAppService {
       enableSystemRamOffloading: req.settings.enableSystemRamOffloading,
     })
     const residueBlock = buildResidueReconciliationBlock(req.pendingResidueMilestones)
+    const verificationBlock = buildVerificationCommandsBlock(req.workspacePath)
     const fullPrompt =
-      `${PLAN_SYSTEM_PROMPT}\n\nGenera un piano d'azione sintetico per il seguente task:\n\n${req.prompt}${residueBlock}`
+      `${PLAN_SYSTEM_PROMPT}${verificationBlock}\n\nGenera un piano d'azione sintetico per il seguente task:\n\n${req.prompt}${residueBlock}`
 
     let accumulated = ''
     try {

@@ -5,6 +5,7 @@ import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
+import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
@@ -43,6 +44,9 @@ export interface ToolResultProcessingContext {
   goalPlanner: GoalDecompositionPlanner
   executionGuard: TransactionalExecutionGuard
   circuitBreaker: StagnationCircuitBreaker
+  /** Same instance the response interpreter checks against: this step feeds the real
+   *  execution outcome back into it. */
+  loopDetector: AgentActionLoopDetector
   isSessionActive: () => boolean
   targetWindow: BrowserWindow | null
   emitLog: EmitLog

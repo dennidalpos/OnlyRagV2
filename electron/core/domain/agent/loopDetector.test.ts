@@ -201,4 +201,69 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     const res2 = detector.recordAndCheck(call)
     expect(res2.isLooping).toBe(false)
   })
+  describe('repeat outcome classification', () => {
+    const installCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm install' } }
+
+    /** Mirrors the orchestrator: check before the tool runs, report the outcome after it ran. */
+    const runStep = (call: AgentToolCall, succeeded: boolean) => {
+      const res = detector.recordAndCheck(call)
+      if (!res.isLooping) detector.recordOutcome(call, succeeded)
+      return res
+    }
+
+    it('classifies a repeat as failing when the earlier executions failed', () => {
+      runStep(installCall, false)
+      runStep(installCall, false)
+      const blocked = runStep(installCall, false)
+
+      expect(blocked.isLooping).toBe(true)
+      expect(blocked.repeatOutcome).toBe('failing')
+      expect(blocked.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
+    })
+
+    it('classifies a repeat as succeeding when every earlier execution succeeded', () => {
+      runStep(installCall, true)
+      runStep(installCall, true)
+      const blocked = runStep(installCall, true)
+
+      expect(blocked.isLooping).toBe(true)
+      expect(blocked.repeatOutcome).toBe('succeeding')
+      expect(blocked.suggestedIntervention).toContain('[REDUNDANT ACTION: "run_command" ALREADY SUCCEEDED 2 TIME(S)]')
+      // The failing-loop advice would send the model hunting for an error that never happened.
+      expect(blocked.suggestedIntervention).not.toContain('investigate the error stack trace')
+    })
+
+    it('treats a command that succeeded and then broke as a failing repeat', () => {
+      runStep(installCall, true)
+      runStep(installCall, false)
+      const blocked = runStep(installCall, false)
+
+      expect(blocked.repeatOutcome).toBe('failing')
+      expect(blocked.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
+    })
+
+    it('falls back to the failing-loop advice while no outcome has been reported yet', () => {
+      detector.recordAndCheck(installCall)
+      detector.recordAndCheck(installCall)
+      const blocked = detector.recordAndCheck(installCall)
+
+      expect(blocked.isLooping).toBe(true)
+      expect(blocked.repeatOutcome).toBe('unknown')
+      expect(blocked.suggestedIntervention).toContain('[CRITICAL LOOP INTERVENTION')
+    })
+
+    it('keeps outcome memory across resetTarget so a later repeat is still read as successful', () => {
+      detector.recordOutcome(installCall, true)
+      detector.resetTarget('npm install')
+
+      expect(detector.classifyRepeatOutcome(installCall)).toBe('succeeding')
+    })
+
+    it('drops outcome memory on a full reset', () => {
+      detector.recordOutcome(installCall, true)
+      detector.reset()
+
+      expect(detector.classifyRepeatOutcome(installCall)).toBe('unknown')
+    })
+  })
 })

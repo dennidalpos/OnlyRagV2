@@ -155,6 +155,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
   }
 
   ctx.state.stagnationStreak = 0
+  ctx.state.redundantSuccessStreak = 0
 
   ctx.emitLog('tool_call', `Step ${ctx.stepCount} Tool Call [${parsedTool.tool}]:`, JSON.stringify(parsedTool.parameters, null, 2))
   if (ctx.settings.enableCodingAgentDebugLog) {

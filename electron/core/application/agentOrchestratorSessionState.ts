@@ -79,6 +79,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const responseInterpreterState: SessionState['responseInterpreterState'] = {
     noToolStreak: 0,
     stagnationStreak: 0,
+    redundantSuccessStreak: 0,
     verificationFixCycles: 0,
   }
   const surfacedDodReasons = new Set<string>()

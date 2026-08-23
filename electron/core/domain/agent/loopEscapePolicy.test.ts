@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   LOOP_ESCAPE_ABORT_STREAK,
+  REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS,
   resolveLoopEscapeAction,
+  resolveRedundantSuccessAction,
   type LoopEscapeContext,
 } from './loopEscapePolicy'
 
@@ -35,5 +37,17 @@ describe('resolveLoopEscapeAction', () => {
 
   it('never aborts a step-capped session, which ends on its own step budget', () => {
     expect(resolveLoopEscapeAction(LOOP_ESCAPE_ABORT_STREAK, CAPPED)).toBe('force_milestone_advance')
+  })
+})
+
+describe('resolveRedundantSuccessAction', () => {
+  it('answers a repeat of a working command with advice, never with escalation', () => {
+    for (let streak = 1; streak <= REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS; streak++) {
+      expect(resolveRedundantSuccessAction(streak)).toBe('advise')
+    }
+  })
+
+  it('hands the repeat back to the stagnation ladder once the advisory budget is spent', () => {
+    expect(resolveRedundantSuccessAction(REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS + 1)).toBe('treat_as_stagnation')
   })
 })

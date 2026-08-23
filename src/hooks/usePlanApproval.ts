@@ -172,7 +172,7 @@ export function usePlanApproval({
 
         if (window.electronAPI?.agentPlanGenerate && settings) {
           try {
-            const genRes = await window.electronAPI.agentPlanGenerate(prompt, modelToUse, settings, pendingResidueMilestones)
+            const genRes = await window.electronAPI.agentPlanGenerate(prompt, modelToUse, settings, pendingResidueMilestones, workspacePath)
             accumulatedPlan = genRes?.planText?.trim() || ''
           } catch (ipcErr: any) {
             logger.warn('usePlanApproval', `agentPlanGenerate IPC failed: ${ipcErr?.message}`)
@@ -234,7 +234,7 @@ export function usePlanApproval({
         return fallbackPlan
       }
     },
-    [settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans]
+    [settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans, workspacePath]
   )
 
   const handleApprovePlan = useCallback(async () => {

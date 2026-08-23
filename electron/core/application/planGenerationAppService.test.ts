@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 import { planGenerationAppService } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
 import type { AppSettings } from '../../../src/types'
@@ -109,5 +112,58 @@ describe('PlanGenerationAppService', () => {
     const milestones = planGenerationAppService.parsePlanText('1. First step\n2. Second step\n3. Third step')
     expect(milestones).toHaveLength(3)
     expect(milestones[0].title).toBe('First step')
+  })
+  describe('project-resolved verification commands', () => {
+    let workspacePath: string
+
+    beforeEach(() => {
+      workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-plan-verify-'))
+      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+    })
+
+    afterEach(() => {
+      try {
+        fs.rmSync(workspacePath, { recursive: true, force: true })
+      } catch {}
+    })
+
+    const capturedPrompt = () => vi.mocked(ollamaAppService.generateStream).mock.calls[0][1] as string
+
+    it('offers the planner only the commands the workspace manifest actually declares', async () => {
+      fs.writeFileSync(
+        path.join(workspacePath, 'package.json'),
+        JSON.stringify({ scripts: { build: 'vite build', dev: 'vite', test: 'vitest run' } })
+      )
+
+      await planGenerationAppService.generatePlanText({ prompt: 'Add a dashboard', settings, workspacePath })
+
+      const prompt = capturedPrompt()
+      expect(prompt).toContain('`npm run build`')
+      expect(prompt).toContain('`npm run test`')
+      // `dev` never exits, so proposing it as a proof would hang the verification forever.
+      expect(prompt).not.toContain('`npm run dev`')
+      expect(prompt).toContain('FORBIDDEN from inventing')
+    })
+
+    it('tells the planner no command exists rather than letting it invent one', async () => {
+      await planGenerationAppService.generatePlanText({ prompt: 'Scaffold a new app', settings, workspacePath })
+
+      const prompt = capturedPrompt()
+      expect(prompt).toContain('VERIFICATION COMMANDS AVAILABLE IN THIS PROJECT: NONE.')
+      expect(prompt).toContain('DO NOT EXIST here until a microtask creates them')
+    })
+
+    it('keeps the verification command the planner declares on a checklist line', async () => {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
+      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+        onChunk('- [ ] m-1: Create `src/App.tsx` shell\n- [ ] m-2: Build pulita — verify: `npm run build`\n')
+        return { success: true }
+      })
+
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Add a page', settings, workspacePath })
+
+      expect(result.milestones[1].title).toBe('Build pulita')
+      expect(result.milestones[1].verificationCommand).toBe('npm run build')
+    })
   })
 })

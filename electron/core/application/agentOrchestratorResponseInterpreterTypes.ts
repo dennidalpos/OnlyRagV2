@@ -27,6 +27,12 @@ export interface ResponseInterpreterState {
   noToolStreak: number
   stagnationStreak: number
   /**
+   * Consecutive loop blocks whose repeated action had actually SUCCEEDED before. Counted apart
+   * from stagnationStreak precisely so redundant-but-working calls never abandon a milestone
+   * as FAILED; bounded by REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS. See loopEscapePolicy.ts.
+   */
+  redundantSuccessStreak: number
+  /**
    * Rounds of "verification failed, fix it and try again" already spent on this session.
    * Bounded by MAX_VERIFICATION_FIX_CYCLES: a model that cannot fix the failure would otherwise
    * spend the whole step budget rediscovering it. See verificationGatePolicy.ts.

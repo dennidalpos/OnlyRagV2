@@ -34,6 +34,29 @@ export interface LoopEscapeContext {
  * `stagnationStreak` is the shared "how stuck is the model right now" counter, reset to 0
  * by any successfully executed tool — so a streak of N means N advisories in a row failed.
  */
+export type RedundantSuccessAction = 'advise' | 'treat_as_stagnation'
+
+/**
+ * Advisory turns granted to a model that keeps re-issuing a command which SUCCEEDS every time.
+ * Kept low: the advice is cheap, but the model still has to move on eventually.
+ */
+export const REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS = 3
+
+/**
+ * Repeating a successful command is not stagnation — the deliverable exists and the milestone
+ * is achievable, so escalating it would mark work FAILED that actually happened (audit session
+ * o3tx: `npm install` succeeded at steps 12 and 13, yet milestone m-12 was abandoned as FAILED
+ * on the third attempt and reported as incomplete).
+ *
+ * The exemption is bounded rather than unconditional: it suppresses the escalation ladder, and
+ * the ladder is the only thing that terminates a session which never breaks out. After
+ * REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS advisories the repeat rejoins the normal stagnation path,
+ * so the abort guarantee still holds — it is deferred, never removed.
+ */
+export function resolveRedundantSuccessAction(redundantSuccessStreak: number): RedundantSuccessAction {
+  return redundantSuccessStreak > REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS ? 'treat_as_stagnation' : 'advise'
+}
+
 export function resolveLoopEscapeAction(stagnationStreak: number, ctx: LoopEscapeContext): LoopEscapeAction {
   if (ctx.isUnlimitedSteps && stagnationStreak >= LOOP_ESCAPE_ABORT_STREAK) return 'abort'
 

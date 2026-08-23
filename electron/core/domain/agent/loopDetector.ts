@@ -1,10 +1,23 @@
 import crypto from 'node:crypto'
 import type { AgentToolCall } from './agentTypes'
 
+/**
+ * How the previous invocations of a repeated action actually ended.
+ * `unknown` covers actions the executor never reported an outcome for (the very first
+ * repeat inside a single turn, or non-executing pseudo-tools).
+ */
+export type RepeatOutcomeKind = 'succeeding' | 'failing' | 'unknown'
+
 export interface LoopCheckResult {
   isLooping: boolean
   consecutiveDuplicateCount: number
   suggestedIntervention?: string
+  /**
+   * Only meaningful when `isLooping` is true. Repeating a command that KEEPS SUCCEEDING is a
+   * different failure from repeating one that keeps failing: the work is done, the model just
+   * isn't moving on. The caller must not punish it as stagnation — see handleLoopDetection.
+   */
+  repeatOutcome?: RepeatOutcomeKind
 }
 
 export interface CycleDetectionResult {
@@ -18,6 +31,14 @@ interface TargetActionRecord {
   target?: string
 }
 
+interface SignatureOutcomeRecord {
+  successes: number
+  failures: number
+  /** The outcome of the most recent execution: a command that worked twice and then broke
+   *  is a failing repeat, not a redundant one. */
+  lastSucceeded: boolean
+}
+
 /**
  * Fingerprints agent tool invocations and tracks target-level semantic patterns
  * to detect and prevent infinite loops, oscillation traps, and redundant read loops.
@@ -26,6 +47,8 @@ export class AgentActionLoopDetector {
   private signatureHistory: string[] = []
   private targetHistory: TargetActionRecord[] = []
   private actionSequence: string[] = []
+  /** Execution outcomes keyed by fingerprint, fed back by the orchestrator after each tool runs. */
+  private outcomeBySignature = new Map<string, SignatureOutcomeRecord>()
   private readonly maxRepeatsAllowed: number
   private readonly maxHistoryLength = 20
 
@@ -51,6 +74,29 @@ export class AgentActionLoopDetector {
       toolCall.parameters?.command ||
       toolCall.parameters?.url
     )
+  }
+
+  /**
+   * Feeds the real execution outcome of a previously recorded tool call back into the detector.
+   * Without this the detector only ever sees INTENT, so it cannot tell a model hammering a
+   * broken command from one re-running a command that works — the two need opposite responses.
+   * Called by the orchestrator once the tool has actually run.
+   */
+  public recordOutcome(toolCall: AgentToolCall, succeeded: boolean): void {
+    const signature = this.generateFingerprint(toolCall)
+    const previous = this.outcomeBySignature.get(signature)
+    this.outcomeBySignature.set(signature, {
+      successes: (previous?.successes || 0) + (succeeded ? 1 : 0),
+      failures: (previous?.failures || 0) + (succeeded ? 0 : 1),
+      lastSucceeded: succeeded,
+    })
+  }
+
+  /** Classifies a repeat by how its previous executions ended. */
+  public classifyRepeatOutcome(toolCall: AgentToolCall): RepeatOutcomeKind {
+    const record = this.outcomeBySignature.get(this.generateFingerprint(toolCall))
+    if (!record) return 'unknown'
+    return record.lastSucceeded ? 'succeeding' : 'failing'
   }
 
   /**
@@ -110,10 +156,22 @@ export class AgentActionLoopDetector {
     const duplicateCount = recentSignatures.filter((sig) => sig === signature).length
 
     if (duplicateCount > this.maxRepeatsAllowed) {
+      const repeatOutcome = this.classifyRepeatOutcome(toolCall)
+      const record = this.outcomeBySignature.get(signature)
+
+      // A repeat whose previous runs SUCCEEDED needs the opposite advice: there is no error to
+      // investigate and no alternative approach to find — the action already did its job and
+      // its effect is on disk. Telling such a model to "investigate the error stack trace"
+      // sends it looking for a failure that never happened.
+      const suggestedIntervention = repeatOutcome === 'succeeding'
+        ? `[REDUNDANT ACTION: "${toolCall.tool}" ALREADY SUCCEEDED ${record?.successes || 1} TIME(S)]\nYou have re-issued the exact same "${toolCall.tool}" call ${duplicateCount} times. Every previous execution SUCCEEDED — nothing is broken and there is no error to fix.\nIts effect is ALREADY applied${target ? ` to "${target}"` : ''}: re-running it changes nothing and wastes a step.\nDirectives:\n1. Treat this action as DONE and move to the NEXT unfinished step of your active milestone.\n2. If the milestone's deliverable is already in place, run its verification command via run_command, then mark it with update_plan.\n3. If every milestone is complete and verified, invoke the "finish" tool with your final report.`
+        : `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`
+
       return {
         isLooping: true,
         consecutiveDuplicateCount: duplicateCount,
-        suggestedIntervention: `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`,
+        suggestedIntervention,
+        repeatOutcome,
       }
     }
 
@@ -208,6 +266,9 @@ export class AgentActionLoopDetector {
    * Resets history for a specific target or all targets.
    * Call this after an intervention is issued so that the model's next attempt
    * to fix/modify the target file is evaluated cleanly against the new strategy.
+   *
+   * Outcome memory is deliberately kept: "this exact command succeeded" stays true after the
+   * plan moves on, and forgetting it would let the next repeat be misread as a failing loop.
    */
   public resetTarget(target?: string): void {
     this.signatureHistory = []
@@ -219,12 +280,13 @@ export class AgentActionLoopDetector {
   }
 
   /**
-   * Resets signature, target, and cycle history.
+   * Resets signature, target, cycle history and recorded outcomes.
    */
   public reset(): void {
     this.signatureHistory = []
     this.targetHistory = []
     this.actionSequence = []
+    this.outcomeBySignature.clear()
   }
 
   /**

@@ -178,16 +178,6 @@ export class GoalDecompositionPlanner {
     }
   }
 
-  public getPlanMarkdown(): string {
-    if (this.milestones.length === 0) return ''
-    const lines: string[] = ['# Execution Plan', '', '## Execution Checklist']
-    for (const m of this.milestones) {
-      const mark = m.status === 'verified' ? 'x' : ' '
-      lines.push(`- [${mark}] **Task ${m.id}: ${m.title}**`)
-    }
-    return lines.join('\n')
-  }
-
   public compileProgressPrompt(): string {
     if (this.milestones.length === 0) return ''
 
@@ -261,6 +251,50 @@ export class GoalDecompositionPlanner {
     // "Step 1: " are the model's own prose and are left intact.
     const stripped = title.replace(/^\s*(?:m[-_]?\d+|milestone\s*\d+)\s*[:.)-]\s+/i, '').trim()
     return stripped || title.trim()
+  }
+
+  /**
+   * Pulls a trailing verification directive off a checklist line.
+   *
+   * The JSON plan payload has always carried `verificationCommand`, but a plan drafted as a
+   * markdown checklist — which is what the planning prompt actually asks for, and what the
+   * user edits by hand — had no way to express one: the field only ever survived the JSON
+   * path, so `update_plan` fell back to trusting the model's own claim that a milestone was
+   * done. A checklist line can now say how it is proven, in the form the planning prompt
+   * mandates: `- [ ] m-4: Create \`src/App.tsx\` — verify: \`npm run build\``.
+   *
+   * Recognised endings (case-insensitive, `verifica`/`verification` accepted alongside
+   * `verify`, since the plan is written in the user's language):
+   *   `— verify: npm run build`   `(verify: npm run build)`   `[verifica: npm test]`
+   */
+  private static extractVerificationDirective(title: string): { title: string; verificationCommand?: string } {
+    if (!title) return { title }
+
+    // Emphasis markers are tolerated around the keyword because getPlanMarkdown renders the
+    // directive as "— *Verify with:* `cmd`", and that rendered plan is exactly what the user
+    // edits by hand and sends back through this parser: without this the field would be lost
+    // on every round trip through the UI.
+    const KEYWORD = '[*_]{0,2}\\s*(?:verify with|verified by|verificato con|verification|verifica|verify)\\s*[:=]\\s*[*_]{0,2}\\s*'
+    const PATTERNS = [
+      // Bracketed: "... (verify: npm run build)" / "... [verifica: npm test]"
+      new RegExp(`\\s*[([]\\s*${KEYWORD}([^)\\]]+?)\\s*[)\\]]\\s*$`, 'i'),
+      // Separated by a dash or sentence punctuation: "... — verify: npm run build"
+      new RegExp(`\\s*(?:[—–]|--|-|;|,|\\.)\\s*${KEYWORD}(.+?)\\s*$`, 'i'),
+    ]
+
+    for (const pattern of PATTERNS) {
+      const match = title.match(pattern)
+      if (!match) continue
+      // Backticks/quotes are markdown decoration around the command, never part of it.
+      const command = match[1].replace(/^[`'"*_]+|[`'"*_.]+$/g, '').trim()
+      const remainingTitle = title.slice(0, match.index).trim()
+      // A line that is ONLY a verification directive still has to keep a title, so an
+      // over-eager match that would empty it is discarded rather than applied.
+      if (!command || !remainingTitle) continue
+      return { title: remainingTitle, verificationCommand: command }
+    }
+
+    return { title }
   }
 
   public static parsePlanFromText(text: string): PlanMilestone[] {
@@ -370,19 +404,17 @@ export class GoalDecompositionPlanner {
     const milestones: PlanMilestone[] = []
     let counter = 1
     for (const block of blocks) {
-      if (block.children.length > 0) {
-        for (const child of block.children) {
-          milestones.push({
-            id: `m-${counter++}`,
-            title: this.stripRedundantIdPrefix(child.title),
-            status: child.status,
-          })
-        }
-      } else {
+      const entries = block.children.length > 0
+        ? block.children
+        : [{ title: block.topTitle, status: block.topStatus }]
+
+      for (const entry of entries) {
+        const { title, verificationCommand } = this.extractVerificationDirective(entry.title)
         milestones.push({
           id: `m-${counter++}`,
-          title: this.stripRedundantIdPrefix(block.topTitle),
-          status: block.topStatus,
+          title: this.stripRedundantIdPrefix(title),
+          status: entry.status,
+          verificationCommand,
         })
       }
     }

@@ -261,4 +261,62 @@ Here is the microtask execution plan:
     expect(compact.activeMicroTask).toBe('m-1: Create a new React project using Vite.')
     expect(compact.pendingMicroTasks[1]).toBe('m-2: Initialize Tailwind CSS in the project.')
   })
+  describe('verification directives on checklist lines', () => {
+    it('reads the verification command from a dash-separated directive and keeps it out of the title', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText(
+        '- [ ] m-1: Create `src/App.tsx` with the layout shell\n' +
+        '- [ ] m-2: Verifica di compilazione del progetto — verify: `npm run build`'
+      )
+
+      expect(plan).toHaveLength(2)
+      expect(plan[0].verificationCommand).toBeUndefined()
+      expect(plan[1].title).toBe('Verifica di compilazione del progetto')
+      expect(plan[1].verificationCommand).toBe('npm run build')
+    })
+
+    it('reads a bracketed directive and accepts the Italian keyword', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Suite di test verde (verifica: `npm test`)')
+
+      expect(plan[0].title).toBe('Suite di test verde')
+      expect(plan[0].verificationCommand).toBe('npm test')
+    })
+
+    it('reads the directive on flattened sub-bullets too', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText(
+        '- [ ] Quality gate\n' +
+        '  - [ ] Typecheck pulito — verify: `npx tsc --noEmit`\n' +
+        '  - [ ] Build pulita — verify: `npm run build`'
+      )
+
+      expect(plan.map((m) => m.verificationCommand)).toEqual(['npx tsc --noEmit', 'npm run build'])
+      expect(plan[0].title).toBe('Typecheck pulito')
+    })
+
+    it('leaves a line that merely mentions verification untouched', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Verify the layout renders on tablet widths')
+
+      expect(plan[0].title).toBe('Verify the layout renders on tablet widths')
+      expect(plan[0].verificationCommand).toBeUndefined()
+    })
+
+    it('keeps the title when the directive would consume the whole line', () => {
+      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] verify: `npm run build`')
+
+      expect(plan[0].title).toBe('verify: `npm run build`')
+      expect(plan[0].verificationCommand).toBeUndefined()
+    })
+    it('reads back the directive as compileProgressPrompt renders it, emphasis markers included', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([
+        { id: 'm-1', title: 'Build pulita', status: 'pending', verificationCommand: 'npm run build' },
+      ])
+
+      // The model sees this rendering every turn and mimics it when it revises the plan,
+      // so the parser has to accept its own output back.
+      const reparsed = GoalDecompositionPlanner.parsePlanFromText(planner.compileProgressPrompt())
+
+      expect(reparsed[0].title).toBe('Build pulita')
+      expect(reparsed[0].verificationCommand).toBe('npm run build')
+    })
+  })
 })

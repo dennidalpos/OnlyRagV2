@@ -380,6 +380,7 @@ export async function runAgentOrchestratorLoop(
       goalPlanner,
       executionGuard,
       circuitBreaker,
+      loopDetector,
       isSessionActive,
       targetWindow: session.targetWindow,
       emitLog,

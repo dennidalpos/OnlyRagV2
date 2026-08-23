@@ -559,7 +559,7 @@ export interface IElectronAPI {
   /** Enriches prompt with user's confirmed interview answers. */
   agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[]) => Promise<string>
   /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
-  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[]) => Promise<PlanGenerationResult>
+  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null) => Promise<PlanGenerationResult>
   /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
   agentPlanParseText?: (planText: string) => Promise<PlanMilestone[]>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */

@@ -68,8 +68,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-generate',
-    async (_, prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: any[]) => {
-      return planGenerationAppService.generatePlanText({ prompt, model, settings, pendingResidueMilestones })
+    async (_, prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: any[], workspacePath?: string | null) => {
+      return planGenerationAppService.generatePlanText({ prompt, model, settings, pendingResidueMilestones, workspacePath })
     }
   )
 

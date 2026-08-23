@@ -29,6 +29,26 @@ export default defineConfig({
     electron({
       main: {
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            // `rolldownOptions`, not `rollupOptions`: Vite 8 reads the former, and
+            // vite-plugin-electron resolves `build.rolldownOptions || build.rollupOptions`
+            // after merging its own defaults — which already set `rolldownOptions`. A
+            // `rollupOptions` block here would be silently dropped, and the only symptom
+            // would be a bundle of exactly the same size as before.
+            rolldownOptions: {
+              // depcheck resolves its language parsers at runtime with require('./parser/<name>'),
+              // built from a name list evaluated the moment the module is imported. Inlined into
+              // dist-electron/main.js that require becomes dist-electron/parser/coffee, which does
+              // not exist: the main process threw "App threw an error during load" before writing
+              // its second log line, so the installed app died at startup with nothing to go on.
+              // Left external it is required from node_modules, which electron-builder does package
+              // (node_modules/depcheck/dist/parser/*.js are inside app.asar), and its own relative
+              // requires resolve next to it.
+              external: ['depcheck'],
+            },
+          },
+        },
       },
       preload: {
         input: 'electron/preload.ts',

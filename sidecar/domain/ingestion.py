@@ -10,12 +10,14 @@ import pymupdf
 import pandas as pd
 from sidecar.config import (
     logger,
+    OLLAMA_BASE_URL,
     TABULAR_MAX_ROWS,
     EXCEL_MAX_ROWS_PER_SHEET,
     EXCEL_MAX_SHEETS
 )
 from sidecar.infrastructure.ocr import run_layout_ocr, run_vision_ocr
 from sidecar.domain.sanitizer import sanitize_extracted_text
+from sidecar.domain.vision_prompt import is_vision_ocr_requested, render_vision_prompt
 from sidecar.domain.router import (
     classify_file_type,
     DocumentCategory,
@@ -80,6 +82,37 @@ def extract_tables_from_page(page: pymupdf.Page) -> Tuple[List[str], List[Any]]:
 
 from sidecar.domain.llm_normalizer import normalize_page_markdown_with_llm
 
+def run_page_ocr(
+    image_bytes: bytes,
+    vision_model: Optional[str] = None,
+    vision_prompt: Optional[str] = None,
+    filename: str = "",
+    page_num: int = 1,
+    num_pages: int = 1,
+    active_page_content: str = ""
+) -> str:
+    """
+    Routes one page/image bitmap to the OCR engine the user selected.
+
+    A non-empty `vision_prompt` means the multimodal Vision LLM engine was chosen
+    (`AppSettings.ocrEngine === 'vision_model'`); RapidOCR then stays as the safety net, because a
+    vision call returns an empty string on a missing model, a timeout or a refusal, and a page must
+    never be silently dropped over that.
+    """
+    if is_vision_ocr_requested(vision_prompt):
+        prompt = render_vision_prompt(vision_prompt, filename, page_num, num_pages, active_page_content)
+        vision_text = run_vision_ocr(
+            image_bytes,
+            prompt,
+            ollama_url=OLLAMA_BASE_URL,
+            model=vision_model or "llama3.2-vision"
+        )
+        if vision_text.strip():
+            return vision_text
+        logger.warning(f"Vision OCR yielded no content on page {page_num}; falling back to RapidOCR.")
+
+    return run_layout_ocr(image_bytes)
+
 def prepare_pdf_page_work_item(
     doc: pymupdf.Document,
     page: pymupdf.Page,
@@ -91,6 +124,8 @@ def prepare_pdf_page_work_item(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
+    filename: str = "",
+    num_pages: int = 1,
     **kwargs: Any
 ) -> Dict[str, Any]:
     """
@@ -115,18 +150,33 @@ def prepare_pdf_page_work_item(
         "vision_prompt": vision_prompt,
         "normalize_with_llm": normalize_with_llm,
         "normalization_model": normalization_model,
+        "filename": filename,
+        "num_pages": num_pages,
     }
+
+def _ocr_work_item_image(work_item: Dict[str, Any], active_page_content: str = "") -> str:
+    """Unpacks a prepared work item onto `run_page_ocr`."""
+    return run_page_ocr(
+        work_item["ocr_image_bytes"],
+        vision_model=work_item.get("vision_model"),
+        vision_prompt=work_item.get("vision_prompt"),
+        filename=work_item.get("filename", ""),
+        page_num=work_item["page_num"],
+        num_pages=work_item.get("num_pages", 1),
+        active_page_content=active_page_content
+    )
 
 def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
     """
-    Renders a single prepared page: executes local RapidOCR on scanned/bitmap pages or formats native text/tables.
-    Applies optional LLM Markdown normalization only if explicitly requested.
+    Renders a single prepared page: runs the selected OCR engine (see `run_page_ocr`) on
+    scanned/bitmap pages, or formats native text/tables. Applies optional LLM Markdown
+    normalization only if explicitly requested.
     """
     page_num = work_item["page_num"]
     page_md_parts: List[str] = []
 
     if work_item["used_ocr"] and work_item.get("ocr_image_bytes"):
-        ocr_result = run_layout_ocr(work_item["ocr_image_bytes"])
+        ocr_result = _ocr_work_item_image(work_item, active_page_content=work_item.get("raw_text", ""))
         if ocr_result.strip():
             page_md_parts.append(ocr_result.strip())
         else:
@@ -140,7 +190,7 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
 
         # Fallback for scanned pages where native text layer was empty
         if not native_text and not work_item.get("md_tables") and work_item.get("ocr_image_bytes"):
-            ocr_result = run_layout_ocr(work_item["ocr_image_bytes"])
+            ocr_result = _ocr_work_item_image(work_item)
             if ocr_result.strip():
                 page_md_parts.append(ocr_result.strip())
 
@@ -165,13 +215,17 @@ def render_pdf_page_content(
     used_ocr: bool,
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
+    filename: str = "",
+    num_pages: int = 1,
     **kwargs: Any
 ) -> str:
     """Single-page convenience wrapper around prepare_pdf_page_work_item + render_prepared_pdf_page."""
     work_item = prepare_pdf_page_work_item(
         doc, page, page_num, raw_text, md_tables, used_ocr,
         vision_model=vision_model,
-        vision_prompt=vision_prompt
+        vision_prompt=vision_prompt,
+        filename=filename,
+        num_pages=num_pages
     )
     _, page_content = render_prepared_pdf_page(work_item)
     return page_content
@@ -182,7 +236,8 @@ def extract_pdf_document(
     vision_model: Optional[str] = None,
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
-    normalization_model: Optional[str] = None
+    normalization_model: Optional[str] = None,
+    filename: str = ""
 ) -> List[Tuple[int, str]]:
     """
     Extracts markdown per page preserving layout, native tables, and high-fidelity OCR.
@@ -219,7 +274,9 @@ def extract_pdf_document(
             vision_model=vision_model,
             vision_prompt=vision_prompt,
             normalize_with_llm=normalize_with_llm,
-            normalization_model=normalization_model
+            normalization_model=normalization_model,
+            filename=filename,
+            num_pages=num_pages
         ))
 
     with ThreadPoolExecutor(max_workers=min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))) as executor:
@@ -344,7 +401,8 @@ def extract_document_markdown(
                 vision_model=vision_model,
                 vision_prompt=vision_prompt,
                 normalize_with_llm=normalize_with_llm,
-                normalization_model=normalization_model
+                normalization_model=normalization_model,
+                filename=filename
             )
         finally:
             pdf_doc.close()
@@ -356,7 +414,12 @@ def extract_document_markdown(
         if file_path and os.path.exists(file_path):
             with open(file_path, "rb") as f:
                 img_bytes = f.read()
-        ocr_text = run_layout_ocr(img_bytes)
+        ocr_text = run_page_ocr(
+            img_bytes,
+            vision_model=vision_model,
+            vision_prompt=vision_prompt,
+            filename=filename
+        )
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if normalize_with_llm and sanitized_ocr:
             norm_model = normalization_model or "llama3.2"
@@ -424,7 +487,12 @@ def extract_document_markdown(
                     for img_name in image_names:
                         img_data = z.read(img_name)
                         if len(img_data) >= 1500:  # Skip tiny icons or empty placeholder graphics
-                            ocr_text = run_layout_ocr(img_data)
+                            ocr_text = run_page_ocr(
+                                img_data,
+                                vision_model=vision_model,
+                                vision_prompt=vision_prompt,
+                                filename=filename
+                            )
                             clean_ocr = sanitize_extracted_text(ocr_text)
                             if clean_ocr and clean_ocr not in ("[Empty Page Content]", "[Scanned page - No readable text detected]"):
                                 docx_blocks.append(f"### Immagine DOCX {img_idx} (Testo rilevato da OCR)\n\n{clean_ocr}")

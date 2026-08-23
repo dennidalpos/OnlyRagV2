@@ -5,7 +5,7 @@ import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
-import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 
 export const LANGUAGES = [
@@ -94,7 +94,7 @@ export function useDocumentTranslation(settings?: AppSettings) {
 
   // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion
   // module can block starting their own task while a translation is mid-flight (see
-  // useGlobalTaskLock.ts).
+  // globalTaskLock.ts).
   useEffect(() => {
     if (isTranslating) {
       acquireGlobalTaskLock('translation')

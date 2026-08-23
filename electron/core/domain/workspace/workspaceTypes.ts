@@ -1,22 +1,3 @@
-export interface ProjectFile {
-  name: string
-  path: string
-  isDirectory: boolean
-  sizeBytes?: number
-  children?: ProjectFile[]
-}
-
-export interface GrepMatchLine {
-  line: number
-  content: string
-}
-
-export interface GrepSearchResult {
-  filePath: string
-  relativePath: string
-  matches: GrepMatchLine[]
-}
-
 export interface GuestOsInfo {
   platform: string
   arch: string

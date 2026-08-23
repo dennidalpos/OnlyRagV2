@@ -4,8 +4,22 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
-import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
+import { resolveNodeTemplate } from '../constants/promptConfig'
+
+/**
+ * The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR.
+ *
+ * The multimodal engine is opt-in (Impostazioni > Motore OCR): sending the template is exactly what
+ * tells the sidecar to route page bitmaps through the vision model. The template is shipped raw
+ * because three of its four variables (`currentPage`, `numPages`, `activePageContent`) are only
+ * known inside the sidecar's page loop, which renders it there.
+ */
+export function resolveVisionOcrPrompt(settings?: AppSettings): string | undefined {
+  if (settings?.ocrEngine !== 'vision_model') return undefined
+  return resolveNodeTemplate('images:analysis', settings).template || undefined
+}
 
 export interface IngestionProgressState {
   active: boolean
@@ -87,7 +101,7 @@ export function useIngestion(settings?: AppSettings) {
 
   // Mirrors this module's busy state (upload/ingest pipeline OR in-place translation) into
   // the cross-module task lock so the coding agent/translation module can block starting
-  // their own task while ingestion is mid-flight (see useGlobalTaskLock.ts).
+  // their own task while ingestion is mid-flight (see globalTaskLock.ts).
   const isIngestionBusy = isUploading || isTranslatingInplace
   useEffect(() => {
     if (isIngestionBusy) {
@@ -393,6 +407,10 @@ export function useIngestion(settings?: AppSettings) {
     const baseName = displayName || targetFilePath.split(/[/\\]/).pop() || targetFilePath
     const ext = baseName.includes('.') ? baseName.split('.').pop()!.toLowerCase() : 'text'
 
+    const visionPrompt = resolveVisionOcrPrompt(settings)
+    const useVisionOcr = visionPrompt !== undefined
+    const visionModelName = settings?.visionModel || 'llama3.2-vision'
+
     let detectedCategory = 'Documento Testo'
     let initialPipeline = 'Fast-Router: Pre-analisi & Classificazione'
     let ocrTech = 'PyMuPDF Text Extraction'
@@ -400,11 +418,15 @@ export function useIngestion(settings?: AppSettings) {
     if (ext === 'pdf') {
       detectedCategory = 'PDF (Ibrido / Scansione / Testo)'
       initialPipeline = 'Pipeline: PDF Fast-Router & Layout Extraction'
-      ocrTech = `PyMuPDF / RapidOCR + VLM Fallback (${settings?.visionModel || 'llama3.2-vision'})`
+      ocrTech = useVisionOcr
+        ? `PyMuPDF / Vision LLM OCR (${visionModelName}) + RapidOCR fallback`
+        : 'PyMuPDF / RapidOCR (CUDA nativo)'
     } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
       detectedCategory = 'Immagine Raster'
-      initialPipeline = 'Pipeline: Multimodal Vision & OCR'
-      ocrTech = `RapidOCR + Ollama Vision Fallback (${settings?.visionModel || 'llama3.2-vision'})`
+      initialPipeline = useVisionOcr ? 'Pipeline: Multimodal Vision & OCR' : 'Pipeline: RapidOCR Layout'
+      ocrTech = useVisionOcr
+        ? `Vision LLM OCR (${visionModelName}) + RapidOCR fallback`
+        : 'RapidOCR (CUDA nativo)'
     } else if (ext === 'docx') {
       detectedCategory = 'Microsoft Word'
       initialPipeline = 'Pipeline: DOCX Structured XML Parser'
@@ -424,7 +446,7 @@ export function useIngestion(settings?: AppSettings) {
       fileName: baseName,
       fileCategory: detectedCategory,
       pipeline: initialPipeline,
-      modelName: settings?.visionModel || 'llama3.2-vision',
+      modelName: useVisionOcr ? visionModelName : 'RapidOCR PP-OCRv4',
       ocrTechnology: ocrTech,
       step: 'Pre-elaborazione, Fast-Routing e classificazione del file...',
       percent: 20,
@@ -441,7 +463,7 @@ export function useIngestion(settings?: AppSettings) {
       const res = await apiService.ingestFile(
         targetFilePath,
         settings?.visionModel,
-        undefined,
+        visionPrompt,
         false
       )
 

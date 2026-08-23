@@ -65,7 +65,6 @@ export interface PromptNode {
    * Set when nothing in the app currently sends this prompt to a model. Editing it is stored and
    * preserved, but has no runtime effect yet — the modal says so instead of implying otherwise.
    */
-  notWiredYet?: boolean
 }
 
 export interface PromptCategory {
@@ -188,7 +187,6 @@ export const PROMPT_HIERARCHY: PromptCategory[] = [
             sample: '[Document Title: Q2 Financial Statement — Operating Margin: +24%]',
           },
         ],
-        notWiredYet: true,
       },
     ],
   },

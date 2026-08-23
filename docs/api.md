@@ -54,10 +54,12 @@ OnlyRag V2 implementa due livelli di interfaccia:
 * **`POST /ingest-path`** — Ingestione sincrona da percorso file locale.
   * **Corpo:** `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2", "max_tabular_rows"?: 500, "max_excel_rows_per_sheet"?: 250, "max_excel_sheets"?: 20 }`.
   * **Risposta:** `IngestResponse` (`{ "id": "...", "filename": "...", "status": "indexed" | "indexed_fallback", "used_fallback_embeddings": boolean, ... }`).
+  * **Motore OCR:** i campi opzionali `vision_model` e `vision_prompt` selezionano il tier OCR. Un `vision_prompt` non vuoto significa "l'utente ha scelto il Vision LLM multimodale" (`AppSettings.ocrEngine === 'vision_model'`): le bitmap di pagina passano da `run_vision_ocr`, con RapidOCR come fallback se il modello non risponde. Il valore è il **template Mustache grezzo** del nodo `images:analysis`, reso per pagina dal sidecar. Omesso il campo, l'ingestione resta su RapidOCR locale.
 * **`POST /ingest-path-stream`** — Ingestione con streaming NDJSON progressivo.
   * **Corpo:** `{ "file_path": "C:/docs/report.pdf", "normalize_with_llm"?: false, "normalization_model"?: "llama3.2", "max_tabular_rows"?: 500, "max_excel_rows_per_sheet"?: 250, "max_excel_sheets"?: 20 }`.
   * **Content-Type:** `application/x-ndjson`.
   * **Eventi:** `{ "type": "progress" | "done", "percent": 0-100, "step": "...", "data"?: IngestResponse }`.
+  * **Motore OCR:** identico a `/ingest-path` (`vision_model` / `vision_prompt`). Gli eventi `progress` nominano il motore realmente in uso nei campi `step` e `pipeline` ("Vision LLM OCR" oppure "OCR Layout").
 
 ---
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
+import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './globalTaskLock'
 
-describe('useGlobalTaskLock', () => {
+describe('globalTaskLock', () => {
   beforeEach(() => {
     // Reset shared module-level state between tests.
     releaseGlobalTaskLock('coding')

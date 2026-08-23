@@ -26,7 +26,7 @@ from sidecar.schemas import (
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
 from sidecar.infrastructure.db import lance_db, get_existing_tables, safe_open_table, run_db_maintenance
-from sidecar.infrastructure.ocr import run_vision_ocr, run_layout_ocr, detect_gpu_acceleration
+from sidecar.infrastructure.ocr import run_vision_ocr, detect_gpu_acceleration
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
     process_and_index_document,

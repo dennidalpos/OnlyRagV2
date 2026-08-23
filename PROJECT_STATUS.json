@@ -1,9 +1,11 @@
 {
   "todos": [
     "Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato.",
-    "Decidere il destino del nodo prompt 'images:analysis': nessuna pipeline lo invia a un modello (il prompt vision era gia configurabile ma inutilizzato prima del refactor). O collegarlo all'inferenza vision nell'ingestion, o rimuoverlo dall'albero.",
     "Valutare la sostituzione del client Ollama artigianale (ollamaHttpClient.ts, agentStreamTransport.ts) con il pacchetto ufficiale ollama, verificando che il riuso di context (AGT1) resti possibile.",
     "Valutare zod per il sanitizer appSettingsDomain.ts.",
-    "Debito pre-esistente rilevato da knip: 4 file orfani (electron/core/domain/sidecar/sidecarTypes.ts, src/components/diagnostics/OllamaEnvApprovalModal.tsx, src/components/diagnostics/OllamaEnvParamsModal.tsx, src/components/wizard/ModelOptionCard.tsx), la dipendenza inutilizzata p-retry e 9 export morti."
+    "Setup Wizard: decidere se esporre in UI i badge VRAM. `assessModelHardwareCompatibility` calcola gia' `compatibilityStatus` (optimal/tight/exceeds) e lo usa per ranking e selezione, ma `WizardStepRecommendedModels.tsx` mostra solo select con stato di download; il componente card che rendeva i badge e' stato rimosso perche' orfano.",
+    "Scansione workspace: dopo la rimozione della catena `ignore` (dead code), `contextFilter.isIgnoredPath` filtra solo tramite i set dichiarativi `DEFAULT_IGNORED_DIRS/EXTENSIONS/FILENAMES`; nessun rispetto di `.gitignore`/`.cursorignore` per-workspace. Valutare la reintroduzione via libreria se il filtro statico si rivela insufficiente.",
+    "Validazione live della Vision OCR ora cablata: ingerire un PDF scansionato e un'immagine raster con `ocrEngine: 'vision_model'` e un modello vision realmente installato (es. llama3.2-vision:11b), verificando la resa del prompt per pagina, la qualita' della trascrizione e il fallback su RapidOCR quando il modello non risponde. Il routing e' coperto solo da test unitari con Ollama mockato.",
+    "Endpoint sidecar `POST /inspect-image` (`run_vision_ocr`) resta senza alcun client in `src/` o `electron/`: decidere se esporlo con un'azione \"ispeziona immagine\" nella vista Ingestione o rimuoverlo insieme a `InspectImageRequest` e alla sua voce in docs/api.md."
   ]
 }

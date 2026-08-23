@@ -123,10 +123,7 @@ function estimateWeightFromMetadata(details: RunningModelDetails): number | null
 // Hardware classification now lives in hardwareProfileTiers.ts (single threshold ladder
 // shared with the agent runtime resolver and the complexity router). Re-exported here so
 // existing importers of this module keep compiling unchanged.
-export {
-  calculateRealUsableVram,
-  classifyHardwareProfileTier,
-} from './hardwareProfileTiers'
+export { calculateRealUsableVram } from './hardwareProfileTiers'
 export type { HardwareFacts } from './hardwareProfileTiers'
 
 export interface ModelRecommendation {

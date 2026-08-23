@@ -574,7 +574,7 @@ export const it: TranslationSchema = {
     nodeTranslation: 'Traduzione Documenti',
     nodeTranslationDesc: 'Preservazione del Markdown e coerenza terminologica.',
     nodeImageAnalysis: 'Analisi Visiva & OCR',
-    nodeImageAnalysisDesc: 'Trascrizione fedele, diagrammi e tabelle.',
+    nodeImageAnalysisDesc: 'Trascrizione fedele, diagrammi e tabelle. Inviato solo quando il motore OCR e impostato su Vision LLM.',
     customBadge: 'Modificato',
     defaultBadge: 'Default',
     editTab: 'Editor',
@@ -589,8 +589,6 @@ export const it: TranslationSchema = {
     tokenCount: '{tokens} token · {chars} caratteri',
     capabilityOmitted:
       'Il modello attivo dichiara il tool calling nativo: questo blocco non viene inviato (lo schema arriva già dal parametro tools). Restera inutilizzato finche non selezioni un modello senza questa capability.',
-    notWiredYet:
-      'Questo prompt e configurabile ma nessuna pipeline lo invia ancora a un modello. Le modifiche vengono salvate e conservate.',
     issueSyntax: 'Sintassi del template non valida.',
     issueEmpty: 'Il prompt non puo essere vuoto.',
     issueMissingPartial: 'Manca {{> {token}}}: quel blocco non verra inviato al modello.',

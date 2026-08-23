@@ -746,3 +746,108 @@ def test_list_stored_documents_includes_fallback_embedded_documents(monkeypatch)
     assert by_id["doc-1"]["used_fallback_embeddings"] is False
     assert by_id["doc-2"]["status"] == "indexed_fallback"
     assert by_id["doc-2"]["used_fallback_embeddings"] is True
+
+# ---------------------------------------------------------------------------
+# Vision LLM OCR engine routing
+# ---------------------------------------------------------------------------
+
+def test_render_vision_prompt_fills_per_page_variables():
+    """The per-page Mustache variables of `images:analysis` are only known inside the sidecar page
+    loop, so the renderer ships the raw template and this is where it gets filled."""
+    from sidecar.domain.vision_prompt import render_vision_prompt
+
+    template = "Doc {{filename}} page {{currentPage}}/{{numPages}}\nContext: {{activePageContent}}"
+    out = render_vision_prompt(template, "report.pdf", 3, 8, "Operating margin +24%")
+
+    assert "Doc report.pdf page 3/8" in out
+    assert "Operating margin +24%" in out
+    assert "{{" not in out
+
+def test_render_vision_prompt_falls_back_when_template_empty():
+    """An override the user emptied must not send a blank instruction to the vision model."""
+    from sidecar.domain.vision_prompt import render_vision_prompt, FALLBACK_VISION_PROMPT
+
+    assert render_vision_prompt("   ", "a.pdf", 1, 1) == FALLBACK_VISION_PROMPT
+    assert render_vision_prompt(None, "a.pdf", 1, 1) == FALLBACK_VISION_PROMPT
+
+def test_run_page_ocr_stays_on_rapidocr_without_vision_prompt(monkeypatch):
+    """No vision prompt on the wire means the user kept the native CUDA engine."""
+    from sidecar.domain import ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", lambda img: "RAPIDOCR TEXT")
+    monkeypatch.setattr(ingestion_module, "run_vision_ocr", lambda *a, **kw: pytest.fail(
+        "Vision model must not be called when no vision prompt was requested"))
+
+    assert ingestion_module.run_page_ocr(b"img", vision_model="llama3.2-vision") == "RAPIDOCR TEXT"
+
+def test_run_page_ocr_routes_to_vision_with_rendered_prompt(monkeypatch):
+    """With a vision prompt present the page bitmap goes to the multimodal model, and the prompt
+    reaching it is the rendered one, not the raw template."""
+    from sidecar.domain import ingestion as ingestion_module
+
+    captured = {}
+    def fake_vision(image_bytes, prompt, ollama_url=None, model=None):
+        captured["prompt"] = prompt
+        captured["model"] = model
+        return "VISION MARKDOWN"
+
+    monkeypatch.setattr(ingestion_module, "run_vision_ocr", fake_vision)
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", lambda img: pytest.fail(
+        "RapidOCR must not run when the vision model returned content"))
+
+    result = ingestion_module.run_page_ocr(
+        b"img",
+        vision_model="minicpm-v",
+        vision_prompt="Read page {{currentPage}} of {{numPages}} in {{filename}}",
+        filename="invoice.pdf",
+        page_num=2,
+        num_pages=5
+    )
+
+    assert result == "VISION MARKDOWN"
+    assert captured["prompt"] == "Read page 2 of 5 in invoice.pdf"
+    assert captured["model"] == "minicpm-v"
+
+def test_run_page_ocr_falls_back_to_rapidocr_when_vision_returns_nothing(monkeypatch):
+    """run_vision_ocr returns an empty string on a missing model, a timeout or a refusal — a page
+    must never be silently dropped over that."""
+    from sidecar.domain import ingestion as ingestion_module
+
+    monkeypatch.setattr(ingestion_module, "run_vision_ocr", lambda *a, **kw: "")
+    monkeypatch.setattr(ingestion_module, "run_layout_ocr", lambda img: "RAPIDOCR SAFETY NET")
+
+    result = ingestion_module.run_page_ocr(
+        b"img", vision_model="llama3.2-vision", vision_prompt="Transcribe this page"
+    )
+    assert result == "RAPIDOCR SAFETY NET"
+
+def test_render_pdf_page_content_routes_scanned_page_to_vision(monkeypatch):
+    """End of the wire: a scanned PDF page prepared with a vision prompt is transcribed by the
+    multimodal model, with the document filename and page count reaching the prompt."""
+    from sidecar.domain import ingestion as ingestion_module
+
+    captured = {}
+    def fake_vision(image_bytes, prompt, ollama_url=None, model=None):
+        captured["prompt"] = prompt
+        return "# Scanned Page\n\nVision transcription"
+
+    monkeypatch.setattr(ingestion_module, "run_vision_ocr", fake_vision)
+
+    import pymupdf
+
+    doc = pymupdf.open()
+    doc.new_page(width=595, height=842)
+    try:
+        page = doc.load_page(0)
+        content = ingestion_module.render_pdf_page_content(
+            doc, page, 1, "", [], True,
+            vision_model="llama3.2-vision",
+            vision_prompt="File {{filename}}, page {{currentPage}}/{{numPages}}",
+            filename="scan.pdf",
+            num_pages=4
+        )
+    finally:
+        doc.close()
+
+    assert "Vision transcription" in content
+    assert captured["prompt"] == "File scan.pdf, page 1/4"

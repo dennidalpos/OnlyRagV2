@@ -10,9 +10,9 @@ import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type { ApprovalResponse, AgentSession } from './agentOrchestratorTypes'
+import type { AgentSession } from './agentOrchestratorTypes'
 
-export type { ApprovalResponse, AgentSession }
+export type { AgentSession }
 
 const activeAgentSessions = new Map<string, AgentSession>()
 

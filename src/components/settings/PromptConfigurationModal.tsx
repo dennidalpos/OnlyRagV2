@@ -324,12 +324,10 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
                 </div>
               </div>
 
-              {(capabilityOmitted || selectedNode.notWiredYet) && (
+              {capabilityOmitted && (
                 <div className="mx-5 mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex gap-2 text-[11px] text-amber-200 shrink-0">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>
-                    {capabilityOmitted ? t('promptConfig.capabilityOmitted') : t('promptConfig.notWiredYet')}
-                  </span>
+                  <span>{t('promptConfig.capabilityOmitted')}</span>
                 </div>
               )}
 

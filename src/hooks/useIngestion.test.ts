@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { getPageLineNumber, getTotalLines } from './useIngestion'
+import { getPageLineNumber, getTotalLines, resolveVisionOcrPrompt } from './useIngestion'
+import { DEFAULT_IMAGE_ANALYSIS_PROMPT } from '../constants/promptConfig'
+import type { AppSettings } from '../types'
 
 describe('useIngestion page line calculation and pagination sync', () => {
   const sampleMarkdown = `# Document Title
@@ -46,5 +48,35 @@ Section 3 content`
   it('calculates total line count accurately', () => {
     expect(getTotalLines(sampleMarkdown)).toBe(16)
     expect(getTotalLines('')).toBe(1)
+  })
+})
+
+describe('useIngestion vision OCR engine gate', () => {
+  const withEngine = (ocrEngine: AppSettings['ocrEngine']): AppSettings =>
+    ({ ocrEngine, customPromptOverrides: {} }) as unknown as AppSettings
+
+  it('sends no prompt while the native CUDA engine is selected', () => {
+    expect(resolveVisionOcrPrompt(withEngine('native_cuda'))).toBeUndefined()
+    expect(resolveVisionOcrPrompt(undefined)).toBeUndefined()
+  })
+
+  it('ships the raw factory template when the Vision LLM engine is selected', () => {
+    const prompt = resolveVisionOcrPrompt(withEngine('vision_model'))
+    expect(prompt).toBe(DEFAULT_IMAGE_ANALYSIS_PROMPT)
+  })
+
+  it('leaves the per-page variables unrendered for the sidecar page loop to fill', () => {
+    const prompt = resolveVisionOcrPrompt(withEngine('vision_model')) || ''
+    expect(prompt).toContain('{{currentPage}}')
+    expect(prompt).toContain('{{numPages}}')
+    expect(prompt).toContain('{{activePageContent}}')
+  })
+
+  it('prefers a user override of the images:analysis node', () => {
+    const settings = {
+      ocrEngine: 'vision_model',
+      customPromptOverrides: { 'images:analysis': 'Transcribe page {{currentPage}} verbatim.' },
+    } as unknown as AppSettings
+    expect(resolveVisionOcrPrompt(settings)).toBe('Transcribe page {{currentPage}} verbatim.')
   })
 })

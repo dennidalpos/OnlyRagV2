@@ -574,7 +574,7 @@ export const en: TranslationSchema = {
     nodeTranslation: 'Document Translation',
     nodeTranslationDesc: 'Markdown preservation and terminology consistency.',
     nodeImageAnalysis: 'Visual Analysis & OCR',
-    nodeImageAnalysisDesc: 'Faithful transcription, diagrams, and tables.',
+    nodeImageAnalysisDesc: 'Faithful transcription, diagrams, and tables. Sent only when the OCR engine is set to the Vision LLM.',
     customBadge: 'Modified',
     defaultBadge: 'Default',
     editTab: 'Editor',
@@ -589,8 +589,6 @@ export const en: TranslationSchema = {
     tokenCount: '{tokens} tokens · {chars} characters',
     capabilityOmitted:
       'The active model declares native tool calling, so this block is not sent (the schema already goes out via the tools parameter). It stays unused until you select a model without that capability.',
-    notWiredYet:
-      'This prompt is configurable but no pipeline sends it to a model yet. Edits are saved and preserved.',
     issueSyntax: 'Invalid template syntax.',
     issueEmpty: 'The prompt cannot be empty.',
     issueMissingPartial: 'Missing {{> {token}}}: that block will not be sent to the model.',

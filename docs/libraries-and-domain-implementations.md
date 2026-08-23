@@ -38,10 +38,9 @@ Questo documento costituisce la fonte di verità sulle dipendenze esterne utiliz
 | **`turndown`** | `^7.2.4` | Conversione deterministica da HTML a Markdown strutturato per l'indicizzazione e la consultazione web. |
 | **`js-yaml`** | `^4.1.0` | Parsing ed estrazione dei metadati YAML frontmatter nei manifesti delle skill agentiche (`SKILL.md`) e serializzazione YAML. |
 | **`mustache`** | `^4.2.0` | Motore di rendering dei template di system prompt (`promptTemplateEngine.ts`): sostituzione variabili, innesto dei blocchi figli come partial (`{{> directives}}`, `{{> tools}}`) e sezioni condizionate sulle capability del modello (`{{^nativeToolCalling}}`). `Mustache.parse()` fornisce l'AST usato dal validatore per intercettare partial mancanti o duplicati. Scelto perche' **logic-less**: i template sono editabili dall'utente e persistiti, quindi un motore che compila a `new Function` (Eta, EJS, Handlebars) sarebbe una superficie di code injection e richiederebbe `unsafe-eval`, incompatibile con `contextIsolation: true`. |
-| **`ignore`** | `^7.0.6` | Rispetto rigoroso dei pattern standard `.gitignore` durante la scansione e l'esplorazione ricorsiva del workspace. |
 | **`strip-ansi`** | `^7.2.0` | Rimozione dei codici di escape ANSI di colore e formattazione dai log shell prima della persistenza su disco e dell'invio all'LLM. |
 | **`gpt-tokenizer`** | `^4.0.0` | Calcolo deterministico dei token reali BPE (`o200k_base`) per la selezione ottimale del `num_ctx` Ollama (`contextWindowCalculator.ts`). |
-| **`p-queue` & `p-retry`** | `^9.3.3` / `^8.0.0` | Accodamento sequenziale dei task asincroni ed esecuzione di retry resilienti con backoff esponenziale. |
+| **`p-queue`** | `^9.3.3` | Accodamento sequenziale dei task asincroni con dispatch a priorita'. |
 
 ---
 
@@ -54,6 +53,7 @@ Questo documento costituisce la fonte di verità sulle dipendenze esterne utiliz
 | **`pymupdf` (fitz)** | `>=1.24.0` | Motore C++ per il parsing, rasterizzazione ad alta risoluzione (300 DPI), estrazione dei blocchi di testo, bounding box geometriche e redazione in-place di documenti PDF. |
 | **`python-docx`** | `>=1.1.0` | Lettura, analisi strutturale a paragrafi/tabelle e generazione di documenti Word (.docx) preservando la formattazione originale. |
 | **`rapidocr-onnxruntime`** | `>=1.4.0` | Motore OCR basato su modelli ONNX con rilevamento automatico dell'accelerazione hardware CUDA via ONNX Runtime GPU. |
+| **`chevron`** | `>=0.14.0` | Renderer Mustache del prompt `images:analysis` per il Vision OCR: le variabili per-pagina (`currentPage`, `numPages`, `activePageContent`) sono note solo dentro il loop di pagina del sidecar, quindi il template arriva grezzo da Electron e viene reso qui (`domain/vision_prompt.py`). Stesso motore logic-less di `mustache` lato renderer, così un override scritto dall'utente si comporta identicamente sui due lati. |
 | **`opencv-python-headless`** | `>=4.8.0` | Elaborazione computer vision per l'ottimizzazione dell'immagine prima dell'OCR (filtri CLAHE per il contrasto della luminanza ed equalizzazione unsharp mask). |
 | **`pillow` (PIL)** | `>=10.0.0` | Manipolazione delle immagini bitmap, correzione dell'orientamento EXIF e ricampionamento Lanczos. |
 | **`ftfy`** | `>=6.2.0` | Riparazione universale automatica di testo Unicode corrotto, mojibake e sequenze di codifica errate provenienti da PDF o scansioni OCR. |

@@ -466,12 +466,7 @@ def run_rapid_ocr(image_bytes: bytes) -> str:
     result, _elapse = engine(prepared_bytes)
     return _reconstruct_layout_from_ocr_boxes(result)
 
-def run_layout_ocr(
-    image_bytes: bytes,
-    prompt: Optional[str] = None,
-    ollama_url: Optional[str] = None,
-    model: Optional[str] = None
-) -> str:
+def run_layout_ocr(image_bytes: bytes) -> str:
     """High-fidelity local OCR engine via RapidOCR.
     Extracts verbatim text lines, numbers, and layout without multimodal LLM hallucination or network latency."""
     prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560)

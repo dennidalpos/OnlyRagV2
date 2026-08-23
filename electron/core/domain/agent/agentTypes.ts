@@ -50,13 +50,6 @@ export interface AgentLogEntry {
   }
 }
 
-export interface AgentApprovalRequest {
-  id: string
-  toolName: string
-  description: string
-  params: Record<string, any>
-}
-
 export interface AgentTaskResult {
   success: boolean
   summary: string

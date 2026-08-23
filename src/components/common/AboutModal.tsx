@@ -95,9 +95,9 @@ export const UPSTREAM_MODULES: DependencyItem[] = [
     url: 'https://www.electron.build',
   },
   {
-    name: 'p-queue & p-retry',
-    version: 'v9.3 / v8.0',
-    description: 'Promise concurrency queue with priority dispatching and exponential backoff retry.',
+    name: 'p-queue',
+    version: 'v9.3',
+    description: 'Promise concurrency queue with priority dispatching for serial task execution.',
     license: 'MIT',
     category: 'core',
     url: 'https://github.com/sindresorhus/p-queue',

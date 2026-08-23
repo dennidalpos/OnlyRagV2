@@ -6,7 +6,7 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeOrGrowContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
 import type { TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
-export type { TurnDispatchContext, TurnDispatchData, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
+export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
 async function dispatchToLlm(
   ctx: TurnDispatchContext,

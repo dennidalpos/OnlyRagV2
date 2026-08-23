@@ -588,7 +588,6 @@ export interface TranslationSchema {
     resetNodeConfirm: string
     tokenCount: string
     capabilityOmitted: string
-    notWiredYet: string
     issueSyntax: string
     issueEmpty: string
     issueMissingPartial: string

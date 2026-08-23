@@ -13,6 +13,7 @@ from sidecar.schemas import IngestResponse, PagePreviewResponse
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
 from sidecar.infrastructure.embeddings import generate_embedding, generate_embedding_with_status
 from sidecar.domain.sanitizer import sanitize_extracted_text
+from sidecar.domain.vision_prompt import is_vision_ocr_requested
 from sidecar.domain.ingestion import (
     extract_document_markdown,
     create_semantic_chunks,
@@ -158,6 +159,8 @@ def process_and_index_document_generator(
     effective_max_sheets = max_excel_sheets if max_excel_sheets is not None else max_sheets
     doc_id = str(uuid.uuid4())
     persisted_path = file_path or ""
+    # Progress labels must name the engine the pages actually went through, not a fixed one.
+    ocr_engine_label = "Vision LLM OCR" if is_vision_ocr_requested(vision_prompt) else "OCR Layout"
 
     try:
         if not persisted_path or not os.path.exists(persisted_path):
@@ -231,7 +234,9 @@ def process_and_index_document_generator(
                             vision_model=vision_model,
                             vision_prompt=vision_prompt,
                             normalize_with_llm=normalize_with_llm,
-                            normalization_model=normalization_model
+                            normalization_model=normalization_model,
+                            filename=filename,
+                            num_pages=num_pages
                         ))
                         page_render_meta[page_num] = {
                             "table_info": table_info,
@@ -243,8 +248,8 @@ def process_and_index_document_generator(
                         for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
                             meta = page_render_meta[result_page_num]
                             if meta["used_ocr"]:
-                                step_msg = f"Pagina {result_page_num}/{num_pages}: OCR Layout completato."
-                                pipeline_label = "OCR Layout (Scansione)"
+                                step_msg = f"Pagina {result_page_num}/{num_pages}: {ocr_engine_label} completato."
+                                pipeline_label = f"{ocr_engine_label} (Scansione)"
                             else:
                                 step_msg = f"Pagina {result_page_num}/{num_pages}: Estrazione testo{meta['table_info']} completata."
                                 pipeline_label = "PDF Stream & Table Finder"

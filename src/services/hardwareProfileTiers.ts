@@ -57,30 +57,6 @@ const TIER_MIN_VRAM_GB: Record<Exclude<HardwareProfileTier, 'legacy'>, number> =
   extreme: 20,
 }
 
-/**
- * Safe-budget lower bound of each tier — `calculateRealUsableVram` applied to the VRAM
- * boundaries above. Exported so callers that only hold a budget (the agent runtime
- * resolver, the complexity router) classify identically to callers that hold raw VRAM.
- */
-export const TIER_MIN_SAFE_BUDGET_GB: Record<Exclude<HardwareProfileTier, 'legacy'>, number> = {
-  entry: calculateRealUsableVram(TIER_MIN_VRAM_GB.entry * 1024),
-  midrange: calculateRealUsableVram(TIER_MIN_VRAM_GB.midrange * 1024),
-  highend: calculateRealUsableVram(TIER_MIN_VRAM_GB.highend * 1024),
-  extreme: calculateRealUsableVram(TIER_MIN_VRAM_GB.extreme * 1024),
-}
-
-/**
- * Representative safe VRAM budget for a tier, used when the user pinned a coarse profile
- * manually (`Low`/`Medium`/`High`) and no GPU probe is available to measure the real one.
- */
-export const TIER_NOMINAL_SAFE_BUDGET_GB: Record<HardwareProfileTier, number> = {
-  legacy: 0,
-  entry: TIER_MIN_SAFE_BUDGET_GB.entry,
-  midrange: TIER_MIN_SAFE_BUDGET_GB.midrange,
-  highend: TIER_MIN_SAFE_BUDGET_GB.highend,
-  extreme: TIER_MIN_SAFE_BUDGET_GB.extreme,
-}
-
 /** Classifies a host from raw facts. The canonical entry point. */
 export function classifyHardwareProfileTier(facts: HardwareFacts): HardwareProfileTier {
   const hasGpu = !!facts.hasGpu
@@ -89,15 +65,6 @@ export function classifyHardwareProfileTier(facts: HardwareFacts): HardwareProfi
   if (vramGB < TIER_MIN_VRAM_GB.midrange) return 'entry'
   if (vramGB < TIER_MIN_VRAM_GB.highend) return 'midrange'
   if (vramGB < TIER_MIN_VRAM_GB.extreme) return 'highend'
-  return 'extreme'
-}
-
-/** Classifies a host when only the net usable VRAM budget is known. */
-export function classifyTierFromSafeBudget(safeVramBudgetGB: number, hasGpu: boolean = true): HardwareProfileTier {
-  if (!hasGpu || !safeVramBudgetGB || safeVramBudgetGB < TIER_MIN_SAFE_BUDGET_GB.entry) return 'legacy'
-  if (safeVramBudgetGB < TIER_MIN_SAFE_BUDGET_GB.midrange) return 'entry'
-  if (safeVramBudgetGB < TIER_MIN_SAFE_BUDGET_GB.highend) return 'midrange'
-  if (safeVramBudgetGB < TIER_MIN_SAFE_BUDGET_GB.extreme) return 'highend'
   return 'extreme'
 }
 
@@ -140,22 +107,3 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
   if (!systemRamGB || systemRamGB <= 0) return SYSTEM_RAM_MIN_BUDGET_GB
   return Math.max(SYSTEM_RAM_MIN_BUDGET_GB, Math.round(systemRamGB * SYSTEM_RAM_USABLE_RATIO * 100) / 100)
 }
-
-/**
- * Calculates combined hybrid memory budget (Usable VRAM + Usable System RAM)
- * when System RAM Offloading is enabled.
- */
-export function calculateHybridUsableMemoryGB(vramTotalMB: number, systemRamGB: number): number {
-  const usableVram = calculateRealUsableVram(vramTotalMB)
-  const usableRam = calculateUsableSystemRamGB(systemRamGB)
-  return Math.round((usableVram + usableRam) * 100) / 100
-}
-
-/**
- * Weight ceiling for a model that must run on CPU. This is a *throughput* bound, not a
- * memory bound: an 8GB CPU-only host can technically hold a 4.7GB model inside its
- * `calculateUsableSystemRamGB` budget, but it will emit a couple of tokens per second,
- * which makes an autonomous multi-turn tool loop unusable. Candidates above this size are
- * therefore ranked last on `legacy` hosts even when memory alone would allow them.
- */
-export const CPU_INFERENCE_WEIGHT_BUDGET_GB = 3.0

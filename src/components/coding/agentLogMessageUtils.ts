@@ -7,8 +7,6 @@
 
 import { AgentActionLog } from '../../types'
 
-export type MutationVerb = 'Edited' | 'Created' | 'Deleted' | 'Moved' | 'Copied'
-
 export function getStepModelName(message?: string, fallbackModelName?: string): string {
   if (!message) return fallbackModelName || 'LLM'
 

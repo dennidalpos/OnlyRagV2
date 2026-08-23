@@ -4,6 +4,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
 import { logger } from '../../../diagnostics'
+import { decidePortReclaim, parseImageNameFromTasklist, parseListeningPidFromNetstat } from './orphanPortReclaim'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -11,6 +12,13 @@ const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 // repository root, so __dirname is <root>/dist-electron no matter where this module's source
 // lives. Every dev-only lookup below must climb from here, never from the source tree depth.
 const DEV_PROJECT_ROOT = path.join(__dirname, '..')
+
+const SIDECAR_PORT = 8000
+const SIDECAR_BASE_URL = `http://127.0.0.1:${SIDECAR_PORT}`
+
+/** How long to wait for a terminated orphan to actually release the port before giving up. */
+const ORPHAN_PORT_RELEASE_ATTEMPTS = 5
+const ORPHAN_PORT_RELEASE_INTERVAL_MS = 400
 
 let sidecarProcess: ChildProcess | null = null
 
@@ -33,7 +41,7 @@ export class SidecarProcessManager {
 
   checkSidecarHealth(): Promise<boolean> {
     return new Promise((resolve) => {
-      const req = http.get('http://127.0.0.1:8000/health', { agent: httpAgent, timeout: 3000 }, (res) => {
+      const req = http.get(`${SIDECAR_BASE_URL}/health`, { agent: httpAgent, timeout: 3000 }, (res) => {
         let raw = ''
         res.on('data', (chunk) => {
           raw += chunk
@@ -46,14 +54,14 @@ export class SidecarProcessManager {
                 status: 'online',
                 engine: data.engine || 'FastAPI Python Sidecar + LanceDB OCR Engine',
                 version: data.version || '2.2.0',
-                endpoint: 'http://127.0.0.1:8000',
+                endpoint: SIDECAR_BASE_URL,
                 documentsCount: data.documents_count || 0,
                 chunksCount: data.chunks_count || 0,
               }
               resolve(true)
             } catch (err: any) {
               logger.log('WARN', 'Sidecar', `Non-standard JSON response from /health: ${err.message}`)
-              this.state = { status: 'online', engine: 'FastAPI + LanceDB', endpoint: 'http://127.0.0.1:8000' }
+              this.state = { status: 'online', engine: 'FastAPI + LanceDB', endpoint: SIDECAR_BASE_URL }
               resolve(true)
             }
           } else {
@@ -156,10 +164,99 @@ export class SidecarProcessManager {
     return false
   }
 
+  /**
+   * Runs a command purely to read its stdout. Separate from execAsync, which only ever needed
+   * stderr, and never rejects: every failure mode here (tool missing, non-zero exit, timeout)
+   * means the same thing to the caller — the holder of the port could not be identified.
+   */
+  private readCommandOutput(cmd: string, args: string[], timeoutMs = 5000): Promise<string> {
+    return new Promise((resolve) => {
+      let stdout = ''
+      let settled = false
+      const finish = (value: string) => {
+        if (settled) return
+        settled = true
+        resolve(value)
+      }
+
+      try {
+        const proc = spawn(cmd, args, { windowsHide: true })
+        const timer = setTimeout(() => {
+          proc.kill()
+          finish('')
+        }, timeoutMs)
+
+        proc.stdout?.on('data', (data) => {
+          stdout += data.toString()
+        })
+        proc.on('close', () => {
+          clearTimeout(timer)
+          finish(stdout)
+        })
+        proc.on('error', () => {
+          clearTimeout(timer)
+          finish('')
+        })
+      } catch {
+        finish('')
+      }
+    })
+  }
+
+  /**
+   * Terminates a sidecar left listening on the port by a previous session, so this run can own
+   * the process it talks to. See orphanPortReclaim.ts for why adopting the orphan instead is
+   * not the harmless choice it looks like.
+   *
+   * Returns true only when the port was actually freed: a caller that gets false is looking at
+   * a healthy endpoint it does not own, which is still better than no sidecar at all.
+   */
+  private async reclaimOrphanSidecarPort(): Promise<boolean> {
+    if (process.platform !== 'win32') {
+      logger.log('WARN', 'Sidecar', `Port ${SIDECAR_PORT} is held by a sidecar this session did not start; automatic reclaim is implemented for Windows only.`)
+      return false
+    }
+
+    const netstat = await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp'])
+    const pid = parseListeningPidFromNetstat(netstat, SIDECAR_PORT)
+    const imageName = pid === null ? null : parseImageNameFromTasklist(
+      await this.readCommandOutput('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'])
+    )
+
+    const decision = decidePortReclaim({ pid, imageName, ownPid: process.pid })
+    if (decision.action === 'skip') {
+      logger.log('WARN', 'Sidecar', `Orphan sidecar on port ${SIDECAR_PORT} left running: ${decision.reason}.`)
+      return false
+    }
+
+    logger.log('INFO', 'Sidecar', `Reclaiming port ${SIDECAR_PORT} from orphan sidecar "${imageName}" (PID ${decision.pid}) left by a previous session.`)
+    await this.readCommandOutput('taskkill', ['/pid', String(decision.pid), '/f', '/t'])
+
+    // The port is not free the instant taskkill returns, and spawning into a still-bound port
+    // is exactly the failure this is meant to prevent.
+    for (let attempt = 0; attempt < ORPHAN_PORT_RELEASE_ATTEMPTS; attempt++) {
+      if (!(await this.checkSidecarHealth())) return true
+      await new Promise((resolve) => setTimeout(resolve, ORPHAN_PORT_RELEASE_INTERVAL_MS))
+    }
+
+    logger.log('WARN', 'Sidecar', `Port ${SIDECAR_PORT} still answering after terminating PID ${decision.pid}.`)
+    return false
+  }
+
   async startPythonSidecar(): Promise<boolean> {
     if (await this.checkSidecarHealth()) {
-      logger.log('INFO', 'Sidecar', 'Python sidecar is already running on port 8000.')
-      return true
+      // Ours, started earlier in this same session: nothing to do.
+      if (sidecarProcess) {
+        logger.log('INFO', 'Sidecar', `Python sidecar is already running on port ${SIDECAR_PORT}.`)
+        return true
+      }
+      // Not ours. Adopting it would leave this session unable to ever stop the sidecar it
+      // depends on, and would keep serving the previous build after an update.
+      const reclaimed = await this.reclaimOrphanSidecarPort()
+      if (!reclaimed) {
+        logger.log('WARN', 'Sidecar', 'Continuing with the pre-existing sidecar; this session does not own its lifecycle.')
+        return true
+      }
     }
 
     this.stopPythonSidecar()

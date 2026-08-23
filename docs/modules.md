@@ -105,6 +105,7 @@ Espone e valida i canali IPC bidirezionali tra Renderer e Main:
 * **`workspaceIpc.ts`**: Operazioni su file, directory, terminale PTY e comandi shell.
 * **`skillIpc.ts`**: Sincronizzazione, salvataggio e cancellazione delle skill nel workspace.
 * **`sessionHistoryIpc.ts`**: CRUD della cronologia sessioni (`sessions:list`, `sessions:save`, `sessions:delete`, `sessions:clear`) e migrazione one-shot delle sessioni legacy (`sessions:migrate-legacy`).
+* **`settingsIpc.ts`**: Recupero e salvataggio delle impostazioni globali dell'applicazione (`settings:get`, `settings:save`) su store filesystem unificato.
 
 ### 2.2. Application Layer (`electron/core/application/`)
 Orchestra i casi d'uso di sistema implementando la logica applicativa:
@@ -116,11 +117,13 @@ Orchestra i casi d'uso di sistema implementando la logica applicativa:
 * **`skillInstallApprovalService.ts`**: Bridge richiesta/risposta per la conferma di installazione skill (`agent:skill-install-request` / `agent:skill-install-response`), necessario perche' la decisione avviene mentre il main process assembla il prompt del turno. Le richieste senza risposta entro 120s si risolvono come rifiutate, cosi' il loop agentico non puo' bloccarsi.
 * **`aiDebugBundleService.ts`**: Genera un pacchetto diagnostico autosufficiente ad alta densità informativa in formato Markdown ("AI Debug Diagnostic Bundle"), strutturato specificamente per essere analizzato da un assistente AI esterno (Claude, Antigravity, ChatGPT, DeepSeek). Include specifiche complete dell'host e toolchain di sviluppo, prompt utente originale, tabella cronologica di tutti i turni con esito tipizzato, log ed errori isolati ripuliti da sequenze ANSI (`\u001b[...]`), modifiche al filesystem con `git diff` unificato e stato dei milestone del piano di esecuzione.
 * **`sessionHistoryAppService.ts`**: Casi d'uso della cronologia sessioni (list/save/delete/clear) e migrazione one-shot dalle sessioni `localStorage`. L'eliminazione di una sessione o la pulizia del workspace rimuove anche il relativo stato runtime (`.agent_state_*.json`) e le sue voci mirate nell'audit log.
+* **`appSettingsAppService.ts`**: Gestione e coordinamento del caricamento e salvataggio atomico delle preferenze applicative (`AppSettings`) sul file system.
 * **`ollamaAppService.ts`**: Facade per la gestione dello stato del daemon Ollama (locale o server in rete remoto via standard HTTP REST API), test della connessione (`testConnection`), e del ciclo di vita dei modelli, incluso il recupero delle `capabilities` e dei metadati (`parameter_size`, `quantization_level`) per modello da `/api/tags`.
 * **`systemAppService.ts`**: Ispezione delle risorse hardware e verifica preventiva dello spazio su disco per i download.
 
 ### 2.3. Domain Layer (`electron/core/domain/`)
 Contiene entità pure, logica decisionale e regole di business indipendenti dall'infrastruttura:
+* **`settings/appSettingsDomain.ts`**: Entità pura, valori predefiniti (`DEFAULT_APP_SETTINGS`), sanitizzazione deterministica (`sanitizeAppSettings`) e merge delle impostazioni applicative.
 * **`agent/transactionalExecutionGuard.ts`**: Guardrail transazionale con snapshot crittografici SHA-256 dello stato del filesystem, rilevamento di oscillazione dello stato del codice e verifica rigorosa del Definition of Done gate prima della chiusura del task (`validateTaskCompletion`).
 * **`agent/verificationCommandSafety.ts`**: Decide se un comando puo stare come prova di una milestone. Rifiuta i comandi MUTANTI (redirezione su file, `touch`/`New-Item`/`Set-Content`/`cp`/`mv`/`rm`, `sed -i`, sottocomandi `init` e `create`), che scrivono il workspace e non possono quindi giudicare il file appena scritto, e i comandi VACUI (`echo`, `true`, `cd`, `Write-Host`), che escono 0 comunque e non possono fallire. Build e test restano ammessi anche se scrivono in `dist/`, perche il loro exit code riflette il codice. Puro e indipendente dal workspace: e invocato all ingestione del piano, prima dell esecuzione in `update_plan` e nella classificazione di un `run_command` come verifica.
 * **`agent/toolSchemaValidator.ts`**: Validatore e normalizzatore dichiarativo dei parametri dei tool (`validateAndSanitize`, `normalizeToolParams`, `normalizeToolName`), che fornisce un singolo punto di verità per tutti gli alias di strumenti e argomenti.
@@ -150,6 +153,7 @@ Contiene entità pure, logica decisionale e regole di business indipendenti dall
 Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
 * **`filesystem/atomicWorkspaceJournal.ts`**: Snapshot preventivo e gestione transazionale delle mutazioni file su disco con gestione sicura di directory e file inesistenti, supporto a `rollbackAll()` completo su errore/annullamento e `commit()` a fine task. Traccia anche uno snapshot per-step separato dal baseline di sessione: `endStep()` (chiamato dall'orchestratore dopo ogni tool call) promuove le modifiche accumulate a "ultimo step concluso" e `rollbackLastStep()` le ripristina senza toccare gli step precedenti ne' il baseline usato da `rollbackAll()`.
 * **`filesystem/sessionHistoryRepository.ts`**: Store filesystem della cronologia sessioni (`<workspace>/.onlyrag/sessions/session_history.json`, fallback `~/.onlyrag_v2/sessions/session_history.json`) con scrittura atomica tmp+rename, upsert per id e merge non distruttivo dei record migrati da `localStorage`.
+* **`filesystem/appSettingsRepository.ts`**: Store canonico su filesystem per `AppSettings` in `%APPDATA%/onlyrag-v2/settings.json` con scrittura atomica `tmp+rename`, garantendo parità assoluta tra ambiente di sviluppo (`http://localhost:5173`) e app impacchettata (`file://`).
 * **`filesystem/agentSessionStateRepository.ts`**: Persistenza su disco dello stato runtime di sessione agente (`.onlyrag/sessions/.agent_state_*.json`): milestone del piano, episodi, step e task corrente — solo cio' che serve a riprendere il loop, senza duplicare i dati della cronologia ne' proiezioni ricalcolabili dai milestone. Espone `seedPlanMilestones()` per iniettare i milestone di un piano approvato prima dell'avvio dell'esecuzione, cosicché `GoalDecompositionPlanner` li carichi come stato iniziale invece di affidarsi alla sola auto-rilevazione dal primo turno del modello.
 * **`http/webClient.ts`**: Client HTTP per il web scraping, download file e ricerca DuckDuckGo (`WebClient`). Integra conversione HTML in Markdown ad alta fedeltà tramite `turndown`, parsing DOM con `cheerio`, e protezione SSRF multilivello contro indirizzi privati (RFC1918), localhost e endpoint cloud metadata.
 * **`http/ollamaHttpClient.ts`**: Client HTTP verso Ollama (`/api/generate`, `/api/chat`, `/api/tags`, `/api/ps`, `/api/pull`, `/api/show`), incluso `getModelCapabilities()` per il recupero bulk di `capabilities`/`parameter_size`/`quantization_level` per modello da `/api/tags`.
@@ -207,3 +211,18 @@ Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
   - **Streaming NDJSON**: Generatore asincrono `translate_document_stream_generator` per aggiornamenti di progresso in tempo reale pagina per pagina verso Electron e React.
   - **Destinazione Sicura Obbligatoria**: Salvataggio del documento tradotto nella cartella di destinazione specificata con suffisso lingua (`{nome}_{target_lang}.pdf` o `.docx`), garantendo che il file originale rimanga sempre intatto.
 * **`domain/log_analyzer.py`**: Scansione dei file di log applicativi con rilevamento deterministico di anomalie (`TRUNCATED_JSON`, `CUDA_OOM`/`VRAM_THRASHING`, `EMPTY_RESPONSE`, `GATEWAY_TIMEOUT`, `TOOL_LOOP`), usato da `POST /agent/logs/analyze` (§ api.md) e da `SlmDiagnosticsPanel.tsx`.
+
+---
+
+## 4. Script di Build, Quality Assurance & Automazione (`scripts/`)
+
+* **`scripts/test_bundle_smoke.ps1`**:
+  * **Responsabilità**: Esegue lo smoke test automatizzato del bundle Electron (`dist-electron/main.js`). Compila con Vite ed esegue il main process in modalità headless (`--smoke-test` / `ONLYRAG_SMOKE_TEST=1`), verificando che tutti i moduli runtime (incluso `depcheck` e i parser) e i canali IPC si inizializzino correttamente prima di emettere `[SMOKE_TEST_PASS]` ed uscire con codice 0.
+* **`scripts/lint_format.ps1`**:
+  * **Responsabilità**: Pipeline di qualità seriale a 5 step (JSON configs, TypeScript `tsc --noEmit`, sintassi Python sidecar `py_compile`, suite Vitest `npm run test:fast`, e smoke test bundle Electron).
+* **`scripts/build_package.ps1`**:
+  * **Responsabilità**: Pipeline di build di produzione e packaging NSIS a 5 step (TypeScript typecheck, PyInstaller sidecar, Vite build + smoke test main process, electron-builder NSIS packaging, e validazione firma/dimensione installer).
+* **`scripts/test_sidecar_health.ps1`**:
+  * **Responsabilità**: Suite di validazione per il sidecar Python (FastAPI health, markdown export, LanceDB vector search e Pytest test suite).
+* **`scripts/clean_workspace.ps1`**:
+  * **Responsabilità**: Pulizia degli artifact di compilazione (`Repo`), dei dati locali AppData (`UserData`), o factory reset completo (`Full`).

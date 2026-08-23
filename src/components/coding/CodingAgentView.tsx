@@ -250,7 +250,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           />
 
           {/* Active View Container */}
-          <div className="flex-1 overflow-hidden relative">
+          <div className="flex-1 w-full h-full overflow-hidden relative flex flex-col">
             {activeRightTab === 'editor' && (
               <CodingEditorContent
                 c={c}

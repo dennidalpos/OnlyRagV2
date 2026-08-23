@@ -59,6 +59,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           maxSteps={c.maxSteps}
           activeSkills={c.activeSkills}
           streamingText={c.streamingText}
+          currentStatusText={c.currentStatusText}
           onExecute={onExecute}
           onGeneratePlan={onGeneratePlan}
           hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}

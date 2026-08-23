@@ -77,6 +77,9 @@ const api: IElectronAPI = {
   removeProjectFromRegistry: (projectPath: string) => ipcRenderer.invoke('projects:remove', projectPath),
   /** One-shot import of the legacy localStorage project list. */
   migrateLegacyProjects: (projects: unknown) => ipcRenderer.invoke('projects:migrate-legacy', projects),
+  /** Unified filesystem settings store (settings.json under userData). */
+  getAppSettings: () => ipcRenderer.invoke('settings:get'),
+  saveAppSettings: (settings: AppSettings) => ipcRenderer.invoke('settings:save', settings),
   /** Cross-project semantic prompt history (see sidecar's /history/* routes). */
   indexPromptHistory: (payload: any) => ipcRenderer.invoke('history:index', payload),
   searchPromptHistory: (query: string, topK?: number, projectPaths?: string[]) => ipcRenderer.invoke('history:search', query, topK, projectPaths),

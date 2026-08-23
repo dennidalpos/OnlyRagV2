@@ -34,7 +34,7 @@ try {
     }
 
     # 1. Verifica Tipo & Sintassi TypeScript
-    if (-not $Fast) { Write-Host "`n[1/4] Esecuzione TypeScript Typecheck..." -ForegroundColor Yellow }
+    if (-not $Fast) { Write-Host "`n[1/5] Esecuzione TypeScript Typecheck..." -ForegroundColor Yellow }
     npm run typecheck
     if ($LASTEXITCODE -ne 0) {
         throw "[ERRORE] Typecheck fallito con codice di uscita $LASTEXITCODE. Interruzione immediata."
@@ -42,7 +42,7 @@ try {
     if (-not $Fast) { Write-Host "[OK] Typecheck superato con successo." -ForegroundColor Green }
 
     # 2. Compilazione PyInstaller Standalone Executable per Sidecar Python
-    if (-not $Fast) { Write-Host "`n[2/4] Compilazione PyInstaller Standalone Executable per Sidecar Python..." -ForegroundColor Yellow }
+    if (-not $Fast) { Write-Host "`n[2/5] Compilazione PyInstaller Standalone Executable per Sidecar Python..." -ForegroundColor Yellow }
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
     $venvPyInstaller = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\pyinstaller.exe"
 
@@ -61,22 +61,31 @@ try {
         if (-not $Fast) { Write-Host "[WARN] PyInstaller non trovato in .venv o flag SkipSidecar attivo. L'installer utilizzerà l'auto-installer dinamico Python." -ForegroundColor Yellow }
     }
 
-    # 3. Compilazione Build & Packaging NSIS tramite electron-builder
-    if (-not $Fast) { Write-Host "`n[3/4] Avvio build Vite + Electron ed impacchettamento NSIS (electron-builder)..." -ForegroundColor Yellow }
+    # 3. Compilazione Bundle Vite & Smoke Test del Main Process
+    if (-not $Fast) { Write-Host "`n[3/5] Compilazione bundle Vite e Smoke Test del Main Process..." -ForegroundColor Yellow }
+    $smokeScript = Join-Path -Path $PSScriptRoot -ChildPath "test_bundle_smoke.ps1"
+    & $smokeScript -Fast
+    if ($LASTEXITCODE -ne 0) {
+        throw "[ERRORE] Smoke test del bundle Electron fallito con codice di uscita $LASTEXITCODE. Interruzione immediata."
+    }
+    if (-not $Fast) { Write-Host "[OK] Bundle Electron verificato con successo dallo smoke test." -ForegroundColor Green }
+
+    # 4. Impacchettamento NSIS tramite electron-builder
+    if (-not $Fast) { Write-Host "`n[4/5] Avvio impacchettamento NSIS (electron-builder)..." -ForegroundColor Yellow }
     $distPath = Join-Path -Path $PSScriptRoot -ChildPath "..\dist"
     if (Test-Path $distPath) {
         Remove-Item -Path (Join-Path $distPath "win-unpacked") -Recurse -Force -ErrorAction SilentlyContinue
         Get-ChildItem -Path $distPath -Filter "*.exe" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
         Get-ChildItem -Path $distPath -Filter "*.blockmap" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     }
-    npm run build
+    npx electron-builder
     if ($LASTEXITCODE -ne 0) {
-        throw "[ERRORE] Build o impacchettamento NSIS fallito con codice di uscita $LASTEXITCODE. Interruzione immediata."
+        throw "[ERRORE] Impacchettamento NSIS fallito con codice di uscita $LASTEXITCODE. Interruzione immediata."
     }
-    if (-not $Fast) { Write-Host "[OK] Compilazione ed impacchettamento completati." -ForegroundColor Green }
+    if (-not $Fast) { Write-Host "[OK] Impacchettamento completato." -ForegroundColor Green }
 
-    # 4. Validazione Artifact NSIS generati
-    if (-not $Fast) { Write-Host "`n[4/4] Verifica degli artifact di installazione NSIS in dist/..." -ForegroundColor Yellow }
+    # 5. Validazione Artifact NSIS generati
+    if (-not $Fast) { Write-Host "`n[5/5] Verifica degli artifact di installazione NSIS in dist/..." -ForegroundColor Yellow }
     $distPath = Join-Path -Path $PSScriptRoot -ChildPath "..\dist"
     $nsisInstaller = Get-ChildItem -Path $distPath -Filter "*.exe" | Where-Object { $_.Name -like "*Setup*.exe" } | Select-Object -First 1
 

@@ -15,6 +15,7 @@
     "test:agent": "vitest run --reporter=dot electron/core/domain/agent",
     "test:skills": "vitest run --reporter=dot electron/core/domain/skills",
     "test:sidecar": "powershell -ExecutionPolicy Bypass -File ./scripts/test_sidecar_health.ps1 -Fast",
+    "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/test_bundle_smoke.ps1 -Fast",
     "lint": "powershell -ExecutionPolicy Bypass -File ./scripts/lint_format.ps1 -Fast",
     "clean": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Repo",
     "clean:full": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Full",

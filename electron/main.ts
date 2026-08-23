@@ -13,6 +13,7 @@ import { registerSkillIpcHandlers } from './core/presentation/skillIpc'
 import { registerSessionHistoryIpcHandlers } from './core/presentation/sessionHistoryIpc'
 import { registerProjectRegistryIpcHandlers } from './core/presentation/projectRegistryIpc'
 import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
+import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = app.isPackaged
@@ -113,9 +114,6 @@ app.whenReady().then(() => {
   // Clean startup residuals
   taskRunner.cleanTempResiduals().catch(() => {})
 
-  createWindow()
-  sidecarProcessManager.startPythonSidecar()
-
   registerSystemIpcHandlers(() => win)
   registerOllamaIpcHandlers()
   registerWorkspaceIpcHandlers()
@@ -125,4 +123,16 @@ app.whenReady().then(() => {
   registerSessionHistoryIpcHandlers()
   registerProjectRegistryIpcHandlers()
   registerDiagnosticsIpcHandlers()
+  registerSettingsIpcHandlers()
+
+  if (process.env.ONLYRAG_SMOKE_TEST === '1' || process.argv.includes('--smoke-test')) {
+    logger.log('INFO', 'MainProcess', '[SMOKE_TEST_PASS] Main process bundle and IPC handlers initialized successfully.')
+    setTimeout(() => {
+      app.quit()
+    }, 50)
+    return
+  }
+
+  createWindow()
+  sidecarProcessManager.startPythonSidecar()
 })

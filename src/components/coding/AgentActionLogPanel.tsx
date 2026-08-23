@@ -22,6 +22,7 @@ interface AgentActionLogPanelProps {
   maxSteps?: number | string
   activeSkills?: string[]
   streamingText?: string
+  currentStatusText?: string
   onExecute: () => void
   onCancel: () => void
   pinnedFiles: Map<string, WorkspaceFile>
@@ -88,6 +89,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   currentStep = 0,
   maxSteps = 50,
   streamingText = '',
+  currentStatusText = '',
   onExecute,
   onCancel,
   pinnedFiles,
@@ -194,7 +196,10 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         onOpenFile={onOpenFile}
         onOpenRightTab={onOpenRightTab}
         isExecuting={isExecuting}
+        currentStep={currentStep}
+        maxSteps={maxSteps}
         streamingText={streamingText}
+        currentStatusText={currentStatusText}
         scrollContainerRef={scrollContainerRef}
         bottomRef={bottomRef}
         isScrolledUp={isScrolledUp}

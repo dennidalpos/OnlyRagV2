@@ -16,7 +16,10 @@ interface AgentTimelineProps {
   onOpenFile?: (file: WorkspaceFile) => void
   onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
   isExecuting: boolean
+  currentStep?: number
+  maxSteps?: number | string
   streamingText: string
+  currentStatusText?: string
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   bottomRef: React.RefObject<HTMLDivElement | null>
   isScrolledUp: boolean
@@ -46,7 +49,10 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   onOpenFile,
   onOpenRightTab,
   isExecuting,
+  currentStep,
+  maxSteps,
   streamingText,
+  currentStatusText = '',
   scrollContainerRef,
   bottomRef,
   isScrolledUp,
@@ -230,13 +236,22 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       )}
 
       {isExecuting && (
-        <div className="p-3 rounded-2xl bg-[#111827] border border-slate-800 space-y-2 text-xs text-cyan-300 font-sans shadow-lg animate-in fade-in duration-150">
-          <div className="flex items-center gap-2.5">
-            <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-            <span className="font-semibold text-slate-200">{t('coding.runTask')}...</span>
+        <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#111827] to-[#0b0f17] border border-cyan-500/30 space-y-2 text-xs text-cyan-300 font-sans shadow-xl animate-in fade-in duration-150">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
+              <span className="font-semibold text-slate-100 truncate">
+                {currentStatusText || `${t('coding.runTask')}...`}
+              </span>
+            </div>
+            {currentStep !== undefined && currentStep > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-mono text-[10px] font-bold shrink-0 shadow-sm">
+                Step {currentStep}{maxSteps ? ` / ${maxSteps}` : ''}
+              </span>
+            )}
           </div>
           {streamingText && (
-            <div className="mt-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed shadow-inner">
+            <div className="mt-2 p-2.5 rounded-xl bg-slate-950/95 border border-slate-800/90 text-[11px] font-mono text-slate-200 overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed shadow-inner">
               {streamingText}
             </div>
           )}

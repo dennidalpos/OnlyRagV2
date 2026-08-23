@@ -32,7 +32,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
   const isWordWrap = settings?.editorWordWrap !== false
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#080c14] relative">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-[#080c14] relative">
       {/* Breadcrumbs Navigation Bar */}
       {c.selectedFile && (
         <div className="px-4 py-1.5 bg-[#0b101b] border-b border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400 shrink-0">
@@ -60,10 +60,11 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
       )}
 
       {/* Editor Content Area */}
-      <div className="flex-1 relative overflow-hidden bg-[#080c14]">
+      <div className="flex-1 w-full h-full relative overflow-hidden bg-[#080c14] flex flex-col">
         {c.selectedFile ? (
           isDiffMode ? (
             <DiffEditor
+              width="100%"
               height="100%"
               theme={ONLYRAG_MONACO_THEME_NAME}
               beforeMount={defineOnlyRagMonacoTheme}
@@ -78,6 +79,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
             />
           ) : (
             <Editor
+              width="100%"
               height="100%"
               theme={ONLYRAG_MONACO_THEME_NAME}
               beforeMount={defineOnlyRagMonacoTheme}

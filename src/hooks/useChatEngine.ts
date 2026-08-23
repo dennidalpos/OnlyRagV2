@@ -110,8 +110,16 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const autoScrollRef = useRef<boolean>(true)
   const isScrolledUpRef = useRef<boolean>(false)
 
-  // Persist conversation changes to localStorage
+  const prevActiveIdRef = useRef<string>(activeConversationId)
+
+  // Persist conversation changes to localStorage safely without race condition on conversation switch
   useEffect(() => {
+    // If the conversation ID just changed, do not persist yet — we are loading the target conversation
+    if (prevActiveIdRef.current !== activeConversationId) {
+      prevActiveIdRef.current = activeConversationId
+      return
+    }
+
     if (!activeConversationId) return
     setConversations((prev) => {
       const next = prev.map((conv) => {
@@ -526,11 +534,15 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     const target = conversations.find((c) => c.id === id)
     if (!target) return
 
+    prevActiveIdRef.current = id
     setActiveConversationId(id)
     setMessages(target.messages && target.messages.length > 0 ? target.messages : [createDefaultGreetingMessage()])
     setSelectedDocIds(new Set(target.selectedDocIds || []))
     setInput('')
     setShowMentions(false)
+    try {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, id)
+    } catch {}
   }, [conversations, isGenerating])
 
   const handleNewChat = useCallback(() => {
@@ -556,9 +568,13 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       updatedAt: new Date().toISOString(),
     }
 
+    prevActiveIdRef.current = newConv.id
     setConversations((prev) => [newConv, ...prev])
     setActiveConversationId(newConv.id)
     setMessages(newConv.messages)
+    try {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, newConv.id)
+    } catch {}
   }, [isGenerating])
 
   const deleteConversation = useCallback((id: string) => {
@@ -587,16 +603,24 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }
+        prevActiveIdRef.current = fresh.id
         setActiveConversationId(fresh.id)
         setMessages(fresh.messages)
         setSelectedDocIds(new Set())
+        try {
+          localStorage.setItem(STORAGE_KEY_ACTIVE_ID, fresh.id)
+        } catch {}
         return [fresh]
       }
       if (activeConversationId === id) {
         const nextActive = remaining[0]
+        prevActiveIdRef.current = nextActive.id
         setActiveConversationId(nextActive.id)
         setMessages(nextActive.messages && nextActive.messages.length > 0 ? nextActive.messages : [createDefaultGreetingMessage()])
         setSelectedDocIds(new Set(nextActive.selectedDocIds || []))
+        try {
+          localStorage.setItem(STORAGE_KEY_ACTIVE_ID, nextActive.id)
+        } catch {}
       }
       return remaining
     })

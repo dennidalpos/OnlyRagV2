@@ -75,8 +75,8 @@ export function getStandardMonacoOptions(config: MonacoOptionsConfig = {}) {
     readOnly = false,
     minimap = false,
     lineNumbers = 'on',
-    fontSize = 13,
-    lineHeight = 20,
+    fontSize = 14,
+    lineHeight = 22,
     renderSideBySide = false,
     ...rest
   } = config

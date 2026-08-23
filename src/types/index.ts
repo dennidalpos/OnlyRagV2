@@ -509,6 +509,9 @@ export interface IElectronAPI {
   removeProjectFromRegistry?: (projectPath: string) => Promise<boolean>
   /** One-shot import of the project list previously persisted in localStorage. */
   migrateLegacyProjects?: (projects: unknown) => Promise<{ migrated: number }>
+  /** Unified filesystem settings store (settings.json under userData). */
+  getAppSettings?: () => Promise<AppSettings | null>
+  saveAppSettings?: (settings: AppSettings) => Promise<boolean>
   /** Fire-and-forget: embeds and upserts one completed prompt into the semantic history index. */
   indexPromptHistory?: (payload: {
     id: string

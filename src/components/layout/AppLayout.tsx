@@ -99,6 +99,40 @@ export const AppLayout: React.FC = () => {
     }
   }, [settings.hasCompletedInitialSetup, settings.defaultModel])
 
+  // Load and synchronize settings with canonical Electron main process filesystem store
+  useEffect(() => {
+    let isMounted = true
+    const loadMainSettings = async () => {
+      try {
+        if (window.electronAPI?.getAppSettings) {
+          const backendSettings = await window.electronAPI.getAppSettings()
+          if (backendSettings && isMounted) {
+            setSettings(backendSettings)
+            if (backendSettings.language && backendSettings.language !== language) {
+              setLanguage(backendSettings.language)
+            }
+            try {
+              localStorage.setItem('onlyrag_app_settings', JSON.stringify(backendSettings))
+            } catch {}
+            return
+          }
+        }
+        // If backend store has no settings yet, migrate existing localStorage settings to backend store
+        const saved = localStorage.getItem('onlyrag_app_settings')
+        if (saved && window.electronAPI?.saveAppSettings) {
+          const parsed = JSON.parse(saved)
+          await window.electronAPI.saveAppSettings(parsed)
+        }
+      } catch (err: any) {
+        logger.error('AppLayout', `Failed initializing settings from filesystem store: ${err?.message}`)
+      }
+    }
+    loadMainSettings()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     // Applied before setSettings: React runs state updaters during the render phase, so
     // updating another component's state (I18nProvider) from inside one is a render-phase
@@ -159,6 +193,11 @@ export const AppLayout: React.FC = () => {
           localStorage.setItem('onlyrag_app_settings', JSON.stringify(updated))
         } catch (err: any) {
           logger.error('AppLayout', `Failed persisting app settings: ${err.message}`)
+        }
+        if (window.electronAPI?.saveAppSettings) {
+          window.electronAPI.saveAppSettings(updated).catch((err: any) => {
+            logger.error('AppLayout', `Failed saving app settings to main store: ${err?.message}`)
+          })
         }
       })
       return updated

@@ -65,6 +65,7 @@ export function useCodingAgent(settings?: AppSettings) {
 
   const [activeSkills, setActiveSkills] = useState<string[]>([])
   const [streamingText, setStreamingText] = useState<string>('')
+  const [currentStatusText, setCurrentStatusText] = useState<string>('')
   const [currentStep, setCurrentStep] = useState<number>(0)
   const [maxSteps, setMaxSteps] = useState<number | string>(50)
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
@@ -274,6 +275,11 @@ export function useCodingAgent(settings?: AppSettings) {
         setCurrentLiveModel((log as any).meta.modelName)
       }
 
+      if (log.type === 'tool_call') {
+        setStreamingText('')
+        setCurrentStatusText(log.message)
+      }
+
       if (log.type === 'terminal' && log.detail) {
         appendTerminalLogs(`\n${log.detail}\n`)
         if (
@@ -332,9 +338,13 @@ export function useCodingAgent(settings?: AppSettings) {
       }
     })
 
-    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string }) => {
+    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string; statusText?: string }) => {
       currentStepRef.current = data.step
       setCurrentStep(data.step)
+      setStreamingText('')
+      if (data?.statusText) {
+        setCurrentStatusText(data.statusText)
+      }
       if (data?.maxStepsLabel !== undefined) setMaxSteps(data.maxStepsLabel)
       else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
     })
@@ -363,6 +373,7 @@ export function useCodingAgent(settings?: AppSettings) {
       closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
       setIsExecuting(false)
       setStreamingText('')
+      setCurrentStatusText('')
 
       if (shellCommandTimerRef.current) {
         clearTimeout(shellCommandTimerRef.current)
@@ -695,6 +706,7 @@ export function useCodingAgent(settings?: AppSettings) {
     maxSteps,
     activeSkills,
     streamingText,
+    currentStatusText,
     pendingApproval,
     setPendingApproval,
     handleRunGrepSearch,

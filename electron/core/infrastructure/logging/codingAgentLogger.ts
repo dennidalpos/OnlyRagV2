@@ -3,9 +3,26 @@ import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 
+/** Below this, eliding a shared prefix costs more in explanation than it saves. */
+const MIN_ELIDABLE_PREFIX_CHARS = 400
+
 export class CodingAgentLogger {
   private logFilePath: string
   private maxSizeBytes = 10 * 1024 * 1024 // 10 MB per audit log
+  /**
+   * Previous turn prompt of each live session, kept to elide the part the next one repeats.
+   *
+   * A turn prompt is a stable head (user instruction, execution rules) followed by the parts
+   * that move (plan state, trajectory, tool outputs). Writing the head out on every step made
+   * prompts 69% of a 734 KB audit log for a single 38-step session, burying the 11% that says
+   * what the agent actually did.
+   *
+   * The anchor is the PREVIOUS step, not the session's first prompt: consecutive prompts share
+   * far more than distant ones (the plan block is usually unchanged between adjacent steps),
+   * which measured -76% against -50% on that session. Entries stay reconstructable by reading
+   * the log forward, which is how a session log is read anyway.
+   */
+  private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
 
   constructor() {
     const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
@@ -153,6 +170,14 @@ Source Prompt: "${prompt.slice(0, 300)}"`
     this.writeEntry(`[SKILLS ACTIVATED] Session: ${sessionId}`, content)
   }
 
+  /** Length of the longest prefix `a` and `b` share. */
+  private static commonPrefixLength(a: string, b: string): number {
+    const limit = Math.min(a.length, b.length)
+    let i = 0
+    while (i < limit && a.charCodeAt(i) === b.charCodeAt(i)) i++
+    return i
+  }
+
   public logTurnPrompt(
     sessionId: string,
     step: number,
@@ -160,12 +185,50 @@ Source Prompt: "${prompt.slice(0, 300)}"`
     numCtx: number,
     prompt: string
   ): void {
-    const content = `Session ID: ${sessionId} | Step: ${step} | Target Model: ${model} | Context Limit: ${numCtx}
+    const header = `Session ID: ${sessionId} | Step: ${step} | Target Model: ${model} | Context Limit: ${numCtx}`
+    const previous = this.previousPromptBySession.get(sessionId)
+    this.previousPromptBySession.set(sessionId, { step, prompt })
+
+    if (previous === undefined) {
+      this.writeEntry(
+        `[STEP ${step} - PROMPT SENT TO LLM] Session: ${sessionId}`,
+        `${header} | Baseline: full prompt (${prompt.length} chars)
 Turn Prompt Payload:
 \`\`\`
 ${prompt.slice(0, 15000)}
 \`\`\``
-    this.writeEntry(`[STEP ${step} - PROMPT SENT TO LLM] Session: ${sessionId}`, content)
+      )
+      return
+    }
+
+    // Snap the boundary back to a line start: a raw character prefix cuts mid-token, so a
+    // delta would open with "2 with new trajectory" instead of the whole "PLAN: step 2 ..."
+    // line, and the reader cannot tell what changed without fetching the baseline.
+    const rawShared = CodingAgentLogger.commonPrefixLength(previous.prompt, prompt)
+    const sharedChars = prompt.lastIndexOf('\n', Math.max(0, rawShared - 1)) + 1
+
+    if (sharedChars < MIN_ELIDABLE_PREFIX_CHARS) {
+      this.writeEntry(
+        `[STEP ${step} - PROMPT SENT TO LLM] Session: ${sessionId}`,
+        `${header} | Diverged from step ${previous.step} (${prompt.length} chars)
+Turn Prompt Payload:
+\`\`\`
+${prompt.slice(0, 15000)}
+\`\`\``
+      )
+      return
+    }
+
+    const tail = prompt.slice(sharedChars)
+    this.writeEntry(
+      `[STEP ${step} - PROMPT SENT TO LLM] Session: ${sessionId}`,
+      `${header} | Total: ${prompt.length} chars
+[First ${sharedChars} chars identical to step ${previous.step}'s prompt — see that entry for ${sessionId}]
+Turn Prompt Delta:
+\`\`\`
+${tail.slice(0, 15000)}
+\`\`\``
+    )
   }
 
   public logLlmResponse(sessionId: string, step: number, rawResponse: string): void {
@@ -207,6 +270,30 @@ ${result}
 \`\`\`
 ${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` : ''}`
     this.writeEntry(`[STEP ${step} - TOOL RESULT COMPLETED] ${tool}`, content)
+  }
+
+  /**
+   * Records one milestone changing status, with what caused it.
+   *
+   * The audit log used to carry only full plan snapshots, one per step — 14% of the file,
+   * and still not enough to answer the question that actually matters when a plan closes
+   * something it should not have: which step changed this milestone, and why. Reconstructing
+   * that meant diffing consecutive snapshots by hand.
+   */
+  public logMilestoneTransition(
+    sessionId: string,
+    step: number,
+    milestoneId: string,
+    milestoneTitle: string,
+    fromStatus: string,
+    toStatus: string,
+    cause: string
+  ): void {
+    const content = `Session ID: ${sessionId} | Step: ${step}
+Milestone: ${milestoneId} — ${milestoneTitle}
+Transition: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}
+Cause: ${cause}`
+    this.writeEntry(`[STEP ${step} - MILESTONE ${milestoneId}: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}] Session: ${sessionId}`, content)
   }
 
   public logPlanMilestoneUpdate(
@@ -252,6 +339,9 @@ ${interventionMessage}
   }
 
   public logSessionEnd(sessionId: string, totalSteps: number, success: boolean, summary: string): void {
+    // The anchor exists only to elide repeated prompt text within one live session; keeping
+    // it after the session ends would leak a full prompt per session for the process lifetime.
+    this.previousPromptBySession.delete(sessionId)
     const content = `Session ID: ${sessionId}
 Status: ${success ? 'COMPLETED' : 'STOPPED/FAILED'}
 Total Steps: ${totalSteps}

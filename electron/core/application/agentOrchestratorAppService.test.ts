@@ -33,6 +33,12 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-test-'))
     vi.clearAllMocks()
+    // clearAllMocks resets call history but NOT the mockResolvedValueOnce queue, and every
+    // test here scripts a turn-by-turn sequence of LLM replies. A test that consumes fewer
+    // replies than it queued therefore leaked the remainder into the next test, which then
+    // ran against another test's script — the failures surfaced far from their cause and
+    // moved whenever the loop's step count changed. mockReset drains the queue too.
+    vi.mocked(AgentStreamTransport.streamCompletion).mockReset()
   })
 
   afterEach(() => {

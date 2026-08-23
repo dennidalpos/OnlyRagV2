@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Modal } from './Modal'
 import { AppSettings } from '../../types'
 import {
   FeatureModule,
@@ -183,16 +184,6 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   }, [isOpen, module, activeModelName, settings])
 
   // ESC key listener for accessibility
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -268,13 +259,12 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   const wordCount = promptText.trim() ? promptText.trim().split(/\s+/).length : 0
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="system-prompt-modal-title"
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="system-prompt-modal-title"
+      panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
     >
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
           <div className="flex items-center gap-3">
@@ -441,7 +431,6 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

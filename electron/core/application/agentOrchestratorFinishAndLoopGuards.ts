@@ -14,8 +14,13 @@ import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from '
  */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
   if (ctx.agentMode === 'agent') {
+    // `failed` milestones are abandoned work, not outstanding work: the loop guard gave up on
+    // them deliberately and the plan block already orders the model to report them as
+    // incomplete. Counting them as pending made this gate demand "update milestone statuses to
+    // verified" for milestones that can never reach verified, contradicting that same order.
+    // The build requirement below is untouched — that is the gate that actually protects quality.
     const nonFinishPendingMilestones = ctx.goalPlanner.getMilestones().filter(
-      (m) => m.status !== 'verified' && !isCompletionMilestoneTitle(m.title)
+      (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
     )
     const pendingMilestonesCount = nonFinishPendingMilestones.length
 
@@ -191,6 +196,12 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     // giving up, not completing the task, so it must never be recorded as a success.
     const stagSummary = `Pausa per stagnazione: raggiunti ${ctx.state.stagnationStreak} step consecutivi senza progresso.`
     ctx.emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
+    // Without this the audit log simply stopped mid-session with no outcome recorded, which
+    // is exactly how session-1787476734227-nkn0 ended -- 38 steps and no way to tell from the
+    // log whether it finished, crashed or gave up.
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, stagSummary)
+    }
     ctx.emitDone(false, stagSummary)
     await ctx.persistCurrentState()
     ctx.finalizeSession()

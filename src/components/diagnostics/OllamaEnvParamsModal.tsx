@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, {useState} from 'react'
+import { Modal } from '../common/Modal'
 import { OllamaEnvConfig } from '../../services/hardwareRecommendationEngine'
 import { Zap, X, Copy, Check, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../i18n'
@@ -19,16 +20,6 @@ export const OllamaEnvParamsModal: React.FC<OllamaEnvParamsModalProps> = ({
   const { t } = useTranslation()
   const [copiedScript, setCopiedScript] = useState<boolean>(false)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -39,13 +30,12 @@ export const OllamaEnvParamsModal: React.FC<OllamaEnvParamsModalProps> = ({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="ollama-env-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="ollama-env-modal-title"
+      panelClassName="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
     >
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
           <div className="flex items-center gap-3">
@@ -132,7 +122,6 @@ export const OllamaEnvParamsModal: React.FC<OllamaEnvParamsModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

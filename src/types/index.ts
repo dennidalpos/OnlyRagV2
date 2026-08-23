@@ -475,7 +475,6 @@ export interface IElectronAPI {
   getProjectMap: (dirPath: string) => Promise<ProjectMapItem[]>
   readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => Promise<{ success: boolean; content?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
   writeWorkspaceFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>
-  deleteWorkspaceFile: (filePath: string) => Promise<{ success: boolean; error?: string }>
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) => Promise<{ success: boolean; error?: string }>
   multiReplaceWorkspaceFileChunks: (filePath: string, replacements: AgentToolReplacementChunk[]) => Promise<{ success: boolean; replacedCount?: number; error?: string }>
   grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => Promise<GrepSearchResult[]>

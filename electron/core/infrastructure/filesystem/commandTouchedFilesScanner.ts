@@ -24,6 +24,41 @@ export interface CommandTouchedFilesScan {
   files: string[]
   /** True when the walk hit MAX_SCANNED_ENTRIES and the file list may be incomplete. */
   truncated: boolean
+  /**
+   * Top-level directories the command created inside the workspace root.
+   *
+   * A project generator handed a project name creates one of these and puts the whole
+   * project inside it, which is never what the agent was asked for — the workspace root IS
+   * the project root. `npx create-react-app project-dashboard-task` did exactly that in
+   * session-1787476734227-nkn0, then failed mid-install and cleaned up only partially.
+   */
+  createdTopLevelDirs: string[]
+}
+
+/**
+ * Lists top-level directories created at or after `startedAtMs`.
+ *
+ * Creation time, not modification time: a directory's mtime changes whenever a child is
+ * added, so `src/` would look "created" by any command that wrote a file into it.
+ */
+function findCreatedTopLevelDirs(root: string, thresholdMs: number): string[] {
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const created: string[] = []
+  for (const entry of entries) {
+    if (!entry.isDirectory() || isIgnoredPath(entry.name, true)) continue
+    try {
+      if (fs.statSync(path.join(root, entry.name)).birthtimeMs >= thresholdMs) created.push(entry.name)
+    } catch {
+      // Vanished between readdir and stat: nothing to report.
+    }
+  }
+  return created.sort()
 }
 
 /**
@@ -86,5 +121,9 @@ export function scanCommandTouchedFiles(
   }
 
   walk(root)
-  return { files: files.sort(), truncated }
+  return {
+    files: files.sort(),
+    truncated,
+    createdTopLevelDirs: findCreatedTopLevelDirs(root, threshold),
+  }
 }

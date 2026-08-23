@@ -27,6 +27,51 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
     expect(prompt).toContain('Implement feature in main.ts')
   })
 
+  it('orders an unambiguous finish when only the closing milestone remains, never a contradiction', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Create src/App.tsx', status: 'verified' },
+      { id: 'm-2', title: 'Create src/pages/Tasks.tsx', status: 'failed' },
+      { id: 'm-3', title: 'Riepilogo finale e arresto (invoke finish)', status: 'pending' },
+    ])
+
+    const prompt = planner.compileProgressPrompt()
+
+    expect(prompt).toContain('[NO OPERATIONAL MILESTONES REMAIN - ACTION REQUIRED]')
+    // The contradiction that killed session-1787471833056-o5fk: ordering finish and
+    // forbidding it in the same prompt left the model with no legal move.
+    expect(prompt).not.toContain('Do NOT invoke \"finish\"')
+    expect(prompt).not.toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
+  })
+
+  it('lists abandoned milestones so the final report can own them', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Create src/pages/Tasks.tsx', status: 'failed' },
+      { id: 'm-2', title: 'Completamento e arresto (invoke finish)', status: 'pending' },
+    ])
+
+    const prompt = planner.compileProgressPrompt()
+
+    expect(prompt).toContain('MUST be reported as incomplete in your summary')
+    expect(prompt).toContain('- m-1: Create src/pages/Tasks.tsx')
+  })
+
+  it('keeps the ordinary focus block while operational work is still pending', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      { id: 'm-1', title: 'Create src/App.tsx', status: 'failed' },
+      { id: 'm-2', title: 'Create src/pages/Tasks.tsx', status: 'pending' },
+      { id: 'm-3', title: 'Riepilogo finale (invoke finish)', status: 'pending' },
+    ])
+
+    const prompt = planner.compileProgressPrompt()
+
+    expect(prompt).toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
+    expect(prompt).toContain('Task m-2: Create src/pages/Tasks.tsx')
+    expect(prompt).not.toContain('[NO OPERATIONAL MILESTONES REMAIN')
+  })
+
   it('should parse markdown checklist plans from LLM text', () => {
     const rawOutput = `
 Here is my plan to solve the task:

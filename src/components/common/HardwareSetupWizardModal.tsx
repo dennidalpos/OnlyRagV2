@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { Modal } from './Modal'
 import { AppSettings, DiagnosticsData, HardwareProfile } from '../../types'
 import {
   analyzeHardwareAndRecommend,
@@ -324,7 +325,9 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     }
 
     if (diskCheck && !diskCheck.allowed) {
-      alert(
+      // Reported through the wizard's own error channel rather than a blocking native alert:
+      // the message stays inside the dialog the user is looking at, in the app's own styling.
+      setPullErrorDetail(
         t('hardwareWizard.insufficientDiskSpaceAlert', {
           free: diskCheck.freeGB,
           required: diskCheck.requiredGB,
@@ -469,13 +472,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="wizard-modal-title"
-      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="wizard-modal-title"
+      panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
     >
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl flex flex-col shadow-2xl overflow-hidden max-h-[92vh]">
         {/* Wizard Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center gap-3">
@@ -710,7 +712,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

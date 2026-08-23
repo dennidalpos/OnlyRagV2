@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Modal } from '../../common/Modal'
 import { X, Plus, Globe, AlertCircle } from 'lucide-react'
 import { CustomHubInput, HubSourceType } from '../../../types'
 import { useTranslation } from '../../../i18n'
@@ -23,16 +24,6 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  React.useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -60,13 +51,13 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-custom-hub-title"
-      className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="add-custom-hub-title"
+      layer="nested"
+      panelClassName="relative max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
     >
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
           <div className="flex items-center gap-3">
@@ -171,7 +162,6 @@ export const AddCustomHubModal: React.FC<AddCustomHubModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

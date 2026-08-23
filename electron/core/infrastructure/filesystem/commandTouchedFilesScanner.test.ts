@@ -85,6 +85,57 @@ describe('scanCommandTouchedFiles', () => {
   })
 
   it('returns an empty result for a workspace path that does not exist', () => {
-    expect(scanCommandTouchedFiles(path.join(tempDir, 'missing'), Date.now())).toEqual({ files: [], truncated: false })
+    expect(scanCommandTouchedFiles(path.join(tempDir, 'missing'), Date.now())).toEqual({
+      files: [],
+      truncated: false,
+      createdTopLevelDirs: [],
+    })
+  })
+})
+
+describe('scanCommandTouchedFiles — nested project directories', () => {
+  let tempDir: string
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-nested-test-'))
+  })
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('reports a project directory a generator created in the workspace root', () => {
+    const startedAt = Date.now()
+    // The exact shape of session-1787476734227-nkn0 step 1.
+    fs.mkdirSync(path.join(tempDir, 'project-dashboard-task', 'src'), { recursive: true })
+
+    expect(scanCommandTouchedFiles(tempDir, startedAt).createdTopLevelDirs).toEqual(['project-dashboard-task'])
+  })
+
+  it('does not report a pre-existing directory merely because files were written into it', () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export const App = () => null')
+
+    // "Pre-existing" means created before the command started, and creation time is what the
+    // scan reads — utimes cannot backdate it, so the command start is placed after instead.
+    // This is the case that must not regress: a directory's mtime moves whenever a child is
+    // written into it, so an mtime-based check would report `src` on every single command.
+    const startedAfterTheDirectoryExisted = Date.now() + 5000
+
+    expect(scanCommandTouchedFiles(tempDir, startedAfterTheDirectoryExisted).createdTopLevelDirs).toEqual([])
+  })
+
+  it('does not report ignored trees such as node_modules', () => {
+    const startedAt = Date.now()
+    fs.mkdirSync(path.join(tempDir, 'node_modules', 'react'), { recursive: true })
+
+    expect(scanCommandTouchedFiles(tempDir, startedAt).createdTopLevelDirs).toEqual([])
+  })
+
+  it('reports nothing when the command created no directory', () => {
+    const startedAt = Date.now()
+    fs.writeFileSync(path.join(tempDir, 'package.json'), '{}')
+
+    expect(scanCommandTouchedFiles(tempDir, startedAt).createdTopLevelDirs).toEqual([])
   })
 })

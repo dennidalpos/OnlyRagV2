@@ -1,4 +1,5 @@
 import os from 'node:os'
+import { workspaceAppService } from './workspaceAppService'
 import path from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { shell } from 'electron'
@@ -964,7 +965,12 @@ Do not retry the same installation. Continue without this tool or ask the user t
         if (filePath) {
           const beforeContent = this.readContentSafely(pathCheck.safePath)
           this.journal.recordBeforeModification(pathCheck.safePath)
-          const res = await this.repo.deleteFile(pathCheck.safePath)
+          // Routed through workspaceAppService, not the repository directly: that is what
+          // broadcasts `workspace:file-deleted`, which the renderer uses to close the deleted
+          // file's editor tab and drop it from the pinned set (purgeFileReferences in
+          // useCodingAgent). Deleting straight through the repository left those references
+          // pointing at a file that no longer existed.
+          const res = await workspaceAppService.deleteFile(pathCheck.safePath)
           if (res.success) {
             return {
               outputForHistory: `Successfully deleted file ${filePath}`,

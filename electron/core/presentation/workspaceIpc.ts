@@ -18,10 +18,6 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.writeFile(filePath, content)
   })
 
-  ipcMain.handle('workspace:delete-file', async (_event: unknown, filePath: string) => {
-    return workspaceAppService.deleteFile(filePath)
-  })
-
   ipcMain.handle('workspace:replace-chunk', async (_event: unknown, filePath: string, targetContent: string, replacementContent: string) => {
     return workspaceAppService.replaceChunk(filePath, targetContent, replacementContent)
   })

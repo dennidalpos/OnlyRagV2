@@ -163,7 +163,6 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   }
 
   const handleResetSkill = async (skillId: string) => {
-    if (!confirm(t('skills.confirmReset'))) return
     setIsLoading(true)
     const res = await apiService.resetSkillToOriginal(skillId, workspacePath || undefined)
     if (res.success) {
@@ -176,7 +175,6 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   }
 
   const handleDeleteSkill = async (skillId: string) => {
-    if (!confirm(t('skills.confirmDelete'))) return
     setIsLoading(true)
     const res = await apiService.uninstallSkill(skillId, workspacePath || undefined)
     if (res.success) {
@@ -202,7 +200,6 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   }
 
   const handleRemoveCustomHub = async (sourceId: string) => {
-    if (!confirm(t('skills.confirmRemoveHub'))) return
     setIsLoading(true)
     const res = await apiService.removeCustomHubSource(sourceId)
     if (res.success) {

@@ -71,8 +71,9 @@ export function extractDeliverablePaths(title: string): string[] {
  * Decides whether a milestone's file deliverables are all present on disk.
  *
  * Returns `not_applicable` when the title names no path at all — such milestones
- * ("design the tablet layout") have no falsifiable artefact and are left to the
- * existing verification paths and to the loop guard's structural escape.
+ * ("design the tablet layout") have no falsifiable artefact. Callers must NOT read that
+ * as permission to close them: it means the opposite, that nothing here can attest to
+ * them either way.
  *
  * A title that names paths which do not exist yet returns `unsatisfied`, which is
  * also what a false-positive path token ("Node.js") yields: the resolver can only
@@ -91,4 +92,28 @@ export function resolveMilestoneDeliverableStatus(
   }
 
   return 'satisfied'
+}
+
+/**
+ * True when `mutatedPath` is one of the files this milestone set out to produce.
+ *
+ * Presence alone is not evidence that THIS milestone advanced: a run that writes
+ * `src/App.tsx` would otherwise close any milestone whose files happened to already
+ * exist. Requiring the write to land on the milestone's own deliverable ties the
+ * closure to work actually done for it.
+ *
+ * Comparison is on normalised workspace-relative paths, and also accepts an absolute
+ * path that ends with the deliverable, since tool results report absolute paths.
+ */
+export function isDeliverableOfMilestone(title: string, mutatedPath: string | undefined): boolean {
+  if (!mutatedPath) return false
+
+  const normalisedMutation = mutatedPath.replace(/\\/g, '/').replace(/^\.\//, '')
+  if (!normalisedMutation) return false
+
+  return extractDeliverablePaths(title).some(
+    (deliverable) =>
+      normalisedMutation === deliverable ||
+      normalisedMutation.endsWith(`/${deliverable}`)
+  )
 }

@@ -1,5 +1,8 @@
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
+import { resolveMilestoneDeliverableStatus } from '../domain/agent/milestoneDeliverableResolver'
+import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -86,7 +89,25 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       }
     }
 
-    if (goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes)) {
+    // Evidence on disk outranks the model's self-report: see milestoneUpdateAuthority.ts.
+    // Checked after the verificationCommand run above, so a command that genuinely failed can
+    // still record a failure, and before the write, so a rejected update never lands.
+    const authorityVerdict = targetMilestone
+      ? resolveMilestoneUpdate({
+          current: targetMilestone,
+          requestedStatus: effectiveStatus,
+          requestedNotes: effectiveNotes,
+          deliverableStatus: workspacePath
+            ? resolveMilestoneDeliverableStatus(targetMilestone.title, createWorkspaceDeliverableProbe(workspacePath))
+            : 'not_applicable',
+        })
+      : null
+
+    if (authorityVerdict?.kind === 'reject') {
+      updateFailed = true
+      planFeedback = authorityVerdict.directive
+      planLog = `update_plan rejected: ${authorityVerdict.reason}`
+    } else if (goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes ?? `Set to '${effectiveStatus}' by the model at step ${stepCount}.`)) {
       const progress = goalPlanner.getProgressSummary()
       const mismatchNote =
         effectiveStatus !== nextStatus

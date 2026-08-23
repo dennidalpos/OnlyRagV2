@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { Modal } from '../../common/Modal'
 import { Check, Package, Store, Target, X } from 'lucide-react'
 import { SkillInstallApprovalRequest } from '../../../types'
 import { useTranslation } from '../../../i18n'
@@ -28,13 +29,14 @@ export const SkillInstallApprovalModal: React.FC<SkillInstallApprovalModalProps>
   if (!request) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="skill-install-modal-title"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+    <Modal
+      isOpen={Boolean(request)}
+      onClose={() => onReject(request.requestId)}
+      labelledById="skill-install-modal-title"
+      layer="approval"
+      dismissible={false}
+      panelClassName="max-w-md rounded-2xl border border-indigo-500/50 bg-[#0f172a] shadow-2xl text-slate-200 font-sans overflow-hidden"
     >
-      <div className="w-full max-w-md rounded-2xl border border-indigo-500/50 bg-[#0f172a] shadow-2xl text-slate-200 font-sans">
         <div className="flex items-center gap-2 p-4 border-b border-slate-800">
           <Package className="w-4 h-4 text-indigo-400" />
           <h2 id="skill-install-modal-title" className="text-sm font-bold text-indigo-300">{t('coding.skillInstallTitle')}</h2>
@@ -76,7 +78,6 @@ export const SkillInstallApprovalModal: React.FC<SkillInstallApprovalModalProps>
             <Check className="w-3.5 h-3.5" /> {t('coding.skillInstallApprove')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -58,7 +58,12 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
     const milestones = goalPlanner.getMilestones()
     return new SessionDebtTracker({
       sessionId,
-      completedTasks: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
+      // The evidence that closed each milestone is carried into the tracker, not just the
+      // fact that it closed. "m-14: Run the application — VERIFIED" told a reader nothing
+      // about whether the application had ever been run; the cause makes that auditable.
+      completedTasks: milestones
+        .filter((m) => m.status === 'verified')
+        .map((m) => `${m.id}: ${m.title}${m.notes ? ` — ${m.notes}` : ''}`),
       unresolvedIssues: milestones
         .filter((m) => m.status === 'failed')
         .map((m) => `${m.id}: ${m.title}${m.notes ? ` (${m.notes})` : ''}`),
@@ -106,9 +111,26 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
         statusText,
       })
     }
-    if (settings.enableCodingAgentDebugLog && goalPlanner.hasPlan()) {
-      codingAgentLogger.logPlanMilestoneUpdate(sessionId, stepCountBox.value, [...goalPlanner.getMilestones()], statusText)
-    }
+    // The full plan is NOT dumped here any more. Writing all 15 milestones on every step made
+    // those snapshots 14% of the audit log while still not saying which step moved a milestone
+    // or why -- the one question worth asking of them. The plan is written out in full when it
+    // is created or revised, and each status change is recorded as its own transition entry.
+  }
+
+  // Each milestone status change is recorded with its cause, so a plan that closes something
+  // it should not have can be traced to the exact step and rule that closed it.
+  if (settings.enableCodingAgentDebugLog) {
+    goalPlanner.onMilestoneTransition((transition) => {
+      codingAgentLogger.logMilestoneTransition(
+        sessionId,
+        stepCountBox.value,
+        transition.id,
+        transition.title,
+        transition.from,
+        transition.to,
+        transition.cause
+      )
+    })
   }
 
   return { buildSessionTracker, persistCurrentState, emitStepUpdate }

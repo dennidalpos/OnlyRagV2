@@ -1,4 +1,5 @@
 import React from 'react'
+import { Modal } from '../common/Modal'
 import { X, Sparkles, Download, CheckCircle } from 'lucide-react'
 import { SkillHubSourceSelector } from './skills/SkillHubSourceSelector'
 import { InstalledSkillsList } from './skills/InstalledSkillsList'
@@ -51,13 +52,13 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
   if (!isOpen) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="skill-hub-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150 select-text"
-    >
-      <div className="relative w-full max-w-4xl max-h-[85vh] flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        labelledById="skill-hub-modal-title"
+        panelClassName="relative max-w-4xl max-h-[85vh] flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden select-text"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
           <div className="flex items-center gap-3">
@@ -177,9 +178,10 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
             </div>
           )}
         </div>
-      </div>
+      </Modal>
 
-      {/* Sub-modals */}
+      {/* Sub-modals. Siblings, not children: each renders through its own portal on the
+          `nested` layer, so they stack above this dialog instead of inside its panel. */}
       <SkillEditorModal
         isOpen={isEditorOpen}
         onClose={() => {
@@ -202,6 +204,6 @@ export const SkillHubModal: React.FC<SkillHubModalProps> = ({ isOpen, onClose, w
         onAdd={handleAddCustomHub}
         isLoading={isLoading}
       />
-    </div>
+    </>
   )
 }

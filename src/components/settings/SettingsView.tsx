@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { DiagnosticsData, AppSettings } from '../../types'
 import {
   Settings,
@@ -18,6 +18,7 @@ import {
   Sparkles,
   Sliders,
 } from 'lucide-react'
+import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { ToggleSwitch } from '../common/ToggleSwitch'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
@@ -48,7 +49,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const { t, language, setLanguage } = useTranslation()
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
-  const [deletingModel, setDeletingModel] = useState<string | null>(null)
 
   const handleLanguageChange = (newLang: Language) => {
     setLanguage(newLang)
@@ -379,34 +379,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div>
                       <div className="text-xs font-bold text-slate-200">{modelName}</div>
                     </div>
-                    {deletingModel === modelName ? (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => { s.handleDeleteModel(modelName); setDeletingModel(null) }}
-                          className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] rounded-lg transition-colors focus-ring"
-                        >
-                          {t('settings.confirmDelete')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingModel(null)}
-                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded-lg transition-colors focus-ring"
-                        >
-                          {t('common.cancel')}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingModel(modelName)}
-                        className="p-1.5 text-slate-400 hover:text-red-400 transition-colors focus-ring rounded-lg"
-                        title={t('settings.deleteModel')}
-                        aria-label={`${t('settings.deleteModel')} ${modelName}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <InlineDestructiveConfirm
+                      itemLabel={modelName}
+                      iconClassName="w-4 h-4"
+                      actionLabel={t('settings.deleteModel')}
+                      onConfirm={() => s.handleDeleteModel(modelName)}
+                    />
                   </div>
                 ))}
               </div>

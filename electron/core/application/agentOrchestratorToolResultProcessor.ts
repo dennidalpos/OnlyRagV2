@@ -96,9 +96,9 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   if (isMutating && !isToolFailure) {
     await recordMutationSideEffects(ctx, targetParam)
   }
-  if (!isToolFailure) {
-    recordCommandTouchedFiles(ctx)
-  }
+  // Runs on failure too: a generator that aborts halfway still leaves directories behind,
+  // and that leftover is precisely what the agent needs to be told about.
+  recordCommandTouchedFiles(ctx, isToolFailure)
   trackVerification(ctx, isToolFailure)
 
   const toolName = parsedTool.tool

@@ -1,8 +1,10 @@
 import path from 'node:path'
-import { resolveMilestoneDeliverableStatus } from '../domain/agent/milestoneDeliverableResolver'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone } from '../domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import { scanCommandTouchedFiles } from '../infrastructure/filesystem/commandTouchedFilesScanner'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
+import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 /** Returns a `return` outcome if the stagnation circuit breaker trips into a hard stop. */
@@ -17,6 +19,11 @@ export async function runCircuitBreaker(
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
   const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
   ctx.emitLog('info', cbMsg)
+  // Every session-ending path must leave an outcome in the audit log; this one and the
+  // stagnation abort in handleLoopDetection were the two that did not.
+  if (ctx.settings.enableCodingAgentDebugLog) {
+    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, cbRes.suggestedAction || cbMsg)
+  }
   ctx.emitDone(false, cbRes.suggestedAction || cbMsg)
   await ctx.persistCurrentState()
   ctx.finalizeSession()
@@ -24,23 +31,25 @@ export async function runCircuitBreaker(
 }
 
 /**
- * Advances the active milestone when the file mutation that just landed satisfies it.
+ * Advances the active milestone when the file mutation that just landed is evidence for it.
  *
- * Without this, a milestone whose deliverable is a file has no route to `verified` at all
- * (trackVerification only reacts to run_tests / open_in_browser / build commands), so the
- * plan froze on its first entry for every model that does not volunteer `update_plan` —
- * and the prompt then re-issued that same milestone until the session died of stagnation.
+ * A milestone closes here on exactly one condition: the file just written is one the
+ * milestone itself set out to produce, AND every file it names is now on disk with content.
+ * Both halves matter. Without the first, a run writing `src/App.tsx` closed whichever
+ * milestone happened to be active — and without the second, a partially delivered milestone
+ * would close on its first file.
  *
- * Two cases advance, and both leave a note saying which rule fired:
- *  - `satisfied`      — every path named in the title is on disk with content.
- *  - `not_applicable` — the title names no artefact at all ("design the tablet layout").
- *    Nothing can ever falsify such a milestone, so gating progress on it is pure deadlock;
- *    one successful mutation while it is active is taken as the work having happened.
- *
- * Advancing here does NOT weaken the Definition of Done: handleFinishTool still refuses to
- * close a session that has never produced a passing build (verifyBeforeFinish).
+ * A milestone naming no artefact at all ("ensure buttons have a 44x44 touch target", "run
+ * the application") is NEVER closed here. It used to be, on the reasoning that nothing could
+ * falsify it so gating on it was deadlock — but that manufactured verification rather than
+ * granting it: in session-1787476734227-nkn0 the plan reported "Run the application to ensure
+ * it is fully runnable" as verified, at 13/15 overall, while the model was still writing
+ * src/App.tsx and the project had no entrypoint at all. Such milestones now close only
+ * through real evidence — a passing verification command, or an explicit `update_plan` the
+ * workspace does not contradict — and the loop guard's structural escape, not a fabricated
+ * pass, is what keeps them from deadlocking the plan.
  */
-function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext) {
+function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, mutatedPaths: Array<string | undefined>) {
   const activeM = ctx.goalPlanner.getActiveMilestone()
   if (!activeM || activeM.status === 'verified') return
 
@@ -48,29 +57,34 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext) {
   // or the plan would read 100% complete before the agent has written its final report.
   if (isCompletionMilestoneTitle(activeM.title)) return
 
-  if (!ctx.workspacePath) {
+  const markInProgress = () => {
     if (activeM.status === 'pending') ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
+  }
+
+  const workspacePath = ctx.workspacePath
+  if (!workspacePath) {
+    markInProgress()
     return
   }
 
-  const probe = createWorkspaceDeliverableProbe(ctx.workspacePath)
-  const deliverableStatus = resolveMilestoneDeliverableStatus(activeM.title, probe)
-
-  if (deliverableStatus === 'satisfied') {
-    ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified: every file named by this milestone exists on disk with content.')
-    ctx.emitLog('info', `✅ Milestone ${activeM.id} verificata: i file richiesti sono presenti nel workspace.`)
+  const evidencePath = mutatedPaths.find((candidate) => isDeliverableOfMilestone(activeM.title, candidate))
+  if (!evidencePath) {
+    markInProgress()
     return
   }
 
-  if (deliverableStatus === 'not_applicable') {
-    ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Auto-verified: milestone names no file artefact, advanced on a successful file mutation.')
-    ctx.emitLog('info', `➡️ Milestone ${activeM.id} avanzata: nessun artefatto verificabile dichiarato nel titolo.`)
+  const probe = createWorkspaceDeliverableProbe(workspacePath)
+  if (resolveMilestoneDeliverableStatus(activeM.title, probe) !== 'satisfied') {
+    markInProgress()
     return
   }
 
-  if (activeM.status === 'pending') {
-    ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
-  }
+  ctx.goalPlanner.updateMilestone(
+    activeM.id,
+    'verified',
+    `Verified: "${evidencePath}" was written for this milestone and every file it names is now on disk with content.`
+  )
+  ctx.emitLog('info', `✅ Milestone ${activeM.id} verificata: scritto "${evidencePath}", tutti i file richiesti sono presenti.`)
 }
 
 export async function recordMutationSideEffects(ctx: ToolResultProcessingContext, targetParam: string | undefined) {
@@ -91,11 +105,55 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
     }
   }
 
-  advanceActiveMilestoneOnMutation(ctx)
+  advanceActiveMilestoneOnMutation(ctx, [targetParam])
 }
 
 /**
- * Registers the files a successful shell command created or rewrote.
+ * Reports a nested project directory a shell command left in the workspace root.
+ *
+ * The workspace root IS the project root, but a generator handed a project name creates a
+ * subdirectory and puts everything inside it. That rule was written only into the PLANNER
+ * prompt, which the agent that actually runs commands never sees, so nothing stopped step 1
+ * of session-1787476734227-nkn0 from running `npx create-react-app project-dashboard-task`.
+ * It created `test_app/project-dashboard-task`, failed mid-install, and cleaned up only
+ * partially — the most likely source of the directories the user could not open afterwards.
+ *
+ * The directory is reported, never deleted: removing a directory the agent did not ask to
+ * remove is not a decision this guard gets to make silently.
+ */
+function reportNestedProjectDirs(ctx: ToolResultProcessingContext, createdDirs: string[], commandFailed: boolean) {
+  if (createdDirs.length === 0) return
+
+  const dirList = createdDirs.map((d) => `"${d}"`).join(', ')
+  const directive = commandFailed
+    ? `[FAILED COMMAND LEFT DIRECTORIES BEHIND]\nThe command failed, but it created ${dirList} in the workspace root and did not fully remove them. A partially written directory tree can be locked or unreadable.\nDirectives:\n1. Inspect ${dirList} with list_dir and delete what the failed command left behind before retrying anything.\n2. Do NOT re-run the same generator. Build the project files directly at the workspace root with write_file.`
+    : `[PROJECT CREATED IN THE WRONG PLACE]\nThe command created ${dirList} inside the workspace root. The workspace root IS the project root — the project must NOT live in a nested subfolder.\nDirectives:\n1. Move the generated files up to the workspace root, or recreate them there directly with write_file.\n2. Delete the nested directory once its contents are at the root.\n3. Never pass a project name to a generator: scaffold in place.`
+
+  ctx.episodicCompactor.recordStep(
+    {
+      step: ctx.stepCount,
+      tool: ctx.parsedTool.tool,
+      target: createdDirs[0],
+      status: 'BLOCKED',
+      summary: commandFailed
+        ? `Failed command left ${createdDirs.length} directory(ies) in the workspace root`
+        : `Command created ${createdDirs.length} nested project directory(ies) in the workspace root`,
+    },
+    directive
+  )
+  ctx.emitLog(
+    'info',
+    commandFailed
+      ? `🧹 Il comando fallito ha lasciato ${dirList} nel workspace: richiesta pulizia all'agente.`
+      : `📁 Il comando ha creato ${dirList} annidata nel workspace: il progetto deve stare nella radice.`,
+    directive,
+    { category: 'system_alert' }
+  )
+}
+
+/**
+ * Registers the files a successful shell command created or rewrote, and reports any project
+ * directory it left in the workspace root.
  *
  * Only the write_file / replace / delete tools emit `changeStats`, so a project scaffolded by
  * a CLI left `sessionChangedFiles` empty — SESSION_TRACKER.md then reported "Modified &
@@ -106,11 +164,15 @@ export async function recordMutationSideEffects(ctx: ToolResultProcessingContext
  * by a command and later by write_file stays a single entry. Line counts stay at zero: the
  * scan attributes files by mtime and never reads their contents, so it has no diff to report.
  */
-export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext) {
+export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, commandFailed = false) {
   if (ctx.parsedTool.tool !== 'run_command' || !ctx.workspacePath) return
 
   const scan = scanCommandTouchedFiles(ctx.workspacePath, ctx.toolStartedAtMs)
-  if (scan.files.length === 0) return
+  reportNestedProjectDirs(ctx, scan.createdTopLevelDirs, commandFailed)
+
+  // A failed command's leftovers are debris, not deliverables: they must never count as file
+  // mutations, and above all must never advance a milestone. Reporting them is the whole job.
+  if (commandFailed || scan.files.length === 0) return
 
   let newlyTracked = 0
   for (const relativePath of scan.files) {
@@ -128,7 +190,9 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext) {
     )
   }
 
-  advanceActiveMilestoneOnMutation(ctx)
+  // A scaffolder or codegen step can perfectly well deliver the active milestone's file,
+  // so the whole set it touched counts as candidate evidence.
+  advanceActiveMilestoneOnMutation(ctx, scan.files)
 }
 
 /**
@@ -147,6 +211,20 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
   }
 
   if (ctx.parsedTool.tool === 'open_in_browser' && !isToolFailure) {
+    // Opening a source file in a browser shows text; it proves nothing about the project
+    // building or running. Treating it as verification let a project whose index.html
+    // referenced a src/main.tsx that was never written pass the Definition of Done gate
+    // (session-1787471833056-o5fk, steps 41-44). See browserPreviewVerification.ts.
+    const previewTarget = ctx.parsedTool.parameters?.filePath || ctx.parsedTool.parameters?.url
+    if (!isBrowserRenderableTarget(previewTarget)) {
+      ctx.emitLog(
+        'info',
+        `👁️ Anteprima aperta su "${previewTarget}": non vale come verifica, non è una pagina renderizzata.`,
+        'Esegui una build, un typecheck o un test per verificare il progetto.'
+      )
+      return
+    }
+
     ctx.flags.hasVerifiedBuild = true
     const activeM = ctx.goalPlanner.getActiveMilestone()
     if (activeM && activeM.status !== 'verified') {

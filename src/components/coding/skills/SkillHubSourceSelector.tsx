@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Globe, Plus, HelpCircle, Trash2, RefreshCw, ChevronDown, CheckCircle2, Shield, FolderGit2, Layers } from 'lucide-react'
+import { Globe, Plus, HelpCircle, RefreshCw, ChevronDown, CheckCircle2, Shield, FolderGit2, Layers } from 'lucide-react'
+import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
 import { SkillHubSource } from '../../../types'
 import { useTranslation } from '../../../i18n'
 
@@ -141,14 +142,13 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
           </button>
 
           {selectedSource && !selectedSource.isBuiltin && (
-            <button
-              type="button"
-              onClick={() => onRemoveCustomSource(selectedSource.id)}
-              className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs transition-all shrink-0"
-              title={t('common.delete')}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <InlineDestructiveConfirm
+              itemLabel={selectedSource.name}
+              hint={t('skills.confirmRemoveHub')}
+              iconClassName="w-4 h-4"
+              className="!p-2.5 !rounded-xl bg-rose-500/10 border border-rose-500/20 !text-rose-400 hover:bg-rose-500/20"
+              onConfirm={() => onRemoveCustomSource(selectedSource.id)}
+            />
           )}
         </div>
 

@@ -1,4 +1,5 @@
 import React from 'react'
+import { Modal } from '../common/Modal'
 import { OllamaEnvConfig } from '../../services/hardwareRecommendationEngine'
 import { ShieldCheck, X, RefreshCw, Check } from 'lucide-react'
 import { useTranslation } from '../../i18n'
@@ -27,15 +28,21 @@ export const OllamaEnvApprovalModal: React.FC<OllamaEnvApprovalModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="ollama-env-approval-title"
+      layer="approval"
+      dismissible={false}
+      panelClassName="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg overflow-hidden flex flex-col"
+    >
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-100 text-sm">{t('ollamaEnvParams.approvalTitle')}</h3>
+              <h3 id="ollama-env-approval-title" className="font-bold text-slate-100 text-sm">{t('ollamaEnvParams.approvalTitle')}</h3>
               <p className="text-[11px] text-slate-400">{t('ollamaEnvParams.approvalSubtitle')}</p>
             </div>
           </div>
@@ -109,7 +116,6 @@ export const OllamaEnvApprovalModal: React.FC<OllamaEnvApprovalModalProps> = ({
             )}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

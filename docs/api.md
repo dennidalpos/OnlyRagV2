@@ -372,12 +372,11 @@ const report = await analyzeLogs()
 | :--- | :--- | :--- | :--- |
 | `workspace:read-file` | `{ filePath: string, startLine?: number, endLine?: number }` | `{ content: string, totalLines: number }` | Lettura intera o slicing puntuale del file. |
 | `workspace:write-file` | `{ filePath: string, content: string }` | `{ success: boolean, path: string }` | Scrittura sicura con creazione automatica delle cartelle padre. |
-| `workspace:delete-file` | `{ filePath: string }` | `{ success: boolean, error?: string }` | Eliminazione sicura di un file/cartella dal workspace con epurazione vettoriale sidecar ed evento `workspace:file-deleted`. |
 | `workspace:replace-file-content` | `{ filePath: string, chunks: ReplacementChunk[] }` | `{ success: boolean }` | Sostituzione mirata multi-chunk tollerante ai line ending CRLF. |
 | `workspace:run-command` | `{ command: string, cwd?: string, timeoutMs?: number }` | `{ stdout: string, stderr: string, exitCode: number }` | Esecuzione sequenziale di comandi PowerShell con cattura dello stack trace. |
 
 #### Eventi Broadcast Renderer per Cancellazione Riferimenti
-* **`workspace:file-deleted`**: Trasmesso al renderer su eliminazione file/cartella (`{ filePath: string }`). Attiva il purge deterministico di tab aperti, file in evidenza (`pinnedFiles`), file selezionati ed elementi correlati.
+* **`workspace:file-deleted`**: Trasmesso al renderer su eliminazione file/cartella (`{ filePath: string }`). Attiva il purge deterministico di tab aperti, file in evidenza (`pinnedFiles`), file selezionati ed elementi correlati. L'unico percorso di eliminazione e' il tool `delete_file` dell'agente, che passa da `workspaceAppService.deleteFile` proprio per emettere questo evento: eliminando direttamente dal repository i riferimenti nel renderer restavano puntati a un file non piu' esistente.
 * **`ingest:document-deleted`**: Trasmesso al renderer su eliminazione documento RAG (`{ docId: string }`). Rimuove il documento dagli allegati attivi (`attachedDocIds`), anteprime e selezioni UI.
 
 ---

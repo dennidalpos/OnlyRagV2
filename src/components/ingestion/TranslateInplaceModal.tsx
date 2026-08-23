@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Modal } from '../common/Modal'
 import { Languages, Info, X, Loader2, Folder, AlertCircle } from 'lucide-react'
 import { LANGUAGES } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
@@ -65,13 +66,14 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
   const isFormValid = Boolean(targetDir.trim()) && sourceLang !== targetLang
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="translate-inplace-modal-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="translate-inplace-modal-title"
+      layer="approval"
+      dismissible={false}
+      panelClassName="max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden"
     >
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
@@ -243,8 +245,7 @@ export const TranslateInplaceModal: React.FC<TranslateInplaceModalProps> = ({
             )}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Modal } from '../common/Modal'
 import { DiagnosticsData, LogEntry } from '../../types'
 import { apiService } from '../../services/api'
 import {
@@ -156,13 +157,13 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
   if (!isOpen) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="diagnostics-drawer-title"
-      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="diagnostics-drawer-title"
+      align="end"
+      panelClassName="max-w-3xl h-full glass-panel border-l border-slate-800 flex flex-col shadow-2xl bg-slate-950"
     >
-      <div className="w-full max-w-3xl h-full glass-panel border-l border-slate-800 flex flex-col shadow-2xl bg-slate-950">
         {/* Top Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
           <div className="flex items-center gap-3">
@@ -477,7 +478,6 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
             </span>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

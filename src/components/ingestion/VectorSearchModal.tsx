@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, {useState} from 'react'
+import { Modal } from '../common/Modal'
 import { Search, X, AlertTriangle, Sparkles, Copy, Check, SlidersHorizontal, Database } from 'lucide-react'
 import { apiService } from '../../services/api'
 import { VectorSearchResult } from '../../types'
@@ -24,16 +25,6 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({
   const [hasSearched, setHasSearched] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -60,13 +51,12 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="vector-search-modal-title"
-      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="vector-search-modal-title"
+      panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
     >
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
           <div className="flex items-center gap-3">
@@ -273,7 +263,6 @@ export const VectorSearchModal: React.FC<VectorSearchModalProps> = ({
             {t('common.close')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -34,15 +34,20 @@ export function useSettingsManager(
     }
   }
 
+  /**
+   * Confirmation belongs to the UI, not here: the caller asks in place (see
+   * InlineDestructiveConfirm), so this used to raise a SECOND, native prompt on top of the
+   * one the user had already answered. Failures report through the same `pullMessage` channel
+   * as every other model operation rather than a blocking `alert` with an untranslated string.
+   */
   const handleDeleteModel = async (modelName: string) => {
     if (!window.electronAPI) return
-    if (confirm(`Are you sure you want to delete model "${modelName}"?`)) {
-      const res = await window.electronAPI.deleteOllamaModel(modelName)
-      if (res.success) {
-        onRefreshDiagnostics()
-      } else {
-        alert(`Failed to delete model: ${res.error}`)
-      }
+    const res = await window.electronAPI.deleteOllamaModel(modelName)
+    if (res.success) {
+      setPullMessage(`Deleted ${modelName}`)
+      onRefreshDiagnostics()
+    } else {
+      setPullMessage(`Failed to delete model: ${res.error || 'Unknown error'}`)
     }
   }
 

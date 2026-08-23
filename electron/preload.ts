@@ -42,7 +42,6 @@ const api: IElectronAPI = {
   getProjectMap: (dirPath: string) => ipcRenderer.invoke('workspace:get-project-map', dirPath),
   readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => ipcRenderer.invoke('workspace:read-file', filePath, startLine, endLine),
   writeWorkspaceFile: (filePath: string, content: string) => ipcRenderer.invoke('workspace:write-file', filePath, content),
-  deleteWorkspaceFile: (filePath: string) => ipcRenderer.invoke('workspace:delete-file', filePath),
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) =>
     ipcRenderer.invoke('workspace:replace-chunk', filePath, targetContent, replacementContent),
   multiReplaceWorkspaceFileChunks: (filePath: string, replacements: any[]) =>

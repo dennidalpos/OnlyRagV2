@@ -15,7 +15,8 @@
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
-import { capPlanMilestones, MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
+import { MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
+import { compilePlanFromText } from '../domain/agent/planCompilation'
 import { logger } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AppSettings } from '../../../src/types'
@@ -37,18 +38,21 @@ const PLAN_SYSTEM_PROMPT =
   '   - Assembly & Integration (e.g. `src/App.tsx`, router wiring)\n' +
   '   - Verification & Quality (e.g. `npm run build`, `tsc --noEmit`, test validation)\n' +
   '   - Final Review & Completion (invoke finish)\n' +
-  '3. FORMAT: Output strictly as a checklist in "- [ ] m-N: <Action & exact relative file path>" format. One item per line.\n' +
-  '4. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, etc.).\n' +
+  '3. FALSIFIABILITY (EVERY ITEM MUST BE CHECKABLE): each microtask MUST name either an exact relative file path it produces or a command that verifies it. An item nobody could prove done or not done is NOT a step — it is an acceptance criterion of another step. Never emit "Design the two-column tablet layout", "Ensure buttons are 44x44 px" or "Fix every overflow issue" as items of their own: attach them to the microtask that writes the file they constrain (e.g. "- [ ] m-4: Create `src/components/Sidebar.tsx`; collapsible on tablet, 44x44 px tap targets, no horizontal overflow"). Any item left unfalsifiable is folded into its neighbour automatically.\n' +
+  '4. FORMAT: Output strictly as a checklist in "- [ ] m-N: <Action & exact relative file path>" format. One item per line.\n' +
+  '5. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, etc.).\n' +
   'Output ONLY the markdown checklist lines. No conversational preambles, notes or explanations outside the checklist.'
 
 const FALLBACK_PLAN_TEXT = (prompt: string) =>
   `🎯 Piano di Esecuzione a Microtask per: ${prompt}\n\n` +
-  '- [ ] 📦 m-1: Inizializzazione progetto e configurazione dipendenze (`package.json` / configurazione)\n' +
-  '- [ ] 📐 m-2: Configurazione stili di base e design tokens\n' +
-  '- [ ] 🧩 m-3: Creazione layout shell ed entrypoint principale\n' +
-  '- [ ] ✏️ m-4: Implementazione componenti UI e logica applicativa\n' +
-  '- [ ] 🧪 m-5: Verifica di compilazione e build (`npm run build` / typecheck)\n' +
-  '- [ ] 🛑 m-6: Revisione finale dei requisiti e chiusura del task'
+  // Every item names a file or a command: the fallback plan has to satisfy the same
+  // falsifiability rule the generated ones do, or normalizePlanFalsifiability collapses it.
+  '- [ ] 📦 m-1: Inizializzazione progetto e dipendenze in `package.json`\n' +
+  '- [ ] 📐 m-2: Configurazione degli stili di base e dei design token in `src/styles/globals.css`\n' +
+  '- [ ] 🧩 m-3: Creazione dell entrypoint `index.html` e del layout shell `src/App.tsx`\n' +
+  '- [ ] ✏️ m-4: Implementazione dei componenti UI e della logica applicativa sotto `src/components/`\n' +
+  '- [ ] 🧪 m-5: Verifica di compilazione con `npm run build` e typecheck con `npx tsc --noEmit`\n' +
+  '- [ ] 🛑 m-6: Riepilogo finale dei requisiti e arresto dell agente (invoke "finish")'
 
 export interface PlanGenerationRequest {
   prompt: string
@@ -111,12 +115,12 @@ export class PlanGenerationAppService {
 
     const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt)
     const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
-    const milestones = capPlanMilestones(parsedMilestones)
+    const milestones = compilePlanFromText(planText)
     if (milestones.length < parsedMilestones.length) {
       logger.log(
         'INFO',
         'PlanGenerationAppService',
-        `Plan capped: ${parsedMilestones.length} milestones merged into ${milestones.length} (max ${MAX_PLAN_MILESTONES}).`
+        `Plan compiled: ${parsedMilestones.length} raw milestones reduced to ${milestones.length} falsifiable ones (max ${MAX_PLAN_MILESTONES}); acceptance criteria folded into the deliverables they qualify.`
       )
     }
     if (req.settings.enableCodingAgentDebugLog) {
@@ -131,7 +135,7 @@ export class PlanGenerationAppService {
    * after manual edits in the frontend.
    */
   parsePlanText(planText: string): PlanMilestone[] {
-    return capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(planText))
+    return compilePlanFromText(planText)
   }
 }
 

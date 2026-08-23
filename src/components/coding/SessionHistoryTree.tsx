@@ -10,9 +10,9 @@ import {
   Folder,
   Loader2,
   MessageSquare,
-  Trash2,
   XCircle,
 } from 'lucide-react'
+import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 import { CodingSession, ExecutedPrompt, ExecutedPromptOutcome } from '../../types'
 import { formatDateTime } from '../../lib/timeFormat'
 import { useTranslation } from '../../i18n'
@@ -177,15 +177,12 @@ export const SessionHistoryTree: React.FC<SessionHistoryTreeProps> = ({
                         <Edit2 className="w-3 h-3" />
                       </button>
                       {sessions.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteSession(session.id)}
-                          title={t('common.delete')}
-                          aria-label={`${t('common.delete')} ${session.title}`}
-                          className="p-1 hover:text-rose-400 rounded focus-ring"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <InlineDestructiveConfirm
+                          itemLabel={session.title}
+                          iconClassName="w-3 h-3"
+                          className="!p-1"
+                          onConfirm={() => onDeleteSession(session.id)}
+                        />
                       )}
                     </div>
                   </>

@@ -1,5 +1,5 @@
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
-import { capPlanMilestones } from '../domain/agent/planMilestoneCapper'
+import { compilePlanMilestones } from '../domain/agent/planCompilation'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -19,8 +19,12 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
   const outputText = ctx.streamedOutput || ''
   const hasExplicitPlanBlock = outputText.includes('<plan>')
   if (!ctx.goalPlanner.hasPlan() && (hasExplicitPlanBlock || outputText.includes('- [ ]') || outputText.includes('1. '))) {
-    const extractedMilestones = capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(outputText))
-    if (extractedMilestones.length >= 2) {
+    // The >= 2 threshold asks "did the model actually emit a checklist?", so it is applied to
+    // the PARSED milestones. Applying it after compilation would let a two-item plan whose
+    // second item is an acceptance criterion fold to one entry and then be discarded whole.
+    const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(outputText)
+    if (parsedMilestones.length >= 2) {
+      const extractedMilestones = compilePlanMilestones(parsedMilestones)
       // A brand-new plan can only ever start pending: parsePlanFromText's checkbox status
       // (verified/in_progress/failed) is meant for RE-parsing a plan that was already running
       // (resume, revision). Trusting it here would let a model that mistakenly echoes "[x]"
@@ -28,18 +32,28 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
       // orders it to call finish immediately, closing the task without doing any work.
       ctx.goalPlanner.initializePlan(extractedMilestones.map((m) => ({ ...m, status: 'pending' })))
       ctx.emitLog('info', `📋 Execution Plan Initialized (${extractedMilestones.length} milestones)`)
+      // The plan is written out in full exactly when it changes shape -- here and on revision
+      // below. Per-step snapshots were removed; individual status changes are logged as
+      // transitions instead (see agentOrchestratorSessionPersistence.ts).
+      if (ctx.settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logPlanMilestoneUpdate(ctx.sessionId, ctx.stepCount, [...ctx.goalPlanner.getMilestones()], 'Plan initialized')
+      }
     }
     return
   }
   if (ctx.goalPlanner.hasPlan() && hasExplicitPlanBlock) {
-    const revisedMilestones = capPlanMilestones(GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput))
-    if (revisedMilestones.length >= 2) {
+    const parsedRevision = GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput)
+    if (parsedRevision.length >= 2) {
+      const revisedMilestones = compilePlanMilestones(parsedRevision)
       ctx.goalPlanner.replacePlanPreservingProgress(revisedMilestones)
       const progress = ctx.goalPlanner.getProgressSummary()
       ctx.emitLog(
         'info',
         `📋 Execution Plan Revised (${revisedMilestones.length} milestones, ${progress.completed} already verified carried over)`
       )
+      if (ctx.settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logPlanMilestoneUpdate(ctx.sessionId, ctx.stepCount, [...ctx.goalPlanner.getMilestones()], 'Plan revised')
+      }
       await ctx.persistCurrentState()
     }
   }

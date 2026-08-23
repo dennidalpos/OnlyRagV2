@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   extractDeliverablePaths,
+  isDeliverableOfMilestone,
   resolveMilestoneDeliverableStatus,
   type DeliverableProbe,
 } from './milestoneDeliverableResolver'
@@ -77,5 +78,36 @@ describe('resolveMilestoneDeliverableStatus', () => {
 
   it('never advances on a false-positive path token that does not exist on disk', () => {
     expect(resolveMilestoneDeliverableStatus('Set up the Node.js toolchain', probeFrom({}))).toBe('unsatisfied')
+  })
+})
+
+describe('isDeliverableOfMilestone', () => {
+  const title = 'Create `src/components/Sidebar.tsx` for the sidebar component.'
+
+  it('recognises a write that lands on the milestone own deliverable', () => {
+    expect(isDeliverableOfMilestone(title, 'src/components/Sidebar.tsx')).toBe(true)
+  })
+
+  it('accepts the absolute path a tool result reports', () => {
+    expect(isDeliverableOfMilestone(title, 'C:\\Users\\dev\\app\\src\\components\\Sidebar.tsx')).toBe(true)
+  })
+
+  it('rejects a write to an unrelated file', () => {
+    // The regression from session-1787476734227-nkn0: writing App.tsx closed whichever
+    // milestone happened to be active, including "Run the application".
+    expect(isDeliverableOfMilestone(title, 'src/App.tsx')).toBe(false)
+  })
+
+  it('rejects a different file whose name merely ends similarly', () => {
+    expect(isDeliverableOfMilestone(title, 'src/legacy/OldSidebar.tsx')).toBe(false)
+  })
+
+  it('rejects any write for a milestone that names no deliverable', () => {
+    expect(isDeliverableOfMilestone('Run the application to ensure it is runnable.', 'src/App.tsx')).toBe(false)
+  })
+
+  it('rejects an absent path', () => {
+    expect(isDeliverableOfMilestone(title, undefined)).toBe(false)
+    expect(isDeliverableOfMilestone(title, '')).toBe(false)
   })
 })

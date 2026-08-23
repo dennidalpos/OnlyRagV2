@@ -26,8 +26,29 @@ export function isCompletionMilestoneTitle(title: string): boolean {
   return /finish|completamento|arresto|riepilogo|final report/i.test(title || '')
 }
 
+/** One milestone changing status, emitted so callers can record who moved it and why. */
+export interface MilestoneTransition {
+  id: string
+  title: string
+  from: PlanMilestone['status']
+  to: PlanMilestone['status']
+  cause: string
+}
+
 export class GoalDecompositionPlanner {
   private milestones: PlanMilestone[] = []
+  private transitionListener?: (transition: MilestoneTransition) => void
+
+  /**
+   * Registers a listener notified whenever a milestone's status actually changes.
+   *
+   * The planner stays free of any logging dependency — it only announces the change, and the
+   * application layer decides what to do with it. Answering "which step closed this milestone,
+   * and on what grounds?" previously meant diffing full plan snapshots by hand.
+   */
+  public onMilestoneTransition(listener: (transition: MilestoneTransition) => void): void {
+    this.transitionListener = listener
+  }
 
   public initializePlan(milestones: PlanMilestone[]): void {
     this.milestones = milestones.map((m, idx) => ({
@@ -93,8 +114,19 @@ export class GoalDecompositionPlanner {
     const target = this.findMilestone(idOrIndex)
     if (!target) return false
 
+    const previousStatus = target.status
     target.status = status
     if (notes) target.notes = notes
+
+    if (previousStatus !== status) {
+      this.transitionListener?.({
+        id: target.id,
+        title: target.title,
+        from: previousStatus,
+        to: status,
+        cause: notes || target.notes || 'No cause recorded.',
+      })
+    }
     return true
   }
 
@@ -186,17 +218,31 @@ export class GoalDecompositionPlanner {
       lines.push(line)
     }
 
+    const activeM = this.getActiveMilestone()
+    const failedMilestones = this.milestones.filter((m) => m.status === 'failed')
+
     if (progress.completed === progress.total && progress.total > 0) {
       lines.push(
         '\n[ALL CHECKLIST MILESTONES COMPLETED - ACTION REQUIRED]\nAll operational checklist tasks are 100% completed and verified. DO NOT execute any more file edits or commands.\nIMMEDIATELY invoke the "finish" tool and provide a comprehensive final summary report (resoconto finale in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion'
       )
+    } else if (!activeM || isCompletionMilestoneTitle(activeM.title)) {
+      // Every milestone that could still be worked on is done or abandoned, and only the
+      // closing milestone is left. The generic branch below would be self-contradictory here:
+      // it renders "Task m-N: ... invoke finish" as the active milestone while its own
+      // directive 4 forbids finishing until everything is verified -- which abandoned
+      // milestones make permanently false. Faced with no legal move the model asked a
+      // question instead, and the session died as STOPPED/FAILED (session-1787471833056-o5fk,
+      // step 45). Abandoned work is reported in the final summary, not used to block it.
+      const failedList = failedMilestones.length > 0
+        ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((m) => `- ${m.id}: ${m.title}`).join('\n')}`
+        : ''
+      lines.push(
+        `\n[NO OPERATIONAL MILESTONES REMAIN - ACTION REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nIMMEDIATELY invoke the "finish" tool with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion${failedList}`
+      )
     } else {
-      const activeM = this.getActiveMilestone()
-      if (activeM) {
-        lines.push(
-          `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Focus your actions on achieving the goals of this milestone.\n2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.\n3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.\n4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.\n5. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx) directly in the workspace root.`
-        )
-      }
+      lines.push(
+        `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Focus your actions on achieving the goals of this milestone.\n2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.\n3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.\n4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.\n5. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx) directly in the workspace root.`
+      )
     }
 
     return lines.join('\n')

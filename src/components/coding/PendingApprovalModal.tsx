@@ -1,4 +1,5 @@
 import React from 'react'
+import { Modal } from '../common/Modal'
 import { AlertTriangle, Check, X, FileCode } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../electron/core/domain/agent/diffEngine'
@@ -130,14 +131,14 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
   if (!pendingApproval) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="approval-modal-title"
-      aria-describedby="approval-modal-desc"
-      className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+    <Modal
+      isOpen={Boolean(pendingApproval)}
+      onClose={onReject}
+      labelledById="approval-modal-title"
+      layer="approval"
+      dismissible={false}
+      panelClassName="bg-slate-900 border border-amber-500/50 rounded-2xl p-6 max-w-3xl shadow-2xl space-y-4 overflow-y-auto max-h-[85vh]"
     >
-      <div className="bg-slate-900 border border-amber-500/50 rounded-2xl p-6 max-w-3xl w-full shadow-2xl space-y-4">
         <div className="flex items-center gap-3 text-amber-400">
           <AlertTriangle className="w-6 h-6 shrink-0" />
           <h3 id="approval-modal-title" className="font-bold text-lg text-slate-100">
@@ -250,7 +251,6 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
             <Check className="w-4 h-4" /> {t('coding.approveBtn')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

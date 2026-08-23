@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { Modal } from '../common/Modal'
 import { Search, X, AlertTriangle, Sparkles, FolderGit2, ArrowRight } from 'lucide-react'
 import { WorkspaceProject } from '../../types'
 import { usePromptHistorySearch } from '../../hooks/usePromptHistorySearch'
@@ -23,14 +24,6 @@ export const PromptHistorySearchModal: React.FC<PromptHistorySearchModalProps> =
   const { t } = useTranslation()
   const { query, setQuery, results, isSearching, error, hasSearched, search, reset } = usePromptHistorySearch()
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   useEffect(() => {
     if (!isOpen) reset()
@@ -44,13 +37,12 @@ export const PromptHistorySearchModal: React.FC<PromptHistorySearchModalProps> =
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="prompt-history-search-modal-title"
-      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="prompt-history-search-modal-title"
+      panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
     >
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
@@ -211,7 +203,6 @@ export const PromptHistorySearchModal: React.FC<PromptHistorySearchModalProps> =
             {t('common.close')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

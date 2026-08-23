@@ -55,4 +55,74 @@ describe('CodingAgentLogger Unit Tests', () => {
     expect(contentAfter).not.toContain('session-to-delete')
     expect(contentAfter).toContain('session-to-keep')
   })
+
+  it('writes the first turn prompt of a session in full as the baseline', () => {
+    const prompt = `${'STABLE HEAD '.repeat(60)}
+PLAN: step 1`
+    loggerInstance.logTurnPrompt('delta-session', 1, 'qwen2.5-coder:7b', 8192, prompt)
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('Baseline: full prompt')
+    expect(content).toContain('PLAN: step 1')
+  })
+
+  it('elides the prefix a later prompt shares with the previous step', () => {
+    const head = 'STABLE HEAD '.repeat(60)
+    loggerInstance.logTurnPrompt('elide-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
+PLAN: step 1`)
+    const afterBaseline = fs.readFileSync(logPath, 'utf-8').length
+
+    loggerInstance.logTurnPrompt('elide-session', 2, 'qwen2.5-coder:7b', 8192, `${head}
+PLAN: step 2 with new trajectory`)
+    const content = fs.readFileSync(logPath, 'utf-8')
+    const secondEntry = content.slice(afterBaseline)
+
+    expect(secondEntry).toContain('Turn Prompt Delta')
+    expect(secondEntry).toContain("identical to step 1's prompt")
+    expect(secondEntry).toContain('PLAN: step 2 with new trajectory')
+    // The whole point: the repeated head is not written a second time.
+    expect(secondEntry).not.toContain(head)
+  })
+
+  it('writes a diverged prompt in full rather than a misleading delta', () => {
+    loggerInstance.logTurnPrompt('diverge-session', 1, 'qwen2.5-coder:7b', 8192, 'A'.repeat(2000))
+    const afterBaseline = fs.readFileSync(logPath, 'utf-8').length
+
+    loggerInstance.logTurnPrompt('diverge-session', 2, 'qwen2.5-coder:7b', 8192, 'B'.repeat(2000))
+    const secondEntry = fs.readFileSync(logPath, 'utf-8').slice(afterBaseline)
+
+    expect(secondEntry).toContain('Diverged from step 1')
+    expect(secondEntry).toContain('B'.repeat(100))
+  })
+
+  it('starts a fresh baseline for a session reusing an id after it ended', () => {
+    const head = 'STABLE HEAD '.repeat(60)
+    loggerInstance.logTurnPrompt('reuse-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
+first run`)
+    loggerInstance.logSessionEnd('reuse-session', 1, true, 'done')
+    const afterEnd = fs.readFileSync(logPath, 'utf-8').length
+
+    loggerInstance.logTurnPrompt('reuse-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
+second run`)
+    const newEntry = fs.readFileSync(logPath, 'utf-8').slice(afterEnd)
+
+    expect(newEntry).toContain('Baseline: full prompt')
+  })
+
+  it('records a milestone transition with the cause that produced it', () => {
+    loggerInstance.logMilestoneTransition(
+      'transition-session',
+      12,
+      'm-4',
+      'Create src/components/TaskCard.tsx',
+      'in_progress',
+      'verified',
+      'Verified: "src/components/TaskCard.tsx" was written for this milestone.'
+    )
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('[STEP 12 - MILESTONE m-4: IN_PROGRESS -> VERIFIED]')
+    expect(content).toContain('Create src/components/TaskCard.tsx')
+    expect(content).toContain('Cause: Verified: "src/components/TaskCard.tsx" was written for this milestone.')
+  })
 })

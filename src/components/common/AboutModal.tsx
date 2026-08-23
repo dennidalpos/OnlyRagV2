@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { Modal } from './Modal'
 import {
   X,
   Award,
@@ -372,16 +373,6 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
 
-  React.useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   const repoUrl = APP_REPOSITORY_URL
 
@@ -421,13 +412,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="about-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="about-modal-title"
+      panelClassName="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-slate-100 relative"
     >
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 relative">
         {/* Top Header Banner */}
         <div className="relative p-6 border-b border-slate-800/80 bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -767,8 +757,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             {t('common.close')}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

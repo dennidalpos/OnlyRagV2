@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Modal } from '../common/Modal'
 import {
   X,
   Cpu,
@@ -55,16 +56,6 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
   const [isCopied, setIsCopied] = useState<boolean>(false)
 
   // ESC Key Listener for Accessibility
-  React.useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
 
   const handleCopyAiDebugBundle = async () => {
     if (isCopyingDebugBundle) return
@@ -110,13 +101,12 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
   const lastActivityTime = lastLog ? formatClockTime(lastLog.timestamp) : 'N/A'
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="diagnostics-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledById="diagnostics-modal-title"
+      panelClassName="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
     >
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -383,7 +373,6 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

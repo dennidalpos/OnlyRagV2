@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import {
   CheckCircle,
-  Trash2,
   Edit3,
   RotateCcw,
   Plus,
@@ -11,6 +10,7 @@ import {
   User,
   Search,
 } from 'lucide-react'
+import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
 import { SkillDefinition } from '../../../types'
 import { useTranslation } from '../../../i18n'
 
@@ -194,26 +194,20 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
                 </button>
 
                 {skill.originType === 'hub_modified' && (
-                  <button
-                    type="button"
-                    onClick={() => onResetSkill(skill.id)}
-                    aria-label={`${t('skills.resetOriginal')} ${skill.name}`}
-                    className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all focus-ring"
-                    title={t('skills.resetOriginal')}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
+                  <InlineDestructiveConfirm
+                    itemLabel={skill.name}
+                    icon={RotateCcw}
+                    actionLabel={t('skills.resetOriginal')}
+                    hint={t('skills.confirmReset')}
+                    onConfirm={() => onResetSkill(skill.id)}
+                  />
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => onDeleteSkill(skill.id)}
-                  aria-label={`${t('common.delete')} ${skill.name}`}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all focus-ring"
-                  title={t('common.delete')}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <InlineDestructiveConfirm
+                  itemLabel={skill.name}
+                  hint={t('skills.confirmDelete')}
+                  onConfirm={() => onDeleteSkill(skill.id)}
+                />
               </div>
             </div>
 

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, EXPORT_DIR, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
 from sidecar.infrastructure.embeddings import generate_embedding, generate_embedding_with_status
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.ingestion import (
@@ -100,19 +100,7 @@ def process_and_index_document(
     doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
     if chunk_records:
-        try:
-            ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-            ctbl.add(chunk_records)
-        except Exception:
-            try:
-                ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records)
-            except Exception as err:
-                logger.warning(f"Re-creating {CHUNKS_TABLE_NAME} table due to schema update/error: {err}")
-                try:
-                    lance_db.drop_table(CHUNKS_TABLE_NAME)
-                except Exception:
-                    pass
-                ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records)
+        ctbl = append_records(CHUNKS_TABLE_NAME, chunk_records)
 
         try:
             ctbl.create_fts_index("text", replace=True)
@@ -134,19 +122,7 @@ def process_and_index_document(
         "used_fallback_embeddings": used_fallback_embeddings
     }]
 
-    try:
-        dtbl = lance_db.open_table(DOCS_TABLE_NAME)
-        dtbl.add(doc_record)
-    except Exception:
-        try:
-            lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
-        except Exception as err:
-            logger.warning(f"Re-creating {DOCS_TABLE_NAME} table due to schema update/error: {err}")
-            try:
-                lance_db.drop_table(DOCS_TABLE_NAME)
-            except Exception:
-                pass
-            lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
+    append_records(DOCS_TABLE_NAME, doc_record)
 
     logger.info(f"Ingested {filename} into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
 
@@ -360,19 +336,7 @@ def process_and_index_document_generator(
         doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
         if chunk_records:
-            try:
-                ctbl = lance_db.open_table(CHUNKS_TABLE_NAME)
-                ctbl.add(chunk_records)
-            except Exception:
-                try:
-                    ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records, mode="overwrite")
-                except Exception as err:
-                    logger.warning(f"Re-creating {CHUNKS_TABLE_NAME} table due to error: {err}")
-                    try:
-                        lance_db.drop_table(CHUNKS_TABLE_NAME)
-                    except Exception:
-                        pass
-                    ctbl = lance_db.create_table(CHUNKS_TABLE_NAME, data=chunk_records)
+            ctbl = append_records(CHUNKS_TABLE_NAME, chunk_records)
 
             yield json.dumps({
                 "type": "progress",
@@ -401,18 +365,7 @@ def process_and_index_document_generator(
             "used_fallback_embeddings": used_fallback_embeddings
         }]
 
-        try:
-            dtbl = lance_db.open_table(DOCS_TABLE_NAME)
-            dtbl.add(doc_record)
-        except Exception:
-            try:
-                lance_db.create_table(DOCS_TABLE_NAME, data=doc_record, mode="overwrite")
-            except Exception:
-                try:
-                    lance_db.drop_table(DOCS_TABLE_NAME)
-                except Exception:
-                    pass
-                lance_db.create_table(DOCS_TABLE_NAME, data=doc_record)
+        append_records(DOCS_TABLE_NAME, doc_record)
 
         logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
 

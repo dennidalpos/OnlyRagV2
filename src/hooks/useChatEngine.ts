@@ -91,7 +91,6 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
   const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
     onDocsUpdated: handleDocsUpdated,
-    autoRetryIntervalMs: 3000,
   })
 
   const [input, setInput] = useState('')

@@ -7,6 +7,11 @@ import { logger } from '../../../diagnostics'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
+// In development the main process runs bundled as dist-electron/main.js, one level below the
+// repository root, so __dirname is <root>/dist-electron no matter where this module's source
+// lives. Every dev-only lookup below must climb from here, never from the source tree depth.
+const DEV_PROJECT_ROOT = path.join(__dirname, '..')
+
 let sidecarProcess: ChildProcess | null = null
 
 export class SidecarProcessManager {
@@ -74,8 +79,8 @@ export class SidecarProcessManager {
     const possiblePaths = [
       path.join(process.cwd(), '.venv', 'Scripts', 'python.exe'),
       path.join(process.cwd(), 'venv', 'Scripts', 'python.exe'),
-      path.join(__dirname, '..', '..', '..', '..', 'venv', 'Scripts', 'python.exe'),
-      path.join(__dirname, '..', '..', '..', '..', '.venv', 'Scripts', 'python.exe'),
+      path.join(DEV_PROJECT_ROOT, 'venv', 'Scripts', 'python.exe'),
+      path.join(DEV_PROJECT_ROOT, '.venv', 'Scripts', 'python.exe'),
       path.join(app.getAppPath(), 'venv', 'Scripts', 'python.exe'),
       path.join(app.getAppPath(), '.venv', 'Scripts', 'python.exe'),
       path.join(process.resourcesPath, 'venv', 'Scripts', 'python.exe'),
@@ -112,7 +117,7 @@ export class SidecarProcessManager {
     logger.log('WARN', 'Sidecar', `Dependencies missing in ${initialPython}. Initializing virtual environment setup...`)
     const venvDir = app.isPackaged
       ? path.join(app.getPath('userData'), 'python_venv')
-      : path.join(__dirname, '..', '..', '..', '..', '.venv')
+      : path.join(DEV_PROJECT_ROOT, '.venv')
     const venvPython = path.join(venvDir, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
 
     if (!fs.existsSync(venvPython)) {
@@ -166,7 +171,7 @@ export class SidecarProcessManager {
 
     const devSidecarDir = app.isPackaged
       ? path.join(process.resourcesPath, 'sidecar')
-      : path.join(__dirname, '..', '..', '..', '..', 'sidecar')
+      : path.join(DEV_PROJECT_ROOT, 'sidecar')
     const parentSidecarDir = path.dirname(devSidecarDir)
 
     const envVars = {

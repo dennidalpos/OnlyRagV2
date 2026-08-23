@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extractDeliverablePaths,
   isDeliverableOfMilestone,
+  isPlaceholderContent,
   resolveMilestoneDeliverableStatus,
   type DeliverableProbe,
 } from './milestoneDeliverableResolver'
@@ -10,7 +11,7 @@ import {
 function probeFrom(files: Record<string, string>): DeliverableProbe {
   return (relativePath: string) => {
     const content = files[relativePath]
-    return { exists: content !== undefined, contentLength: content?.length ?? 0 }
+    return { exists: content !== undefined, contentLength: content?.length ?? 0, content }
   }
 }
 
@@ -109,5 +110,73 @@ describe('isDeliverableOfMilestone', () => {
   it('rejects an absent path', () => {
     expect(isDeliverableOfMilestone(title, undefined)).toBe(false)
     expect(isDeliverableOfMilestone(title, '')).toBe(false)
+  })
+})
+
+describe('isPlaceholderContent', () => {
+  it('rejects an empty or near-empty file', () => {
+    expect(isPlaceholderContent('')).toBe(true)
+    expect(isPlaceholderContent('   \n\n ')).toBe(true)
+    expect(isPlaceholderContent('{}')).toBe(true)
+  })
+
+  it('rejects a file that is nothing but comments', () => {
+    expect(isPlaceholderContent('// TODO: implement the sidebar component')).toBe(true)
+    expect(isPlaceholderContent('# placeholder for the ingest pipeline\n# fill this in later')).toBe(true)
+    expect(isPlaceholderContent('/*\n * Sidebar\n */')).toBe(true)
+  })
+
+  it('rejects a one-liner whose only content is a deferral marker', () => {
+    expect(isPlaceholderContent('export default function App() { /* TODO */ }')).toBe(true)
+    expect(isPlaceholderContent('def build_report():\n    raise NotImplementedError("TODO")')).toBe(true)
+  })
+
+  it('accepts a short but real implementation', () => {
+    expect(isPlaceholderContent("export * from './Sidebar'")).toBe(false)
+    expect(isPlaceholderContent('{\n  "name": "app",\n  "version": "1.0.0"\n}')).toBe(false)
+  })
+
+  it('accepts real code that merely mentions a marker in passing', () => {
+    const realFile = [
+      'import { useState } from "react"',
+      '',
+      'export function Counter() {',
+      '  const [n, setN] = useState(0)',
+      '  // TODO: persist this across reloads',
+      '  return <button onClick={() => setN(n + 1)}>{n}</button>',
+      '}',
+    ].join('\n')
+    expect(isPlaceholderContent(realFile)).toBe(false)
+  })
+
+  it('does not mistake a word that merely contains a marker for a marker', () => {
+    expect(isPlaceholderContent('const stubbornRetries = 3\nexport default stubbornRetries')).toBe(false)
+  })
+})
+
+describe('resolveMilestoneDeliverableStatus — placeholder deliverables', () => {
+  it('refuses to satisfy a milestone whose deliverable is a stub', () => {
+    const probe = probeFrom({ 'src/components/Sidebar.tsx': '// TODO: implement the sidebar' })
+    expect(resolveMilestoneDeliverableStatus('m-2: Create `src/components/Sidebar.tsx`', probe)).toBe('unsatisfied')
+  })
+
+  it('satisfies the same milestone once the file holds real code', () => {
+    const probe = probeFrom({
+      'src/components/Sidebar.tsx': 'export function Sidebar() {\n  return <aside>Navigation</aside>\n}',
+    })
+    expect(resolveMilestoneDeliverableStatus('m-2: Create `src/components/Sidebar.tsx`', probe)).toBe('satisfied')
+  })
+
+  it('refuses when only one of several deliverables is a stub', () => {
+    const probe = probeFrom({
+      'src/App.tsx': 'export function App() {\n  return <Sidebar />\n}',
+      'src/components/Sidebar.tsx': '// TODO',
+    })
+    expect(resolveMilestoneDeliverableStatus('Wire src/App.tsx to src/components/Sidebar.tsx', probe)).toBe('unsatisfied')
+  })
+
+  it('leaves large files alone when the probe supplies no content to inspect', () => {
+    const probe: DeliverableProbe = () => ({ exists: true, contentLength: 8192 })
+    expect(resolveMilestoneDeliverableStatus('Create src/App.tsx', probe)).toBe('satisfied')
   })
 })

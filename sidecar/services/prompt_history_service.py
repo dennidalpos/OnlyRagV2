@@ -8,7 +8,7 @@ from sidecar.schemas import (
     PromptHistorySearchResult,
     PromptHistoryRemoveRequest,
 )
-from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id
+from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
 from sidecar.infrastructure.embeddings import generate_embedding
 
 
@@ -58,23 +58,7 @@ def index_prompt_history(req: IndexPromptHistoryRequest) -> None:
         "vector": vector,
     }]
 
-    try:
-        tbl = lance_db.open_table(PROMPT_HISTORY_TABLE_NAME)
-        try:
-            tbl.delete(f'id = "{safe_id}"')
-        except Exception:
-            pass
-        tbl.add(record)
-    except Exception:
-        try:
-            lance_db.create_table(PROMPT_HISTORY_TABLE_NAME, data=record)
-        except Exception as err:
-            logger.warning(f"Re-creating {PROMPT_HISTORY_TABLE_NAME} table due to schema update/error: {err}")
-            try:
-                lance_db.drop_table(PROMPT_HISTORY_TABLE_NAME)
-            except Exception:
-                pass
-            lance_db.create_table(PROMPT_HISTORY_TABLE_NAME, data=record)
+    append_records(PROMPT_HISTORY_TABLE_NAME, record, delete_where=f'id = "{safe_id}"')
 
 
 def search_prompt_history(req: PromptHistorySearchRequest) -> List[PromptHistorySearchResult]:

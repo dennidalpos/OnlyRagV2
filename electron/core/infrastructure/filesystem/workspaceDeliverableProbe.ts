@@ -2,9 +2,10 @@
  * Infrastructure adapter for the domain's `DeliverableProbe` port
  * (see domain/agent/milestoneDeliverableResolver.ts).
  *
- * Answers "does this workspace-relative path exist with content?" without ever reading
- * the file body — `statSync` alone gives both answers, so probing a milestone's
- * deliverables costs nothing measurable even on a plan with dozens of entries.
+ * Answers "does this workspace-relative path exist, and is what it holds a real deliverable
+ * or a placeholder?". `statSync` settles existence and size; the body is read back only when
+ * the file is small enough to plausibly be a stub, so probing a plan with dozens of entries
+ * still costs nothing measurable on real implementation files.
  */
 
 import fs from 'node:fs'
@@ -12,6 +13,12 @@ import path from 'node:path'
 import type { DeliverableProbe, DeliverableProbeResult } from '../../domain/agent/milestoneDeliverableResolver'
 
 const MISSING: DeliverableProbeResult = { exists: false, contentLength: 0 }
+
+/**
+ * Files above this are never inspected: no placeholder runs to four kilobytes, and reading
+ * every large deliverable on every probe is exactly the cost this adapter was built to avoid.
+ */
+const MAX_INSPECTABLE_BYTES = 4096
 
 /**
  * Builds a probe rooted at `workspacePath`. Any candidate that resolves outside the
@@ -31,7 +38,10 @@ export function createWorkspaceDeliverableProbe(workspacePath: string): Delivera
     try {
       const stats = fs.statSync(resolved)
       if (!stats.isFile()) return MISSING
-      return { exists: true, contentLength: stats.size }
+      if (stats.size === 0 || stats.size > MAX_INSPECTABLE_BYTES) {
+        return { exists: true, contentLength: stats.size }
+      }
+      return { exists: true, contentLength: stats.size, content: fs.readFileSync(resolved, 'utf-8') }
     } catch {
       return MISSING
     }

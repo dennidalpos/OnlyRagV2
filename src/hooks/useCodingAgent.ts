@@ -106,7 +106,6 @@ export function useCodingAgent(settings?: AppSettings) {
 
   const { documents: ingestedDocs } = useIngestedDocuments({
     onDocsUpdated: handleDocsUpdated,
-    autoRetryIntervalMs: 3000,
   })
 
   const ingestedDocsRef = useRef(ingestedDocs)

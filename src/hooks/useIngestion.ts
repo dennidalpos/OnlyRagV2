@@ -134,7 +134,6 @@ export function useIngestion(settings?: AppSettings) {
     refetchDocuments: fetchDocuments,
   } = useIngestedDocuments({
     onDocsUpdated: handleDocUpdateCallback,
-    autoRetryIntervalMs: 3000,
   })
 
   const handleCancelIngestion = async () => {

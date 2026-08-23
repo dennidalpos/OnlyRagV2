@@ -168,7 +168,6 @@ export function useDocumentTranslation(settings?: AppSettings) {
 
   const { documents, refetchDocuments: fetchDocuments } = useIngestedDocuments({
     onDocsUpdated: handleDocsUpdated,
-    autoRetryIntervalMs: 3000,
   })
 
   const handleSwapLanguages = () => {

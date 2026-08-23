@@ -20,6 +20,11 @@
 export interface DeliverableProbeResult {
   exists: boolean
   contentLength: number
+  /**
+   * The file body, supplied only when the file is small enough to plausibly be a placeholder.
+   * Left undefined for anything large, which is definitionally not a stub.
+   */
+  content?: string
 }
 
 /** Injected by the infrastructure/application layer; the domain never touches `fs`. */
@@ -67,6 +72,44 @@ export function extractDeliverablePaths(title: string): string[] {
   return found
 }
 
+/** Line prefixes that mark a comment across the languages a generated project can use. */
+const COMMENT_LINE_PATTERN = /^(\/\/|\/\*|\*\/|\*|#|--|<!--|;)/
+
+/** Words a model writes when it is deferring the actual work. */
+const PLACEHOLDER_MARKER_PATTERN = /\b(todo|fixme|placeholder|stub|not implemented|implement (me|here|this)|coming soon|lorem ipsum)\b/i
+
+/** Below this, a file carries no implementation whatever its extension. */
+const MIN_MEANINGFUL_LENGTH = 12
+
+/** A marker only condemns a file that has essentially nothing else in it. */
+const MAX_MARKER_ONLY_LENGTH = 200
+const MAX_MARKER_ONLY_CODE_LINES = 2
+
+/**
+ * True when a file's body is a placeholder rather than a deliverable.
+ *
+ * Deliberately conservative and purely syntactic, for the same reason as the rest of this
+ * module: it must behave identically for every model and stack. A false positive only ever
+ * leaves a milestone `unsatisfied` -- the safe direction, since the resolver can then never
+ * close it on evidence that is not there.
+ */
+export function isPlaceholderContent(content: string): boolean {
+  const trimmed = content.trim()
+  if (trimmed.length < MIN_MEANINGFUL_LENGTH) return true
+
+  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const codeLines = lines.filter((line) => !COMMENT_LINE_PATTERN.test(line))
+
+  // Nothing but comments: the model described the work instead of doing it.
+  if (codeLines.length === 0) return true
+
+  return (
+    codeLines.length <= MAX_MARKER_ONLY_CODE_LINES &&
+    trimmed.length <= MAX_MARKER_ONLY_LENGTH &&
+    PLACEHOLDER_MARKER_PATTERN.test(trimmed)
+  )
+}
+
 /**
  * Decides whether a milestone's file deliverables are all present on disk.
  *
@@ -78,6 +121,9 @@ export function extractDeliverablePaths(title: string): string[] {
  * A title that names paths which do not exist yet returns `unsatisfied`, which is
  * also what a false-positive path token ("Node.js") yields: the resolver can only
  * ever fail to advance a milestone, never advance one whose files are missing.
+ *
+ * A path that exists but holds placeholder content is `unsatisfied` too -- see
+ * `isPlaceholderContent`. Existence with a non-zero size used to be the entire bar.
  */
 export function resolveMilestoneDeliverableStatus(
   title: string,
@@ -89,6 +135,9 @@ export function resolveMilestoneDeliverableStatus(
   for (const deliverable of deliverables) {
     const result = probe(deliverable)
     if (!result.exists || result.contentLength <= 0) return 'unsatisfied'
+    // Presence and a non-zero size were the whole bar, so a file holding "// TODO: implement"
+    // closed its milestone. Content the probe deemed small enough to inspect is now checked.
+    if (result.content !== undefined && isPlaceholderContent(result.content)) return 'unsatisfied'
   }
 
   return 'satisfied'

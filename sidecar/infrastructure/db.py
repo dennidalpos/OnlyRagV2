@@ -51,43 +51,78 @@ def safe_open_table(table_name: str) -> Optional[Any]:
                 logger.error(f"Failed to isolate corrupted table directory {table_path}: {move_err}")
         return None
 
+class SchemaMismatchError(RuntimeError):
+    """Raised when a record cannot be appended to an existing table.
+
+    Carries the table name so callers can surface which store needs migrating.
+    """
+
+    def __init__(self, table_name: str, cause: Exception):
+        self.table_name = table_name
+        self.cause = cause
+        super().__init__(
+            f"Cannot append to LanceDB table '{table_name}': the record does not match the "
+            f"stored schema ({cause}). The existing data was left untouched -- migrate or "
+            f"remove the table deliberately before ingesting again."
+        )
+
+
+def append_records(
+    table_name: str,
+    records: List[Dict[str, Any]],
+    delete_where: Optional[str] = None,
+) -> Any:
+    """Appends records to a table, creating it on first use, and returns the table handle.
+
+    Deliberately non-destructive. Earlier revisions answered a failed `add` by dropping and
+    re-creating the table from the incoming record alone, which silently deleted every row the
+    user had already indexed whenever a schema changed. A mismatch now raises SchemaMismatchError
+    and leaves the stored data intact: losing an ingest is recoverable, losing the corpus is not.
+    """
+    if table_name not in get_existing_tables():
+        return lance_db.create_table(table_name, data=records)
+
+    tbl = lance_db.open_table(table_name)
+    if delete_where:
+        tbl.delete(delete_where)
+    try:
+        tbl.add(records)
+    except Exception as err:
+        logger.error(f"Schema mismatch appending to LanceDB table '{table_name}': {err}")
+        raise SchemaMismatchError(table_name, err) from err
+    return tbl
+
+
 def run_db_maintenance() -> Dict[str, Any]:
-    """Performs compaction of fragmented Lance datasets and purges obsolete file versions."""
+    """Compacts fragmented Lance datasets, prunes obsolete versions and refreshes indices.
+
+    Uses `Table.optimize()`, the supported entry point since LanceDB 0.21. The previous
+    implementation called `compact_files()` and `cleanup_old_versions()`, both deprecated and
+    both requiring the optional `pylance` package: without it every call raised, yet each table
+    was still reported as "success" with compacted/cleaned silently False, so a maintenance run
+    that did nothing at all was indistinguishable from one that worked.
+    """
     results = []
-    tables = get_existing_tables()
-    for table_name in tables:
+    all_succeeded = True
+
+    for table_name in get_existing_tables():
         try:
-            tbl = lance_db.open_table(table_name)
-            compacted = False
-            cleaned = False
-
-            if hasattr(tbl, 'compact_files'):
-                try:
-                    tbl.compact_files()
-                    compacted = True
-                except Exception as comp_err:
-                    logger.warning(f"Compaction not supported or failed for table '{table_name}': {comp_err}")
-
-            if hasattr(tbl, 'cleanup_old_versions'):
-                try:
-                    tbl.cleanup_old_versions()
-                    cleaned = True
-                except Exception as clean_err:
-                    logger.warning(f"Cleanup old versions failed for table '{table_name}': {clean_err}")
-
-            results.append({
-                "table": table_name,
-                "status": "success",
-                "compacted": compacted,
-                "cleaned": cleaned
-            })
+            lance_db.open_table(table_name).optimize()
+            results.append({"table": table_name, "status": "success", "optimized": True})
         except Exception as err:
+            all_succeeded = False
             logger.warning(f"Maintenance failed on table '{table_name}': {err}")
             results.append({
                 "table": table_name,
                 "status": "error",
-                "error": str(err)
+                "optimized": False,
+                "error": str(err),
             })
 
-    logger.info(f"LanceDB maintenance completed for {len(results)} tables: {results}")
-    return {"success": True, "tables": results}
+    failed = [r["table"] for r in results if r["status"] == "error"]
+    if failed:
+        logger.error(f"LanceDB maintenance failed on {len(failed)} of {len(results)} tables: {failed}")
+    else:
+        logger.info(f"LanceDB maintenance optimized {len(results)} tables successfully.")
+
+    return {"success": all_succeeded, "tables": results}

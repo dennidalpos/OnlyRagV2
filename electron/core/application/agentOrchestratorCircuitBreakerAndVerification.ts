@@ -87,8 +87,25 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
   ctx.emitLog('info', `✅ Milestone ${activeM.id} verificata: scritto "${evidencePath}", tutti i file richiesti sono presenti.`)
 }
 
+/**
+ * A file written after the last passing build makes that build stale evidence.
+ *
+ * `hasVerifiedBuild` used to be monotonic: once any build/test/typecheck passed it stayed true
+ * for the rest of the session, so the Definition of Done gate accepted a build from step 10 as
+ * proof for files written at step 30. Clearing it on every mutation ties the gate to the code
+ * that actually exists at finish time.
+ *
+ * Safe against a verification command invalidating itself: `trackVerification` runs after both
+ * callers of this within the same tool result, so a build that writes to `dist/` re-raises the
+ * flag in the same step it cleared it.
+ */
+function invalidateVerifiedBuild(ctx: ToolResultProcessingContext) {
+  ctx.flags.hasVerifiedBuild = false
+}
+
 export async function recordMutationSideEffects(ctx: ToolResultProcessingContext, targetParam: string | undefined) {
   ctx.flags.hasFileMutations = true
+  invalidateVerifiedBuild(ctx)
   // Checkpoint immediately after a successful file mutation, independent of the periodic
   // PERSIST_EVERY_N_STEPS cadence, so a crash right after a write never loses track of what
   // was actually changed on disk.
@@ -183,6 +200,7 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
   }
 
   ctx.flags.hasFileMutations = true
+  invalidateVerifiedBuild(ctx)
   if (newlyTracked > 0) {
     ctx.emitLog(
       'info',

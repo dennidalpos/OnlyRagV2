@@ -1,7 +1,6 @@
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
-import type { ModelTier } from '../domain/agent/complexityEvaluator'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
@@ -58,9 +57,7 @@ export interface TurnDispatchData {
   errorCountInHistory: number
   compiledHistoryBlock: string
   targetModel: string
-  intermediateModel: string
   fallbackModel: string
-  heavyEscalationModel: string | undefined
 }
 
 export type TurnDispatchOutcome =
@@ -70,9 +67,6 @@ export type TurnDispatchOutcome =
 export interface ModelSelection {
   targetModel: string
   targetModelToolCallingCapable: boolean
-  intermediateModel: string
   fallbackModel: string
-  heavyEscalationModel: string | undefined
   runtimeOpts: OllamaRuntimeOptions
-  complexityTier: ModelTier
 }

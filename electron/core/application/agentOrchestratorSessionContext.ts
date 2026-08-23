@@ -4,7 +4,6 @@ import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/ski
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorAppService'
 import { logger } from '../../diagnostics'
-import { evaluateTaskComplexity } from '../domain/agent/complexityEvaluator'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import {
   resolveWorkspacePath,
@@ -87,15 +86,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   // per session; failures resolve to an empty map, which falls back to the family allow-list.
   const modelCapabilities = await ollamaAppService.getModelCapabilities(settings.ollamaHost)
 
-  const firstTurnComplexity = evaluateTaskComplexity(userTask, {
-    attachedFilesCount: payload.pinnedFiles?.length || 0,
-    contextSizeChars: payload.activeFile?.content?.length || 0,
-    settings,
-    availableModels,
-    hasRecentToolFailure: false,
-    errorCountInHistory: 0,
-  })
-
   const warmUpModel = settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
 
   emitLog(
@@ -111,11 +101,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
       agentMode,
       warmUpModel,
       workspacePath,
-      {
-        standardModel: settings.codingModel || settings.defaultModel,
-        hardwareProfile: settings.hardwareProfile,
-      },
-      firstTurnComplexity
+      settings.hardwareProfile
     )
   }
 

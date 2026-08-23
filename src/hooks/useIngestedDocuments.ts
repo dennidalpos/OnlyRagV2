@@ -57,11 +57,16 @@ export function useIngestedDocuments(options: UseIngestedDocumentsOptions = {}) 
     setIsLoading(true)
     try {
       const docs = await apiService.getIngestedDocuments()
-      const validDocs = Array.isArray(docs) ? docs : []
-      setDocuments(validDocs)
+      if (docs === null) {
+        // Could not ask the sidecar. Keep the documents (and the caller's selection built on
+        // them) exactly as they were, and leave isLoaded false so the retry timer keeps going.
+        logger.warn('useIngestedDocuments', 'Document list unavailable; keeping the previous list and selection.')
+        return
+      }
+      setDocuments(docs)
       setIsLoaded(true)
       if (onDocsUpdatedRef.current) {
-        onDocsUpdatedRef.current(validDocs)
+        onDocsUpdatedRef.current(docs)
       }
     } catch (err: any) {
       logger.error('useIngestedDocuments', `Failed fetching documents: ${err.message}`)

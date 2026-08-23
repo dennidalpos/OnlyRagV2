@@ -20,9 +20,9 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
 
     const prompt = planner.compileProgressPrompt()
     expect(prompt).toContain('1/3 verified - 33%')
-    expect(prompt).toContain('[x] **Inspect workspace files**')
-    expect(prompt).toContain('[>] **Implement feature in main.ts**')
-    expect(prompt).toContain('[ ] **Run verification tests**')
+    expect(prompt).toContain('[x] **m-1: Inspect workspace files**')
+    expect(prompt).toContain('[>] **m-2: Implement feature in main.ts**')
+    expect(prompt).toContain('[ ] **m-3: Run verification tests**')
     expect(prompt).toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
     expect(prompt).toContain('Implement feature in main.ts')
   })
@@ -192,5 +192,28 @@ Here is the microtask execution plan:
     expect(parsed[3].title).toContain('Tasks.tsx')
     expect(parsed[4].id).toBe('m-5')
     expect(parsed[4].title).toContain('Completamento dell\'ultimo task')
+  })
+
+  it('should not double up the milestone id when the planner model self-labels its titles (regression: "Task m-1: m-1: ...")', () => {
+    const rawOutput = `
+- [ ] m-1: Create a new React project using Vite.
+- [ ] m-2: Initialize Tailwind CSS in the project.
+`
+    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawOutput)
+    expect(parsed[0].title).toBe('Create a new React project using Vite.')
+    expect(parsed[1].title).toBe('Initialize Tailwind CSS in the project.')
+
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan(parsed as any)
+    const prompt = planner.compileProgressPrompt()
+
+    expect(prompt).toContain('**m-1: Create a new React project using Vite.**')
+    expect(prompt).not.toContain('m-1: m-1:')
+    expect(prompt).not.toContain('m-2: m-2:')
+
+    // the tracker re-prefixes the id too, and must likewise render it exactly once
+    const compact = planner.getCompactState()
+    expect(compact.activeMicroTask).toBe('m-1: Create a new React project using Vite.')
+    expect(compact.pendingMicroTasks[1]).toBe('m-2: Initialize Tailwind CSS in the project.')
   })
 })

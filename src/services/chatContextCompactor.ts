@@ -36,7 +36,8 @@ function distillTurn(userText: string, botText: string): string {
 export function compactChatHistory(
   messages: ChatMessage[],
   budget: ChatContextBudget,
-  hasSelectedDocs: boolean
+  hasSelectedDocs: boolean,
+  availableChars?: number
 ): ChatCompactionResult {
   // Filter out empty messages and the initial placeholder greeting only
   const dialogueMessages = messages
@@ -59,11 +60,20 @@ export function compactChatHistory(
     }
   }
 
-  // Calculate dynamic character budget for history:
-  // When no documents are selected, the model's full context window (minus system prompt ~2500 chars) is available.
-  const baseBudget = hasSelectedDocs
+  // Character budget for the replayed history.
+  //
+  // `availableChars` is what the caller has left after the system prompt and the selected
+  // document context have taken their share, and it WINS when supplied. The fallback below is
+  // only for callers that do not budget the whole prompt: `maxNumCtx * 2.0` sizes the history in
+  // isolation, as if the rest of the turn did not have to fit in the same window, which left the
+  // answer as little as 61 tokens to generate into on a legacy profile.
+  //
+  // The selected attachment outranks conversation history on purpose: the user picked that
+  // document for this question, and it is the one thing the answer cannot be produced without.
+  const fallbackBudget = hasSelectedDocs
     ? Math.max(budget.historyChars, Math.floor(budget.maxNumCtx * 2.0))
     : Math.max(budget.historyChars, Math.floor(budget.maxNumCtx * 3.5 - 2500))
+  const baseBudget = availableChars !== undefined ? Math.max(0, availableChars) : fallbackBudget
 
   // Group messages into user-assistant pairs
   const turnPairs: { user: string; assistant: string; userMsgId: string; assistantMsgId?: string }[] = []
@@ -130,12 +140,21 @@ export function compactChatHistory(
 
   const combined = [summarySection, recentSection].filter(Boolean).join('\n\n')
 
+  // Hard ceiling. Distillation is best-effort - TextRankSummarizer cannot shrink text with no
+  // sentence structure (logs, tables, code), and the recent-turn loop deliberately keeps the
+  // last 4 turns whatever their size - so without this clamp the block could still exceed the
+  // caller's budget and push the selected document out of the context window. Trim from the
+  // FRONT: the most recent turns are the ones the answer depends on.
+  const bounded = combined.length > baseBudget
+    ? `[...older conversation trimmed to fit the context window]\n\n${combined.slice(combined.length - baseBudget)}`
+    : combined
+
   return {
-    historyBlock: combined,
+    historyBlock: bounded,
     isCompacted: true,
     summarizedTurnsCount: olderTurns.length,
     verbatimTurnsCount: recentTurns.length,
     totalOriginalChars,
-    finalChars: combined.length,
+    finalChars: bounded.length,
   }
 }

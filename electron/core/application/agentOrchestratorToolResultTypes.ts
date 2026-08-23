@@ -32,9 +32,7 @@ export interface ToolResultProcessingContext {
   settings: AppSettings
   workspacePath: string | null
   targetModel: string
-  intermediateModel: string
   fallbackModel: string
-  heavyEscalationModel: string | undefined
   isUnlimitedSteps: boolean
   flags: ToolResultMutableFlags
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>

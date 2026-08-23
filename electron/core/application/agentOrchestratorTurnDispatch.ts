@@ -62,7 +62,7 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
   const errorCountInHistory = ctx.episodicCompactor.failureCount
   const compiledHistoryBlock = ctx.episodicCompactor.compilePromptHistoryBlock(10000)
 
-  const selection = selectModelForTurn(ctx, hasRecentToolFailure, errorCountInHistory)
+  const selection = selectModelForTurn(ctx)
   const { assembled, compactionResult, turnPrompt } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
   freezeOrGrowContextWindow(ctx, turnPrompt, selection.runtimeOpts)
 
@@ -121,9 +121,7 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
       errorCountInHistory,
       compiledHistoryBlock,
       targetModel: effectiveUsedModel,
-      intermediateModel: selection.intermediateModel,
       fallbackModel: selection.fallbackModel,
-      heavyEscalationModel: selection.heavyEscalationModel,
     },
   }
 }

@@ -6,30 +6,30 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 8 })
     expect(opts.num_ctx).toBe(4096)
     expect(opts.num_thread).toBe(7)
-    expect(opts.maxContextChars).toBe(16000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(4096))
     expect(opts.temperature).toBe(0.1)
   })
 
-  it('should resolve Medium profile with 8192 context and 28k max context chars, and still pin num_thread (a Medium profile can run on a CPU-only machine)', () => {
+  it('should resolve Medium profile with 8192 context, and still pin num_thread (a Medium profile can run on a CPU-only machine)', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Medium', { cpuCount: 8 })
     expect(opts.num_ctx).toBe(8192)
-    expect(opts.maxContextChars).toBe(28000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(8192))
     expect(opts.num_thread).toBe(7)
   })
 
-  it('should resolve High profile with 16384 context and 48k max context chars, and still pin num_thread', () => {
+  it('should resolve High profile with 16384 context, and still pin num_thread', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 8 })
     expect(opts.num_ctx).toBe(16384)
-    expect(opts.maxContextChars).toBe(48000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(16384))
     expect(opts.num_thread).toBe(7)
   })
 
-  it('should cap generation with a tier-scaled num_predict and ship the shared stop sequences on every profile', () => {
-    const low = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 4 }, 'fast')
-    const high = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 4 }, 'deep_reasoning')
+  it('should cap generation with a window-derived num_predict and ship the shared stop sequences on every profile', () => {
+    const low = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 4 })
+    const high = HardwareProfileResolver.resolveOllamaOptions('High', { cpuCount: 4 })
 
-    expect(low.num_predict).toBe(4096)
-    expect(high.num_predict).toBe(8192)
+    expect(low.num_predict).toBe(HardwareProfileResolver.deriveNumPredict(4096))
+    expect(high.num_predict).toBe(HardwareProfileResolver.deriveNumPredict(16384))
     expect(low.stop).toEqual(AGENT_STOP_SEQUENCES)
     expect(high.stop).toEqual(AGENT_STOP_SEQUENCES)
     // Never the closing code fence: write_file payloads routinely contain markdown fences.
@@ -43,7 +43,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       systemRamGB: 32,
     })
     expect(opts.num_ctx).toBe(16384)
-    expect(opts.maxContextChars).toBe(48000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
   it('should dynamically resolve Auto profile to Medium (not Low) for an entry-tier 6GB VRAM GPU, matching chatContextBudget.ts\'s treatment of the entry tier', () => {
@@ -53,7 +53,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       systemRamGB: 16,
     })
     expect(opts.num_ctx).toBe(8192)
-    expect(opts.maxContextChars).toBe(28000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
   it('should dynamically resolve Auto profile to Medium when 8GB VRAM GPU is detected', () => {
@@ -63,7 +63,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       systemRamGB: 16,
     })
     expect(opts.num_ctx).toBe(8192)
-    expect(opts.maxContextChars).toBe(28000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
   it('should dynamically resolve Auto profile to Low when no dedicated GPU is detected', () => {
@@ -75,24 +75,19 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     })
     expect(opts.num_ctx).toBe(4096)
     expect(opts.num_thread).toBe(5)
-    expect(opts.maxContextChars).toBe(16000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
-  it('should adapt context budget and num_ctx dynamically based on ComplexityTier', () => {
-    // Fast tier on Medium profile gives lower context for super-fast latency
-    const fastOpts = HardwareProfileResolver.resolveOllamaOptions('Medium', undefined, 'fast')
-    expect(fastOpts.num_ctx).toBe(4096)
-    expect(fastOpts.maxContextChars).toBe(16000)
-
-    // Deep reasoning tier on Medium profile uses safe 8k context window to prevent OOM
-    const deepOpts = HardwareProfileResolver.resolveOllamaOptions('Medium', undefined, 'deep_reasoning')
-    expect(deepOpts.num_ctx).toBe(8192)
-    expect(deepOpts.maxContextChars).toBe(28000)
-
-    // Deep reasoning tier on High profile expands up to 32k context
-    const deepHighOpts = HardwareProfileResolver.resolveOllamaOptions('High', undefined, 'deep_reasoning')
-    expect(deepHighOpts.num_ctx).toBe(32768)
-    expect(deepHighOpts.maxContextChars).toBe(64000)
+  it('should keep num_predict and maxContextChars inside the context window on every profile', () => {
+    // Regression: these three used to be hand-set per tier and drifted apart — the Medium
+    // profile shipped num_ctx 8192 with num_predict 6144 AND a 28000-char prompt budget, i.e.
+    // it promised the prompt ~3x more room than the window could hold alongside generation.
+    for (const profile of ['Low', 'Medium', 'High'] as const) {
+      const opts = HardwareProfileResolver.resolveOllamaOptions(profile, { cpuCount: 4 })
+      const promptTokenBudget = Math.ceil(opts.maxContextChars / 3.6)
+      expect(opts.num_predict).toBeLessThan(opts.num_ctx)
+      expect(promptTokenBudget + opts.num_predict).toBeLessThanOrEqual(opts.num_ctx)
+    }
   })
 
   it('should upgrade effective tier to Medium on GPU-less machine when enableSystemRamOffloading is true and RAM is >= 16GB', () => {
@@ -104,6 +99,6 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       enableSystemRamOffloading: true,
     })
     expect(opts.num_ctx).toBe(8192)
-    expect(opts.maxContextChars).toBe(28000)
+    expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 })

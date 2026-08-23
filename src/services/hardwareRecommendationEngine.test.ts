@@ -11,12 +11,12 @@ import {
   isOllamaModelInstalled,
   getRecommendedOllamaEnvVars,
 } from './hardwareRecommendationEngine'
-import { findMatchingInstalledModel } from './complexityRouterService'
+import { findMatchingInstalledModel } from '../../electron/core/domain/agent/modelTagMatcher'
 import {
-  FAST_TIER_CATALOG,
-  STANDARD_TIER_CATALOG,
-  DEEP_REASONING_TIER_CATALOG,
-  HEAVY_ESCALATION_TIER_CATALOG,
+  COMPACT_CODING_CATALOG,
+  WORKHORSE_CODING_CATALOG,
+  REASONING_CODING_CATALOG,
+  LARGE_CODING_CATALOG,
   CHAT_TIER_CATALOG,
   TRANSLATION_TIER_CATALOG,
   MEDICAL_TIER_CATALOG,
@@ -134,7 +134,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     it('analyzeHardwareAndRecommend should thread diagnostics.ollama.modelDetails into per-model footprintGB', () => {
       const diagnosticsWithoutDetails = createMockDiagnostics(true, 8192, 16)
       const withoutDetails = analyzeHardwareAndRecommend(diagnosticsWithoutDetails)
-      const allWithout = [...withoutDetails.standardTierModels, ...withoutDetails.fastTierModels, ...withoutDetails.deepReasoningTierModels]
+      const allWithout = withoutDetails.codingModels
       const baselineRec = allWithout.find((m) => m.modelName === 'qwen2.5-coder:7b')
       expect(baselineRec?.footprintGB).toBeDefined()
 
@@ -146,7 +146,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
         },
       }
       const withDetails = analyzeHardwareAndRecommend(diagnosticsWithDetails)
-      const allWith = [...withDetails.standardTierModels, ...withDetails.fastTierModels, ...withDetails.deepReasoningTierModels]
+      const allWith = withDetails.codingModels
       const metadataRec = allWith.find((m) => m.modelName === 'qwen2.5-coder:7b')
 
       // F16 (2 bytes/param) is much larger than the static table's Q4-class estimate (4.7GB).
@@ -154,19 +154,19 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     })
   })
 
-  describe('ModelTier consolidation (B4)', () => {
-    it('should tag each complexity-tier recommendation group with its shared ModelTier', () => {
+  describe('coding model catalog consolidation', () => {
+    it('should expose one deduplicated coding model list instead of four routing-tier lists', () => {
       const diagnostics = createMockDiagnostics(true, 8192, 16)
       const recs = analyzeHardwareAndRecommend(diagnostics)
 
-      expect(recs.fastTierModels.every((m) => m.tier === 'fast')).toBe(true)
-      expect(recs.standardTierModels.every((m) => m.tier === 'standard')).toBe(true)
-      expect(recs.deepReasoningTierModels.every((m) => m.tier === 'deep_reasoning')).toBe(true)
-      expect(recs.heavyEscalationTierModels.every((m) => m.tier === 'heavy')).toBe(true)
-
-      // Functional (non-complexity) groups are not part of the ModelTier vocabulary.
-      expect(recs.chatTierModels.every((m) => m.tier === undefined)).toBe(true)
-      expect(recs.visionTierModels.every((m) => m.tier === undefined)).toBe(true)
+      const names = recs.codingModels.map((m) => m.modelName)
+      expect(names.length).toBeGreaterThan(0)
+      // qwen2.5-coder:7b appeared in three of the four old tier catalogs.
+      expect(new Set(names).size).toBe(names.length)
+      expect(names).toContain('qwen2.5-coder:7b')
+      // small and large coding models both remain selectable from the single list
+      expect(names).toContain('qwen2.5-coder:1.5b')
+      expect(names).toContain('qwen2.5-coder:32b')
     })
   })
 
@@ -220,14 +220,9 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileTier).toBe('legacy')
     expect(recs.profileName).toContain('Legacy / CPU-Only Hardware')
 
-    const recFast = recs.fastTierModels.find((m) => m.isRecommended)
-    expect(recFast?.modelName).toBe('qwen2.5-coder:1.5b')
-
-    const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
-
-    const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen3:4b')
+    // On legacy hardware the single coding list still surfaces a legacy-safe default first.
+    const recCoding = recs.codingModels.find((m) => m.isRecommended)
+    expect(recCoding?.modelName).toBe('qwen2.5-coder:3b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -256,11 +251,8 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileName).toContain('Entry-Level GPU')
     expect(recs.safeVramBudgetGB).toBe(3.0)
 
-    const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('qwen2.5-coder:3b')
-
-    const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen3:4b')
+    const recCoding = recs.codingModels.find((m) => m.isRecommended)
+    expect(recCoding?.modelName).toBe('qwen2.5-coder:3b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -277,14 +269,8 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileName).toContain('Mid-Range GPU')
     expect(recs.safeVramBudgetGB).toBe(4.5)
 
-    const recFast = recs.fastTierModels.find((m) => m.isRecommended)
-    expect(recFast?.modelName).toBe('qwen2.5-coder:1.5b')
-
-    const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
-
-    const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen3:8b')
+    const recCoding = recs.codingModels.find((m) => m.isRecommended)
+    expect(recCoding?.modelName).toBe('qwen2.5-coder:7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('moondream:latest')
@@ -313,14 +299,8 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileName).toContain('High-End Performance GPU')
     expect(recs.safeVramBudgetGB).toBe(10.5)
 
-    const recFast = recs.fastTierModels.find((m) => m.isRecommended)
-    expect(recFast?.modelName).toBe('qwen2.5-coder:3b')
-
-    const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('qwen2.5-coder:7b')
-
-    const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('qwen2.5-coder:14b')
+    const recCoding = recs.codingModels.find((m) => m.isRecommended)
+    expect(recCoding?.modelName).toBe('qwen2.5-coder:7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llava:7b')
@@ -343,11 +323,8 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.profileName).toContain('Extreme Workstation')
     expect(recs.safeVramBudgetGB).toBe(16.5)
 
-    const recStd = recs.standardTierModels.find((m) => m.isRecommended)
-    expect(recStd?.modelName).toBe('qwen2.5-coder:14b')
-
-    const recDeep = recs.deepReasoningTierModels.find((m) => m.isRecommended)
-    expect(recDeep?.modelName).toBe('gpt-oss:20b')
+    const recCoding = recs.codingModels.find((m) => m.isRecommended)
+    expect(recCoding?.modelName).toBe('qwen2.5-coder:14b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llama3.2-vision:11b')
@@ -414,7 +391,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(findMatchingInstalledModel('nonexistent-model', installed)).toBeNull()
   })
 
-  it('should resolve fuzzy quant-tag and loose substring base matches via the consolidated matcher (AGT4: previously only available in complexityEvaluator.ts, now shared via complexityRouterService)', () => {
+  it('should resolve fuzzy quant-tag and loose substring base matches via the consolidated matcher (AGT4: shared through modelTagMatcher)', () => {
     const installed = ['qwen2.5-coder:7b-instruct-q4_k_m']
     // Compatible quant/instruction tag fuzzy match
     expect(findMatchingInstalledModel('qwen2.5-coder:7b', installed)).toBe('qwen2.5-coder:7b-instruct-q4_k_m')
@@ -468,10 +445,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
         expect(recs.profileTier).toBe(host.tier)
 
         const allGroups = [
-          recs.fastTierModels,
-          recs.standardTierModels,
-          recs.deepReasoningTierModels,
-          recs.heavyEscalationTierModels,
+          recs.codingModels,
           recs.chatTierModels,
           recs.translationTierModels,
           recs.medicalTierModels,
@@ -492,27 +466,15 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       }
     })
 
-    it('must expose exactly one recommended model per complexity tier for every profile', () => {
+    it('must offer at least one recommended coding model on every profile', () => {
+      // The wizard defaults the single codingModel slot to the first `isRecommended` entry,
+      // so every supported host must have one.
       for (const host of REPRESENTATIVE_HOSTS) {
         const recs = analyzeHardwareAndRecommend(host.diagnostics)
-        expect(recs.fastTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
-        expect(recs.standardTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
-        expect(recs.deepReasoningTierModels.filter((m) => m.isRecommended)).toHaveLength(1)
-      }
-    })
-
-    it('must curate a different model for Standard vs Deep Reasoning on every profile', () => {
-      // Regression: midrange used to curate qwen2.5-coder:7b as the recommended pick in both
-      // STANDARD_TIER_CATALOG and DEEP_REASONING_TIER_CATALOG, so the wizard defaulted both
-      // slots to the identical model.
-      for (const host of REPRESENTATIVE_HOSTS) {
-        const recs = analyzeHardwareAndRecommend(host.diagnostics)
-        const standardPick = recs.standardTierModels.find((m) => m.isRecommended)?.modelName
-        const deepPick = recs.deepReasoningTierModels.find((m) => m.isRecommended)?.modelName
         expect(
-          deepPick,
-          `${host.tier}: Standard and Deep Reasoning both curated ${standardPick}`
-        ).not.toBe(standardPick)
+          recs.codingModels.filter((m) => m.isRecommended).length,
+          `${host.tier}: no recommended coding model`
+        ).toBeGreaterThanOrEqual(1)
       }
     })
   })
@@ -548,10 +510,10 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       // model" default: the size string shown in the wizard and the weight the VRAM
       // budgeting math uses must describe the same model.
       const ALL_CATALOGS: RawModelCatalogEntry[] = [
-        ...FAST_TIER_CATALOG,
-        ...STANDARD_TIER_CATALOG,
-        ...DEEP_REASONING_TIER_CATALOG,
-        ...HEAVY_ESCALATION_TIER_CATALOG,
+        ...COMPACT_CODING_CATALOG,
+        ...WORKHORSE_CODING_CATALOG,
+        ...REASONING_CODING_CATALOG,
+        ...LARGE_CODING_CATALOG,
         ...CHAT_TIER_CATALOG,
         ...TRANSLATION_TIER_CATALOG,
         ...MEDICAL_TIER_CATALOG,
@@ -641,18 +603,18 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       expect(withOffload.warning).toContain('Offloading ibrido')
     })
 
-    it('should recommend 14B model in heavyEscalationTierModels when enableSystemRamOffloading is true on midrange GPU', () => {
+    it('should recommend a 14B coding model when enableSystemRamOffloading is true on a midrange GPU', () => {
       const diag = createMockDiagnostics(true, 8192, 32)
       const withoutOffload = analyzeHardwareAndRecommend(diag, false)
-      const heavy14bWithout = withoutOffload.heavyEscalationTierModels.find((m) => m.modelName.includes('14b'))
-      expect(heavy14bWithout?.isRecommended).toBe(false)
-      expect(heavy14bWithout?.isHardwareCompatible).toBe(false)
+      const m14bWithout = withoutOffload.codingModels.find((m) => m.modelName.includes('14b'))
+      expect(m14bWithout?.isRecommended).toBe(false)
+      expect(m14bWithout?.isHardwareCompatible).toBe(false)
 
       const withOffload = analyzeHardwareAndRecommend(diag, true)
-      const heavy14bWith = withOffload.heavyEscalationTierModels.find((m) => m.modelName.includes('14b'))
-      expect(heavy14bWith?.isRecommended).toBe(true)
-      expect(heavy14bWith?.isHardwareCompatible).toBe(true)
-      expect(heavy14bWith?.compatibilityStatus).toBe('tight_vram')
+      const m14bWith = withOffload.codingModels.find((m) => m.modelName.includes('14b'))
+      expect(m14bWith?.isRecommended).toBe(true)
+      expect(m14bWith?.isHardwareCompatible).toBe(true)
+      expect(m14bWith?.compatibilityStatus).toBe('tight_vram')
     })
   })
 })

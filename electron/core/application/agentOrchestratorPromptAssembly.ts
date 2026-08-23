@@ -1,6 +1,6 @@
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import os from 'node:os'
-import { findMatchingInstalledModel } from '../domain/agent/complexityEvaluator'
+import { findMatchingInstalledModel } from '../domain/agent/modelTagMatcher'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
@@ -10,12 +10,11 @@ import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../d
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
-import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { skillAppService } from './skillAppService'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
-export function selectModelForTurn(ctx: TurnDispatchContext, _hasRecentToolFailure: boolean, _errorCountInHistory: number): ModelSelection {
+export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const cachedGpu = getCachedGpuInfo()
   const memInfo = getMemoryInfo()
 
@@ -23,15 +22,6 @@ export function selectModelForTurn(ctx: TurnDispatchContext, _hasRecentToolFailu
   const targetModel: string = ctx.currentOverriddenModel
     ? ctx.currentOverriddenModel
     : findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
-
-  if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logComplexityRouting(
-      ctx.sessionId,
-      ctx.stepCount,
-      { tier: 'standard', tierName: 'Standard', modelName: targetModel, isEscalated: false, reasoning: 'Direct execution on primary coding model' },
-      targetModel
-    )
-  }
 
   // Native tool-calling routing: when the primary model is detected as tool-calling capable
   // (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool
@@ -49,21 +39,19 @@ export function selectModelForTurn(ctx: TurnDispatchContext, _hasRecentToolFailu
       systemRamGB: memInfo.totalRAMGB,
       cpuCount: os.cpus()?.length,
       enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
-    },
-    'standard'
+    }
   )
 
+  // Resilience fallback only — the model swapped in when the primary OOMs or crashes.
+  // It is NOT a routing tier: nothing selects it based on task difficulty.
   const candidateFallback = ctx.settings.codingFallbackModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
   const fallbackModel = findMatchingInstalledModel(candidateFallback, ctx.availableModels) || candidateFallback
 
   return {
     targetModel,
     targetModelToolCallingCapable,
-    intermediateModel: targetModel,
     fallbackModel,
-    heavyEscalationModel: undefined,
     runtimeOpts,
-    complexityTier: 'standard',
   }
 }
 
@@ -102,7 +90,6 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     agentMode: ctx.agentMode,
     stepCount: ctx.stepCount,
     maxSteps: ctx.maxSteps,
-    complexityTier: selection.complexityTier,
     workspacePath: ctx.workspacePath,
     isStandaloneMode: ctx.isStandaloneMode,
     activeFile: ctx.payload.activeFile,
@@ -118,18 +105,25 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   })
   const basePrompt = assembled.prompt
 
+  // Feed the compactor the assembler's DISJOINT segments. Passing `assembled.stableSection`
+  // as `systemPrompt` (as this once did) duplicated the plan, pinned/active files, skills, RAG
+  // and repo-map bytes — they are already inside stableSection — so the compactor measured the
+  // prompt at roughly double its real size. That tripped the 75% watermark on prompts that
+  // actually fit, and made `remaining = budget - immutableSize` negative, which floored
+  // historyAlloc at 0 and replaced the entire tool history with "...[compacted]". With no
+  // history the prompt was byte-identical every turn, so the model deterministically re-emitted
+  // its first tool call forever (see coding_agent_audit.log session-1787441347002-hu1s).
+  const seg = assembled.segments
   const compactionResult = HeuristicContextCompactor.compile(
     {
-      systemPrompt: assembled.stableSection || basePrompt,
-      activePlanBlock: planBlock,
-      pinnedFilesBlock: ctx.pinnedFilesContextStr,
-      activeFileBlock: ctx.payload.activeFile
-        ? `Active File: ${ctx.payload.activeFile.name}\n${(ctx.payload.activeFile.content || '').slice(0, 8000)}`
-        : '',
-      skillsBlock,
+      systemPrompt: seg.baseSystemPrompt || basePrompt,
+      activePlanBlock: seg.planSection,
+      pinnedFilesBlock: seg.pinnedBlock,
+      activeFileBlock: seg.activeFileBlock,
+      skillsBlock: seg.skillsSection,
       historyBlock: compiledHistoryBlock,
-      attachedContext: ctx.attachedContext,
-      projectMapBlock: currentProjectMapStr,
+      attachedContext: seg.attachedBlock,
+      projectMapBlock: seg.mapBlock,
     },
     selection.runtimeOpts.maxContextChars
   )
@@ -150,7 +144,10 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
  * dropped in that case because the tokens it holds no longer correspond to the new window.
  */
 export function freezeOrGrowContextWindow(ctx: TurnDispatchContext, turnPrompt: string, runtimeOpts: OllamaRuntimeOptions) {
-  const requiredNumCtx = calculateDynamicContextWindow(turnPrompt, runtimeOpts.num_ctx)
+  // Headroom is the profile's own generation reserve (num_predict), not a second independent
+  // constant: the two used to be set apart and disagreed about how much of the window the
+  // completion needed.
+  const requiredNumCtx = calculateDynamicContextWindow(turnPrompt, runtimeOpts.num_ctx, runtimeOpts.num_predict)
   if (ctx.sessionNumCtxBox.value === null) {
     ctx.sessionNumCtxBox.value = requiredNumCtx
   } else if (requiredNumCtx > ctx.sessionNumCtxBox.value) {

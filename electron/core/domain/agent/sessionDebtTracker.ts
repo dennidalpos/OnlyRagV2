@@ -108,10 +108,10 @@ export class SessionDebtTracker {
       this.data.completedTasks.forEach((task) => lines.push(`- [x] ${task}`))
     }
 
-    if (this.data.nextSteps.length > 0) {
-      lines.push('📋 **RECOMMENDED FOLLOW-UP STEPS:**')
-      this.data.nextSteps.forEach((step) => lines.push(`- [ ] ${step}`))
-    }
+    // nextSteps is deliberately NOT rendered here. It is the list of still-pending milestones,
+    // which the prompt already carries verbatim in the STRUCTURED EXECUTION PLAN block - echoing
+    // it a second time cost ~1.5k chars per turn to tell the model something it had just read.
+    // It stays in the persisted SESSION_TRACKER.md (compileTrackerMarkdown) for session resume.
 
     return lines.join('\n')
   }

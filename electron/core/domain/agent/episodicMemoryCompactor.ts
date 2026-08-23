@@ -11,6 +11,8 @@ export interface EpisodicFullLog {
   tool: string
   output: string
   isFailure?: boolean
+  /** Tool target (file path / command), used to collapse repeated failures on the same target. */
+  target?: string
 }
 
 /**
@@ -42,12 +44,21 @@ export class EpisodicMemoryCompactor {
       tool: record.tool,
       output: truncated,
       isFailure: record.status === 'FAILURE' || record.status === 'BLOCKED',
+      target: record.target,
     }
 
     if (logEntry.isFailure) {
-      // Keep failure logs in a dedicated buffer (deduplicated) so they are never lost to FIFO shifting
+      // Keep failure logs in a dedicated buffer (deduplicated) so they are never lost to FIFO shifting.
+      // Dedup is on tool+target, NOT on exact output: loop interventions embed an escalating
+      // "Attempt N" counter, so byte-comparison never matched and 8 near-identical intervention
+      // blobs crowded the real tool diagnostics out of the history budget. Same tool on the same
+      // target replaces the previous entry, keeping only the latest (highest-attempt) copy.
       const lastFailure = this.failureLogs[this.failureLogs.length - 1]
-      if (!lastFailure || lastFailure.output !== logEntry.output || lastFailure.tool !== logEntry.tool) {
+      const isSameTarget =
+        lastFailure && lastFailure.tool === logEntry.tool && (lastFailure.target || '') === (logEntry.target || '')
+      if (isSameTarget) {
+        this.failureLogs[this.failureLogs.length - 1] = logEntry
+      } else {
         this.failureLogs.push(logEntry)
         if (this.failureLogs.length > 8) {
           this.failureLogs.shift()

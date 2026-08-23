@@ -1,5 +1,4 @@
 import { DiagnosticsData, RunningModelDetails } from '../types'
-import type { ModelTier } from './complexityRouterService'
 import type { TranslationKey } from '../i18n'
 import {
   calculateRealUsableVram,
@@ -11,10 +10,10 @@ import {
   type HardwareProfileTier,
 } from './hardwareProfileTiers'
 import {
-  FAST_TIER_CATALOG,
-  STANDARD_TIER_CATALOG,
-  DEEP_REASONING_TIER_CATALOG,
-  HEAVY_ESCALATION_TIER_CATALOG,
+  COMPACT_CODING_CATALOG,
+  WORKHORSE_CODING_CATALOG,
+  REASONING_CODING_CATALOG,
+  LARGE_CODING_CATALOG,
   CHAT_TIER_CATALOG,
   TRANSLATION_TIER_CATALOG,
   MEDICAL_TIER_CATALOG,
@@ -34,10 +33,10 @@ import {
 // explicit entry in `KNOWN_WEIGHT_ALIASES_GB` below.
 const CATALOG_DERIVED_WEIGHTS_GB: Record<string, number> = Object.fromEntries(
   ([
-    ...FAST_TIER_CATALOG,
-    ...STANDARD_TIER_CATALOG,
-    ...DEEP_REASONING_TIER_CATALOG,
-    ...HEAVY_ESCALATION_TIER_CATALOG,
+    ...COMPACT_CODING_CATALOG,
+    ...WORKHORSE_CODING_CATALOG,
+    ...REASONING_CODING_CATALOG,
+    ...LARGE_CODING_CATALOG,
     ...CHAT_TIER_CATALOG,
     ...TRANSLATION_TIER_CATALOG,
     ...MEDICAL_TIER_CATALOG,
@@ -143,13 +142,6 @@ export interface ModelRecommendation {
   sizeBytesApprox: string
   description: string
   isRecommended: boolean
-  /**
-   * Model-routing tier this recommendation belongs to (see ModelTier in
-   * complexityEvaluator.ts) — set for the fast/standard/deep_reasoning/heavy
-   * groups. Undefined for functional (non-complexity) groups like chat,
-   * translation, medical, legal, vision, and embedding.
-   */
-  tier?: ModelTier
   footprintGB?: number
   isHardwareCompatible?: boolean
   compatibilityStatus?: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
@@ -176,11 +168,12 @@ export interface HardwareRecommendations {
   gpuSummary: string
   ramSummary: string
   safeVramBudgetGB: number
-  fastTierModels: ModelRecommendation[]
-  standardTierModels: ModelRecommendation[]
-  deepReasoningTierModels: ModelRecommendation[]
-  /** Heavy Escalation Tier (⚡): optional 14B+ models for complex multi-file tasks. Requires 12GB+ VRAM. */
-  heavyEscalationTierModels: ModelRecommendation[]
+  /**
+   * Every coding-capable model in the built-in catalogs, deduplicated and hardware-assessed.
+   * Replaces the old fast/standard/deep_reasoning/heavy split: the coding module runs on one
+   * configured model, so there is one list to choose it from.
+   */
+  codingModels: ModelRecommendation[]
   chatTierModels: ModelRecommendation[]
   translationTierModels: ModelRecommendation[]
   medicalTierModels: ModelRecommendation[]
@@ -422,7 +415,7 @@ export function assessModelHardwareCompatibility(
   }
 }
 
-export { isOllamaModelInstalled } from './complexityRouterService'
+export { isOllamaModelInstalled } from '../../electron/core/domain/agent/modelTagMatcher'
 
 /**
  * Analyzes detected host hardware and calculates calibrated, non-saturated model assignments
@@ -443,10 +436,7 @@ export function analyzeHardwareAndRecommend(
     gpuSummary,
     ramSummary,
     safeVramBudgetGB,
-    fastTierModels: FAST_TIER_CATALOG.map((item) => enrich(item, 'fast')),
-    standardTierModels: STANDARD_TIER_CATALOG.map((item) => enrich(item, 'standard')),
-    deepReasoningTierModels: DEEP_REASONING_TIER_CATALOG.map((item) => enrich(item, 'deep_reasoning')),
-    heavyEscalationTierModels: HEAVY_ESCALATION_TIER_CATALOG.map((item) => enrich(item, 'heavy')),
+    codingModels: buildCodingModelCatalog().map((item) => enrich(item)),
     chatTierModels: CHAT_TIER_CATALOG.map((item) => enrich(item)),
     translationTierModels: TRANSLATION_TIER_CATALOG.map((item) => enrich(item)),
     medicalTierModels: MEDICAL_TIER_CATALOG.map((item) => enrich(item)),
@@ -532,7 +522,7 @@ function buildModelEnricher(
   profileTier: HardwareProfileTier,
   enableSystemRamOffloading: boolean = false
 ) {
-  return (item: RawModelCatalogEntry, tier?: ModelTier): ModelRecommendation => {
+  return (item: RawModelCatalogEntry): ModelRecommendation => {
     const assessment = assessModelHardwareCompatibility(
       item.modelName,
       vramTotalMB,
@@ -542,12 +532,14 @@ function buildModelEnricher(
       enableSystemRamOffloading
     )
     const isRecommendedByProfile = item.recommendedForProfiles.includes(profileTier)
-    const isRecommended =
-      isRecommendedByProfile ||
-      (enableSystemRamOffloading &&
-        tier === 'heavy' &&
-        assessment.isCompatible &&
-        item.recommendedForProfiles.includes('highend'))
+    // Hybrid offloading lets a host reach one rung further up the ladder than its VRAM alone
+    // allows, so a model curated for a HIGHER profile becomes recommendable once it fits.
+    const hostRank = PROFILE_RANK.indexOf(profileTier)
+    const isReachableViaOffloading =
+      enableSystemRamOffloading &&
+      assessment.isCompatible &&
+      item.recommendedForProfiles.some((p) => PROFILE_RANK.indexOf(p) > hostRank)
+    const isRecommended = isRecommendedByProfile || isReachableViaOffloading
 
     return {
       modelName: item.modelName,
@@ -556,13 +548,44 @@ function buildModelEnricher(
       sizeBytesApprox: item.sizeBytesApprox,
       description: item.description,
       isRecommended,
-      tier,
       footprintGB: assessment.footprintGB,
       isHardwareCompatible: assessment.isCompatible,
       compatibilityStatus: assessment.compatibilityStatus,
       compatibilityWarning: assessment.warning,
     }
   }
+}
+
+/** Hardware profiles from least to most capable, for "is this model a rung above the host?". */
+const PROFILE_RANK: HardwareProfileTier[] = ['legacy', 'entry', 'midrange', 'highend', 'extreme']
+
+/**
+ * Builds the single coding-model list from the four legacy tier catalogs.
+ *
+ * Only WORKHORSE_CODING_CATALOG carries a meaningful `recommendedForProfiles`: it is the workhorse
+ * ladder (legacy/entry -> 3b, midrange/highend -> 7b, extreme -> 14b). The other catalogs tagged
+ * profiles RELATIVE to the tier they filled — FAST listed qwen2.5-coder:3b as the pick for
+ * 'highend'/'extreme' because it was the *fast* choice on a big machine, not the model that
+ * machine should code with. Carrying those tags into one list made a 3b the default on a 24GB
+ * workstation, so they are dropped: models outside the ladder stay selectable but are never
+ * auto-recommended.
+ */
+function buildCodingModelCatalog(): RawModelCatalogEntry[] {
+  const byName = new Map<string, RawModelCatalogEntry>()
+  const order: string[] = []
+
+  for (const item of WORKHORSE_CODING_CATALOG) {
+    if (byName.has(item.modelName)) continue
+    byName.set(item.modelName, item)
+    order.push(item.modelName)
+  }
+  for (const item of [...COMPACT_CODING_CATALOG, ...REASONING_CODING_CATALOG, ...LARGE_CODING_CATALOG]) {
+    if (byName.has(item.modelName)) continue
+    byName.set(item.modelName, { ...item, recommendedForProfiles: [] })
+    order.push(item.modelName)
+  }
+
+  return order.map((name) => byName.get(name) as RawModelCatalogEntry)
 }
 
 /**

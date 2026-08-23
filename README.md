@@ -77,7 +77,7 @@ All architectural, operational, API and setup specifications reside strictly in 
   * **Plan Mode**: Generates technical implementation blueprints before executing changes.
   * **Ask Mode**: Read-only research runs autonomously; destructive actions require explicit user approval.
   * **Agent Mode**: Fully autonomous multi-turn development loop with auto-healing feedback on test/build errors.
-* **Task Complexity Evaluator**: Dynamically routes prompts across 4 tiers (`Fast 🟢`, `Standard 🔵`, `Deep Reasoning 🟣`, `Escalated ⚡`) with exact installed Ollama tag resolution.
+* **Single Configured Model**: Every module, coding included, runs on one model chosen in Settings, with exact installed Ollama tag resolution and an optional fallback used only on OOM or crash.
 
 ### 5. 🧩 Multi-Marketplace Skill Hub
 * **Open Standard Interoperability**: Seamless integration with **Skills.sh**, **Anthropic Agent Skills** (`agentskills.io`), and **LobeHub Marketplace**.
@@ -196,7 +196,7 @@ OnlyRagV2/
 ├── electron/                  # Electron Main Process (Clean Layered Architecture)
 │   ├── core/
 │   │   ├── application/       # Orchestrator, SkillAppService, ToolExecutor
-│   │   ├── domain/            # SkillMatcher, ToolParser, ComplexityEvaluator
+│   │   ├── domain/            # SkillMatcher, ToolParser, PromptAssembler
 │   │   ├── infrastructure/    # FileSystemRepo, WebClient, Hub Adapters
 │   │   └── presentation/      # IPC Handlers and Typed Channels
 │   ├── main.ts                # App Lifecycle & Sidecar Process Supervisor

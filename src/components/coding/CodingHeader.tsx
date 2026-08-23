@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Code, ChevronRight, Sparkles, Cpu, CheckCircle2, AlertCircle, Wrench, Sliders } from 'lucide-react'
 import { AppSettings } from '../../types'
-import { ComplexityRouteResult, ModelTier } from '../../services/complexityRouterService'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useTranslation } from '../../i18n'
 
@@ -11,12 +10,8 @@ interface CodingHeaderProps {
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
   activeSkills?: string[]
   installedModels?: string[]
-  /** Routed complexity for the last submitted (or, while idle, currently drafted) prompt — computed once by the parent. */
-  complexity: ComplexityRouteResult
-  /** Model actually driving the agent: complexity.modelName when routing is on, otherwise the fixed coding model. */
+  /** Model driving the agent: the configured coding model, or the live one while executing. */
   activeModel: string
-  /** Live executing tier during agent turns (optional) */
-  activeTier?: ModelTier | null
   onOpenDiagnosticsModal?: () => void
   onOpenSkillHubModal?: () => void
   onOpenPromptModal?: () => void
@@ -28,9 +23,7 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
   onUpdateSettings,
   activeSkills = [],
   installedModels = [],
-  complexity,
   activeModel,
-  activeTier,
   onOpenDiagnosticsModal,
   onOpenSkillHubModal,
   onOpenPromptModal,

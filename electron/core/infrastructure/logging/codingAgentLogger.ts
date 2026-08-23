@@ -2,16 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
-import type { ComplexityRouteResult } from '../../domain/agent/complexityEvaluator'
-
-export interface ModelTiersConfig {
-  fastModel?: string
-  standardModel?: string
-  deepReasoningModel?: string
-  heavyModel?: string
-  useComplexityRouting?: boolean
-  hardwareProfile?: string
-}
 
 export class CodingAgentLogger {
   private logFilePath: string
@@ -116,34 +106,14 @@ export class CodingAgentLogger {
     mode: string,
     model: string,
     workspacePath?: string | null,
-    tiersConfig?: ModelTiersConfig,
-    initialComplexity?: ComplexityRouteResult
+    hardwareProfile?: string
   ): void {
-    const tierLines = tiersConfig ? [
-      `Complexity Routing Active: ${tiersConfig.useComplexityRouting !== false ? 'YES' : 'NO'}`,
-      `Hardware Profile: ${tiersConfig.hardwareProfile || 'Auto'}`,
-      `Configured Model Tiers Matrix:`,
-      `  🟢 Fast Tier: ${tiersConfig.fastModel || 'default'}`,
-      `  🔵 Standard Tier: ${tiersConfig.standardModel || model}`,
-      `  🟣 Deep Reasoning Tier: ${tiersConfig.deepReasoningModel || 'default'}`,
-      `  🔶 Heavy Escalation Tier: ${tiersConfig.heavyModel || 'none'}`,
-    ].join('\n') : ''
-
-    const complexityLines = initialComplexity ? [
-      `Initial Complexity Route Result:`,
-      `  Tier: ${initialComplexity.tier.toUpperCase()} (${initialComplexity.tierName})`,
-      `  Selected Model: ${initialComplexity.modelName}`,
-      `  Reasoning: ${initialComplexity.reasoning}`,
-      `  Is Escalated: ${Boolean(initialComplexity.isEscalated)} | Is Fallback: ${Boolean(initialComplexity.isFallback)}`,
-    ].join('\n') : ''
-
     const content = [
       `Session ID: ${sessionId}`,
       `Starting Mode: ${mode.toUpperCase()}`,
       `Active Model: ${model}`,
       `Workspace Path: ${workspacePath || 'Standalone'}`,
-      tierLines,
-      complexityLines,
+      `Hardware Profile: ${hardwareProfile || 'Auto'}`,
       `User Task:`,
       `"""`,
       `${userTask}`,
@@ -151,35 +121,6 @@ export class CodingAgentLogger {
     ].filter(Boolean).join('\n')
 
     this.writeEntry(`[AGENT SESSION START] Session: ${sessionId}`, content)
-  }
-
-  public logComplexityRouting(
-    sessionId: string,
-    step: number,
-    routing: ComplexityRouteResult,
-    targetModel: string
-  ): void {
-    const content = `Session ID: ${sessionId} | Step: ${step}
-Routing Tier: ${routing.tier.toUpperCase()} (${routing.tierName})
-Target Model: ${targetModel}
-Reasoning: ${routing.reasoning}
-Is Escalated: ${Boolean(routing.isEscalated)} | Is Fallback: ${Boolean(routing.isFallback)}`
-    this.writeEntry(`[STEP ${step} - COMPLEXITY ROUTING EVALUATED] Session: ${sessionId}`, content)
-  }
-
-  public logModelEscalation(
-    sessionId: string,
-    step: number,
-    fromModel: string,
-    toModel: string,
-    reason: string,
-    tierLabel?: string
-  ): void {
-    const content = `Session ID: ${sessionId} | Step: ${step}
-Escalated From: ${fromModel}
-Escalated To: ${toModel}${tierLabel ? ` (${tierLabel})` : ''}
-Trigger Reason: ${reason}`
-    this.writeEntry(`[STEP ${step} - MODEL ESCALATION CASCADE] Session: ${sessionId}`, content)
   }
 
   public logModeTransition(

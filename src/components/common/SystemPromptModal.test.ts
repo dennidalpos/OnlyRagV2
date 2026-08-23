@@ -149,7 +149,7 @@ describe('SystemPromptModal & Family Detection Tests', () => {
   })
 
   it('should resolve the unified coding prompt, family-agnostic (B2)', () => {
-    const compiled = PromptCompiler.compileCodingPrompt('standard', {
+    const compiled = PromptCompiler.compileCodingPrompt({
       userTask: 'Create a component',
       workspacePath: 'D:/test',
       agentMode: 'AGENT',
@@ -160,7 +160,7 @@ describe('SystemPromptModal & Family Detection Tests', () => {
     expect(compiled.prompt).toContain('Create a component')
     expect(compiled.prompt).toContain('D:/test')
     expect(compiled.prompt).toContain('AGENT')
-    expect(compiled.prompt).toContain('COMPLETE PRODUCTION CODE')
+    expect(compiled.prompt).toContain('COMPLETE CODE')
   })
 
   it('should include explicit attachment grounding and no-attachment directives in chat prompt presets', () => {

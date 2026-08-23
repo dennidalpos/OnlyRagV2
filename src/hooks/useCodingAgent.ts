@@ -13,7 +13,6 @@ import { useAgentApprovals } from './useAgentApprovals'
 import { useAgentPromptQueue, type QueuedPrompt } from './useAgentPromptQueue'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from './useGlobalTaskLock'
 import { soundEffectsService } from '../services/soundEffectsService'
-import type { ModelTier } from '../services/complexityRouterService'
 import { logger } from '../lib/logger'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 
@@ -70,7 +69,6 @@ export function useCodingAgent(settings?: AppSettings) {
   const [maxSteps, setMaxSteps] = useState<number | string>(50)
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
   const [currentLiveModel, setCurrentLiveModel] = useState<string | null>(null)
-  const [currentLiveTier, setCurrentLiveTier] = useState<ModelTier | null>(null)
 
   // Modular Approvals Hook
   const {
@@ -277,12 +275,6 @@ export function useCodingAgent(settings?: AppSettings) {
         setCurrentLiveModel((log as any).meta.modelName)
       }
 
-      if ((log as any).complexityTier) {
-        setCurrentLiveTier((log as any).complexityTier)
-      } else if ((log as any).meta?.complexityTier) {
-        setCurrentLiveTier((log as any).meta.complexityTier)
-      }
-
       if (log.type === 'terminal' && log.detail) {
         appendTerminalLogs(`\n${log.detail}\n`)
         if (
@@ -369,7 +361,6 @@ export function useCodingAgent(settings?: AppSettings) {
     const unsubDone = window.electronAPI.onAgentDone?.((res: { success: boolean; summary: string }) => {
       soundEffectsService.play(res?.success === false ? 'error' : 'completion', settings?.enableSoundEffects !== false)
       setCurrentLiveModel(null)
-      setCurrentLiveTier(null)
       closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
       setIsExecuting(false)
       setStreamingText('')
@@ -408,7 +399,6 @@ export function useCodingAgent(settings?: AppSettings) {
   const handleCancelAgent = () => {
     setIsExecuting(false)
     setCurrentLiveModel(null)
-    setCurrentLiveTier(null)
     if (window.electronAPI) {
       if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
@@ -702,7 +692,6 @@ export function useCodingAgent(settings?: AppSettings) {
     actionLogs,
     isExecuting,
     currentLiveModel,
-    currentLiveTier,
     currentStep,
     maxSteps,
     activeSkills,

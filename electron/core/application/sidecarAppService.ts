@@ -423,7 +423,9 @@ export class SidecarAppService {
     })
   }
 
-  listIngestedDocuments() {
+  /** Resolves null (not []) when the sidecar could not be reached or its reply could not be
+   *  parsed, so callers can tell "no documents" apart from "could not ask". */
+  listIngestedDocuments(): Promise<any[] | null> {
     return new Promise((resolve) => {
       const req = http.get('http://127.0.0.1:8000/documents', { agent: httpAgent, timeout: 5000 }, (res) => {
         let raw = ''
@@ -437,7 +439,7 @@ export class SidecarAppService {
               data.map((item: any) => ({
                 id: item.id,
                 filename: item.filename,
-                filePath: item.filePath || item.filename,
+                filePath: item.file_path || item.filePath || item.filename,
                 fileSize: item.file_size,
                 numPages: item.num_pages,
                 numChunks: item.num_chunks,
@@ -450,7 +452,7 @@ export class SidecarAppService {
             )
           } catch (parseErr: any) {
             logger.log('ERROR', 'SidecarApp', `Failed parsing /documents list: ${parseErr.message}`)
-            resolve([])
+            resolve(null)
           }
         })
       })
@@ -458,12 +460,15 @@ export class SidecarAppService {
         if (err?.message && !err.message.includes('ECONNREFUSED')) {
           logger.log('WARN', 'SidecarApp', `Failed requesting /documents: ${err.message}`)
         }
-        resolve([])
+        // null, not []: an unreachable sidecar is NOT an empty library. Callers prune the user's
+        // document selection against this list, so returning [] on a transport blip silently
+        // deselected every attachment the user had chosen.
+        resolve(null)
       })
       req.setTimeout(5000, () => {
         req.destroy()
         logger.log('WARN', 'SidecarApp', 'Listing documents timed out (5s)')
-        resolve([])
+        resolve(null)
       })
     })
   }

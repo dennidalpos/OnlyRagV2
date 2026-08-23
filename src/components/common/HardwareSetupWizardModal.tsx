@@ -51,8 +51,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const downloadedModels = diagnostics?.ollama.models ?? []
 
   const recCoding =
-    recommendations.standardTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.standardTierModels[0]?.modelName ||
+    recommendations.codingModels.find((m) => m.isRecommended)?.modelName ||
+    recommendations.codingModels[0]?.modelName ||
     'qwen2.5-coder:7b'
   const recChat =
     recommendations.chatTierModels.find((m) => m.isRecommended)?.modelName ||

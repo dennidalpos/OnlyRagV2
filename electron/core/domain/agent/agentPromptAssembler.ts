@@ -1,6 +1,5 @@
 import { PromptCompiler } from './promptCompiler'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
-import type { ModelTier } from './complexityEvaluator'
 import type { AppSettings } from '../../../../src/types'
 import type { AgentMode } from './agentTypes'
 
@@ -10,8 +9,6 @@ export interface PromptAssemblerInput {
   agentMode: AgentMode
   stepCount: number
   maxSteps: number
-  /** Drives which of the family-agnostic coding prompts is selected (see promptPresets.ts). */
-  complexityTier: ModelTier
   workspacePath?: string | null
   isStandaloneMode?: boolean
   activeFile?: { name: string; path: string; content: string } | null
@@ -45,10 +42,26 @@ export interface AssembledPrompt {
   historyBlock: string
   /** Small always-resend per-turn text (recovery hint + step counter) — never part of the cached prefix. */
   turnSuffix: string
+  /**
+   * The individual, still-disjoint pieces that were concatenated into `stableSection`.
+   * HeuristicContextCompactor must be fed THESE, never `stableSection` itself: passing the
+   * joined section as its `systemPrompt` while also passing the same pieces separately counts
+   * every byte twice, which both trips the watermark spuriously and drives the compactor's
+   * `remaining` budget negative — silently zeroing the history allocation.
+   */
+  segments: {
+    baseSystemPrompt: string
+    planSection: string
+    pinnedBlock: string
+    activeFileBlock: string
+    skillsSection: string
+    attachedBlock: string
+    mapBlock: string
+  }
 }
 
 /**
- * Assembles a 4-tier token budgeted prompt fitting within the hardware profile context limit.
+ * Assembles a priority-budgeted prompt fitting within the hardware profile context limit.
  */
 export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt {
   const {
@@ -57,7 +70,6 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
     agentMode,
     stepCount,
     maxSteps,
-    complexityTier,
     workspacePath,
     isStandaloneMode,
     activeFile,
@@ -82,11 +94,10 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   const currentDate = `${now.toISOString().split('T')[0]} (${formattedDate})`
 
   // Priority 1: Base System Prompt & User Goal Guidelines (Mandatory intact).
-  // Family-agnostic: selected by complexity tier, not by model family (see B2).
+  // Family-agnostic and tier-free — one configured coding model, one prompt.
   // Deliberately excludes the per-turn step counter (see turnSuffix below) so this
   // block stays byte-identical across turns whenever nothing else changed (AGT1).
   const { prompt: baseSystemPrompt } = PromptCompiler.compileCodingPrompt(
-    complexityTier,
     {
       agentMode: agentMode.toUpperCase(),
       userTask: effectiveTaskText,
@@ -111,9 +122,12 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   // Priority 2.5: Contextual Domain Skills & Guidelines
   const skillsSection = skillsBlock ? `${skillsBlock}\n` : ''
 
-  // Priority 3: Auxiliary Background Context (RAG docs & Repository Tree Map)
-  const maxRAGChars = runtimeOpts.maxContextChars <= 16000 ? 2500 : 6000
-  const maxMapChars = runtimeOpts.maxContextChars <= 16000 ? 4000 : 10000
+  // Priority 3: Auxiliary Background Context (RAG docs & Repository Tree Map).
+  // Budgeted as a SHARE of the profile's context allowance rather than by fixed thresholds:
+  // the old `<= 16000 ? 2500 : 6000` step handed a 19k-char profile 16k of background context,
+  // leaving almost nothing for tool history — the one block the agent needs to make progress.
+  const maxRAGChars = Math.floor(runtimeOpts.maxContextChars * 0.12)
+  const maxMapChars = Math.floor(runtimeOpts.maxContextChars * 0.18)
   const attachedBlock = attachedContext ? `ATTACHED RAG DOCS CONTEXT:\n${attachedContext.slice(0, maxRAGChars)}\n` : ''
   const mapBlock = projectContextMapStr ? `FULL REPOSITORY WORKSPACE MAP (${workspacePath}):\n${projectContextMapStr.slice(0, maxMapChars)}\n` : ''
 
@@ -149,5 +163,11 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   // point of truncation — see agentOrchestratorAppService.ts).
   const prompt = [stableSection, historyBlock, turnSuffix].filter((p) => Boolean(p && p.trim())).join('\n\n')
 
-  return { prompt, stableSection, historyBlock, turnSuffix }
+  return {
+    prompt,
+    stableSection,
+    historyBlock,
+    turnSuffix,
+    segments: { baseSystemPrompt, planSection, pinnedBlock, activeFileBlock, skillsSection, attachedBlock, mapBlock },
+  }
 }

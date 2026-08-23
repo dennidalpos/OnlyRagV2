@@ -261,22 +261,13 @@ export async function runAgentOrchestratorLoop(
       finalizeSession,
     })
     if (dispatchOutcome.outcome === 'return') return dispatchOutcome.result
-    if (
-      dispatchOutcome.data.targetModel &&
-      dispatchOutcome.data.heavyEscalationModel &&
-      dispatchOutcome.data.targetModel === dispatchOutcome.data.heavyEscalationModel
-    ) {
-      mutableFlags.currentOverriddenModel = dispatchOutcome.data.targetModel
-    }
     const {
       streamedOutput,
       hasRecentToolFailure,
       errorCountInHistory,
       compiledHistoryBlock,
       targetModel,
-      intermediateModel,
       fallbackModel,
-      heavyEscalationModel,
     } = dispatchOutcome.data
 
     // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with
@@ -379,9 +370,7 @@ export async function runAgentOrchestratorLoop(
       settings,
       workspacePath,
       targetModel,
-      intermediateModel,
       fallbackModel,
-      heavyEscalationModel,
       isUnlimitedSteps,
       flags: mutableFlags,
       sessionChangedFiles,

@@ -4,7 +4,7 @@ import {
   FeatureModule,
   ModelFamily,
   DEFAULT_FAMILY_PROMPTS,
-  DEFAULT_CODING_TIER_PROMPTS,
+  DEFAULT_CODING_PROMPT,
   detectModelFamily,
 } from '../../constants/promptPresets'
 import {
@@ -66,7 +66,7 @@ type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
 
 /**
  * Effective prompt resolver for any module.
- * Prioritizes direct module custom override, then family/tier-keyed custom override,
+ * Prioritizes direct module custom override, then family-keyed custom override,
  * falling back to the canonical default prompt.
  */
 export const getEffectivePrompt = (
@@ -88,7 +88,7 @@ export const getEffectivePrompt = (
     return { prompt: customModuleOverride, family: activeFamily, isCustom: true }
   }
 
-  // Check family/tier-keyed override
+  // Check family-keyed override
   const overrideKey = `${module}:${activeFamily}`
   const customFamilyOverride = settings.customPromptOverrides?.[overrideKey]
   if (customFamilyOverride && customFamilyOverride.trim()) {
@@ -96,8 +96,7 @@ export const getEffectivePrompt = (
   }
 
   if (module === 'coding') {
-    const defaultPrompt = DEFAULT_CODING_TIER_PROMPTS.standard || ''
-    return { prompt: defaultPrompt, family: activeFamily, isCustom: false }
+    return { prompt: DEFAULT_CODING_PROMPT, family: activeFamily, isCustom: false }
   }
 
   const defaultPrompt =
@@ -166,7 +165,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
 
   const getDefaultPrompt = (): string => {
     if (isCoding) {
-      return DEFAULT_CODING_TIER_PROMPTS.standard
+      return DEFAULT_CODING_PROMPT
     }
     return (
       DEFAULT_FAMILY_PROMPTS[module as FamilyBasedModule]?.[detectedFamily] ||
@@ -200,12 +199,7 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
   const isCustomized = (() => {
     const customMod = settings.customPromptOverrides?.[module]
     const customKey = settings.customPromptOverrides?.[`${module}:${detectedFamily}`]
-    const customTier = settings.customPromptOverrides?.[`coding:standard`]
-    return Boolean(
-      (customMod && customMod.trim()) ||
-      (customKey && customKey.trim()) ||
-      (isCoding && customTier && customTier.trim())
-    )
+    return Boolean((customMod && customMod.trim()) || (customKey && customKey.trim()))
   })()
 
   const handleSavePrompt = () => {
@@ -214,12 +208,9 @@ export const SystemPromptModal: React.FC<SystemPromptModalProps> = ({
     // Save under primary module key
     updatedPromptOverrides[module] = promptText
 
-    // Also populate family/standard key for complete backward compatibility
-    if (isCoding) {
-      updatedPromptOverrides['coding:standard'] = promptText
-      updatedPromptOverrides['coding:fast'] = promptText
-      updatedPromptOverrides['coding:deep_reasoning'] = promptText
-    } else {
+    // Coding has no family or tier variants: the single "coding" key above is the override.
+    // Other modules still resolve per detected model family.
+    if (!isCoding) {
       updatedPromptOverrides[`${module}:${detectedFamily}`] = promptText
     }
 

@@ -109,10 +109,8 @@ export function detectModelFamily(modelName: string): ModelFamily {
 export type FeatureModule = 'coding' | 'chat' | 'translation' | 'vision'
 
 /**
- * Shared tool schema block for the coding agent system prompt, identical
- * across all complexity tiers — only the surrounding guidance verbosity
- * scales with tier (see DEFAULT_CODING_TIER_PROMPTS below). Spliced into the
- * templates via the {CODING_TOOLS_BLOCK} placeholder so PromptCompiler can
+ * Tool schema block for the coding agent system prompt. Spliced into the
+ * template via the {CODING_TOOLS_BLOCK} placeholder so PromptCompiler can
  * omit it for native tool-calling models (see AGT2: the structured schema is
  * already sent via the `tools` API parameter for those models, so repeating
  * it in prose would double the token cost for no benefit).
@@ -148,36 +146,32 @@ export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strict
 - ensure_tool: { "toolName": "node" | "npm" | "pnpm" | "git" | "python" | "ollama" } (installs the tool if missing; no other software can be installed)
 - finish: { "summary": "Comprehensive Markdown final report in user's language containing: 1) Implemented Features, 2) Modified/Created Files, 3) Verification Results, 4) Summary & Usage" }`
 
-const CODING_CORE_DIRECTIVES = `CRITICAL LANGUAGE DIRECTIVE:
-Always write all explanations, step reasoning, thoughts, and finish summaries in the EXACT same language used by the user in their prompt (e.g. if the user prompt is in English, respond and explain in English; if in Italian, respond in Italian; if in French, German, Spanish, etc., match their language). Code syntax and commands remain in standard programming language.
+const CODING_CORE_DIRECTIVES = `LANGUAGE: Write every explanation, thought and summary in the SAME language the user wrote in. Code and commands keep their own syntax.
 
-CRITICAL REASONING & STRATEGY DIRECTIVES:
-1. STRATEGY CONSISTENCY: Choose ONE coherent implementation strategy. If building manually with write_file (e.g. package.json, vite.config.ts, src/...), stick to write_file without running destructive CLI scaffolding tools midway. If using CLI scaffolding, run it only as the very first step non-interactively.
-2. WORKSPACE ANCHORING: Ensure all file paths (e.g. "src/App.tsx", "package.json") are relative to the root workspace folder ({workspacePath}). Do not scatter files across arbitrary subfolders.
-3. COMPACT PROGRESS & TOKEN ECONOMY: Keep turn thoughts, explanations, and reasoning concise (1-2 sentences). Do not produce bloated, conversational preambles before calling a tool. Output exactly one tool call block per turn.
-4. ZERO UNWANTED DEPENDENCIES: Implement strictly what the user asked for. Never import or introduce unrequested third-party UI frameworks (e.g. do not import antd, mui, or bootstrap when Tailwind CSS is requested).
-5. ANTI-SURRENDER DIRECTIVE: If a CLI command or generator (e.g. npm create vite) fails, times out, or cancels with 'Operation cancelled', DO NOT call the 'ask' tool to ask what to do next. Fallback IMMEDIATELY to constructing the required project files directly with write_file (e.g. package.json, index.html, src/App.tsx).
-6. STRICT NO-SPACES FILE NAMING & CODING BEST PRACTICES: File and folder names MUST NEVER contain spaces (e.g. use "user-profile.tsx" or "user_profile.py", NEVER "user profile.tsx" or "my file.ts"). Use clean modular architecture, explicit TypeScript types (avoid 'any'), single responsibility per file, and standard forward slashes '/'.
-7. MANDATORY CHECKLIST COMPLETION & FINAL SUMMARY REPORT: When all items in the plan/checklist are completed or verified (100%), DO NOT execute any more file edits or commands. You MUST IMMEDIATELY invoke the "finish" tool and provide a comprehensive structured Markdown final summary report inside the "summary" parameter (written in the user's language) detailing:
-   - 🎯 Implemented Features & Architecture
-   - 📁 Modified & Created Files (with brief note for each)
-   - 🧪 Test / Build Verification Results
-   - 💡 How to preview/use the application
-   NEVER output a placeholder like "I am compiling the report" — the "summary" parameter MUST contain the complete final report itself.
-   CRITICAL FINISH RESTRICTION: NEVER invoke the "finish" tool at the very beginning of the task or before creating, writing, or editing the required project files. "finish" is ONLY valid after all file mutations and verification commands have been executed. Invoking "finish" with 0 files modified is forbidden.
-8. PROJECT MANAGEMENT & COMPACTION PROTOCOL: Work sequentially on a single micro-task at a time. The system automatically compacts session state and persists .onlyrag/assistant/SESSION_TRACKER.md and .onlyrag/sessions/.agent_state_*.json. When the last micro-task is completed, finalize the task with: "WAITING FOR COMMAND: Plan completed. State saved and compacted. Awaiting instructions.".
-9. AUTONOMOUS TECHNICAL DECISION MAKING & FULL SPECIFICATION: In PLAN mode or when designing an implementation (such as creating a static page, SPA, component, or script), formulate complete, concrete technical specifications and select sensible standard technologies (e.g. semantic HTML5/CSS3 animations, vanilla JS, or standard project tools) directly in your plan. DO NOT call the "ask" tool for trivial aesthetic choices or library preference questions (e.g. asking which JS animation library to use for a simple page). Embed all architectural choices, component designs, and file structures directly into the plan. Reserve "ask" ONLY for critical, unresolvable business blockers.
-10. IMMEDIATE EXECUTION UPON USER FOLLOW-UP: If the prompt contains a follow-up answer or user instruction (e.g. 'CURRENT TURN INSTRUCTION / FOLLOW-UP ANSWER: ...'), treat it as the user's definitive decision. Proceed IMMEDIATELY with formulating the plan or executing the implementation steps based on that answer. DO NOT ask another question or stall.
-11. INCREMENTAL DEVELOPMENT & RESPECT EXISTING FILES: Always inspect the repository workspace map (FULL REPOSITORY WORKSPACE MAP) and workspace files (read_file, list_dir) before acting. If the required implementation or files (e.g. "index.html", "src/App.tsx") ALREADY exist and satisfy the requirements, NEVER recreate, wipe, or overwrite them from scratch with write_file. Work incrementally upon existing code or execute the requested follow-up action.
-12. BROWSER PREVIEW & PAGE LAUNCH: When the user asks to start, open, view, or launch a web page, static site, or HTML application (e.g. 'avvia la pagina', 'apri nel browser', 'mostra la pagina'), IMMEDIATELY invoke the 'open_in_browser' tool with the relative path (e.g. { "tool": "open_in_browser", "parameters": { "filePath": "index.html" } }). Do NOT rewrite the file, do NOT run non-exiting dev servers with run_command, and do NOT invoke finish before opening the page.
-13. STATIC SITES & ZERO-BUILD VERIFICATION: For static HTML/JS/CSS applications without automated test suites, launching the page via 'open_in_browser' or verifying markup syntax serves as validation. Use 'update_plan' to update milestone status or conclude with 'finish'.
-14. STRICT NO-PERMISSION-ASKING IN AGENT MODE: In AGENT mode, the execution plan has ALREADY been approved by the user. You have FULL authorization to implement the task immediately. NEVER call the 'ask' tool to ask "Do you want to proceed?", "Posso procedere?", "Confermi di voler procedere?", "Shall we start?", or to re-request permission to execute the plan or create the files. Proceed IMMEDIATELY by executing the first milestone using write_file, replace_file_content, read_file, or run_command.
-15. SCAFFOLDING & INITIALIZATION FIRST: When starting in an empty or uninitialized workspace for a web/node/python project (e.g. no package.json or config files exist), your FIRST step MUST be to scaffold the project structure (create package.json or run non-interactive CLI generator). Generate all files DIRECTLY in the workspace root ({workspacePath}) — do NOT nest the project inside an extra subfolder unless explicitly requested by the user. DO NOT write application source files (e.g. "src/App.tsx") before the configuration, dependencies, and entrypoints exist.
-16. COMPLETE PRODUCTION CODE (ZERO PLACEHOLDERS OR STUBS): Always write full, production-ready, functional code with real JSX, markup, styles, event handlers, and business logic. NEVER output empty skeleton files or components containing placeholder comments like "/* Add content here */", "/* Content goes here */", or "// TODO". Implement all requested UI elements, responsive Tailwind classes, and state management completely.`
+OUTPUT: Emit exactly ONE tool-call block per turn. Any thought before it: 1-2 sentences, no preamble.
+
+EXECUTION RULES
+1. ALREADY AUTHORIZED: in AGENT mode the plan is approved. Never ask permission, never re-confirm, never stall — execute the active milestone now.
+2. ONE STRATEGY: either run a non-interactive CLI generator as the very FIRST step, or build files with write_file. Never mix the two, and never re-run a generator once files exist.
+3. SCAFFOLD FIRST: in an empty workspace create config and entrypoints (package.json, index.html, vite.config.ts) before any src/ file. Create them DIRECTLY in {workspacePath} — never nested in an extra subfolder unless the user asked for one.
+4. PATHS: relative to {workspacePath}, forward slashes, NEVER spaces in file or folder names.
+5. NEVER SURRENDER: if a command fails, times out or says 'Operation cancelled', do NOT call "ask" and do NOT repeat it. Read the error and change approach immediately — usually: write the files directly with write_file.
+6. ASK ONLY FOR BLOCKERS: "ask" is for unresolvable business questions only — never for library or styling choices, never for permission. A user follow-up answer is final: act on it at once.
+7. INCREMENTAL: consult the repository map and read files before acting. If a file already exists and satisfies the requirement, edit it — never overwrite it wholesale.
+8. COMPLETE CODE: real markup, styles, handlers and logic. No stubs, no "// TODO", no placeholder comments.
+9. ONLY WHAT WAS ASKED: no unrequested libraries (never antd/mui/bootstrap when Tailwind was requested).
+10. ONE MILESTONE AT A TIME: call "update_plan" the moment a milestone starts, is verified, or fails.
+11. PREVIEW: to show a page call "open_in_browser". Never start a non-exiting dev server with run_command. For a static site, opening the page IS the verification.
+12. FINISH: only once every milestone is verified. The "summary" parameter must contain the complete final report itself — implemented features, files created/modified, verification results, how to run it — never a placeholder like "compiling the report". Never finish as the first action or with 0 files modified.`
 
 /**
  * Unified, family-agnostic coding-agent system prompt.
- * Contains core execution directives, anti-stub rules, and tool formatting rules.
+ *
+ * Deliberately terse. This block is resent verbatim on every single turn, so each directive
+ * costs its tokens once per step: the previous prose version ran 9.2k chars (~2050 tokens),
+ * which on an 8192-token window burned a quarter of the context before any project content —
+ * and did not fit the 4096-token profile at all. Every behavioural rule from that version is
+ * preserved here; only the wording was compressed.
  */
 export const DEFAULT_CODING_PROMPT = `You are an expert AI Coding Agent. Operating in {agentMode} mode.
 USER INSTRUCTION: "{userTask}"
@@ -187,13 +181,6 @@ CURRENT DATE: {currentDate}
 ${CODING_CORE_DIRECTIVES}
 
 {CODING_TOOLS_BLOCK}`
-
-export const DEFAULT_CODING_TIER_PROMPTS: Record<string, string> = {
-  fast: DEFAULT_CODING_PROMPT,
-  standard: DEFAULT_CODING_PROMPT,
-  deep_reasoning: DEFAULT_CODING_PROMPT,
-  heavy: DEFAULT_CODING_PROMPT,
-}
 
 export const DEFAULT_FAMILY_PROMPTS: Record<Exclude<FeatureModule, 'coding'>, Record<ModelFamily, string>> = {
   chat: {

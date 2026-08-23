@@ -5,7 +5,7 @@ import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../components/common/SystemPromptModal'
 import { evaluateDomainIntent } from '../services/domainRouter'
 import { useIngestedDocuments } from './useIngestedDocuments'
-import { resolveChatContextBudget, resolveChatThreadCount } from '../services/chatContextBudget'
+import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from '../services/chatContextBudget'
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
@@ -284,18 +284,8 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       })
     )
 
-    // Dynamically preserve and compact full conversation history based on detected hardware profile.
     const budget = budgetRef.current
     const hasSelectedDocs = selectedDocIds.size > 0
-    const compactionResult = compactChatHistory(messages, budget, hasSelectedDocs)
-    const previousTurns = compactionResult.historyBlock
-
-    if (compactionResult.isCompacted) {
-      logger.info(
-        'ChatEngine',
-        `Conversation history compacted: ${compactionResult.totalOriginalChars} -> ${compactionResult.finalChars} chars (${compactionResult.summarizedTurnsCount} summarized turns, ${compactionResult.verbatimTurnsCount} verbatim turns)`
-      )
-    }
 
     setMessages((prev) => [...prev, userMsg, botMsg])
     setIsGenerating(true)
@@ -360,12 +350,28 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const activeDocs = documents.filter((d) => selectedDocIds.has(d.id))
       const directDocsText = activeDocs
-        .map((d) => `[Full Document: ${d.filename}]\n${(d.extractedMarkdown || '').slice(0, budget.perDocumentPreviewChars)}...`)
+        .map((d) => {
+          const full = d.extractedMarkdown || ''
+          const body = full.slice(0, budget.perDocumentPreviewChars)
+          // Say which of the two this actually is. The label used to read 'Full Document' and
+          // always ended in '...', so the model was told it held the complete file while holding
+          // a truncated head - and then answered that the information was not in the document.
+          return body.length === full.length
+            ? `[Full Document: ${d.filename}]\n${body}`
+            : `[Document Excerpt (first ${body.length} of ${full.length} chars): ${d.filename}]\n${body}\n[...truncated]`
+        })
         .join('\n\n---\n\n')
 
-      const combinedRawContext = [vectorContextText, directDocsText].filter(Boolean).join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
-      // Budget context to prevent context window overflow
-      const boundedContext = combinedRawContext.slice(0, budget.totalContextChars)
+      // Budget the two sources SEPARATELY instead of slicing their concatenation. The slice ran
+      // over `vectorContext + separator + directDocs` with the vector text first, so whenever
+      // retrieval alone reached totalContextChars the selected document's own text was cut off
+      // entirely - the user had attached a file the model then never saw.
+      const boundedVectorContext = vectorContextText.slice(0, budget.vectorContextChars)
+      const directDocsBudget = Math.max(0, budget.totalContextChars - boundedVectorContext.length)
+      const boundedDirectDocs = directDocsText.slice(0, directDocsBudget)
+      const boundedContext = [boundedVectorContext, boundedDirectDocs]
+        .filter(Boolean)
+        .join('\n\n=== ADDITIONAL CONTEXT ===\n\n')
 
       const modelToUse = routingResult.modelName
       const effectivePromptObj = getEffectivePrompt('chat', modelToUse, settings)
@@ -397,12 +403,34 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       ].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 
+      // History is compacted LAST, against whatever the window has left once the system prompt
+      // and the selected document context have been placed. It used to be compacted FIRST,
+      // against a budget of its own (`maxNumCtx * 2.0` chars) that ignored the rest of the turn:
+      // on midrange that reserved 16384 chars for history against 5500 for the documents, and
+      // the assembled prompt then filled the window so completely that the answer was left
+      // ~1245 tokens to generate into on midrange and 61 on a legacy profile. Placing the
+      // attachment first and giving history the remainder inverts that priority: the user picked
+      // that document for this question.
+      const turnSuffix = `User: ${userText}\nAssistant:`
+      const historyBudgetChars = Math.max(
+        0,
+        resolvePromptCharBudget(budget.maxNumCtx) - systemPromptWithContext.length - turnSuffix.length
+      )
+      const compactionResult = compactChatHistory(messages, budget, hasSelectedDocs, historyBudgetChars)
+      const previousTurns = compactionResult.historyBlock
+      if (compactionResult.isCompacted) {
+        logger.info(
+          'ChatEngine',
+          `Conversation history compacted: ${compactionResult.totalOriginalChars} -> ${compactionResult.finalChars} chars (${compactionResult.summarizedTurnsCount} summarized turns, ${compactionResult.verbatimTurnsCount} verbatim turns)`
+        )
+      }
+
       // Assemble full multi-turn prompt in standard conversational format
       const promptParts = [systemPromptWithContext]
       if (previousTurns) {
         promptParts.push(previousTurns)
       }
-      promptParts.push(`User: ${userText}\nAssistant:`)
+      promptParts.push(turnSuffix)
       const finalPrompt = promptParts.join('\n\n')
 
       if (window.electronAPI?.generateOllamaStream) {

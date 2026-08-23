@@ -6,7 +6,6 @@
  *   - hardwareRecommendationEngine.classifyHardwareTier   (raw VRAM GB: 4 / 8 / 12 / 20)
  *   - hardwareRecommendationEngine.getRecommendedOllamaEnvVars (raw VRAM GB: 4 / 8 / 12 / 24)
  *   - hardwareProfileResolver.resolveOllamaOptions        (safe budget GB: 3.0 / 7.5)
- *   - complexityEvaluator.evaluateTaskComplexity          (safe budget GB: 3.0 / 7.0 / 12.0)
  * A 24GB workstation was therefore `extreme` for the model matrix but `highend` for the
  * Ollama OS parameters, and a 6GB laptop GPU was `entry` for recommendations but `Low`
  * for the agent runtime options.

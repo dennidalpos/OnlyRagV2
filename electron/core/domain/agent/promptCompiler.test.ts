@@ -29,11 +29,11 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
     expect(detectModelFamily('custom-unknown-model')).toBe('generic')
   })
 
-  it('should compile the SAME family-agnostic coding prompt for a given tier regardless of model name/family (B2)', () => {
+  it('should compile the SAME family-agnostic coding prompt regardless of model name/family (B2)', () => {
     const modelsToTest = ['qwen2.5-coder:7b', 'deepseek-coder:6.7b', 'llama3.2:3b', 'codestral:22b', 'unknown-llm']
 
     const prompts = modelsToTest.map((_name) =>
-      PromptCompiler.compileCodingPrompt('standard', {
+      PromptCompiler.compileCodingPrompt({
         userTask: 'Build dashboard',
         workspacePath: 'D:/app',
         agentMode: 'AGENT',
@@ -42,7 +42,7 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
       }).prompt
     )
 
-    // Every model resolves to the identical standard-tier template — no per-family branching.
+    // Every model resolves to the identical template — no per-family, no per-tier branching.
     expect(new Set(prompts).size).toBe(1)
     expect(prompts[0]).toContain('Build dashboard')
     expect(prompts[0]).toContain('D:/app')
@@ -51,22 +51,21 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
 
   it('should compile the unified coding prompt with core directives and anti-stub rules', () => {
     const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
-    const compiled = PromptCompiler.compileCodingPrompt('standard', vars).prompt
+    const compiled = PromptCompiler.compileCodingPrompt(vars).prompt
 
     expect(compiled).toContain('Task')
     expect(compiled).toContain('D:/app')
     expect(compiled).toContain('AGENT')
-    expect(compiled).toContain('COMPLETE PRODUCTION CODE')
+    expect(compiled).toContain('COMPLETE CODE')
   })
 
-  it('should support custom user prompt overrides keyed by tier or direct module name', () => {
+  it('should support a custom user prompt override under the single "coding" key', () => {
     const customPrompt = 'CUSTOM OVERRIDE: {userTask} in mode {agentMode}'
     const { prompt, isCustom } = PromptCompiler.compileCodingPrompt(
-      'standard',
       { userTask: 'Test task', agentMode: 'PLAN' },
       {
         customPromptOverrides: {
-          'coding:standard': customPrompt,
+          coding: customPrompt,
         },
       } as any
     )
@@ -76,7 +75,6 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
 
     // Direct 'coding' key
     const directCoding = PromptCompiler.compileCodingPrompt(
-      'standard',
       { userTask: 'Build feature', agentMode: 'AGENT' },
       {
         customPromptOverrides: {
@@ -110,18 +108,16 @@ describe('PromptCompiler & Model Family Resolution Tests', () => {
 
   it('should include the prose AVAILABLE AGENT TOOLS block by default (prompt-engineered path)', () => {
     const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
-    const prompt = PromptCompiler.compileCodingPrompt('standard', vars).prompt
+    const prompt = PromptCompiler.compileCodingPrompt(vars).prompt
     expect(prompt).toContain('AVAILABLE AGENT TOOLS')
     expect(prompt).toContain('extract_code_symbols')
   })
 
   it('should omit the prose AVAILABLE AGENT TOOLS block when toolCallingCapable=true (AGT2: avoid double-sending the tool schema)', () => {
     const vars = { userTask: 'Task', workspacePath: 'D:/app', agentMode: 'AGENT', stepCount: '1', MAX_STEPS: '50' }
-    for (const tier of ['fast', 'standard', 'deep_reasoning'] as const) {
-      const prompt = PromptCompiler.compileCodingPrompt(tier, vars, undefined, true).prompt
-      expect(prompt).not.toContain('AVAILABLE AGENT TOOLS')
-      expect(prompt).not.toContain('extract_code_symbols')
-      expect(prompt).toContain('Task')
-    }
+    const prompt = PromptCompiler.compileCodingPrompt(vars, undefined, true).prompt
+    expect(prompt).not.toContain('AVAILABLE AGENT TOOLS')
+    expect(prompt).not.toContain('extract_code_symbols')
+    expect(prompt).toContain('Task')
   })
 })

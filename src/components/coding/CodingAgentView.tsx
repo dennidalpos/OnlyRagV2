@@ -13,7 +13,6 @@ import { SkillHubModal } from './SkillHubModal'
 import { SkillInstallApprovalModal } from './skills/SkillInstallApprovalModal'
 import { PromptHistorySearchModal } from './PromptHistorySearchModal'
 import { useSkillInstallApproval } from '../../hooks/useSkillInstallApproval'
-import { evaluateTaskComplexity } from '../../services/complexityRouterService'
 import { useTranslation } from '../../i18n'
 import { CodingEditorTabBar, CodingRightTab } from './CodingEditorTabBar'
 import { CodingEditorContent } from './CodingEditorContent'
@@ -37,7 +36,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   // Single autoscroll toggle shared by every agent-opened panel
   const [autoScroll, setAutoScroll] = useState<boolean>(true)
-  const [lastExecutedPrompt, setLastExecutedPrompt] = useState<string>('')
 
   // Unified Right Workspace View
   const [activeRightTab, setActiveRightTab] = useState<CodingRightTab>('editor')
@@ -50,7 +48,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     sessionPlans: c.activeSessionPlans,
     onSessionPlansChange: c.updateActiveSessionPlans,
     onPlanApproved: (_approvedPlan) => {
-      setLastExecutedPrompt(c.agentPrompt)
       c.setAgentMode('agent')
       c.handleAgentExecute(undefined, 'agent')
     },
@@ -83,36 +80,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     rejectInstall: rejectSkillInstall,
   } = useSkillInstallApproval(settings)
 
-  const routedComplexity = useMemo(() => {
-    const promptForRouting = c.isExecuting ? lastExecutedPrompt : c.agentPrompt
-    return evaluateTaskComplexity(promptForRouting, {
-      attachedFilesCount: c.pinnedFiles.size,
-      contextSizeChars: c.editorContent.length,
-      settings,
-      availableModels: diagnostics?.ollama?.models,
-      vramTotalMB: diagnostics?.gpu?.vramTotalMB,
-      systemRamGB: diagnostics?.memory?.totalRAMGB,
-      enableSystemRamOffloading: settings?.enableSystemRamOffloading,
-    })
-  }, [
-    settings,
-    c.isExecuting,
-    lastExecutedPrompt,
-    c.agentPrompt,
-    c.pinnedFiles.size,
-    c.editorContent.length,
-    diagnostics?.ollama?.models,
-    diagnostics?.gpu?.vramTotalMB,
-    diagnostics?.memory?.totalRAMGB,
-  ])
-
   const activeModelName = (c.isExecuting && c.currentLiveModel)
     ? c.currentLiveModel
     : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-
-  const activeComplexityTier = (c.isExecuting && c.currentLiveTier)
-    ? c.currentLiveTier
-    : routedComplexity.tier
 
   const hasPendingUnconsolidatedMilestones = useMemo(() => {
     if (c.isExecuting) return false
@@ -137,7 +107,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   const handleInitiateTaskExecution = () => {
     if (!c.agentPrompt.trim()) return
-    setLastExecutedPrompt(c.agentPrompt)
     if (c.agentMode === 'plan') {
       handleGeneratePlanFromPrompt()
     } else {
@@ -166,9 +135,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         onUpdateSettings={onUpdateSettings}
         activeSkills={c.activeSkills}
         installedModels={diagnostics?.ollama?.models || []}
-        complexity={routedComplexity}
         activeModel={activeModelName}
-        activeTier={activeComplexityTier}
         onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
         onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
         onOpenPromptModal={() => c.setIsPromptModalOpen(true)}

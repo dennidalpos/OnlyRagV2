@@ -76,7 +76,7 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 ---
 
 ### 3.2. Calcolo Dinamico della VRAM Netta e Profilazione Hardware Host
-* **Moduli:** [`hardwareProfileTiers.ts`](../src/services/hardwareProfileTiers.ts), [`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts), [`complexityEvaluator.ts`](../electron/core/domain/agent/complexityEvaluator.ts)
+* **Moduli:** [`hardwareProfileTiers.ts`](../src/services/hardwareProfileTiers.ts), [`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts), [`hardwareProfileResolver.ts`](../electron/core/domain/agent/hardwareProfileResolver.ts)
 * **Motivazione Tecnica:** Nessuna libreria NPM o PyPI è in grado di calcolare con precisione il margine di sicurezza della VRAM su macchine Windows per prevenire i crash CUDA OOM di Ollama, considerando congiuntamente:
   1. La VRAM fisica dedicata rilevata da NVML / WMI.
   2. L'overhead del Windows Desktop Window Manager (DWM) e delle applicazioni GPU in esecuzione.

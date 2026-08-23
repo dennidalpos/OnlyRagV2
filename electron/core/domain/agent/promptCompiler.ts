@@ -2,14 +2,13 @@ import {
   ModelFamily,
   FeatureModule,
   DEFAULT_FAMILY_PROMPTS,
-  DEFAULT_CODING_TIER_PROMPTS,
+  DEFAULT_CODING_PROMPT,
   CODING_TOOLS_BLOCK,
   detectModelFamily,
 } from './promptPresets'
-import type { ComplexityTier, ModelTier } from './complexityEvaluator'
 import type { AppSettings } from '../../../../src/types'
 
-export type { ModelFamily, FeatureModule, ComplexityTier, ModelTier }
+export type { ModelFamily, FeatureModule }
 
 type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
 
@@ -17,8 +16,7 @@ export class PromptCompiler {
   /**
    * Compiles and resolves the system prompt template for chat/translation/vision —
    * modules that still vary by model family (see DEFAULT_FAMILY_PROMPTS).
-   * For the coding module, use compileCodingPrompt instead (family-agnostic,
-   * scaled by complexity tier).
+   * For the coding module, use compileCodingPrompt instead (family-agnostic).
    */
   static compilePrompt(
     module: FamilyBasedModule,
@@ -56,10 +54,9 @@ export class PromptCompiler {
   }
 
   /**
-   * Compiles the coding-agent system prompt, family-agnostic and scaled by
-   * complexity tier (fast/standard/deep_reasoning/heavy) instead of model family —
-   * see DEFAULT_CODING_TIER_PROMPTS. Custom overrides are keyed by tier
-   * ("coding:fast", "coding:standard", "coding:deep_reasoning", "coding:heavy") or direct "coding".
+   * Compiles the coding-agent system prompt. Family-agnostic and tier-free: the coding module
+   * runs on the single configured `codingModel`, so there is one prompt. Custom overrides are
+   * read from the "coding" key.
    *
    * When `toolCallingCapable` is true, the prose AVAILABLE AGENT TOOLS block
    * is omitted: the model already receives the structured tool schema via
@@ -67,50 +64,21 @@ export class PromptCompiler {
    * repeating it in text would double-send the same schema (AGT2).
    */
   static compileCodingPrompt(
-    tierOrVariables: ModelTier | string | Record<string, string> = 'standard',
-    variablesOrSettings: Record<string, string> | AppSettings = {},
-    settingsOrToolCallingCapable?: AppSettings | boolean,
+    variables: Record<string, string> = {},
+    settings?: AppSettings,
     toolCallingCapable = false
-  ): { prompt: string; tier: ModelTier; isCustom: boolean } {
-    let tier: ModelTier = 'standard'
-    let variables: Record<string, string> = {}
-    let settings: AppSettings | undefined = undefined
-    let isNativeToolCalling = false
-
-    if (typeof tierOrVariables === 'string') {
-      tier = tierOrVariables as ModelTier
-      variables = (variablesOrSettings as Record<string, string>) || {}
-      settings = typeof settingsOrToolCallingCapable === 'object' ? settingsOrToolCallingCapable : undefined
-      isNativeToolCalling = typeof settingsOrToolCallingCapable === 'boolean' ? settingsOrToolCallingCapable : toolCallingCapable
-    } else {
-      variables = tierOrVariables || {}
-      settings = (variablesOrSettings as AppSettings) || undefined
-      isNativeToolCalling = typeof settingsOrToolCallingCapable === 'boolean' ? settingsOrToolCallingCapable : false
-    }
-
-    const overrideKey = `coding:${tier}`
-
-    let template = ''
-    let isCustom = false
-
-    if (settings?.customPromptOverrides && settings.customPromptOverrides['coding']) {
-      template = settings.customPromptOverrides['coding']
-      isCustom = true
-    } else if (settings?.customPromptOverrides && settings.customPromptOverrides[overrideKey]) {
-      template = settings.customPromptOverrides[overrideKey]
-      isCustom = true
-    } else {
-      template = DEFAULT_CODING_TIER_PROMPTS[tier] || DEFAULT_CODING_TIER_PROMPTS.standard || DEFAULT_FAMILY_PROMPTS.chat.generic
-    }
+  ): { prompt: string; isCustom: boolean } {
+    const override = settings?.customPromptOverrides?.['coding']
+    const isCustom = Boolean(override && override.trim())
+    const template = isCustom ? (override as string) : DEFAULT_CODING_PROMPT
 
     const effectiveVariables = {
       ...variables,
-      CODING_TOOLS_BLOCK: isNativeToolCalling ? '' : CODING_TOOLS_BLOCK,
+      CODING_TOOLS_BLOCK: toolCallingCapable ? '' : CODING_TOOLS_BLOCK,
     }
 
     return {
-      prompt: substituteVariables(template, effectiveVariables).replace(/\n{3,}/g, '\n\n'),
-      tier,
+      prompt: collapseBlankRuns(substituteVariables(template, effectiveVariables)),
       isCustom,
     }
   }
@@ -125,9 +93,18 @@ export class PromptCompiler {
   /**
    * Get default coding template, without variable substitution.
    */
-  static getDefaultCodingTemplate(_tier?: ModelTier | string): string {
-    return DEFAULT_CODING_TIER_PROMPTS.standard
+  static getDefaultCodingTemplate(): string {
+    return DEFAULT_CODING_PROMPT
   }
+}
+
+/**
+ * Collapses runs of 3+ newlines to a single blank line. Placeholders that resolve to '' (most
+ * often {CODING_TOOLS_BLOCK} on native tool-calling models) otherwise leave gaping holes in the
+ * prompt, which is pure wasted context on a small window.
+ */
+function collapseBlankRuns(text: string): string {
+  return text.replace(/\n{3,}/g, '\n\n')
 }
 
 function substituteVariables(template: string, variables: Record<string, string>): string {

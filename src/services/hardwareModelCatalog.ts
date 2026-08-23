@@ -24,8 +24,8 @@ export interface RawModelCatalogEntry {
   recommendedForProfiles: HardwareProfileTier[]
 }
 
-// 🟢 Fast Tier Recommendations (Lightweight models: 0.5B - 4B)
-export const FAST_TIER_CATALOG: RawModelCatalogEntry[] = [
+// 🟢 Compact coding models (0.5B - 4B) — the only ones that fit legacy / CPU-only hosts.
+export const COMPACT_CODING_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:1.5b',
     displayName: 'Qwen 2.5 Coder (1.5B)',
@@ -132,8 +132,10 @@ export const FAST_TIER_CATALOG: RawModelCatalogEntry[] = [
   },
 ]
 
-// 🔵 Standard Tier Recommendations (Balanced workhorse models: 3B - 30B)
-export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
+// 🔵 Workhorse coding models (3B - 30B). This is the curated ladder: `recommendedForProfiles`
+// here maps each hardware profile to its default coding model, and it is the ONLY catalog the
+// single-model recommendation reads (see buildCodingModelCatalog in hardwareRecommendationEngine.ts).
+export const WORKHORSE_CODING_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:7b',
     displayName: 'Qwen 2.5 Coder (7B)',
@@ -304,8 +306,8 @@ export const STANDARD_TIER_CATALOG: RawModelCatalogEntry[] = [
   },
 ]
 
-// 🟣 Deep Reasoning Tier Recommendations (Multi-step reasoning & architecture)
-export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
+// 🟣 Reasoning-oriented coding models (multi-step reasoning & architecture work).
+export const REASONING_CODING_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:7b',
     displayName: 'Qwen 2.5 Coder (7B)',
@@ -492,8 +494,9 @@ export const DEEP_REASONING_TIER_CATALOG: RawModelCatalogEntry[] = [
   },
 ]
 
-// ⚡ Heavy Escalation Tier (14B+) — Auto-healing fallback for complex multi-file tasks
-export const HEAVY_ESCALATION_TIER_CATALOG: RawModelCatalogEntry[] = [
+// ⚡ Large coding models (14B+) for complex multi-file work. Requires 12GB+ VRAM, or hybrid
+// system-RAM offloading.
+export const LARGE_CODING_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:14b',
     displayName: 'Qwen 2.5 Coder (14B)',
@@ -1062,50 +1065,4 @@ export function parseCatalogSizeGB(sizeBytesApprox: string): number {
   return match[2].toUpperCase() === 'MB' ? value / 1024 : value
 }
 
-export interface FallbackChainTarget {
-  /** Detected (or user-declared) host tier — selects the curated first choice. */
-  profileTier: HardwareProfileTier
-  /** Weight in GB a candidate must fit into: safe VRAM budget, or the CPU throughput bound. */
-  budgetGB: number
-}
 
-/**
- * Builds the ordered candidate cascade for one routing tier on one host, derived entirely
- * from catalog data.
- *
- * complexityEvaluator.ts previously hardcoded six literal arrays of model tags alongside
- * its own VRAM thresholds, so every catalog change had to be mirrored by hand in a second
- * place — and had not been: the router still cascaded onto tags the matrix no longer
- * recommended, and onto sizes the host could not hold.
- *
- * Ordering:
- *   1. the model curated for this exact profile (the same pick the setup wizard defaults to)
- *   2. everything that fits the budget, largest first — the most capable model that is safe
- *   3. everything that exceeds the budget, smallest first — least-worst overflow, so a host
- *      with only oversized models installed still gets the cheapest of them
- */
-export function buildFallbackChain(
-  catalog: RawModelCatalogEntry[],
-  target: FallbackChainTarget
-): string[] {
-  const indexed = catalog.map((entry, index) => ({
-    entry,
-    index,
-    sizeGB: parseCatalogSizeGB(entry.sizeBytesApprox),
-  }))
-
-  const curated = indexed.filter((c) => c.entry.recommendedForProfiles.includes(target.profileTier))
-  const curatedNames = new Set(curated.map((c) => c.entry.modelName))
-  const rest = indexed.filter((c) => !curatedNames.has(c.entry.modelName))
-
-  const withinBudget = rest
-    .filter((c) => c.sizeGB <= target.budgetGB)
-    .sort((a, b) => b.sizeGB - a.sizeGB || a.index - b.index)
-
-  const overBudget = rest
-    .filter((c) => c.sizeGB > target.budgetGB)
-    .sort((a, b) => a.sizeGB - b.sizeGB || a.index - b.index)
-
-  const ordered = [...curated, ...withinBudget, ...overBudget].map((c) => c.entry.modelName)
-  return Array.from(new Set(ordered))
-}

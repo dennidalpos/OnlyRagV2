@@ -74,4 +74,51 @@ describe('HeuristicContextCompactor', () => {
     expect(result.prompt).toContain(FAKE_SYSTEM_PROMPT)
     expect(result.prompt).toContain(FAKE_PLAN)
   })
+
+  it('should never zero the history allocation when the immutable tier overflows the budget (regression: agent repeated its first tool call forever)', () => {
+    // Reproduces session-1787441347002-hu1s: an oversized immutable tier drove `remaining`
+    // negative, flooring historyAlloc at 0. The history vanished, every turn's prompt became
+    // byte-identical, and qwen2.5-coder:7b re-emitted the same `npm create vite` call 22 times.
+    const history = [
+      '### COMPLETE EXECUTION TRAJECTORY (Step History):',
+      '| Step | Tool | Target | Status | Outcome Summary |',
+      '|:---:|:---|:---|:---:|:---|',
+      '| Step 1 | `run_command` | npm create vite | SUCCESS | scaffolded |',
+      '| Step 2 | `run_command` | npm create vite | FAILURE | Operation cancelled |',
+    ].join('\n')
+
+    const result = HeuristicContextCompactor.compile(
+      {
+        systemPrompt: makeRepeated('IMMUTABLE SYSTEM DIRECTIVES.\n', 400),
+        activePlanBlock: makeRepeated('PLAN MILESTONE.\n', 200),
+        pinnedFilesBlock: makeRepeated('PINNED.\n', 200),
+        activeFileBlock: '',
+        skillsBlock: makeRepeated('SKILL.\n', 100),
+        historyBlock: history,
+        attachedContext: makeRepeated('RAG.\n', 200),
+        projectMapBlock: makeRepeated('MAP.\n', 200),
+      },
+      16_000
+    )
+
+    expect(result.wasCompacted).toBe(true)
+    expect(result.prompt).toContain('COMPLETE EXECUTION TRAJECTORY')
+    expect(result.prompt).toContain('Operation cancelled')
+  })
+
+  it('should measure the prompt once, not twice (regression: stableSection was passed as systemPrompt alongside its own parts)', () => {
+    const parts = {
+      systemPrompt: FAKE_SYSTEM_PROMPT,
+      activePlanBlock: FAKE_PLAN,
+      pinnedFilesBlock: makeRepeated('PINNED.\n', 50),
+      activeFileBlock: '',
+      skillsBlock: makeRepeated('SKILL.\n', 50),
+      historyBlock: makeRepeated('HISTORY.\n', 50),
+      attachedContext: makeRepeated('RAG.\n', 50),
+      projectMapBlock: makeRepeated('MAP.\n', 50),
+    }
+    const disjointSize = Object.values(parts).filter(Boolean).join('\n\n').length
+    const result = HeuristicContextCompactor.compile(parts, 200_000)
+    expect(result.originalChars).toBe(disjointSize)
+  })
 })

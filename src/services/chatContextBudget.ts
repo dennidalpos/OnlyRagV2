@@ -47,6 +47,33 @@ export interface ChatContextBudget {
   keepAlive: string
 }
 
+/**
+ * Tokens held back for the answer, and the chars-per-token ratio used to translate the token
+ * window into the char budgets everything else is expressed in. 3.5 is the conservative side of
+ * what Italian/English prose plus markdown actually measures, so the estimate errs on the side of
+ * a prompt that is smaller than the window rather than larger.
+ */
+const GENERATION_RESERVE_TOKENS = 1024
+const CHARS_PER_TOKEN = 3.5
+
+/**
+ * Total chars the assembled prompt may occupy on a host, once the answer's own token reserve is
+ * held back.
+ *
+ * The per-segment budgets above (retrieval, document previews, history) were each sized on their
+ * own, with no budget for the assembled turn: history alone was allowed `maxNumCtx * 2.0` chars
+ * — 16384 on midrange, against 5500 for the selected documents. Summed with the system prompt and
+ * the document context that filled almost the entire window, leaving the ANSWER with what was
+ * left over: ~1245 tokens on midrange, 346 on a minimal host, and 61 on legacy. Nothing enforced
+ * a ceiling because `calculateDynamicContextWindow` clamps its result to `maxNumCtx` instead of
+ * trimming the prompt, so an over-budget turn was simply sent as-is and the reply was squeezed
+ * into whatever remained.
+ */
+export function resolvePromptCharBudget(maxNumCtx: number): number {
+  const usableTokens = Math.max(512, maxNumCtx - GENERATION_RESERVE_TOKENS)
+  return Math.floor(usableTokens * CHARS_PER_TOKEN)
+}
+
 interface TierBudget {
   vectorContextChars: number
   totalContextChars: number

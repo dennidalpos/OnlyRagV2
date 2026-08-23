@@ -26,7 +26,6 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 1,
       maxSteps: 50,
-      complexityTier: 'standard',
       workspacePath: 'D:/project',
       toolOutputHistory: [],
       settings: defaultSettings,
@@ -36,8 +35,9 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     expect(prompt).toContain('Fix typo in index.html')
     expect(prompt).toContain('D:/project')
     expect(prompt).toContain('AGENT')
-    expect(prompt).toContain('INCREMENTAL DEVELOPMENT & RESPECT EXISTING FILES')
-    expect(prompt).toContain('BROWSER PREVIEW & PAGE LAUNCH')
+    expect(prompt).toContain('INCREMENTAL')
+    expect(prompt).toContain('PREVIEW')
+    expect(prompt).toContain('SCAFFOLD FIRST')
   })
 
   it('should include pinned files and active file snippet when provided', () => {
@@ -46,7 +46,6 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 2,
       maxSteps: 50,
-      complexityTier: 'standard',
       workspacePath: 'D:/project',
       activeFile: { name: 'calc.ts', path: 'D:/project/calc.ts', content: 'export function calculateTotal() {}' },
       pinnedFilesContextStr: '[EXPLICIT REFERENCED FILE: helper.ts]\n```\nconst tax = 0.22;\n```',
@@ -66,14 +65,14 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     // AgentPromptAssembler no longer re-truncates the assembled prompt against
     // maxContextChars — that watermark-based compaction is HeuristicContextCompactor's
     // sole responsibility in the orchestrator loop (see agentOrchestratorAppService.ts).
-    // Here only the per-segment maxMapChars budget (4000 for maxContextChars<=16000) applies.
+    // Here only the per-segment maxMapChars budget applies: a share (18%) of maxContextChars,
+    // so the background context scales with the window instead of a fixed step threshold.
     const hugeMap = 'a'.repeat(25000)
     const { prompt } = assembleTurnPrompt({
       userTask: 'Optimize database queries',
       agentMode: 'agent',
       stepCount: 3,
       maxSteps: 50,
-      complexityTier: 'deep_reasoning',
       workspacePath: 'D:/project',
       projectContextMapStr: hugeMap,
       toolOutputHistory: [],
@@ -81,8 +80,9 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       runtimeOpts: { ...runtimeOpts, maxContextChars: 16000 },
     })
 
-    expect(prompt).not.toContain('a'.repeat(4001))
-    expect(prompt).toContain('a'.repeat(4000))
+    const expectedMapChars = Math.floor(16000 * 0.18)
+    expect(prompt).not.toContain('a'.repeat(expectedMapChars + 1))
+    expect(prompt).toContain('a'.repeat(expectedMapChars))
   })
 
   it('should omit the prose tool schema block when toolCallingCapable=true (AGT2: native tool-calling models already receive it via the `tools` API param)', () => {
@@ -91,7 +91,6 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 1,
       maxSteps: 50,
-      complexityTier: 'standard',
       workspacePath: 'D:/project',
       toolOutputHistory: [],
       settings: defaultSettings,
@@ -102,7 +101,6 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 1,
       maxSteps: 50,
-      complexityTier: 'standard',
       workspacePath: 'D:/project',
       toolOutputHistory: [],
       settings: defaultSettings,
@@ -121,7 +119,6 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       agentMode: 'agent',
       stepCount: 1,
       maxSteps: Infinity,
-      complexityTier: 'standard',
       workspacePath: 'D:/project',
       toolOutputHistory: [],
       settings: defaultSettings,
@@ -136,7 +133,6 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       userTask: 'Fix typo in index.html',
       agentMode: 'agent' as const,
       maxSteps: 50,
-      complexityTier: 'standard' as const,
       workspacePath: 'D:/project',
       settings: defaultSettings,
       runtimeOpts,
@@ -193,6 +189,48 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
 
       const reassembled = [stableSection, historyBlock, turnSuffix].filter((p) => p && p.trim()).join('\n\n')
       expect(reassembled).toBe(prompt)
+    })
+  })
+
+  describe('segments (compactor input contract)', () => {
+    it('exposes stableSection as DISJOINT segments that rejoin to exactly stableSection', () => {
+      // The orchestrator must feed HeuristicContextCompactor these segments, never stableSection
+      // itself. Passing the joined section as `systemPrompt` while ALSO passing its own parts
+      // counted every byte twice: the compactor saw ~40k for a ~27k prompt, tripped its watermark
+      // on prompts that fit, and drove its budget negative — wiping the tool history so every
+      // turn's prompt was byte-identical and the model looped on its first tool call forever.
+      const { stableSection, segments } = assembleTurnPrompt({
+        userTask: 'Build a dashboard',
+        agentMode: 'agent',
+        stepCount: 3,
+        maxSteps: 50,
+        workspacePath: 'D:/project',
+        planBlock: '### STRUCTURED EXECUTION PLAN\nm-1: scaffold',
+        skillsBlock: '## CONTEXTUAL SKILLS\ntailwind-css-v4',
+        pinnedFilesContextStr: 'pinned.ts contents',
+        attachedContext: 'rag docs context',
+        projectContextMapStr: 'src/\n  App.tsx',
+        toolOutputHistory: 'HISTORY BLOCK',
+        settings: defaultSettings,
+        runtimeOpts,
+      })
+
+      const rejoined = [
+        segments.baseSystemPrompt,
+        segments.planSection,
+        segments.pinnedBlock,
+        segments.activeFileBlock,
+        segments.skillsSection,
+        segments.attachedBlock,
+        segments.mapBlock,
+      ]
+        .filter((p) => p && p.trim())
+        .join('\n\n')
+
+      expect(rejoined).toBe(stableSection)
+      // and no segment may itself contain the whole joined section (the double-count signature)
+      expect(segments.baseSystemPrompt).not.toBe(stableSection)
+      expect(segments.baseSystemPrompt.length).toBeLessThan(stableSection.length)
     })
   })
 })

@@ -162,7 +162,9 @@ export class GoalDecompositionPlanner {
       else if (m.status === 'in_progress') icon = '[>]'
       else if (m.status === 'failed') icon = '[!]'
 
-      let line = `${idx + 1}. ${icon} **${m.title}**`
+      // Render the id explicitly: titles no longer carry a self-label (see stripRedundantIdPrefix),
+      // and the model needs the canonical id here to address a milestone via "update_plan".
+      let line = `${idx + 1}. ${icon} **${m.id}: ${m.title}**`
       if (m.falsifiableHypothesis) {
         line += ` — *Hypothesis:* ${m.falsifiableHypothesis}`
       }
@@ -191,6 +193,21 @@ export class GoalDecompositionPlanner {
     return lines.join('\n')
   }
 
+  /**
+   * Planner models routinely emit their own "m-3: " / "3. " label inside the milestone title.
+   * Callers then prefix the canonical id again, so prompts rendered "Task m-1: m-1: Create ..."
+   * — duplicated noise in the plan block, the active-milestone focus line and the session
+   * tracker, on every single turn. Strip a leading self-label so the id is written exactly once.
+   */
+  private static stripRedundantIdPrefix(title: string): string {
+    if (!title) return title
+    // Deliberately narrow: only an `m-N` / `milestone N` self-label, which is the canonical id
+    // form this class emits and therefore the one that actually doubles up. Prefixes like
+    // "Step 1: " are the model's own prose and are left intact.
+    const stripped = title.replace(/^\s*(?:m[-_]?\d+|milestone\s*\d+)\s*[:.)-]\s+/i, '').trim()
+    return stripped || title.trim()
+  }
+
   public static parsePlanFromText(text: string): PlanMilestone[] {
     if (!text || typeof text !== 'string') return []
 
@@ -209,7 +226,7 @@ export class GoalDecompositionPlanner {
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((item: any, idx: number) => ({
             id: item.id || `m-${idx + 1}`,
-            title: item.title || item.step || item.name || `Milestone ${idx + 1}`,
+            title: this.stripRedundantIdPrefix(item.title || item.step || item.name || `Milestone ${idx + 1}`),
             status: (item.status as any) || 'pending',
             falsifiableHypothesis: item.falsifiableHypothesis || item.hypothesis || undefined,
             verificationCommand: item.verificationCommand || item.verify || undefined,
@@ -302,14 +319,14 @@ export class GoalDecompositionPlanner {
         for (const child of block.children) {
           milestones.push({
             id: `m-${counter++}`,
-            title: child.title,
+            title: this.stripRedundantIdPrefix(child.title),
             status: child.status,
           })
         }
       } else {
         milestones.push({
           id: `m-${counter++}`,
-          title: block.topTitle,
+          title: this.stripRedundantIdPrefix(block.topTitle),
           status: block.topStatus,
         })
       }

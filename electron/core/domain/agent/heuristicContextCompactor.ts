@@ -59,16 +59,25 @@ export class HeuristicContextCompactor {
     // Tier 1 (immutable): system prompt + active plan
     const immutableSize = (segments.systemPrompt || '').length + (segments.activePlanBlock || '').length
 
-    let remaining = budget - immutableSize
+    // Tool history is what makes the agent stateful: without it the prompt is byte-identical
+    // every turn and the model deterministically repeats its last action. So it is reserved
+    // BEFORE the optional tiers bid for space, and never floored to zero — an oversized
+    // immutable tier must eat into pinned/active/skills/RAG, never into the trajectory.
+    const historyFloor = Math.min(
+      segments.historyBlock.length,
+      Math.max(0, Math.floor(hardwareMaxContextChars * 0.20))
+    )
+    let remaining = Math.max(0, budget - immutableSize)
 
-    // Tier 2 caps: pinned files and active file
-    const pinnedAlloc = Math.min(segments.pinnedFilesBlock.length, Math.floor(remaining * 0.30))
-    const activeFileAlloc = Math.min(segments.activeFileBlock.length, Math.floor(remaining * 0.15))
-    const skillsAlloc = Math.min(segments.skillsBlock.length, Math.floor(remaining * 0.10))
-    remaining -= pinnedAlloc + activeFileAlloc + skillsAlloc
+    // Tier 2 caps: pinned files and active file — bid only for space above the history floor
+    const tier2Pool = Math.max(0, remaining - historyFloor)
+    const pinnedAlloc = Math.min(segments.pinnedFilesBlock.length, Math.floor(tier2Pool * 0.30))
+    const activeFileAlloc = Math.min(segments.activeFileBlock.length, Math.floor(tier2Pool * 0.15))
+    const skillsAlloc = Math.min(segments.skillsBlock.length, Math.floor(tier2Pool * 0.10))
+    remaining = Math.max(0, remaining - (pinnedAlloc + activeFileAlloc + skillsAlloc))
 
     // Tier 3: history — distill terminal outputs, keep top-level summary table
-    const historyAlloc = Math.max(0, Math.floor(remaining * 0.70))
+    const historyAlloc = Math.max(historyFloor, Math.floor(remaining * 0.70))
     const distilledHistory = this.compactHistoryBlock(segments.historyBlock, historyAlloc)
 
     // Tier 4: auxiliary context — what's left

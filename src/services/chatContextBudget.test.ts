@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveChatContextBudget, resolveChatThreadCount } from './chatContextBudget'
+import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from './chatContextBudget'
 import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
 
 describe('chatContextBudget', () => {
@@ -113,5 +113,39 @@ describe('chatContextBudget', () => {
     expect(resolveChatThreadCount(1)).toBe(1)
     expect(resolveChatThreadCount(0)).toBeUndefined()
     expect(resolveChatThreadCount(undefined)).toBeUndefined()
+  })
+
+  describe('prompt char budget vs token window (regression: selected attachment truncated away)', () => {
+    it('should keep the whole assembled turn inside the token window on every profile', () => {
+      // The per-segment budgets were each sized on their own, with nothing budgeting the
+      // assembled turn: on midrange, history alone was allowed maxNumCtx * 2.0 = 16384 chars
+      // against 5500 for the selected documents. The turn then filled almost the whole window
+      // and the ANSWER got what was left — ~1245 tokens on midrange, 61 on legacy.
+      const hosts = [
+        { hasNvidiaGpu: false, vramTotalMB: 0, totalRAMGB: 8, cpuCount: 4 },
+        { hasNvidiaGpu: true, vramTotalMB: 8192, totalRAMGB: 32, cpuCount: 8 },
+        { hasNvidiaGpu: true, vramTotalMB: 24576, totalRAMGB: 64, cpuCount: 16 },
+      ]
+      for (const host of hosts) {
+        const budget = resolveChatContextBudget(host)
+        const promptChars = resolvePromptCharBudget(budget.maxNumCtx)
+
+        // The system prompt and the selected document context must both fit, with room left over
+        // for at least some conversation history.
+        const systemAndDocs = 2500 + budget.totalContextChars
+        expect(
+          promptChars,
+          `${budget.profileTier}: no room left for history after system prompt + documents`
+        ).toBeGreaterThan(systemAndDocs)
+
+        // And the whole budget must fit the window once the answer's reserve is held back.
+        expect(Math.ceil(promptChars / 3.5)).toBeLessThan(budget.maxNumCtx)
+      }
+    })
+
+    it('should scale the prompt budget with the window', () => {
+      expect(resolvePromptCharBudget(4096)).toBeLessThan(resolvePromptCharBudget(8192))
+      expect(resolvePromptCharBudget(8192)).toBeLessThan(resolvePromptCharBudget(32768))
+    })
   })
 })

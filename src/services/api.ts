@@ -57,13 +57,20 @@ export const apiService = {
     }
   },
 
-  async getIngestedDocuments(): Promise<IngestedDocument[]> {
-    if (!window.electronAPI) return []
+  /**
+   * Resolves null when the document list could NOT be retrieved (sidecar unreachable, timeout,
+   * unparseable reply). Callers must not treat that as an empty library: useIngestedDocuments
+   * prunes the user's active selection against this result, and flattening a failure to []
+   * silently deselected every attachment they had chosen.
+   */
+  async getIngestedDocuments(): Promise<IngestedDocument[] | null> {
+    if (!window.electronAPI) return null
     try {
-      return await window.electronAPI.getIngestedDocuments()
+      const docs = await window.electronAPI.getIngestedDocuments()
+      return Array.isArray(docs) ? docs : null
     } catch (err: any) {
       logger.error('ApiService:Ingestion', `Failed to fetch ingested documents: ${err.message}`)
-      return []
+      return null
     }
   },
 

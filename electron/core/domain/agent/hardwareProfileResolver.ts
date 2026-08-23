@@ -1,6 +1,5 @@
 import os from 'node:os'
 import type { HardwareProfile } from '../../../../src/types'
-import type { ModelTier } from './complexityEvaluator'
 import { resolveEffectiveTier } from '../../../../src/services/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
@@ -44,15 +43,48 @@ export interface HardwareEnvironment {
 }
 
 export class HardwareProfileResolver {
+
   /**
-   * Resolves effective hardware tier and optimal Ollama runtime options based on user settings, hardware diagnostics, and complexity tier.
+   * Generation reserve, as a share of the context window. A turn is one tool call, so the only
+   * genuinely large completion is a write_file payload; GENERATION_RESERVE_RATIO keeps room for
+   * one without letting the reserve crowd out the prompt.
+   */
+  private static readonly GENERATION_RESERVE_RATIO = 0.35
+  private static readonly GENERATION_RESERVE_CAP_TOKENS = 4096
+  /**
+   * Chars per BPE token for this prompt mix (English directives + markdown + code). Measured at
+   * ~4.08 on real audit-log prompts; 3.6 is the conservative side of that, so the char budget
+   * always under-estimates rather than over-estimates the token cost.
+   */
+  private static readonly CHARS_PER_TOKEN = 3.6
+
+  static deriveNumPredict(numCtx: number): number {
+    return Math.min(
+      HardwareProfileResolver.GENERATION_RESERVE_CAP_TOKENS,
+      Math.floor(numCtx * HardwareProfileResolver.GENERATION_RESERVE_RATIO)
+    )
+  }
+
+  /**
+   * The prompt-assembly char budget that actually fits `numCtx` once the generation reserve is
+   * held back. Everything upstream (HeuristicContextCompactor, the assembler's per-block caps)
+   * budgets in chars, so this is the single place where the token window is translated.
+   */
+  static deriveMaxContextChars(numCtx: number): number {
+    const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx)
+    return Math.floor(promptTokens * HardwareProfileResolver.CHARS_PER_TOKEN)
+  }
+  /**
+   * Resolves optimal Ollama runtime options from user settings and hardware diagnostics.
    * Classification (and the safe-VRAM formula behind it) is owned by hardwareProfileTiers.ts;
-   * this method only maps the resolved tier onto runtime options.
+   * this method only maps the resolved hardware tier onto runtime options.
+   *
+   * There is deliberately no complexity-tier parameter: every module, coding included, runs on
+   * one configured model, so a machine has exactly one runtime profile.
    */
   static resolveOllamaOptions(
     profile: HardwareProfile = 'Auto',
-    env?: HardwareEnvironment,
-    tier?: ModelTier
+    env?: HardwareEnvironment
   ): OllamaRuntimeOptions {
     const cpuCores = env?.cpuCount || os.cpus()?.length || 4
     const safeCpuThreads = Math.max(1, cpuCores - 1)
@@ -74,59 +106,24 @@ export class HardwareProfileResolver {
       const ramGB = env.systemRamGB || 0
       if (effectiveTier === 'Low' && ramGB >= 16) {
         effectiveTier = 'Medium'
-      } else if (effectiveTier === 'Medium' && ramGB >= 32 && (tier === 'deep_reasoning' || tier === 'heavy')) {
-        effectiveTier = 'High'
       }
     }
 
-    // Generation cap scales with the tier's expected answer size, not with the hardware:
-    // a small model on a fast task still only has to emit one compact tool call.
-    const numPredict = tier === 'fast' ? 4096 : (tier === 'deep_reasoning' || tier === 'heavy') ? 8192 : 6144
+    // One runtime profile per hardware class. num_predict and maxContextChars are DERIVED from
+    // num_ctx rather than hand-tuned, because the three used to be set independently and drifted:
+    // the Medium profile shipped num_ctx 8192 with num_predict 6144 and a 28000-char prompt
+    // budget, i.e. a prompt allowance ~3x larger than the generation reserve left room for.
+    const numCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
 
-    // Base profile configurations with hardware-constrained context windows.
-    // num_thread is set on every tier: a Medium/High profile can still be running on a
-    // CPU-only or low-VRAM machine, where leaving Ollama's thread count unset costs throughput.
-    if (effectiveTier === 'Low') {
-      const isDeep = tier === 'deep_reasoning' || tier === 'heavy'
-      return {
-        num_ctx: isDeep ? 8192 : 4096,
-        temperature: 0.1,
-        top_p: 0.9,
-        repeat_penalty: 1.1,
-        num_thread: safeCpuThreads,
-        num_predict: numPredict,
-        stop: [...AGENT_STOP_SEQUENCES],
-        maxContextChars: isDeep ? 24000 : 16000,
-      }
-    }
-
-    if (effectiveTier === 'Medium') {
-      const isFast = tier === 'fast'
-      const isDeep = tier === 'deep_reasoning' || tier === 'heavy'
-      return {
-        num_ctx: isFast ? 4096 : isDeep ? 8192 : 8192,
-        temperature: 0.1,
-        top_p: 0.9,
-        repeat_penalty: 1.1,
-        num_thread: safeCpuThreads,
-        num_predict: numPredict,
-        stop: [...AGENT_STOP_SEQUENCES],
-        maxContextChars: isFast ? 16000 : isDeep ? 28000 : 28000,
-      }
-    }
-
-    // High tier
-    const isFast = tier === 'fast'
-    const isDeep = tier === 'deep_reasoning' || tier === 'heavy'
     return {
-      num_ctx: isFast ? 8192 : isDeep ? 32768 : 16384,
+      num_ctx: numCtx,
       temperature: 0.1,
       top_p: 0.9,
       repeat_penalty: 1.1,
       num_thread: safeCpuThreads,
-      num_predict: numPredict,
+      num_predict: HardwareProfileResolver.deriveNumPredict(numCtx),
       stop: [...AGENT_STOP_SEQUENCES],
-      maxContextChars: isFast ? 24000 : isDeep ? 64000 : 48000,
+      maxContextChars: HardwareProfileResolver.deriveMaxContextChars(numCtx),
     }
   }
 }

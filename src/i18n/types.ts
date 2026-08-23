@@ -458,14 +458,7 @@ export interface TranslationSchema {
     translationOutputFolderNotSet: string
     translationOutputFolderBrowse: string
     translationOutputFolderClear: string
-    fastTier: string
-    standardTier: string
-    deepTier: string
     embeddingTier: string
-    codingAgentSection: string
-    codingAgentSubtitle: string
-    complexityRouterActive: string
-    complexityRouterDisabled: string
     ragChatSection: string
     ragChatSubtitle: string
     translationSection: string
@@ -568,7 +561,6 @@ export interface TranslationSchema {
     activeModel: string
     detectedFamily: string
     familyPreset: string
-    complexityTierPreset: string
     codingTierNotice: string
     customBadge: string
     promptText: string
@@ -691,9 +683,6 @@ export interface TranslationSchema {
     incompleteSlotsWarning: string
     pullErrorTitle: string
     heavyTierBadge: string
-    heavyEscalationSectionTitle: string
-    heavyEscalationSectionDescPre: string
-    heavyEscalationSectionDescPost: string
     heavyDisabledLabel: string
     heavyDisabledDesc: string
     selectedLabel: string

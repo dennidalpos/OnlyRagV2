@@ -168,14 +168,21 @@ La suite Python gira sempre su uno store LanceDB temporaneo isolato: `sidecar/te
 
 ### Script di Automazione e Qualità (`scripts/`)
 ```powershell
-# Validazione completa seriale (TypeScript + Vitest + Pytest)
+# Validazione completa seriale (TypeScript + Vitest + Pytest + Smoke Test)
 .\scripts\lint_format.ps1 -Fast
 
-# Pulizia sicura del workspace e delle cache temporanee
-npm run clean
+# Audit architettura e code hygiene completo (dpdm + knip + skott)
+npm run audit:all
+# Audit mirati: dipendenze circolari, dead code, o grafo visuale
+npm run audit:cycles
+npm run audit:deadcode
+npm run audit:graph
 
-# Pulizia completa di fabbrica (incluso database LanceDB in AppData)
-npm run clean:full
+# Pulizia selettiva e factory reset
+npm run clean        # Pulisce gli artifact temporanei di build nel repository
+npm run clean:logs   # Termina i processi attivi e pulisce tutti i file di log
+npm run clean:user   # Pulisce i dati locali in AppData (LanceDB e impostazioni)
+npm run clean:full   # Factory reset completo (Repo + Logs + UserData)
 
 # Verifica dello stato di salute del sidecar locale
 .\scripts\test_sidecar_health.ps1 -Fast

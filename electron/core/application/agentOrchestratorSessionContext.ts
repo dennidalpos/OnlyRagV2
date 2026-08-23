@@ -2,7 +2,7 @@ import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
 import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
-import type { AgentSession } from './agentOrchestratorAppService'
+import type { AgentSession } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import {

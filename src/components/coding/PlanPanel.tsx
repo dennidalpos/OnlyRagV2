@@ -2,14 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
 import type { InterviewQuestion, UserInterviewAnswer } from '../../types'
-import { parsePlanChecklist, PlanChecklistItem } from './planChecklistParser'
+import { parsePlanChecklist } from './planChecklistParser'
 import { PlanPanelHeader } from './PlanPanelHeader'
 import { PlanPanelCountdownBanner } from './PlanPanelCountdownBanner'
 import { PlanPanelChecklistView } from './PlanPanelChecklistView'
 import { PlanPanelDocumentView } from './PlanPanelDocumentView'
 import { PlanInterviewCard } from './PlanInterviewCard'
-
-export type { PlanChecklistItem }
 
 interface PlanPanelProps {
   plan: AgentPlan | null

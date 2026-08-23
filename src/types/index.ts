@@ -133,6 +133,8 @@ export interface WorkspaceFile {
   sizeBytes?: number
 }
 
+export type AgentMode = 'plan' | 'ask' | 'agent'
+
 export type AgentLogCategory =
   | 'user_prompt'
   | 'agent_thought'

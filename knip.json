@@ -15,7 +15,11 @@
     "electron/**/*.{ts,tsx}"
   ],
   "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": [
+    "nvidia-smi"
+  ],
   "ignoreDependencies": [
-    "@tailwindcss/vite"
+    "@types/diff",
+    "tailwindcss"
   ]
 }

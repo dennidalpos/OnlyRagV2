@@ -1,5 +1,5 @@
 import React from 'react'
-import { AgentMode } from './CodingAgentView'
+import type { AgentMode } from '../../types'
 import { useTranslation } from '../../i18n'
 
 interface AgentModeSelectorProps {

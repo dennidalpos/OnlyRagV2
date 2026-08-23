@@ -6,7 +6,7 @@ import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
-import type { AgentSession } from './agentOrchestratorAppService'
+import type { AgentSession } from './agentOrchestratorTypes'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 

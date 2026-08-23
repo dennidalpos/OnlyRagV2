@@ -4,7 +4,7 @@ import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
-import type { ApprovalResponse } from './agentOrchestratorAppService'
+import type { ApprovalResponse } from './agentOrchestratorTypes'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 

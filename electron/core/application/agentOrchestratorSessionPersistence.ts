@@ -1,7 +1,7 @@
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
-import type { AgentSession } from './agentOrchestratorAppService'
+import type { AgentSession } from './agentOrchestratorTypes'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'

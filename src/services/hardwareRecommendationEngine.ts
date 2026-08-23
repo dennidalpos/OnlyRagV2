@@ -125,15 +125,9 @@ function estimateWeightFromMetadata(details: RunningModelDetails): number | null
 // existing importers of this module keep compiling unchanged.
 export {
   calculateRealUsableVram,
-  calculateUsableSystemRamGB,
   classifyHardwareProfileTier,
-  classifyTierFromSafeBudget,
-  isMinimalHardwareHost,
-  resolveEffectiveTier,
-  VRAM_SAFETY_MARGIN,
-  VRAM_OVERHEAD_OS_GB,
 } from './hardwareProfileTiers'
-export type { HardwareProfileTier, DeclaredHardwareProfile, HardwareFacts } from './hardwareProfileTiers'
+export type { HardwareFacts } from './hardwareProfileTiers'
 
 export interface ModelRecommendation {
   modelName: string

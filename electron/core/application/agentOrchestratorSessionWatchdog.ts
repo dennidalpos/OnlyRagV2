@@ -1,5 +1,5 @@
 import type { AppSettings } from '../../../src/types'
-import type { AgentSession, ApprovalResponse } from './agentOrchestratorAppService'
+import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'

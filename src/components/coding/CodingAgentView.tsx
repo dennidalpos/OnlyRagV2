@@ -21,8 +21,9 @@ import { GitDiffPanel } from './GitDiffPanel'
 import { PlanPanel } from './PlanPanel'
 import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
+import type { AgentMode } from '../../types'
 
-export type AgentMode = 'plan' | 'ask' | 'agent'
+export type { AgentMode }
 
 interface CodingAgentViewProps {
   settings?: AppSettings

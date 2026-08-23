@@ -1,8 +1,8 @@
 import React from 'react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { AgentActionLogPanel } from './AgentActionLogPanel'
-import { useCodingAgent } from '../../hooks/useCodingAgent'
-import { usePlanApproval } from '../../hooks/usePlanApproval'
+import type { useCodingAgent } from '../../hooks/useCodingAgent'
+import type { usePlanApproval } from '../../hooks/usePlanApproval'
 
 interface CodingAgentLeftPanelProps {
   c: ReturnType<typeof useCodingAgent>

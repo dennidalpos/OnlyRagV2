@@ -1,7 +1,7 @@
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
-import { agentToolExecutorService } from './agentToolExecutorService'
+import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
 
 export class WorkspaceAppService {
@@ -67,8 +67,21 @@ export class WorkspaceAppService {
   }
 
   gitCommit(workspaceRoot: string | undefined, commitMessage: string) {
-    const result = agentToolExecutorService.performGitCommit(workspaceRoot || process.cwd(), commitMessage)
-    return { success: result.success, output: result.output, error: result.success ? undefined : result.output }
+    const cwd = workspaceRoot || process.cwd()
+    const trimmedMessage = (commitMessage || '').trim()
+    if (!trimmedMessage) {
+      return { success: false, output: 'Git Commit Error: commitMessage parameter is required.', error: 'Git Commit Error: commitMessage parameter is required.' }
+    }
+    try {
+      const stdout = gitCliRepository.commit(cwd, trimmedMessage)
+      return {
+        success: true,
+        output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,
+      }
+    } catch (err: any) {
+      const detail = (err.stdout?.toString().trim() || err.stderr?.toString().trim() || err.message) as string
+      return { success: false, output: `Git Commit Error: ${detail}`, error: `Git Commit Error: ${detail}` }
+    }
   }
 
   async inspectGuestOsEnvironment(): Promise<GuestOsInfo> {

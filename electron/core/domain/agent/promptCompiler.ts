@@ -8,7 +8,7 @@ import {
 } from './promptPresets'
 import type { AppSettings } from '../../../../src/types'
 
-export type { ModelFamily, FeatureModule }
+export type { ModelFamily }
 
 type FamilyBasedModule = Exclude<FeatureModule, 'coding'>
 

@@ -3,9 +3,8 @@
  * Dispatches normalized errors to UI toasts with deduplication and audio/logging triggers.
  */
 
-import { useCallback } from 'react'
 import { normalizeError, NormalizedError } from './errorNormalizer'
-import { useToast, ToastType } from '../../components/common/Toast'
+import { ToastType } from '../../components/common/Toast'
 
 const DEDUPLICATION_TTL_MS = 3000
 const deduplicationCache = new Map<string, number>()
@@ -65,20 +64,4 @@ export function notifyError(
  */
 export function clearErrorDeduplicationCache(): void {
   deduplicationCache.clear()
-}
-
-/**
- * Hook for easy access to centralized error notification in React components
- */
-export function useErrorNotifier() {
-  const toast = useToast()
-
-  const reportError = useCallback(
-    (err: unknown, context?: string, options: Omit<NotifyErrorOptions, 'context'> = {}): NormalizedError => {
-      return notifyError(err, toast.showToast, { ...options, context })
-    },
-    [toast]
-  )
-
-  return { reportError, notifyError: reportError }
 }

@@ -13,9 +13,8 @@ import {
   Layers,
   Sparkles,
 } from 'lucide-react'
-import { IngestedDocument, WorkspaceFile, AgentChangeMetrics } from '../../types'
-import { AgentMode } from './CodingAgentView'
-import { QueuedPrompt } from '../../hooks/useCodingAgent'
+import { IngestedDocument, WorkspaceFile, AgentChangeMetrics, AgentMode } from '../../types'
+import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useTranslation } from '../../i18n'
 import { PromptComposerToolsMenu } from './PromptComposerToolsMenu'
 import { AgentModeSelector } from './AgentModeSelector'

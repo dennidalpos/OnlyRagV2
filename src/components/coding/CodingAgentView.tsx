@@ -128,7 +128,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[#0b0f17] overflow-hidden select-text">
+    <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
       {/* Antigravity Top Header Bar */}
       <CodingHeader
         guestOsInfo={c.guestOsInfo}
@@ -233,7 +233,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
         </div>
 
         {/* Right Column: Unified Full-Height Workspace Area */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-[#090d16] min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
           <CodingEditorTabBar
             openFiles={c.openFiles}
             selectedFile={c.selectedFile}

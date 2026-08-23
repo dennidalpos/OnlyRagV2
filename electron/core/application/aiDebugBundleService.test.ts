@@ -4,9 +4,28 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
 
-vi.mock('../infrastructure/filesystem/agentSessionStateRepository')
-vi.mock('../infrastructure/process/gitCliRepository')
-vi.mock('../infrastructure/process/devToolProbeRepository')
+vi.mock('../infrastructure/filesystem/agentSessionStateRepository', () => ({
+  agentSessionStateRepository: {
+    loadSessionState: vi.fn(),
+    saveSessionState: vi.fn(),
+    clearSessionState: vi.fn(),
+    clearAllSessionStates: vi.fn(),
+  },
+}))
+vi.mock('../infrastructure/process/gitCliRepository', () => ({
+  gitCliRepository: {
+    run: vi.fn(),
+    isGitRepo: vi.fn(),
+    getStatusSummary: vi.fn(),
+  },
+}))
+vi.mock('../infrastructure/process/devToolProbeRepository', () => ({
+  devToolProbeRepository: {
+    probeHostEnvironment: vi.fn(),
+    probeVersion: vi.fn(),
+    getToolchainSummary: vi.fn(),
+  },
+}))
 
 describe('AiDebugBundleService Unit Tests', () => {
   beforeEach(() => {

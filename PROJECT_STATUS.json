@@ -1,6 +1,3 @@
 {
-  "todos": [
-    "[P1] Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato.",
-    "[P1] Validazione live della Vision OCR: ingerire un PDF scansionato e un'immagine raster con `ocrEngine: 'vision_model'`, verificando resa del prompt per pagina, qualita' della trascrizione e fallback su RapidOCR quando il modello non risponde."
-  ]
+  "todos": []
 }

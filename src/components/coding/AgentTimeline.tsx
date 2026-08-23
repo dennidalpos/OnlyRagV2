@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Code2, Loader2, ArrowDown } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
+import { Code2, Loader2, ArrowDown, FolderOpen } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { AgentActionLog, WorkspaceFile, CodingSession, InterviewQuestion, UserInterviewAnswer } from '../../types'
 import { AgentPlan } from '../../hooks/usePlanApproval'
@@ -7,12 +7,16 @@ import { useTranslation } from '../../i18n'
 import { AgentTimelineMessage } from './AgentTimelineMessage'
 import { PlanInterviewCard } from './PlanInterviewCard'
 import { PlanChatApprovalCard } from './PlanChatApprovalCard'
+import { resolveWorkspaceQuickActions } from './workspaceQuickActions'
 
 interface AgentTimelineProps {
   actionLogs: AgentActionLog[]
   activeSession?: CodingSession | null
   setAgentPrompt: (prompt: string) => void
   activeModelName?: string
+  workspacePath?: string | null
+  files?: WorkspaceFile[]
+  onSelectWorkspaceFolder?: () => void
   onOpenFile?: (file: WorkspaceFile) => void
   onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
   isExecuting: boolean
@@ -46,6 +50,9 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   activeSession,
   setAgentPrompt,
   activeModelName,
+  workspacePath,
+  files = [],
+  onSelectWorkspaceFolder,
   onOpenFile,
   onOpenRightTab,
   isExecuting,
@@ -75,6 +82,11 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   const { t } = useTranslation()
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
 
+  const quickActions = useMemo(
+    () => resolveWorkspaceQuickActions(workspacePath, files),
+    [workspacePath, files]
+  )
+
   const toggleExpand = (id: string) => {
     setExpandedLogIds((prev) => {
       const next = new Set(prev)
@@ -99,14 +111,14 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     <div
       ref={scrollContainerRef}
       onScroll={onScroll}
-      className="flex-1 overflow-y-auto p-3 space-y-1.5 text-xs font-mono relative"
+      className="flex-1 overflow-y-auto p-3 space-y-1.5 text-xs font-mono select-text relative"
     >
       {/* Floating Scroll-to-Bottom Button */}
       {isScrolledUp && (
         <button
           type="button"
           onClick={onScrollToBottom}
-          className="sticky bottom-2 ml-auto z-20 px-3 py-1.5 rounded-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-1.5 transition-all active:scale-95"
+          className="sticky bottom-2 ml-auto z-20 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 font-semibold text-xs shadow-xl flex items-center gap-1.5 transition-all focus-ring active:scale-95 cursor-pointer backdrop-blur-sm"
           aria-label="Scorri fino in fondo"
         >
           <ArrowDown className="w-3.5 h-3.5" />
@@ -115,8 +127,8 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       )}
 
       {actionLogs.length === 0 ? (
-        <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400 font-sans select-none">
-          <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-1 shadow-lg shadow-cyan-950/20">
+        <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400 font-sans select-text">
+          <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-1 shadow-sm">
             <Code2 className="w-6 h-6" />
           </div>
           <div>
@@ -124,31 +136,43 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
               {(activeSession?.executedPrompts?.length ?? 0) > 0 ? activeSession?.title : t('coding.headerTitle')}
             </div>
             <p className="text-xs max-w-xs leading-relaxed text-slate-400 mt-1">
-              {t('coding.subtitle')}
+              {workspacePath ? t('coding.subtitle') : t('coding.noProjectAttached')}
             </p>
           </div>
 
-          <div className="w-full pt-3 space-y-1.5 text-left font-sans">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
-              {t('common.actions')}
+          {!workspacePath && onSelectWorkspaceFolder ? (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onSelectWorkspaceFolder}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-200 hover:text-cyan-300 font-semibold rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95 focus-ring cursor-pointer"
+              >
+                <FolderOpen className="w-4 h-4 text-cyan-400" />
+                <span>{t('coding.selectFolder')}</span>
+              </button>
             </div>
-            <div className="flex flex-col gap-1.5">
-              {[
-                'npm run test:fast',
-                'npm run typecheck',
-                'git status',
-              ].map((quickTask, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setAgentPrompt(quickTask)}
-                  className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-[11px] text-slate-300 hover:text-cyan-200 transition-all text-left focus-ring active:scale-98 font-mono"
-                >
-                  {quickTask}
-                </button>
-              ))}
+          ) : quickActions.length > 0 ? (
+            <div className="w-full max-w-sm pt-3 space-y-1.5 text-left font-sans">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
+                {t('common.actions')}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => setAgentPrompt(action.command)}
+                    className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-[11px] text-slate-300 hover:text-cyan-200 transition-all text-left focus-ring active:scale-98 font-mono flex items-center justify-between cursor-pointer"
+                  >
+                    <span>{action.command}</span>
+                    {action.description && (
+                      <span className="text-[10px] font-sans text-slate-500">{action.description}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       ) : (
         <div style={{ position: 'relative', width: '100%', height: rowVirtualizer.getTotalSize() }}>
@@ -236,7 +260,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       )}
 
       {isExecuting && (
-        <div className="p-3.5 rounded-2xl bg-gradient-to-b from-[#111827] to-[#0b0f17] border border-cyan-500/30 space-y-2 text-xs text-cyan-300 font-sans shadow-xl animate-in fade-in duration-150">
+        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs text-slate-200 font-sans shadow-lg animate-in fade-in duration-150">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
@@ -245,13 +269,13 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
               </span>
             </div>
             {currentStep !== undefined && currentStep > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-mono text-[10px] font-bold shrink-0 shadow-sm">
+              <span className="px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-cyan-300 font-mono text-[10px] font-bold shrink-0 shadow-sm">
                 Step {currentStep}{maxSteps ? ` / ${maxSteps}` : ''}
               </span>
             )}
           </div>
           {streamingText && (
-            <div className="mt-2 p-2.5 rounded-xl bg-slate-950/95 border border-slate-800/90 text-[11px] font-mono text-slate-200 overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed shadow-inner">
+            <div className="mt-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-200 overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed shadow-inner">
               {streamingText}
             </div>
           )}

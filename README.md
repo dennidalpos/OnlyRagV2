@@ -34,7 +34,8 @@ All architectural, operational, API and setup specifications reside strictly in 
 - 🧩 [**Modules & Responsibilities**](./docs/modules.md): Complete mapping of Frontend, Electron Main Core, Python Sidecar, and Skill Hub components with input/output contracts.
 - 🔌 [**API Reference & Contracts**](./docs/api.md): REST endpoints (`/health`, `/ingest`, `/search`, `/documents`, `/export`), Electron IPC channels (`window.electronAPI`), TypeScript schemas and error codes.
 - ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware tiers (**legacy / entry / midrange / highend / extreme**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
-- 📖 [**Documentation Index**](./docs/README.md): Navigable master index.
+- 📚 [**Libraries & Domain Implementations**](./docs/libraries-and-domain-implementations.md): External libraries inventory and technical rationale for custom domain implementations.
+- 📖 [**Documentation Master Index**](./docs/README.md): Navigable master index.
 
 ---
 

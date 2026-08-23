@@ -106,7 +106,7 @@ export const SlmDiagnosticsAnomalyRow: React.FC<AnomalyRowProps> = ({ anomaly, i
             type="button"
             onClick={handleCopySnippet}
             aria-label="Copia snippet di log"
-            className="absolute top-1.5 right-1.5 p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+            className="absolute top-1.5 right-1.5 p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-ring cursor-pointer"
             title="Copia snippet di log"
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}

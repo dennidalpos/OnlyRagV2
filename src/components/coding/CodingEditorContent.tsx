@@ -32,10 +32,10 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
   const isWordWrap = settings?.editorWordWrap !== false
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-[#080c14] relative">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-slate-950 relative">
       {/* Breadcrumbs Navigation Bar */}
       {c.selectedFile && (
-        <div className="px-4 py-1.5 bg-[#0b101b] border-b border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400 shrink-0">
+        <div className="px-4 py-1.5 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-400 shrink-0">
           <div className="flex items-center gap-1 truncate">
             {getBreadcrumbParts(c.selectedFile.path, t('common.noFileOpen')).map((part, idx, arr) => (
               <React.Fragment key={idx}>
@@ -51,7 +51,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
             type="button"
             onClick={onCopyPath}
             aria-label={t('coding.copyPath')}
-            className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
+            className="p-1 text-slate-400 hover:text-slate-300 transition-colors focus-ring rounded"
             title={t('coding.copyPath')}
           >
             {copiedPath ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -60,7 +60,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
       )}
 
       {/* Editor Content Area */}
-      <div className="flex-1 w-full h-full relative overflow-hidden bg-[#080c14] flex flex-col">
+      <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-950 flex flex-col">
         {c.selectedFile ? (
           isDiffMode ? (
             <DiffEditor
@@ -97,8 +97,8 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
             />
           )
         ) : (
-          <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-3 text-slate-400 font-sans select-none">
-            <FileCode2 className="w-10 h-10 text-cyan-500/40" />
+          <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-3 text-slate-400 font-sans select-text">
+            <FileCode2 className="w-10 h-10 text-cyan-500/30" />
             <div className="text-slate-300 font-semibold text-sm">{t('coding.noFilesOpen')}</div>
             <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
               {t('coding.emptyLogs')}
@@ -106,7 +106,7 @@ export const CodingEditorContent: React.FC<CodingEditorContentProps> = ({
             <button
               type="button"
               onClick={onShowWorkspaceSidebar}
-              className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-200 hover:text-cyan-300 font-semibold rounded-xl text-xs transition-all shadow-sm active:scale-95 focus-ring cursor-pointer"
             >
               {t('coding.filesTab')}
             </button>

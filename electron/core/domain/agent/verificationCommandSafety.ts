@@ -18,16 +18,35 @@
  * A 7B model disobeyed it, which is the normal case rather than the exceptional one, so the
  * contract is enforced here in code instead of being asked for in prose.
  *
- * Two rejection families, both fatal to the promise a verification makes:
+ * Four rejection families, all fatal to the promise a verification makes:
  *  - MUTATING: the command writes to the workspace. It cannot be trusted to judge the file it
  *    just wrote, and in the observed session it actively corrupted source.
  *  - VACUOUS: the command exits 0 whatever the state of the code (`echo`, `true`, `cd`). It
  *    can never fail, so promoting on its exit code is the same rubber stamp the
  *    verificationCommand mechanism exists to remove.
+ *  - INTERACTIVE: the command opens an editor or pager that waits on a keypress (`nano`,
+ *    `vim`). In coding_agent_audit.log session-1787518626817-72a8 the planner emitted `nano
+ *    <file>` as the verification for six of ten implementation milestones. There is no
+ *    non-interactive way to run it: without a TTY it hangs until the run_command timeout,
+ *    and with one its exit code reports only whether the editor was closed, never whether the
+ *    file is correct. Every milestone that carried it was abandoned by the loop guard after
+ *    the model spent its retries unable to produce a passing run.
+ *  - NON-EXITING: the command starts a dev/watch server or other process that never exits on
+ *    its own (`--watch`, `vite`, `npm run dev`). The same session declared `npx tailwindcss
+ *    -i ./src/styles/globals.css -o ./dist/output.css --watch` as the verification for two
+ *    milestones; run_command's BLOCKING_DEV_SERVER_BLOCK guard (see
+ *    isBlockingDevServerCommand in agentToolExecutorService.ts, whose patterns this mirrors)
+ *    correctly refuses to execute it, but only at execution time — the milestone had already
+ *    been handed a "proof" that can never run to completion, so it could never be verified.
  *
  * Build and test commands stay allowed even though they write to `dist/` or `coverage/`:
  * their exit code reflects the code under test, which is the property that matters. The
  * denylist targets commands whose *only* effect is to author a named file.
+ *
+ * All four families are enforced here in code rather than requested of the model in prose,
+ * because the failure is not particular to one model: any Ollama-compatible model driving
+ * this agent can propose `nano` or `--watch` as a check, and the harness — not the model's
+ * judgement — is what has to keep it out of the plan.
  */
 
 export interface VerificationCommandVerdict {
@@ -79,6 +98,62 @@ const VACUOUS_COMMANDS = new Set([
   'write-host',
   'write-output',
 ])
+
+/**
+ * Terminal editors and pagers. Every one of these waits for a keypress or a TTY that
+ * run_command cannot supply, so none of them can report pass or fail — they either hang until
+ * the timeout or exit on a signal that says nothing about the file's content.
+ */
+const INTERACTIVE_PROGRAMS = new Set([
+  'nano',
+  'vi',
+  'vim',
+  'nvim',
+  'emacs',
+  'pico',
+  'ed',
+  'edit',
+  'less',
+  'more',
+  'man',
+])
+
+/**
+ * Mirrors isBlockingDevServerSubcommand in agentToolExecutorService.ts. Domain code must not
+ * import the application layer (see loopDetector.ts's SHELL_TOOL_KEYWORDS for the same
+ * constraint handled the same way), so the patterns are kept here in sync by hand. Both copies
+ * exist to catch the same commands at two different times: this one keeps them out of the plan
+ * before the model ever tries them, the other refuses to execute one if it slips through anyway.
+ */
+function isNonExitingVerificationSegment(segment: string): boolean {
+  const cmd = segment.trim().toLowerCase()
+  if (!cmd) return false
+
+  // Install commands are never dev servers, even when the package name is "vite" or "next".
+  if (/^(npm|pnpm|yarn|bun)\s+(install|i|add)\b/.test(cmd)) return false
+
+  // Pure build/test/lint/typecheck commands exit on their own and stay allowed.
+  if (
+    /^(npm|pnpm|yarn|bun)\s+(run\s+)?(build|test|lint|typecheck|check|format)\b/.test(cmd) ||
+    /^(npx\s+)?(tsc|eslint|prettier|vitest\s+run|jest\s+--runInBand)\b/.test(cmd) ||
+    /^(npx\s+)?vite\s+build\b/.test(cmd) ||
+    /^(npx\s+)?next\s+build\b/.test(cmd)
+  ) {
+    return false
+  }
+
+  return (
+    /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|preview)\b/.test(cmd) ||
+    /^(npx\s+)?vite(\.js|\.cmd|\.exe)?(\s+(dev|serve|preview))?$/i.test(cmd) ||
+    /\bnext\s+(dev|start)\b/.test(cmd) ||
+    /\bng\s+serve\b/.test(cmd) ||
+    /\bwebpack(-dev-server)?\s+serve\b/.test(cmd) ||
+    /\bnodemon\b/.test(cmd) ||
+    /\bflask\s+run\b/.test(cmd) ||
+    /-m\s+http\.server\b/.test(cmd) ||
+    /--watch(all)?\b/.test(cmd)
+  )
+}
 
 /**
  * Replaces the contents of quoted spans so the operator scan cannot trip over punctuation
@@ -157,6 +232,20 @@ export function checkVerificationCommandSafety(rawCommand: string): Verification
 
     if (VACUOUS_COMMANDS.has(head)) {
       return { isSafe: false, reason: `\`${head}\` exits 0 whatever the state of the code, so it can never fail and proves nothing` }
+    }
+
+    if (INTERACTIVE_PROGRAMS.has(head)) {
+      return {
+        isSafe: false,
+        reason: `\`${head}\` opens an interactive editor or pager, which blocks waiting for a keypress and cannot report pass or fail in an unattended run`,
+      }
+    }
+
+    if (isNonExitingVerificationSegment(segment)) {
+      return {
+        isSafe: false,
+        reason: 'it starts a dev/watch server or other process that never exits on its own, so it can never run to completion and report pass or fail',
+      }
     }
   }
 

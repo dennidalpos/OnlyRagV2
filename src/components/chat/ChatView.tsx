@@ -205,11 +205,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
           className="border-r border-slate-800 bg-slate-900/40 p-3 space-y-3 flex flex-col shrink-0 overflow-hidden select-text"
         >
           {/* Sidebar Tab Switcher */}
-          <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+          <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800" role="tablist" aria-label="Schede pannello laterale chat">
             <button
               type="button"
+              role="tab"
+              aria-selected={sidebarTab === 'context'}
               onClick={() => setSidebarTab('context')}
-              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all focus-ring cursor-pointer ${
                 sidebarTab === 'context'
                   ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -220,8 +222,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={sidebarTab === 'history'}
               onClick={() => setSidebarTab('history')}
-              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all focus-ring cursor-pointer ${
                 sidebarTab === 'history'
                   ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
@@ -382,7 +386,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                               <button
                                 type="button"
                                 onClick={(e) => handleStartRename(conv.id, conv.title, e)}
@@ -457,7 +461,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
               </button>
             )}
             {c.messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto space-y-4 font-sans select-none">
+              <div className="h-full flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto space-y-4 font-sans select-text">
                 <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-950/20">
                   <MessageSquare className="w-6 h-6" />
                 </div>

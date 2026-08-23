@@ -46,13 +46,7 @@ interface AgentActionLogPanelProps {
   onGeneratePlan?: () => void
   hasPendingUnconsolidatedMilestones?: boolean
   workspacePath?: string | null
-  workspaceSessions?: CodingSession[]
-  activeSessionId?: string
   activeSession?: CodingSession | null
-  onCreateSession?: () => void
-  onSwitchSession?: (id: string) => void
-  onDeleteSession?: (id: string) => void
-  onRenameSession?: (id: string, title: string) => void
   onSelectWorkspaceFolder?: () => void
   changeMetrics?: AgentChangeMetrics
   autoScroll: boolean
@@ -60,6 +54,7 @@ interface AgentActionLogPanelProps {
   showWorkspaceSidebar?: boolean
   onToggleWorkspaceSidebar?: () => void
   filesCount?: number
+  files?: WorkspaceFile[]
   onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
   // Plan Flow Props
   plan?: AgentPlan | null
@@ -111,13 +106,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onGeneratePlan,
   hasPendingUnconsolidatedMilestones = false,
   workspacePath,
-  workspaceSessions = [],
-  activeSessionId,
   activeSession,
-  onCreateSession,
-  onSwitchSession,
-  onDeleteSession,
-  onRenameSession,
   onSelectWorkspaceFolder,
   changeMetrics,
   autoScroll,
@@ -125,6 +114,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   showWorkspaceSidebar,
   onToggleWorkspaceSidebar,
   filesCount,
+  files = [],
   onOpenRightTab,
   plan,
   isGeneratingPlan,
@@ -168,17 +158,10 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const isContextHeavy = contextPercent >= 70 || actionLogs.length > 14
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0f17] text-slate-200 overflow-hidden select-text relative">
+    <div className="h-full flex flex-col bg-slate-950 text-slate-200 overflow-hidden select-text relative">
       <AgentSessionHeaderBar
         workspacePath={workspacePath}
         onSelectWorkspaceFolder={onSelectWorkspaceFolder}
-        activeSession={activeSession}
-        workspaceSessions={workspaceSessions}
-        activeSessionId={activeSessionId}
-        onCreateSession={onCreateSession}
-        onSwitchSession={onSwitchSession}
-        onDeleteSession={onDeleteSession}
-        onRenameSession={onRenameSession}
         showWorkspaceSidebar={showWorkspaceSidebar}
         onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
         filesCount={filesCount}
@@ -192,6 +175,9 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         activeSession={activeSession}
         setAgentPrompt={setAgentPrompt}
         activeModelName={activeModelName}
+        workspacePath={workspacePath}
+        files={files}
+        onSelectWorkspaceFolder={onSelectWorkspaceFolder}
         onOpenFile={onOpenFile}
         onOpenRightTab={onOpenRightTab}
         isExecuting={isExecuting}

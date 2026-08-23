@@ -72,7 +72,7 @@ function renderMarkdownContent(text: string): React.ReactNode {
       if (inCodeBlock) {
         const codeText = codeBlockLines.join('\n')
         elements.push(
-          <div key={`code-${i}`} className="my-2 rounded-xl bg-[#030712] border border-slate-800 overflow-hidden shadow-inner font-mono text-xs">
+          <div key={`code-${i}`} className="my-2 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden shadow-inner font-mono text-xs">
             {codeBlockLang && (
               <div className="px-3 py-1 bg-slate-900 border-b border-slate-800 text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
                 {codeBlockLang}
@@ -156,7 +156,7 @@ function renderMarkdownContent(text: string): React.ReactNode {
 
   if (inCodeBlock && codeBlockLines.length > 0) {
     elements.push(
-      <div key="unclosed-code" className="my-2 rounded-xl bg-[#030712] border border-slate-800 p-3 overflow-x-auto font-mono text-[11px] text-slate-200">
+      <div key="unclosed-code" className="my-2 rounded-xl bg-slate-950 border border-slate-800 p-3 overflow-x-auto font-mono text-[11px] text-slate-200">
         <pre><code>{codeBlockLines.join('\n')}</code></pre>
       </div>
     )
@@ -320,8 +320,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenRightTab('terminal')}
-                className="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300 hover:text-cyan-300 border border-slate-700/80 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300 hover:text-cyan-300 border border-slate-700/80 transition-colors focus-ring cursor-pointer"
                 title="Apri Terminale"
+                aria-label="Apri Terminale"
               >
                 Terminale
               </button>
@@ -330,8 +331,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleExpand(log.id)}
-                className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer"
                 title={isExpanded ? 'Comprimi' : 'Espandi'}
+                aria-label={isExpanded ? 'Comprimi dettaglio log' : 'Espandi dettaglio log'}
               >
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
@@ -340,7 +342,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         </div>
 
         {isExpanded && log.detail && (
-          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
+          <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail}
           </div>
         )}
@@ -378,8 +380,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
                 if (onOpenFile) onOpenFile({ name: fileName, path: targetPath, isDir: false })
                 if (onOpenRightTab) onOpenRightTab('editor')
               }}
-              className="font-bold text-slate-200 hover:text-cyan-300 transition-colors cursor-pointer rounded truncate"
+              className="font-bold text-slate-200 hover:text-cyan-300 transition-colors focus-ring cursor-pointer rounded truncate"
               title={targetPath}
+              aria-label={`Apri file ${fileName}`}
             >
               {fileName}
             </button>
@@ -391,8 +394,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
                 if (onOpenFile) onOpenFile({ name: fileName, path: targetPath, isDir: false })
                 if (onOpenRightTab) onOpenRightTab('editor')
               }}
-              className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+              className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring cursor-pointer"
               title="Apri file in Monaco Editor"
+              aria-label={`Apri ${fileName} nell'editor`}
             >
               Visualizza
             </button>
@@ -400,8 +404,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenRightTab('git_diff')}
-                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors focus-ring cursor-pointer"
                 title="Visualizza Git Diff"
+                aria-label={`Visualizza diff di ${fileName}`}
               >
                 Diff
               </button>
@@ -410,8 +415,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleExpand(log.id)}
-                className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer"
                 title={isExpanded ? 'Comprimi' : 'Espandi'}
+                aria-label={isExpanded ? 'Comprimi dettaglio log' : 'Espandi dettaglio log'}
               >
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
@@ -420,7 +426,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         </div>
 
         {isExpanded && log.detail && (
-          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
+          <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail}
           </div>
         )}
@@ -446,8 +452,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenRightTab('terminal')}
-                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors focus-ring cursor-pointer"
                 title="Apri Terminale"
+                aria-label="Apri Terminale"
               >
                 Terminale
               </button>
@@ -456,8 +463,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleExpand(log.id)}
-                className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer"
                 title={isExpanded ? 'Comprimi' : 'Espandi'}
+                aria-label={isExpanded ? 'Comprimi output comando' : 'Espandi output comando'}
               >
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
@@ -466,7 +474,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         </div>
 
         {isExpanded && (
-          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
+          <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             <div className="text-slate-500 mb-1">workspace &gt; {cmdText}</div>
             {log.detail || log.message}
           </div>
@@ -493,8 +501,9 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
             <button
               type="button"
               onClick={() => onToggleExpand(log.id)}
-              className="text-slate-400 hover:text-slate-200 p-0.5 rounded cursor-pointer shrink-0"
+              className="text-slate-400 hover:text-slate-200 p-0.5 rounded focus-ring cursor-pointer shrink-0"
               title={isExpanded ? 'Comprimi' : 'Espandi'}
+              aria-label={isExpanded ? 'Comprimi dettaglio ricerca' : 'Espandi dettaglio ricerca'}
             >
               {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </button>
@@ -502,7 +511,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         </div>
 
         {isExpanded && log.detail && (
-          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
+          <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail}
           </div>
         )}
@@ -537,7 +546,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         </div>
 
         {isExpanded && (
-          <div className="p-2.5 rounded-lg bg-[#030712] border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
+          <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] text-slate-300 font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-56">
             {log.detail || log.message}
           </div>
         )}
@@ -567,7 +576,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
         onClick={() => isInteractive && onToggleExpand(log.id)}
         className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg border transition-all ${
           isInteractive ? 'cursor-pointer hover:bg-slate-900/80 focus-ring' : ''
-        } bg-[#0c121e]/80 border-slate-800/80 text-slate-300`}
+        } bg-slate-900/50 border-slate-800/80 text-slate-300`}
       >
         <div className="flex items-center gap-2 min-w-0">
           <Bot className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
@@ -590,7 +599,7 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
       </div>
 
       {isExpanded && (
-        <div className="p-3 rounded-xl bg-[#090d16] border border-slate-800 text-xs text-slate-200 space-y-2 animate-in fade-in duration-100">
+        <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-200 space-y-2 animate-in fade-in duration-100">
           <div className="whitespace-pre-wrap leading-relaxed">{renderMarkdownContent(log.message)}</div>
           {log.detail && (
             <pre className="mt-1.5 p-2 bg-slate-950 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap max-h-56 leading-relaxed">

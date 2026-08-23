@@ -49,7 +49,7 @@ export const DiffLinesView: React.FC<DiffLinesViewProps> = ({ lines, collapse = 
                 {entry.line.newLineNumber ?? ''}
               </td>
               <td className={`pl-2 pr-1 select-none w-4 align-top ${style.marker}`}>{style.sign}</td>
-              <td className="pr-3 whitespace-pre">{entry.line.content}</td>
+              <td className="pr-3 whitespace-pre select-text">{entry.line.content}</td>
             </tr>
           )
         })}

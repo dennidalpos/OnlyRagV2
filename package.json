@@ -31,7 +31,6 @@
   "author": "Danny Perondi <https://github.com/dennidalpos>",
   "license": "MIT",
   "dependencies": {
-    "@types/mustache": "^4.2.6",
     "cheerio": "^1.2.0",
     "depcheck": "^1.4.7",
     "diff": "^9.0.0",
@@ -54,6 +53,7 @@
     "@types/diff": "^7.0.2",
     "@types/fast-levenshtein": "^0.0.4",
     "@types/js-yaml": "^4.0.9",
+    "@types/mustache": "^4.2.6",
     "@types/node": "^26.2.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

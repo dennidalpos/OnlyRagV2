@@ -35,7 +35,7 @@ export const SkillInstallApprovalModal: React.FC<SkillInstallApprovalModalProps>
       labelledById="skill-install-modal-title"
       layer="approval"
       dismissible={false}
-      panelClassName="max-w-md rounded-2xl border border-indigo-500/50 bg-[#0f172a] shadow-2xl text-slate-200 font-sans overflow-hidden"
+      panelClassName="max-w-md rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl text-slate-200 font-sans overflow-hidden"
     >
         <div className="flex items-center gap-2 p-4 border-b border-slate-800">
           <Package className="w-4 h-4 text-indigo-400" />

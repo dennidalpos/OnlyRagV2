@@ -24,7 +24,7 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
   activeIndex,
 }) => {
   return (
-    <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 shadow-xl">
+    <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3 shadow-md">
       {/* Checklist Progress Bar Banner */}
       <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">

@@ -62,6 +62,51 @@ describe('checkVerificationCommandSafety', () => {
     }
   })
 
+  it('refuses the interactive editor commands that stalled session-1787518626817-72a8', () => {
+    // The planner declared `nano <file>` as the verification for six of ten implementation
+    // milestones. It cannot be run non-interactively: without a TTY it hangs until the
+    // run_command timeout, and even with one its exit code only reports whether the editor
+    // closed, never whether the file is correct. Every milestone that carried it was
+    // eventually abandoned by the loop guard.
+    for (const command of [
+      'nano tailwind.config.js',
+      'nano src/App.tsx',
+      'vim src/index.html',
+      'vi src/App.tsx',
+      'emacs src/pages/Dashboard.tsx',
+      'C:\\tools\\nano.exe src/App.tsx',
+    ]) {
+      const verdict = checkVerificationCommandSafety(command)
+      expect(verdict.isSafe).toBe(false)
+      expect(verdict.reason).toMatch(/interactive editor|pager/)
+    }
+  })
+
+  it('refuses dev/watch servers that never exit, the same shape run_command already blocks at execution time', () => {
+    // The same session declared `npx tailwindcss ... --watch` as the verification for two
+    // milestones. run_command's BLOCKING_DEV_SERVER_BLOCK guard correctly refuses to execute
+    // it, but only once the model tries — by then the milestone already carries a "proof"
+    // that can never run to completion.
+    for (const command of [
+      'npx tailwindcss -i ./src/styles/globals.css -o ./dist/output.css --watch',
+      'npm run dev',
+      'vite',
+      'next dev',
+      'nodemon src/index.js',
+      'jest --watchAll',
+    ]) {
+      const verdict = checkVerificationCommandSafety(command)
+      expect(verdict.isSafe).toBe(false)
+      expect(verdict.reason).toMatch(/never exits/)
+    }
+  })
+
+  it('still allows one-shot build/test commands that happen to mention a dev-server tool by name', () => {
+    expect(checkVerificationCommandSafety('vite build').isSafe).toBe(true)
+    expect(checkVerificationCommandSafety('npm run build').isSafe).toBe(true)
+    expect(checkVerificationCommandSafety('npx vitest run').isSafe).toBe(true)
+  })
+
   it('rejects scaffolding regardless of which tool spells it', () => {
     expect(checkVerificationCommandSafety('git init').isSafe).toBe(false)
     expect(checkVerificationCommandSafety('tsc --init').isSafe).toBe(false)

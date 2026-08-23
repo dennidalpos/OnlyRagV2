@@ -82,12 +82,12 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   return (
     <aside
       style={width ? { width: `${width}px` } : undefined}
-      className={`${width ? '' : 'w-72'} border-r border-slate-800/80 bg-[#080c14] flex flex-col h-full shrink-0 z-20 select-text font-sans overflow-hidden`}
+      className={`${width ? '' : 'w-72'} border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0 z-20 select-text font-sans overflow-hidden`}
     >
       {/* Top Header */}
-      <div className="h-11 px-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/90 text-xs font-bold text-slate-200 backdrop-blur-sm">
+      <div className="h-11 px-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/60 text-xs font-bold text-slate-200">
         <span className="flex items-center gap-2 text-cyan-400 text-xs font-bold">
-          <div className="w-5 h-5 rounded-md bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm">
+          <div className="w-5 h-5 rounded-md bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-sm">
             <FolderOpen className="w-3 h-3" />
           </div>
           <span>Workspace Explorer</span>
@@ -205,7 +205,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
               <Folder className="w-3 h-3 text-cyan-400" />
               <span>File ({files.length})</span>
             </button>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
               <button
                 type="button"
                 onClick={onRefreshFiles}

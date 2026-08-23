@@ -96,7 +96,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[#0b0f17] text-slate-200 select-text font-sans overflow-hidden">
+    <div className="flex-1 h-full flex flex-col bg-slate-950 text-slate-200 select-text font-sans overflow-hidden">
       <PlanPanelHeader
         plan={plan}
         planHistory={planHistory}

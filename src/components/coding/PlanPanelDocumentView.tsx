@@ -22,7 +22,7 @@ export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
   onSaveEdit,
 }) => {
   return (
-    <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5 shadow-xl">
+    <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2.5 shadow-md">
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
         <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
           <FileText className="w-4 h-4 text-cyan-400" /> Artefatto Piano v{plan.version}
@@ -46,7 +46,7 @@ export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
             onChange={(e) => onChangeEditedText(e.target.value)}
             rows={10}
             aria-label="Testo del piano"
-            className="w-full bg-slate-900 border border-cyan-500/60 rounded-xl p-3 text-xs font-mono text-slate-100 outline-none leading-relaxed resize-y"
+            className="w-full bg-slate-950 border border-cyan-500/60 rounded-xl p-3 text-xs font-mono text-slate-100 outline-none leading-relaxed resize-y"
           />
           <div className="flex justify-end gap-2">
             <button
@@ -59,14 +59,14 @@ export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
             <button
               type="button"
               onClick={onSaveEdit}
-              className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-lg"
+              className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-950/40"
             >
               Salva
             </button>
           </div>
         </div>
       ) : (
-        <div className="whitespace-pre-wrap font-mono text-xs text-slate-200 leading-relaxed p-2.5 bg-slate-900/50 rounded-xl border border-slate-900/80">
+        <div className="whitespace-pre-wrap font-mono text-xs text-slate-200 leading-relaxed p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80">
           {plan.planText}
         </div>
       )}

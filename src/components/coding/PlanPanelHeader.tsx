@@ -22,7 +22,7 @@ export const PlanPanelHeader: React.FC<PlanPanelHeaderProps> = ({
   onToggleViewMode,
 }) => {
   return (
-    <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0">
+    <div className="h-11 px-3 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between shrink-0 font-sans">
       <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
         <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
         <span>Piano &amp; Checklist Operativa</span>

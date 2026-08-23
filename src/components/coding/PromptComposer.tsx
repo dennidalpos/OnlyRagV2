@@ -172,14 +172,14 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       )}
 
       {/* Main Composer Box */}
-      <div className="bg-slate-900/90 border border-slate-800 focus-within:border-cyan-500/80 focus-within:ring-1 focus-within:ring-cyan-500/30 rounded-2xl p-2.5 transition-all shadow-xl space-y-2 relative">
+      <div className="bg-slate-900/90 border border-slate-800 focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20 rounded-2xl p-2.5 transition-all shadow-lg space-y-2 relative">
         {/* Context Pills (Pinned files & Attached RAG docs) */}
         {hasContextPills && (
           <div className="flex flex-wrap gap-1.5 pb-1 border-b border-slate-800/50">
             {pinnedFilesArray.map((file) => (
               <span
                 key={file.path}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 text-[10px] font-mono shadow-sm"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/40 border border-cyan-800/50 text-cyan-300 text-[10px] font-mono shadow-sm"
                 title={file.path}
               >
                 <Pin className="w-2.5 h-2.5" />
@@ -200,7 +200,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
             {attachedDocsArray.map((doc) => (
               <span
                 key={doc.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/70 border border-emerald-800/60 text-emerald-300 text-[10px] font-mono shadow-sm"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-[10px] font-mono shadow-sm"
                 title={doc.filename}
               >
                 <FileText className="w-2.5 h-2.5" />

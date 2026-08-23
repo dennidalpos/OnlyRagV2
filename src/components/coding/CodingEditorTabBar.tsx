@@ -39,17 +39,17 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
   const { t } = useTranslation()
 
   return (
-    <div className="bg-[#090d16] border-b border-slate-800/80 px-2.5 pt-1.5 flex items-center justify-between text-xs shrink-0 select-none overflow-x-auto">
+    <div className="h-11 bg-slate-900/60 border-b border-slate-800 px-3 flex items-center justify-between text-xs shrink-0 select-none overflow-x-auto font-sans">
       {/* Left side: Open File Tabs & Tool View Switchers */}
       <div className="flex items-center gap-1.5 overflow-x-auto py-0.5" role="tablist" aria-label="Aree di lavoro e file">
         {/* Tool Views Tabs */}
-        <div className="flex items-center gap-1 pr-2 mr-1 border-r border-slate-800/80 shrink-0">
+        <div className="flex items-center gap-1 pr-2 mr-1 border-r border-slate-800 shrink-0">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'terminal'}
             onClick={() => onSelectTab('terminal')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
               activeTab === 'terminal'
                 ? 'bg-slate-900 text-cyan-300 border border-cyan-500/40 shadow-cyan-950/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
@@ -65,7 +65,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             role="tab"
             aria-selected={activeTab === 'git_diff'}
             onClick={() => onSelectTab('git_diff')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
               activeTab === 'git_diff'
                 ? 'bg-slate-900 text-indigo-300 border border-indigo-500/40 shadow-indigo-950/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
@@ -86,7 +86,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             role="tab"
             aria-selected={activeTab === 'plan'}
             onClick={() => onSelectTab('plan')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer relative shadow-sm ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer relative shadow-sm ${
               activeTab === 'plan'
                 ? 'bg-slate-900 text-amber-300 border border-amber-500/40 shadow-amber-950/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
@@ -108,7 +108,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             role="tab"
             aria-selected={activeTab === 'slm_diagnostics'}
             onClick={() => onSelectTab('slm_diagnostics')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${
               activeTab === 'slm_diagnostics'
                 ? 'bg-slate-900 text-amber-300 border border-amber-500/40 shadow-amber-950/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
@@ -142,10 +142,10 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
                   onSelectTab('editor')
                 }
               }}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg font-mono text-xs cursor-pointer transition-all border-x border-slate-800/80 focus-ring ${
+              className={`flex items-center gap-2 px-2.5 py-1 rounded-lg font-mono text-xs cursor-pointer transition-all border focus-ring ${
                 isActive
-                  ? 'bg-[#0d121d] border-t-2 border-t-cyan-400 text-slate-100 font-bold shadow-md'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50 border-t-2 border-transparent'
+                  ? 'bg-slate-900 border-slate-700 text-slate-100 font-semibold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 border-transparent'
               }`}
             >
               <FileCode2 className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
@@ -166,17 +166,10 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
             </div>
           )
         })}
-
-        {openFiles.length === 0 && activeTab === 'editor' && (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0d121d] border-t-2 border-t-cyan-400 border-x border-slate-800/80 rounded-t-lg text-slate-400 font-mono text-xs">
-            <FileCode2 className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{t('coding.noFilesOpen')}</span>
-          </div>
-        )}
       </div>
 
       {/* Right Controls: Save & Diff Toggle in Editor View */}
-      <div className="flex items-center gap-1.5 pb-1">
+      <div className="flex items-center gap-1.5">
         {activeTab === 'editor' && selectedFile && (
           <>
             <button
@@ -186,7 +179,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
               className={`p-1.5 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
                 isDiffMode
                   ? 'bg-cyan-950 text-cyan-300 border-cyan-800 shadow-sm'
-                  : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400 hover:text-slate-200'
+                  : 'bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200'
               }`}
               title={isDiffMode ? t('coding.diffStandardTitle') : t('coding.diffToggleTitle')}
             >
@@ -198,7 +191,7 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
               onClick={onSaveFile}
               disabled={isSaved}
               aria-label={t('coding.saveButton')}
-              className="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 disabled:opacity-30 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1 shadow-md shadow-cyan-950/40 cursor-pointer"
+              className="px-3 py-1 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-30 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1 shadow-sm shadow-cyan-950/40 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" /> {t('coding.saveButton')}
             </button>

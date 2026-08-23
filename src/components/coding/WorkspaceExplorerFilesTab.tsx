@@ -28,7 +28,7 @@ export const WorkspaceExplorerFilesTab: React.FC<WorkspaceExplorerFilesTabProps>
         <button
           type="button"
           onClick={onAddProject}
-          className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition-all"
+          className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-200 hover:text-cyan-300 font-semibold text-xs rounded-xl transition-all shadow-sm focus-ring cursor-pointer"
         >
           Seleziona Cartella Progetto
         </button>

@@ -47,10 +47,10 @@ export const SlmDiagnosticsPanel: React.FC<SlmDiagnosticsPanelProps> = ({
   }, [lastReport, isAnalyzingLogs, analyzeLogsError, handleScan])
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-[#0b0f17] select-text font-sans text-slate-200 overflow-y-auto">
+    <div className="flex-1 h-full flex flex-col bg-slate-950 select-text font-sans text-slate-200 overflow-y-auto">
 
       {/* ── Panel Header ── */}
-      <div className="p-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-10 backdrop-blur-md">
+      <div className="h-11 px-3 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
           <ScanLine className="w-4 h-4 text-amber-400 shrink-0" />
           <span>SLM Diagnostica Log</span>

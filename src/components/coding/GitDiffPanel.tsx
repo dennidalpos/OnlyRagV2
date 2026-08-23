@@ -83,7 +83,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 select-text">
       {/* Panel Header */}
-      <div className="p-3 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between shrink-0">
+      <div className="h-11 px-3 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between shrink-0 font-sans">
         <div className="flex items-center gap-2 text-xs text-slate-300 font-semibold">
           <GitBranch className="w-4 h-4 text-cyan-400" />
           <span>Git Status &amp; Working Tree Diff</span>

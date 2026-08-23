@@ -171,9 +171,9 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = ({
           </span>
         </div>
 
-        {/* Action icons on hover */}
+        {/* Action icons on hover or keyboard focus */}
         {!item.isDir && (
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={handlePinClick}

@@ -163,7 +163,7 @@ export const SessionHistoryTree: React.FC<SessionHistoryTreeProps> = ({
                       </span>
                     </button>
 
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                       <button
                         type="button"
                         onClick={() => {

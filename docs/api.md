@@ -138,9 +138,7 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
-### 1.9. SLM Agent Studio — Diagnostica Log
-
-> Lo stack di orchestrazione SLM duplicato (`POST /agent/orchestrate`, `slm_tool_registry`, macchina a stati di retry L1/L2/L3) è stato rimosso: era ridondante rispetto al loop agentico principale (`agent:start-task`, vedi §2.2), che è l'unico percorso di esecuzione tool realmente usato dall'app. Rimane solo l'endpoint di diagnostica log qui sotto, usato da `SlmDiagnosticsPanel.tsx`.
+### 1.9. Diagnostica Log Applicativi
 
 #### `POST /agent/logs/analyze`
 

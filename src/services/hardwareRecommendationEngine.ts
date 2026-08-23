@@ -406,6 +406,49 @@ export function assessModelHardwareCompatibility(
   }
 }
 
+/** Verdict for a single model on the current host, as shown next to a model choice in the UI. */
+export interface ModelFitVerdict {
+  compatibilityStatus: 'optimal_vram' | 'tight_vram' | 'exceeds_vram'
+  footprintGB: number
+}
+
+/**
+ * Builds a memoized per-model VRAM verdict lookup for the detected host.
+ *
+ * `analyzeHardwareAndRecommend` only assesses models present in the built-in catalogs, but the
+ * Setup Wizard also offers hardcoded preset tags and whatever is already installed locally. This
+ * lookup assesses any model name on demand so every selectable option can carry its footprint.
+ */
+export function buildModelFitLookup(
+  diagnostics: DiagnosticsData | null,
+  enableSystemRamOffloading: boolean = false
+): (modelName: string) => ModelFitVerdict {
+  const facts = extractHardwareFacts(diagnostics)
+  const vramTotalMB = facts.vramTotalMB || 0
+  const systemRamGB = facts.systemRamGB || 8
+  const cache = new Map<string, ModelFitVerdict>()
+
+  return (modelName: string): ModelFitVerdict => {
+    const cached = cache.get(modelName)
+    if (cached) return cached
+
+    const assessment = assessModelHardwareCompatibility(
+      modelName,
+      vramTotalMB,
+      systemRamGB,
+      4096,
+      diagnostics?.ollama.modelDetails?.[modelName],
+      enableSystemRamOffloading
+    )
+    const verdict: ModelFitVerdict = {
+      compatibilityStatus: assessment.compatibilityStatus,
+      footprintGB: assessment.footprintGB,
+    }
+    cache.set(modelName, verdict)
+    return verdict
+  }
+}
+
 export { isOllamaModelInstalled } from '../../electron/core/domain/agent/modelTagMatcher'
 
 /**

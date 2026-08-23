@@ -109,21 +109,7 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
-### 1.6. Ispezione Immagine (Vision OCR)
-* **Endpoint:** `POST /inspect-image`
-* **Request Body:**
-```json
-{
-  "image_base64": "<base64_string>",
-  "question": "Describe the diagram in detail.",
-  "vision_model": "llama3.2-vision"
-}
-```
-* **Risposta (200 OK):** `{ "status": "success", "analysis": "..." }`
-
----
-
-### 1.7. Esportazione Documento Formattato
+### 1.6. Esportazione Documento Formattato
 * **Endpoint:** `POST /export`
 * **Content-Type:** `application/json`
 * **Request Body:**
@@ -138,19 +124,19 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ---
 
-### 1.8. Gestione Task & Pulizia
+### 1.7. Gestione Task & Pulizia
 * **`POST /tasks/cancel?task_id={id}`**: Segnala la cancellazione di un task attivo. Risposta: `{ "status": "success", "message": "..." }`.
 * **`POST /cleanup/temp`**: Rimuove tutti i file temporanei nella directory di export. Risposta: `{ "status": "success", "cleaned_files": 3 }`.
 
 ---
 
-### 1.9. Sincronizzazione Vocabolari Multi-Lingua
+### 1.8. Sincronizzazione Vocabolari Multi-Lingua
 * **`POST /vocab/sync`**: Esegue il controllo asincrono degli aggiornamenti dei vocabolari di lingua upstream (scaricati atomicamente in `%APPDATA%/onlyrag-v2/vocab/`). Risposta: `{ "status": "success" | "cached" | "offline", "updated_languages": [...], "message": "..." }`.
 * **`GET /vocab/status`**: Restituisce lo stato delle lingue caricate in cache locale e la disponibilità della libreria `wordfreq`. Risposta: `{ "wordfreq_available": boolean, "cached_languages": [...], "cache_dir": "..." }`.
 
 ---
 
-### 1.10. SLM Agent Studio — Diagnostica Log
+### 1.9. SLM Agent Studio — Diagnostica Log
 
 > Lo stack di orchestrazione SLM duplicato (`POST /agent/orchestrate`, `slm_tool_registry`, macchina a stati di retry L1/L2/L3) è stato rimosso: era ridondante rispetto al loop agentico principale (`agent:start-task`, vedi §2.2), che è l'unico percorso di esecuzione tool realmente usato dall'app. Rimane solo l'endpoint di diagnostica log qui sotto, usato da `SlmDiagnosticsPanel.tsx`.
 
@@ -191,7 +177,8 @@ Scansiona i file di log di OnlyRag V2 e restituisce un report strutturato di ano
       "log_file": "C:/Users/.../sidecar.log",
       "line_number": 34,
       "snippet": "[ERROR] CUDA out of memory. Tried to allocate 4.00 GiB",
-      "count": 2
+      "count": 2,
+      "remediation": "Riduci il context window (num_ctx: 4096) o seleziona un modello quantizzato (Q4_K_M) nelle impostazioni."
     },
     {
       "anomaly_type": "TOOL_LOOP",
@@ -212,6 +199,7 @@ Scansiona i file di log di OnlyRag V2 e restituisce un report strutturato di ano
 | `scanned_files` | `string[]` | Lista completa dei file di log scansionati. |
 | `total_lines_scanned` | `integer` | Numero totale di righe analizzate. |
 | `anomalies` | `AnomalyRecord[]` | Lista ordinata di anomalie rilevate. Vuota se nessuna anomalia. |
+| `anomalies[].remediation` | `string` | Azione correttiva suggerita per il tipo di anomalia (vuota se non mappata). |
 | `has_critical` | `boolean` | `true` se almeno un'anomalia ha severity `CRITICAL`. |
 | `summary` | `string` | Stringa leggibile con conteggio anomalie o `"No anomalies detected"`. |
 
@@ -380,40 +368,6 @@ const report = await analyzeLogs()
 #### Eventi Broadcast Renderer per Cancellazione Riferimenti
 * **`workspace:file-deleted`**: Trasmesso al renderer su eliminazione file/cartella (`{ filePath: string }`). Attiva il purge deterministico di tab aperti, file in evidenza (`pinnedFiles`), file selezionati ed elementi correlati. L'unico percorso di eliminazione e' il tool `delete_file` dell'agente, che passa da `workspaceAppService.deleteFile` proprio per emettere questo evento: eliminando direttamente dal repository i riferimenti nel renderer restavano puntati a un file non piu' esistente.
 * **`ingest:document-deleted`**: Trasmesso al renderer su eliminazione documento RAG (`{ docId: string }`). Rimuove il documento dagli allegati attivi (`attachedDocIds`), anteprime e selezioni UI.
-
----
-
-### 1.7. SLM Log Diagnostics & Anomaly Analysis
-* **Endpoint:** `POST /agent/logs/analyze`
-* **Content-Type:** `application/json`
-* **Request Body:**
-```json
-{
-  "extra_paths": ["C:/custom/logs/"]
-}
-```
-* **Risposta (200 OK):**
-```json
-{
-  "scanned_files": [".onlyrag/logs/session.log", "logs/app.log"],
-  "total_lines_scanned": 1420,
-  "anomalies": [
-    {
-      "anomaly_type": "CUDA_OOM",
-      "severity": "CRITICAL",
-      "log_file": "logs/app.log",
-      "line_number": 42,
-      "snippet": "CUDA out of memory. Tried to allocate 4.00 GiB",
-      "count": 1,
-      "remediation": "Riduci il context window (num_ctx: 4096) o seleziona un modello quantizzato (Q4_K_M) nelle impostazioni."
-    }
-  ],
-  "has_critical": true,
-  "summary": "Analisi completata: 2 file scansionati, 1 anomalia rilevata."
-}
-```
-
----
 
 ### 2.4. Canali Sistema & Diagnostica (`system:*` / `diagnostics:*` / `agent:logs-*`)
 

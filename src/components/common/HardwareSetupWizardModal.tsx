@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { AppSettings, DiagnosticsData, HardwareProfile } from '../../types'
 import {
   analyzeHardwareAndRecommend,
+  buildModelFitLookup,
   HardwareRecommendations,
   isOllamaModelInstalled,
 } from '../../services/hardwareRecommendationEngine'
@@ -48,6 +49,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     diagnostics,
     enableSystemRamOffloading
   )
+  // Assesses any model tag against the host, including preset options absent from the catalogs.
+  const getModelFit = buildModelFitLookup(diagnostics, enableSystemRamOffloading)
 
   const downloadedModels = diagnostics?.ollama.models ?? []
 
@@ -576,6 +579,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           {step === 2 && (
             <WizardStepRecommendedModels
               downloadedModels={downloadedModels}
+              getModelFit={getModelFit}
               selectedCoding={selectedCoding}
               selectedCodingFallback={selectedCodingFallback}
               onChangeCoding={setSelectedCoding}

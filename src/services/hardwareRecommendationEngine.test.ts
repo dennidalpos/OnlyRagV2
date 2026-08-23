@@ -10,6 +10,7 @@ import {
   getModelApproxSize,
   isOllamaModelInstalled,
   getRecommendedOllamaEnvVars,
+  buildModelFitLookup,
 } from './hardwareRecommendationEngine'
 import { findMatchingInstalledModel } from '../../electron/core/domain/agent/modelTagMatcher'
 import {
@@ -615,6 +616,41 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       expect(m14bWith?.isRecommended).toBe(true)
       expect(m14bWith?.isHardwareCompatible).toBe(true)
       expect(m14bWith?.compatibilityStatus).toBe('tight_vram')
+    })
+  })
+
+  describe('buildModelFitLookup (Setup Wizard per-option VRAM verdict)', () => {
+    it('should assess a model name that is absent from every built-in catalog', () => {
+      const diag = createMockDiagnostics(true, 8192, 16)
+      const getFit = buildModelFitLookup(diag, false)
+
+      const fit = getFit('some-unlisted-model:70b')
+      expect(fit.footprintGB).toBeGreaterThan(0)
+      expect(fit.compatibilityStatus).toBe('exceeds_vram')
+    })
+
+    it('should agree with assessModelHardwareCompatibility for the same host', () => {
+      const diag = createMockDiagnostics(true, 8192, 16)
+      const getFit = buildModelFitLookup(diag, false)
+
+      for (const model of ['qwen2.5-coder:1.5b', 'qwen2.5-coder:14b']) {
+        const direct = assessModelHardwareCompatibility(model, 8192, 16, 4096, undefined, false)
+        expect(getFit(model)).toEqual({
+          compatibilityStatus: direct.compatibilityStatus,
+          footprintGB: direct.footprintGB,
+        })
+      }
+    })
+
+    it('should honour the RAM offloading flag', () => {
+      const diag = createMockDiagnostics(true, 8192, 32)
+      expect(buildModelFitLookup(diag, false)('qwen2.5-coder:14b').compatibilityStatus).toBe('exceeds_vram')
+      expect(buildModelFitLookup(diag, true)('qwen2.5-coder:14b').compatibilityStatus).toBe('tight_vram')
+    })
+
+    it('should return a stable memoized verdict for repeated lookups', () => {
+      const getFit = buildModelFitLookup(createMockDiagnostics(true, 8192, 16), false)
+      expect(getFit('qwen2.5-coder:7b')).toEqual(getFit('qwen2.5-coder:7b'))
     })
   })
 })

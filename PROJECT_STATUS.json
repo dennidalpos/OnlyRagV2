@@ -2,10 +2,8 @@
   "todos": [
     "Validazione live dei quattro fix agentici su sessione reale con qwen2.5-coder:7b su workspace di test isolato (C:\\Users\\Utente\\Desktop\\test_app) con log audit azzerato.",
     "Valutare la sostituzione del client Ollama artigianale (ollamaHttpClient.ts, agentStreamTransport.ts) con il pacchetto ufficiale ollama, verificando che il riuso di context (AGT1) resti possibile.",
-    "Valutare zod per il sanitizer appSettingsDomain.ts.",
-    "Setup Wizard: decidere se esporre in UI i badge VRAM. `assessModelHardwareCompatibility` calcola gia' `compatibilityStatus` (optimal/tight/exceeds) e lo usa per ranking e selezione, ma `WizardStepRecommendedModels.tsx` mostra solo select con stato di download; il componente card che rendeva i badge e' stato rimosso perche' orfano.",
-    "Scansione workspace: dopo la rimozione della catena `ignore` (dead code), `contextFilter.isIgnoredPath` filtra solo tramite i set dichiarativi `DEFAULT_IGNORED_DIRS/EXTENSIONS/FILENAMES`; nessun rispetto di `.gitignore`/`.cursorignore` per-workspace. Valutare la reintroduzione via libreria se il filtro statico si rivela insufficiente.",
     "Validazione live della Vision OCR ora cablata: ingerire un PDF scansionato e un'immagine raster con `ocrEngine: 'vision_model'` e un modello vision realmente installato (es. llama3.2-vision:11b), verificando la resa del prompt per pagina, la qualita' della trascrizione e il fallback su RapidOCR quando il modello non risponde. Il routing e' coperto solo da test unitari con Ollama mockato.",
-    "Endpoint sidecar `POST /inspect-image` (`run_vision_ocr`) resta senza alcun client in `src/` o `electron/`: decidere se esporlo con un'azione \"ispeziona immagine\" nella vista Ingestione o rimuoverlo insieme a `InspectImageRequest` e alla sua voce in docs/api.md."
+    "Decisione registrata (2026-08-23) — zod NON adottato per `appSettingsDomain.ts`: il sanitizer e' 147 righe su un solo boundary (lettura settings da disco), gia' coperto da `appSettingsDomain.test.ts`. Una dipendenza runtime per riscrivere codice testato non paga. Rivalutare solo se i boundary da validare diventano piu' di uno o se lo schema di AppSettings inizia a servire anche l'IPC.",
+    "Decisione registrata (2026-08-23) — filtro workspace: nessuna reintroduzione di `.gitignore`/`.cursorignore` per-workspace. `contextFilter.isIgnoredPath` resta sui set dichiarativi + regola 'directory dotted'. Riaprire solo con un caso reale di file rilevante escluso (o di file ignorabile incluso) osservato su un workspace utente."
   ]
 }

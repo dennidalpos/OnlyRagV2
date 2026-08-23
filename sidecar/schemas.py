@@ -59,12 +59,6 @@ class ExportRequest(BaseModel):
     markdown_content: str
     export_format: str = "pdf"
 
-class InspectImageRequest(BaseModel):
-    image_base64: str
-    question: Optional[str] = "What is in this diagram or document image?"
-    vision_model: Optional[str] = "llama3.2-vision"
-
-
 # ---------------------------------------------------------------------------
 # Log Diagnostics Schemas
 # ---------------------------------------------------------------------------

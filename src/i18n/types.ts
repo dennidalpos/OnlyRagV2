@@ -669,6 +669,9 @@ export interface TranslationSchema {
     step4Subtitle: string
     step5Subtitle: string
     step6Subtitle: string
+    vramFitOptimal: string
+    vramFitTight: string
+    vramFitExceeds: string
     modelsToPull: string
     allModelsReady: string
     customLocalModel: string

@@ -9,9 +9,12 @@ import {
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
+import type { ModelFitVerdict } from '../../services/hardwareRecommendationEngine'
 
 export interface WizardStepRecommendedModelsProps {
   downloadedModels: string[]
+  /** Per-model VRAM verdict for the detected host, rendered inline on every option. */
+  getModelFit: (modelName: string) => ModelFitVerdict
   // Coding
   selectedCoding: string
   selectedCodingFallback?: string
@@ -49,6 +52,7 @@ export interface WizardStepRecommendedModelsProps {
 
 export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsProps> = ({
   downloadedModels,
+  getModelFit,
   selectedCoding,
   selectedCodingFallback,
   onChangeCoding,
@@ -90,11 +94,30 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
     return Array.from(new Set(all))
   }
 
+  // A native <option> renders text only, so the VRAM verdict is appended to the label rather
+  // than drawn as a styled badge.
+  const FIT_MARKERS: Record<ModelFitVerdict['compatibilityStatus'], string> = {
+    optimal_vram: '●',
+    tight_vram: '⚠',
+    exceeds_vram: '⛔',
+  }
+  const FIT_LABEL_KEYS = {
+    optimal_vram: 'hardwareWizard.vramFitOptimal',
+    tight_vram: 'hardwareWizard.vramFitTight',
+    exceeds_vram: 'hardwareWizard.vramFitExceeds',
+  } as const
+
+  const renderVramBadge = (name: string) => {
+    const { compatibilityStatus, footprintGB } = getModelFit(name)
+    return ` — ${FIT_MARKERS[compatibilityStatus]} ${footprintGB} GB · ${t(FIT_LABEL_KEYS[compatibilityStatus])}`
+  }
+
   const renderOption = (name: string) => {
     const installed = isModelInstalled(name)
+    const state = installed ? `✓ ${name} [${t('common.ready')}]` : `⬇ ${name} [${t('common.download')}]`
     return (
       <option key={name} value={name}>
-        {installed ? `✓ ${name} [${t('common.ready')}]` : `⬇ ${name} [${t('common.download')}]`}
+        {`${state}${renderVramBadge(name)}`}
       </option>
     )
   }

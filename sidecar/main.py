@@ -9,7 +9,6 @@ if _parent_dir not in sys.path:
 if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
-import base64
 import asyncio
 from typing import List, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, Form
@@ -19,14 +18,14 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sidecar.config import ALLOWED_ORIGINS, EXPORT_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import (
     IngestResponse, IngestPathRequest, SearchRequest, SearchResult,
-    ExportRequest, InspectImageRequest, UpdateDocumentRequest, PagePreviewResponse,
+    ExportRequest, UpdateDocumentRequest, PagePreviewResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
     PromptHistoryRemoveRequest, TranslateInplaceRequest,
 )
 from sidecar.domain.log_analyzer import LogAnalyzer
 from sidecar.infrastructure.db import lance_db, get_existing_tables, safe_open_table, run_db_maintenance
-from sidecar.infrastructure.ocr import run_vision_ocr, detect_gpu_acceleration
+from sidecar.infrastructure.ocr import detect_gpu_acceleration
 from sidecar.domain.exporter import export_markdown_to_file
 from sidecar.services.ingest_service import (
     process_and_index_document,
@@ -228,18 +227,6 @@ async def get_page_preview(doc_id: str, page_num: int):
         raise HTTPException(status_code=404, detail=str(val_err))
     except Exception as e:
         logger.error(f"Error rendering page preview: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/inspect-image")
-async def inspect_image(req: InspectImageRequest):
-    logger.info("Received image inspection request.")
-    try:
-        img_bytes = base64.b64decode(req.image_base64)
-        v_model = req.vision_model or "llama3.2-vision"
-        answer = await asyncio.to_thread(run_vision_ocr, img_bytes, req.question or "Describe this image in detail.", model=v_model)
-        return {"status": "success", "analysis": answer or "Vision model response unavailable."}
-    except Exception as e:
-        logger.error(f"Error inspecting image: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/documents")

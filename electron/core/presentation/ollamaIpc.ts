@@ -60,4 +60,8 @@ export function registerOllamaIpcHandlers() {
   ipcMain.handle('ollama:test-connection', async (_, host?: string) => {
     return ollamaAppService.testConnection(host)
   })
+
+  ipcMain.handle('ollama:check-model-updates', async (_, host?: string) => {
+    return ollamaAppService.checkModelUpdates(host)
+  })
 }

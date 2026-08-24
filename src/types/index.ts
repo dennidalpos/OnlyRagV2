@@ -460,6 +460,14 @@ export interface OllamaModelMetrics {
   quantizationLevel?: string
   family?: string
   sizeBytes?: number
+  digest?: string
+}
+
+export interface OllamaModelUpdateInfo {
+  updateAvailable: boolean
+  localDigest?: string
+  remoteDigest?: string
+  error?: string
 }
 
 export interface IElectronAPI {
@@ -515,7 +523,10 @@ export interface IElectronAPI {
   testOllamaConnection: (host?: string) => Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }>
   /** Per-model facts from Ollama's /api/tags: context length, capabilities, parameter size, quantization. */
   getOllamaModelMetrics: (host?: string) => Promise<Record<string, OllamaModelMetrics>>
+  /** Checks for model updates against official registry using SHA256 manifest digests. */
+  checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
+  openPath?: (targetPath: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
@@ -534,6 +545,7 @@ export interface IElectronAPI {
   registerProject?: (projectPath: string, name?: string) => Promise<WorkspaceProject>
   /** Plain "select project" -- bumps recency only; returns null if the project isn't registered. */
   touchProject?: (projectPath: string) => Promise<WorkspaceProject | null>
+  renameProject?: (projectPath: string, name: string) => Promise<WorkspaceProject | null>
   removeProjectFromRegistry?: (projectPath: string) => Promise<boolean>
   /** One-shot import of the project list previously persisted in localStorage. */
   migrateLegacyProjects?: (projects: unknown) => Promise<{ migrated: number }>
@@ -609,7 +621,7 @@ export interface IElectronAPI {
 }
 
 // ---------------------------------------------------------------------------
-// Pre-flight Clarification Interview Types (Claude Code Style)
+// Pre-flight Clarification Interview Types
 // ---------------------------------------------------------------------------
 
 export interface InterviewQuestion {

@@ -30,6 +30,7 @@ import { OnlyRagLogo } from '../common/OnlyRagLogo'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
+import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
 import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
@@ -96,6 +97,9 @@ export const AppLayout: React.FC = () => {
       hasCompletedInitialSetup: false,
     }
   })
+
+  // Triggers non-blocking background model update checks on application start
+  useOllamaModelUpdates(settings.ollamaHost)
 
   // Load and synchronize settings with canonical Electron main process filesystem store
   useEffect(() => {

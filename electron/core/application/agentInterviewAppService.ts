@@ -1,7 +1,7 @@
 /**
  * electron/core/application/agentInterviewAppService.ts
  *
- * Application Layer — Pre-Flight Clarification Interview Service (Claude Code style)
+ * Application Layer — Pre-Flight Clarification Interview Service
  *
  * Analyzes user prompts before plan generation to identify architectural,
  * styling, persistence, or library choices. Generates structured multiple-choice

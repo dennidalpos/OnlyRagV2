@@ -28,6 +28,7 @@ import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useChatEngine } from '../../hooks/useChatEngine'
+import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
@@ -42,6 +43,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
   const { t } = useTranslation()
   const c = useChatEngine(settings, diagnostics)
   const toast = useToast()
+  const downloadProgress = useModelDownloadProgress()
+  const activeChatModel = settings.chatModel || settings.defaultModel || 'llama3.2'
+  const isCurrentChatModelUpdating = downloadProgress.isDownloading && downloadProgress.modelName === activeChatModel
   const {
     width: sidebarWidth,
     isResizing: isSidebarResizing,
@@ -671,6 +675,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
           {/* Bottom Chat Input Form Container */}
           <div className="p-4 border-t border-slate-800 bg-slate-900/60 shrink-0">
             <div className="max-w-4xl mx-auto space-y-2">
+              {isCurrentChatModelUpdating && (
+                <div className="px-3.5 py-2 rounded-xl bg-amber-950/60 border border-amber-500/50 text-amber-300 text-xs flex items-center gap-2 animate-pulse shadow-sm">
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                  <span className="font-medium">{t('settings.modelUpdatingBlocked')} ({downloadProgress.percent}%)</span>
+                </div>
+              )}
               <form onSubmit={c.handleSendMessage} className="space-y-2">
                 {/* Main Input Text Field */}
                 <div className="relative flex items-center">
@@ -681,13 +691,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                     onChange={c.handleInputChange}
                     placeholder={t('chat.inputPlaceholder')}
                     aria-label={t('chat.inputPlaceholder')}
-                    disabled={c.isGenerating}
+                    disabled={c.isGenerating || isCurrentChatModelUpdating}
                     className="w-full pl-4 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/80 transition-all font-sans disabled:opacity-50"
                   />
                 </div>
 
                 {/* Controls Bar Below Input */}
-                <div className="flex items-center justify-between text-xs px-1">
+                <div className="flex items-center justify-between text-xs px-1 mt-2">
                   {/* Left: Tools & System Prompt Trigger */}
                   <div className="flex items-center gap-2 relative">
                     <button
@@ -857,8 +867,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
                     ) : (
                       <button
                         type="submit"
-                        disabled={!c.input.trim()}
+                        disabled={!c.input.trim() || isCurrentChatModelUpdating}
                         aria-label={t('chat.send')}
+                        title={isCurrentChatModelUpdating ? t('settings.modelUpdatingBlocked') : t('chat.send')}
                         className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95"
                       >
                         <ArrowUp className="w-3.5 h-3.5 font-bold" />

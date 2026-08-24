@@ -74,7 +74,7 @@ export function usePlanApproval({
   const [countdownSeconds, setCountdownSeconds] = useState<number>(15)
   const [isAutoProceedPaused, setIsAutoProceedPaused] = useState<boolean>(false)
 
-  // Pre-flight Clarification Interview state (Claude Code style)
+  // Pre-flight Clarification Interview state
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
   const [isInterviewActive, setIsInterviewActive] = useState<boolean>(false)
   const [isAnalyzingInterview, setIsAnalyzingInterview] = useState<boolean>(false)

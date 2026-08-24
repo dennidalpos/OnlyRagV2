@@ -42,7 +42,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
 
   /**
    * Pre-flight Clarification Interview: analyze user prompt for key architectural
-   * and implementation trade-offs (Claude Code style) before drafting a plan.
+   * and implementation trade-offs before drafting a plan.
    */
   ipcMain.handle(
     'agent:plan-interview',

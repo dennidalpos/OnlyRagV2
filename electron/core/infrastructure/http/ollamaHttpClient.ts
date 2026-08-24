@@ -26,6 +26,8 @@ export interface OllamaModelMetrics {
   family?: string
   /** On-disk weight in bytes. */
   sizeBytes?: number
+  /** SHA256 manifest digest reported by /api/tags */
+  digest?: string
 }
 
 export class OllamaHttpClient {
@@ -137,6 +139,7 @@ export class OllamaHttpClient {
                     quantizationLevel: typeof details.quantization_level === 'string' ? details.quantization_level : undefined,
                     family: typeof details.family === 'string' ? details.family : undefined,
                     sizeBytes: typeof m?.size === 'number' ? m.size : undefined,
+                    digest: typeof m?.digest === 'string' ? m.digest : undefined,
                   }
                 }
               }
@@ -153,6 +156,62 @@ export class OllamaHttpClient {
       req.setTimeout(5000, () => {
         req.destroy()
         resolve({})
+      })
+      req.end()
+    })
+  }
+
+  /**
+   * Fetches /api/tags and returns installed models with their tag names and manifest digests.
+   */
+  getModelTagsWithDigests(customHost?: string): Promise<Array<{ name: string; digest: string; modifiedAt?: string }>> {
+    if (customHost) this.setBaseHost(customHost)
+    const urlOpts = this.resolveUrl('/api/tags')
+
+    return new Promise((resolve) => {
+      const req = http.request(
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'GET',
+          agent: httpAgent,
+        },
+        (res) => {
+          let data = ''
+          res.on('data', (chunk) => { data += chunk })
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              resolve([])
+              return
+            }
+            try {
+              const parsed = JSON.parse(data)
+              const list: Array<{ name: string; digest: string; modifiedAt?: string }> = []
+              if (Array.isArray(parsed.models)) {
+                for (const m of parsed.models) {
+                  const name = m?.name || m?.model
+                  if (!name) continue
+                  list.push({
+                    name,
+                    digest: typeof m?.digest === 'string' ? m.digest : '',
+                    modifiedAt: typeof m?.modified_at === 'string' ? m.modified_at : undefined,
+                  })
+                }
+              }
+              resolve(list)
+            } catch (err: any) {
+              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags for digests: ${err.message}`)
+              resolve([])
+            }
+          })
+        }
+      )
+
+      req.on('error', () => resolve([]))
+      req.setTimeout(5000, () => {
+        req.destroy()
+        resolve([])
       })
       req.end()
     })

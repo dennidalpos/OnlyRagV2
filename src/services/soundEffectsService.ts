@@ -34,62 +34,67 @@ export class SoundEffectsService {
       const now = ctx.currentTime
 
       if (type === 'error') {
-        // Subtle descending warning tone
+        // Soft, gentle low-frequency double-damped tone (sine wave, warm and unobtrusive)
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
-        osc.type = 'sawtooth'
-        osc.frequency.setValueAtTime(320, now)
-        osc.frequency.exponentialRampToValueAtTime(180, now + 0.22)
-        gain.gain.setValueAtTime(0.12, now)
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(220, now)
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.18)
+        gain.gain.setValueAtTime(0.001, now)
+        gain.gain.linearRampToValueAtTime(0.05, now + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20)
         osc.connect(gain)
         gain.connect(ctx.destination)
         osc.start(now)
-        osc.stop(now + 0.25)
+        osc.stop(now + 0.20)
       } else if (type === 'interactive') {
-        // Pleasant two-tone bell chime (D5 -> A5)
+        // Soft warm two-tone chime (F4 -> C5, gentle marimba/bell tone)
         const playTone = (freq: number, startTime: number, duration: number) => {
           const osc = ctx.createOscillator()
           const gain = ctx.createGain()
           osc.type = 'sine'
           osc.frequency.setValueAtTime(freq, startTime)
-          gain.gain.setValueAtTime(0.15, startTime)
+          gain.gain.setValueAtTime(0.001, startTime)
+          gain.gain.linearRampToValueAtTime(0.06, startTime + 0.015)
           gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration)
           osc.connect(gain)
           gain.connect(ctx.destination)
           osc.start(startTime)
           osc.stop(startTime + duration)
         }
-        playTone(587.33, now, 0.18)
-        playTone(880.0, now + 0.1, 0.28)
+        playTone(349.23, now, 0.22)
+        playTone(523.25, now + 0.1, 0.32)
       } else if (type === 'completion') {
-        // Cheerful ascending major triad arpeggio (C5 -> E5 -> G5)
-        const notes = [523.25, 659.25, 783.99]
+        // Soft, warm ascending triad arpeggio (E4 -> G4 -> C5)
+        const notes = [329.63, 392.00, 523.25]
         notes.forEach((freq, idx) => {
           const startTime = now + idx * 0.09
           const osc = ctx.createOscillator()
           const gain = ctx.createGain()
           osc.type = 'sine'
           osc.frequency.setValueAtTime(freq, startTime)
-          gain.gain.setValueAtTime(0.14, startTime)
-          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.28)
+          gain.gain.setValueAtTime(0.001, startTime)
+          gain.gain.linearRampToValueAtTime(0.05, startTime + 0.015)
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.26)
           osc.connect(gain)
           gain.connect(ctx.destination)
           osc.start(startTime)
-          osc.stop(startTime + 0.28)
+          osc.stop(startTime + 0.26)
         })
       } else if (type === 'step') {
-        // Light subtle tick on milestone progression
+        // Very subtle, gentle soft micro-tap on milestone progression
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
         osc.type = 'sine'
-        osc.frequency.setValueAtTime(800, now)
-        gain.gain.setValueAtTime(0.04, now)
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05)
+        osc.frequency.setValueAtTime(440, now)
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.04)
+        gain.gain.setValueAtTime(0.001, now)
+        gain.gain.linearRampToValueAtTime(0.02, now + 0.008)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045)
         osc.connect(gain)
         gain.connect(ctx.destination)
         osc.start(now)
-        osc.stop(now + 0.05)
+        osc.stop(now + 0.045)
       }
     } catch {
       // Audio errors are silently handled to prevent interruption

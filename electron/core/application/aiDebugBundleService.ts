@@ -3,7 +3,7 @@
  *
  * Application Layer — AI Debug Diagnostic Bundle Generator.
  * Compiles a structured, zero-noise, high-density diagnostic markdown report
- * designed specifically to be analyzed by an AI assistant (Claude, Antigravity, ChatGPT, DeepSeek)
+ * designed specifically to be analyzed by an AI assistant
  * to immediately identify root causes and generate concrete fixes.
  */
 

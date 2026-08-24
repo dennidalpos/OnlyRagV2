@@ -4,8 +4,10 @@ import {
   Check,
   ShieldAlert,
   Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 import {
   type ModelIntent,
@@ -57,8 +59,10 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
   const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const downloadProgress = useModelDownloadProgress()
 
   const isInstalled = isOllamaModelInstalled(currentModel, installedModels)
+  const isCurrentModelUpdating = downloadProgress.isDownloading && downloadProgress.modelName === currentModel
 
   // Close on outside click or Escape key
   useEffect(() => {
@@ -122,20 +126,32 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={`${featureLabel}: ${currentModel}${fallbackModel ? ` (Fallback: ${fallbackModel})` : ''}`}
-        title={`${featureLabel}: ${currentModel}${fallbackModel ? ` • Fallback: ${fallbackModel}` : ''}`}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-semibold border transition-all focus-ring shadow-sm ${activeStyle} ${
+        title={`${featureLabel}: ${currentModel}${isCurrentModelUpdating ? ` • (${t('settings.updating')})` : ''}${fallbackModel ? ` • Fallback: ${fallbackModel}` : ''}`}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-semibold border transition-all focus-ring shadow-sm ${
+          isCurrentModelUpdating
+            ? 'bg-amber-950/70 border-amber-500/60 text-amber-200 ring-1 ring-amber-500/50 animate-pulse'
+            : activeStyle
+        } ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-95'
         }`}
       >
-        <IconComponent className="w-3.5 h-3.5 shrink-0 text-current opacity-90" />
+        {isCurrentModelUpdating ? (
+          <Loader2 className="w-3.5 h-3.5 shrink-0 text-amber-400 animate-spin" />
+        ) : (
+          <IconComponent className="w-3.5 h-3.5 shrink-0 text-current opacity-90" />
+        )}
         <span className="truncate max-w-[140px] font-bold">{currentModel || 'Seleziona'}</span>
 
         {/* Status indicator dot */}
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-            isInstalled ? 'bg-emerald-400 shadow-sm shadow-emerald-500/80' : 'bg-amber-400'
+            isCurrentModelUpdating
+              ? 'bg-amber-400 animate-ping'
+              : isInstalled
+              ? 'bg-emerald-400 shadow-sm shadow-emerald-500/80'
+              : 'bg-amber-400'
           }`}
-          title={isInstalled ? t('common.ready') : t('common.download')}
+          title={isCurrentModelUpdating ? t('settings.updating') : isInstalled ? t('common.ready') : t('common.download')}
         />
 
         {fallbackModel && (
@@ -168,25 +184,33 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
               const installed = isOllamaModelInstalled(modelName, installedModels)
               const isSelected = modelName === currentModel
               const isFallback = modelName === fallbackModel
+              const isOptionUpdating = downloadProgress.isDownloading && downloadProgress.modelName === modelName
 
               return (
                 <button
                   key={modelName}
                   type="button"
                   role="option"
+                  disabled={isOptionUpdating}
                   aria-selected={isSelected}
+                  title={isOptionUpdating ? t('settings.modelUpdatingBlocked') : modelName}
                   onClick={() => {
+                    if (isOptionUpdating) return
                     onSelectModel(modelName)
                     setIsOpen(false)
                   }}
-                  className={`w-full px-3 py-1.5 text-left text-xs font-mono flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-cyan-950/80 text-cyan-200 font-bold'
-                      : 'text-slate-300 hover:bg-slate-900 hover:text-slate-100'
+                  className={`w-full px-3 py-1.5 text-left text-xs font-mono flex items-center justify-between gap-2 transition-colors ${
+                    isOptionUpdating
+                      ? 'opacity-60 cursor-not-allowed bg-amber-950/20 text-amber-300'
+                      : isSelected
+                      ? 'bg-cyan-950/80 text-cyan-200 font-bold cursor-pointer'
+                      : 'text-slate-300 hover:bg-slate-900 hover:text-slate-100 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {isSelected ? (
+                    {isOptionUpdating ? (
+                      <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
+                    ) : isSelected ? (
                       <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                     ) : (
                       <span className="w-3.5 shrink-0" />
@@ -200,15 +224,21 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
                         Fallback
                       </span>
                     )}
-                    <span
-                      className={`text-[10px] font-sans px-1.5 py-0.5 rounded ${
-                        installed
-                          ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
-                          : 'bg-slate-900 text-slate-500 border border-slate-800'
-                      }`}
-                    >
-                      {installed ? '✓' : '⬇'}
-                    </span>
+                    {isOptionUpdating ? (
+                      <span className="text-[9px] font-sans px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-700/60">
+                        {downloadProgress.percent}%
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-[10px] font-sans px-1.5 py-0.5 rounded ${
+                          installed
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
+                            : 'bg-slate-900 text-slate-500 border border-slate-800'
+                        }`}
+                      >
+                        {installed ? '✓' : '⬇'}
+                      </span>
+                    )}
                   </div>
                 </button>
               )

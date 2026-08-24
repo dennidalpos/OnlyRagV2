@@ -464,6 +464,14 @@ export interface TranslationSchema {
     downloading: string
     installedLocalModels: string
     noModelsDetected: string
+    updateAvailable: string
+    updateNow: string
+    updating: string
+    anotherModelUpdating: string
+    modelUpdatingBlocked: string
+    checkUpdates: string
+    checkingUpdates: string
+    modelUpToDate: string
     deleteModel: string
     confirmDelete: string
     languagePreference: string

@@ -68,10 +68,22 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     }
   }, [])
 
-  const handleSelectProject = useCallback((pathStr: string) => {
-    setWorkspacePath(pathStr)
+  const handleSelectProject = useCallback((pathStr: string | null) => {
+    if (!pathStr || !pathStr.trim()) {
+      setWorkspacePath(null)
+      setIsStandaloneMode(true)
+      try {
+        localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
+      } catch (err: any) {
+        logger.warn('useWorkspaceProjects', `Failed clearing last workspace: ${err?.message}`)
+      }
+      return
+    }
+
+    const cleanPath = pathStr.trim()
+    setWorkspacePath(cleanPath)
     try {
-      localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, pathStr)
+      localStorage.setItem(LAST_WORKSPACE_STORAGE_KEY, cleanPath)
     } catch (err: any) {
       logger.warn('useWorkspaceProjects', `Failed saving last workspace: ${err?.message}`)
     }
@@ -81,25 +93,23 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     // reconciled below with the authoritative registry entry once the IPC round-trip resolves.
     const nowIso = new Date().toISOString()
     setProjects((prev) => {
-      const existing = prev.find((p) => p.path === pathStr)
+      const existing = prev.find((p) => p.path === cleanPath)
       const optimistic: WorkspaceProject = existing
         ? { ...existing, lastOpenedAt: nowIso }
-        : { path: pathStr, name: deriveNameFromPath(pathStr), addedAt: nowIso, lastOpenedAt: nowIso }
-      return [optimistic, ...prev.filter((p) => p.path !== pathStr)]
+        : { path: cleanPath, name: deriveNameFromPath(cleanPath), addedAt: nowIso, lastOpenedAt: nowIso }
+      return [optimistic, ...prev.filter((p) => p.path !== cleanPath)]
     })
 
     void (async () => {
       if (!window.electronAPI?.touchProject) return
       try {
-        // touchProject never creates: a path not yet in the registry (e.g. opened via a
-        // stale link or CLI arg) falls back to registerProject.
-        let entry = await window.electronAPI.touchProject(pathStr)
+        let entry = await window.electronAPI.touchProject(cleanPath)
         if (!entry && window.electronAPI.registerProject) {
-          entry = await window.electronAPI.registerProject(pathStr)
+          entry = await window.electronAPI.registerProject(cleanPath)
         }
         if (entry) {
           const confirmed = entry
-          setProjects((prev) => [confirmed, ...prev.filter((p) => p.path !== pathStr)])
+          setProjects((prev) => [confirmed, ...prev.filter((p) => p.path !== cleanPath)])
         }
       } catch (err: any) {
         logger.warn('useWorkspaceProjects', `Could not update project registry: ${err?.message}`)
@@ -114,6 +124,30 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     })
     if (chosen) handleSelectProject(chosen)
   }, [handleSelectProject])
+
+  const handleRenameProject = useCallback(async (projectPath: string, newName: string) => {
+    const cleanName = newName.trim()
+    if (!cleanName || !projectPath) return
+    setProjects((prev) => prev.map((p) => (p.path === projectPath ? { ...p, name: cleanName } : p)))
+    if (window.electronAPI?.renameProject) {
+      try {
+        await window.electronAPI.renameProject(projectPath, cleanName)
+      } catch (err: any) {
+        logger.warn('useWorkspaceProjects', `Could not rename project in registry: ${err?.message}`)
+      }
+    }
+  }, [])
+
+  const handleOpenProjectPath = useCallback(async (projectPath: string) => {
+    if (!projectPath || !projectPath.trim()) return
+    if (window.electronAPI?.openPath) {
+      try {
+        await window.electronAPI.openPath(projectPath.trim())
+      } catch (err: any) {
+        logger.warn('useWorkspaceProjects', `Could not open project path: ${err?.message}`)
+      }
+    }
+  }, [])
 
   const handleRemoveProject = useCallback(
     (pathStr: string) => {
@@ -131,6 +165,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
             handleSelectProject(updated[0].path)
           } else {
             setWorkspacePath(null)
+            setIsStandaloneMode(true)
             try {
               localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
             } catch (err: any) {
@@ -155,6 +190,8 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     isStandaloneMode,
     handleSelectProject,
     handleAddProject,
+    handleRenameProject,
+    handleOpenProjectPath,
     handleRemoveProject,
     handleSelectWorkspaceFolder: handleAddProject,
     handleToggleStandalone,

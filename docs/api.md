@@ -222,6 +222,7 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 | :--- | :--- | :--- | :--- |
 | `ollama:get-models` | `none` | `OllamaModel[]` | Elenco di tutti i modelli scaricati localmente. |
 | `ollama:pull-model` | `{ modelName: string }` | `Stream Event (progress %)` | Download streaming del modello con percentuale e byte trasferiti. |
+| `ollama:check-model-updates` | `none` | `OllamaModelUpdateInfo[]` | Controllo asincrono dello stato di aggiornamento di tutti i modelli locali rispetto al registro ufficiale Ollama. |
 | `ollama:get-running-models`| `none` | `RunningModelInfo[]` | Modelli attualmente caricati nella VRAM/RAM (`/api/ps`). |
 | `ollama:unload-model` | `{ modelName: string }` | `{ success: boolean }` | Evizione esplicita immediata (`keep_alive: 0`). |
 

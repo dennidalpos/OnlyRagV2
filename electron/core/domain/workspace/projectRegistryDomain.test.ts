@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { WorkspaceProject } from '../../../../src/types'
-import { deriveNameFromPath, upsertProject, touchProject, sortProjectsByRecency, mergeProjects } from './projectRegistryDomain'
+import { deriveNameFromPath, upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from './projectRegistryDomain'
 
 function buildProject(path: string, overrides: Partial<WorkspaceProject> = {}): WorkspaceProject {
   return { path, name: 'proj', addedAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-01T00:00:00.000Z', ...overrides }
@@ -10,6 +10,20 @@ describe('projectRegistryDomain', () => {
   it('deriveNameFromPath returns the basename, tolerating a trailing slash', () => {
     expect(deriveNameFromPath('D:\\Projects\\Alpha')).toBe('Alpha')
     expect(deriveNameFromPath('/home/user/beta/')).toBe('beta')
+    expect(deriveNameFromPath('')).toBe('Workspace')
+  })
+
+  it('upsertProject ignores empty or whitespace projectPath', () => {
+    const list = [buildProject('/repo/a')]
+    expect(upsertProject(list, '')).toEqual(list)
+    expect(upsertProject(list, '   ')).toEqual(list)
+  })
+
+  it('renameProjectInList renames the specified project display name', () => {
+    const list = [buildProject('/repo/a', { name: 'Alpha' }), buildProject('/repo/b', { name: 'Beta' })]
+    const renamed = renameProjectInList(list, '/repo/a', 'Alpha Pro')
+    expect(renamed.find((p) => p.path === '/repo/a')?.name).toBe('Alpha Pro')
+    expect(renamed.find((p) => p.path === '/repo/b')?.name).toBe('Beta')
   })
 
   it('upsertProject creates a new entry with matching addedAt/lastOpenedAt', () => {

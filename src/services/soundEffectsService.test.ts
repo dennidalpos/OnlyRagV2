@@ -23,6 +23,7 @@ describe('SoundEffectsService Unit Tests', () => {
     mockGain = {
       gain: {
         setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
         exponentialRampToValueAtTime: vi.fn(),
       },
       connect: vi.fn(),

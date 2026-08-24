@@ -60,7 +60,9 @@ const api: IElectronAPI = {
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
   testOllamaConnection: (host?: string) => ipcRenderer.invoke('ollama:test-connection', host),
   getOllamaModelMetrics: (host?: string) => ipcRenderer.invoke('ollama:get-model-metrics', host),
+  checkOllamaModelUpdates: (host?: string) => ipcRenderer.invoke('ollama:check-model-updates', host),
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
+  openPath: (targetPath: string) => ipcRenderer.invoke('system:open-path', targetPath),
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
   respondToAgentApproval: (sessionId: string, approved: boolean, approvedHunkIndices?: number[]) =>
@@ -77,6 +79,7 @@ const api: IElectronAPI = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   registerProject: (projectPath: string, name?: string) => ipcRenderer.invoke('projects:register', projectPath, name),
   touchProject: (projectPath: string) => ipcRenderer.invoke('projects:touch', projectPath),
+  renameProject: (projectPath: string, name: string) => ipcRenderer.invoke('projects:rename', projectPath, name),
   removeProjectFromRegistry: (projectPath: string) => ipcRenderer.invoke('projects:remove', projectPath),
   /** One-shot import of the legacy localStorage project list. */
   migrateLegacyProjects: (projects: unknown) => ipcRenderer.invoke('projects:migrate-legacy', projects),

@@ -64,7 +64,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
         </div>
         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-[10px] text-cyan-300">
           <Sparkles className="w-3 h-3 text-cyan-400" />
-          <span>Claude Code Style</span>
+          <span>Interactive AI</span>
         </div>
       </div>
 

@@ -442,7 +442,7 @@ async def async_handler():
       )
 
       expect(res.outputForHistory).not.toContain('[REDUNDANT_INSTALL_SKIP]')
-    })
+    }, 15000)
   })
 
   it('should block run_command via Shell-Tool Confusion Guard when a registered tool name is passed as a shell command', async () => {

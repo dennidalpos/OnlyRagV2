@@ -3,8 +3,9 @@ import type { WorkspaceProject } from '../../../../src/types'
 
 /** Basename of a filesystem path, used as the display name for a newly registered project. */
 export function deriveNameFromPath(projectPath: string): string {
-  const trimmed = projectPath.replace(/[/\\]+$/, '')
-  return path.basename(trimmed) || trimmed
+  if (!projectPath || !projectPath.trim()) return 'Workspace'
+  const trimmed = projectPath.trim().replace(/[/\\]+$/, '')
+  return path.basename(trimmed) || trimmed || 'Workspace'
 }
 
 /**
@@ -13,14 +14,28 @@ export function deriveNameFromPath(projectPath: string): string {
  * must never make it look freshly added.
  */
 export function upsertProject(projects: WorkspaceProject[], projectPath: string, name?: string): WorkspaceProject[] {
+  if (!projectPath || !projectPath.trim()) return projects
+  const normalizedPath = projectPath.trim()
+  const cleanName = name?.trim() || deriveNameFromPath(normalizedPath)
   const nowIso = new Date().toISOString()
-  const index = projects.findIndex((p) => p.path === projectPath)
+  const index = projects.findIndex((p) => p.path === normalizedPath)
   if (index === -1) {
-    const entry: WorkspaceProject = { path: projectPath, name: name || deriveNameFromPath(projectPath), addedAt: nowIso, lastOpenedAt: nowIso }
+    const entry: WorkspaceProject = { path: normalizedPath, name: cleanName, addedAt: nowIso, lastOpenedAt: nowIso }
     return [entry, ...projects]
   }
   const next = [...projects]
-  next[index] = { ...next[index], name: name || next[index].name, lastOpenedAt: nowIso }
+  next[index] = { ...next[index], name: cleanName, lastOpenedAt: nowIso }
+  return next
+}
+
+/** Renames the display name of an existing registered project. */
+export function renameProjectInList(projects: WorkspaceProject[], projectPath: string, newName: string): WorkspaceProject[] {
+  const cleanName = newName.trim()
+  if (!cleanName || !projectPath) return projects
+  const index = projects.findIndex((p) => p.path === projectPath)
+  if (index === -1) return projects
+  const next = [...projects]
+  next[index] = { ...next[index], name: cleanName }
   return next
 }
 

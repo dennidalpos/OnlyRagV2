@@ -127,7 +127,8 @@
       "shortcutName": "OnlyRag V2",
       "uninstallDisplayName": "OnlyRag V2 Local AI Workspace",
       "deleteAppDataOnUninstall": true,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "include": "installer/installer.nsh"
     }
   }
 }

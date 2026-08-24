@@ -3,7 +3,7 @@ import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import type { WorkspaceProject } from '../../../../src/types'
-import { upsertProject, touchProject, sortProjectsByRecency, mergeProjects } from '../../domain/workspace/projectRegistryDomain'
+import { upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from '../../domain/workspace/projectRegistryDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 
 const REGISTRY_FILE_NAME = 'project_registry.json'
@@ -76,6 +76,13 @@ export class ProjectRegistryRepository {
     const projects = await this.readStore()
     const next = touchProject(projects, projectPath)
     if (!next) return null
+    await this.writeStore(next)
+    return next.find((p) => p.path === projectPath) || null
+  }
+
+  public async rename(projectPath: string, name: string): Promise<WorkspaceProject | null> {
+    const projects = await this.readStore()
+    const next = renameProjectInList(projects, projectPath, name)
     await this.writeStore(next)
     return next.find((p) => p.path === projectPath) || null
   }

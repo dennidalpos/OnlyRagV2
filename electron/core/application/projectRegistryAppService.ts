@@ -25,6 +25,11 @@ export class ProjectRegistryAppService {
     return projectRegistryRepository.touch(projectPath)
   }
 
+  /** Renames display name of an existing project in the registry. */
+  async renameProject(projectPath: string, name: string): Promise<WorkspaceProject | null> {
+    return projectRegistryRepository.rename(projectPath, name)
+  }
+
   async removeProject(projectPath: string): Promise<boolean> {
     // 1. Purge all sessions, runtime states, audit log records, and prompt history for this project
     try {

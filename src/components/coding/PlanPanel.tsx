@@ -124,7 +124,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
         {isAnalyzingInterview ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-            <div className="font-bold text-slate-200 text-xs">Analisi del Prompt &amp; Scelte Tecniche (Claude Code style)...</div>
+            <div className="font-bold text-slate-200 text-xs">Analisi del Prompt &amp; Scelte Tecniche...</div>
             <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI sta valutando se ci sono trade-off architetturali da confermare prima di generare la checklist.
             </p>

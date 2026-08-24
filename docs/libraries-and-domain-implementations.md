@@ -121,7 +121,7 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 
 ---
 
-### 3.6. Pre-Flight Clarification Interview & Enriched Prompting (Claude Code Style)
+### 3.6. Pre-Flight Clarification Interview & Enriched Prompting
 * **Moduli:** [`agentInterviewAppService.ts`](../electron/core/application/agentInterviewAppService.ts), [`PlanInterviewCard.tsx`](../src/components/coding/PlanInterviewCard.tsx), [`usePlanApproval.ts`](../src/hooks/usePlanApproval.ts)
 * **Motivazione Tecnica:** Prima di avviare la generazione automatica di un piano d'azione, richieste ambigue dell'utente su architettura, persistenza o styling richiedono una chiarificazione preliminare interattiva, fornendo opzioni mirate con default consigliato e supporto write-in.
 * **Soluzione Implementata:** Servizio application layer che interroga l'LLM locale con schema JSON rigoroso, riparato e convalidato tramite `jsonrepair`, per generare al massimo 1-2 quesiti tecnici mirati e arricchire il prompt con le scelte dell'utente prima della scomposizione in milestone.

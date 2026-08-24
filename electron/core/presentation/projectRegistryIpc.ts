@@ -14,6 +14,10 @@ export function registerProjectRegistryIpcHandlers() {
     return projectRegistryAppService.touchProject(projectPath)
   })
 
+  ipcMain.handle('projects:rename', async (_event: unknown, projectPath: string, name: string) => {
+    return projectRegistryAppService.renameProject(projectPath, name)
+  })
+
   ipcMain.handle('projects:remove', async (_event: unknown, projectPath: string) => {
     return projectRegistryAppService.removeProject(projectPath)
   })

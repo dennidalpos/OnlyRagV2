@@ -135,7 +135,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
-      {/* Antigravity Top Header Bar */}
+      {/* Top Header Bar */}
       <CodingHeader
         guestOsInfo={c.guestOsInfo}
         settings={settings}
@@ -160,6 +160,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               onAddProject={c.handleAddProject}
               onRemoveProject={c.handleRemoveProject}
               onSelectProject={c.handleSelectProject}
+              onRenameProject={c.handleRenameProject}
+              onOpenProjectPath={c.handleOpenProjectPath}
               files={c.files}
               selectedFilePath={c.selectedFile?.path || null}
               pinnedPaths={new Set(c.pinnedFiles.keys())}
@@ -171,7 +173,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
               onCreateSession={c.handleCreateSession}
               onSwitchSession={c.handleSwitchSession}
               onDeleteSession={c.handleDeleteSession}
-              onClearSessions={c.handleClearSessionHistory}
               onRenameSession={c.handleRenameSession}
               onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
               onClose={() => setShowWorkspaceSidebar(false)}

@@ -28,6 +28,14 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
     return false
   })
 
+  ipcMain.handle('system:open-path', async (_, targetPath: string) => {
+    if (targetPath && typeof targetPath === 'string' && targetPath.trim()) {
+      await shell.openPath(targetPath.trim())
+      return true
+    }
+    return false
+  })
+
   ipcMain.handle('task:cancel', async (_, taskId?: string) => {
     if (taskId) {
       return taskRunner.cancelTask(taskId)

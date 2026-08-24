@@ -51,6 +51,17 @@ export function useSettingsManager(
     }
   }
 
+  const handleUnloadModel = async (modelName: string) => {
+    if (!window.electronAPI?.unloadModel) return
+    const res = await window.electronAPI.unloadModel(modelName, settings.ollamaHost)
+    if (res?.success) {
+      setPullMessage(`Modello ${modelName} scaricato dalla memoria.`)
+      onRefreshDiagnostics()
+    } else {
+      setPullMessage(`Errore scaricamento memoria per ${modelName}: ${res?.error || 'Errore sconosciuto'}`)
+    }
+  }
+
   return {
     pullModelInput,
     setPullModelInput,
@@ -62,5 +73,6 @@ export function useSettingsManager(
     setIsWizardOpen,
     handlePullModel,
     handleDeleteModel,
+    handleUnloadModel,
   }
 }

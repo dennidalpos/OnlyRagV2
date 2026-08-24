@@ -12,9 +12,11 @@ import {
   Minimize2,
   Layers,
   Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { IngestedDocument, WorkspaceFile, AgentChangeMetrics, AgentMode } from '../../types'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
+import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { useTranslation } from '../../i18n'
 import { PromptComposerToolsMenu } from './PromptComposerToolsMenu'
 import { AgentModeSelector } from './AgentModeSelector'
@@ -93,6 +95,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const [showToolsMenu, setShowToolsMenu] = useState(false)
   const toolsMenuRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const downloadProgress = useModelDownloadProgress()
+  const isModelUpdating = downloadProgress.isDownloading
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -128,7 +132,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (agentPrompt.trim()) {
+      if (agentPrompt.trim() && !isModelUpdating) {
         onExecute()
       }
     }
@@ -168,6 +172,14 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Model Updating Warning Banner */}
+      {isModelUpdating && (
+        <div className="px-3.5 py-2 rounded-xl bg-amber-950/60 border border-amber-500/50 text-amber-300 text-xs flex items-center gap-2 animate-pulse shadow-sm">
+          <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+          <span className="font-medium">{t('settings.modelUpdatingBlocked')} ({downloadProgress.percent}%)</span>
         </div>
       )}
 
@@ -218,22 +230,25 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           </div>
         )}
 
-        {/* Prompt Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={agentPrompt}
-          onChange={(e) => setAgentPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={1}
-          aria-label={t('coding.promptPlaceholder')}
-          placeholder={t('coding.promptPlaceholder')}
-          className="w-full bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-500 resize-none font-sans leading-relaxed px-1 min-h-[38px] max-h-[160px]"
-        />
+        {/* Text Input Area */}
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={agentPrompt}
+            onChange={(e) => setAgentPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('coding.promptPlaceholder')}
+            aria-label={t('coding.promptPlaceholder')}
+            disabled={isModelUpdating}
+            className="w-full bg-transparent text-xs text-slate-100 placeholder-slate-500 resize-none outline-none max-h-40 py-1 leading-relaxed custom-scrollbar font-sans disabled:opacity-50"
+          />
+        </div>
 
-        {/* Bottom Bar: [Left Tools] --- [Center Context Gauge] --- [Right Mode & Actions] */}
-        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-slate-800/40">
-          {/* Left: Tools popover trigger, Plan generation & Reset */}
-          <div className="flex items-center gap-1 shrink-0">
+        {/* Bottom Toolbar & Action Bar */}
+        <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 gap-2">
+          {/* Left: Tools Dropdown Trigger + Reset + Generate Plan */}
+          <div className="flex items-center gap-1 shrink-0 relative">
             <PromptComposerToolsMenu
               isOpen={showToolsMenu}
               onToggle={() => setShowToolsMenu(!showToolsMenu)}
@@ -283,9 +298,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={onGeneratePlan}
-                disabled={!agentPrompt.trim()}
+                disabled={!agentPrompt.trim() || isModelUpdating}
                 aria-label={t('coding.generatePlanFromPrompt')}
-                title={t('coding.generatePlanFromPrompt')}
+                title={isModelUpdating ? t('settings.modelUpdatingBlocked') : t('coding.generatePlanFromPrompt')}
                 className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer focus-ring"
               >
                 <ClipboardList className="w-3.5 h-3.5" />
@@ -347,9 +362,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={() => onExecute()}
-                disabled={!agentPrompt.trim()}
+                disabled={!agentPrompt.trim() || isModelUpdating}
                 aria-label={t('coding.queuedPrompts', { count: queueLength })}
-                title={t('coding.queuedPrompts', { count: queueLength })}
+                title={isModelUpdating ? t('settings.modelUpdatingBlocked') : t('coding.queuedPrompts', { count: queueLength })}
                 className="px-2.5 py-1 bg-gradient-to-r from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-md active:scale-95 shrink-0 cursor-pointer focus-ring"
               >
                 <ListPlus className="w-3.5 h-3.5" />
@@ -359,9 +374,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               <button
                 type="button"
                 onClick={() => onExecute()}
-                disabled={!agentPrompt.trim()}
+                disabled={!agentPrompt.trim() || isModelUpdating}
                 aria-label={t('coding.runTask')}
-                title={t('coding.runTask')}
+                title={isModelUpdating ? t('settings.modelUpdatingBlocked') : t('coding.runTask')}
                 className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-sky-500 hover:from-cyan-500 hover:to-sky-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-950 flex items-center justify-center transition-all shadow-md shadow-cyan-950/50 active:scale-95 shrink-0 cursor-pointer focus-ring"
               >
                 <ArrowUp className="w-3.5 h-3.5 font-bold" />

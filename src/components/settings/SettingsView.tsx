@@ -1,5 +1,5 @@
-import React from 'react'
-import { DiagnosticsData, AppSettings } from '../../types'
+import React, { useState, useEffect } from 'react'
+import { DiagnosticsData, AppSettings, RunningModelInfo } from '../../types'
 import {
   Settings,
   Download,
@@ -16,6 +16,9 @@ import {
   Layers,
   Sparkles,
   Sliders,
+  PowerOff,
+  ArrowUpCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
@@ -27,6 +30,8 @@ import { OcrEngineSelector } from './OcrEngineSelector'
 import { AgentExecutionLimitsConfig } from './AgentExecutionLimitsConfig'
 import { OllamaServerConfig } from './OllamaServerConfig'
 import { useSettingsManager } from '../../hooks/useSettingsManager'
+import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
+import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { useTranslation, Language } from '../../i18n'
 import { apiService } from '../../services/api'
 
@@ -49,6 +54,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const { t, language, setLanguage } = useTranslation()
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
+  const {
+    updateAvailableMap,
+    isCheckingUpdates,
+    checkForUpdates,
+    triggerUpdateModel,
+    isModelUpdating,
+    isAnyModelUpdating,
+    downloadProgress,
+  } = useOllamaModelUpdates(settings.ollamaHost, onRefreshDiagnostics)
+  const [runningModels, setRunningModels] = useState<RunningModelInfo[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchRunning = async () => {
+      if (!window.electronAPI?.getRunningModels) return
+      try {
+        const res = await window.electronAPI.getRunningModels(settings.ollamaHost)
+        if (!cancelled && res?.success && Array.isArray(res.models)) {
+          setRunningModels(res.models)
+        }
+      } catch {
+        if (!cancelled) setRunningModels([])
+      }
+    }
+    void fetchRunning()
+    return () => {
+      cancelled = true
+    }
+  }, [settings.ollamaHost, diagnostics?.timestamp, s.pullMessage])
 
   const handleLanguageChange = (newLang: Language) => {
     setLanguage(newLang)
@@ -370,23 +405,189 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {s.pullMessage && <p className="text-xs text-cyan-300 font-mono">{s.pullMessage}</p>}
 
-          <div className="space-y-2 pt-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('settings.installedLocalModels')}</h4>
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                {t('settings.installedLocalModels')} ({diagnostics?.ollama.models?.length || 0})
+              </h4>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={isCheckingUpdates}
+                  onClick={() => checkForUpdates()}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 disabled:opacity-50 flex items-center gap-1 font-semibold hover:underline cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
+                  {isCheckingUpdates ? t('settings.checkingUpdates') : t('settings.checkUpdates')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onRefreshDiagnostics}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold hover:underline cursor-pointer"
+                >
+                  <Zap className="w-3 h-3" /> Aggiorna Stato Modelli
+                </button>
+              </div>
+            </div>
+
             {diagnostics?.ollama.models && diagnostics.ollama.models.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {diagnostics.ollama.models.map((modelName) => (
-                  <div key={modelName} className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-200">{modelName}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {diagnostics.ollama.models.map((modelName) => {
+                  const m = modelMetrics[modelName]
+                  const runningInfo = runningModels.find((r) => r.name === modelName || r.model === modelName)
+                  const isRunning = Boolean(runningInfo)
+                  const hasUpdate = Boolean(updateAvailableMap[modelName])
+                  const isUpdatingThis = isModelUpdating(modelName)
+                  const vramBytes = runningInfo?.size_vram || 0
+                  const totalBytes = runningInfo?.size || 0
+                  const vramGB = (vramBytes / 1024 ** 3).toFixed(1)
+                  const ramBytes = Math.max(0, totalBytes - vramBytes)
+                  const ramGB = (ramBytes / 1024 ** 3).toFixed(1)
+
+                  return (
+                    <div
+                      key={modelName}
+                      className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all ${
+                        isUpdatingThis
+                          ? 'bg-amber-950/20 border-amber-500/50 shadow-md shadow-amber-950/30 ring-1 ring-amber-500/40'
+                          : isRunning
+                          ? 'bg-cyan-950/30 border-cyan-500/50 shadow-md shadow-cyan-950/30 ring-1 ring-cyan-500/30'
+                          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Top Model Title & Status */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-bold text-slate-100 text-xs truncate flex-1" title={modelName}>
+                            {modelName}
+                          </div>
+                          {isUpdatingThis ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-700/60 shrink-0 flex items-center gap-1">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-400" /> {t('settings.updating')}
+                            </span>
+                          ) : isRunning ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shrink-0 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> In Memoria
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 shrink-0">
+                              Su Disco
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Running VRAM / RAM detail if active */}
+                        {isRunning && (
+                          <div className="text-[10px] font-mono text-emerald-400/90 bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-900/40">
+                            VRAM: {vramGB} GB {parseFloat(ramGB) > 0.1 ? `+ RAM: ${ramGB} GB (Hybrid)` : ''}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Update Available Badge & Action */}
+                      {hasUpdate && !isUpdatingThis && (
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs">
+                          <div className="flex items-center gap-1.5 font-semibold text-[11px]">
+                            <ArrowUpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{t('settings.updateAvailable')}</span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isAnyModelUpdating}
+                            onClick={() => triggerUpdateModel(modelName)}
+                            title={isAnyModelUpdating ? t('settings.anotherModelUpdating') : t('settings.updateNow')}
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-[10px] rounded-lg transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>{t('settings.updateNow')}</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Streaming Progress Bar during Update */}
+                      {isUpdatingThis && (
+                        <div className="p-2.5 rounded-lg bg-slate-950/80 border border-amber-500/40 space-y-1.5 font-mono text-[11px]">
+                          <div className="flex items-center justify-between text-amber-300">
+                            <span className="flex items-center gap-1 font-bold">
+                              <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                              {downloadProgress.status || t('settings.updating')}
+                            </span>
+                            <span className="font-bold">{downloadProgress.percent}%</span>
+                          </div>
+                          <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                            <div
+                              className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full transition-all duration-200"
+                              style={{ width: `${downloadProgress.percent}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-400">
+                            <span className="truncate max-w-[130px]">{downloadProgress.status}</span>
+                            <span>{downloadProgress.mbCompleted} / {downloadProgress.mbTotal} MB</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Specs & Metrics Grid */}
+                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
+                        <div>
+                          <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Parametri:</span>
+                          <span className="font-bold text-cyan-300">{m?.parameterSize || 'N/D'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Quantizzazione:</span>
+                          <span className="font-bold text-slate-200">{m?.quantizationLevel || 'N/D'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Peso su Disco:</span>
+                          <span className="font-bold text-slate-200">
+                            {m?.sizeBytes ? `${(m.sizeBytes / 1024 ** 3).toFixed(2)} GB` : 'N/D'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Famiglia:</span>
+                          <span className="font-bold text-slate-200 capitalize">{m?.family || 'N/D'}</span>
+                        </div>
+                      </div>
+
+                      {/* Capabilities badges */}
+                      {m?.capabilities && m.capabilities.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {m.capabilities.map((cap) => (
+                            <span
+                              key={cap}
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-slate-950 text-slate-300 border border-slate-800"
+                            >
+                              {cap === 'tools' ? '🛠️ Tools' : cap === 'vision' ? '👁️ Vision' : cap === 'embedding' ? '📐 Embed' : `💬 ${cap}`}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                        {isRunning ? (
+                          <button
+                            type="button"
+                            onClick={() => s.handleUnloadModel(modelName)}
+                            title="Scarica il modello dalla memoria VRAM/RAM"
+                            className="px-2.5 py-1 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/50 text-amber-300 text-[10px] font-semibold rounded-lg transition-all focus-ring flex items-center gap-1 cursor-pointer"
+                          >
+                            <PowerOff className="w-3 h-3" /> Scarica RAM
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-mono">Modello pronto</span>
+                        )}
+
+                        <InlineDestructiveConfirm
+                          itemLabel={modelName}
+                          iconClassName="w-4 h-4"
+                          actionLabel={t('settings.deleteModel')}
+                          onConfirm={() => s.handleDeleteModel(modelName)}
+                        />
+                      </div>
                     </div>
-                    <InlineDestructiveConfirm
-                      itemLabel={modelName}
-                      iconClassName="w-4 h-4"
-                      actionLabel={t('settings.deleteModel')}
-                      onConfirm={() => s.handleDeleteModel(modelName)}
-                    />
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <p className="text-xs text-slate-400">{t('settings.noModelsDetected')}</p>

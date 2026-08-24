@@ -2,18 +2,31 @@ import { checkOllamaStatus } from '../../diagnostics'
 import { ollamaHttpClient, type OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 export type { OllamaModelMetrics }
 import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
+import { ollamaModelUpdateAppService, type ModelUpdateCheckResult } from './ollamaModelUpdateAppService'
+export type { ModelUpdateCheckResult }
 
 export class OllamaAppService {
   installOrLaunchOllama(): Promise<{ success: boolean; message?: string; error?: string }> {
     return ollamaInstallerRepository.installOrLaunch()
   }
 
-  pullModel(modelName: string, onProgress?: (progress: { status: string; completed?: number; total?: number }) => void) {
-    return ollamaHttpClient.pullModel(modelName, undefined, onProgress)
+  async pullModel(modelName: string, onProgress?: (progress: { status: string; completed?: number; total?: number }) => void): Promise<{ success: boolean; data?: string; error?: string }> {
+    if (!ollamaModelUpdateAppService.acquireUpdateLock(modelName)) {
+      return {
+        success: false,
+        error: `Un altro modello (${ollamaModelUpdateAppService.getActiveUpdatingModel()}) è già in fase di aggiornamento o download.`,
+      }
+    }
+    try {
+      return await ollamaHttpClient.pullModel(modelName, undefined, onProgress)
+    } finally {
+      ollamaModelUpdateAppService.releaseUpdateLock(modelName)
+    }
   }
 
   cancelPullModel() {
     ollamaHttpClient.cancelPull()
+    ollamaModelUpdateAppService.releaseUpdateLock()
     return { success: true }
   }
 
@@ -48,6 +61,11 @@ export class OllamaAppService {
   /** Everything /api/tags reports per model, for the settings and wizard badges. */
   getModelMetrics(host?: string): Promise<Record<string, OllamaModelMetrics>> {
     return ollamaHttpClient.getModelMetrics(host)
+  }
+
+  /** Checks for model updates against official registry using SHA256 manifest digests. */
+  checkModelUpdates(host?: string): Promise<Record<string, ModelUpdateCheckResult>> {
+    return ollamaModelUpdateAppService.checkModelUpdates(host)
   }
 
   /** Warms a model into memory ahead of the first turn. Never throws — see preloadModel. */

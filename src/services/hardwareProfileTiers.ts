@@ -107,3 +107,40 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
   if (!systemRamGB || systemRamGB <= 0) return SYSTEM_RAM_MIN_BUDGET_GB
   return Math.max(SYSTEM_RAM_MIN_BUDGET_GB, Math.round(systemRamGB * SYSTEM_RAM_USABLE_RATIO * 100) / 100)
 }
+
+/**
+ * Resolves optimal context tokens (num_ctx) based on declared profile, hardware facts, and system RAM offloading.
+ * Implements RAM-aware context scaling (up to 32K for >=24GB RAM, 16K for >=16GB RAM) to exploit Ollama's
+ * transparent KV-cache offloading without hardcoded UI approximations.
+ */
+export function resolveMaxContextTokens(
+  declared: DeclaredHardwareProfile = 'Auto',
+  facts: HardwareFacts = {},
+  enableSystemRamOffloading: boolean = false
+): number {
+  const hardwareTier = resolveEffectiveTier(declared, facts)
+  let effectiveTier: 'Low' | 'Medium' | 'High' =
+    hardwareTier === 'legacy'
+      ? 'Low'
+      : hardwareTier === 'entry' || hardwareTier === 'midrange'
+        ? 'Medium'
+        : 'High'
+
+  if (enableSystemRamOffloading && declared === 'Auto') {
+    const ramGB = facts.systemRamGB || 0
+    if (effectiveTier === 'Low' && ramGB >= 16) {
+      effectiveTier = 'Medium'
+    }
+  }
+
+  const vramBaseCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
+  const ramGB = facts.systemRamGB ?? 0
+  if (ramGB >= 24) {
+    return effectiveTier === 'Low' ? 16384 : 32768
+  }
+  if (ramGB >= 16) {
+    return effectiveTier === 'Low' ? 8192 : effectiveTier === 'Medium' ? 16384 : 32768
+  }
+  return vramBaseCtx
+}
+

@@ -110,7 +110,13 @@ describe('getEffectivePrompt', () => {
 describe('compilePromptWithSampleVars', () => {
   it('fills placeholders from the registry samples for the preview pane', () => {
     const compiled = compilePromptWithSampleVars('From {{sourceLang}} to {{targetLang}}.', 'translation')
-    expect(compiled).toBe('From Italian to English.')
+    expect(compiled).toBe('From [Source language, e.g. Italian] to [Target language, e.g. English].')
+
+    const withContext = compilePromptWithSampleVars('From {{sourceLang}} to {{targetLang}}.', 'translation', undefined, {
+      sourceLang: 'Italian',
+      targetLang: 'English',
+    })
+    expect(withContext).toBe('From Italian to English.')
   })
 
   it('expands partials so the preview shows the whole assembled prompt', () => {
@@ -128,7 +134,7 @@ describe('compilePromptWithSampleVars', () => {
     // 2. coding:directives
     const codingDirectives = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:directives'), 'coding:directives')
     expect(codingDirectives).toContain('LANGUAGE:')
-    expect(codingDirectives).toContain('D:/Projects/OnlyRagWorkspace')
+    expect(codingDirectives).toContain('d:/GITHUB/OnlyRagV2')
 
     // 3. coding:tools
     const codingTools = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:tools'), 'coding:tools')
@@ -140,13 +146,13 @@ describe('compilePromptWithSampleVars', () => {
 
     // 5. translation
     const translationPrompt = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('translation'), 'translation')
-    expect(translationPrompt).toContain('Italian')
-    expect(translationPrompt).toContain('English')
+    expect(translationPrompt).toContain('[Source language, e.g. Italian]')
+    expect(translationPrompt).toContain('[Target language, e.g. English]')
 
     // 6. images:analysis
     const imagePrompt = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('images:analysis'), 'images:analysis')
-    expect(imagePrompt).toContain('quarterly_report_2026.pdf')
-    expect(imagePrompt).toContain('Viewing Page 1 of 8')
+    expect(imagePrompt).toContain('[Document filename, e.g. report.pdf]')
+    expect(imagePrompt).toContain('Viewing Page 1 of 10')
   })
 
   it('returns the raw text for a half-typed template instead of blanking the pane', () => {

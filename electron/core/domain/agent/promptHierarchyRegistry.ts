@@ -81,10 +81,10 @@ const CODING_VARIABLES: PromptVariableMeta[] = [
   {
     name: 'userTask',
     description: "The user's coding instruction for this run",
-    sample: 'Implement secure JWT authentication and token refresh middleware',
+    sample: '[User instruction / task prompt entered in the chat]',
   },
-  { name: 'workspacePath', description: 'Absolute root path of the active workspace', sample: 'D:/Projects/OnlyRagWorkspace' },
-  { name: 'currentDate', description: 'Current date, injected each turn', sample: '2026-08-23 (domenica 23 agosto 2026)' },
+  { name: 'workspacePath', description: 'Absolute root path of the active workspace', sample: 'd:/GITHUB/OnlyRagV2' },
+  { name: 'currentDate', description: 'Current date, injected each turn', sample: '2026-08-24 (Monday, August 24, 2026)' },
 ]
 
 export const PROMPT_HIERARCHY: PromptCategory[] = [
@@ -158,8 +158,8 @@ export const PROMPT_HIERARCHY: PromptCategory[] = [
         label: 'Document Translation',
         defaultValue: DEFAULT_TRANSLATION_PROMPT,
         variables: [
-          { name: 'sourceLang', description: 'Source document language', sample: 'Italian' },
-          { name: 'targetLang', description: 'Target document language', sample: 'English' },
+          { name: 'sourceLang', description: 'Source document language', sample: '[Source language, e.g. Italian]' },
+          { name: 'targetLang', description: 'Target document language', sample: '[Target language, e.g. English]' },
         ],
       },
     ],
@@ -178,13 +178,13 @@ export const PROMPT_HIERARCHY: PromptCategory[] = [
         label: 'Visual Analysis & OCR',
         defaultValue: DEFAULT_IMAGE_ANALYSIS_PROMPT,
         variables: [
-          { name: 'filename', description: 'Source document filename', sample: 'quarterly_report_2026.pdf' },
+          { name: 'filename', description: 'Source document filename', sample: '[Document filename, e.g. report.pdf]' },
           { name: 'currentPage', description: 'Page currently being inspected', sample: '1' },
-          { name: 'numPages', description: 'Total page count of the document', sample: '8' },
+          { name: 'numPages', description: 'Total page count of the document', sample: '10' },
           {
             name: 'activePageContent',
             description: 'Text already extracted from the page',
-            sample: '[Document Title: Q2 Financial Statement — Operating Margin: +24%]',
+            sample: '[Extracted text / layout content of the active page]',
           },
         ],
       },

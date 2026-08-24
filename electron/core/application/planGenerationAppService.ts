@@ -12,6 +12,7 @@
  * output — so the frontend and backend never disagree on milestone structure.
  */
 
+import os from 'node:os'
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
@@ -19,7 +20,7 @@ import { MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
 import { compilePlanFromText } from '../domain/agent/planCompilation'
 import { resolveVerificationCommands } from '../domain/agent/projectVerificationResolver'
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
-import { logger } from '../../diagnostics'
+import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AppSettings } from '../../../src/types'
 
@@ -32,29 +33,35 @@ const PLAN_SYSTEM_PROMPT =
   'strictly sequential, fine-grained Implementation Plan of ATOMIC MICRO-TASKS in MARKDOWN CHECKLIST format.\n\n' +
   'STRICT MICRO-TASK ARCHITECTURE FOR UNIVERSAL COMPATIBILITY (SLMs TO FRONTIER MODELS):\n' +
   '1. ATOMIC DELIVERABLE COHESION (1 FILE / DELIVERABLE = 1 COMPLETE MICRO-TASK): Every single file deliverable MUST be specified as exactly ONE complete milestone (e.g. create and configure the file with all required styles/logic). NEVER split creation and content of the same file into separate microtasks (do NOT create "m-2: Create globals.css" and "m-3: Add Tailwind to globals.css" — write "- [ ] m-2: Create and configure `src/styles/globals.css`").\n' +
-  '2. SCAFFOLD-FIRST WORKFLOW (5 to 15 granular microtasks — 15 is a HARD LIMIT; anything beyond it is consolidated automatically):\n' +
-  '   - Scaffolding & Minimum Buildable Skeleton first: In a greenfield/empty workspace, the first microtasks MUST establish the buildable project skeleton (`package.json`, `index.html`, `vite.config.ts`, `tsconfig.json`, `src/App.tsx`, `src/main.tsx`). Never leave entrypoints missing.\n' +
-  '   - Core styles & utilities (e.g. `src/styles/globals.css`)\n' +
-  '   - Individual discrete UI components (1 component per microtask: e.g. `src/components/Sidebar.tsx`, then `src/components/TaskCard.tsx`)\n' +
-  '   - Pages & Views (1 page per microtask: e.g. `src/pages/Dashboard.tsx`, then `src/pages/Tasks.tsx`)\n' +
-  '   - Assembly & Integration (e.g. wiring routes and components)\n' +
-  '   - Global Verification: Run real build/typecheck (e.g. `npm run build` or `npx tsc --noEmit`)\n' +
-  '   - Final Review & Completion (invoke finish)\n' +
+  '2. WORKSPACE-AWARE SCOPE (3 to 15 granular microtasks — 15 is a HARD LIMIT; anything beyond it is consolidated automatically):\n' +
+  '   - Existing Workspace / Incremental Task: If working in an established project or implementing a specific feature/fix/refactor, target ONLY the relevant files and components requested. DO NOT re-scaffold existing project infrastructure (`package.json`, `index.html`, `vite.config.ts`, `src/App.tsx`) unless explicitly instructed.\n' +
+  '   - Greenfield / Empty Workspace: In an empty workspace where a new application is requested from scratch, the first microtasks MUST establish the buildable project skeleton (`package.json`, `index.html`, `vite.config.ts`, `tsconfig.json`, `src/App.tsx`, `src/main.tsx`).\n' +
+  '   - Global Verification: Run real build/typecheck (e.g. `npm run build` or `npx tsc --noEmit` or tests).\n' +
+  '   - Final Review & Completion (invoke finish).\n' +
   '3. FALSIFIABILITY & REAL VERIFICATIONS: Each microtask MUST name either an exact relative file path it produces or a command that verifies it. NEVER invent fake or mutating verification commands (e.g. do NOT use `touch`, `echo > file`, `init`, or `mkdir` as verifications). Attach design criteria (e.g. "44x44 tap targets", "responsive layout") directly to the component file they constrain.\n' +
   '4. FORMAT: Output strictly as a checklist in "- [ ] m-N: <Action & exact relative file path>" format. One item per line. A microtask proven by a command appends the directive "— verify: `<command>`" at the END of its line, copied verbatim from the VERIFICATION COMMANDS block below.\n' +
   '5. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, etc.).\n' +
   'Output ONLY the markdown checklist lines. No conversational preambles, notes or explanations outside the checklist.'
 
-const FALLBACK_PLAN_TEXT = (prompt: string) =>
-  `🎯 Piano di Esecuzione a Microtask per: ${prompt}\n\n` +
-  // Every item names a file or a command: the fallback plan has to satisfy the same
-  // falsifiability rule the generated ones do, or normalizePlanFalsifiability collapses it.
-  '- [ ] 📦 m-1: Inizializzazione progetto e dipendenze in `package.json`\n' +
-  '- [ ] 📐 m-2: Configurazione degli stili di base e dei design token in `src/styles/globals.css`\n' +
-  '- [ ] 🧩 m-3: Creazione dell entrypoint `index.html` e del layout shell `src/App.tsx`\n' +
-  '- [ ] ✏️ m-4: Implementazione dei componenti UI e della logica applicativa sotto `src/components/`\n' +
-  '- [ ] 🧪 m-5: Verifica di compilazione con `npm run build` e typecheck con `npx tsc --noEmit`\n' +
-  '- [ ] 🛑 m-6: Riepilogo finale dei requisiti e arresto dell agente (invoke "finish")'
+const FALLBACK_PLAN_TEXT = (prompt: string, hasExistingProject: boolean = false) => {
+  if (hasExistingProject) {
+    return (
+      `🎯 Piano di Esecuzione per: ${prompt}\n\n` +
+      '- [ ] 🔍 m-1: Analisi del codice sorgente e identificazione dei file rilevanti\n' +
+      '- [ ] ✏️ m-2: Esecuzione delle modifiche e implementazione dei requisiti richiesti\n' +
+      '- [ ] 🧪 m-3: Verifica della correttezza tramite build o test di progetto\n' +
+      '- [ ] 🛑 m-4: Riepilogo finale dei requisiti e arresto dell agente (invoke "finish")'
+    )
+  }
+  return (
+    `🎯 Piano di Esecuzione a Microtask per: ${prompt}\n\n` +
+    '- [ ] 📦 m-1: Inizializzazione progetto e configurazione di base in `package.json`\n' +
+    '- [ ] 🧩 m-2: Creazione dell entrypoint `index.html` e del layout shell `src/App.tsx`\n' +
+    '- [ ] ✏️ m-3: Implementazione dei componenti UI e della logica applicativa sotto `src/`\n' +
+    '- [ ] 🧪 m-4: Verifica di compilazione con `npm run build` e typecheck con `npx tsc --noEmit`\n' +
+    '- [ ] 🛑 m-5: Riepilogo finale dei requisiti e arresto dell agente (invoke "finish")'
+  )
+}
 
 export interface PlanGenerationRequest {
   prompt: string
@@ -133,7 +140,13 @@ export class PlanGenerationAppService {
    */
   async generatePlanText(req: PlanGenerationRequest): Promise<PlanGenerationResult> {
     const model = req.model || req.settings.codingModel || req.settings.defaultModel || 'qwen2.5-coder:7b'
+    const cachedGpu = getCachedGpuInfo()
+    const memInfo = getMemoryInfo()
     const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(req.settings.hardwareProfile, {
+      hasGpu: cachedGpu?.hasNvidiaGpu,
+      vramTotalMB: cachedGpu?.vramTotalMB,
+      systemRamGB: memInfo?.totalRAMGB,
+      cpuCount: os.cpus()?.length,
       enableSystemRamOffloading: req.settings.enableSystemRamOffloading,
     })
     const residueBlock = buildResidueReconciliationBlock(req.pendingResidueMilestones)
@@ -157,7 +170,9 @@ export class PlanGenerationAppService {
       logger.log('WARN', 'PlanGenerationAppService', `Plan generation threw: ${err.message}`)
     }
 
-    const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt)
+    const manifest = readWorkspaceManifest(req.workspacePath)
+    const hasExistingProject = manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
+    const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt, hasExistingProject)
     const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
     const milestones = compilePlanFromText(planText)
     if (milestones.length < parsedMilestones.length) {

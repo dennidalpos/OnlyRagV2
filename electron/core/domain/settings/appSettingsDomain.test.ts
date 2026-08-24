@@ -34,11 +34,36 @@ describe('AppSettingsDomain Unit Tests', () => {
     const sanitized = sanitizeAppSettings(custom)
     expect(sanitized.defaultModel).toBe('qwen2.5-coder:7b')
     expect(sanitized.chatModel).toBe('llama3.2:3b')
-    expect(sanitized.hardwareProfile).toBe('HighEnd')
+    expect(sanitized.hardwareProfile).toBe('High')
     expect(sanitized.ocrEngine).toBe('vision_model')
     expect(sanitized.language).toBe('en')
     expect(sanitized.hasCompletedInitialSetup).toBe(true)
     expect(sanitized.customPromptOverrides).toEqual({ 'coding:master': 'custom prompt' })
+  })
+
+  it('should preserve maxToolCallSteps: 0 for unlimited execution and valid numeric ranges', () => {
+    const unlimited = sanitizeAppSettings({ maxToolCallSteps: 0 })
+    expect(unlimited.maxToolCallSteps).toBe(0)
+
+    const customSteps = sanitizeAppSettings({ maxToolCallSteps: 120 })
+    expect(customSteps.maxToolCallSteps).toBe(120)
+
+    const invalidNegative = sanitizeAppSettings({ maxToolCallSteps: -5 })
+    expect(invalidNegative.maxToolCallSteps).toBe(50)
+
+    const invalidTooHigh = sanitizeAppSettings({ maxToolCallSteps: 9999 })
+    expect(invalidTooHigh.maxToolCallSteps).toBe(50)
+  })
+
+  it('should correctly normalize all hardware profile casing and tier aliases to Low/Medium/High/Auto', () => {
+    expect(sanitizeAppSettings({ hardwareProfile: 'Medium' }).hardwareProfile).toBe('Medium')
+    expect(sanitizeAppSettings({ hardwareProfile: 'Low' }).hardwareProfile).toBe('Low')
+    expect(sanitizeAppSettings({ hardwareProfile: 'High' }).hardwareProfile).toBe('High')
+    expect(sanitizeAppSettings({ hardwareProfile: 'Auto' }).hardwareProfile).toBe('Auto')
+    expect(sanitizeAppSettings({ hardwareProfile: 'legacy' }).hardwareProfile).toBe('Low')
+    expect(sanitizeAppSettings({ hardwareProfile: 'midrange' }).hardwareProfile).toBe('Medium')
+    expect(sanitizeAppSettings({ hardwareProfile: 'highend' }).hardwareProfile).toBe('High')
+    expect(sanitizeAppSettings({ hardwareProfile: 'extreme' }).hardwareProfile).toBe('High')
   })
 
   it('drops prompt override keys that do not name a prompt node', () => {
@@ -72,10 +97,13 @@ describe('AppSettingsDomain Unit Tests', () => {
     const updated = mergeAppSettings(current, {
       codingModel: 'deepseek-r1:8b',
       hasCompletedInitialSetup: true,
+      maxToolCallSteps: 0,
     })
 
     expect(updated.codingModel).toBe('deepseek-r1:8b')
     expect(updated.hasCompletedInitialSetup).toBe(true)
     expect(updated.language).toBe('it')
+    expect(updated.maxToolCallSteps).toBe(0)
   })
 })
+

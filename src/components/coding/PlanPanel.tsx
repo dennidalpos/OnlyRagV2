@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Sparkles, Copy, Check } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
 import type { InterviewQuestion, UserInterviewAnswer } from '../../types'
 import { parsePlanChecklist } from './planChecklistParser'
+import { formatPromptForDisplay } from './promptFormatter'
 import { PlanPanelHeader } from './PlanPanelHeader'
 import { PlanPanelCountdownBanner } from './PlanPanelCountdownBanner'
 import { PlanPanelChecklistView } from './PlanPanelChecklistView'
@@ -55,6 +56,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   const [isEditing, setIsEditing] = useState<boolean>(false)
   const [editedText, setEditedText] = useState<string>('')
   const [viewMode, setViewMode] = useState<'checklist' | 'document'>('checklist')
+  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false)
 
   useEffect(() => {
     if (plan?.planText) {
@@ -62,30 +64,31 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
     }
   }, [plan?.planText])
 
+  const formattedPrompt = useMemo(() => formatPromptForDisplay(plan?.prompt), [plan?.prompt])
+
+  const handleCopyPrompt = async () => {
+    if (!plan?.prompt) return
+    try {
+      await navigator.clipboard.writeText(plan.prompt)
+      setCopiedPrompt(true)
+      setTimeout(() => setCopiedPrompt(false), 2000)
+    } catch {
+      // ignore
+    }
+  }
+
   const parsedChecklist = useMemo(() => parsePlanChecklist(plan), [plan?.planText, plan?.milestones])
 
   // Calculate items completed and active item status
   const totalItems = parsedChecklist.length
 
-  // Calculate relative steps executed for this specific plan version
-  const baseOffset = plan?.baseStepOffset || 0
-  const stepsForThisPlan = Math.max(0, completedStepCount - baseOffset)
+  const completedItemsCount = parsedChecklist.filter((item) => item.completed).length
 
-  // Determine auto-step completed index based on execution state.
-  let autoStepCompletedIndex = 0
-  if (isExecuting && stepsForThisPlan > 0) {
-    autoStepCompletedIndex = Math.min(totalItems, stepsForThisPlan - 1)
-  } else if (plan?.status === 'approved' && stepsForThisPlan > 0) {
-    autoStepCompletedIndex = Math.min(totalItems, stepsForThisPlan)
-  }
-
-  const completedItemsCount = parsedChecklist.reduce((acc, item, idx) => {
-    if (item.completed || idx < autoStepCompletedIndex) return acc + 1
-    return acc
-  }, 0)
-
-  const activeIndex = isExecuting && autoStepCompletedIndex < totalItems
-    ? autoStepCompletedIndex
+  // Determine active item based on in_progress status or the first unfinished item when executing
+  const inProgressIndex = parsedChecklist.findIndex((item) => item.status === 'in_progress')
+  const firstUnfinishedIndex = parsedChecklist.findIndex((item) => !item.completed)
+  const activeIndex = isExecuting
+    ? (inProgressIndex !== -1 ? inProgressIndex : firstUnfinishedIndex)
     : -1
 
   const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
@@ -152,12 +155,36 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
         ) : (
           <div className="space-y-3">
             {/* User Request Pill Box */}
-            <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-1">
+            <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs space-y-2 shadow-sm">
               <div className="flex items-center justify-between text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
                 <span>Richiesta Utente</span>
-                <span>Versione {plan.version || activePlanIndex + 1}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyPrompt}
+                    title="Copia prompt"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 font-mono text-[9px] lowercase transition-colors cursor-pointer"
+                  >
+                    {copiedPrompt ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400">copiato</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-slate-400" />
+                        <span>copia</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-mono text-[9px]">
+                    v{plan.version || activePlanIndex + 1}
+                  </span>
+                </div>
               </div>
-              <div className="font-mono text-slate-200 text-[11px] leading-relaxed">{plan.prompt}</div>
+              <div className="font-mono text-slate-200 text-[11px] leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80 select-text">
+                {formattedPrompt || plan.prompt}
+              </div>
             </div>
 
             {plan.status === 'approved' && viewMode === 'checklist' ? (
@@ -167,7 +194,6 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                 completedItemsCount={completedItemsCount}
                 totalItems={totalItems}
                 progressPercent={progressPercent}
-                autoStepCompletedIndex={autoStepCompletedIndex}
                 isExecuting={isExecuting}
                 activeIndex={activeIndex}
               />

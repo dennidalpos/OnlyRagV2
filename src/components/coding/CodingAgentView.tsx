@@ -340,6 +340,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
           initialNodeId="coding:master"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
+          workspacePath={c.workspacePath}
+          isStandaloneMode={c.isStandaloneMode}
+          userTask={c.promptQueue[0]?.prompt || undefined}
         />
       )}
 

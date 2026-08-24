@@ -4,6 +4,7 @@ import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import type { WorkspaceProject } from '../../../../src/types'
 import { upsertProject, touchProject, sortProjectsByRecency, mergeProjects } from '../../domain/workspace/projectRegistryDomain'
+import { safeAtomicWrite } from './safeAtomicFileWriter'
 
 const REGISTRY_FILE_NAME = 'project_registry.json'
 const STORE_VERSION = 1
@@ -50,12 +51,8 @@ export class ProjectRegistryRepository {
   private async writeStore(projects: WorkspaceProject[]): Promise<boolean> {
     const filePath = this.getStateFilePath()
     try {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true })
       const payload: ProjectRegistryStore = { version: STORE_VERSION, projects }
-      const tempPath = `${filePath}.tmp`
-      await fs.promises.writeFile(tempPath, JSON.stringify(payload, null, 2), 'utf-8')
-      await fs.promises.rename(tempPath, filePath)
-      return true
+      return await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2))
     } catch (err: any) {
       logger.log('WARN', 'ProjectRegistryRepo', `Failed writing project registry at ${filePath}: ${err.message}`)
       return false

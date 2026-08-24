@@ -86,18 +86,16 @@ export const AppLayout: React.FC = () => {
       hardwareProfile: 'Auto',
       ocrEngine: 'native_cuda',
       ollamaHost: 'http://127.0.0.1:11434',
+      ollamaMode: 'local',
       language: 'it',
       autoInstallHubSkills: 'auto',
       autoInstallMinScore: 8.0,
+      enableSkillRouter: true,
+      maxToolCallSteps: 50,
+      enableCodingAgentDebugLog: true,
+      hasCompletedInitialSetup: false,
     }
   })
-
-  // Auto-launch initial setup wizard on first start
-  React.useEffect(() => {
-    if (!settings.hasCompletedInitialSetup && !settings.defaultModel) {
-      setIsWizardOpen(true)
-    }
-  }, [settings.hasCompletedInitialSetup, settings.defaultModel])
 
   // Load and synchronize settings with canonical Electron main process filesystem store
   useEffect(() => {
@@ -114,6 +112,15 @@ export const AppLayout: React.FC = () => {
             try {
               localStorage.setItem('onlyrag_app_settings', JSON.stringify(backendSettings))
             } catch {}
+
+            // Auto-launch initial setup wizard ONLY on the very first install/launch if never completed or dismissed
+            const alreadyCompleted =
+              localStorage.getItem('onlyrag_initial_setup_completed') === 'true' ||
+              Boolean(backendSettings.hasCompletedInitialSetup) ||
+              Boolean(backendSettings.defaultModel)
+            if (!alreadyCompleted) {
+              setIsWizardOpen(true)
+            }
             return
           }
         }
@@ -131,7 +138,7 @@ export const AppLayout: React.FC = () => {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [language, setLanguage])
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     // Applied before setSettings: React runs state updaters during the render phase, so
@@ -184,6 +191,14 @@ export const AppLayout: React.FC = () => {
       runDiagnosticsScan()
     }
   }, [lastCompletedModel, runDiagnosticsScan])
+
+  const handleCloseWizard = useCallback(() => {
+    setIsWizardOpen(false)
+    try {
+      localStorage.setItem('onlyrag_initial_setup_completed', 'true')
+    } catch {}
+    handleUpdateSettings({ hasCompletedInitialSetup: true })
+  }, [handleUpdateSettings])
 
   const handleSelectTab = (tab: NavTab) => {
     setActiveTab(tab)
@@ -515,7 +530,7 @@ export const AppLayout: React.FC = () => {
       {/* Complete Hardware & Model Setup Wizard Modal */}
       <HardwareSetupWizardModal
         isOpen={isWizardOpen}
-        onClose={() => setIsWizardOpen(false)}
+        onClose={handleCloseWizard}
         diagnostics={diagnostics}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}

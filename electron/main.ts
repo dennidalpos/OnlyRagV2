@@ -2,8 +2,23 @@ import { app, BrowserWindow, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 
-// Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/OnlyRag V2)
-app.name = 'OnlyRag V2'
+// Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/onlyrag-v2)
+app.name = 'onlyrag-v2'
+
+const isSingleInstance = app.requestSingleInstanceLock()
+if (!isSingleInstance && !process.env.ONLYRAG_SMOKE_TEST && !process.argv.includes('--smoke-test')) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  })
+}
+
+// Suppress noisy Chromium GPU shader disk cache locking errors on Windows
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
 import { logger } from './diagnostics'
 import { sidecarProcessManager } from './core/infrastructure/process/sidecarProcessManager'

@@ -72,6 +72,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           selectedFile={c.selectedFile}
           activeModelName={activeModelName}
           settings={settings}
+          diagnostics={diagnostics}
           availableModels={diagnostics?.ollama.models}
           onOpenFile={c.handleOpenFile}
           promptQueue={c.promptQueue}

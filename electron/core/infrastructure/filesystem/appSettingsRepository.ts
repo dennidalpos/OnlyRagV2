@@ -4,6 +4,7 @@ import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import type { AppSettings } from '../../../../src/types'
 import { sanitizeAppSettings } from '../../domain/settings/appSettingsDomain'
+import { safeAtomicWrite } from './safeAtomicFileWriter'
 
 const SETTINGS_FILE_NAME = 'settings.json'
 
@@ -72,11 +73,8 @@ export class AppSettingsRepository {
     const sanitized = sanitizeAppSettings(settings)
 
     try {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true })
-      const tempPath = `${filePath}.tmp-${Date.now()}`
-      await fs.promises.writeFile(tempPath, JSON.stringify(sanitized, null, 2), 'utf-8')
-      await fs.promises.rename(tempPath, filePath)
-      return true
+      const payload = JSON.stringify(sanitized, null, 2)
+      return await safeAtomicWrite(filePath, payload)
     } catch (err: any) {
       logger.log('ERROR', 'AppSettingsRepo', `Failed writing settings to ${filePath}: ${err.message}`)
       return false

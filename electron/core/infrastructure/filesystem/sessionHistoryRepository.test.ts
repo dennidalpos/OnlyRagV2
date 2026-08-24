@@ -132,4 +132,21 @@ describe('SessionHistoryRepository Unit Tests', () => {
       fs.rmSync(unrelatedWorkspace, { recursive: true, force: true })
     }
   })
+
+  it('should clear sessions for a workspace without affecting standalone sessions or other workspaces', async () => {
+    const standalone = await sessionHistoryRepository.saveSession(buildSession('session-standalone-keep', null))
+    expect(standalone).not.toBeNull()
+
+    const workspaceSession = await sessionHistoryRepository.saveSession(buildSession('session-workspace-clear', tempDir))
+    expect(workspaceSession).not.toBeNull()
+
+    expect(await sessionHistoryRepository.clearSessions(tempDir)).toBe(true)
+    expect(await sessionHistoryRepository.listSessions(tempDir)).toHaveLength(0)
+
+    const remainingStandalone = await sessionHistoryRepository.listSessions(null)
+    expect(remainingStandalone.find((s) => s.id === 'session-standalone-keep')).toBeDefined()
+
+    // Cleanup standalone test session
+    await sessionHistoryRepository.deleteSession('session-standalone-keep', null)
+  })
 })

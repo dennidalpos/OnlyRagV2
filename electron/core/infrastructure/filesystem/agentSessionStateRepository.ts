@@ -6,6 +6,7 @@ import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../domain/agent/planAndSolveGraph'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
+import { safeAtomicWrite } from './safeAtomicFileWriter'
 
 export interface SavedAgentSessionState {
   sessionId: string
@@ -74,13 +75,10 @@ export class AgentSessionStateRepository {
   }
 
   public async saveSessionState(state: SavedAgentSessionState): Promise<boolean> {
+    const filePath = this.getStateFilePath(state.sessionId, state.workspacePath)
     try {
-      const filePath = this.getStateFilePath(state.sessionId, state.workspacePath)
       const payload = JSON.stringify(state, null, 2)
-      const tempPath = `${filePath}.tmp`
-      await fs.promises.writeFile(tempPath, payload, 'utf-8')
-      await fs.promises.rename(tempPath, filePath)
-      return true
+      return await safeAtomicWrite(filePath, payload)
     } catch (err: any) {
       logger.log('WARN', 'AgentSessionStateRepo', `Failed saving session state for ${state.sessionId}: ${err.message}`)
       return false
@@ -107,10 +105,7 @@ export class AgentSessionStateRepository {
       }
       const trackerPath = path.join(assistantDir, 'SESSION_TRACKER.md')
       const markdown = tracker.compileTrackerMarkdown()
-      const tempPath = `${trackerPath}.tmp`
-      await fs.promises.writeFile(tempPath, markdown, 'utf-8')
-      await fs.promises.rename(tempPath, trackerPath)
-      return true
+      return await safeAtomicWrite(trackerPath, markdown)
     } catch (err: any) {
       logger.log('WARN', 'AgentSessionStateRepo', `Failed saving SESSION_TRACKER.md: ${err.message}`)
       return false

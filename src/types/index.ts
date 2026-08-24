@@ -537,7 +537,7 @@ export interface IElectronAPI {
   /** Semantic search across every indexed project's prompt history. */
   searchPromptHistory?: (query: string, topK?: number, projectPaths?: string[]) => Promise<PromptHistorySearchResult[]>
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
-  onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => () => void
+  onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
   onAgentStreamThought?: (callback: (data: { step: number; chunk: string }) => void) => () => void
   onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void

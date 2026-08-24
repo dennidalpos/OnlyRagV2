@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentActionLog, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode } from '../types'
+import { AgentActionLog, AgentPlan, PlanMilestone, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode } from '../types'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useSessionHistory } from './useSessionHistory'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
@@ -66,7 +66,19 @@ export function useCodingAgent(settings?: AppSettings) {
   const [streamingText, setStreamingText] = useState<string>('')
   const [currentStatusText, setCurrentStatusText] = useState<string>('')
   const [currentStep, setCurrentStep] = useState<number>(0)
-  const [maxSteps, setMaxSteps] = useState<number | string>(50)
+  const [maxSteps, setMaxSteps] = useState<number | string>(() => {
+    const isUnlimited = settings?.maxToolCallSteps === 0 || (settings?.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
+    return isUnlimited ? '∞' : (settings?.maxToolCallSteps || 50)
+  })
+
+  // Synchronize maxSteps with user settings when idle
+  useEffect(() => {
+    if (!isExecuting) {
+      const isUnlimited = settings?.maxToolCallSteps === 0 || (settings?.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
+      setMaxSteps(isUnlimited ? '∞' : (settings?.maxToolCallSteps || 50))
+    }
+  }, [settings?.maxToolCallSteps, isExecuting])
+
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
   const [currentLiveModel, setCurrentLiveModel] = useState<string | null>(null)
 
@@ -120,7 +132,7 @@ export function useCodingAgent(settings?: AppSettings) {
     isStandaloneMode,
     handleSelectProject,
     handleAddProject,
-    handleRemoveProject,
+    handleRemoveProject: rawHandleRemoveProject,
     handleSelectWorkspaceFolder,
     handleToggleStandalone,
   } = useWorkspaceProjects(settings)
@@ -206,6 +218,7 @@ export function useCodingAgent(settings?: AppSettings) {
     switchSession,
     deleteSession,
     clearSessions,
+    purgeWorkspace,
     renameSession,
     updateSessionPlans,
     beginExecutedPrompt,
@@ -343,7 +356,7 @@ export function useCodingAgent(settings?: AppSettings) {
       }
     })
 
-    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string; statusText?: string }) => {
+    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string; statusText?: string; milestones?: PlanMilestone[] }) => {
       currentStepRef.current = data.step
       setCurrentStep(data.step)
       setStreamingText('')
@@ -352,6 +365,18 @@ export function useCodingAgent(settings?: AppSettings) {
       }
       if (data?.maxStepsLabel !== undefined) setMaxSteps(data.maxStepsLabel)
       else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
+      if (data?.milestones && data.milestones.length > 0) {
+        updateActiveSessionPlans((prev) => {
+          if (prev.length === 0) return prev
+          const copy = [...prev]
+          const lastIdx = copy.length - 1
+          copy[lastIdx] = {
+            ...copy[lastIdx],
+            milestones: data.milestones,
+          }
+          return copy
+        })
+      }
     })
 
     const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
@@ -486,6 +511,30 @@ export function useCodingAgent(settings?: AppSettings) {
   const handleRenameSession = (sessionId: string, newTitle: string) => {
     renameSession(sessionId, newTitle)
   }
+
+  const handleRemoveProject = useCallback(
+    (pathStr: string) => {
+      // 1. Purge in-memory session cache & disarm pending writes for the removed workspace
+      purgeWorkspace(pathStr)
+
+      // 2. If the removed workspace is currently active, clear all active session state immediately
+      if (pathStr === workspacePath) {
+        resetSessionViewState()
+        setActionLogs([])
+        clearPromptQueue()
+        setAttachedDocIds(new Set())
+        setPinnedFiles(new Map())
+        setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
+        setStreamingText('')
+        clearPendingApproval()
+        setCurrentStep(0)
+      }
+
+      // 3. Remove project from registry, delete .onlyrag and purge LanceDB prompt index
+      rawHandleRemoveProject(pathStr)
+    },
+    [purgeWorkspace, workspacePath, resetSessionViewState, clearPromptQueue, clearPendingApproval, rawHandleRemoveProject]
+  )
 
   const handleNewSession = handleCreateSession
 

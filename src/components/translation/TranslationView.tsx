@@ -598,6 +598,8 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
           initialNodeId="translation"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
+          sourceLang={tr.sourceLang}
+          targetLang={tr.targetLang}
         />
       )}
     </div>

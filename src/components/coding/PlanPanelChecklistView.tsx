@@ -8,7 +8,6 @@ interface PlanPanelChecklistViewProps {
   completedItemsCount: number
   totalItems: number
   progressPercent: number
-  autoStepCompletedIndex: number
   isExecuting: boolean
   activeIndex: number
 }
@@ -19,7 +18,6 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
   completedItemsCount,
   totalItems,
   progressPercent,
-  autoStepCompletedIndex,
   isExecuting,
   activeIndex,
 }) => {
@@ -54,8 +52,8 @@ export const PlanPanelChecklistView: React.FC<PlanPanelChecklistViewProps> = ({
       {/* Checklist Items List (Read-Only driven by Agent Execution) */}
       <div className="space-y-2 pt-1">
         {parsedChecklist.map((item, idx) => {
-          const isChecked = item.completed || idx < autoStepCompletedIndex
-          const isActive = isExecuting && !isChecked && idx === activeIndex
+          const isChecked = item.completed
+          const isActive = isExecuting && !isChecked && (item.status === 'in_progress' || idx === activeIndex)
 
           return (
             <div

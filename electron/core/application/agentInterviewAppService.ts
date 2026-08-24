@@ -8,10 +8,11 @@
  * questions with a recommended default and write-in support, validated via jsonrepair.
  */
 
+import os from 'node:os'
 import { jsonrepair } from 'jsonrepair'
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
-import { logger } from '../../diagnostics'
+import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import type { AppSettings } from '../../../src/types'
 
 export interface InterviewQuestion {
@@ -72,7 +73,15 @@ export class AgentInterviewAppService {
     settings: AppSettings
   ): Promise<InterviewAnalysisResult> {
     const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(settings.hardwareProfile)
+    const cachedGpu = getCachedGpuInfo()
+    const memInfo = getMemoryInfo()
+    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(settings.hardwareProfile, {
+      hasGpu: cachedGpu?.hasNvidiaGpu,
+      vramTotalMB: cachedGpu?.vramTotalMB,
+      systemRamGB: memInfo?.totalRAMGB,
+      cpuCount: os.cpus()?.length,
+      enableSystemRamOffloading: settings.enableSystemRamOffloading,
+    })
 
     const fullPrompt = `${INTERVIEW_SYSTEM_PROMPT}\n\nUser request to analyze:\n\n${prompt}`
 

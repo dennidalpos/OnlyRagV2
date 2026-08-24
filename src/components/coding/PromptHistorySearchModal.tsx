@@ -1,11 +1,31 @@
 import React, { useEffect } from 'react'
 import { Modal } from '../common/Modal'
-import { Search, X, AlertTriangle, Sparkles, FolderGit2, ArrowRight } from 'lucide-react'
-import { WorkspaceProject } from '../../types'
+import {
+  Search,
+  X,
+  AlertTriangle,
+  Sparkles,
+  FolderGit2,
+  ArrowRight,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Ban,
+  CircleDashed,
+} from 'lucide-react'
+import { WorkspaceProject, ExecutedPromptOutcome } from '../../types'
 import { usePromptHistorySearch } from '../../hooks/usePromptHistorySearch'
 import { formatDateTime } from '../../lib/timeFormat'
 import { useTranslation } from '../../i18n'
-import { OUTCOME_STYLES } from './SessionHistoryTree'
+import type { TranslationKey } from '../../i18n/I18nContext'
+
+export const OUTCOME_STYLES: Record<ExecutedPromptOutcome, { icon: React.ElementType; className: string; labelKey: TranslationKey }> = {
+  running: { icon: Loader2, className: 'text-cyan-400 animate-spin', labelKey: 'coding.outcomeRunning' },
+  success: { icon: CheckCircle2, className: 'text-emerald-400', labelKey: 'coding.outcomeSuccess' },
+  failed: { icon: XCircle, className: 'text-rose-400', labelKey: 'coding.outcomeFailed' },
+  cancelled: { icon: Ban, className: 'text-amber-400', labelKey: 'coding.outcomeCancelled' },
+  unknown: { icon: CircleDashed, className: 'text-slate-500', labelKey: 'coding.outcomeUnknown' },
+}
 
 interface PromptHistorySearchModalProps {
   isOpen: boolean

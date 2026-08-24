@@ -4,6 +4,7 @@ import os from 'node:os'
 import { logger } from '../../../diagnostics'
 import type { CodingSession } from '../../../../src/types'
 import { normalizeSession, sortSessionsByRecency, upsertSession } from '../../domain/sessions/sessionHistoryDomain'
+import { safeAtomicWrite } from './safeAtomicFileWriter'
 
 const HISTORY_FILE_NAME = 'session_history.json'
 const STORE_VERSION = 1
@@ -98,10 +99,7 @@ export class SessionHistoryRepository {
     const filePath = path.join(dir, HISTORY_FILE_NAME)
     try {
       const payload: SessionHistoryStore = { version: STORE_VERSION, sessions }
-      const tempPath = `${filePath}.tmp`
-      await fs.promises.writeFile(tempPath, JSON.stringify(payload, null, 2), 'utf-8')
-      await fs.promises.rename(tempPath, filePath)
-      return true
+      return await safeAtomicWrite(filePath, JSON.stringify(payload, null, 2))
     } catch (err: any) {
       logger.log('WARN', 'SessionHistoryRepo', `Failed writing session history at ${filePath}: ${err.message}`)
       return false
@@ -147,7 +145,30 @@ export class SessionHistoryRepository {
   }
 
   public async clearSessions(workspacePath?: string | null): Promise<boolean> {
-    return this.writeStore(workspacePath, [])
+    const normalizedTarget = workspacePath ? path.normalize(workspacePath).toLowerCase() : null
+
+    if (workspacePath && fs.existsSync(workspacePath)) {
+      const workspaceDir = path.join(workspacePath, '.onlyrag', 'sessions')
+      if (fs.existsSync(workspaceDir)) {
+        await this.writeStoreAtDir(workspaceDir, [])
+      }
+    }
+
+    const fallbackDir = path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+    if (fs.existsSync(fallbackDir)) {
+      const fallbackSessions = await this.readStoreAtDir(fallbackDir)
+      if (fallbackSessions.length > 0) {
+        const remaining = normalizedTarget
+          ? fallbackSessions.filter((session) => (session.workspacePath ? path.normalize(session.workspacePath).toLowerCase() : null) !== normalizedTarget)
+          : fallbackSessions.filter((session) => !!session.workspacePath && session.workspacePath.trim().length > 0)
+
+        if (remaining.length !== fallbackSessions.length) {
+          await this.writeStoreAtDir(fallbackDir, remaining)
+        }
+      }
+    }
+
+    return true
   }
 
   /**

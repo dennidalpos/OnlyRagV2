@@ -81,20 +81,20 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
       if (e) e.stopPropagation()
       setOpenFiles((prev) => {
         const next = prev.filter((f) => f.path !== fileToClose.path)
-        setSelectedFile((curr) => {
-          if (curr?.path !== fileToClose.path) return curr
+        if (selectedFile?.path === fileToClose.path) {
           if (next.length > 0) {
-            handleOpenFile(next[next.length - 1])
-            return curr
+            const nextFile = next[next.length - 1]
+            queueMicrotask(() => handleOpenFile(nextFile))
+          } else {
+            setSelectedFile(null)
+            setEditorContent('')
+            setOriginalContent('')
           }
-          setEditorContent('')
-          setOriginalContent('')
-          return null
-        })
+        }
         return next
       })
     },
-    [handleOpenFile]
+    [handleOpenFile, selectedFile]
   )
 
   const handleSaveFile = useCallback(async () => {
@@ -138,16 +138,16 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
       setOpenFiles((prev) => {
         const remaining = prev.filter((f) => !isInside(f.path))
-        setSelectedFile((curr) => {
-          if (!curr || !isInside(curr.path)) return curr
+        if (selectedFile && isInside(selectedFile.path)) {
           if (remaining.length > 0) {
-            handleOpenFile(remaining[remaining.length - 1])
-            return curr
+            const nextFile = remaining[remaining.length - 1]
+            queueMicrotask(() => handleOpenFile(nextFile))
+          } else {
+            setSelectedFile(null)
+            setEditorContent('')
+            setOriginalContent('')
           }
-          setEditorContent('')
-          setOriginalContent('')
-          return null
-        })
+        }
         return remaining
       })
 
@@ -163,7 +163,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
       if (workspacePath) loadWorkspaceFiles(workspacePath)
     },
-    [workspacePath, handleOpenFile, loadWorkspaceFiles, onPathPurged]
+    [workspacePath, handleOpenFile, loadWorkspaceFiles, onPathPurged, selectedFile]
   )
 
   useEffect(() => {

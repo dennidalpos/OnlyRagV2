@@ -109,12 +109,9 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
         maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
         maxStepsLabel,
         statusText,
+        milestones: goalPlanner.getMilestones(),
       })
     }
-    // The full plan is NOT dumped here any more. Writing all 15 milestones on every step made
-    // those snapshots 14% of the audit log while still not saying which step moved a milestone
-    // or why -- the one question worth asking of them. The plan is written out in full when it
-    // is created or revised, and each status change is recorded as its own transition entry.
   }
 
   // Each milestone status change is recorded with its cause, so a plan that closes something

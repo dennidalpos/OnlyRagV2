@@ -1,6 +1,6 @@
 import os from 'node:os'
 import type { HardwareProfile } from '../../../../src/types'
-import { resolveEffectiveTier } from '../../../../src/services/hardwareProfileTiers'
+import { resolveMaxContextTokens } from '../../../../src/services/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
   num_ctx: number
@@ -89,48 +89,9 @@ export class HardwareProfileResolver {
     const cpuCores = env?.cpuCount || os.cpus()?.length || 4
     const safeCpuThreads = Math.max(1, cpuCores - 1)
 
-    // Hardware classification is delegated to the shared 5-tier ladder in
-    // hardwareProfileTiers.ts, so the runtime options, the model matrix, the complexity
-    // router and the Ollama OS parameters all agree on what a given machine is.
-    const hardwareTier = resolveEffectiveTier(profile, env)
-    let effectiveTier: 'Low' | 'Medium' | 'High' =
-      hardwareTier === 'legacy'
-        ? 'Low'
-        : hardwareTier === 'entry' || hardwareTier === 'midrange'
-          ? 'Medium'
-          : 'High'
-
-    // When Hybrid System RAM Offloading is enabled and system RAM is plentiful,
-    // upgrade effective runtime headroom to allow larger context windows and hybrid execution.
-    if (env?.enableSystemRamOffloading && profile === 'Auto') {
-      const ramGB = env.systemRamGB || 0
-      if (effectiveTier === 'Low' && ramGB >= 16) {
-        effectiveTier = 'Medium'
-      }
-    }
-
-    // ── RAM-aware context window sizing ──
-    // Base context from VRAM tier (GPU-only conservative floor).
-    const vramBaseCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
-
-    // When sufficient system RAM is available, Ollama transparently offloads KV cache
-    // overflow to RAM. Slower prompt-eval but dramatically more context capacity.
-    // Modern local models (7B+) natively support 32K–128K context; the KV cache cost
-    // for a 7B at 32K is ~1.8 GB — modest relative to typical system RAM budgets.
-    // Allowing larger context prevents the instruction-following collapse observed
-    // when SLMs exhaust their prompt budget on plan + execution history + diagnostics
-    // within a tight 8K window (see coding_agent_audit.log session analysis).
-    const ramGB = env?.systemRamGB ?? 0
-    let numCtx: number
-    if (ramGB >= 24) {
-      // 24 GB+ RAM: all tiers scale to the native maximum of modern models (32K).
-      numCtx = effectiveTier === 'Low' ? 16384 : 32768
-    } else if (ramGB >= 16) {
-      // 16 GB+ RAM: double the VRAM-only baseline.
-      numCtx = effectiveTier === 'Low' ? 8192 : effectiveTier === 'Medium' ? 16384 : 32768
-    } else {
-      numCtx = vramBaseCtx
-    }
+    // Sizing and RAM-aware scaling is delegated to resolveMaxContextTokens in hardwareProfileTiers.ts
+    // (single source of truth across Electron domain, Recommendation Engine, and React UI).
+    const numCtx = resolveMaxContextTokens(profile, env, env?.enableSystemRamOffloading)
 
     return {
       num_ctx: numCtx,

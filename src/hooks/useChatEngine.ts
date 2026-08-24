@@ -536,13 +536,23 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     prevActiveIdRef.current = id
     setActiveConversationId(id)
     setMessages(target.messages && target.messages.length > 0 ? target.messages : [createDefaultGreetingMessage()])
-    setSelectedDocIds(new Set(target.selectedDocIds || []))
+    
+    // Filter selectedDocIds against valid current documents to prevent orphaned doc selections
+    const validDocIds = new Set(documents.map((d) => d.id))
+    const filteredSelection = new Set<string>()
+    if (documents.length > 0 && target.selectedDocIds) {
+      target.selectedDocIds.forEach((docId) => {
+        if (validDocIds.has(docId)) filteredSelection.add(docId)
+      })
+    }
+    setSelectedDocIds(filteredSelection)
+
     setInput('')
     setShowMentions(false)
     try {
       localStorage.setItem(STORAGE_KEY_ACTIVE_ID, id)
     } catch {}
-  }, [conversations, isGenerating])
+  }, [conversations, documents, isGenerating])
 
   const handleNewChat = useCallback(() => {
     if (streamThrottleTimer.current) {
@@ -568,7 +578,13 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }
 
     prevActiveIdRef.current = newConv.id
-    setConversations((prev) => [newConv, ...prev])
+    setConversations((prev) => {
+      const nextList = [newConv, ...prev]
+      try {
+        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
+      } catch {}
+      return nextList
+    })
     setActiveConversationId(newConv.id)
     setMessages(newConv.messages)
     try {
@@ -593,6 +609,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
     setConversations((prev) => {
       const remaining = prev.filter((c) => c.id !== id)
+      let nextList = remaining
       if (remaining.length === 0) {
         const fresh: ChatConversation = {
           id: `session-${Date.now()}`,
@@ -606,12 +623,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         setActiveConversationId(fresh.id)
         setMessages(fresh.messages)
         setSelectedDocIds(new Set())
+        nextList = [fresh]
         try {
           localStorage.setItem(STORAGE_KEY_ACTIVE_ID, fresh.id)
         } catch {}
-        return [fresh]
-      }
-      if (activeConversationId === id) {
+      } else if (activeConversationId === id) {
         const nextActive = remaining[0]
         prevActiveIdRef.current = nextActive.id
         setActiveConversationId(nextActive.id)
@@ -621,15 +637,27 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
           localStorage.setItem(STORAGE_KEY_ACTIVE_ID, nextActive.id)
         } catch {}
       }
-      return remaining
+
+      try {
+        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
+      } catch (err) {
+        logger.warn('ChatEngine', `Failed writing updated conversations to localStorage: ${err}`)
+      }
+      return nextList
     })
   }, [activeConversationId, isGenerating])
 
   const renameConversation = useCallback((id: string, newTitle: string) => {
     if (!newTitle.trim()) return
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c))
-    )
+    setConversations((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c))
+      try {
+        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(updated))
+      } catch (err) {
+        logger.warn('ChatEngine', `Failed writing updated conversations to localStorage: ${err}`)
+      }
+      return updated
+    })
   }, [])
 
   return {

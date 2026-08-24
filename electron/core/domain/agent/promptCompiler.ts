@@ -122,20 +122,83 @@ export function getEffectivePrompt(
   return PromptCompiler.compileModulePrompt(module, { ...options, settings })
 }
 
+import { supportsNativeToolCallingByFamily } from './ollamaToolCallingCapability'
+
+export function activeModelForModule(module: string, settings?: AppSettings): string {
+  if (!settings) return ''
+  switch (module) {
+    case 'coding':
+      return settings.codingModel || settings.defaultModel || ''
+    case 'chat':
+      return settings.chatModel || settings.defaultModel || ''
+    case 'translation':
+      return settings.translationModel || settings.defaultModel || ''
+    case 'images':
+      return settings.visionModel || settings.defaultModel || ''
+    default:
+      return settings.defaultModel || ''
+  }
+}
+
 /**
- * Renders a template with the registry's sample values, for the modal's preview pane.
+ * Renders a template with the registry's sample values or live context values, for the modal's preview pane.
  * Never used on the wire.
  */
 export function compilePromptWithSampleVars(
   rawTemplate: string,
   nodeId: PromptNodeId,
-  settings?: AppSettings
+  settings?: AppSettings,
+  contextOverrides?: {
+    workspacePath?: string | null
+    isStandaloneMode?: boolean
+    currentDate?: string
+    agentMode?: string
+    userTask?: string
+    sourceLang?: string
+    targetLang?: string
+    filename?: string
+    currentPage?: string
+    numPages?: string
+    activePageContent?: string
+  }
 ): string {
   const node = findPromptNode(nodeId)
   if (!node) return rawTemplate
 
+  const now = new Date()
+  const formattedDate = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const dynamicCurrentDate = `${now.toISOString().split('T')[0]} (${formattedDate})`
+
+  const resolvedWorkspacePath = contextOverrides?.isStandaloneMode
+    ? 'Standalone (No Workspace)'
+    : (contextOverrides?.workspacePath || (typeof window !== 'undefined' ? localStorage.getItem('onlyrag_last_workspace_path') : null) || 'd:/GITHUB/OnlyRagV2')
+
   const samples: Record<string, string> = {}
-  for (const variable of node.variables) samples[variable.name] = variable.sample
+  for (const variable of node.variables) {
+    if (variable.name === 'currentDate') {
+      samples.currentDate = contextOverrides?.currentDate || dynamicCurrentDate
+    } else if (variable.name === 'workspacePath') {
+      samples.workspacePath = resolvedWorkspacePath
+    } else if (variable.name === 'agentMode') {
+      samples.agentMode = (contextOverrides?.agentMode || 'AGENT').toUpperCase()
+    } else if (variable.name === 'userTask') {
+      samples.userTask = contextOverrides?.userTask || variable.sample || '[User instruction / task prompt entered in the chat]'
+    } else if (variable.name === 'sourceLang') {
+      samples.sourceLang = contextOverrides?.sourceLang || variable.sample || '[Source language, e.g. Italian]'
+    } else if (variable.name === 'targetLang') {
+      samples.targetLang = contextOverrides?.targetLang || variable.sample || '[Target language, e.g. English]'
+    } else if (variable.name === 'filename') {
+      samples.filename = contextOverrides?.filename || variable.sample || '[Document filename, e.g. report.pdf]'
+    } else if (variable.name === 'currentPage') {
+      samples.currentPage = contextOverrides?.currentPage || variable.sample || '1'
+    } else if (variable.name === 'numPages') {
+      samples.numPages = contextOverrides?.numPages || variable.sample || '10'
+    } else if (variable.name === 'activePageContent') {
+      samples.activePageContent = contextOverrides?.activePageContent || variable.sample || '[Extracted text / layout content of the active page]'
+    } else {
+      samples[variable.name] = variable.sample
+    }
+  }
 
   const partials: Record<string, string> = {}
   for (const child of partialNodesForModule(node.module)) {
@@ -143,9 +206,12 @@ export function compilePromptWithSampleVars(
     partials[child.partialName as string] = (override && override.trim()) ? override : child.defaultValue
   }
 
+  const activeModel = settings ? activeModelForModule(node.module, settings) : ''
+  const isNativeTool = supportsNativeToolCallingByFamily(activeModel)
+
   const view: Record<string, unknown> = {
     ...samples,
-    nativeToolCalling: false,
+    nativeToolCalling: isNativeTool,
     nativeVision: true,
   }
 

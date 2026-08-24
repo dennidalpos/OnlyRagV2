@@ -52,6 +52,15 @@ interface PromptConfigurationModalProps {
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
   /** Node to open on: the views pass the one matching the section the user came from. */
   initialNodeId?: PromptNodeId
+  workspacePath?: string | null
+  isStandaloneMode?: boolean
+  userTask?: string
+  sourceLang?: string
+  targetLang?: string
+  filename?: string
+  currentPage?: string
+  numPages?: string
+  activePageContent?: string
 }
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
@@ -83,6 +92,15 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
   settings,
   onUpdateSettings,
   initialNodeId = 'coding:master',
+  workspacePath,
+  isStandaloneMode,
+  userTask,
+  sourceLang,
+  targetLang,
+  filename,
+  currentPage,
+  numPages,
+  activePageContent,
 }) => {
   const { t } = useTranslation()
 
@@ -140,8 +158,35 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
   }, [selectedNode, settings])
 
   const preview = useMemo(
-    () => (tab === 'preview' ? compilePromptWithSampleVars(draft, selectedNodeId, settings) : ''),
-    [tab, draft, selectedNodeId, settings]
+    () =>
+      tab === 'preview'
+        ? compilePromptWithSampleVars(draft, selectedNodeId, settings, {
+            workspacePath,
+            isStandaloneMode,
+            userTask,
+            sourceLang,
+            targetLang,
+            filename,
+            currentPage,
+            numPages,
+            activePageContent,
+          })
+        : '',
+    [
+      tab,
+      draft,
+      selectedNodeId,
+      settings,
+      workspacePath,
+      isStandaloneMode,
+      userTask,
+      sourceLang,
+      targetLang,
+      filename,
+      currentPage,
+      numPages,
+      activePageContent,
+    ]
   )
 
   const visibleCategories = useMemo(() => {

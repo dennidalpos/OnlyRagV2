@@ -70,7 +70,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   const [searchFilter, setSearchFilter] = useState<string>('')
   const [pinnedExpanded, setPinnedExpanded] = useState<boolean>(true)
   const [filesExpanded, setFilesExpanded] = useState<boolean>(true)
-  const [sessionsExpanded, setSessionsExpanded] = useState<boolean>(false)
+  const [sessionsExpanded, setSessionsExpanded] = useState<boolean>(true)
 
   const activeProjectName = activeProjectPath
     ? activeProjectPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'

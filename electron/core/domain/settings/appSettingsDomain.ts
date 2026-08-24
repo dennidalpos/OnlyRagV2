@@ -20,11 +20,25 @@ export function getDefaultAppSettings(): AppSettings {
   return { ...DEFAULT_APP_SETTINGS }
 }
 
-const VALID_HARDWARE_PROFILES = new Set<string>(['Auto', 'Legacy', 'Entry', 'MidRange', 'HighEnd', 'Extreme'])
+const VALID_HARDWARE_PROFILES = new Set<string>([
+  'Auto', 'auto',
+  'Low', 'low', 'legacy', 'Legacy',
+  'Medium', 'medium', 'entry', 'Entry', 'midrange', 'Midrange', 'MidRange',
+  'High', 'high', 'highend', 'HighEnd', 'extreme', 'Extreme'
+])
 const VALID_OCR_ENGINES = new Set<string>(['native_cuda', 'vision_model'])
 const VALID_AUTO_INSTALL_POLICIES = new Set<string>(['disabled', 'prompt', 'auto'])
 const VALID_LANGUAGES = new Set<string>(['it', 'en'])
 const VALID_OLLAMA_MODES = new Set<string>(['local', 'remote'])
+
+export function normalizeHardwareProfile(rawVal: unknown): HardwareProfile {
+  if (typeof rawVal !== 'string') return 'Auto'
+  const trimmed = rawVal.trim().toLowerCase()
+  if (trimmed === 'low' || trimmed === 'legacy') return 'Low'
+  if (trimmed === 'medium' || trimmed === 'entry' || trimmed === 'midrange') return 'Medium'
+  if (trimmed === 'high' || trimmed === 'highend' || trimmed === 'extreme') return 'High'
+  return 'Auto'
+}
 
 export function sanitizeAppSettings(input: unknown): AppSettings {
   if (!input || typeof input !== 'object') {
@@ -35,8 +49,8 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
   const defaults = getDefaultAppSettings()
 
   const hardwareProfile: HardwareProfile =
-    typeof raw.hardwareProfile === 'string' && VALID_HARDWARE_PROFILES.has(raw.hardwareProfile)
-      ? (raw.hardwareProfile as HardwareProfile)
+    typeof raw.hardwareProfile === 'string' && VALID_HARDWARE_PROFILES.has(raw.hardwareProfile.trim())
+      ? normalizeHardwareProfile(raw.hardwareProfile)
       : defaults.hardwareProfile
 
   const ocrEngine =
@@ -69,7 +83,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     autoInstallHubSkills,
     autoInstallMinScore: typeof raw.autoInstallMinScore === 'number' && !isNaN(raw.autoInstallMinScore) ? raw.autoInstallMinScore : defaults.autoInstallMinScore,
     enableSkillRouter: typeof raw.enableSkillRouter === 'boolean' ? raw.enableSkillRouter : defaults.enableSkillRouter,
-    maxToolCallSteps: typeof raw.maxToolCallSteps === 'number' && raw.maxToolCallSteps >= 5 && raw.maxToolCallSteps <= 500 ? raw.maxToolCallSteps : defaults.maxToolCallSteps,
+    maxToolCallSteps: typeof raw.maxToolCallSteps === 'number' && (raw.maxToolCallSteps === 0 || (raw.maxToolCallSteps >= 5 && raw.maxToolCallSteps <= 500)) ? raw.maxToolCallSteps : defaults.maxToolCallSteps,
     enableCodingAgentDebugLog: typeof raw.enableCodingAgentDebugLog === 'boolean' ? raw.enableCodingAgentDebugLog : defaults.enableCodingAgentDebugLog,
     hasCompletedInitialSetup: typeof raw.hasCompletedInitialSetup === 'boolean' ? raw.hasCompletedInitialSetup : defaults.hasCompletedInitialSetup,
   }

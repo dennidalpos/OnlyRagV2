@@ -1,9 +1,10 @@
 import React from 'react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, InterviewQuestion, UserInterviewAnswer, AgentMode } from '../../types'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, InterviewQuestion, UserInterviewAnswer, AgentMode, DiagnosticsData } from '../../types'
 import type { AgentPlan } from '../../hooks/usePlanApproval'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
 import { estimateTokenCount } from '../../lib/tokenEstimate'
+import { resolveMaxContextTokens } from '../../services/hardwareProfileTiers'
 import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'
 import { AgentTimeline } from './AgentTimeline'
 import { PromptComposer } from './PromptComposer'
@@ -32,6 +33,7 @@ interface AgentActionLogPanelProps {
   selectedFile: WorkspaceFile | null
   activeModelName?: string
   settings?: AppSettings
+  diagnostics?: DiagnosticsData | null
   availableModels?: string[]
   onOpenFile?: (file: WorkspaceFile) => void
   promptQueue?: QueuedPrompt[]
@@ -93,6 +95,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onToggleAttachDoc,
   activeModelName,
   settings,
+  diagnostics,
   onOpenFile,
   promptQueue = [],
   onRemoveFromQueue,
@@ -145,8 +148,19 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } =
     useAgentTimelineScroll(actionLogs, streamingText, isExecuting, autoScroll, onToggleAutoScroll)
 
-  // Context window tracking
-  const maxContextLimit = settings?.hardwareProfile === 'High' ? 12000 : settings?.hardwareProfile === 'Low' ? 4000 : 7000
+  // Context window tracking (dynamic RAM-aware hardware limit, single source of truth with backend)
+  const maxContextLimit = React.useMemo(() => {
+    const facts = diagnostics
+      ? {
+          hasGpu: diagnostics.gpu.hasNvidiaGpu,
+          vramTotalMB: diagnostics.gpu.vramTotalMB || 0,
+          systemRamGB: Math.round(diagnostics.memory.totalRAMGB || 8),
+          cpuCount: diagnostics.system.cpusCount || 4,
+        }
+      : {}
+    return resolveMaxContextTokens(settings?.hardwareProfile, facts, settings?.enableSystemRamOffloading)
+  }, [diagnostics, settings?.hardwareProfile, settings?.enableSystemRamOffloading])
+
   const BASE_PROMPT_OVERHEAD_TOKENS = 650
   const recentLogsTokens = React.useMemo(() => {
     const recentLogs = actionLogs.slice(-8)
@@ -155,7 +169,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   const promptTokens = React.useMemo(() => estimateTokenCount(agentPrompt), [agentPrompt])
   const estimatedTurnTokens = Math.min(maxContextLimit, BASE_PROMPT_OVERHEAD_TOKENS + promptTokens + recentLogsTokens)
   const contextPercent = Math.min(100, Math.round((estimatedTurnTokens / maxContextLimit) * 100))
-  const isContextHeavy = contextPercent >= 70 || actionLogs.length > 14
+  const isContextHeavy = contextPercent >= 70 || (contextPercent >= 50 && actionLogs.length > 25)
 
   return (
     <div className="h-full flex flex-col bg-slate-950 text-slate-200 overflow-hidden select-text relative">

@@ -104,16 +104,20 @@ export function useIngestion(settings?: AppSettings) {
           setMarkdownContent((curr) => curr || updated.extractedMarkdown)
           return updated
         }
-      }
-      if (docs.length > 0 && !prev) {
-        setMarkdownContent(docs[0].extractedMarkdown)
-        return docs[0]
-      }
-      if (docs.length === 0) {
+        // prev is no longer in docs (was deleted)
+        if (docs.length > 0) {
+          setMarkdownContent(docs[0].extractedMarkdown)
+          return docs[0]
+        }
         setMarkdownContent('')
         return null
       }
-      return prev
+      if (docs.length > 0) {
+        setMarkdownContent(docs[0].extractedMarkdown)
+        return docs[0]
+      }
+      setMarkdownContent('')
+      return null
     })
   }, [])
 

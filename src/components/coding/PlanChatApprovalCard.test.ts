@@ -20,9 +20,9 @@ describe('PlanChecklistParser Unit Tests', () => {
 
     const items = parsePlanChecklist(plan)
     expect(items).toHaveLength(3)
-    expect(items[0]).toEqual({ id: 'm1', title: 'Setup auth', completed: false })
-    expect(items[1]).toEqual({ id: 'm2', title: 'Add JWT', completed: false })
-    expect(items[2]).toEqual({ id: 'm3', title: 'Verify tests', completed: true })
+    expect(items[0]).toEqual({ id: 'm1', title: 'Setup auth', completed: false, status: 'pending' })
+    expect(items[1]).toEqual({ id: 'm2', title: 'Add JWT', completed: false, status: 'in_progress' })
+    expect(items[2]).toEqual({ id: 'm3', title: 'Verify tests', completed: true, status: 'verified' })
   })
 
   it('should fallback to parsing numbered text when milestones are omitted', () => {

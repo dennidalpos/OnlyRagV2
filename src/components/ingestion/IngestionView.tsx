@@ -913,6 +913,9 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
           initialNodeId="images:analysis"
           settings={settings}
           onUpdateSettings={onUpdateSettings}
+          filename={ing.selectedDoc?.filename}
+          numPages={ing.selectedDoc ? String(ing.selectedDoc.numPages) : undefined}
+          activePageContent={ing.markdownContent ? ing.markdownContent.slice(0, 120) : undefined}
         />
       )}
     </div>

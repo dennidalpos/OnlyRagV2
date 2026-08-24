@@ -5,6 +5,7 @@ export interface PlanChecklistItem {
   id: string
   title: string
   completed: boolean
+  status?: 'pending' | 'in_progress' | 'verified' | 'failed'
   tag?: string
 }
 
@@ -18,6 +19,7 @@ export function parsePlanChecklist(plan: Pick<AgentPlan, 'planText' | 'milestone
       id: m.id,
       title: m.title,
       completed: m.status === 'verified',
+      status: m.status,
     }))
   }
 
@@ -28,5 +30,6 @@ export function parsePlanChecklist(plan: Pick<AgentPlan, 'planText' | 'milestone
     id: m.id,
     title: m.title,
     completed: m.status === 'verified',
+    status: m.status,
   }))
 }

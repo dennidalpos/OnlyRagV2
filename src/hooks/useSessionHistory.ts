@@ -309,6 +309,31 @@ export function useSessionHistory(workspacePath: string | null) {
     return fresh
   }, [workspacePath])
 
+  const purgeWorkspace = useCallback(
+    (targetWorkspacePath: string | null) => {
+      const targetKey = targetWorkspacePath || ''
+      bootstrapSessionsRef.current.delete(targetKey)
+
+      // Drop pending writes for this workspace so they don't persist back to disk
+      for (const [id, session] of pendingWritesRef.current.entries()) {
+        if ((session.workspacePath || '') === targetKey) {
+          pendingWritesRef.current.delete(id)
+        }
+      }
+
+      if (pendingWritesRef.current.size === 0 && persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+      }
+
+      if (workspacePath === targetWorkspacePath) {
+        setSessions([])
+        setActiveSessionId('')
+      }
+    },
+    [workspacePath]
+  )
+
   const renameSession = useCallback(
     (sessionId: string, title: string) => {
       const clean = title.trim()
@@ -416,6 +441,7 @@ export function useSessionHistory(workspacePath: string | null) {
     switchSession,
     deleteSession,
     clearSessions,
+    purgeWorkspace,
     renameSession,
     updateSessionContent,
     updateSessionPlans,

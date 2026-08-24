@@ -267,6 +267,184 @@ async def async_handler():
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
   })
 
+  it('gives the model the failure reason even when the command also printed to stdout', async () => {
+    // The end-to-end shape of every failing `npm run build` in session-1787562597025-q8a5: a
+    // banner on stdout, the actual cause on stderr. The executor used to hand the model
+    // whichever single stream was non-empty, so the auto-healing block arrived carrying the
+    // banner and an exit code, under a directive to inspect a stack trace it had discarded.
+    // The markers live in a script file, never in the command string: the diagnostics block
+    // echoes the command back, so an inline `node -e "...CAUSE_LINE..."` would satisfy the
+    // assertion from the echo alone and pass against the very bug it is meant to catch.
+    fs.writeFileSync(
+      path.join(tempDir, 'fail.js'),
+      "console.log('BANNER_LINE'); console.error('CAUSE_LINE'); process.exit(1);",
+      'utf-8'
+    )
+
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'run_command', parameters: { command: 'node fail.js', timeoutSeconds: 30 } },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]')
+    expect(res.outputForHistory).toContain('BANNER_LINE')
+    expect(res.outputForHistory).toContain('CAUSE_LINE')
+  })
+
+  describe('write_file target shape', () => {
+    it('creates a real directory when the path ends with a separator and no content is given', () => {
+      // `write_file("src/services/", "")` used to answer "Successfully wrote file src/services/"
+      // after creating a zero-byte FILE named services — session-1787562597025-q8a5, m-7.
+      return agentToolExecutorService
+        .executeTool({ tool: 'write_file', parameters: { filePath: 'src/services/', content: '' } }, tempDir, settings)
+        .then((res) => {
+          expect(res.outputForHistory).toContain('Created DIRECTORY')
+          expect(fs.statSync(path.join(tempDir, 'src', 'services')).isDirectory()).toBe(true)
+        })
+    })
+
+    it('refuses a separator-terminated path that also carries content', async () => {
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath: 'src/services/', content: 'export const api = 1' } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[WRITE_FILE REJECTED: PATH IS A DIRECTORY]')
+      expect(fs.existsSync(path.join(tempDir, 'src', 'services'))).toBe(false)
+    })
+
+    it('still writes an ordinary file path unchanged', async () => {
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath: 'src/services/api.ts', content: 'export const api = 1' } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('Successfully wrote file')
+      expect(fs.readFileSync(path.join(tempDir, 'src', 'services', 'api.ts'), 'utf-8')).toContain('export const api')
+    })
+  })
+
+  describe('undeclared import gate', () => {
+    it('tells the model immediately when a written file imports a package the project never declared', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0', tailwindcss: '^3.0.0' } }),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        {
+          tool: 'write_file',
+          parameters: {
+            filePath: 'src/pages/Dashboard.tsx',
+            content: "import React from 'react'\nimport { Container } from '@tailwindcss/react'\nexport default function D() { return <Container /> }",
+          },
+        },
+        tempDir,
+        settings
+      )
+
+      // The write still lands: the code is mostly right and discarding it costs the turn.
+      expect(fs.existsSync(path.join(tempDir, 'src', 'pages', 'Dashboard.tsx'))).toBe(true)
+      expect(res.outputForHistory).toContain('Successfully wrote file')
+      expect(res.outputForHistory).toContain('[UNDECLARED IMPORT IN src/pages/Dashboard.tsx]')
+      expect(res.outputForHistory).toContain('@tailwindcss/react')
+    })
+
+    it('says nothing about a file whose imports are all declared', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: "import React from 'react'\nexport default function A() { return null }" } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toBe('Successfully wrote file src/App.tsx')
+    })
+  })
+
+  it('appends the version-conflict directive when an install fails on ERESOLVE', async () => {
+    // A script that reproduces npm's ERESOLVE report on stderr and exits 1, so the whole path
+    // is exercised: shell -> stream composition -> auto-healing block. The real failure this
+    // stands in for is `npm install @vitejs/plugin-react` against a pinned vite@4.
+    fs.writeFileSync(
+      path.join(tempDir, 'eresolve.js'),
+      [
+        "const lines = [",
+        "  'npm error code ERESOLVE',",
+        "  'npm error ERESOLVE unable to resolve dependency tree',",
+        "  'npm error While resolving: project-dashboard-task@1.0.0',",
+        "  'npm error Found: vite@4.5.14',",
+        "  'npm error   dev vite@\"^4.2.3\" from the root project',",
+        "  'npm error Could not resolve dependency:',",
+        "  'npm error peer vite@\"^8.0.0\" from @vitejs/plugin-react@6.1.0',",
+        "];",
+        "console.error(lines.join('\\n'));",
+        "process.exit(1);",
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const res = await agentToolExecutorService.executeTool(
+      { tool: 'run_command', parameters: { command: 'node eresolve.js', timeoutSeconds: 30 } },
+      tempDir,
+      settings
+    )
+
+    expect(res.outputForHistory).toContain('[DEPENDENCY VERSION CONFLICT — ERESOLVE]')
+    expect(res.outputForHistory).toContain('npm install vite@^8.0.0')
+    // The generic "install the missing dependency" advice is the one that just failed.
+    expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
+  })
+
+  describe('redundant install guard', () => {
+    it('skips an install whose packages are both declared and present in node_modules', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
+        'utf-8'
+      )
+      fs.mkdirSync(path.join(tempDir, 'node_modules', 'react'), { recursive: true })
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install react' } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[REDUNDANT_INSTALL_SKIP]')
+      expect(res.isTerminal).toBe(true)
+    })
+
+    it('lets the install run when the package is declared but node_modules is empty', async () => {
+      // The regression that cost session-1787562597025-q8a5 its build: the agent had authored
+      // package.json itself, so every dependency read as "already installed" while nothing was
+      // on disk, and the guard cancelled the only npm install of the run.
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        // --dry-run --offline keeps the assertion about the guard, not about npm's network.
+        { tool: 'run_command', parameters: { command: 'npm install react --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).not.toContain('[REDUNDANT_INSTALL_SKIP]')
+    })
+  })
+
   it('should block run_command via Shell-Tool Confusion Guard when a registered tool name is passed as a shell command', async () => {
     const res = await agentToolExecutorService.executeTool(
       {

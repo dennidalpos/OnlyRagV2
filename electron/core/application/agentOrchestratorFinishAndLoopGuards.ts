@@ -221,7 +221,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
 
   if (isExemptRedundantSuccess) {
-    const redundancyIntervention = `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nYou are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}' again. Advance to the next unfinished step instead.`
+    const redundancyIntervention = `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
 
     ctx.episodicCompactor.recordStep(
       {
@@ -253,8 +253,13 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   ctx.state.stagnationStreak++
   const isCommand = parsedTool.tool === 'run_command'
+  // A build or test command is how the task gets verified at all, so the escape must never
+  // read as "stop running it". What is blocked is re-issuing it UNCHANGED, and the way out is
+  // to change something first: in session-1787562597025-q8a5 the model was told it was
+  // "FORBIDDEN from calling run_command on 'npm run build'" — the exact command the completion
+  // gate requires — and spent its remaining turns re-reading files instead of fixing them.
   const escapeDirective = isCommand
-    ? `\n[CRITICAL ESCAPE STRATEGY]: If a scaffolding or build command failed or is blocked, DO NOT repeat it. Instead, switch IMMEDIATELY to constructing or editing the required files directly with write_file (e.g. write package.json, vite.config.ts, src/App.tsx), or run a read/verification tool.`
+    ? `\n[CRITICAL ESCAPE STRATEGY]: Do not re-issue this command unchanged — nothing about the workspace has changed since it last ran. Read the error text in the diagnostics above, apply the fix it names with write_file or replace_file_content, and THEN run the command again. Running a build or test command after a real edit is always allowed and is how this task gets verified. If the command is a scaffolding generator that failed, write the files it would have produced directly instead.`
     : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
 
   const escapeAction = resolveLoopEscapeAction(ctx.state.stagnationStreak, {
@@ -265,7 +270,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   })
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
 
-  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating operations on '${loopTarget || 'target'}'. You are FORBIDDEN from calling ${parsedTool.tool} on '${loopTarget || 'target'}'.${escapeDirective}${planAdvanceDirective || ''}`
+  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
 
   ctx.episodicCompactor.recordStep(
     {

@@ -44,6 +44,21 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res.stdout).toContain('Val: 150')
   })
 
+  it('returns the failure reason on stderr alongside the banner the command wrote to stdout', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+
+    // Pins the contract the executor now depends on: BOTH streams come back populated. This
+    // session already honoured it — the reason every failing `npm run build` in
+    // session-1787562597025-q8a5 reached the model as a bare exit code was the caller
+    // selecting one stream (`stdout || stderr`), not the shell dropping the other. Locking it
+    // here keeps that fix from being undone one layer down.
+    const res = await session.execute('Write-Output "BANNER_ON_STDOUT"; Write-Error "REASON_ON_STDERR"')
+
+    expect(res.stdout).toContain('BANNER_ON_STDOUT')
+    expect(res.stderr).toContain('REASON_ON_STDERR')
+    expect(res.code).not.toBe(0)
+  })
+
   it('should abort immediately on an interactive prompt instead of waiting out the full timeout', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 

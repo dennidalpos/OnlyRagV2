@@ -114,6 +114,56 @@ describe('checkVerificationCommandSafety', () => {
     expect(checkVerificationCommandSafety('npx create-react-app .').isSafe).toBe(false)
   })
 
+  it('refuses a command that only prints the file the milestone just wrote', () => {
+    // Seven of fifteen milestones in session-1787562597025-q8a5 declared exactly this shape.
+    for (const command of [
+      'cat src/App.tsx',
+      'cat index.html',
+      'type vite.config.ts',
+      'Get-Content src/styles/globals.css',
+      'gc package.json',
+      'head -n 20 src/main.tsx',
+      'tail src/pages/Tasks.tsx',
+      'ls src/components',
+      'dir src',
+      'Test-Path tsconfig.json',
+    ]) {
+      const verdict = checkVerificationCommandSafety(command)
+      expect(verdict.isSafe, command).toBe(false)
+      expect(verdict.reason, command).toBeTruthy()
+    }
+  })
+
+  it('still accepts a content search, which fails when the file exists but is wrong', () => {
+    for (const command of [
+      'grep -q "createRoot" src/main.tsx',
+      'findstr /C:"createRoot" src\\main.tsx',
+      'Select-String -Pattern "createRoot" src/main.tsx',
+    ]) {
+      expect(checkVerificationCommandSafety(command).isSafe, command).toBe(true)
+    }
+  })
+
+  it('refuses a test runner started in its windowed mode but keeps the headless one', () => {
+    for (const command of [
+      'npx cypress open',
+      'cypress open',
+      'npx playwright test --ui',
+      'npx playwright test --headed',
+    ]) {
+      expect(checkVerificationCommandSafety(command).isSafe, command).toBe(false)
+    }
+    for (const command of ['npx cypress run', 'npx playwright test', 'npx vitest run']) {
+      expect(checkVerificationCommandSafety(command).isSafe, command).toBe(true)
+    }
+  })
+
+  it('refuses a command that hands the workspace to a graphical application', () => {
+    for (const command of ['start index.html', 'open dist/index.html', 'xdg-open dist/index.html', 'code .']) {
+      expect(checkVerificationCommandSafety(command).isSafe, command).toBe(false)
+    }
+  })
+
   it('treats an empty or non-string command as unsafe rather than throwing', () => {
     expect(checkVerificationCommandSafety('').isSafe).toBe(false)
     expect(checkVerificationCommandSafety('   ').isSafe).toBe(false)

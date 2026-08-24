@@ -176,3 +176,25 @@ describe('ToolSchemaValidator Unit Tests', () => {
   })
 })
 
+describe('invented tool names', () => {
+  it('rejects a name that is neither a supported tool nor an alias', () => {
+    // Step 1 of a live run on 2026-08-24 was `npm_install`: plausible, and not a tool. It used
+    // to validate cleanly and be dispatched to an executor with no handler for it.
+    const result = validateAndSanitize({ tool: 'npm_install' as any, parameters: {} })
+
+    expect(result.valid).toBe(false)
+    expect(result.errors.join(' ')).toContain('Unknown tool "npm_install"')
+    expect(result.errors.join(' ')).toContain('run_command')
+  })
+
+  it('still accepts every supported tool that carries no explicit parameter case', () => {
+    for (const tool of ['git_status', 'git_diff', 'inspect_os_env', 'rollback_workspace', 'run_tests', 'finish'] as const) {
+      expect(validateAndSanitize({ tool, parameters: {} }).valid, tool).toBe(true)
+    }
+  })
+
+  it('still resolves aliases to their canonical tool', () => {
+    expect(validateAndSanitize({ tool: 'shell' as any, parameters: { command: 'ls' } }).valid).toBe(true)
+    expect(validateAndSanitize({ tool: 'mkdir' as any, parameters: { dirPath: 'src' } }).valid).toBe(true)
+  })
+})

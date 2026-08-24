@@ -1,3 +1,56 @@
+/** What a session that stopped without finishing has to be able to tell the user. */
+export interface SessionStopReport {
+  /** Why the run ended, in plain words. Never an internal directive aimed at the model. */
+  reason: string
+  stepCount: number
+  /** Milestone lines already formatted by the caller ("m-2: Create vite.config.ts"). */
+  completed: readonly string[]
+  outstanding: readonly string[]
+  modifiedFiles: readonly string[]
+}
+
+const MAX_LISTED_ITEMS = 8
+
+function listSection(heading: string, items: readonly string[]): string[] {
+  if (items.length === 0) return []
+  const shown = items.slice(0, MAX_LISTED_ITEMS).map((item) => `- ${item}`)
+  if (items.length > MAX_LISTED_ITEMS) shown.push(`- …and ${items.length - MAX_LISTED_ITEMS} more`)
+  return ['', heading, ...shown]
+}
+
+/**
+ * The report a user gets when a session is stopped by a guard rather than by the model's own
+ * `finish` call.
+ *
+ * These paths used to surface the guard's internal `suggestedAction` — the sentence written to
+ * steer the MODEL — as the session's final summary. In coding_agent_audit.log
+ * session-1787562597025-q8a5 the user's whole account of a 45-step run was "Forcing execution
+ * pause. Proceed immediately to applying file changes or call finish tool.": an instruction
+ * addressed to someone else, naming no milestone, no file and no cause.
+ *
+ * Everything here is already known at the moment of the stop. Not producing it was the only
+ * thing missing.
+ */
+export function compileSessionStopSummary(report: SessionStopReport): string {
+  const lines: string[] = [
+    `⛔ Sessione interrotta automaticamente al passo ${report.stepCount}.`,
+    '',
+    `Motivo: ${report.reason}`,
+  ]
+
+  lines.push(
+    ...listSection(`✅ Completato (${report.completed.length}):`, report.completed),
+    ...listSection(`⏳ Rimasto aperto (${report.outstanding.length}):`, report.outstanding),
+    ...listSection(`📄 File creati o modificati (${report.modifiedFiles.length}):`, report.modifiedFiles)
+  )
+
+  if (report.completed.length === 0 && report.modifiedFiles.length === 0) {
+    lines.push('', 'Nessuna modifica è stata scritta sul workspace durante questa sessione.')
+  }
+
+  return lines.join('\n')
+}
+
 export interface SessionReportData {
   sessionId?: string
   lastUpdated?: string
@@ -65,10 +118,18 @@ export class SessionDebtTracker {
     }
 
     lines.push('', '## 3. Unresolved Issues, Errors & Known Debt')
-    if (this.data.unresolvedIssues.length === 0) {
-      lines.push('- None reported (all verified).')
-    } else {
+    if (this.data.unresolvedIssues.length > 0) {
       this.data.unresolvedIssues.forEach((issue) => lines.push(`- [!] **BLOCKER/DEBT:** ${issue}`))
+    } else if (this.data.nextSteps.length > 0) {
+      // "None reported (all verified)" used to print whenever no milestone carried the `failed`
+      // status — which is not the same thing as being done. In session-1787562597025-q8a5 the
+      // tracker made that claim over a failed run with fourteen of fifteen milestones still
+      // open, because none of them had been explicitly marked failed. Open work is debt.
+      lines.push(
+        `- [!] No explicit blocker was recorded, but ${this.data.nextSteps.length} milestone(s) are still open — see section 4.`
+      )
+    } else {
+      lines.push('- None reported (all verified).')
     }
 
     lines.push('', '## 4. Next Recommended Steps')

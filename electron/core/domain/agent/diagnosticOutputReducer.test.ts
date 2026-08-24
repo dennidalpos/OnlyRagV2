@@ -8,6 +8,31 @@ describe('DiagnosticOutputReducer Unit Tests', () => {
     expect(stripped).toBe('FAIL src/test.ts')
   })
 
+  describe('composeCommandOutput', () => {
+    it('keeps the error text when the command also wrote a banner to stdout', () => {
+      // The exact shape that made every `npm run build` failure unreadable: npm's own two
+      // banner lines on stdout, the reason on stderr. Selecting one stream dropped the reason.
+      const stdout = "> project-dashboard-task@0.1.0 build\n> tsc && vite build"
+      const stderr = "'tsc' is not recognized as an internal or external command"
+
+      const composed = DiagnosticOutputReducer.composeCommandOutput(stdout, stderr, 1)
+
+      expect(composed).toContain('tsc && vite build')
+      expect(composed).toContain("'tsc' is not recognized")
+      expect(composed.indexOf('is not recognized')).toBeGreaterThan(composed.indexOf('build'))
+    })
+
+    it('returns whichever single stream produced output', () => {
+      expect(DiagnosticOutputReducer.composeCommandOutput('only stdout', '', 0)).toBe('only stdout')
+      expect(DiagnosticOutputReducer.composeCommandOutput('', 'only stderr', 1)).toBe('only stderr')
+    })
+
+    it('falls back to the exit code when a command produced no output at all', () => {
+      expect(DiagnosticOutputReducer.composeCommandOutput('', '', 127)).toBe('Exit code 127')
+      expect(DiagnosticOutputReducer.composeCommandOutput(undefined, undefined, null)).toBe('Exit code unknown')
+    })
+  })
+
   it('should preserve short output without modification', () => {
     const shortOutput = 'PASS src/app.test.ts (5 tests)\nAll tests passed.'
     const distilled = DiagnosticOutputReducer.distillTerminalOutput(shortOutput, 1000)

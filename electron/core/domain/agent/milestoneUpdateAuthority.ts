@@ -47,6 +47,11 @@ export interface MilestoneUpdateRequest {
   requestedNotes?: string
   /** Whether the files named by the milestone title are on disk (see milestoneDeliverableResolver). */
   deliverableStatus: MilestoneDeliverableStatus
+  /**
+   * Which of those files are missing, empty or placeholders. Only ever read to name them in a
+   * refusal, so callers that cannot itemise may omit it and get a generic message.
+   */
+  unsatisfiedDeliverables?: readonly string[]
 }
 
 /**
@@ -59,12 +64,22 @@ export interface MilestoneUpdateRequest {
  *    letting it revert is precisely how the plan lost progress it had genuinely earned.
  *  - `failed` is refused while the milestone's deliverables exist with content. "I could not
  *    do it" is not credible about a file the run already wrote.
+ *  - `verified` is refused while any deliverable the title names is absent, empty or a
+ *    placeholder. The mirror of the rule above, and the one that was missing: evidence on disk
+ *    outranked the model only in the direction that denied progress, never in the direction
+ *    that granted it. In session-1787562597025-q8a5 m-2 ("Create `vite.config.ts`; Create
+ *    `tsconfig.json`") went to `verified` on a passing check while `tsconfig.json` had never
+ *    been written — and the project's own `tsc && vite build` could not run for the rest of
+ *    the session. It was the single milestone that run reported as done.
+ *
+ * A milestone whose title names no file at all is `not_applicable` and stays closeable by its
+ * verification command: there is no artefact to contradict it either way.
  *
  * Everything else applies. Notes are replaced rather than merged: a status change invalidates
  * whatever the previous status said about itself.
  */
 export function resolveMilestoneUpdate(req: MilestoneUpdateRequest): MilestoneUpdateVerdict {
-  const { current, requestedStatus, requestedNotes, deliverableStatus } = req
+  const { current, requestedStatus, requestedNotes, deliverableStatus, unsatisfiedDeliverables } = req
 
   if (requestedStatus === current.status) {
     return {
@@ -95,6 +110,23 @@ export function resolveMilestoneUpdate(req: MilestoneUpdateRequest): MilestoneUp
       kind: 'reject',
       reason: `Milestone '${current.id}' cannot be failed: its deliverables exist on disk`,
       directive: `[UPDATE_PLAN REJECTED: CONTRADICTED BY THE WORKSPACE] Every file named by milestone '${current.id}' exists on disk with content, so it cannot be reported as failed.\nIf the content is wrong, fix the file with replace_file_content and mark the milestone verified. If it is already correct, move to the next milestone.`,
+    }
+  }
+
+  if (requestedStatus === 'verified' && deliverableStatus === 'unsatisfied') {
+    const named = (unsatisfiedDeliverables || []).filter(Boolean)
+    const whichFiles = named.length
+      ? `Still missing, empty or placeholder: ${named.join(', ')}.`
+      : `At least one file this milestone names is missing, empty or still a placeholder.`
+    return {
+      kind: 'reject',
+      reason: `Milestone '${current.id}' cannot be verified: ${named.length ? named.join(', ') : 'deliverables'} not on disk`,
+      directive:
+        `[UPDATE_PLAN REJECTED: DELIVERABLES MISSING] Milestone '${current.id}' names files it has not produced, so it cannot be verified — whatever its check reported.\n` +
+        `${whichFiles}\n` +
+        `Directives:\n` +
+        `1. Write the missing file(s) with write_file, with real content — not a TODO comment.\n` +
+        `2. Then mark this milestone again. A check that passes while a declared file is absent is proving something other than this milestone.`,
     }
   }
 

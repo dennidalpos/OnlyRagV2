@@ -1,3 +1,11 @@
 {
-  "todos": []
+  "todos": [
+    "PRIORITA' 1 — Churn: il modello ripete lavoro gia' riuscito e non arriva mai a `finish`. Rilancia comandi gia' passati (nel probe ERESOLVE ha rieseguito 4 volte un `npm run build` verde) e riscrive lo stesso file (21-31 write_file per ~14 file in 50 passi). Punti da esaminare: loopDetector.ts sezione 1, loopEscapePolicy.ts (REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS), e il flag flags.hasVerifiedBuild in agentOrchestratorCircuitBreakerAndVerification.ts. Dettaglio e ipotesi in docs/coding-agent-studio-blueprint.md §5.4.",
+    "Typecheck incrementale post-write: validateAST copre gia' la sintassi in pre-commit dentro write_file, ma un errore di tipo emerge solo al build globale.",
+    "Validazione visiva assente (blueprint §5.5 punto 1): open_in_browser delega all'OS e non restituisce screenshot, console.error o codici HTTP, quindi i requisiti di responsive testing non sono verificabili dall'agente. Richiede Electron Offscreen WebContents e va sviluppato lanciando l'app vera: il banco headless `npm run test:live` non puo' esercitarlo.",
+    "Aderenza alle skill non verificata: la skill tailwind-css-v4 vieta le direttive @tailwind e il CSS generato dall'agente le contiene comunque. Nessun controllo che una skill attiva sia stata rispettata.",
+    "Le skill canvas-design e frontend-design (installate da hub in %APPDATA%/onlyrag-v2/skills) contengono solo due frasi generiche sulla codifica UTF-8: occupano contesto di prompt senza dare indicazioni.",
+    "L'auto-install delle skill dell'hub scrive dentro il progetto dell'utente (`<workspace>/skills/<nome>/SKILL.md`, vedi skillRepository.ts riga ~281): verificare se lo scope workspace e' voluto per le skill auto-scoperte o se devono restare in userData.",
+    "Librerie citate dal blueprint e non installate: ts-morph/@babel/parser, playwright-core, fast-glob, pathe, execa, diff2html. La tabella in §2 ora distingue adottate e proposte; valutarle caso per caso invece di adottarle in blocco."
+  ]
 }

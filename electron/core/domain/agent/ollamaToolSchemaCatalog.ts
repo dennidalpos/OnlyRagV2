@@ -141,3 +141,76 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     summary: { type: 'string', description: 'Final summary of what was accomplished.' },
   }, ['summary']),
 ]
+
+/** The catalogue entry for one tool, or undefined for a name it does not define. */
+export function findToolSchema(toolName: string): OllamaToolSchema | undefined {
+  return OLLAMA_TOOL_SCHEMA_CATALOG.find((entry) => entry.function.name === toolName)
+}
+
+/** A plausible value for a parameter, used only to render the example call. */
+function exampleValueFor(paramName: string, type: string): string {
+  if (type === 'integer' || type === 'number') return '1'
+  if (type === 'boolean') return 'false'
+  if (type === 'array') return '[...]'
+  return `"<${paramName}>"`
+}
+
+/**
+ * What to send back to a model whose tool call was rejected by parameter validation.
+ *
+ * The rejection feedback used to be one fixed sentence — "mandatory input parameters were
+ * missing or malformed. Please ensure you provide valid JSON with all required parameters" —
+ * which names no tool, no parameter and no shape. A 7B model reading it has been told that
+ * something is wrong and nothing about what, so its next attempt is a guess, and the guess is
+ * frequently the same call again.
+ *
+ * The contract is already declared, once, in this catalogue (it is what native tool-calling
+ * models are handed). Rendering it back on a rejection costs nothing and turns the feedback
+ * into something a small model can actually follow: which parameters are mandatory, which are
+ * optional, and the exact JSON envelope to emit.
+ */
+export function buildToolSchemaCorrectionDirective(toolName: string, errors: readonly string[] = []): string {
+  const schema = findToolSchema(toolName)
+  const why = errors.length > 0 ? errors.map((e) => `- ${e}`).join('\n') : '- The call was missing or malformed.'
+
+  if (!schema) {
+    const known = OLLAMA_TOOL_SCHEMA_CATALOG.map((entry) => entry.function.name).join(', ')
+    return [
+      `[TOOL CALL REJECTED: UNKNOWN TOOL "${toolName}"]`,
+      why,
+      `Available tools: ${known}.`,
+      `Emit one JSON tool call using an exact name from that list.`,
+    ].join('\n')
+  }
+
+  const { parameters } = schema.function
+  const required = parameters.required
+  const optional = Object.keys(parameters.properties).filter((name) => !required.includes(name))
+  const describe = (name: string) => `  - "${name}" (${parameters.properties[name].type}): ${parameters.properties[name].description}`
+
+  const exampleBody = required.length > 0 ? required : Object.keys(parameters.properties).slice(0, 1)
+  const exampleParams = exampleBody
+    .map((name) => `    "${name}": ${exampleValueFor(name, parameters.properties[name].type)}`)
+    .join(',\n')
+
+  return [
+    `[TOOL CALL REJECTED: "${toolName}" PARAMETERS INVALID]`,
+    why,
+    '',
+    required.length > 0 ? `Mandatory parameters:\n${required.map(describe).join('\n')}` : 'This tool takes no mandatory parameters.',
+    optional.length > 0 ? `Optional parameters:\n${optional.map(describe).join('\n')}` : '',
+    '',
+    'Emit exactly this shape, filled in:',
+    '```json',
+    '{',
+    `  "tool": "${toolName}",`,
+    '  "parameters": {',
+    exampleParams,
+    '  },',
+    '  "explanation": "..."',
+    '}',
+    '```',
+  ]
+    .filter((line) => line !== '')
+    .join('\n')
+}

@@ -9,6 +9,7 @@ import {
 } from '../domain/agent/milestoneVerificationPromotion'
 import { scanCommandTouchedFiles } from '../infrastructure/filesystem/commandTouchedFilesScanner'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
+import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
@@ -25,15 +26,30 @@ export async function runCircuitBreaker(
   // The circuit breaker is forcing a pause/intervention due to stagnation/looping
   const cbMsg = `⚠️ Circuit Breaker Triggered: ${cbRes.reason}`
   ctx.emitLog('info', cbMsg)
+
+  // What the USER gets. `cbRes.suggestedAction` is written for the model ("Proceed immediately
+  // to applying file changes or call finish tool") and used to be handed to the user verbatim
+  // as the entire account of the run — see compileSessionStopSummary.
+  const milestones = ctx.goalPlanner.getMilestones()
+  const userSummary = compileSessionStopSummary({
+    reason: cbRes.reason || cbMsg,
+    stepCount: ctx.stepCount,
+    completed: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
+    outstanding: milestones
+      .filter((m) => m.status !== 'verified' && !isCompletionMilestoneTitle(m.title))
+      .map((m) => `${m.id}: ${m.title}${m.status === 'failed' ? ' (fallita)' : ''}`),
+    modifiedFiles: Array.from(ctx.sessionChangedFiles.keys()),
+  })
+
   // Every session-ending path must leave an outcome in the audit log; this one and the
   // stagnation abort in handleLoopDetection were the two that did not.
   if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, cbRes.suggestedAction || cbMsg)
+    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, userSummary)
   }
-  ctx.emitDone(false, cbRes.suggestedAction || cbMsg)
+  ctx.emitDone(false, userSummary)
   await ctx.persistCurrentState()
   ctx.finalizeSession()
-  return { outcome: 'return', result: { success: false, summary: cbRes.suggestedAction || cbMsg } }
+  return { outcome: 'return', result: { success: false, summary: userSummary } }
 }
 
 /**

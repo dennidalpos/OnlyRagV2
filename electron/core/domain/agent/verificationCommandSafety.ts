@@ -18,12 +18,18 @@
  * A 7B model disobeyed it, which is the normal case rather than the exceptional one, so the
  * contract is enforced here in code instead of being asked for in prose.
  *
- * Four rejection families, all fatal to the promise a verification makes:
+ * Six rejection families, all fatal to the promise a verification makes:
  *  - MUTATING: the command writes to the workspace. It cannot be trusted to judge the file it
  *    just wrote, and in the observed session it actively corrupted source.
  *  - VACUOUS: the command exits 0 whatever the state of the code (`echo`, `true`, `cd`). It
  *    can never fail, so promoting on its exit code is the same rubber stamp the
  *    verificationCommand mechanism exists to remove.
+ *  - EXISTENCE-ONLY: the command prints a file or lists a directory (`cat`, `Get-Content`,
+ *    `ls`). It fails only when the target is absent, and the target is the file the agent has
+ *    just written — see EXISTENCE_ONLY_COMMANDS for the session where this carried seven of
+ *    fifteen milestones and promoted one that was missing half its deliverables.
+ *  - GUI-MODE: a real test runner invoked in its windowed mode (`cypress open`, `--headed`,
+ *    `--ui`). See isGuiModeVerificationSegment.
  *  - INTERACTIVE: the command opens an editor or pager that waits on a keypress (`nano`,
  *    `vim`). In coding_agent_audit.log session-1787518626817-72a8 the planner emitted `nano
  *    <file>` as the verification for six of ten implementation milestones. There is no
@@ -100,6 +106,39 @@ const VACUOUS_COMMANDS = new Set([
 ])
 
 /**
+ * Commands that print a file or list a directory: they exit 0 for anything that exists,
+ * whatever it contains.
+ *
+ * Not vacuous in the strict sense — `cat missing.txt` does fail — but the only thing they can
+ * fail on is absence, and the file whose absence they would report is the one the agent has
+ * just written. The exit code therefore carries no information about the code at all.
+ *
+ * This was the dominant verification in coding_agent_audit.log session-1787562597025-q8a5:
+ * seven of fifteen milestones declared `cat <file>` as their proof. Milestone m-2 promised
+ * `vite.config.ts` AND `tsconfig.json`, passed on `cat vite.config.ts`, and was recorded as the
+ * single verified milestone of the session — while `tsconfig.json` was never created and the
+ * project's own `tsc && vite build` could not run at all.
+ *
+ * Content searches are deliberately absent from this list: `grep`, `findstr` and
+ * `Select-String` fail when the file exists but does not say what it should, which is a real
+ * claim about the code and a legitimate proof.
+ */
+const EXISTENCE_ONLY_COMMANDS = new Set([
+  'cat',
+  'type',
+  'get-content',
+  'gc',
+  'head',
+  'tail',
+  'ls',
+  'dir',
+  'get-childitem',
+  'gci',
+  'test-path',
+  'stat',
+])
+
+/**
  * Terminal editors and pagers. Every one of these waits for a keypress or a TTY that
  * run_command cannot supply, so none of them can report pass or fail — they either hang until
  * the timeout or exit on a signal that says nothing about the file's content.
@@ -116,7 +155,38 @@ const INTERACTIVE_PROGRAMS = new Set([
   'less',
   'more',
   'man',
+  // Openers and editors that hand the workspace to a graphical application and return an exit
+  // code describing the launch, never the code.
+  'start',
+  'open',
+  'xdg-open',
+  'explorer',
+  'code',
+  'code-insiders',
+  'storybook',
+  'start-storybook',
 ])
+
+/**
+ * Test runners invoked in their graphical mode.
+ *
+ * The binary is a legitimate verification tool — `npx cypress run` and `npx playwright test`
+ * are exactly the falsifiable proof a milestone wants — but `open`, `--ui` and `--headed`
+ * switch it into a window that waits for a human and reports only whether that window was
+ * closed. The distinction is the subcommand, so it cannot be made by the first token alone.
+ *
+ * session-1787562597025-q8a5 carried `npx cypress open` as the declared proof for four
+ * milestones (validating the interface at 375, 768, 1024 and 1440 px). Cypress was not even a
+ * dependency of the project: those four were unverifiable from the moment the plan was parsed.
+ */
+function isGuiModeVerificationSegment(segment: string): boolean {
+  const cmd = segment.trim().toLowerCase()
+  if (!cmd) return false
+  return (
+    /\b(cypress|playwright|vitest|jest|nightwatch)\s+(open|--ui|--headed)\b/.test(cmd) ||
+    /\b(cypress|playwright|vitest|jest|nightwatch)\b.*\s--(ui|headed)\b/.test(cmd)
+  )
+}
 
 /**
  * Mirrors isBlockingDevServerSubcommand in agentToolExecutorService.ts. Domain code must not
@@ -234,10 +304,24 @@ export function checkVerificationCommandSafety(rawCommand: string): Verification
       return { isSafe: false, reason: `\`${head}\` exits 0 whatever the state of the code, so it can never fail and proves nothing` }
     }
 
+    if (EXISTENCE_ONLY_COMMANDS.has(head)) {
+      return {
+        isSafe: false,
+        reason: `\`${head}\` only prints what is already on disk, so it passes for any file that exists — including the one this milestone has just written — and says nothing about whether the code is correct`,
+      }
+    }
+
     if (INTERACTIVE_PROGRAMS.has(head)) {
       return {
         isSafe: false,
-        reason: `\`${head}\` opens an interactive editor or pager, which blocks waiting for a keypress and cannot report pass or fail in an unattended run`,
+        reason: `\`${head}\` opens an interactive editor, pager or graphical window, which waits for a human and cannot report pass or fail in an unattended run`,
+      }
+    }
+
+    if (isGuiModeVerificationSegment(segment)) {
+      return {
+        isSafe: false,
+        reason: 'it launches a test runner in graphical mode, which waits for a human and reports only whether the window was closed — use the headless subcommand (e.g. `cypress run`, `playwright test`) instead',
       }
     }
 

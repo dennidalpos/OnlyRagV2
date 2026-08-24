@@ -651,3 +651,35 @@ describe('parseAgentToolCall — several calls in one response', () => {
     expect(result?.parameters.command).toBe('npm test')
   })
 })
+
+describe('rejection diagnostics', () => {
+  const FENCE = '```json'
+
+  it('reports which tool was refused and why, instead of failing silently', () => {
+    const rejections: { toolName: string; errors: string[] }[] = []
+    const parsed = parseAgentToolCall(
+      [FENCE, '{ "tool": "write_file", "parameters": { "content": "hello" } }', '```'].join('\n'),
+      (r) => rejections.push(r)
+    )
+
+    expect(parsed).toBeNull()
+    expect(rejections).toHaveLength(1)
+    expect(rejections[0].toolName).toBe('write_file')
+    expect(rejections[0].errors.join(' ')).toContain('filePath')
+  })
+
+  it('stays silent on a valid call', () => {
+    const rejections: { toolName: string; errors: string[] }[] = []
+    const parsed = parseAgentToolCall(
+      [FENCE, '{ "tool": "read_file", "parameters": { "filePath": "src/App.tsx" } }', '```'].join('\n'),
+      (r) => rejections.push(r)
+    )
+
+    expect(parsed?.tool).toBe('read_file')
+    expect(rejections).toHaveLength(0)
+  })
+
+  it('works without a sink, as every existing caller does', () => {
+    expect(parseAgentToolCall([FENCE, '{ "tool": "write_file", "parameters": {} }', '```'].join('\n'))).toBeNull()
+  })
+})

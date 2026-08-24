@@ -132,15 +132,25 @@ export function resolveMilestoneDeliverableStatus(
   const deliverables = extractDeliverablePaths(title)
   if (deliverables.length === 0) return 'not_applicable'
 
-  for (const deliverable of deliverables) {
+  return findUnsatisfiedDeliverables(title, probe).length === 0 ? 'satisfied' : 'unsatisfied'
+}
+
+/**
+ * The milestone's declared deliverables that are absent, empty, or still placeholders.
+ *
+ * Same evidence `resolveMilestoneDeliverableStatus` reduces to a single verdict, kept itemised
+ * so a refusal can name the files instead of asserting that something is missing. A milestone
+ * titled "Create `vite.config.ts`; Create `tsconfig.json`" that reports only `tsconfig.json`
+ * tells the model exactly what to write next; "deliverables missing" tells it to guess.
+ */
+export function findUnsatisfiedDeliverables(title: string, probe: DeliverableProbe): string[] {
+  return extractDeliverablePaths(title).filter((deliverable) => {
     const result = probe(deliverable)
-    if (!result.exists || result.contentLength <= 0) return 'unsatisfied'
+    if (!result.exists || result.contentLength <= 0) return true
     // Presence and a non-zero size were the whole bar, so a file holding "// TODO: implement"
     // closed its milestone. Content the probe deemed small enough to inspect is now checked.
-    if (result.content !== undefined && isPlaceholderContent(result.content)) return 'unsatisfied'
-  }
-
-  return 'satisfied'
+    return result.content !== undefined && isPlaceholderContent(result.content)
+  })
 }
 
 /**

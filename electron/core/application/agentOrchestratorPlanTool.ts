@@ -1,8 +1,9 @@
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
+import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { checkVerificationCommandSafety, unsafeVerificationNote } from '../domain/agent/verificationCommandSafety'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
-import { resolveMilestoneDeliverableStatus } from '../domain/agent/milestoneDeliverableResolver'
+import { findUnsatisfiedDeliverables, resolveMilestoneDeliverableStatus } from '../domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -92,7 +93,10 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         )
         const passed = verifyRes.code === 0 && !verifyRes.timedOut
         effectiveStatus = passed ? 'verified' : 'failed'
-        const outputTail = (verifyRes.stdout || verifyRes.stderr || '').trim().slice(-1500)
+        // Both streams, not whichever is non-empty: a failed verification writes its banner to
+        // stdout and its reason to stderr, and selecting one hands the model a note that says
+        // the milestone failed without saying why.
+        const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
         effectiveNotes = passed
           ? `Auto-verified by running: ${verifyCmd}`
           : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
@@ -117,14 +121,16 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       // Evidence on disk outranks the model's self-report: see milestoneUpdateAuthority.ts.
       // Checked after the verificationCommand run above, so a command that genuinely failed can
       // still record a failure, and before the write, so a rejected update never lands.
+      const probe = workspacePath ? createWorkspaceDeliverableProbe(workspacePath) : null
       const authorityVerdict = targetMilestone
         ? resolveMilestoneUpdate({
             current: targetMilestone,
             requestedStatus: effectiveStatus,
             requestedNotes: effectiveNotes,
-            deliverableStatus: workspacePath
-              ? resolveMilestoneDeliverableStatus(targetMilestone.title, createWorkspaceDeliverableProbe(workspacePath))
+            deliverableStatus: probe
+              ? resolveMilestoneDeliverableStatus(targetMilestone.title, probe)
               : 'not_applicable',
+            unsatisfiedDeliverables: probe ? findUnsatisfiedDeliverables(targetMilestone.title, probe) : undefined,
           })
         : null
 

@@ -5,7 +5,7 @@ const {
   resolveCommandTimeoutMs,
   isLongRunningCommand,
   isBlockingDevServerCommand,
-  extractRequestedPackageNames,
+  extractRequestedPackages,
   findAlreadyInstalledPackages,
 } = __testing
 
@@ -79,17 +79,18 @@ describe('redundant install detection', () => {
   })
 
   it('extracts package names, stripping flags and version specifiers', () => {
-    expect(extractRequestedPackageNames('npm install -D tailwindcss postcss autoprefixer')).toEqual([
+    const names = (cmd: string) => extractRequestedPackages(cmd).map((p) => p.name)
+    expect(names('npm install -D tailwindcss postcss autoprefixer')).toEqual([
       'tailwindcss', 'postcss', 'autoprefixer',
     ])
-    expect(extractRequestedPackageNames('npm install tailwindcss postcss autoprefixer --save-dev')).toEqual([
+    expect(names('npm install tailwindcss postcss autoprefixer --save-dev')).toEqual([
       'tailwindcss', 'postcss', 'autoprefixer',
     ])
-    expect(extractRequestedPackageNames('npm i react@18.2.0')).toEqual(['react'])
-    expect(extractRequestedPackageNames('yarn add @tanstack/react-virtual@3.14.10')).toEqual(['@tanstack/react-virtual'])
-    expect(extractRequestedPackageNames('npm install')).toEqual([])
-    expect(extractRequestedPackageNames('npm ci')).toEqual([])
-    expect(extractRequestedPackageNames('npm run build')).toEqual([])
+    expect(names('npm i react@18.2.0')).toEqual(['react'])
+    expect(names('yarn add @tanstack/react-virtual@3.14.10')).toEqual(['@tanstack/react-virtual'])
+    expect(names('npm install')).toEqual([])
+    expect(names('npm ci')).toEqual([])
+    expect(names('npm run build')).toEqual([])
   })
 
   it('must flag every-package-already-present installs as redundant (regression: the same tailwind install was re-run 19 times in one production session because nothing checked package.json first)', () => {
@@ -105,5 +106,21 @@ describe('redundant install detection', () => {
     expect(findAlreadyInstalledPackages(['tailwindcss', 'new-package'], packageJson)).toBeNull()
     expect(findAlreadyInstalledPackages(['react'], 'not valid json')).toBeNull()
     expect(findAlreadyInstalledPackages([], packageJson)).toBeNull()
+  })
+
+  it('flags a request that pins an explicit version, so the redundant-install guard lets it through', () => {
+    // `npm install vite@^8.0.0` is a request to CHANGE the version. Comparing names alone made
+    // the guard answer "vite is already installed" and cancel the one command that resolves a
+    // peer conflict (observed in the ERESOLVE probe of 2026-08-24).
+    expect(extractRequestedPackages('npm install vite@^8.0.0')).toEqual([
+      { name: 'vite', hasExplicitVersion: true },
+    ])
+    expect(extractRequestedPackages('npm install vite')).toEqual([{ name: 'vite', hasExplicitVersion: false }])
+    expect(extractRequestedPackages('npm i @vitejs/plugin-react@4.7.0')).toEqual([
+      { name: '@vitejs/plugin-react', hasExplicitVersion: true },
+    ])
+    expect(extractRequestedPackages('npm i @vitejs/plugin-react')).toEqual([
+      { name: '@vitejs/plugin-react', hasExplicitVersion: false },
+    ])
   })
 })

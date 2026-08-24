@@ -99,3 +99,41 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
     expect(state.recentFullLogs.length).toBeLessThanOrEqual(3)
   })
 })
+
+describe('failure-block accumulation', () => {
+  it('collapses alternating failures on two targets instead of stacking them', () => {
+    const compactor = new EpisodicMemoryCompactor()
+
+    // What a blocked model actually does: A, B, A, B... Comparing only the buffer's tail
+    // matched none of these, and eight near-identical intervention blocks filled the prompt
+    // (session-1787562597025-q8a5, steps 25-36).
+    for (let step = 1; step <= 8; step++) {
+      const target = step % 2 === 0 ? 'src/App.tsx' : 'src/pages/Dashboard.tsx'
+      compactor.recordStep(
+        { step, tool: 'read_file', target, status: 'BLOCKED', summary: 'redundant repeat' },
+        `[REDUNDANT ACTION] Attempt ${step} on ${target}`
+      )
+    }
+
+    const block = compactor.compilePromptHistoryBlock()
+    const failureBlockCount = (block.match(/#### \[FAILURE at Step/g) || []).length
+    expect(failureBlockCount).toBe(2)
+    // Only the most recent attempt per target survives.
+    expect(block).toContain('Attempt 8 on src/App.tsx')
+    expect(block).toContain('Attempt 7 on src/pages/Dashboard.tsx')
+    expect(block).not.toContain('Attempt 1 on')
+  })
+
+  it('keeps distinct failures on distinct targets', () => {
+    const compactor = new EpisodicMemoryCompactor()
+    for (const target of ['a.ts', 'b.ts', 'c.ts']) {
+      compactor.recordStep(
+        { step: 1, tool: 'write_file', target, status: 'FAILURE', summary: 'x' },
+        `failed on ${target}`
+      )
+    }
+
+    const block = compactor.compilePromptHistoryBlock()
+    expect((block.match(/#### \[FAILURE at Step/g) || []).length).toBe(3)
+  })
+})

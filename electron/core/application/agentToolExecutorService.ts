@@ -14,6 +14,10 @@ import { sanitizePowerShellCommand } from '../domain/agent/shellStreamGuard'
 import { webClient } from '../infrastructure/http/webClient'
 import { applyFuzzyReplace, validateAST } from '../domain/agent/fuzzyPatchEngine'
 import { parseTestRunOutput } from '../domain/agent/testResultParser'
+import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
+import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
+import { classifyWriteFileTarget } from '../domain/agent/toolSchemaValidator'
+import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../domain/agent/pendingChangeProjection'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
@@ -112,7 +116,7 @@ function isBlockingDevServerCommand(command: string): boolean {
  * specifiers. Returns an empty array for a bare `npm install`/`npm ci` (no explicit targets,
  * which legitimately reinstalls from the lockfile every time) or a non-install command.
  */
-function extractRequestedPackageNames(command: string): string[] {
+function extractRequestedPackages(command: string): { name: string; hasExplicitVersion: boolean }[] {
   const match = command.trim().match(/^(?:npm|pnpm|yarn|bun)\s+(?:install|i|add)\b(.*)$/i)
   if (!match) return []
   return match[1]
@@ -121,17 +125,21 @@ function extractRequestedPackageNames(command: string): string[] {
     .map((tok) => {
       // Scoped package ("@scope/name@version"): keep the scope, strip only a trailing version.
       const versionSplitIndex = tok.startsWith('@') ? tok.indexOf('@', 1) : tok.indexOf('@')
-      return versionSplitIndex > 0 ? tok.slice(0, versionSplitIndex) : tok
+      return versionSplitIndex > 0
+        ? { name: tok.slice(0, versionSplitIndex), hasExplicitVersion: true }
+        : { name: tok, hasExplicitVersion: false }
     })
 }
 
 /**
  * Returns the requested package names if EVERY one is already listed in package.json's
- * dependencies or devDependencies (a purely mechanical, no-guesswork check) -- meaning the
- * install command would do nothing. Returns null if any package is missing, or if
- * package.json can't be read/parsed, so the caller only skips execution when it's certain the
- * command is fully redundant. Observed in production logs: the same `npm install -D tailwindcss
- * postcss autoprefixer` (and near-variants of it) re-run 19 times in one session.
+ * dependencies or devDependencies (a purely mechanical, no-guesswork check). Returns null if
+ * any package is missing, or if package.json can't be read/parsed. Observed in production
+ * logs: the same `npm install -D tailwindcss postcss autoprefixer` (and near-variants of it)
+ * re-run 19 times in one session.
+ *
+ * Being declared is only half the question -- see missingFromNodeModules in
+ * agentToolFileRepository for the other half, which the caller must ask before skipping.
  */
 function findAlreadyInstalledPackages(requestedNames: string[], packageJsonRaw: string): string[] | null {
   if (requestedNames.length === 0) return null
@@ -224,7 +232,11 @@ export class AgentToolExecutorService {
         logMessage: `Git Commit created in ${path.basename(cwd)}`,
       }
     } catch (err: any) {
-      const detail = (err.stdout?.toString().trim() || err.stderr?.toString().trim() || err.message) as string
+      // Same stream-selection trap as run_command: git prints "nothing to commit" on stdout
+      // while the reason a commit was rejected (hook failure, missing identity) lands on stderr.
+      const gitStdout = err.stdout?.toString().trim() || ''
+      const gitStderr = err.stderr?.toString().trim() || ''
+      const detail = ([gitStdout, gitStderr].filter(Boolean).join('\n') || err.message) as string
       return {
         success: false,
         output: `Git Commit Error: ${detail}`,
@@ -264,6 +276,27 @@ export class AgentToolExecutorService {
   private buildChangeStats(filePath: string, before: string, after: string) {
     const { additions, deletions } = countDiffLines(computeLineDiff(before, after))
     return { filePath, additions, deletions }
+  }
+
+  /**
+   * Appended to a successful write when the file imports a package the project never declared.
+   *
+   * The write is NOT undone: the code is usually most of the way right and throwing it away
+   * costs the model the turn that produced it. What it gets instead is the fact, immediately,
+   * instead of a "Cannot find module" thirty steps later — or, as in
+   * session-1787562597025-q8a5, never (see importDeclarationGate.ts).
+   *
+   * Returns '' whenever the gate has no confident opinion, so the ordinary write result is
+   * untouched in every normal case.
+   */
+  private importIntegrityDirective(filePath: string | undefined, content: string, workspacePath: string | null | undefined): string {
+    if (!workspacePath) return ''
+    const declared = agentToolFileRepository.readDeclaredPackages(workspacePath)
+    if (!declared) return ''
+    const verdict = evaluateFileImportIntegrity(String(filePath || ''), content, declared)
+    if (verdict.ok || !verdict.directive) return ''
+    logger.log('WARN', 'AgentToolExecutor', `[UNDECLARED_IMPORT] ${filePath} imports ${verdict.undeclared.join(', ')}`)
+    return `\n\n${verdict.directive}`
   }
 
   /**
@@ -409,7 +442,7 @@ export class AgentToolExecutorService {
         TEST_TIMEOUT_MS
       )
 
-      const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
+      const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)
       const parsed = parseTestRunOutput(rawOutput, res.timedOut ? 1 : res.code ?? 1)
       const statusLine = parsed.framework === 'unknown' ? parsed.summary : `${parsed.success ? '✅' : '❌'} ${parsed.summary}`
 
@@ -638,7 +671,7 @@ ${toolchain}`
             }
           }
 
-          const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
+          const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)
           return {
             outputForHistory: `[ENSURE_TOOL INSTALL FAILED]
 Command: "${installCmd}"
@@ -752,6 +785,33 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
         const filePath = parameters.filePath
         const content = parameters.content || ''
+
+        // A separator-terminated path names a directory. Writing it as a file produced a
+        // zero-byte file where a folder was needed — see classifyWriteFileTarget.
+        const targetKind = classifyWriteFileTarget(filePath, content)
+        if (targetKind === 'contradictory') {
+          return {
+            outputForHistory: `[WRITE_FILE REJECTED: PATH IS A DIRECTORY]\n"${filePath}" ends with a path separator, so it names a directory, but content was supplied for it.\nDirectives:\n1. To create the folder, call create_directory with dirPath "${filePath}".\n2. To write this content, call write_file again with the full file path, including the file name and extension.`,
+            logMessage: `Write File Rejected: directory path with content ("${filePath}")`,
+          }
+        }
+        if (targetKind === 'directory') {
+          const dirPath = String(filePath)
+          const dirCheck = validatePathSafety(dirPath, workspacePath)
+          if (!dirCheck.safePath) {
+            return { outputForHistory: `Security Violation: ${dirCheck.error}`, logMessage: `Create Directory Rejected: ${dirCheck.error}` }
+          }
+          try {
+            agentToolFileRepository.mkdir(dirCheck.safePath)
+            return {
+              outputForHistory: `Created DIRECTORY ${dirPath} (not a file: the path ends with a separator, so it was routed to create_directory). To add files inside it, call write_file with a full path such as "${dirPath.replace(/[\\/]+$/, '')}/example.ts".`,
+              logMessage: `Created directory ${path.basename(dirCheck.safePath)} (write_file routed to create_directory)`,
+            }
+          } catch (err: any) {
+            return { outputForHistory: `Error creating directory ${dirPath}: ${err.message}`, logMessage: `Create directory error: ${err.message}` }
+          }
+        }
+
         const pathCheck = validatePathSafety(filePath, workspacePath)
         if (!pathCheck.safePath) {
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
@@ -771,7 +831,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {
           return {
-            outputForHistory: `Successfully wrote file ${filePath}`,
+            outputForHistory: `Successfully wrote file ${filePath}${this.importIntegrityDirective(filePath, content, workspacePath)}`,
             logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}`,
             changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, content),
           }
@@ -1060,21 +1120,41 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
 
         // Redundant Install Guard: skip an install command whose every named package is already
-        // listed in package.json -- it would be a costly no-op. Only skips when certain (all
-        // requested packages present); any doubt (package.json missing/unreadable, or only some
-        // packages present) lets the command through as before.
+        // declared in package.json AND present in node_modules -- only then is it a costly
+        // no-op. Any doubt (package.json missing/unreadable, only some packages declared, or
+        // anything absent from node_modules) lets the command through as before.
+        //
+        // Both halves are required. Declaration alone was the original test, and it inverted
+        // the guard's purpose the moment the agent authored package.json itself: everything
+        // reads as installed while node_modules does not exist, so the guard blocks the install
+        // that would make the project buildable instead of a pointless repeat of one.
         if (workspacePath) {
-          const requestedPkgs = extractRequestedPackageNames(cmd)
+          const requested = extractRequestedPackages(cmd)
+          // A command naming an explicit version is a request to CHANGE the version, not to
+          // reinstall what is there. Skipping it silently defeats the one fix that resolves a
+          // peer conflict: `npm install vite@^8` would be answered "vite is already installed"
+          // by a guard that only ever compares names (observed in the ERESOLVE probe).
+          const requestsVersionChange = requested.some((pkg) => pkg.hasExplicitVersion)
+          const requestedPkgs = requestsVersionChange ? [] : requested.map((pkg) => pkg.name)
           if (requestedPkgs.length > 0) {
             const pkgJsonRes = await this.repo.readFile(path.join(workspacePath, 'package.json'))
-            const alreadyInstalled = pkgJsonRes.success && pkgJsonRes.content
+            const declared = pkgJsonRes.success && pkgJsonRes.content
               ? findAlreadyInstalledPackages(requestedPkgs, pkgJsonRes.content)
               : null
+            const notOnDisk = declared ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : []
+            if (declared && notOnDisk.length > 0) {
+              logger.log(
+                'INFO',
+                'AgentToolExecutor',
+                `[REDUNDANT_INSTALL_ALLOW] Declared but not in node_modules, install proceeds: ${notOnDisk.join(', ')}`
+              )
+            }
+            const alreadyInstalled = declared && notOnDisk.length === 0 ? declared : null
             if (alreadyInstalled) {
               const guardFeedback = [
                 `[REDUNDANT_INSTALL_SKIP]`,
                 `Command: "${cmd}"`,
-                `EXECUTION SKIPPED: every requested package (${alreadyInstalled.join(', ')}) is already listed in package.json.`,
+                `EXECUTION SKIPPED: every requested package (${alreadyInstalled.join(', ')}) is declared in package.json AND already present in node_modules.`,
                 `Re-running this install would do nothing but waste time.`,
                 `Directive: proceed with the next step of your plan -- this dependency is already installed.`,
               ].join('\n')
@@ -1107,7 +1187,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
             COMMAND_TIMEOUT_MS
           )
 
-          const rawOutput = (res.stdout || res.stderr || `Exit code ${res.code}`).trim()
+          const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)
           const lowerOut = rawOutput.toLowerCase()
           const isCancelled =
             lowerOut.includes('operation cancelled') ||
@@ -1137,7 +1217,13 @@ Do not retry the same installation. Continue without this tool or ask the user t
             const createViteDirective = isCreateViteCancelled
               ? `\n\n[VITE CLI NON-INTERACTIVE DIRECTIVE]\n'npm create vite' was cancelled because the target directory is not empty or requires interactive prompt selections. DO NOT re-run 'npm create vite' interactively.\nInstead, construct 'package.json', 'index.html', and 'src/main.tsx' directly using write_file, or run 'npx -y create-vite@latest . -- --template react-ts' after clearing conflicting files.`
               : ''
-            const isMissingDependency = lowerOut.includes('cannot find module') || lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import')
+            // A peer-version conflict, parsed from npm's own report. Placed before the
+            // missing-dependency branch because ERESOLVE output also mentions unresolved
+            // packages, and "install the missing dependency" is the advice that just failed.
+            const resolutionConflictDirective = npmResolutionDirectiveFor(rawOutput)
+            const isMissingDependency =
+              !resolutionConflictDirective &&
+              (lowerOut.includes('cannot find module') || lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import'))
             const missingDepDirective = isMissingDependency
               ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation or runtime failed because an imported module/package is missing. Install the missing dependency via run_command (e.g. 'npm install <package-name>') or add it to 'package.json' before re-running.`
               : ''
@@ -1157,7 +1243,7 @@ Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''}${
 Captured Error Stack Trace & Failure Output:
 \`\`\`
 ${rawOutput.slice(0, 4000)}
-\`\`\`${permsDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${npmNamingDirective}${interactivePromptDirective}
+\`\`\`${permsDirective}${resolutionConflictDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${npmNamingDirective}${interactivePromptDirective}
 
 AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or timed out. DO NOT ask the user vague clarification questions. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the command autonomously.`
             return {
@@ -1401,6 +1487,6 @@ export const __testing = {
   resolveCommandTimeoutMs,
   isLongRunningCommand,
   isBlockingDevServerCommand,
-  extractRequestedPackageNames,
+  extractRequestedPackages,
   findAlreadyInstalledPackages,
 }

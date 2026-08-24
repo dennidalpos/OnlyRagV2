@@ -19,6 +19,31 @@ export class DiagnosticOutputReducer {
   }
 
   /**
+   * Joins a command's two output streams into the single text the model gets to read.
+   *
+   * stdout and stderr are separate pipes and a failing command routinely writes to both: npm
+   * prints its `> pkg@version build` banner on stdout and the actual failure on stderr.
+   * Selecting one stream (`stdout || stderr`) therefore discards the diagnosis in exactly the
+   * case where there is one. In coding_agent_audit.log session-1787562597025-q8a5 four
+   * `npm run build` failures reached the model as an exit code plus those two banner lines,
+   * under an auto-healing directive telling it to "inspect the stack trace, locate the failing
+   * file" — of a stack trace that had been dropped before it was ever shown. The model had
+   * nothing to correct, repeated the command, and the session died on the loop guard.
+   *
+   * stderr goes last because that is where the cause lives and the tail of this block is what
+   * survives the truncation the callers apply. Streams are not labelled: npm, pip and cargo
+   * write ordinary progress to stderr, and tagging it as error output would invite a small
+   * model to diagnose a failure in a command that succeeded.
+   */
+  public static composeCommandOutput(stdout?: string, stderr?: string, exitCode?: number | null): string {
+    const out = (stdout || '').trim()
+    const err = (stderr || '').trim()
+    if (out && err) return `${out}\n${err}`
+    if (out || err) return out || err
+    return `Exit code ${exitCode ?? 'unknown'}`
+  }
+
+  /**
    * Distills voluminous terminal output down to high-signal diagnostic headers, error frames, and summary lines.
    */
   public static distillTerminalOutput(output: string, maxChars: number = 2500): string {

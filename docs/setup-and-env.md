@@ -164,6 +164,14 @@ npm test
 npm run test:sidecar
 ```
 
+### Run Live del Coding Agent
+```powershell
+# Sessioni reali contro un modello Ollama, senza UI (minuti, non secondi)
+npm run test:live
+```
+
+Fuori dalla suite normale per costruzione: gli scenari stanno in `scripts/live/*.live.ts` con una config dedicata (`vitest.live.config.mts`), perche' un file live sotto `electron/**` verrebbe raccolto da `npm test` e, con `isolate: false`, smonterebbe le directory temporanee usate dagli altri test. Richiedono Ollama attivo e le impostazioni reali dell'app. Vedi [`agent-live-testing.md`](./agent-live-testing.md).
+
 La suite Python gira sempre su uno store LanceDB temporaneo isolato: `sidecar/tests/conftest.py` imposta `ONLYRAG_DATA_DIR` su una directory temporanea **prima** di qualsiasi import di `sidecar.config`, che risolve i percorsi dati a import-time. Senza quell'override i test scrivevano nello store reale dell'utente. Ogni tabella LanceDB viene inoltre eliminata fra un test e l'altro, perche' la connessione e' a livello di processo.
 
 ### Script di Automazione e Qualità (`scripts/`)

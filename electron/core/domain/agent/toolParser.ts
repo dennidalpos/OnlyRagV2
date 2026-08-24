@@ -5,6 +5,15 @@ import { validateAndSanitize, normalizeToolName } from './toolSchemaValidator'
 
 export type { AgentToolCall }
 
+/** Why one candidate tool call was refused, so the caller can tell the model something useful. */
+export interface ToolCallRejection {
+  toolName: string
+  errors: string[]
+}
+
+/** Notified for every candidate the validator refused. See parseAgentToolCall. */
+export type ToolCallRejectionSink = (rejection: ToolCallRejection) => void
+
 function sanitizeAndParseJson(raw: string): any {
   if (!raw || !raw.trim()) return null
 
@@ -84,7 +93,7 @@ function sliceBalancedObject(text: string, startIdx: number): string | null {
   return null
 }
 
-function extractToolCallFromText(cleanText: string): AgentToolCall | null {
+function extractToolCallFromText(cleanText: string, onRejection?: ToolCallRejectionSink): AgentToolCall | null {
   if (!cleanText || typeof cleanText !== 'string') return null
 
   // 1. Check for JSON block enclosed in ```json ... ```, <tool_call>...</tool_call>, or generic ``` ... ```
@@ -161,6 +170,7 @@ function extractToolCallFromText(cleanText: string): AgentToolCall | null {
     const validation = validateAndSanitize(candidateCall)
     if (!validation.valid) {
       logger.log('WARN', 'ToolParser', `Rejected ${toolName} call: ${validation.errors.join('; ')}`)
+      onRejection?.({ toolName: String(toolName), errors: validation.errors })
       continue
     }
 
@@ -278,7 +288,14 @@ function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
   return null
 }
 
-export function parseAgentToolCall(text: string): AgentToolCall | null {
+/**
+ * Parses the model's turn into a tool call, or null when none survives validation.
+ *
+ * `onRejection` is how the caller learns WHY. Without it a refused call is indistinguishable
+ * from a turn that contained no tool call at all, and the model was told only that "mandatory
+ * input parameters were missing or malformed" — see buildToolSchemaCorrectionDirective.
+ */
+export function parseAgentToolCall(text: string, onRejection?: ToolCallRejectionSink): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 
   // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>, including unclosed tags at text boundaries) to prevent
@@ -289,7 +306,7 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
     .trim()
 
   const candidate =
-    extractToolCallFromText(cleanText) ||
+    extractToolCallFromText(cleanText, onRejection) ||
     parseFencedCodeBlockFallback(cleanText) ||
     parseShellCodeBlockFallback(cleanText) ||
     parseDiffCodeBlockFallback(cleanText)
@@ -297,5 +314,9 @@ export function parseAgentToolCall(text: string): AgentToolCall | null {
   if (!candidate) return null
 
   const validated = validateAndSanitize(candidate)
+  if (!validated.valid) {
+    onRejection?.({ toolName: String(candidate.tool), errors: validated.errors })
+    return null
+  }
   return validated.sanitizedToolCall
 }

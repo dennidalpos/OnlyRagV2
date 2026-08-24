@@ -1,6 +1,7 @@
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { compilePlanMilestones } from '../domain/agent/planCompilation'
-import { parseAgentToolCall } from '../domain/agent/toolParser'
+import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
+import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
@@ -59,20 +60,44 @@ async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
   }
 }
 
-async function handleMissingToolCall(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
+async function handleMissingToolCall(
+  ctx: ResponseInterpreterContext,
+  rejections: readonly ToolCallRejection[] = []
+): Promise<ResponseInterpretationOutcome> {
   const streamedOutput = ctx.streamedOutput || ''
   const hasToolCallAttempt =
+    rejections.length > 0 ||
     streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
 
   if (hasToolCallAttempt) {
-    const feedback = `[TOOL PARSER REJECTION DIAGNOSTIC]\nYour tool call could not be executed because mandatory input parameters were missing or malformed.\nPlease ensure you provide valid JSON with all required parameters.`
+    // The tool's real contract, rendered from the schema catalogue the native tool-calling
+    // path already publishes, instead of the one generic sentence this used to send. That
+    // sentence named no tool, no parameter and no shape, so a small model's next attempt was
+    // a guess — see buildToolSchemaCorrectionDirective.
+    const rejected = rejections[rejections.length - 1]
+    const feedback = rejected
+      ? buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors)
+      : '[TOOL PARSER REJECTION DIAGNOSTIC]\nNo tool call could be parsed from your response. Emit exactly ONE fenced json block containing "tool", "parameters" and "explanation".'
+    const toolLabel = rejected?.toolName || 'unparsed_tool'
     ctx.episodicCompactor.recordStep(
-      { step: ctx.stepCount, tool: 'unparsed_tool', status: 'BLOCKED', summary: 'Tool call rejected: missing mandatory JSON parameters' },
+      {
+        step: ctx.stepCount,
+        tool: toolLabel,
+        status: 'BLOCKED',
+        summary: rejected
+          ? `Tool call rejected: ${rejected.errors.join('; ').slice(0, 120)}`
+          : 'Tool call rejected: no parsable JSON tool call',
+      },
       feedback
     )
-    ctx.emitLog('info', `Step ${ctx.stepCount} Tool Call Rejected: Missing required parameters in JSON payload.`)
+    ctx.emitLog(
+      'info',
+      rejected
+        ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}]: ${rejected.errors.join('; ')}`
+        : `Step ${ctx.stepCount} Tool Call Rejected: no parsable JSON tool call.`
+    )
     if (ctx.settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'unparsed_tool', feedback)
+      codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, toolLabel, feedback)
     }
     return { outcome: 'continue' }
   }
@@ -149,8 +174,9 @@ async function handleMissingToolCall(ctx: ResponseInterpreterContext): Promise<R
 export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
   await extractOrRevisePlan(ctx)
 
-  const parsedTool = parseAgentToolCall(ctx.streamedOutput)
-  if (!parsedTool) return handleMissingToolCall(ctx)
+  const rejections: ToolCallRejection[] = []
+  const parsedTool = parseAgentToolCall(ctx.streamedOutput, (rejection) => rejections.push(rejection))
+  if (!parsedTool) return handleMissingToolCall(ctx, rejections)
 
   ctx.state.noToolStreak = 0
 

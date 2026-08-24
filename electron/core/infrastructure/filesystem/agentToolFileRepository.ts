@@ -109,6 +109,68 @@ export class AgentToolFileRepository {
   hasPytestConfig(cwd: string): boolean {
     return ['pytest.ini', 'pyproject.toml', 'setup.cfg'].some((f) => fs.existsSync(path.join(cwd, f)))
   }
+
+  /**
+   * What the workspace declares it can import: every dependency name in package.json, plus the
+   * bare prefixes that resolve through tsconfig `compilerOptions.paths` (`@/*` -> `@/`).
+   *
+   * Returns null when there is no readable package.json — a workspace too early to judge an
+   * import against, which the caller must treat as "no opinion" rather than "nothing declared".
+   */
+  readDeclaredPackages(cwd: string): { names: Set<string>; aliasPrefixes: string[] } | null {
+    const pkgJsonPath = path.join(cwd, 'package.json')
+    if (!fs.existsSync(pkgJsonPath)) return null
+
+    let pkg: Record<string, Record<string, string> | undefined>
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
+    } catch {
+      return null
+    }
+
+    const names = new Set<string>()
+    for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+      for (const name of Object.keys(pkg[field] || {})) names.add(name)
+    }
+
+    const aliasPrefixes: string[] = []
+    const tsconfigPath = path.join(cwd, 'tsconfig.json')
+    if (fs.existsSync(tsconfigPath)) {
+      try {
+        // Comments are legal in tsconfig and would break JSON.parse; a tsconfig this cannot
+        // read simply contributes no aliases.
+        const raw = fs
+          .readFileSync(tsconfigPath, 'utf-8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|\s)\/\/.*$/gm, '$1')
+        const paths = JSON.parse(raw)?.compilerOptions?.paths || {}
+        for (const pattern of Object.keys(paths)) {
+          const prefix = pattern.split('*')[0]
+          if (prefix) aliasPrefixes.push(prefix)
+        }
+      } catch {}
+    }
+
+    return { names, aliasPrefixes }
+  }
+
+  /**
+   * Of the given package names, those with no directory under `<cwd>/node_modules`.
+   *
+   * A name in package.json is a declaration, not an installation, and the two diverge in the
+   * exact situation an agent creates: it authors package.json with write_file, so every
+   * dependency is "declared" while node_modules has never existed. In
+   * session-1787562597025-q8a5 the redundant-install guard read that declaration, told the
+   * model the packages were "already installed", and cancelled the one `npm install` of the
+   * session — after which every `npm run build` failed for the rest of the run.
+   *
+   * A scoped name maps to nested directories (`@scope/pkg` -> `node_modules/@scope/pkg`).
+   */
+  missingFromNodeModules(cwd: string, packageNames: string[]): string[] {
+    const modulesRoot = path.join(cwd, 'node_modules')
+    if (!fs.existsSync(modulesRoot)) return [...packageNames]
+    return packageNames.filter((name) => !fs.existsSync(path.join(modulesRoot, ...name.split('/'))))
+  }
 }
 
 export const agentToolFileRepository = new AgentToolFileRepository()

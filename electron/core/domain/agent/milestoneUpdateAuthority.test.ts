@@ -139,4 +139,56 @@ describe('a milestone the loop guard abandoned', () => {
 
     expect(verdict.kind).toBe('apply')
   })
+
+  describe('verified is refused while a declared deliverable is missing', () => {
+    it('names the files that are not there', () => {
+      // m-2 of session-1787562597025-q8a5: promoted on a passing check with tsconfig.json
+      // never written, which is why `tsc && vite build` could not run for the rest of the run.
+      const verdict = resolveMilestoneUpdate({
+        current: { id: 'm-2', title: 'Create `vite.config.ts`; Create `tsconfig.json`', status: 'in_progress' },
+        requestedStatus: 'verified',
+        deliverableStatus: 'unsatisfied',
+        unsatisfiedDeliverables: ['tsconfig.json'],
+      })
+
+      expect(verdict.kind).toBe('reject')
+      if (verdict.kind === 'reject') {
+        expect(verdict.directive).toContain('tsconfig.json')
+        expect(verdict.directive).toContain('DELIVERABLES MISSING')
+      }
+    })
+
+    it('falls back to a generic refusal when the caller cannot itemise', () => {
+      const verdict = resolveMilestoneUpdate({
+        current: milestone('in_progress'),
+        requestedStatus: 'verified',
+        deliverableStatus: 'unsatisfied',
+      })
+
+      expect(verdict.kind).toBe('reject')
+    })
+
+    it('still lets a milestone that names no file at all be verified by its command', () => {
+      // "Implement responsive navigation" has no artefact to contradict it either way.
+      const verdict = resolveMilestoneUpdate({
+        current: { id: 'm-9', title: 'Implement responsive navigation', status: 'in_progress' },
+        requestedStatus: 'verified',
+        deliverableStatus: 'not_applicable',
+      })
+
+      expect(verdict.kind).toBe('apply')
+    })
+
+    it('does not block the other statuses when deliverables are missing', () => {
+      for (const requestedStatus of ['in_progress', 'failed'] as const) {
+        expect(
+          resolveMilestoneUpdate({
+            current: milestone('pending'),
+            requestedStatus,
+            deliverableStatus: 'unsatisfied',
+          }).kind
+        ).toBe('apply')
+      }
+    })
+  })
 })

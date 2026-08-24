@@ -6,6 +6,7 @@
  */
 
 import type { AgentToolCall, SupportedToolName, AgentToolReplacementChunk } from './agentTypes'
+import { findToolSchema } from './ollamaToolSchemaCatalog'
 
 export interface SchemaValidationResult {
   valid: boolean
@@ -154,6 +155,29 @@ const TOOL_NAME_ALIASES: Record<string, SupportedToolName> = {
   finish_task: 'finish',
   stop: 'finish',
   end_task: 'finish',
+}
+
+/**
+ * What a `write_file` call is actually asking for, read from the shape of its arguments.
+ *
+ * A path ending in a separator names a directory, not a file — every filesystem and every
+ * shell agrees on that, so it is a reading rather than a guess. `write_file` used to take the
+ * path as an opaque string: in coding_agent_audit.log session-1787562597025-q8a5 the model
+ * called `write_file("src/services/", "")` to satisfy the milestone "Create `src/services/`
+ * directory", and the tool answered "Successfully wrote file src/services/" after creating a
+ * zero-byte FILE named `services`. Nothing downstream could then put anything inside it.
+ *
+ *  - `directory`   — separator-terminated with no content: create the directory instead.
+ *  - `contradictory` — separator-terminated WITH content: a file cannot be a directory, and
+ *                      which of the two the model meant is genuinely unknown. Refuse and say so.
+ *  - `file`        — everything else, handled as before.
+ */
+export type WriteFileTargetKind = 'file' | 'directory' | 'contradictory'
+
+export function classifyWriteFileTarget(filePath: string | undefined, content: string): WriteFileTargetKind {
+  const raw = typeof filePath === 'string' ? filePath.trim() : ''
+  if (!raw || !/[\\/]$/.test(raw)) return 'file'
+  return (content || '').trim() ? 'contradictory' : 'directory'
 }
 
 /**
@@ -512,6 +536,18 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       break
 
     default:
+      // A name that is neither a supported tool nor one of the aliases above is an invention,
+      // and used to fall through this branch as valid: the orchestrator then dispatched it,
+      // the executor had no handler, and the turn was spent on a tool that does not exist. In
+      // a live run of 2026-08-24 step 1 was `npm_install` — plausible, and not a tool.
+      // The catalogue is the same list native tool-calling models are given, so accepting a
+      // name absent from it would mean accepting something no model was ever offered.
+      if (!findToolSchema(tool)) {
+        errors.push(
+          `Unknown tool "${toolCall.tool}". It is not one of the tools this agent provides. To run a shell command, use "run_command" with a "command" parameter.`
+        )
+        break
+      }
       for (const k of Object.keys(rawParams)) {
         if (typeof rawParams[k] === 'object' && rawParams[k] !== null && !Array.isArray(rawParams[k])) {
           rawParams[k] = JSON.stringify(rawParams[k])

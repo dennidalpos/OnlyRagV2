@@ -42,7 +42,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       vramTotalMB: 16384,
       systemRamGB: 32,
     })
-    expect(opts.num_ctx).toBe(16384)
+    expect(opts.num_ctx).toBe(32768)
     expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
@@ -52,17 +52,17 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       vramTotalMB: 6144,
       systemRamGB: 16,
     })
-    expect(opts.num_ctx).toBe(8192)
+    expect(opts.num_ctx).toBe(16384)
     expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
-  it('should dynamically resolve Auto profile to Medium when 8GB VRAM GPU is detected', () => {
+  it('should dynamically resolve Auto profile to Medium tier with RAM-upgraded 16K context when 8GB VRAM GPU is detected and 16GB RAM is available', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: true,
       vramTotalMB: 8192,
       systemRamGB: 16,
     })
-    expect(opts.num_ctx).toBe(8192)
+    expect(opts.num_ctx).toBe(16384)
     expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 
@@ -90,7 +90,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     }
   })
 
-  it('should upgrade effective tier to Medium on GPU-less machine when enableSystemRamOffloading is true and RAM is >= 16GB', () => {
+  it('should upgrade effective tier to Medium on GPU-less machine when enableSystemRamOffloading is true and RAM is >= 16GB, then RAM-scale context to 32K', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: false,
       vramTotalMB: 0,
@@ -98,7 +98,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
       cpuCount: 8,
       enableSystemRamOffloading: true,
     })
-    expect(opts.num_ctx).toBe(8192)
+    expect(opts.num_ctx).toBe(32768)
     expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 })

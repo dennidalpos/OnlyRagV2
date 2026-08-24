@@ -109,11 +109,28 @@ export class HardwareProfileResolver {
       }
     }
 
-    // One runtime profile per hardware class. num_predict and maxContextChars are DERIVED from
-    // num_ctx rather than hand-tuned, because the three used to be set independently and drifted:
-    // the Medium profile shipped num_ctx 8192 with num_predict 6144 and a 28000-char prompt
-    // budget, i.e. a prompt allowance ~3x larger than the generation reserve left room for.
-    const numCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
+    // ── RAM-aware context window sizing ──
+    // Base context from VRAM tier (GPU-only conservative floor).
+    const vramBaseCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
+
+    // When sufficient system RAM is available, Ollama transparently offloads KV cache
+    // overflow to RAM. Slower prompt-eval but dramatically more context capacity.
+    // Modern local models (7B+) natively support 32K–128K context; the KV cache cost
+    // for a 7B at 32K is ~1.8 GB — modest relative to typical system RAM budgets.
+    // Allowing larger context prevents the instruction-following collapse observed
+    // when SLMs exhaust their prompt budget on plan + execution history + diagnostics
+    // within a tight 8K window (see coding_agent_audit.log session analysis).
+    const ramGB = env?.systemRamGB ?? 0
+    let numCtx: number
+    if (ramGB >= 24) {
+      // 24 GB+ RAM: all tiers scale to the native maximum of modern models (32K).
+      numCtx = effectiveTier === 'Low' ? 16384 : 32768
+    } else if (ramGB >= 16) {
+      // 16 GB+ RAM: double the VRAM-only baseline.
+      numCtx = effectiveTier === 'Low' ? 8192 : effectiveTier === 'Medium' ? 16384 : 32768
+    } else {
+      numCtx = vramBaseCtx
+    }
 
     return {
       num_ctx: numCtx,

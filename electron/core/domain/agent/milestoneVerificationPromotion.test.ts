@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
+import { partialDeliveryDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
 import type { PlanMilestone } from './planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
 
@@ -58,5 +58,45 @@ describe('selectMilestonesProvenByVerification', () => {
 
   it('promotes nothing when the plan is empty', () => {
     expect(selectMilestonesProvenByVerification([], statusMap())).toEqual([])
+  })
+})
+
+/**
+ * live-full-task, 2026-08-24: milestone m-6 was "Configure Tailwind CSS in `postcss.config.js`
+ * and `tailwind.config.js`". The model wrote `postcss.config.js` at step 19 and rewrote that
+ * same file at steps 20, 21, 22, 23, 25, 27, 28 and 29. `tailwind.config.js` was never written
+ * in the whole fifty-step run. The system knew which file was missing at every one of those
+ * steps and never said so.
+ */
+describe('partialDeliveryDirective', () => {
+  it('names the missing file, not just the fact that something is missing', () => {
+    const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
+    expect(directive).toContain('"tailwind.config.js"')
+    expect(directive).toContain('m-6')
+  })
+
+  // The observed loop WAS re-writing the delivered file. Saying only "write the missing one"
+  // leaves that behaviour untouched; naming it as blocked closes it.
+  it('tells the model not to rewrite the file it already delivered', () => {
+    const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
+    expect(directive).toContain('Do NOT re-write "postcss.config.js"')
+  })
+
+  it('credits the write that landed rather than reading as a failure', () => {
+    const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
+    expect(directive).toContain('was written and is accepted')
+  })
+
+  it('lists every missing file and agrees with itself on number', () => {
+    const directive = partialDeliveryDirective('m-2', 'vite.config.ts', ['tsconfig.json', 'index.html'])
+    expect(directive).toContain('"tsconfig.json", "index.html"')
+    expect(directive).toContain('2 FILES STILL MISSING')
+    expect(directive).toContain('are NOT on disk')
+  })
+
+  it('uses the singular for a single missing file', () => {
+    const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
+    expect(directive).toContain('1 FILE STILL MISSING')
+    expect(directive).toContain('is NOT on disk')
   })
 })

@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { resolveClosureDirective } from './agentOrchestratorCircuitBreakerAndVerification'
+import { resolveClosureDirective, resolveUnprovableMilestoneDirective } from './agentOrchestratorCircuitBreakerAndVerification'
 import { handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
@@ -71,6 +71,78 @@ describe('resolveClosureDirective', () => {
     expect(directive).toContain('m-2: Ensure every button has a 44x44 touch target')
     expect(directive).toContain('update_plan')
     expect(directive).toContain('"finish"')
+  })
+})
+
+/**
+ * The exact milestone from the live-full-task run of 2026-08-24. m-10 was "Create
+ * `src/services` folder"; the model wrote `src/services/index.tsx` three times with three
+ * different placeholder bodies trying to close it, because focus directive 2 said writing the
+ * milestone's files was how closure happened.
+ */
+describe('resolveUnprovableMilestoneDirective', () => {
+  it('fires on the folder milestone that caused the observed loop', () => {
+    const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
+
+    const directive = resolveUnprovableMilestoneDirective(tempDir, planner)!
+
+    expect(directive).toContain('NAMES NO FILE')
+    expect(directive).toContain('"m-10"')
+  })
+
+  // Writing a file into the folder does not change the verdict, which is the whole point:
+  // three writes later the milestone was still exactly as closeable as before.
+  it('still fires after the model has written a file into that folder', () => {
+    fs.mkdirSync(path.join(tempDir, 'src', 'services'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'services', 'index.tsx'), 'export default {}\n')
+    const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
+
+    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).not.toBeNull()
+  })
+
+  it('stays silent for a milestone that names a file which is still missing', () => {
+    const planner = plannerWith([{ id: 'm-3', title: 'Create `src/App.tsx`', status: 'in_progress' }])
+
+    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+  })
+
+  it('stays silent for a milestone whose file is on disk', () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export default function App() { return null }\n')
+    const planner = plannerWith([{ id: 'm-3', title: 'Create `src/App.tsx`', status: 'in_progress' }])
+
+    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+  })
+
+  // The finish tool owns the completion milestone; telling the model to update_plan it would
+  // drive the checklist to 100% before the report is written.
+  it('stays silent on the completion milestone', () => {
+    const planner = plannerWith([{ id: 'm-15', title: 'Final Review & Completion (invoke finish)', status: 'pending' }])
+
+    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+  })
+
+  it('stays silent without a workspace to probe', () => {
+    const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
+
+    expect(resolveUnprovableMilestoneDirective(null, planner)).toBeNull()
+  })
+
+  // Observed on m-5 "Install Tailwind CSS" in the live run of 2026-08-24: the milestone names
+  // no file, but `update_plan` runs its declared command and promotes on the exit code, so
+  // "no command can prove it" was false and the directive was pushing the model off a real check.
+  it('stays silent for a milestone that declares its own verification command', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan([
+      {
+        id: 'm-5',
+        title: 'Install Tailwind CSS',
+        status: 'in_progress',
+        verificationCommand: 'npm install tailwindcss postcss autoprefixer',
+      },
+    ] as never)
+
+    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
   })
 })
 

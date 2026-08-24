@@ -11,7 +11,7 @@ import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { skillAppService } from './skillAppService'
-import { resolveClosureDirective } from './agentOrchestratorCircuitBreakerAndVerification'
+import { resolveClosureDirective, resolveUnprovableMilestoneDirective } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
@@ -60,11 +60,13 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   const skillsBlock = ctx.skillsBlock !== undefined
     ? ctx.skillsBlock
     : await skillAppService.getContextSkillsBlock(ctx.skillMatchContext, ctx.workspacePath, 3, ctx.skillMatchingOptions)
-  // The plan block stops demanding more work once the project's own verification has passed
-  // and nothing has been written since — see resolveClosureDirective.
-  const planBlock = ctx.goalPlanner.compileProgressPrompt(
-    resolveClosureDirective(ctx.workspacePath, ctx.goalPlanner, ctx.hasVerifiedBuild)
-  )
+  // Two states in which the plan block's standing directives assert something false: the
+  // project is finished and it still forbids finishing, and the active milestone names no
+  // file while directive 2 promises that writing its files closes it.
+  const planBlock = ctx.goalPlanner.compileProgressPrompt({
+    closureDirective: resolveClosureDirective(ctx.workspacePath, ctx.goalPlanner, ctx.hasVerifiedBuild),
+    unprovableMilestoneDirective: resolveUnprovableMilestoneDirective(ctx.workspacePath, ctx.goalPlanner),
+  })
 
   let debtTrackerBlock = ''
   if (ctx.workspacePath) {

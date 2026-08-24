@@ -1,9 +1,10 @@
 import path from 'node:path'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone } from '../domain/agent/milestoneDeliverableResolver'
+import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, findUnsatisfiedDeliverables } from '../domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
   awaitingVerificationNote,
+  partialDeliveryDirective,
   promotionNote,
   selectMilestonesProvenByVerification,
 } from '../domain/agent/milestoneVerificationPromotion'
@@ -13,6 +14,7 @@ import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
 import { assessPostVerificationClosure, buildClosureDirective } from '../domain/agent/postVerificationClosure'
+import { buildUnprovableMilestoneDirective, shouldDirectUnprovableClosure } from '../domain/agent/unprovableMilestoneDirective'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -52,6 +54,57 @@ export async function runCircuitBreaker(
   await ctx.persistCurrentState()
   ctx.finalizeSession()
   return { outcome: 'return', result: { success: false, summary: userSummary } }
+}
+
+/**
+ * Hands the model the list of files its active milestone still owes.
+ *
+ * Recorded as its own episodic entry rather than appended to the write result, because the
+ * result was already recorded as SUCCESS by the time this runs — and it IS a success: the file
+ * landed. What follows is not a correction of that write but the next instruction. Same
+ * mechanism `reportNestedProjectDirs` uses, and the episodic buffer deduplicates by tool and
+ * target, so re-writing the same file does not stack copies of this text in the prompt.
+ */
+function reportPartialDelivery(
+  ctx: ToolResultProcessingContext,
+  milestone: { id: string; title: string },
+  evidencePath: string,
+  probe: ReturnType<typeof createWorkspaceDeliverableProbe>
+) {
+  // `evidencePath` arrives as whatever the tool reported — a workspace-relative path from
+  // write_file, an absolute one from a command scan — while the deliverables come out of the
+  // title in relative form. Compared verbatim, an absolute evidence path would never match and
+  // the file just written would be listed back as still missing.
+  const normalisedEvidence = evidencePath.replace(/\\/g, '/')
+  const missing = findUnsatisfiedDeliverables(milestone.title, probe).filter(
+    (candidate) => normalisedEvidence !== candidate && !normalisedEvidence.endsWith(`/${candidate}`)
+  )
+  // Empty when the file just written is itself the unsatisfied one — a placeholder body, say.
+  // The import gate and the placeholder rules already speak to that; repeating it here as
+  // "you still owe this file" would contradict the write result the model just read.
+  if (missing.length === 0) return
+
+  const directive = partialDeliveryDirective(milestone.id, evidencePath, missing)
+  ctx.episodicCompactor.recordStep(
+    {
+      step: ctx.stepCount,
+      tool: ctx.parsedTool.tool,
+      target: evidencePath,
+      // BLOCKED is the only status that routes a directive into the durable failure buffer,
+      // where it survives FIFO trimming — but the write was NOT blocked, and the trajectory
+      // table renders this summary next to that status word. It has to lead with what actually
+      // happened, or the model reads its own successful write back as a rejection.
+      status: 'BLOCKED',
+      summary: `Write accepted — milestone ${milestone.id} still owes ${missing.join(', ')}`,
+    },
+    directive
+  )
+  ctx.emitLog(
+    'info',
+    `📄 Milestone ${milestone.id}: mancano ancora ${missing.map((m) => `"${m}"`).join(', ')}.`,
+    directive,
+    { category: 'system_alert' }
+  )
 }
 
 /**
@@ -102,9 +155,20 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
         `✏️ Milestone ${milestone.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`
       )
       advancedAny = true
-    } else if (milestone.status === 'pending') {
+      continue
+    }
+
+    if (milestone.status === 'pending') {
       ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress')
       advancedAny = true
+    }
+
+    // The branch that used to say nothing. The write landed on one of this milestone's files
+    // and the others are still missing — a fact this exact line already computed and kept to
+    // itself, which is how a model came to rewrite `postcss.config.js` eight times while
+    // `tailwind.config.js` was never written at all. See partialDeliveryDirective.
+    if (status === 'unsatisfied') {
+      reportPartialDelivery(ctx, milestone, evidencePath, probe)
     }
   }
 
@@ -295,6 +359,28 @@ export function resolveClosureDirective(
     deliverableStatusOf: (m) => resolveMilestoneDeliverableStatus(m.title, probe),
   })
   return buildClosureDirective(assessment)
+}
+
+/**
+ * The directive that replaces "write this milestone's files to close it" when there are none.
+ *
+ * Same probe as `resolveClosureDirective`, asked about the ACTIVE milestone instead of the
+ * whole plan, so the two can never disagree about the same milestone in the same turn.
+ * Returns null in every ordinary case, leaving the standing directive untouched.
+ */
+export function resolveUnprovableMilestoneDirective(
+  workspacePath: string | null | undefined,
+  goalPlanner: GoalDecompositionPlanner
+): string | null {
+  if (!workspacePath) return null
+  const activeMilestone = goalPlanner.getActiveMilestone()
+  if (!activeMilestone || isCompletionMilestoneTitle(activeMilestone.title)) return null
+
+  const probe = createWorkspaceDeliverableProbe(workspacePath)
+  const status = resolveMilestoneDeliverableStatus(activeMilestone.title, probe)
+  if (!shouldDirectUnprovableClosure(activeMilestone, status)) return null
+
+  return buildUnprovableMilestoneDirective(activeMilestone)
 }
 
 /**

@@ -56,8 +56,11 @@ mindmap
         Parser canonico e capping a 15 milestone (planMilestoneCapper)
         Probe su disco per deliverable reali (workspaceDeliverableProbe)
         Promozione milestone solo con tutti i deliverable presenti
+        Direttiva dedicata per milestone senza artefatto (unprovableMilestoneDirective)
+        Elenco dei deliverable ancora mancanti dopo una consegna parziale (partialDeliveryDirective)
       Presente ma non efficace
         Microtask orientati ai file invece che alle funzionalità
+        Deliverable di directory non riconosciuti (una milestone "crea la cartella X" resta indimostrabile)
       Cosa manca
         Pianificazione gerarchica a 4 macro-fasi
         Sub-task branching dinamico su imprevisti tecnici
@@ -333,6 +336,44 @@ Cio' che il modello ha fatto, per intero: ha obbedito alla direttiva 1 — al pa
 **Il budget era gia' bruciato prima.** Ai passi 22-28 il modello ha riscritto `src/services/index.tsx` sei volte **con contenuto ogni volta diverso** — quindi `redundantWriteDetector` non e' intervenuto, e correttamente: quelle erano scritture vere. E' il sintomo B in una forma che questa onda non copre. Il fix chiude la riscrittura *identica*, che era quella che invalidava la build verde; la riscrittura *variata* dello stesso file resta un problema aperto, gestito solo dal controllo di thrashing esistente (4 edit in 6 azioni), che infatti e' scattato al passo 25 e ha portato all'abbandono di m-10.
 
 In sintesi: il meccanismo di chiusura e' verificato end-to-end su entrambi i canali, con il contenuto e il momento giusti. Quello che non e' risolto e' la *velocita'* di obbedienza di un 7B e la seconda forma del churn. Le due cose vanno misurate separatamente dalla prossima onda.
+
+**La seconda forma del churn, diagnosticata dal run stesso.** Il tracker riportava "riscrittura dello stesso file con contenuto ogni volta diverso" come ipotesi da valutare. Il log la smentisce: i tre write su `src/services/index.tsx` (passi 22, 23, 24) erano tre **placeholder diversi** — `fetchData` stub, poi `getTasks`/`addTask` stub, poi `export default {}`. Non correzioni, non amnesia: tentativi diversi di soddisfare una milestone che nessuna scrittura poteva soddisfare.
+
+La milestone era m-10, *"Create `src/services` folder"*. `extractDeliverablePaths` non trova nulla — una directory non ha estensione, e il pattern richiede `stem.ext` — quindi la milestone risolve `not_applicable` e nessuna verifica potra' mai promuoverla. Nel frattempo la direttiva 2 del focus block prometteva: *"Once the required files for this milestone are created or updated, invoke `update_plan` to mark it verified"*. Per quella milestone non esistono file da creare. Il modello ha fatto l'unica cosa che la direttiva suggeriva, tre volte, con contenuto diverso ogni volta perche' ogni tentativo lasciava il mondo identico. Poi il controllo di thrashing lo ha bloccato e il loop guard ha abbandonato m-10: sette passi su cinquanta.
+
+E' la stessa forma degli altri difetti di questa sezione — **un'istruzione che non puo' essere eseguita** — e l'uscita esisteva gia' senza essere nominata: `milestoneUpdateAuthority` lascia deliberatamente chiudibile via `update_plan` una milestone che non nomina artefatti, proprio perche' non c'e' nulla su disco che possa contraddire il giudizio del modello.
+
+* [`unprovableMilestoneDirective.ts`](../electron/core/domain/agent/unprovableMilestoneDirective.ts) sostituisce **la sola direttiva 2** quando la milestone attiva e' `not_applicable`: dichiara che nessun file e nessun comando possono dimostrarla, che creare un file nuovo non la soddisfa e verra' bloccato come loop, e nomina `update_plan` con l'id esatto. Il resto del focus block resta intatto — la milestone e' ancora quella attiva e la sessione non e' finita.
+* La direttiva **non** dice di saltare il lavoro. *"Ensure buttons have a 44x44 touch target"* descrive lavoro vero in file che gia' esistono: manca solo la prova. Dire "chiudila e basta" trasformerebbe ogni milestone inchiodabile in un timbro, che e' esattamente cio' che `milestoneVerificationPromotion` e' stato scritto per finire.
+* Quando anche la chiusura di sessione e' legittima, vince quella: a progetto verificato non c'e' piu' una milestone attiva su cui lavorare, e stampare direttive di focus rimetterebbe il modello al lavoro.
+
+> Nota su una strada scartata: rendere estraibile `src/services` come *deliverable di directory*, cosi' che m-10 diventi verificabile. E' allettante e ha un rischio concreto: una milestone oggi `not_applicable` e' **chiudibile** dal giudizio del modello, mentre una `unsatisfied` **blocca** la chiusura di sessione (vedi `assessPostVerificationClosure`). Un'estrazione sbagliata — "Move `src/old` to the `src/new` folder" — convertirebbe una milestone chiudibile in una bloccante permanente. Il guadagno non vale quel rischio finche' non c'e' una regola sintattica che distingua l'intento di creazione da quello di spostamento.
+
+**Verifica live, e di nuovo il run ha corretto la stesura.** La direttiva compare al posto giusto e sostituisce la sola direttiva 2, lasciando intatto il resto del focus block. Ma nel run del 2026-08-24 e' finita su m-5 *"Install Tailwind CSS"*, che porta `Verify with: npm install tailwindcss postcss autoprefixer` — e affermava *"No write and **no command** can prove it"*. Falso: `update_plan` **esegue** il `verificationCommand` dichiarato e promuove sull'exit code. La direttiva stava spingendo il modello a ripiegare sul proprio giudizio mentre un controllo reale era disponibile — il timbro che questo codice continua a dover rimuovere. `shouldDirectUnprovableClosure` ora richiede anche l'assenza di un `verificationCommand`, cosi' che l'affermazione centrale sia letteralmente vera.
+
+Nello stesso run il no-op detector della prima onda ha lavorato per davvero: sette `[NO-OP WRITE]` su `src/styles/globals.css` dal passo 39, con la build verde preservata. Va detto anche il resto: il modello ha ripetuto comunque. Il rilevatore rende osservabile il fatto e protegge la prova, non convince un 7B a smettere.
+
+**La terza forma: consegna parziale.** Nello stesso run, milestone m-6 *"Configure Tailwind CSS in `postcss.config.js` and `tailwind.config.js`"*. Il modello ha scritto `postcss.config.js` al passo 19 e lo ha riscritto ai passi 20, 21, 22, 23, 25, 27, 28 e 29 — byte-identico ogni volta, ognuno bloccato. **`tailwind.config.js` non e' mai stato scritto in tutto il run da cinquanta passi.**
+
+Il modello non era confuso su cosa avesse fatto: non gli e' mai stato detto cosa mancava ancora, e ha continuato a riconsegnare la meta' che ricordava. Il punto in cui l'informazione si perdeva e' preciso — `advanceActiveMilestoneOnMutation` risolve lo stato del deliverable a **ogni** scrittura, e quando risulta `satisfied` emette un messaggio ("tutti i file richiesti sono presenti"). Quando risulta `unsatisfied` non emetteva nulla, pur avendo in mano l'elenco esatto tramite `findUnsatisfiedDeliverables`.
+
+* [`partialDeliveryDirective`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) e' il gemello di `awaitingVerificationNote` per il ramo che taceva: nomina i file mancanti, dichiara che la milestone non puo' essere verificata finche' non esistono, e dice esplicitamente di **non** riscrivere quello appena consegnato. Il file che e' atterrato viene accreditato, non trattato come un errore: e' stato scritto ed e' accettato.
+* Il file appena scritto viene escluso dall'elenco confrontando i path normalizzati e non alla lettera — le scansioni dei comandi riportano path assoluti mentre i deliverable escono dal titolo in forma relativa, e un confronto letterale avrebbe rilanciato al modello come "mancante" il file che aveva appena consegnato.
+* Se l'unico deliverable insoddisfatto e' proprio quello appena scritto — un corpo placeholder, per esempio — la direttiva tace: dirgli che deve ancora consegnarlo contraddirebbe il "Successfully wrote file" che ha appena letto, e di quel caso parlano gia' le regole sui placeholder.
+* La direttiva viaggia come episodio `BLOCKED`, che e' l'unico stato che la instrada nel buffer dei fallimenti dove sopravvive al trimming FIFO. La scrittura pero' **non** e' stata bloccata, e la tabella della traiettoria stampa il sommario accanto a quella parola: il sommario apre percio' con "Write accepted", altrimenti il modello rilegge la propria scrittura riuscita come un rifiuto.
+
+**Verifica live — la prima obbedienza immediata di tutta la serie.** Run del 2026-08-24 con piano seminato:
+
+| | senza direttiva | con direttiva |
+| :--- | :--- | :--- |
+| m-1 (`package.json` + `index.html`) | — | passo 1 scrive `package.json`, direttiva nomina `index.html`, **passo 2** lo scrive |
+| m-2 (`vite.config.ts` + `tsconfig.json`) | passo 3 scrive `vite.config.ts`, `tsconfig.json` arriva ai passi 8, 9 e 12 (uno rifiutato dall'AST) | passo 3 scrive `vite.config.ts`, direttiva nomina `tsconfig.json`, **passo 4** lo scrive |
+
+Nove passi contro uno, sulla stessa milestone. Due sole milestone hanno attivato la direttiva in tutto il run — la deduplicazione su tool+target regge, il costo di prompt e' quello previsto.
+
+**E il resto del run, per intero.** La sessione ha comunque esaurito i cinquanta passi, a **0/15 milestone verificate** contro 2/15 del run precedente. Prima di attribuirlo alla modifica: in **nessuno dei due run** un `npm run build` e' mai andato a buon fine, quindi il canale di promozione per verifica non e' mai stato esercitato in nessuno dei due — le 2/15 precedenti venivano da `update_plan`. I piani sono inoltre rigenerati a ogni run e diversi fra loro. `agent-live-testing.md` classifica questa sonda come *osservazione, non asserzione* proprio per questo: su un 7B una singola coppia di run non sostiene un confronto su quella metrica. Cio' che regge e' la catena causale sopra, che si legge passo per passo.
+
+Il churn tardivo resta, su milestone da **un solo file** (`globals.css` ai passi 35-40, `TasksPage.tsx` ai passi 42-47), dove la consegna parziale non ha nulla da dire. Il prompt satura in entrambi i run — 20.914 e 22.192 caratteri, entrambi al soffitto — che e' il problema di §1.2 e resta aperto.
 
 **Resta aperto — feedback sintattico esteso**: `validateAST` copre gia' la sintassi in pre-commit; manca il typecheck incrementale.
 

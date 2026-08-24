@@ -229,17 +229,26 @@ export class GoalDecompositionPlanner {
   /**
    * Renders the plan block for the next turn.
    *
-   * `closureDirective` is supplied by the caller when the project's verification has passed
-   * and nothing has been written since (see postVerificationClosure.ts). When it is present it
-   * REPLACES the active-milestone focus block rather than joining it, because the two say
-   * opposite things: the focus block's directive 4 reads "Do NOT invoke finish until all
-   * operational checklist milestones are completed and verified", and a milestone that names
-   * no artefact can never become verified through any command. Printing both is what leaves
-   * the model with a green build, a milestone it cannot close, and re-running the build as its
-   * only permitted action.
+   * Both fields of `context` come from the workspace probe, which only the application layer
+   * can run, and both REPLACE standing text rather than joining it — the plan block's default
+   * directives assert things that are false in these two states, and a prompt that says both
+   * is a prompt the model resolves by picking one.
+   *
+   * `closureDirective` (see postVerificationClosure.ts) replaces the whole focus block once
+   * the verification has passed and nothing is left that a command could prove. The focus
+   * block's directive 4 reads "Do NOT invoke finish until all operational checklist milestones
+   * are completed and verified", and a milestone naming no artefact can never get there.
+   *
+   * `unprovableMilestoneDirective` (see unprovableMilestoneDirective.ts) replaces directive 2
+   * alone, when the active milestone is the one that names no artefact. Directive 2 promises
+   * that writing the milestone's files closes it; for that milestone there are none to write.
    */
-  public compileProgressPrompt(closureDirective?: string | null): string {
+  public compileProgressPrompt(context?: {
+    closureDirective?: string | null
+    unprovableMilestoneDirective?: string | null
+  }): string {
     if (this.milestones.length === 0) return ''
+    const closureDirective = context?.closureDirective
 
     const progress = this.getProgressSummary()
     const lines = [
@@ -292,8 +301,24 @@ export class GoalDecompositionPlanner {
     } else if (closureDirective) {
       lines.push(`\n${closureDirective}`)
     } else {
+      // Kept as a list so directive 2 can be swapped out: it is the one that asserts writing
+      // this milestone's files will close it, which is false for a milestone that names none.
+      const closureStep =
+        context?.unprovableMilestoneDirective ||
+        `2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.`
+
       lines.push(
-        `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Focus your actions on achieving the goals of this milestone.\n2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.\n3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.\n4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.\n5. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx) directly in the workspace root.`
+        [
+          `\n[CURRENT ACTIVE MICRO-TASK FOCUS]`,
+          `🎯 ACTIVE MILESTONE (Focus on this step now):`,
+          `👉 **Task ${activeM.id}: ${activeM.title}**`,
+          `Directives:`,
+          `1. Focus your actions on achieving the goals of this milestone.`,
+          closureStep,
+          `3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.`,
+          `4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.`,
+          `5. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx) directly in the workspace root.`,
+        ].join('\n')
       )
     }
 

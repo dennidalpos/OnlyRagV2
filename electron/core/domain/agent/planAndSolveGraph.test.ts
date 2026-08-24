@@ -284,7 +284,7 @@ Here is the microtask execution plan:
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan(activePlan as any)
 
-      const prompt = planner.compileProgressPrompt('[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.')
+      const prompt = planner.compileProgressPrompt({ closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' })
 
       expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
       expect(prompt).not.toContain('ACTIVE MILESTONE')
@@ -295,16 +295,57 @@ Here is the microtask execution plan:
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan(activePlan as any)
 
-      const prompt = planner.compileProgressPrompt('[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.')
+      const prompt = planner.compileProgressPrompt({ closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' })
 
       expect(prompt).toContain('**m-2: Ensure the layout is responsive**')
+    })
+
+    it('swaps directive 2 alone when the active milestone names no artefact', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan(activePlan as any)
+
+      const prompt = planner.compileProgressPrompt({
+        unprovableMilestoneDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.',
+      })
+
+      expect(prompt).toContain('2. THIS MILESTONE NAMES NO FILE.')
+      expect(prompt).not.toContain('Once the required files for this milestone are created')
+      // The rest of the focus block is untouched: this milestone is still the active one and
+      // the session is not finished.
+      expect(prompt).toContain('ACTIVE MILESTONE')
+      expect(prompt).toContain('1. Focus your actions on achieving the goals of this milestone.')
+      expect(prompt).toContain('4. Do NOT invoke "finish"')
+    })
+
+    it('keeps the standard directive 2 when no override is supplied', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan(activePlan as any)
+
+      expect(planner.compileProgressPrompt()).toContain(
+        '2. Once the required files for this milestone are created or updated'
+      )
+    })
+
+    // Closure wins: once the project is verified there is no active milestone to work on, so
+    // rendering focus directives at all would put the model back to work.
+    it('prefers the closure directive over the unprovable one when both apply', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan(activePlan as any)
+
+      const prompt = planner.compileProgressPrompt({
+        closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.',
+        unprovableMilestoneDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.',
+      })
+
+      expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
+      expect(prompt).not.toContain('THIS MILESTONE NAMES NO FILE')
     })
 
     it('leaves the all-complete branch alone: it already orders finish', () => {
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan([{ id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' }] as any)
 
-      const prompt = planner.compileProgressPrompt('[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.')
+      const prompt = planner.compileProgressPrompt({ closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' })
 
       expect(prompt).toContain('ALL CHECKLIST MILESTONES COMPLETED')
     })

@@ -12,6 +12,8 @@ import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
+import { assessPostVerificationClosure, buildClosureDirective } from '../domain/agent/postVerificationClosure'
+import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 /** Returns a `return` outcome if the stagnation circuit breaker trips into a hard stop. */
@@ -266,6 +268,33 @@ export function promoteMilestonesProvenBy(
     'info',
     `✅ ${proven.length} milestone verificate da "${verificationCommand}": ${proven.map((m) => m.id).join(', ')} (${progress.completed}/${progress.total}).`
   )
+}
+
+/**
+ * The directive that tells the model the session may close, or null while it may not.
+ *
+ * Wires the pure closure policy to the one thing it needs from disk — whether each open
+ * milestone names an artefact — using the same probe that decides promotion, so the plan block
+ * and the loop guard cannot end up asserting different things about the same milestone in the
+ * same turn.
+ *
+ * Returns null whenever there is no workspace to probe: without one nothing can be shown to be
+ * finished, and inventing a closure would be the fabricated verification the promotion rules
+ * exist to prevent.
+ */
+export function resolveClosureDirective(
+  workspacePath: string | null | undefined,
+  goalPlanner: GoalDecompositionPlanner,
+  hasVerifiedBuild: boolean
+): string | null {
+  if (!workspacePath || !hasVerifiedBuild) return null
+  const probe = createWorkspaceDeliverableProbe(workspacePath)
+  const assessment = assessPostVerificationClosure({
+    hasVerifiedBuild,
+    milestones: goalPlanner.getMilestones(),
+    deliverableStatusOf: (m) => resolveMilestoneDeliverableStatus(m.title, probe),
+  })
+  return buildClosureDirective(assessment)
 }
 
 /**

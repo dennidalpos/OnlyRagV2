@@ -79,7 +79,13 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   emitChangeMetrics(ctx)
 
-  const isMutating = ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool)
+  // Classified by tool name, then corrected by what the tool actually did: a `write_file`
+  // whose content was already on disk mutated nothing, and treating it as a mutation cleared
+  // the verified-build flag and re-advanced milestones on evidence that had not changed. See
+  // redundantWriteDetector.ts.
+  const isMutating =
+    ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) &&
+    !toolRes.noOpMutation
   const breakerOutcome = await runCircuitBreaker(ctx, isMutating, isToolFailure)
   if (breakerOutcome) return breakerOutcome
 
@@ -110,7 +116,11 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   let category: AgentLogEntry['category'] = 'tool_execution'
   let verb: AgentLogEntry['verb'] = undefined
 
-  if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file', 'move_file', 'create_directory'].includes(toolName)) {
+  if (toolRes.noOpMutation) {
+    // Nothing was created or edited, so the panel must not claim it was: the agent log is the
+    // user's account of what the run did to their workspace. `logMessage` already says so.
+    category = 'tool_execution'
+  } else if (['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'copy_file', 'move_file', 'create_directory'].includes(toolName)) {
     category = 'file_mutation'
     verb = toolName === 'write_file' || toolName === 'create_directory'
       ? 'Created'

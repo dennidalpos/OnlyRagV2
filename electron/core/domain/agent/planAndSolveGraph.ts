@@ -226,7 +226,19 @@ export class GoalDecompositionPlanner {
     }
   }
 
-  public compileProgressPrompt(): string {
+  /**
+   * Renders the plan block for the next turn.
+   *
+   * `closureDirective` is supplied by the caller when the project's verification has passed
+   * and nothing has been written since (see postVerificationClosure.ts). When it is present it
+   * REPLACES the active-milestone focus block rather than joining it, because the two say
+   * opposite things: the focus block's directive 4 reads "Do NOT invoke finish until all
+   * operational checklist milestones are completed and verified", and a milestone that names
+   * no artefact can never become verified through any command. Printing both is what leaves
+   * the model with a green build, a milestone it cannot close, and re-running the build as its
+   * only permitted action.
+   */
+  public compileProgressPrompt(closureDirective?: string | null): string {
     if (this.milestones.length === 0) return ''
 
     const progress = this.getProgressSummary()
@@ -277,6 +289,8 @@ export class GoalDecompositionPlanner {
       lines.push(
         `\n[NO OPERATIONAL MILESTONES REMAIN - ACTION REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nIMMEDIATELY invoke the "finish" tool with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion${failedList}`
       )
+    } else if (closureDirective) {
+      lines.push(`\n${closureDirective}`)
     } else {
       lines.push(
         `\n[CURRENT ACTIVE MICRO-TASK FOCUS]\n🎯 ACTIVE MILESTONE (Focus on this step now):\n👉 **Task ${activeM.id}: ${activeM.title}**\nDirectives:\n1. Focus your actions on achieving the goals of this milestone.\n2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.\n3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.\n4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.\n5. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx) directly in the workspace root.`

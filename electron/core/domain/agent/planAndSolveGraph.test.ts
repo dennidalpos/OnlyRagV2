@@ -261,6 +261,55 @@ Here is the microtask execution plan:
     expect(compact.activeMicroTask).toBe('m-1: Create a new React project using Vite.')
     expect(compact.pendingMicroTasks[1]).toBe('m-2: Initialize Tailwind CSS in the project.')
   })
+  describe('closure directive', () => {
+    const activePlan = [
+      { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' as const },
+      { id: 'm-2', title: 'Ensure the layout is responsive', status: 'in_progress' as const },
+    ]
+
+    it('renders the ordinary focus block, prohibition included, while the session is not closable', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan(activePlan as any)
+
+      const prompt = planner.compileProgressPrompt()
+
+      expect(prompt).toContain('ACTIVE MILESTONE')
+      expect(prompt).toContain('Do NOT invoke "finish"')
+    })
+
+    // The two blocks contradict each other: directive 4 forbids finishing until every
+    // milestone is verified, and a milestone naming no artefact can never get there. Printing
+    // both is what left the model re-running a green build as its only permitted action.
+    it('replaces the focus block entirely once the project is verified and closable', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan(activePlan as any)
+
+      const prompt = planner.compileProgressPrompt('[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.')
+
+      expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
+      expect(prompt).not.toContain('ACTIVE MILESTONE')
+      expect(prompt).not.toContain('Do NOT invoke "finish"')
+    })
+
+    it('still renders the checklist, so the model has the ids update_plan needs', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan(activePlan as any)
+
+      const prompt = planner.compileProgressPrompt('[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.')
+
+      expect(prompt).toContain('**m-2: Ensure the layout is responsive**')
+    })
+
+    it('leaves the all-complete branch alone: it already orders finish', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([{ id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' }] as any)
+
+      const prompt = planner.compileProgressPrompt('[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.')
+
+      expect(prompt).toContain('ALL CHECKLIST MILESTONES COMPLETED')
+    })
+  })
+
   describe('verification directives on checklist lines', () => {
     it('reads the verification command from a dash-separated directive and keeps it out of the title', () => {
       const plan = GoalDecompositionPlanner.parsePlanFromText(

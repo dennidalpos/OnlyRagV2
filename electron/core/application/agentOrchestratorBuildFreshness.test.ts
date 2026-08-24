@@ -4,6 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
+import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
+import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
+import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
+import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
+import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 
 /**
@@ -76,6 +81,63 @@ describe('build freshness — a later write invalidates an earlier verification'
 
     expect(flags.hasFileMutations).toBe(false)
     expect(flags.hasVerifiedBuild).toBe(true)
+  })
+})
+
+describe('build freshness — a write that changed nothing is not a mutation', () => {
+  /** Full tool-result context, since `isMutating` is decided inside runToolResultProcessing. */
+  function makeWriteContext(toolRes: ToolExecutionResult, flags: ToolResultMutableFlags): ToolResultProcessingContext {
+    return {
+      parsedTool: { tool: 'write_file', parameters: { filePath: path.join(tempDir, 'App.tsx') } },
+      toolRes,
+      toolStartedAtMs: Date.now(),
+      stepCount: 30,
+      workspacePath: tempDir,
+      flags,
+      sessionChangedFiles: new Map(),
+      goalPlanner: {
+        getActiveMilestone: () => null,
+        getMilestones: () => [],
+        updateMilestone: () => true,
+        getProgressSummary: () => ({ completed: 0, total: 0, percentage: 0 }),
+      },
+      episodicCompactor: { recordStep: () => {} },
+      circuitBreaker: new StagnationCircuitBreaker(12, 5),
+      executionGuard: new TransactionalExecutionGuard(tempDir),
+      loopDetector: new AgentActionLoopDetector(2),
+      sessionId: 'session-build-freshness',
+      isSessionActive: () => false,
+      targetWindow: null,
+      persistCurrentState: async () => {},
+      emitLog: () => {},
+      emitDone: () => {},
+      finalizeSession: () => {},
+      settings: { enableCodingAgentDebugLog: false },
+    } as unknown as ToolResultProcessingContext
+  }
+
+  // The churn loop this closes: green build -> identical rewrite -> the build is discarded as
+  // stale -> the model runs it again. See redundantWriteDetector.ts.
+  it('leaves the verification standing when write_file reported a no-op', async () => {
+    const flags = freshFlags()
+
+    await runToolResultProcessing(
+      makeWriteContext({ outputForHistory: '[NO-OP WRITE: ...]', logMessage: 'No-op write', noOpMutation: true }, flags)
+    )
+
+    expect(flags.hasVerifiedBuild).toBe(true)
+    expect(flags.hasFileMutations).toBe(false)
+  })
+
+  it('still invalidates the verification when write_file actually wrote something', async () => {
+    const flags = freshFlags()
+
+    await runToolResultProcessing(
+      makeWriteContext({ outputForHistory: 'Successfully wrote file App.tsx', logMessage: 'Wrote App.tsx' }, flags)
+    )
+
+    expect(flags.hasVerifiedBuild).toBe(false)
+    expect(flags.hasFileMutations).toBe(true)
   })
 })
 

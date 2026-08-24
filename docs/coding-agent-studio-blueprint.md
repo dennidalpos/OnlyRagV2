@@ -26,13 +26,13 @@ mindmap
         Riduzione diagnostica stack trace (diagnosticOutputReducer)
         Intercettazione lazy ask (agentOrchestratorAskAutoHealing)
         Gate import non dichiarati post-write (importDeclarationGate)
+        Scrittura a vuoto riconosciuta come no-op (redundantWriteDetector)
+        Stato di chiusura dichiarabile a build verde (postVerificationClosure)
       Presente ma non efficace
         Definition of Done Gate su build reale (raggiunto solo se la sessione arriva a finish)
-        Rilevatore oscillazioni e stagnazione (blocca ma non produce avanzamento)
         Recupero dai conflitti npm ERESOLVE (npmResolutionConflict)
       Cosa manca
         Typecheck incrementale post-write (la sintassi e' gia' coperta da validateAST)
-        Freno alla ripetizione di comandi gia' riusciti
         Auto-reclaim di porte e processi orfani da shell
     Browser & Validazione Visiva
       Cosa c'è
@@ -96,7 +96,7 @@ mindmap
   * [`AgentActionLoopDetector`](../electron/core/domain/agent/loopDetector.ts) con hashing SHA-256 e [`loopEscapePolicy.ts`](../electron/core/domain/agent/loopEscapePolicy.ts) per spezzare cicli e avanzare milestone stagnanti.
 * **Presente ma non efficace** (rilevato in `coding_agent_audit.log`, sessione `session-1787562597025-q8a5`):
   * **Definition of Done Gate** ([`verificationGatePolicy.ts`](../electron/core/domain/agent/verificationGatePolicy.ts), [`TransactionalExecutionGuard`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts)): blocca `finish` senza build passata, ma si attiva **solo quando il modello chiama `finish`**. La sessione osservata è morta al passo 45 sul circuit breaker, quindi il gate — e con lui [`dependencyIntegrityGate`](../electron/core/domain/agent/dependencyIntegrityGate.ts), che gira dentro [`agentOrchestratorVerificationRunner.ts`](../electron/core/application/agentOrchestratorVerificationRunner.ts) — non è mai stato raggiunto. Tre import verso pacchetti inesistenti sono rimasti su disco.
-  * **Rilevatore di loop**: identifica correttamente la ripetizione, ma la sua unica risposta è testo che vieta un'azione. In 12 dei 45 passi ha bloccato senza produrre avanzamento, e le direttive iniettate si accumulano nel prompt fino a saturarlo (dagli step 35–45 il prompt resta fisso a 22.237 caratteri, in gran parte blocchi `[FAILURE at Step N]` quasi identici).
+  * **Rilevatore di loop**: identifica correttamente la ripetizione, ma la sua risposta resta in gran parte testo che vieta un'azione. In 12 dei 45 passi ha bloccato senza produrre avanzamento, e le direttive iniettate si accumulano nel prompt fino a saturarlo (dagli step 35–45 il prompt resta fisso a 22.237 caratteri, in gran parte blocchi `[FAILURE at Step N]` quasi identici). Un caso ha ora un'uscita reale invece di un divieto — la ripetizione a progetto già verificato, vedi §5.4 — ma è uno solo dei rami.
 * **Mancante**:
   * **Feedback Sintattico/LSP Istantaneo**: Notifica di errori di tipo TypeScript / sintassi subito dopo `write_file`, prima della compilazione globale. **Priorità alta**: nella sessione osservata gli import inventati erano visibili al passo 11 e sono emersi solo trenta passi dopo.
   * **Auto-Reclaim Processi Orfani**: Identificazione e chiusura automatica di processi che occupano porte locali di sviluppo.
@@ -297,15 +297,44 @@ L'ordine è vincolato: le funzionalità nuove poggiano su cicli di feedback che 
 
 > Nota sul tono delle direttive: la prima stesura elencava due opzioni e diceva "Pick ONE and run it now". Il modello le ha lette, capite, e ha girato la scelta all'utente con `ask` — in modalita' AGENT, dove non c'e' nessuno che risponda. Una direttiva che offre una decisione a un modello lo invita a delegarla. Ora c'e' una sola istruzione imperativa e un ripiego, non un menu.
 
-### 5.4. Prossimo — cio' che i run live hanno messo in evidenza
+### 5.4. Completato — il churn e la strada per chiudere
 
-**1. Churn: il modello ripete lavoro gia' riuscito.** E' il collo di bottiglia attuale, ed e' quello che oggi impedisce a una sessione di arrivare a `finish`.
-* Sintomo A: rilancia un comando **passato**. Nel probe ERESOLVE ha rieseguito quattro volte un `npm run build` che era gia' verde, invece di chiudere. Il guard glielo dice (`[REDUNDANT ACTION: ... ALREADY SUCCEEDED]`) e lui lo rifa'.
+I due sintomi erano **un solo meccanismo**, e nessuno dei due stava dove il documento li cercava.
+
+* Sintomo A: rilancia un comando **passato**. Nel probe ERESOLVE aveva rieseguito quattro volte un `npm run build` gia' verde, invece di chiudere.
 * Sintomo B: riscrive lo stesso file. 21-31 `write_file` per ~14 file in una sessione da 50 passi.
-* Dove guardare: [`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts) sezione 1 (finestra di 5 passi sulla fingerprint) e [`loopEscapePolicy.ts`](../electron/core/domain/agent/loopEscapePolicy.ts) (`REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS = 3`). Il ramo "ripetizione riuscita" e' deliberatamente esente dalla scala di stagnazione — vedi il commento in `resolveRedundantSuccessAction`, scritto per non abbandonare milestone il cui lavoro era davvero avvenuto. L'esenzione e' corretta ma oggi non porta a nulla: dopo gli avvisi il modello non ha una mossa migliore da fare.
-* Ipotesi da valutare (non ancora testata): quando la verifica del progetto e' **gia' passata** e non ci sono state mutazioni successive, il ripetersi di quello stesso comando dovrebbe portare il sistema a proporre `finish` in modo esplicito, non solo a scoraggiare la ripetizione. Il segnale esiste gia': `flags.hasVerifiedBuild` in [`agentOrchestratorCircuitBreakerAndVerification.ts`](../electron/core/application/agentOrchestratorCircuitBreakerAndVerification.ts), azzerato a ogni scrittura.
 
-**2. Feedback sintattico esteso**: `validateAST` copre gia' la sintassi in pre-commit; manca il typecheck incrementale.
+**La causa.** `write_file` rispondeva `Successfully wrote file X` anche quando il contenuto sul disco era gia' identico — una frase indistinguibile da quella di una modifica vera. E l'orchestratore classifica la mutazione **per nome del tool** (`isMutating` in [`agentOrchestratorToolResultProcessor.ts`](../electron/core/application/agentOrchestratorToolResultProcessor.ts)), quindi una riscrittura che non cambiava un byte azzerava comunque `flags.hasVerifiedBuild`. Da qui il ciclo: build verde → riscrittura identica → la prova viene buttata via → build di nuovo. Il sintomo B *produceva* il sintomo A.
+
+**La seconda causa, indipendente.** Anche con la build verde il modello non poteva chiudere: la direttiva 4 del blocco piano dice *"Do NOT invoke finish until all operational checklist milestones are completed and verified"*, e una milestone che non nomina nessun file (`not_applicable`: "ensure buttons have a 44x44 touch target", "run the application") non puo' raggiungere `verified` tramite nessun comando — `selectMilestonesProvenByVerification` la esclude apposta, perche' promuoverla sarebbe fabbricare una verifica. Il modello si trovava con una build verde, una milestone inchiodabile e un divieto di finire: l'unica azione ancora permessa era rieseguire la build. E' esattamente la forma che l'intestazione di `loopEscapePolicy.ts` gia' descriveva — un divieto senza uscita — e nessuna quantita' di scoraggiamento in piu' poteva risolverla.
+
+**Cosa e' stato applicato:**
+
+* **La scrittura a vuoto e' riconosciuta come tale.** [`redundantWriteDetector.ts`](../electron/core/domain/agent/redundantWriteDetector.ts) confronta il contenuto proposto con quello su disco, normalizzando i soli due scarti che non sono modifiche di codice: fine riga CRLF/LF (la fonte dominante di riscritture fantasma su Windows) e newline finale. Indentazione, righe vuote interne e riformattazioni restano modifiche vere. Il file non viene toccato — nemmeno l'mtime, che e' cio' su cui `scanCommandTouchedFiles` attribuisce i file — e il risultato del tool dichiara il no-op e afferma esplicitamente che la build gia' eseguita resta valida.
+* **Un no-op non e' una mutazione.** `ToolExecutionResult.noOpMutation` esclude la chiamata da `isMutating`: `hasVerifiedBuild` sopravvive, nessuna milestone avanza su prove che non sono cambiate, e il pannello non annuncia un file "Created" che nessuno ha scritto.
+* **La chiusura diventa uno stato dichiarabile.** [`postVerificationClosure.ts`](../electron/core/domain/agent/postVerificationClosure.ts) combina i segnali che esistevano gia' e non erano mai stati messi insieme: se `hasVerifiedBuild` e' vero (verifica passata, nulla scritto dopo) e ogni milestone ancora aperta e' `not_applicable`, allora non resta lavoro che un comando possa dimostrare. Una sola milestone `unsatisfied` — file mancante o placeholder — riporta lo stato a `not_closable` senza guardare il resto.
+* **La direttiva sostituisce il divieto, non ci si affianca.** Quando la chiusura e' legittima, `compileProgressPrompt` rimpiazza **l'intero** blocco della milestone attiva con la direttiva di chiusura, che nomina le milestone inchiodabili e ordina la sequenza esatta: `update_plan` su quelle (via che `milestoneUpdateAuthority` gia' consente per chi non nomina artefatti), poi `finish`. La checklist resta stampata, perche' e' da li' che il modello legge gli id. Stampare entrambi i blocchi sarebbe la contraddizione che ha generato il loop.
+* **Lo stesso testo raggiunge il loop guard, e li' pure sostituisce.** `handleLoopDetection` usa la direttiva di chiusura **al posto** del testo consultivo, in entrambi i rami (ridondanza e stagnazione). Il tetto di `REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS` e l'abort a `LOOP_ESCAPE_ABORT_STREAK` restano intatti: la garanzia di terminazione non e' toccata. Quello che viene sospeso, e solo in stato di chiusura, e' l'escape strutturale — marcare `failed` proprio le milestone che la direttiva sta chiedendo di chiudere metterebbe "fallita" nel report finale per lavoro che era stato fatto.
+
+Il Definition of Done Gate non e' stato indebolito: continua a eseguire la verifica reale del progetto prima di onorare `finish`.
+
+**Verifica live, ed e' qui che la prima stesura ha sbagliato.** Nel run `live-eresolve` del 2026-08-24 la direttiva e' comparsa al passo esatto giusto — passo 11, dopo un `npm run build` verde al passo 10 — con il contenuto giusto. Il modello l'ha ignorata e ha eseguito un altro comando; la sessione ha esaurito i 16 passi senza chiudere. Il motivo si legge nel log: la direttiva era **terza**, in un messaggio i cui primi due blocchi dicevano *"move to the NEXT unfinished step of your active milestone"* e *"Advance to the next unfinished step instead"*. Il modello ha fatto quello che diceva la prima meta' del messaggio. Nel blocco piano avevo sostituito il testo in conflitto; nel loop guard l'avevo accodato. Corretto: ora sostituisce anche li'. **Un messaggio porta una sola istruzione** — la stessa lezione della nota sul tono in §5.3, in un punto diverso.
+
+Secondo run, stessa sonda, dopo la correzione: la sessione **arriva a `finish`** con un report reale (`Status: COMPLETED`, 16 passi). Va detto per intero, pero': il modello ha ripetuto la build altre quattro volte (passi 12-15) prima di obbedire, e il `finish` e' caduto sull'ultimo passo disponibile. E' un miglioramento misurato, non una risoluzione pulita — e non sorprende, perche' in questa sonda la direttiva raggiunge il modello **solo dentro un intervento del loop guard**, cioe' quando sta gia' girando a vuoto. Il canale forte, il blocco piano ripetuto a ogni turno, qui non esiste affatto.
+
+Il secondo run ha anche corretto un'imprecisione del testo: la preambola diceva *"it succeeded every time"*, ma sostituisce **entrambi** i rami, e quello di stagnazione lo raggiungono ripetizioni che falliscono — nel log e' finita sopra un `update_plan` rifiutato due volte per assenza di piano. Ora la preambola non si pronuncia sull'esito.
+
+> Nota sulla sonda: `eresolveRecovery.live.ts` non semina un piano (`update_plan` viene rifiutato con "no active execution plan"), quindi esercita solo la meta' loop-guard della modifica. La meta' che conta di piu' — la direttiva come istruzione **permanente** nel blocco piano — richiede una sonda con piano seminato.
+
+**Run con piano seminato** (`fullTaskRun.live.ts`, 50 passi, stessa data). Il canale forte funziona come progettato: al **passo 31**, subito dopo un `npm run build` verde, il blocco piano ha sostituito il focus della milestone attiva con la direttiva di chiusura, nominando le quattro milestone che nessun comando puo' dimostrare (m-11..m-14, nessun path nel titolo) e lasciando stampata la checklist da cui il modello legge gli id. Da li' in poi la direttiva e' tornata a ogni turno.
+
+Cio' che il modello ha fatto, per intero: ha obbedito alla direttiva 1 — al passo 50 ha emesso `update_plan {m-13, verified}` — ma ci ha messo diciannove passi, e prima ha sprecato i passi 32-33 su `update_plan m-10`, milestone gia' abbandonata e correttamente rifiutata. La sessione e' finita sul tetto dei 50 passi, non su `finish`.
+
+**Il budget era gia' bruciato prima.** Ai passi 22-28 il modello ha riscritto `src/services/index.tsx` sei volte **con contenuto ogni volta diverso** — quindi `redundantWriteDetector` non e' intervenuto, e correttamente: quelle erano scritture vere. E' il sintomo B in una forma che questa onda non copre. Il fix chiude la riscrittura *identica*, che era quella che invalidava la build verde; la riscrittura *variata* dello stesso file resta un problema aperto, gestito solo dal controllo di thrashing esistente (4 edit in 6 azioni), che infatti e' scattato al passo 25 e ha portato all'abbandono di m-10.
+
+In sintesi: il meccanismo di chiusura e' verificato end-to-end su entrambi i canali, con il contenuto e il momento giusti. Quello che non e' risolto e' la *velocita'* di obbedienza di un 7B e la seconda forma del churn. Le due cose vanno misurate separatamente dalla prossima onda.
+
+**Resta aperto — feedback sintattico esteso**: `validateAST` copre gia' la sintassi in pre-commit; manca il typecheck incrementale.
 
 ### 5.5. Poi — le funzionalità del blueprint
 
@@ -319,7 +348,7 @@ L'ordine è vincolato: le funzionalità nuove poggiano su cicli di feedback che 
 
 Punto di ingresso per una sessione nuova, che non ha il contesto di quella in cui le tre onde sono state applicate.
 
-**Stato.** Le sezioni 5.1, 5.2 e 5.3 sono applicate, coperte da test e verificate su sessioni reali. La 5.4 e' il lavoro successivo, in quell'ordine. La 5.5 e' il blueprint originale, che resta valido ma poggia su queste fondamenta.
+**Stato.** Le sezioni 5.1, 5.2, 5.3 e 5.4 sono applicate e coperte da test. Le prime tre sono verificate su sessioni reali; la 5.4 e' verificata solo a meta' — vedi la nota sulla sonda in fondo a quella sezione — e la prima cosa da fare qui e' osservarla su un run con piano seminato. La 5.5 e' il blueprint originale, che resta valido ma poggia su queste fondamenta.
 
 **Verifica che la base sia sana** prima di toccare qualsiasi cosa:
 

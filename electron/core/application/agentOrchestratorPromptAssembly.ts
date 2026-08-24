@@ -11,6 +11,7 @@ import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { skillAppService } from './skillAppService'
+import { resolveClosureDirective } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
@@ -59,7 +60,11 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   const skillsBlock = ctx.skillsBlock !== undefined
     ? ctx.skillsBlock
     : await skillAppService.getContextSkillsBlock(ctx.skillMatchContext, ctx.workspacePath, 3, ctx.skillMatchingOptions)
-  const planBlock = ctx.goalPlanner.compileProgressPrompt()
+  // The plan block stops demanding more work once the project's own verification has passed
+  // and nothing has been written since — see resolveClosureDirective.
+  const planBlock = ctx.goalPlanner.compileProgressPrompt(
+    resolveClosureDirective(ctx.workspacePath, ctx.goalPlanner, ctx.hasVerifiedBuild)
+  )
 
   let debtTrackerBlock = ''
   if (ctx.workspacePath) {

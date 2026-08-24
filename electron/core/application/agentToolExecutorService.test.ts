@@ -729,6 +729,63 @@ async def async_handler():
     expect(edited.changeStats).toEqual({ filePath, additions: 1, deletions: 1 })
   })
 
+  describe('no-op write', () => {
+    // A rewrite that changed nothing used to answer "Successfully wrote file X" and count as a
+    // file mutation, which cleared the verified-build flag and sent the model back to re-run a
+    // build it had never broken. See redundantWriteDetector.ts.
+    it('does not touch the disk and reports the write as a no-op when the content is already there', async () => {
+      const filePath = path.join(tempDir, 'stable.ts')
+      const body = 'export const a = 1\n'
+      await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: body } }, tempDir, settings)
+      const mtimeBefore = fs.statSync(filePath).mtimeMs
+
+      const repeat = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath, content: body } },
+        tempDir,
+        settings
+      )
+
+      expect(repeat.noOpMutation).toBe(true)
+      expect(repeat.outputForHistory).toContain('NO-OP WRITE')
+      expect(repeat.changeStats).toBeUndefined()
+      // The untouched mtime matters on its own: scanCommandTouchedFiles attributes files by
+      // mtime, so a rewritten timestamp alone would re-report the file as changed.
+      expect(fs.statSync(filePath).mtimeMs).toBe(mtimeBefore)
+    })
+
+    it('still writes and reports a real edit as a real edit', async () => {
+      const filePath = path.join(tempDir, 'changing.ts')
+      await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath, content: 'export const a = 1\n' } },
+        tempDir,
+        settings
+      )
+
+      const edited = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath, content: 'export const a = 2\n' } },
+        tempDir,
+        settings
+      )
+
+      expect(edited.noOpMutation).toBeUndefined()
+      expect(edited.outputForHistory).toContain('Successfully wrote file')
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const a = 2\n')
+    })
+
+    it('creates a file that does not exist yet, even with empty content', async () => {
+      const filePath = path.join(tempDir, 'brand-new.txt')
+
+      const created = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath, content: '' } },
+        tempDir,
+        settings
+      )
+
+      expect(created.noOpMutation).toBeUndefined()
+      expect(fs.existsSync(filePath)).toBe(true)
+    })
+  })
+
   it('should report change stats for replace_file_content and delete_file', async () => {
     const filePath = path.join(tempDir, 'replace-metrics.txt')
     fs.writeFileSync(filePath, 'one\ntwo\nthree')

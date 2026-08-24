@@ -220,6 +220,7 @@ export async function runAgentOrchestratorLoop(
       goalPlanner,
       fsmMode,
       currentOverriddenModel: mutableFlags.currentOverriddenModel,
+      hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
       session,
       sessionNumCtxBox,
       isSessionActive,

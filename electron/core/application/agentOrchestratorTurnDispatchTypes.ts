@@ -41,6 +41,12 @@ export interface TurnDispatchContext {
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
   currentOverriddenModel: string | null
+  /**
+   * A real verification has passed and no file has been written since. Read by the plan block,
+   * which stops demanding more work once the project is provably done — see
+   * postVerificationClosure.ts.
+   */
+  hasVerifiedBuild: boolean
   session: AgentSession
   /** Frozen per-session Ollama context window, boxed so this module can grow it in place. */
   sessionNumCtxBox: { value: number | null }

@@ -1,0 +1,204 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+import { resolveClosureDirective } from './agentOrchestratorCircuitBreakerAndVerification'
+import { handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
+import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
+import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
+import type { AgentToolCall } from '../domain/agent/agentTypes'
+import type { AppSettings } from '../../../src/types'
+import type { ResponseInterpreterContext } from './agentOrchestratorResponseInterpreterTypes'
+
+/**
+ * Blueprint §5.4 symptom A: in the ERESOLVE probe the model re-ran a `npm run build` that was
+ * already green four times instead of closing. The guard told it the command had ALREADY
+ * SUCCEEDED and it ran it again — not out of confusion, but because the plan block forbade
+ * finishing while a milestone naming no artefact stayed open, and re-running the build was the
+ * only permitted action left.
+ *
+ * These tests pin the exit: once the verification has passed and nothing is left that a
+ * command could prove, the system says so and names the two calls that end the session.
+ */
+
+let tempDir: string
+
+beforeEach(() => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-closure-'))
+})
+
+afterEach(() => {
+  fs.rmSync(tempDir, { recursive: true, force: true })
+})
+
+function plannerWith(milestones: Array<{ id: string; title: string; status: 'pending' | 'in_progress' | 'verified' | 'failed' }>) {
+  const planner = new GoalDecompositionPlanner()
+  planner.initializePlan(milestones)
+  return planner
+}
+
+describe('resolveClosureDirective', () => {
+  it('says nothing while the build has not been verified', () => {
+    const planner = plannerWith([{ id: 'm-1', title: 'Ensure every button has a 44x44 touch target', status: 'in_progress' }])
+    expect(resolveClosureDirective(tempDir, planner, false)).toBeNull()
+  })
+
+  it('says nothing without a workspace to probe', () => {
+    const planner = plannerWith([{ id: 'm-1', title: 'Ensure every button has a 44x44 touch target', status: 'in_progress' }])
+    expect(resolveClosureDirective(null, planner, true)).toBeNull()
+  })
+
+  it('says nothing while a milestone still names a file that was never written', () => {
+    const planner = plannerWith([
+      { id: 'm-1', title: 'Create `src/pages/Tasks.tsx`', status: 'in_progress' },
+      { id: 'm-2', title: 'Run the application', status: 'pending' },
+    ])
+    expect(resolveClosureDirective(tempDir, planner, true)).toBeNull()
+  })
+
+  it('names the unprovable milestone and the way out once the build is green', () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export default function App() { return null }\n')
+
+    const planner = plannerWith([
+      { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' },
+      { id: 'm-2', title: 'Ensure every button has a 44x44 touch target', status: 'in_progress' },
+    ])
+
+    const directive = resolveClosureDirective(tempDir, planner, true)!
+    expect(directive).toContain('m-2: Ensure every button has a 44x44 touch target')
+    expect(directive).toContain('update_plan')
+    expect(directive).toContain('"finish"')
+  })
+})
+
+describe('handleLoopDetection — a repeat after a green build gets a way out, not another refusal', () => {
+  const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+
+  let ctx: ResponseInterpreterContext
+  let loopDetector: AgentActionLoopDetector
+  let recordedDirectives: string[]
+
+  function makeContext(hasVerifiedBuild: boolean): ResponseInterpreterContext {
+    loopDetector = new AgentActionLoopDetector(2)
+    recordedDirectives = []
+    return {
+      streamedOutput: '',
+      agentMode: 'agent',
+      stepCount: 30,
+      maxSteps: 50,
+      isUnlimitedSteps: false,
+      workspacePath: tempDir,
+      settings: { enableCodingAgentDebugLog: false } as unknown as AppSettings,
+      sessionId: 'session-closure-test',
+      hasRecentToolFailure: false,
+      errorCountInHistory: 0,
+      compiledHistoryBlock: '',
+      flags: { hasFileMutations: true, hasVerifiedBuild, currentOverriddenModel: null },
+      surfacedDodReasons: new Set<string>(),
+      state: { noToolStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      episodicCompactor: {
+        recordStep: (_step: unknown, directive?: string) => {
+          if (directive) recordedDirectives.push(directive)
+        },
+      } as unknown as ResponseInterpreterContext['episodicCompactor'],
+      goalPlanner: plannerWith([
+        { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' },
+        { id: 'm-2', title: 'Ensure the layout is responsive on small screens', status: 'in_progress' },
+      ]),
+      executionGuard: new TransactionalExecutionGuard(tempDir),
+      loopDetector,
+      emitLog: () => {},
+      emitDone: () => {},
+      persistCurrentState: async () => {},
+      finalizeSession: () => {},
+      buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
+    }
+  }
+
+  /** Mirrors the orchestrator turn: guard first, tool afterwards, outcome reported last. */
+  const runStep = async (call: AgentToolCall, succeeded: boolean) => {
+    const outcome = await handleLoopDetection(ctx, call)
+    if (outcome === null) loopDetector.recordOutcome(call, succeeded)
+    return outcome
+  }
+
+  beforeEach(() => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export default function App() { return null }\n')
+  })
+
+  it('tells the model to close the session instead of only refusing the repeated build', async () => {
+    ctx = makeContext(true)
+
+    await runStep(buildCall, true)
+    await runStep(buildCall, true)
+    await runStep(buildCall, true)
+
+    const lastDirective = recordedDirectives[recordedDirectives.length - 1]
+    expect(lastDirective).toContain('PROJECT VERIFIED — CLOSE THE SESSION')
+    expect(lastDirective).toContain('m-2: Ensure the layout is responsive on small screens')
+  })
+
+  /**
+   * The live eresolve run of 2026-08-24 is the reason this is pinned. The closure directive
+   * fired at exactly the right step, third in a message whose earlier blocks said "move to the
+   * NEXT unfinished step of your active milestone" and "Advance to the next unfinished step
+   * instead". The model followed those and ran another command. One message, one instruction.
+   */
+  it('carries no competing "go do more work" advice alongside the order to finish', async () => {
+    ctx = makeContext(true)
+
+    await runStep(buildCall, true)
+    await runStep(buildCall, true)
+    await runStep(buildCall, true)
+
+    const lastDirective = recordedDirectives[recordedDirectives.length - 1]
+    expect(lastDirective).not.toContain('move to the NEXT unfinished step')
+    expect(lastDirective).not.toContain('Advance to the next unfinished step')
+    expect(lastDirective).not.toContain('REDUNDANCY DIRECTIVE')
+  })
+
+  // The same text replaces the stagnation branch, which is reached by repeats that FAILED.
+  // The live run of 2026-08-24 put it on an `update_plan` rejected twice for having no plan,
+  // under a sentence claiming it "succeeded every time".
+  it('does not claim the repeated call succeeded, since it also answers failing repeats', async () => {
+    ctx = makeContext(true)
+    const failingCall: AgentToolCall = { tool: 'update_plan', parameters: { milestoneId: 'm-2' } }
+
+    await runStep(failingCall, false)
+    await runStep(failingCall, false)
+    await runStep(failingCall, false)
+    await runStep(failingCall, false)
+
+    const lastDirective = recordedDirectives[recordedDirectives.length - 1]
+    expect(lastDirective).toContain('CLOSE THE SESSION')
+    expect(lastDirective).not.toContain('succeeded every time')
+  })
+
+  // Escalation would mark the very milestones the directive is asking the model to close as
+  // FAILED, putting "fallita" in the final report for work that was done.
+  it('does not abandon a milestone while telling the model the session is finished', async () => {
+    ctx = makeContext(true)
+
+    for (let i = 0; i < 10; i++) await runStep(buildCall, true)
+
+    expect(ctx.goalPlanner.getMilestones().map((m) => m.status)).not.toContain('failed')
+  })
+
+  // The freshness rule still governs: a write after the build makes it stale evidence, and a
+  // session with unverified changes on disk must not be told it may close.
+  it('stays silent about closing when the build is stale', async () => {
+    ctx = makeContext(false)
+
+    await runStep(buildCall, true)
+    await runStep(buildCall, true)
+    await runStep(buildCall, true)
+
+    const lastDirective = recordedDirectives[recordedDirectives.length - 1]
+    expect(lastDirective).toContain('ALREADY SUCCEEDED')
+    expect(lastDirective).not.toContain('CLOSE THE SESSION')
+  })
+})

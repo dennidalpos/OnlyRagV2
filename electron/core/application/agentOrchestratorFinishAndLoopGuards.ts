@@ -7,7 +7,7 @@ import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domai
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
-import { promoteMilestonesProvenBy } from './agentOrchestratorCircuitBreakerAndVerification'
+import { promoteMilestonesProvenBy, resolveClosureDirective } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
 /**
@@ -212,6 +212,27 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
 
+  // The one case where "find something else to do" is the wrong advice: the project's own
+  // verification has already passed, nothing has been written since, and the plan holds
+  // nothing a command could still prove. The model is not repeating itself out of confusion —
+  // it is repeating itself because finishing was forbidden and re-running a green build was
+  // the only action left. Non-null only in that state; see postVerificationClosure.ts.
+  const closureDirective = resolveClosureDirective(ctx.workspacePath, ctx.goalPlanner, ctx.flags.hasVerifiedBuild)
+
+  // REPLACES the advisory text rather than following it. Appended, it lost: the live
+  // eresolve run of 2026-08-24 shows the directive arriving at step 11 correctly, third in a
+  // message whose first two blocks read "move to the NEXT unfinished step of your active
+  // milestone" and "Advance to the next unfinished step instead". The model did what the
+  // first two said and ran another command. One message may carry one instruction.
+  //
+  // The preamble deliberately says nothing about whether the repeats SUCCEEDED: this text
+  // replaces both branches, and the stagnation branch is reached by repeats that failed. In
+  // the live run of 2026-08-24 it landed on an `update_plan` rejected twice for having no
+  // plan, under a sentence asserting it "succeeded every time".
+  const closureIntervention = closureDirective
+    ? `[SESSION COMPLETE — STOP REPEATING '${loopTarget || 'this action'}']\nYou have re-issued this call ${loopCheck.consecutiveDuplicateCount} times. Whether it succeeds or fails no longer changes anything: the project's verification has already passed and nothing you run now can add to it.\n\n${closureDirective}`
+    : null
+
   // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable
   // exists. Escalating it would abandon a reachable milestone as FAILED (see
   // resolveRedundantSuccessAction for the audit case). The exemption is bounded — past its
@@ -221,7 +242,9 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
 
   if (isExemptRedundantSuccess) {
-    const redundancyIntervention = `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
+    const redundancyIntervention =
+      closureIntervention ||
+      `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
 
     ctx.episodicCompactor.recordStep(
       {
@@ -236,7 +259,9 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     ctx.emitLog(
       'info',
       `♻️ Azione ridondante: ${parsedTool.tool} già riuscito, ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-      'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.'
+      closureIntervention
+        ? 'Progetto già verificato e nulla di aperto da dimostrare: al modello è stato chiesto di chiudere la sessione.'
+        : 'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.'
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logLoopIntervention(
@@ -263,14 +288,23 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
 
   const escapeAction = resolveLoopEscapeAction(ctx.state.stagnationStreak, {
-    canAdvanceMilestone: ctx.goalPlanner
-      .getMilestones()
-      .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)),
+    // Never abandon a milestone as FAILED while the project is verified and closable: the
+    // remaining milestones are the unprovable ones the closure directive is asking the model
+    // to close, and marking them failed would put "fallita" in the final report for work that
+    // was done. The streak still climbs, so the abort guarantee at LOOP_ESCAPE_ABORT_STREAK
+    // is untouched — only the structural escape is withheld.
+    canAdvanceMilestone:
+      !closureIntervention &&
+      ctx.goalPlanner
+        .getMilestones()
+        .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)),
     isUnlimitedSteps: ctx.isUnlimitedSteps,
   })
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
 
-  const enhancedIntervention = `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
+  const enhancedIntervention =
+    closureIntervention ||
+    `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
 
   ctx.episodicCompactor.recordStep(
     {
@@ -285,7 +319,9 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   ctx.emitLog(
     'info',
     `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-    'Intervento automatico: cambio di strategia inviato al modello.'
+    closureIntervention
+      ? 'Progetto già verificato e nulla di aperto da dimostrare: al modello è stato chiesto di chiudere la sessione.'
+      : 'Intervento automatico: cambio di strategia inviato al modello.'
   )
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logLoopIntervention(

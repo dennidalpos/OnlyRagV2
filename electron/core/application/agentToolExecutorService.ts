@@ -17,6 +17,7 @@ import { parseTestRunOutput } from '../domain/agent/testResultParser'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
 import { classifyWriteFileTarget } from '../domain/agent/toolSchemaValidator'
+import { detectRedundantWrite, buildRedundantWriteNotice } from '../domain/agent/redundantWriteDetector'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../domain/agent/diffEngine'
 import { projectPendingChange, type PendingMutationType } from '../domain/agent/pendingChangeProjection'
@@ -183,6 +184,15 @@ export interface ToolExecutionResult {
    * marked a milestone verified for anything containing "test", "build" or "lint".
    */
   verification?: { ran: true; passed: boolean }
+  /**
+   * Set when a mutating tool completed without changing anything on disk.
+   *
+   * The orchestrator classifies mutation by tool NAME, so a `write_file` re-writing content
+   * that was already there still counted as a file mutation — and every file mutation clears
+   * `flags.hasVerifiedBuild`, discarding a green build that the write could not possibly have
+   * invalidated. See redundantWriteDetector.ts for the churn loop this closes.
+   */
+  noOpMutation?: boolean
 }
 
 export class AgentToolExecutorService {
@@ -827,6 +837,23 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
 
         const beforeContent = this.readContentSafely(pathCheck.safePath)
+
+        // A write that changes nothing is answered as what it is, and never reaches the disk:
+        // touching the file would restart the mtime-based scanners and clear the verified-build
+        // flag for a change that does not exist. See redundantWriteDetector.ts.
+        const redundant = detectRedundantWrite(
+          agentToolFileRepository.getFileInfo(pathCheck.safePath) !== null,
+          beforeContent,
+          content
+        )
+        if (redundant.isRedundant && redundant.kind) {
+          return {
+            outputForHistory: buildRedundantWriteNotice(String(filePath), redundant.kind),
+            logMessage: `No-op write: ${path.basename(pathCheck.safePath)} was already up to date`,
+            noOpMutation: true,
+          }
+        }
+
         this.journal.recordBeforeModification(pathCheck.safePath)
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {

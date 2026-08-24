@@ -46,7 +46,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
       compiledHistoryBlock: '',
       flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
       surfacedDodReasons: new Set<string>(),
-      state: { noToolStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
       episodicCompactor: new EpisodicMemoryCompactor(6),
       goalPlanner,
       executionGuard: new TransactionalExecutionGuard(process.cwd()),

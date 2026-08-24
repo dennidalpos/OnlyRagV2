@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { resolveClosureDirective, resolveUnprovableMilestoneDirective } from './agentOrchestratorCircuitBreakerAndVerification'
+import { resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import { handleLoopDetection } from './agentOrchestratorFinishAndLoopGuards'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
@@ -39,15 +39,31 @@ function plannerWith(milestones: Array<{ id: string; title: string; status: 'pen
   return planner
 }
 
-describe('resolveClosureDirective', () => {
+/**
+ * The two directives these tests were written against are now branches of one arbitrated
+ * decision (planDirectiveArbiter.ts). The adapters keep each assertion asking the question it
+ * was written to ask: "is THIS the directive the turn carries?" — which is stricter than the
+ * old "is this directive non-null?", because the arbiter can only ever return one.
+ */
+function closureDirectiveOf(workspace: string | null, planner: GoalDecompositionPlanner, hasVerifiedBuild: boolean): string | null {
+  const decision = resolvePlanDirectiveForTurn(workspace, planner, hasVerifiedBuild)
+  return decision.kind === 'session_closure' ? decision.blockDirective : null
+}
+
+function unprovableDirectiveOf(workspace: string | null, planner: GoalDecompositionPlanner): string | null {
+  const decision = resolvePlanDirectiveForTurn(workspace, planner, false)
+  return decision.kind === 'unprovable_milestone' ? decision.closureStepDirective : null
+}
+
+describe('the session-closure branch of the plan directive arbiter', () => {
   it('says nothing while the build has not been verified', () => {
     const planner = plannerWith([{ id: 'm-1', title: 'Ensure every button has a 44x44 touch target', status: 'in_progress' }])
-    expect(resolveClosureDirective(tempDir, planner, false)).toBeNull()
+    expect(closureDirectiveOf(tempDir, planner, false)).toBeNull()
   })
 
   it('says nothing without a workspace to probe', () => {
     const planner = plannerWith([{ id: 'm-1', title: 'Ensure every button has a 44x44 touch target', status: 'in_progress' }])
-    expect(resolveClosureDirective(null, planner, true)).toBeNull()
+    expect(closureDirectiveOf(null, planner, true)).toBeNull()
   })
 
   it('says nothing while a milestone still names a file that was never written', () => {
@@ -55,7 +71,7 @@ describe('resolveClosureDirective', () => {
       { id: 'm-1', title: 'Create `src/pages/Tasks.tsx`', status: 'in_progress' },
       { id: 'm-2', title: 'Run the application', status: 'pending' },
     ])
-    expect(resolveClosureDirective(tempDir, planner, true)).toBeNull()
+    expect(closureDirectiveOf(tempDir, planner, true)).toBeNull()
   })
 
   it('names the unprovable milestone and the way out once the build is green', () => {
@@ -67,7 +83,7 @@ describe('resolveClosureDirective', () => {
       { id: 'm-2', title: 'Ensure every button has a 44x44 touch target', status: 'in_progress' },
     ])
 
-    const directive = resolveClosureDirective(tempDir, planner, true)!
+    const directive = closureDirectiveOf(tempDir, planner, true)!
     expect(directive).toContain('m-2: Ensure every button has a 44x44 touch target')
     expect(directive).toContain('update_plan')
     expect(directive).toContain('"finish"')
@@ -80,11 +96,11 @@ describe('resolveClosureDirective', () => {
  * different placeholder bodies trying to close it, because focus directive 2 said writing the
  * milestone's files was how closure happened.
  */
-describe('resolveUnprovableMilestoneDirective', () => {
+describe('the unprovable-milestone branch of the plan directive arbiter', () => {
   it('fires on the folder milestone that caused the observed loop', () => {
     const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
 
-    const directive = resolveUnprovableMilestoneDirective(tempDir, planner)!
+    const directive = unprovableDirectiveOf(tempDir, planner)!
 
     expect(directive).toContain('NAMES NO FILE')
     expect(directive).toContain('"m-10"')
@@ -97,13 +113,13 @@ describe('resolveUnprovableMilestoneDirective', () => {
     fs.writeFileSync(path.join(tempDir, 'src', 'services', 'index.tsx'), 'export default {}\n')
     const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
 
-    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).not.toBeNull()
+    expect(unprovableDirectiveOf(tempDir, planner)).not.toBeNull()
   })
 
   it('stays silent for a milestone that names a file which is still missing', () => {
     const planner = plannerWith([{ id: 'm-3', title: 'Create `src/App.tsx`', status: 'in_progress' }])
 
-    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+    expect(unprovableDirectiveOf(tempDir, planner)).toBeNull()
   })
 
   it('stays silent for a milestone whose file is on disk', () => {
@@ -111,7 +127,7 @@ describe('resolveUnprovableMilestoneDirective', () => {
     fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export default function App() { return null }\n')
     const planner = plannerWith([{ id: 'm-3', title: 'Create `src/App.tsx`', status: 'in_progress' }])
 
-    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+    expect(unprovableDirectiveOf(tempDir, planner)).toBeNull()
   })
 
   // The finish tool owns the completion milestone; telling the model to update_plan it would
@@ -119,13 +135,13 @@ describe('resolveUnprovableMilestoneDirective', () => {
   it('stays silent on the completion milestone', () => {
     const planner = plannerWith([{ id: 'm-15', title: 'Final Review & Completion (invoke finish)', status: 'pending' }])
 
-    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+    expect(unprovableDirectiveOf(tempDir, planner)).toBeNull()
   })
 
   it('stays silent without a workspace to probe', () => {
     const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
 
-    expect(resolveUnprovableMilestoneDirective(null, planner)).toBeNull()
+    expect(unprovableDirectiveOf(null, planner)).toBeNull()
   })
 
   // Observed on m-5 "Install Tailwind CSS" in the live run of 2026-08-24: the milestone names
@@ -142,7 +158,7 @@ describe('resolveUnprovableMilestoneDirective', () => {
       },
     ] as never)
 
-    expect(resolveUnprovableMilestoneDirective(tempDir, planner)).toBeNull()
+    expect(unprovableDirectiveOf(tempDir, planner)).toBeNull()
   })
 })
 
@@ -170,11 +186,12 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
       compiledHistoryBlock: '',
       flags: { hasFileMutations: true, hasVerifiedBuild, currentOverriddenModel: null },
       surfacedDodReasons: new Set<string>(),
-      state: { noToolStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
       episodicCompactor: {
         recordStep: (_step: unknown, directive?: string) => {
           if (directive) recordedDirectives.push(directive)
         },
+        getEpisodes: () => [],
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: plannerWith([
         { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' },
@@ -272,5 +289,84 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
     const lastDirective = recordedDirectives[recordedDirectives.length - 1]
     expect(lastDirective).toContain('ALREADY SUCCEEDED')
     expect(lastDirective).not.toContain('CLOSE THE SESSION')
+  })
+})
+
+/**
+ * Regression found by the live run of 2026-08-24, once the arbiter made the model actually run
+ * commands: a repeated `npm run build` abandoned m-1 "Create `package.json`" as FAILED — a file
+ * written correctly at step 1 and on disk the whole time. The escape must not punish a
+ * milestone for an error that belongs to the build.
+ */
+describe('a repeated command must not abandon a milestone that is already delivered', () => {
+  function contextFor(planner: GoalDecompositionPlanner): ResponseInterpreterContext {
+    return {
+      streamedOutput: '',
+      agentMode: 'agent',
+      stepCount: 20,
+      maxSteps: 50,
+      isUnlimitedSteps: false,
+      workspacePath: tempDir,
+      settings: { enableCodingAgentDebugLog: false } as unknown as AppSettings,
+      sessionId: 'session-command-loop-test',
+      hasRecentToolFailure: false,
+      errorCountInHistory: 0,
+      compiledHistoryBlock: '',
+      flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
+      surfacedDodReasons: new Set<string>(),
+      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      episodicCompactor: { recordStep: () => {}, getEpisodes: () => [] } as unknown as ResponseInterpreterContext['episodicCompactor'],
+      goalPlanner: planner,
+      executionGuard: new TransactionalExecutionGuard(tempDir),
+      loopDetector: new AgentActionLoopDetector(2),
+      emitLog: () => {},
+      emitDone: () => {},
+      persistCurrentState: async () => {},
+      finalizeSession: () => {},
+      buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
+    }
+  }
+
+  function writeWorkspaceFile(rel: string, body: string) {
+    const abs = path.join(tempDir, rel)
+    fs.mkdirSync(path.dirname(abs), { recursive: true })
+    fs.writeFileSync(abs, body, 'utf-8')
+  }
+
+  /** Repeats one identical call until the stagnation ladder reaches its structural escape. */
+  async function repeatUntilEscape(call: AgentToolCall, planner: GoalDecompositionPlanner) {
+    const ctx = contextFor(planner)
+    for (let i = 0; i < 8; i++) await handleLoopDetection(ctx, call)
+  }
+
+  const buildCall = { tool: 'run_command', parameters: { command: 'npm run build' } } as AgentToolCall
+
+  it('leaves the milestone alone when the repeat is a build and its file is on disk', async () => {
+    writeWorkspaceFile('package.json', '{ "name": "x", "scripts": { "build": "vite build" } }')
+    const planner = plannerWith([{ id: 'm-1', title: 'Create `package.json`', status: 'in_progress' }])
+
+    await repeatUntilEscape(buildCall, planner)
+
+    expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).not.toBe('failed')
+  })
+
+  it('still abandons a milestone whose own file was never written', async () => {
+    const planner = plannerWith([{ id: 'm-1', title: 'Create `src/never-written.tsx`', status: 'in_progress' }])
+
+    await repeatUntilEscape(buildCall, planner)
+
+    expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).toBe('failed')
+  })
+
+  it('still abandons on a repeated write to the milestone own file', async () => {
+    writeWorkspaceFile('src/App.tsx', 'export default function App() { return null }\n')
+    const planner = plannerWith([{ id: 'm-1', title: 'Create `src/App.tsx`', status: 'in_progress' }])
+
+    await repeatUntilEscape(
+      { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'x' } } as AgentToolCall,
+      planner
+    )
+
+    expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).toBe('failed')
   })
 })

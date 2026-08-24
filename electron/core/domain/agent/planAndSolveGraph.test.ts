@@ -284,7 +284,7 @@ Here is the microtask execution plan:
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan(activePlan as any)
 
-      const prompt = planner.compileProgressPrompt({ closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' })
+      const prompt = planner.compileProgressPrompt({ directive: { blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' } })
 
       expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
       expect(prompt).not.toContain('ACTIVE MILESTONE')
@@ -295,7 +295,7 @@ Here is the microtask execution plan:
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan(activePlan as any)
 
-      const prompt = planner.compileProgressPrompt({ closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' })
+      const prompt = planner.compileProgressPrompt({ directive: { blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' } })
 
       expect(prompt).toContain('**m-2: Ensure the layout is responsive**')
     })
@@ -305,7 +305,7 @@ Here is the microtask execution plan:
       planner.initializePlan(activePlan as any)
 
       const prompt = planner.compileProgressPrompt({
-        unprovableMilestoneDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.',
+        directive: { closureStepDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.' },
       })
 
       expect(prompt).toContain('2. THIS MILESTONE NAMES NO FILE.')
@@ -326,15 +326,18 @@ Here is the microtask execution plan:
       )
     })
 
-    // Closure wins: once the project is verified there is no active milestone to work on, so
-    // rendering focus directives at all would put the model back to work.
-    it('prefers the closure directive over the unprovable one when both apply', () => {
+    // A block directive replaces the focus block outright, so a closure step carried alongside
+    // it is never rendered. The arbiter cannot in fact emit both at once — this pins the
+    // renderer's own precedence, so a future decision carrying both cannot leak the weaker one.
+    it('renders only the block directive when a closure step is also supplied', () => {
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan(activePlan as any)
 
       const prompt = planner.compileProgressPrompt({
-        closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.',
-        unprovableMilestoneDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.',
+        directive: {
+          blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.',
+          closureStepDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.',
+        },
       })
 
       expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
@@ -345,7 +348,7 @@ Here is the microtask execution plan:
       const planner = new GoalDecompositionPlanner()
       planner.initializePlan([{ id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' }] as any)
 
-      const prompt = planner.compileProgressPrompt({ closureDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' })
+      const prompt = planner.compileProgressPrompt({ directive: { blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' } })
 
       expect(prompt).toContain('ALL CHECKLIST MILESTONES COMPLETED')
     })

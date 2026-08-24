@@ -56,6 +56,31 @@ function emitChangeMetrics(ctx: ToolResultProcessingContext) {
 }
 
 /**
+ * Whether a tool result reports a failure.
+ *
+ * A whitelist of markers rather than a flag on ToolExecutionResult, because that is what the
+ * loop has always used and every producer already emits these strings. What matters is that
+ * the list is complete: the label is read three times over — `recordOutcome` feeds it to the
+ * loop detector, only failures enter the buffer that survives FIFO trimming, and the
+ * trajectory table prints it for whoever reads the run.
+ *
+ * The AST marker was missing. Live run of 2026-08-24, steps 46, 47, 49 and 50: four writes
+ * rejected by the pre-commit AST check, none of which reached the disk, all four recorded as
+ * SUCCESS. The model was consequently handed the redundancy directive — whose text says "this
+ * is NOT a failure and it is NOT counted against you" — about a file that did not exist.
+ */
+export function isFailureOutput(outputForHistory: string): boolean {
+  const output = outputForHistory || ''
+  return (
+    output.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
+    output.includes('[REPLACE FILE ERROR') ||
+    output.includes('[PRE-COMMIT AST VALIDATION ERROR IN') ||
+    output.includes('Security Violation') ||
+    output.toLowerCase().startsWith('error:')
+  )
+}
+
+/**
  * Post-processes a tool execution result: change-metrics IPC, stagnation circuit breaker
  * (which may end the session), episodic recording, mutation/verification bookkeeping (see
  * agentOrchestratorCircuitBreakerAndVerification.ts), and the final tool-result log line.
@@ -63,11 +88,7 @@ function emitChangeMetrics(ctx: ToolResultProcessingContext) {
  */
 export async function runToolResultProcessing(ctx: ToolResultProcessingContext): Promise<ToolResultProcessingOutcome> {
   const { toolRes, parsedTool } = ctx
-  const isToolFailure =
-    toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
-    toolRes.outputForHistory.includes('[REPLACE FILE ERROR') ||
-    toolRes.outputForHistory.includes('Security Violation') ||
-    toolRes.outputForHistory.toLowerCase().startsWith('error:')
+  const isToolFailure = isFailureOutput(toolRes.outputForHistory)
 
   const targetParam = extractTargetParam(parsedTool)
   const distilledOutput = distillOutput(toolRes, isToolFailure)

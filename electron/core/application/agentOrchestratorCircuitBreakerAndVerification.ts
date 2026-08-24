@@ -1,10 +1,11 @@
 import path from 'node:path'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, findUnsatisfiedDeliverables } from '../domain/agent/milestoneDeliverableResolver'
+import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
   awaitingVerificationNote,
   partialDeliveryDirective,
+  redeliveredMilestoneDirective,
   promotionNote,
   selectMilestonesProvenByVerification,
 } from '../domain/agent/milestoneVerificationPromotion'
@@ -13,8 +14,15 @@ import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
-import { assessPostVerificationClosure, buildClosureDirective } from '../domain/agent/postVerificationClosure'
-import { buildUnprovableMilestoneDirective, shouldDirectUnprovableClosure } from '../domain/agent/unprovableMilestoneDirective'
+import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
+import { resolvePrimaryVerificationCommand } from '../domain/agent/projectVerificationResolver'
+import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
+import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
+import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
+import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
+import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
+import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
+import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -108,6 +116,52 @@ function reportPartialDelivery(
 }
 
 /**
+ * Reports a write that re-delivered a milestone which was already complete.
+ *
+ * The twin of `reportPartialDelivery` for the branch that only ever spoke to the user. Same
+ * plumbing and same reason: BLOCKED is the only status that routes a directive into the
+ * durable failure buffer, and the summary leads with what actually happened, because the
+ * trajectory table prints it next to that word and the write was not blocked.
+ *
+ * Fires only on a RE-delivery — the milestone already carried its awaiting-verification note
+ * before this write — so a first, legitimate completion stays silent. A byte-identical rewrite
+ * never reaches here at all: redundantWriteDetector answers that one earlier.
+ */
+function reportRedelivery(
+  ctx: ToolResultProcessingContext,
+  milestone: { id: string; title: string },
+  evidencePath: string,
+  probe: ReturnType<typeof createWorkspaceDeliverableProbe>
+) {
+  const active = ctx.goalPlanner.getActiveMilestone()
+  const nextNeed =
+    active && active.id !== milestone.id && !isCompletionMilestoneTitle(active.title)
+      ? (() => {
+          const missing = findUnsatisfiedDeliverables(active.title, probe)
+          return missing.length > 0 ? { milestoneId: active.id, missingPaths: missing } : null
+        })()
+      : null
+
+  const directive = redeliveredMilestoneDirective(milestone.id, evidencePath, nextNeed)
+  ctx.episodicCompactor.recordStep(
+    {
+      step: ctx.stepCount,
+      tool: ctx.parsedTool.tool,
+      target: evidencePath,
+      status: 'BLOCKED',
+      summary: `Write accepted — milestone ${milestone.id} was already complete before it`,
+    },
+    directive
+  )
+  ctx.emitLog(
+    'info',
+    `🔁 Milestone ${milestone.id} era gia' completa: la riscrittura di "${evidencePath}" non ha fatto avanzare il piano.`,
+    directive,
+    { category: 'system_alert' }
+  )
+}
+
+/**
  * Advances the active milestone when the file mutation that just landed is evidence for it.
  *
  * A milestone closes here on exactly one condition: the file just written is one the
@@ -149,11 +203,17 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
 
     const status = resolveMilestoneDeliverableStatus(milestone.title, probe)
     if (status === 'satisfied') {
+      // Already carrying the note means this milestone was complete BEFORE this write, so the
+      // write re-delivered it. The branch used to record the note again and speak only to the
+      // user; the model read `Successfully wrote file` and nothing else, which is
+      // indistinguishable from progress. See redeliveredMilestoneDirective.
+      const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
       ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
       ctx.emitLog(
         'info',
         `✏️ Milestone ${milestone.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`
       )
+      if (wasAlreadySatisfied) reportRedelivery(ctx, milestone, evidencePath, probe)
       advancedAny = true
       continue
     }
@@ -335,52 +395,77 @@ export function promoteMilestonesProvenBy(
 }
 
 /**
- * The directive that tells the model the session may close, or null while it may not.
+ * The single directive this turn's plan block carries, or the ordinary focus block.
  *
- * Wires the pure closure policy to the one thing it needs from disk — whether each open
- * milestone names an artefact — using the same probe that decides promotion, so the plan block
- * and the loop guard cannot end up asserting different things about the same milestone in the
- * same turn.
+ * The one place that reads the workspace on behalf of the arbiter. Every fact it gathers comes
+ * from the same probe and the same manifest the promotion path uses, so the plan block and the
+ * loop guard cannot end up asserting different things about the same milestone in the same
+ * turn — which they did, three times, before the arbiter existed.
  *
- * Returns null whenever there is no workspace to probe: without one nothing can be shown to be
- * finished, and inventing a closure would be the fabricated verification the promotion rules
- * exist to prevent.
+ * Returns the neutral `focus` decision whenever there is no workspace to probe: without one
+ * nothing can be shown to be finished, installed or verified, and inventing any of the three
+ * would be the fabricated verification the promotion rules exist to prevent.
  */
-export function resolveClosureDirective(
+export function resolvePlanDirectiveForTurn(
   workspacePath: string | null | undefined,
   goalPlanner: GoalDecompositionPlanner,
-  hasVerifiedBuild: boolean
-): string | null {
-  if (!workspacePath || !hasVerifiedBuild) return null
+  hasVerifiedBuild: boolean,
+  episodes: readonly { tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[] = []
+): PlanDirectiveDecision {
+  if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
+
   const probe = createWorkspaceDeliverableProbe(workspacePath)
-  const assessment = assessPostVerificationClosure({
+  const manifest = readWorkspaceManifest(workspacePath)
+  const verification = resolvePrimaryVerificationCommand(manifest)
+  const declared = Object.keys({
+    ...(manifest.packageJson?.dependencies ?? {}),
+    ...(manifest.packageJson?.devDependencies ?? {}),
+  })
+
+  return resolvePlanDirective({
     hasVerifiedBuild,
     milestones: goalPlanner.getMilestones(),
+    activeMilestone: goalPlanner.getActiveMilestone(),
     deliverableStatusOf: (m) => resolveMilestoneDeliverableStatus(m.title, probe),
+    // Only ever non-empty for a project that declares dependencies: a workspace with no
+    // manifest offers nothing to install, and reporting "0 missing" would be noise.
+    missingDependencies: declared.length > 0 ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : [],
+    // A bounded synchronous AST walk, the same order of cost as the repo map this turn already
+    // builds. depcheck answers the same question far better and stays where it is — inside the
+    // finish gate — because it is asynchronous and carries a 60-second timeout.
+    undeclaredDependencies: scanUndeclaredImports(workspacePath),
+    // Read back from the session's own trajectory rather than kept as a second piece of state:
+    // the episodes are already recorded, already persisted, and already say which installs
+    // failed and which later succeeded.
+    packagesWithFailedInstall: packagesWithFailedInstall(episodes),
+    verificationCommand: verification,
+    verificationFailing: isVerificationFailing(episodes, verification?.command),
+    disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
   })
-  return buildClosureDirective(assessment)
 }
 
 /**
- * The directive that replaces "write this milestone's files to close it" when there are none.
+ * Whether every file the ACTIVE milestone names is on disk with real content.
  *
- * Same probe as `resolveClosureDirective`, asked about the ACTIVE milestone instead of the
- * whole plan, so the two can never disagree about the same milestone in the same turn.
- * Returns null in every ordinary case, leaving the standing directive untouched.
+ * Asked by the loop guard before it abandons that milestone. Measured on the live run of
+ * 2026-08-24, steps 17-18: the model repeated a failing `npm run build`, and the structural
+ * escape marked m-1 "Create `package.json`" FAILED — a file it had written correctly at step
+ * 1 and which was on disk the whole time. The milestone was not what the model was stuck on;
+ * the build error was. Before this wave the case was unreachable, because the model never ran
+ * a command at all.
+ *
+ * A milestone naming no artefact answers `false`: nothing on disk can speak for it, so the
+ * escape keeps its existing power over exactly the milestones that can genuinely deadlock.
  */
-export function resolveUnprovableMilestoneDirective(
+export function isActiveMilestoneDelivered(
   workspacePath: string | null | undefined,
   goalPlanner: GoalDecompositionPlanner
-): string | null {
-  if (!workspacePath) return null
-  const activeMilestone = goalPlanner.getActiveMilestone()
-  if (!activeMilestone || isCompletionMilestoneTitle(activeMilestone.title)) return null
-
+): boolean {
+  if (!workspacePath) return false
+  const active = goalPlanner.getActiveMilestone()
+  if (!active || isCompletionMilestoneTitle(active.title)) return false
   const probe = createWorkspaceDeliverableProbe(workspacePath)
-  const status = resolveMilestoneDeliverableStatus(activeMilestone.title, probe)
-  if (!shouldDirectUnprovableClosure(activeMilestone, status)) return null
-
-  return buildUnprovableMilestoneDirective(activeMilestone)
+  return resolveMilestoneDeliverableStatus(active.title, probe) === 'satisfied'
 }
 
 /**
@@ -437,4 +522,23 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
     ctx.flags.hasVerifiedBuild = true
     promoteMilestonesProvenBy(ctx, ctx.parsedTool.parameters?.command || 'verification command')
   }
+}
+
+/**
+ * The project's HTML entry page when it loads none of the project's own code, or null.
+ *
+ * Reuses the deliverable probe rather than touching `fs` again: it already answers "is this
+ * path on disk and what does it hold", with the same workspace confinement.
+ */
+function resolveDisconnectedEntrypoint(
+  workspacePath: string,
+  probe: ReturnType<typeof createWorkspaceDeliverableProbe>
+): { htmlPath: string; expectedEntry: string } | null {
+  const html = probe('index.html')
+  // No page, or one too large to have been read back: nothing to judge either way.
+  if (!html.exists || html.content === undefined) return null
+
+  const entriesOnDisk = CONVENTIONAL_ENTRY_PATHS.filter((candidate) => probe(candidate).exists)
+  const verdict = checkHtmlEntrypoint(html.content, entriesOnDisk)
+  return verdict.ok || !verdict.expectedEntry ? null : { htmlPath: 'index.html', expectedEntry: verdict.expectedEntry }
 }

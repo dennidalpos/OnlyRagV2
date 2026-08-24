@@ -2,6 +2,11 @@ import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { compilePlanMilestones } from '../domain/agent/planCompilation'
 import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
+import {
+  buildToolSwitchDirective,
+  rejectionAbortSummary,
+  resolveToolRejectionAction,
+} from '../domain/agent/toolRejectionEscalation'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
@@ -70,22 +75,49 @@ async function handleMissingToolCall(
     streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
 
   if (hasToolCallAttempt) {
-    // The tool's real contract, rendered from the schema catalogue the native tool-calling
-    // path already publishes, instead of the one generic sentence this used to send. That
-    // sentence named no tool, no parameter and no shape, so a small model's next attempt was
-    // a guess — see buildToolSchemaCorrectionDirective.
+    // This branch used to return `continue` without incrementing anything, and the loop
+    // detector never sees these calls because validation rejects them before it runs. The
+    // result was a path with no escalation and no terminating guarantee: thirty-three
+    // consecutive rejected `replace_file_content` calls in the live run of 2026-08-24, zero
+    // loop interventions in the whole audit log, and a session that ended only on its step cap.
+    ctx.state.schemaRejectionStreak++
     const rejected = rejections[rejections.length - 1]
-    const feedback = rejected
-      ? buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors)
-      : '[TOOL PARSER REJECTION DIAGNOSTIC]\nNo tool call could be parsed from your response. Emit exactly ONE fenced json block containing "tool", "parameters" and "explanation".'
     const toolLabel = rejected?.toolName || 'unparsed_tool'
+    const action = resolveToolRejectionAction(ctx.state.schemaRejectionStreak)
+
+    if (action === 'abort') {
+      const summary = rejectionAbortSummary(toolLabel, ctx.state.schemaRejectionStreak)
+      ctx.emitLog('info', `⛔ ${summary}`, undefined, { category: 'system_alert' })
+      if (ctx.settings.enableCodingAgentDebugLog) {
+        codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, summary)
+      }
+      ctx.emitDone(false, summary)
+      await ctx.persistCurrentState()
+      ctx.finalizeSession()
+      return { outcome: 'return', result: { success: false, summary } }
+    }
+
+    // The tool's real contract, rendered from the schema catalogue the native tool-calling
+    // path already publishes. REPLACED, not appended, once repeating it has demonstrably
+    // failed: the contract is correct and was sent 97 times in that run. Sending it again is
+    // not the answer; naming a tool the model can actually emit is. Same shape as the ladder
+    // in loopEscapePolicy.ts.
+    const feedback =
+      action === 'switch_tool' && rejected
+        ? buildToolSwitchDirective(toolLabel, ctx.state.schemaRejectionStreak)
+        : rejected
+          ? buildToolSchemaCorrectionDirective(rejected.toolName, rejected.errors)
+          : '[TOOL PARSER REJECTION DIAGNOSTIC]\nNo tool call could be parsed from your response. Emit exactly ONE fenced json block containing "tool", "parameters" and "explanation".'
     ctx.episodicCompactor.recordStep(
       {
         step: ctx.stepCount,
         tool: toolLabel,
+        // Carries the tool name as target so the episodic buffer collapses the repeats onto one
+        // slot instead of spending the whole recent-outputs window on them.
+        target: toolLabel,
         status: 'BLOCKED',
         summary: rejected
-          ? `Tool call rejected: ${rejected.errors.join('; ').slice(0, 120)}`
+          ? `Tool call rejected (${ctx.state.schemaRejectionStreak}x): ${rejected.errors.join('; ').slice(0, 100)}`
           : 'Tool call rejected: no parsable JSON tool call',
       },
       feedback
@@ -93,7 +125,7 @@ async function handleMissingToolCall(
     ctx.emitLog(
       'info',
       rejected
-        ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}]: ${rejected.errors.join('; ')}`
+        ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}] (${ctx.state.schemaRejectionStreak}x): ${rejected.errors.join('; ')}`
         : `Step ${ctx.stepCount} Tool Call Rejected: no parsable JSON tool call.`
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
@@ -179,6 +211,8 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
   if (!parsedTool) return handleMissingToolCall(ctx, rejections)
 
   ctx.state.noToolStreak = 0
+  // A call that parses ends any rejection streak: the model has produced a valid shape again.
+  ctx.state.schemaRejectionStreak = 0
 
   if (parsedTool.tool === 'finish') return handleFinishTool(ctx, parsedTool)
 

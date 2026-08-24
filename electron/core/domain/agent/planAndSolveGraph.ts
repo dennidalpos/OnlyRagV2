@@ -1,5 +1,5 @@
 import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
-import { extractDeliverablePaths } from './milestoneDeliverableResolver'
+import { extractDeliverablePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
 
 export interface PlanMilestone {
   id: string
@@ -130,7 +130,7 @@ export class GoalDecompositionPlanner {
       if (isDeliverableSatisfied) {
         return !isDeliverableSatisfied(m)
       }
-      if (m.notes && m.notes.includes('Awaiting a passing verification command')) {
+      if (m.notes && m.notes.includes(AWAITING_VERIFICATION_MARKER)) {
         return false
       }
       return true
@@ -229,26 +229,29 @@ export class GoalDecompositionPlanner {
   /**
    * Renders the plan block for the next turn.
    *
-   * Both fields of `context` come from the workspace probe, which only the application layer
-   * can run, and both REPLACE standing text rather than joining it — the plan block's default
-   * directives assert things that are false in these two states, and a prompt that says both
-   * is a prompt the model resolves by picking one.
+   * `directive` is one decision, already arbitrated: which single instruction this turn's
+   * prompt carries is decided in planDirectiveArbiter.ts, not here and not by whichever guard
+   * appended last. Both of its fields REPLACE standing text rather than joining it — the focus
+   * block's default directives assert things that are false in each of those states, and a
+   * prompt that says both is a prompt the model resolves by picking one.
    *
-   * `closureDirective` (see postVerificationClosure.ts) replaces the whole focus block once
-   * the verification has passed and nothing is left that a command could prove. The focus
-   * block's directive 4 reads "Do NOT invoke finish until all operational checklist milestones
-   * are completed and verified", and a milestone naming no artefact can never get there.
+   * `blockDirective` replaces the whole focus block: the session is closable, the dependencies
+   * are not installed, or every deliverable is on disk and only a real check can move the plan.
+   * In all three the block's directive 1 ("achieve this milestone's goals") and directive 4
+   * ("do NOT invoke finish until every milestone is verified") point the opposite way.
    *
-   * `unprovableMilestoneDirective` (see unprovableMilestoneDirective.ts) replaces directive 2
-   * alone, when the active milestone is the one that names no artefact. Directive 2 promises
-   * that writing the milestone's files closes it; for that milestone there are none to write.
+   * `closureStepDirective` replaces directive 2 alone, when the active milestone names no
+   * artefact. Directive 2 promises that writing the milestone's files closes it; for that
+   * milestone there are none to write.
+   *
+   * Typed structurally rather than importing PlanDirectiveDecision: the arbiter reads this
+   * module, so a type import back would close the cycle.
    */
   public compileProgressPrompt(context?: {
-    closureDirective?: string | null
-    unprovableMilestoneDirective?: string | null
+    directive?: { blockDirective?: string | null; closureStepDirective?: string | null } | null
   }): string {
     if (this.milestones.length === 0) return ''
-    const closureDirective = context?.closureDirective
+    const blockDirective = context?.directive?.blockDirective
 
     const progress = this.getProgressSummary()
     const lines = [
@@ -298,13 +301,13 @@ export class GoalDecompositionPlanner {
       lines.push(
         `\n[NO OPERATIONAL MILESTONES REMAIN - ACTION REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nIMMEDIATELY invoke the "finish" tool with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion${failedList}`
       )
-    } else if (closureDirective) {
-      lines.push(`\n${closureDirective}`)
+    } else if (blockDirective) {
+      lines.push(`\n${blockDirective}`)
     } else {
       // Kept as a list so directive 2 can be swapped out: it is the one that asserts writing
       // this milestone's files will close it, which is false for a milestone that names none.
       const closureStep =
-        context?.unprovableMilestoneDirective ||
+        context?.directive?.closureStepDirective ||
         `2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.`
 
       lines.push(

@@ -27,6 +27,8 @@ export interface RedundantWriteVerdict {
   /** True when applying this write would leave the file semantically unchanged. */
   isRedundant: boolean
   kind?: RedundantWriteKind
+  /** The file on disk is empty, so "already up to date" would be a false reassurance. */
+  isEmpty?: boolean
 }
 
 /**
@@ -62,9 +64,11 @@ export function detectRedundantWrite(
   proposedContent: string
 ): RedundantWriteVerdict {
   if (!fileExists) return { isRedundant: false }
-  if (existingContent === proposedContent) return { isRedundant: true, kind: 'identical' }
+  // An empty file on disk is not a deliverable, and the notice must not say it is. See below.
+  const isEmpty = !String(existingContent ?? '').trim()
+  if (existingContent === proposedContent) return { isRedundant: true, kind: 'identical', isEmpty }
   if (normalizeForComparison(existingContent) === normalizeForComparison(proposedContent)) {
-    return { isRedundant: true, kind: 'line_endings_only' }
+    return { isRedundant: true, kind: 'line_endings_only', isEmpty }
   }
   return { isRedundant: false }
 }
@@ -78,7 +82,24 @@ export function detectRedundantWrite(
  * or move to the next file. "Do not write this file again" alone is the kind of pure
  * prohibition that produced the loop in the first place.
  */
-export function buildRedundantWriteNotice(filePath: string, kind: RedundantWriteKind): string {
+export function buildRedundantWriteNotice(filePath: string, kind: RedundantWriteKind, isEmpty = false): string {
+  // The contradiction this branch exists to end, measured on 2026-08-25: the model wrote
+  // `src/services/TaskService.ts` with an empty body, the file was created at zero bytes, and
+  // every identical retry was answered "the deliverable exists and is correct" — while the
+  // milestone probe, correctly, reported the same file as missing-or-empty and `update_plan`
+  // refused the milestone. Two system messages about one file, saying opposite things, for
+  // eighteen blocked steps. An empty file is not a deliverable and must never be called one.
+  if (isEmpty) {
+    return [
+      `[NO-OP WRITE: "${filePath}" IS EMPTY AND STAYS EMPTY]`,
+      `The file exists but holds nothing, and the content you just sent was empty too, so nothing changed.`,
+      `An empty file cannot satisfy the milestone that names it: it will keep being reported as missing or placeholder however many times you write it.`,
+      `Directives:`,
+      `1. Call "write_file" on "${filePath}" again with the COMPLETE body of the file — the real implementation, not an empty string and not a TODO comment.`,
+      `2. Do NOT send empty content for this file again.`,
+    ].join('\n')
+  }
+
   const detail =
     kind === 'line_endings_only'
       ? `The file "${filePath}" already holds exactly this content — the only difference was line endings, which is not a code change.`

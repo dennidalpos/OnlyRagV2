@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { partialDeliveryDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
+import { partialDeliveryDirective, redeliveredMilestoneDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
 import type { PlanMilestone } from './planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
 
@@ -98,5 +98,59 @@ describe('partialDeliveryDirective', () => {
     const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
     expect(directive).toContain('1 FILE STILL MISSING')
     expect(directive).toContain('is NOT on disk')
+  })
+})
+
+/**
+ * The half of the churn the no-op detector and the partial-delivery directive both miss: a
+ * REAL rewrite of a milestone that was already complete. Live run of 2026-08-24, `src/main.tsx`
+ * written at step 25 and rewritten at 27, 28, 34 and 37 with different content every time —
+ * 617, 379, 368, 262 and 529 characters, the shortest of them a literal
+ * `// TODO: Implement main application logic` over working code. The model was told
+ * `Successfully wrote file` each time and nothing else.
+ */
+describe('redeliveredMilestoneDirective', () => {
+  it('says the milestone was already complete and that the rewrite moved nothing', () => {
+    const directive = redeliveredMilestoneDirective('m-5', 'src/main.tsx', null)
+
+    expect(directive).toContain('MILESTONE m-5 WAS ALREADY COMPLETE')
+    expect(directive).toContain('src/main.tsx')
+    expect(directive).toContain('cannot advance the plan')
+  })
+
+  it('names the file the active milestone is actually waiting for', () => {
+    const directive = redeliveredMilestoneDirective('m-5', 'src/main.tsx', {
+      milestoneId: 'm-7',
+      missingPaths: ['tailwind.config.js', 'postcss.config.js'],
+    })
+
+    // One concrete action, which is the property every directive obeyed quickly has had.
+    expect(directive).toContain('"tailwind.config.js", "postcss.config.js"')
+    expect(directive).toContain('m-7 is the active milestone')
+    expect(directive).toContain('Stop editing "src/main.tsx"')
+  })
+
+  it('falls back to the checklist when the active milestone owes no file', () => {
+    const directive = redeliveredMilestoneDirective('m-5', 'src/main.tsx', null)
+
+    expect(directive).toContain('Move to the next milestone in the checklist')
+    expect(directive).not.toContain('is the active milestone')
+  })
+
+  it('does not accuse the model of an error, since the write did succeed', () => {
+    const directive = redeliveredMilestoneDirective('m-5', 'src/main.tsx', null)
+
+    expect(directive.toLowerCase()).not.toContain('rejected')
+    expect(directive.toLowerCase()).not.toContain('blocked')
+  })
+
+  it('leaves room for a rewrite the model can actually justify', () => {
+    const directive = redeliveredMilestoneDirective('m-5', 'src/main.tsx', {
+      milestoneId: 'm-7',
+      missingPaths: ['tailwind.config.js'],
+    })
+
+    // A flat prohibition with no exit is the shape this project has had to undo repeatedly.
+    expect(directive).toContain('say what is wrong with it in your explanation')
   })
 })

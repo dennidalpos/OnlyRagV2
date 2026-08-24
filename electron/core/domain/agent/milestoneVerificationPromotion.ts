@@ -18,6 +18,7 @@
 
 import { isCompletionMilestoneTitle } from './planAndSolveGraph'
 import type { PlanMilestone } from './planAndSolveGraph'
+import { AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
 import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
 
 export interface PromotionCandidate {
@@ -57,7 +58,7 @@ export function promotionNote(verificationCommand: string): string {
 
 /** The note recorded when a deliverable lands but nothing has verified it yet. */
 export function awaitingVerificationNote(evidencePath: string): string {
-  return `"${evidencePath}" was written for this milestone and every file it names is on disk. Awaiting a passing verification command before this can count as verified.`
+  return `"${evidencePath}" was written for this milestone and every file it names is on disk. ${AWAITING_VERIFICATION_MARKER} before this can count as verified.`
 }
 
 /**
@@ -96,4 +97,52 @@ export function partialDeliveryDirective(
     `1. Write ${list} next. Do NOT re-write "${writtenPath}" — it is already correct and re-writing it will be blocked as a loop.`,
     `2. Then run this milestone's verification command, or mark it with update_plan.`,
   ].join('\n')
+}
+
+/**
+ * What the model is told when it rewrites a milestone that was ALREADY complete.
+ *
+ * The third branch of the same fork, and the last one that said nothing. When a write lands
+ * and the milestone's files are all present, `advanceActiveMilestoneOnMutation` records the
+ * awaiting-verification note and logs a line — for the USER. Nothing reaches the model beyond
+ * `Successfully wrote file`, which is indistinguishable from progress.
+ *
+ * Measured, live run of 2026-08-24: `src/main.tsx` was written at step 25 (m-5 complete), then
+ * rewritten at steps 27, 28, 34 and 37 with DIFFERENT content every time — 617, 379, 368, 262
+ * and 529 characters, and the 262-character one was a literal
+ * `// TODO: Implement main application logic` written over working code. Not identical, so the
+ * no-op detector correctly stayed silent; not partial, so the partial-delivery directive had
+ * nothing to say. Meanwhile the focus block named m-7 (`tailwind.config.js`,
+ * `postcss.config.js`), and neither of those files was ever written in the whole run.
+ *
+ * The message therefore does two things and no more: it says this milestone was already
+ * complete BEFORE this write, so the rewrite moved nothing, and it names the file the active
+ * milestone is actually waiting for. One concrete action, which is the property every
+ * directive that got obeyed quickly has had.
+ */
+export function redeliveredMilestoneDirective(
+  milestoneId: string,
+  rewrittenPath: string,
+  nextNeed: { milestoneId: string; missingPaths: readonly string[] } | null
+): string {
+  const lines = [
+    `[MILESTONE ${milestoneId} WAS ALREADY COMPLETE — THIS REWRITE CHANGED NOTHING IN THE PLAN]`,
+    `"${rewrittenPath}" was already on disk with real content before this write, and every file milestone ${milestoneId} names was already present. Rewriting it cannot advance the plan, and it cannot make ${milestoneId} verified either — only a passing verification can do that.`,
+    `Directives:`,
+  ]
+
+  if (nextNeed) {
+    const list = nextNeed.missingPaths.map((p) => `"${p}"`).join(', ')
+    lines.push(
+      `1. Stop editing "${rewrittenPath}". Write ${list} next: ${nextNeed.milestoneId} is the active milestone and ${nextNeed.missingPaths.length === 1 ? 'that file does' : 'those files do'} not exist yet.`,
+      `2. Do not rewrite a file that is already correct in order to look busy. If you believe "${rewrittenPath}" is genuinely wrong, say what is wrong with it in your explanation before changing it.`
+    )
+  } else {
+    lines.push(
+      `1. Stop editing "${rewrittenPath}". Move to the next milestone in the checklist that is not yet verified.`,
+      `2. Do not rewrite a file that is already correct in order to look busy.`
+    )
+  }
+
+  return lines.join('\n')
 }

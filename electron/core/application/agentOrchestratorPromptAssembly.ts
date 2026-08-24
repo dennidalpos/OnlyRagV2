@@ -11,7 +11,7 @@ import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { skillAppService } from './skillAppService'
-import { resolveClosureDirective, resolveUnprovableMilestoneDirective } from './agentOrchestratorCircuitBreakerAndVerification'
+import { resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
@@ -60,12 +60,12 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   const skillsBlock = ctx.skillsBlock !== undefined
     ? ctx.skillsBlock
     : await skillAppService.getContextSkillsBlock(ctx.skillMatchContext, ctx.workspacePath, 3, ctx.skillMatchingOptions)
-  // Two states in which the plan block's standing directives assert something false: the
-  // project is finished and it still forbids finishing, and the active milestone names no
-  // file while directive 2 promises that writing its files closes it.
+  // One decision, arbitrated in planDirectiveArbiter.ts, for the channel that reaches the
+  // model on every single turn. The states it selects between are the ones in which the plan
+  // block's standing directives assert something false — and the one in which they assert
+  // nothing at all, leaving `write_file` as the only action the model is ever pointed at.
   const planBlock = ctx.goalPlanner.compileProgressPrompt({
-    closureDirective: resolveClosureDirective(ctx.workspacePath, ctx.goalPlanner, ctx.hasVerifiedBuild),
-    unprovableMilestoneDirective: resolveUnprovableMilestoneDirective(ctx.workspacePath, ctx.goalPlanner),
+    directive: resolvePlanDirectiveForTurn(ctx.workspacePath, ctx.goalPlanner, ctx.hasVerifiedBuild, ctx.episodicCompactor.getEpisodes()),
   })
 
   let debtTrackerBlock = ''

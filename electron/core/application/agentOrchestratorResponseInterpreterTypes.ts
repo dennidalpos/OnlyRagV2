@@ -25,6 +25,13 @@ export type EmitLog = (
  */
 export interface ResponseInterpreterState {
   noToolStreak: number
+  /**
+   * Consecutive tool calls refused by parameter validation, reset by any call that parses.
+   * Counted apart from every other streak because these calls never reach the loop detector —
+   * validation rejects them first — so before this counter existed nothing on that path could
+   * escalate or terminate. See toolRejectionEscalation.ts.
+   */
+  schemaRejectionStreak: number
   stagnationStreak: number
   /**
    * Consecutive loop blocks whose repeated action had actually SUCCEEDED before. Counted apart

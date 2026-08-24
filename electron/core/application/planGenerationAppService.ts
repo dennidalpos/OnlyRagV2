@@ -174,7 +174,7 @@ export class PlanGenerationAppService {
     const hasExistingProject = manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
     const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt, hasExistingProject)
     const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
-    const milestones = compilePlanFromText(planText)
+    const milestones = compilePlanFromText(planText, resolveVerificationCommands(manifest).find((c) => c.coverage === 'whole-project')?.command)
     if (milestones.length < parsedMilestones.length) {
       logger.log(
         'INFO',
@@ -193,8 +193,14 @@ export class PlanGenerationAppService {
    * canonical parser used for generation, so milestones stay in sync
    * after manual edits in the frontend.
    */
-  parsePlanText(planText: string): PlanMilestone[] {
-    return compilePlanFromText(planText)
+  parsePlanText(planText: string, workspacePath?: string | null): PlanMilestone[] {
+    // Re-parsing user-edited text must produce the same plan the generator would, including the
+    // appended runnable milestone — but only when the caller can say which workspace this is.
+    // Without one, no command can be cited and none is invented.
+    const verification = workspacePath
+      ? resolveVerificationCommands(readWorkspaceManifest(workspacePath)).find((c) => c.coverage === 'whole-project')?.command
+      : undefined
+    return compilePlanFromText(planText, verification)
   }
 }
 

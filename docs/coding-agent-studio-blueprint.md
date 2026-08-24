@@ -1,10 +1,12 @@
 # Architettura & Blueprint Evolutivo: Coding Agent Studio — OnlyRag V2
 
-Documento architetturale e piano operativo per l'evoluzione di **Coding Agent Studio** in OnlyRag V2: analisi dello stato corrente, identificazione dei gap, selezione delle librerie universali, progettazione del flusso end-to-end e standard per la compatibilità universale con modelli Ollama (SLM e Frontier).
+Stato corrente, gap, librerie, flusso end-to-end e standard di compatibilità universale con i modelli Ollama (SLM e Frontier).
+
+Per riprendere il lavoro senza contesto delle sessioni precedenti, parti da §6. Il debito aperto e ordinato sta in `PROJECT_STATUS.json`, non qui.
 
 ---
 
-## 1. Analisi di Sistema: "Cosa c'è" vs "Presente ma non efficace" vs "Cosa manca"
+## 1. Analisi di Sistema: "C'è" / "Presente ma non efficace" / "Manca"
 
 ```mermaid
 mindmap
@@ -78,115 +80,82 @@ mindmap
         Template prompt modulari tarati sulla famiglia del modello
 ```
 
----
+La mappa sopra è l'indice. Qui sotto solo ciò che la mappa non può dire: **perché** una voce è "non efficace", e dove sta.
 
-### 1.1. Gestione File System Locale & di Progetto
-* **Presente**:
-  * Toolchain atomica per manipolazione file: `read_file` (con line slicing), `write_file`, `replace_file_content` (con fuzzy matching basato su `fast-levenshtein`), `multi_replace_file_content`, `create_directory`, `copy_file`, `move_file`, `delete_file`, `list_dir`, `list_files_recursive`, `grep_search`, `get_file_info`.
-  * [`AtomicWorkspaceJournal`](../electron/core/infrastructure/filesystem/atomicWorkspaceJournal.ts): snapshot preventivo in memoria di ogni file modificato e `rollbackAll()` immediato su abort o fallimento.
-  * [`compactSemanticRepoMapper`](../electron/core/domain/agent/compactSemanticRepoMapper.ts): albero compatto dei simboli esportati (`class`, `function`, `interface`, `type`) per orientare l'agente senza saturare il context budget.
-  * [`dependencyScanner`](../electron/core/infrastructure/filesystem/dependencyScanner.ts) e [`dependencyIntegrityGate`](../electron/core/domain/agent/dependencyIntegrityGate.ts): rilevamento proattivo di pacchetti importati ma assenti da `package.json`.
-  * Versionamento Git integrato (`git_status`, `git_diff`, `git_commit`).
-* **Mancante**:
-  * **RAG Vettoriale Locale per il Codice Sorgente**: Indicizzazione incrementale dei file di codice su LanceDB con chunking semantico per funzioni/classi, per navigare codebase complesse.
-  * **Scaffolding Deterministico Multi-Stack**: Modelli di generazione sicuri per stack moderni (React+Vite, FastAPI, Cargo, Next.js) senza invocare comandi CLI interattivi soggetti a freeze.
-  * **Refactoring AST Programmatico**: Trasformazioni di codice guidate da parser AST (`@babel/parser`, `ts-morph` o `tree-sitter`) per modifiche strutturali complesse.
+### 1.1. File System & Progetto
 
----
+Toolchain atomica completa (`read_file` con line slicing, `write_file`, `replace_file_content` fuzzy su `fast-levenshtein`, `multi_replace_file_content`, `create_directory`, `copy_file`, `move_file`, `delete_file`, `list_dir`, `list_files_recursive`, `grep_search`, `get_file_info`), [`AtomicWorkspaceJournal`](../electron/core/infrastructure/filesystem/atomicWorkspaceJournal.ts) con `rollbackAll()`, [`compactSemanticRepoMapper`](../electron/core/domain/agent/compactSemanticRepoMapper.ts), [`dependencyScanner`](../electron/core/infrastructure/filesystem/dependencyScanner.ts) + [`dependencyIntegrityGate`](../electron/core/domain/agent/dependencyIntegrityGate.ts), git integrato.
 
-### 1.2. Gestione Debug Errori & Autocorrezione (Auto-Healing)
-* **Presente**:
-  * Terminale PowerShell persistente non-interattivo con `CI=true` e blocco comandi distruttivi ([`commandSecurity.ts`](../electron/core/domain/agent/commandSecurity.ts)).
-  * [`diagnosticOutputReducer`](../electron/core/domain/agent/diagnosticOutputReducer.ts) e [`autoHealingLogCapper`](../electron/core/domain/agent/autoHealingLogCapper.ts): estrazione compatta degli stack trace di errore con iniezione nel turno successivo (`[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]`).
-  * [`agentOrchestratorAskAutoHealing.ts`](../electron/core/application/agentOrchestratorAskAutoHealing.ts): intercettazione di richieste di permesso o stallo passivo in modalità AGENT con redirezione automatica all'implementazione.
-  * [`AgentActionLoopDetector`](../electron/core/domain/agent/loopDetector.ts) con hashing SHA-256 e [`loopEscapePolicy.ts`](../electron/core/domain/agent/loopEscapePolicy.ts) per spezzare cicli e avanzare milestone stagnanti.
-* **Presente ma non efficace** (rilevato in `coding_agent_audit.log`, sessione `session-1787562597025-q8a5`):
-  * **Definition of Done Gate** ([`verificationGatePolicy.ts`](../electron/core/domain/agent/verificationGatePolicy.ts), [`TransactionalExecutionGuard`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts)): blocca `finish` senza build passata, ma si attiva **solo quando il modello chiama `finish`**. La sessione osservata è morta al passo 45 sul circuit breaker, quindi il gate — e con lui [`dependencyIntegrityGate`](../electron/core/domain/agent/dependencyIntegrityGate.ts), che gira dentro [`agentOrchestratorVerificationRunner.ts`](../electron/core/application/agentOrchestratorVerificationRunner.ts) — non è mai stato raggiunto. Tre import verso pacchetti inesistenti sono rimasti su disco.
-  * **Rilevatore di loop**: identifica correttamente la ripetizione, ma la sua risposta resta in gran parte testo che vieta un'azione. In 12 dei 45 passi ha bloccato senza produrre avanzamento. Un caso ha ora un'uscita reale invece di un divieto — la ripetizione a progetto già verificato, vedi §5.4 — ma è uno solo dei rami.
-  * **Nota di rettifica sul prompt "saturo"**: la stesura precedente diceva che le direttive si accumulano "fino a saturarlo", leggendo *fisso a 22.237 caratteri* come *al soffitto*. La misura del 2026-08-24 smentisce la lettura: con `num_ctx` a 16.384 il budget è di ~44.236 caratteri e il prompt ne occupava 22.192, **il 50%**. Il compattatore non è mai scattato, e correttamente. Il difetto reale era un altro e sta in §5.4.
-* **Mancante**:
-  * **Feedback Sintattico/LSP Istantaneo**: Notifica di errori di tipo TypeScript / sintassi subito dopo `write_file`, prima della compilazione globale. **Priorità alta**: nella sessione osservata gli import inventati erano visibili al passo 11 e sono emersi solo trenta passi dopo.
-  * **Auto-Reclaim Processi Orfani**: Identificazione e chiusura automatica di processi che occupano porte locali di sviluppo.
+**Manca**: RAG vettoriale del codice su LanceDB (chunking per funzione/classe); scaffolding deterministico multi-stack che non invochi CLI interattive soggette a freeze; refactoring AST programmatico (`ts-morph` / `@babel/parser` / tree-sitter).
 
----
+### 1.2. Debug & Auto-Healing
 
-### 1.3. Browser per Test di Validazione Visiva
-* **Presente**:
-  * `open_in_browser`: delega l'apertura all'OS (`shell.openExternal`/`shell.openPath`).
-  * [`browserPreviewVerification.ts`](../electron/core/domain/agent/browserPreviewVerification.ts): regola che limita la prova di verifica tramite browser ai soli file statici renderizzabili (`.html`, `.svg`, `.pdf`).
-* **Mancante (Gap Critico)**:
-  * **Feedback Loop Visivo**: L'agente è attualmente cieco all'esito visivo. Non riceve screenshot, né log di errori runtime (`console.error`), né codici di errore HTTP 404/500 per gli asset.
-  * **Headless Browser Runner Integrato**: Modulo di validazione visiva (via Electron Offscreen `WebContents` o `playwright-core`) capace di caricare la pagina in background, catturare screenshot ad alta fedeltà, intercettare errori JavaScript e produrre un report di layout leggibile dall'agente (e interpretabile da modelli Vision come `llama3.2-vision` / `qwen2.5-vl`).
+Shell PowerShell persistente non-interattiva con `CI=true` e blocco comandi distruttivi ([`commandSecurity.ts`](../electron/core/domain/agent/commandSecurity.ts)); [`diagnosticOutputReducer`](../electron/core/domain/agent/diagnosticOutputReducer.ts) e [`autoHealingLogCapper`](../electron/core/domain/agent/autoHealingLogCapper.ts) che iniettano `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]` nel turno successivo; [`agentOrchestratorAskAutoHealing.ts`](../electron/core/application/agentOrchestratorAskAutoHealing.ts) contro lo stallo passivo in modalità AGENT; [`AgentActionLoopDetector`](../electron/core/domain/agent/loopDetector.ts) con hashing SHA-256 e [`loopEscapePolicy.ts`](../electron/core/domain/agent/loopEscapePolicy.ts).
 
----
+**Presente ma non efficace** (sessione `session-1787562597025-q8a5`):
 
-### 1.4. Generazione Artefatti (Artifacts System)
-* **Presente**:
-  * Visualizzazione modifiche tramite Monaco DiffEditor e Git Diff Panel.
-  * Cronologia delle sessioni salvata in `.onlyrag/sessions/session_history.json`.
-* **Mancante (Gap Critico)**:
-  * **Sistema di Artefatti di Prima Classe (First-Class Artifacts Engine)**: Modello dati formale per artefatti generati (UI Component, Web App interattiva, Diagramma Mermaid, Documento Tecnico, Walkthrough).
-  * **Pannello UI Live Artifacts Preview**: Scheda dedicata nell'interfaccia con iframe sandboxato per il rendering live di componenti React/HTML/Tailwind, rendering SVG di diagrammi Mermaid e visualizzazione Markdown avanzata con export 1-click (`.zip` o bundle).
+* **Definition of Done Gate** ([`verificationGatePolicy.ts`](../electron/core/domain/agent/verificationGatePolicy.ts), `TransactionalExecutionGuard`) si attiva **solo quando il modello chiama `finish`**. Quella sessione è morta al passo 45 sul circuit breaker: il gate — e con lui `dependencyIntegrityGate`, che gira dentro [`agentOrchestratorVerificationRunner.ts`](../electron/core/application/agentOrchestratorVerificationRunner.ts) — non è mai stato raggiunto, e tre import verso pacchetti inesistenti sono rimasti su disco. §6 mostra la stessa condizione chiusa in cerchio.
+* **Rilevatore di loop**: identifica la ripetizione ma risponde in gran parte con un divieto. 12 passi su 45 bloccati senza produrre avanzamento. Un solo ramo ha ora un'uscita reale (§5.4).
 
----
+> **Rettifica**: la stesura precedente diceva che le direttive saturano il prompt, leggendo *fisso a 22.237 caratteri* come *al soffitto*. Misura del 2026-08-24: con `num_ctx` 16.384 il budget è ~44.236 caratteri e il prompt ne occupava 22.192, **il 50%**. Il compattatore non è mai scattato, e correttamente. Il difetto vero è in §5.4.
+
+**Manca**: feedback LSP/typecheck istantaneo post-`write_file` (gli import inventati erano visibili al passo 11 ed emersi trenta passi dopo); auto-reclaim di processi orfani sulle porte di sviluppo.
+
+### 1.3. Browser & Validazione Visiva
+
+`open_in_browser` delega all'OS (`shell.openExternal`/`openPath`); [`browserPreviewVerification.ts`](../electron/core/domain/agent/browserPreviewVerification.ts) limita la prova via browser ai soli file statici renderizzabili (`.html`, `.svg`, `.pdf`).
+
+**Manca (gap critico)**: l'agente è cieco all'esito visivo — nessuno screenshot, nessun `console.error`, nessun codice 404/500 sugli asset. Serve un runner headless (Electron Offscreen `WebContents` o `playwright-core`) che carichi la pagina in background, catturi screenshot, intercetti gli errori JS e produca un report leggibile anche da modelli Vision (`llama3.2-vision`, `qwen2.5-vl`).
+
+### 1.4. Artefatti
+
+Presenti solo Monaco DiffEditor, Git Diff Panel e cronologia in `.onlyrag/sessions/session_history.json`.
+
+**Manca (gap critico)**: modello dati formale per artefatti (UI Component, web app interattiva, diagramma Mermaid, documento, walkthrough) e pannello Live Preview con iframe sandboxato, rendering Mermaid/Markdown ed export 1-click.
 
 ### 1.5. Planner Strutturato
-* **Presente**:
-  * [`GoalDecompositionPlanner`](../electron/core/domain/agent/planAndSolveGraph.ts) con microtask sequenziali atomici (`- [ ] m-N: ... — verify: <cmd>`).
-  * Normalizzatore di falsificabilità, capping deterministico a 15 milestone ([`planMilestoneCapper.ts`](../electron/core/domain/agent/planMilestoneCapper.ts)) e parser canonico unificato.
-  * Probe su disco ([`workspaceDeliverableProbe.ts`](../electron/core/infrastructure/filesystem/workspaceDeliverableProbe.ts)) per escludere file placeholder con soli TODO.
-  * Filtro di falsificabilità sui comandi di verifica ([`verificationCommandSafety.ts`](../electron/core/domain/agent/verificationCommandSafety.ts)): sei famiglie di rifiuto (mutating, vacuous, existence-only, interactive, gui-mode, non-exiting).
-* **Presente ma non efficace**:
-  * **Microtask orientati ai file**: dieci milestone su quindici della sessione osservata dicevano "crea il file X"; nessuna esprimeva un comportamento verificabile ("la navigazione fra Dashboard e Tasks funziona"). Un piano di questa forma si può completare al 100% consegnando un'applicazione che non parte.
-  * **Promozione milestone parziale** ([`agentOrchestratorPlanTool.ts`](../electron/core/application/agentOrchestratorPlanTool.ts)): quando `update_plan` esegue il `verificationCommand` della milestone e questo esce 0, la milestone è promossa a `verified` **senza alcun controllo sui deliverable** — a differenza della promozione post-build, che passa da [`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) e richiede tutti i file presenti. `m-2` ("crea `vite.config.ts` e `tsconfig.json`") è stata verificata senza `tsconfig.json`, rendendo impossibile lo `tsc && vite build` dichiarato dal progetto stesso.
-* **Mancante**:
-  * **Pianificazione Gerarchica a Fasi (4 Macro-Fasi Standard)**:
-    1. `Phase 1: Research & Workspace Inventory`
-    2. `Phase 2: Core Architecture & Scaffolding`
-    3. `Phase 3: Implementation & Component Logic`
-    4. `Phase 4: Build Verification, Visual Validation & Artifact Delivery`
-  * **Sub-Task Branching Dinamico**: Possibilità di decomporre una milestone in sotto-task operativi quando l'agente rileva complessità impreviste senza corrompere l'avanzamento globale.
+
+[`GoalDecompositionPlanner`](../electron/core/domain/agent/planAndSolveGraph.ts) con microtask atomici `- [ ] m-N: … — verify: <cmd>`, normalizzatore di falsificabilità, capping a 15 milestone ([`planMilestoneCapper.ts`](../electron/core/domain/agent/planMilestoneCapper.ts)), probe su disco ([`workspaceDeliverableProbe.ts`](../electron/core/infrastructure/filesystem/workspaceDeliverableProbe.ts)) che esclude i placeholder, filtro di falsificabilità sui comandi ([`verificationCommandSafety.ts`](../electron/core/domain/agent/verificationCommandSafety.ts), sei famiglie di rifiuto: mutating, vacuous, existence-only, interactive, gui-mode, non-exiting).
+
+**Presente ma non efficace**:
+
+* **Microtask orientati ai file**: dieci milestone su quindici dicevano "crea il file X"; nessuna esprimeva un comportamento verificabile. Un piano di questa forma si chiude al 100% consegnando un'applicazione che non parte.
+* **Promozione parziale** ([`agentOrchestratorPlanTool.ts`](../electron/core/application/agentOrchestratorPlanTool.ts)): quando `update_plan` esegue il `verificationCommand` della milestone e questo esce 0, la milestone è promossa **senza alcun controllo sui deliverable** — a differenza della promozione post-build, che passa da [`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts). Così `m-2` ("crea `vite.config.ts` e `tsconfig.json`") è stata verificata senza `tsconfig.json`, rendendo impossibile lo `tsc && vite build` dichiarato dal progetto stesso.
+
+**Manca**: pianificazione gerarchica a 4 macro-fasi (`Research & Workspace Inventory` → `Core Architecture & Scaffolding` → `Implementation & Component Logic` → `Build Verification, Visual Validation & Artifact Delivery`); sub-task branching dinamico su imprevisti tecnici.
+
+### 1.6. Compatibilità Universale Ollama
+
+[`toolParser.ts`](../electron/core/domain/agent/toolParser.ts) con pre-stripping CoT e `jsonrepair`; dual-mode Native Tool Calling (`POST /api/chat`) e JSON fenced; hardware ladder con pinning KV-cache e freeze di `num_ctx`; `buildToolSchemaCorrectionDirective` ([`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts)) che su una tool call rifiutata rimanda parametri obbligatori, opzionali ed envelope JSON esatto; matrice modelli verificati ([`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts), §5.5).
+
+**Presente ma non efficace**: `resolveMaxContextTokens` dimensiona `num_ctx` da tier VRAM e RAM di sistema e non consulta **mai** la `context_length` dichiarata da Ollama. Coincide con la capacità reale solo per caso — misure e conseguenze in §5.5b.
+
+**Manca**: prompt adapter per famiglia di modello (Qwen, Llama, DeepSeek-R1, Mistral).
 
 ---
 
-### 1.6. Compatibilità Universale Modelli Ollama (SLM & Frontier)
-* **Presente**:
-  * [`toolParser.ts`](../electron/core/domain/agent/toolParser.ts) con pre-stripping tag CoT (`<think>...</think>`), pulizia stringhe e riparazione JSON con `jsonrepair`.
-  * Supporto sia per Ollama Native Tool Calling (`POST /api/chat`) che per prompt JSON fenced delimitati.
-  * Hardware Ladder unificato con pinning della KV-cache (`keep_alive`, freeze di `num_ctx`).
-  * **Correzione schema guidata sugli SLM**: quando una tool call viene rifiutata dalla validazione dei parametri, `buildToolSchemaCorrectionDirective` ([`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts)) rimanda al modello i parametri obbligatori, quelli opzionali e l'envelope JSON esatto da emettere. Il feedback precedente era una singola frase che non nominava ne' il tool ne' il parametro. `zod` non e' stato adottato: il contratto dei parametri e' gia' dichiarato una volta in questo catalogo e una seconda fonte divergerebbe.
-  * **Matrice dei modelli verificati** ([`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts)): quattro stati (`verified` / `compatible` / `unsupported` / `unknown`), badge con metriche lette da `/api/tags`, set 1-click per tier hardware nel wizard. Vedi §5.5.
-* **Presente ma non efficace**:
-  * **Capacita' del modello ignorata dal runtime**: `resolveMaxContextTokens` dimensiona `num_ctx` da tier VRAM e RAM di sistema e non consulta mai la `context_length` che Ollama dichiara. Coincide con la capacita' reale solo per caso. Misure e conseguenze in §5.5b.
-* **Mancante**:
-  * **Prompt Adapters per Famiglia di Modello**: Ottimizzazione del formato dei messaggi in base alla famiglia del modello (Qwen, Llama, DeepSeek-R1, Mistral).
+## 2. Direttiva Anti-Hardcoding: Librerie Universali
 
----
+La colonna **Stato** distingue ciò che è dichiarato in `package.json` da ciò che questa sezione si limita a proporre: la versione precedente elencava otto pacchetti non installati sotto l'intestazione "Libreria Adottata", e un lettore — umano o agente che riceve il documento come contesto — ne concludeva che quelle capacità esistessero già.
 
-## 2. Direttiva Anti-Hardcoding: Librerie Universali Standard
-
-In conformità con `AGENTS.md`, le logiche di sistema sono delegate a librerie mature e testate.
-
-La colonna **Stato** distingue ciò che è già dichiarato in `package.json` da ciò che questa sezione si limita a proporre: la versione precedente del documento elencava otto pacchetti non installati sotto l'intestazione "Libreria Adottata", e un lettore — umano o agente che riceve il documento come contesto — ne concludeva che quelle capacità esistessero già.
-
-| Ambito | Libreria | Stato | Funzione & Motivazione Tecnica |
+| Ambito | Libreria | Stato | Funzione & Motivazione |
 | :--- | :--- | :--- | :--- |
 | **Parsing & Riparazione JSON** | `jsonrepair` | ✅ in uso | Ripara JSON corrotti/incompleti generati da SLM quantizzati. |
-| **Validazione Schemi a Runtime** | `ollamaToolSchemaCatalog.ts` (interno) | ✅ in uso | Contratto dei parametri di ogni tool dichiarato una volta sola e usato sia per il native tool calling sia per generare la direttiva di correzione quando una chiamata viene rifiutata. **`zod` non e' stato adottato**: duplicherebbe questo catalogo con una seconda fonte di verita' divergente. La coercizione degli alias resta in `toolSchemaValidator.ts`. |
-| **Fuzzy Matching & Diffing** | `fast-levenshtein` + `diff` | ✅ in uso | Distanze di modifica deterministiche per il patching del codice. |
-| **Rendering Diff Visivi** | `diff2html` | ⬜ da adottare | Rendering HTML dei diff. Oggi la UI usa Monaco DiffEditor. |
+| **Validazione Schemi a Runtime** | `ollamaToolSchemaCatalog.ts` (interno) | ✅ in uso | Contratto dei parametri dichiarato una volta sola, usato sia per il native tool calling sia per la direttiva di correzione. **`zod` non è stato adottato**: duplicherebbe il catalogo con una seconda fonte divergente. La coercizione degli alias resta in `toolSchemaValidator.ts`. |
+| **Fuzzy Matching & Diffing** | `fast-levenshtein` + `diff` | ✅ in uso | Distanze di modifica deterministiche per il patching. |
 | **Validazione AST** | `typescript` | ✅ in uso (solo build) | Compiler API disponibile ma non ancora invocata come check post-write. |
-| **Parsing AST alternativo** | `@babel/parser` | ⬜ da adottare | Necessario solo per stack non-TypeScript. |
-| **Risoluzione Percorsi & Globbing** | `fast-glob` + `pathe` | ⬜ da adottare | Oggi la scansione usa `node:fs` diretto e `node:path`. |
-| **Browser & Validazione Visiva** | Electron Offscreen `WebContents` | ⬜ da adottare | Runtime già presente (Electron), modulo di cattura non ancora scritto. |
-| **Browser headless alternativo** | `playwright-core` | ⬜ da adottare | Alternativa a Offscreen `WebContents`; sceglierne una sola. |
-| **Web Scraping & Markdown** | `cheerio` + `turndown` | ✅ in uso | Parsing DOM resiliente e conversione HTML→Markdown compatto. |
+| **Web Scraping & Markdown** | `cheerio` + `turndown` | ✅ in uso | Parsing DOM resiliente e conversione HTML→Markdown. |
 | **Esecuzione Processi & Shell** | `node:child_process` | ✅ in uso | `persistentPowerShellSession.ts`, sessione persistente non-interattiva. |
-| **Esecuzione Processi (ergonomia)** | `execa` | ⬜ da adottare | Sostituto opzionale; la sessione persistente attuale copre già timeout e streaming. |
+| **Rendering Diff Visivi** | `diff2html` | ⬜ da adottare | Oggi la UI usa Monaco DiffEditor. |
+| **Parsing AST alternativo** | `@babel/parser` | ⬜ da adottare | Necessario solo per stack non-TypeScript. |
+| **Percorsi & Globbing** | `fast-glob` + `pathe` | ⬜ da adottare | Oggi la scansione usa `node:fs` e `node:path` diretti. |
+| **Validazione Visiva** | Electron Offscreen `WebContents` | ⬜ da adottare | Runtime già presente, modulo di cattura non scritto. |
+| **Browser headless alternativo** | `playwright-core` | ⬜ da adottare | Alternativa a Offscreen `WebContents`; sceglierne **una sola**. |
+| **Esecuzione Processi (ergonomia)** | `execa` | ⬜ da adottare | Opzionale: la sessione persistente copre già timeout e streaming. |
 
 ---
 
-## 3. Flusso End-to-End Robusto: Dal Prompt all'Esecuzione
+## 3. Flusso End-to-End
 
 ```mermaid
 sequenceDiagram
@@ -212,12 +181,12 @@ sequenceDiagram
         Orchestrator->>LLM: Invia prompt assemblato (Repo Map + Skills + History + Active Milestone)
         LLM-->>Orchestrator: Generazione in streaming (CoT <think> + Tool Call)
         Orchestrator->>Parser: Isola CoT, ripara JSON con jsonrepair e valida contro il catalogo dei tool
-        
+
         alt Tool Call Valida
             Orchestrator->>Journal: createSnapshot(targetFiles)
             Orchestrator->>Tools: Esegui tool (write_file, run_command, visual_inspect, create_artifact)
             Tools-->>Orchestrator: ToolExecutionResult (stdout, screenshot, diff, status)
-            
+
             alt Errore di Esecuzione / Test Fallito
                 Orchestrator->>Orchestrator: diagnosticOutputReducer: estrai stack trace
                 Orchestrator->>LLM: Inietta blocco diagnostico per auto-healing immediato
@@ -243,37 +212,21 @@ sequenceDiagram
 
 ---
 
-## 4. Architettura dei Tool Refattorizzata (Single Responsibility Principle)
+## 4. Architettura dei Tool Refattorizzata (SRP)
 
-Per eliminare il monolite [`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts), l'architettura dei tool viene scomposta in moduli a responsabilità singola sotto `electron/core/domain/agent/tools/`:
+Scomposizione prevista del monolite [`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts) sotto `electron/core/domain/agent/tools/`:
 
 ```
-electron/core/domain/agent/tools/
-├── fs/
-│   ├── readFileTool.ts              # Line slicing, bounds check, path safety
-│   ├── writeFileTool.ts              # AST pre-validation, atomic file writer
-│   ├── fuzzyPatchTool.ts             # fast-levenshtein fuzzy replace & multi-replace
-│   ├── fileExplorerTools.ts          # list_dir, list_files_recursive, glob
-│   └── codeSymbolExtractorTool.ts    # TypeScript Compiler API AST extractor
-├── execution/
-│   ├── runCommandTool.ts             # PowerShell session, timeout policy, CI env
-│   ├── runTestsTool.ts               # Test result parser (vitest, jest, pytest, cargo)
-│   └── devToolchainTools.ts          # inspect_os_env, ensure_tool (winget)
-├── browser/
-│   ├── visualValidationTool.ts       # Offscreen Webview/Playwright screenshot & DOM inspect
-│   └── consoleLogsExtractorTool.ts   # Intercettazione console.error, 404 assets
-├── artifacts/
-│   ├── artifactCreationTool.ts       # Registrazione formale artefatti (React, HTML, MD, SVG)
-│   └── artifactExportTool.ts         # Zip bundle e render export
-├── web/
-│   ├── webSearchTool.ts              # DuckDuckGo SSRF-safe web search
-│   └── fetchWebContentTool.ts        # Cheerio scraping + Turndown markdown converter
-├── git/
-│   ├── gitStatusTool.ts              # Git working tree status
-│   └── gitCommitDiffTools.ts         # Git diff compute & atomic commit
-└── diagnostics/
-    ├── askClarificationTool.ts       # Clarification & permission interceptor
-    └── finishTaskTool.ts             # Definition of Done gate trigger
+tools/
+├── fs/          readFileTool · writeFileTool (AST pre-validation) · fuzzyPatchTool
+│                fileExplorerTools (list_dir, list_files_recursive, glob) · codeSymbolExtractorTool
+├── execution/   runCommandTool (PowerShell, timeout policy, CI env) · runTestsTool (vitest/jest/pytest/cargo)
+│                devToolchainTools (inspect_os_env, ensure_tool)
+├── browser/     visualValidationTool (Offscreen/Playwright screenshot & DOM) · consoleLogsExtractorTool
+├── artifacts/   artifactCreationTool (React, HTML, MD, SVG) · artifactExportTool (zip bundle, render)
+├── web/         webSearchTool (SSRF-safe) · fetchWebContentTool (cheerio + turndown)
+├── git/         gitStatusTool · gitCommitDiffTools
+└── diagnostics/ askClarificationTool · finishTaskTool (trigger del DoD gate)
 ```
 
 ---
@@ -284,200 +237,381 @@ L'ordine è vincolato: le funzionalità nuove poggiano su cicli di feedback che 
 
 ### 5.1. Completato — cicli di feedback riaperti
 
-* **L'agente riceve di nuovo gli errori.** `run_command`, `run_tests`, `ensure_tool` e la verifica delle milestone univano i due flussi con `res.stdout || res.stderr`: siccome `npm` scrive sempre un banner su stdout, lo stderr veniva scartato ogni volta e il modello riceveva "exit code 1" con un blocco diagnostico vuoto, sotto una direttiva che gli chiedeva di ispezionare uno stack trace mai mostrato. Sostituito da `DiagnosticOutputReducer.composeCommandOutput`.
+* **L'agente riceve di nuovo gli errori.** `run_command`, `run_tests`, `ensure_tool` e la verifica delle milestone univano i flussi con `res.stdout || res.stderr`: siccome `npm` scrive sempre un banner su stdout, lo stderr veniva scartato e il modello riceveva "exit code 1" con blocco diagnostico vuoto, sotto una direttiva che gli chiedeva di ispezionare uno stack trace mai mostrato. Sostituito da `DiagnosticOutputReducer.composeCommandOutput`.
 * **Il guard delle installazioni non annulla più l'install che serve.** Controllava solo `package.json`: in un workspace generato dall'agente ogni dipendenza risulta "già installata" mentre `node_modules` non esiste. Ora richiede anche la presenza su disco (`agentToolFileRepository.missingFromNodeModules`).
-* **Le verifiche non falsificabili sono rifiutate.** [`verificationCommandSafety.ts`](../electron/core/domain/agent/verificationCommandSafety.ts) ha due famiglie nuove: *existence-only* (`cat`, `Get-Content`, `ls`, `Test-Path` — passano per qualunque file esista, incluso quello appena scritto) e *gui-mode* (`cypress open`, `--ui`, `--headed`, più gli opener di sistema). Le ricerche di contenuto (`grep`, `findstr`, `Select-String`) restano ammesse: falliscono quando il file esiste ma è sbagliato, che è una vera affermazione sul codice.
-* **Le direttive anti-loop non mentono più sulla propria durata.** Dicevano "You are FORBIDDEN from calling run_command on 'npm run build'" — il comando che il Definition of Done Gate esige — mentre il rilevatore ha in realtà una finestra di 5 passi. Ora dichiarano l'ambito reale (la chiamata identica, finché nulla cambia) e indicano l'uscita: leggere l'errore, correggerlo, rieseguire.
+* **Le verifiche non falsificabili sono rifiutate.** Due famiglie nuove in [`verificationCommandSafety.ts`](../electron/core/domain/agent/verificationCommandSafety.ts): *existence-only* (`cat`, `Get-Content`, `ls`, `Test-Path` — passano per qualunque file esista, incluso quello appena scritto) e *gui-mode* (`cypress open`, `--ui`, `--headed`, opener di sistema). Le ricerche di contenuto (`grep`, `findstr`, `Select-String`) restano ammesse: falliscono quando il file esiste ma è sbagliato.
+* **Le direttive anti-loop non mentono più sulla propria durata.** Dicevano "You are FORBIDDEN from calling run_command on 'npm run build'" — il comando che il DoD Gate esige — mentre la finestra reale del rilevatore è di 5 passi. Ora dichiarano l'ambito vero e indicano l'uscita: leggere l'errore, correggerlo, rieseguire.
 
 ### 5.2. Completato — i controlli anticipati
 
-* **Import allucinati intercettati alla scrittura.** [`importDeclarationGate.ts`](../electron/core/domain/agent/importDeclarationGate.ts) estrae i package importati dal file appena scritto e li confronta con `package.json` (alias `tsconfig.paths` inclusi). Il file viene comunque salvato — buttarlo costerebbe il turno che lo ha prodotto — ma il risultato del tool porta la lista dei pacchetti non dichiarati. Verificato live: `@vitejs/plugin-react`, `@tailwindcss/react`, `react-router-dom` e `tailwindcss-react-components` segnalati al passo in cui sono stati scritti, invece che mai.
-* **Milestone verificabili solo con i deliverable presenti.** [`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts) rifiuta `verified` finche' un file dichiarato dal titolo manca, e' vuoto o e' un placeholder, nominando i file mancanti. Le milestone senza artefatto (`not_applicable`) restano chiudibili dal loro comando.
-* **`write_file` distingue file e directory.** Un path che termina con separatore viene instradato a `create_directory` (o rifiutato se porta contenuto). Verificato live su `src/services/`, che nella sessione originale aveva prodotto un file da 0 byte.
-* **Blocchi di fallimento deduplicati per tool+target sull'intero buffer**, non solo sull'ultimo elemento: l'alternanza A,B,A,B che riempiva il prompt non si accumula piu'.
-* **Report di chiusura reale**: `compileSessionStopSummary` sostituisce la stringa interna del circuit breaker con motivo, milestone completate e aperte, e file toccati. Il `SESSION_TRACKER.md` non dichiara piu' "all verified" quando restano milestone aperte.
-* **Rifiuto di una tool call con il contratto del tool**: `buildToolSchemaCorrectionDirective` rende i parametri obbligatori, quelli opzionali e l'esempio JSON esatto, al posto della frase generica precedente.
+* **Import allucinati intercettati alla scrittura.** [`importDeclarationGate.ts`](../electron/core/domain/agent/importDeclarationGate.ts) confronta i package importati dal file appena scritto con `package.json` (alias `tsconfig.paths` inclusi). Il file viene comunque salvato — buttarlo costerebbe il turno che lo ha prodotto — ma il risultato del tool porta l'elenco dei non dichiarati. Verificato live su `@vitejs/plugin-react`, `@tailwindcss/react`, `react-router-dom`, `tailwindcss-react-components`.
+* **Milestone verificabili solo con i deliverable presenti.** [`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts) rifiuta `verified` finché un file dichiarato dal titolo manca, è vuoto o è un placeholder, nominandolo. Le milestone senza artefatto (`not_applicable`) restano chiudibili dal loro comando.
+* **`write_file` distingue file e directory.** Un path che termina con separatore va a `create_directory` (rifiutato se porta contenuto). Verificato live su `src/services/`, che nella sessione originale produceva un file da 0 byte.
+* **Blocchi di fallimento deduplicati per tool+target sull'intero buffer**, non solo sull'ultimo elemento: l'alternanza A,B,A,B non si accumula più.
+* **Report di chiusura reale**: `compileSessionStopSummary` sostituisce la stringa interna del circuit breaker con motivo, milestone completate e aperte, file toccati. `SESSION_TRACKER.md` non dichiara più "all verified" con milestone aperte.
+* **Rifiuto di una tool call con il contratto del tool**: `buildToolSchemaCorrectionDirective` al posto della frase generica precedente.
 
 ### 5.3. Completato — recupero dai conflitti di versione
 
-* **`npm ERESOLVE` diventa un'istruzione eseguibile.** [`npmResolutionConflict.ts`](../electron/core/domain/agent/npmResolutionConflict.ts) legge dal report di npm quale versione e' installata e quale viene richiesta, e produce il comando esatto che risolve — con l'intervallo copiato verbatim da npm, mai sintetizzato. Prima, sopra quell'output c'era la direttiva generica "locate the failing file, syntax, or command parameter", che mandava il modello a riscrivere file che non erano il problema.
-* **Il guard delle installazioni distingue una versione da un nome.** `npm install vite@^8.0.0` non e' una reinstallazione: chiede un cambio di versione. Confrontando solo i nomi, il guard rispondeva "vite e' gia' installato" e annullava proprio il comando che risolve il conflitto.
-* **Nomi di tool inventati vengono rifiutati.** `normalizeToolName` restituiva qualunque stringa come se fosse un tool valido: in un run il passo 1 e' stato `npm_install`, dispacciato a un executor che non ha un handler per quel nome. Ora il catalogo dei tool decide, e il rifiuto porta con se' l'elenco dei tool reali.
-* **Verificato live**: partendo da `vite@4.5.14` installato e da un `npm install @vitejs/plugin-react@6.1.0` che non puo' risolvere, il modello ha eseguito il comando indicato dalla direttiva (`npm install vite@^8.0.0`), poi ha ripetuto l'installazione del plugin con successo. Nessun ricorso a `--force` o `--legacy-peer-deps`. Nel run precedente, con la stessa situazione, si era fermato a chiedere all'utente quale opzione preferisse.
+* **`npm ERESOLVE` diventa un'istruzione eseguibile.** [`npmResolutionConflict.ts`](../electron/core/domain/agent/npmResolutionConflict.ts) legge dal report di npm la versione installata e quella richiesta e produce il comando esatto, con l'intervallo copiato **verbatim** da npm, mai sintetizzato. Prima sopra quell'output c'era "locate the failing file, syntax, or command parameter", che mandava il modello a riscrivere file che non erano il problema.
+* **Il guard distingue una versione da un nome.** `npm install vite@^8.0.0` non è una reinstallazione: confrontando solo i nomi, il guard rispondeva "vite è già installato" e annullava il comando che risolve.
+* **Nomi di tool inventati vengono rifiutati.** `normalizeToolName` restituiva qualunque stringa come tool valido: in un run il passo 1 è stato `npm_install`, dispacciato a un executor senza handler. Ora decide il catalogo, e il rifiuto porta l'elenco dei tool reali.
+* **Verificato live**: da `vite@4.5.14` installato e un `npm install @vitejs/plugin-react@6.1.0` irrisolvibile, il modello ha eseguito il comando indicato (`npm install vite@^8.0.0`) e poi ha ripetuto l'installazione con successo. Nessun `--force`, nessun `--legacy-peer-deps`. Nel run precedente si era fermato a chiedere all'utente.
 
-> Nota sul tono delle direttive: la prima stesura elencava due opzioni e diceva "Pick ONE and run it now". Il modello le ha lette, capite, e ha girato la scelta all'utente con `ask` — in modalita' AGENT, dove non c'e' nessuno che risponda. Una direttiva che offre una decisione a un modello lo invita a delegarla. Ora c'e' una sola istruzione imperativa e un ripiego, non un menu.
+> **Nota sul tono.** La prima stesura elencava due opzioni e diceva "Pick ONE and run it now". Il modello le ha capite e ha girato la scelta all'utente con `ask` — in modalità AGENT, dove non risponde nessuno. **Una direttiva che offre una decisione a un modello lo invita a delegarla.** Ora c'è una sola istruzione imperativa e un ripiego, non un menu.
 
 ### 5.4. Completato — il churn e la strada per chiudere
 
-I due sintomi erano **un solo meccanismo**, e nessuno dei due stava dove il documento li cercava.
+I due sintomi erano **un solo meccanismo**, e nessuno stava dove il documento lo cercava.
 
-* Sintomo A: rilancia un comando **passato**. Nel probe ERESOLVE aveva rieseguito quattro volte un `npm run build` gia' verde, invece di chiudere.
-* Sintomo B: riscrive lo stesso file. 21-31 `write_file` per ~14 file in una sessione da 50 passi.
+* Sintomo A: rilancia un comando **passato** — quattro `npm run build` già verdi invece di chiudere.
+* Sintomo B: riscrive lo stesso file — 21-31 `write_file` per ~14 file in cinquanta passi.
 
-**La causa.** `write_file` rispondeva `Successfully wrote file X` anche quando il contenuto sul disco era gia' identico — una frase indistinguibile da quella di una modifica vera. E l'orchestratore classifica la mutazione **per nome del tool** (`isMutating` in [`agentOrchestratorToolResultProcessor.ts`](../electron/core/application/agentOrchestratorToolResultProcessor.ts)), quindi una riscrittura che non cambiava un byte azzerava comunque `flags.hasVerifiedBuild`. Da qui il ciclo: build verde → riscrittura identica → la prova viene buttata via → build di nuovo. Il sintomo B *produceva* il sintomo A.
+**Causa.** `write_file` rispondeva `Successfully wrote file X` anche a contenuto identico sul disco, frase indistinguibile da una modifica vera; e l'orchestratore classifica la mutazione **per nome del tool** (`isMutating` in [`agentOrchestratorToolResultProcessor.ts`](../electron/core/application/agentOrchestratorToolResultProcessor.ts)), quindi una riscrittura a zero byte di differenza azzerava `flags.hasVerifiedBuild`. Ciclo: build verde → riscrittura identica → la prova viene buttata → build di nuovo. **Il sintomo B produceva il sintomo A.**
 
-**La seconda causa, indipendente.** Anche con la build verde il modello non poteva chiudere: la direttiva 4 del blocco piano dice *"Do NOT invoke finish until all operational checklist milestones are completed and verified"*, e una milestone che non nomina nessun file (`not_applicable`: "ensure buttons have a 44x44 touch target", "run the application") non puo' raggiungere `verified` tramite nessun comando — `selectMilestonesProvenByVerification` la esclude apposta, perche' promuoverla sarebbe fabbricare una verifica. Il modello si trovava con una build verde, una milestone inchiodabile e un divieto di finire: l'unica azione ancora permessa era rieseguire la build. E' esattamente la forma che l'intestazione di `loopEscapePolicy.ts` gia' descriveva — un divieto senza uscita — e nessuna quantita' di scoraggiamento in piu' poteva risolverla.
+**Seconda causa, indipendente.** Anche con build verde il modello non poteva chiudere: la direttiva 4 del blocco piano vieta `finish` finché tutte le milestone non sono `verified`, e una milestone che non nomina file (`not_applicable`: "ensure buttons have a 44x44 touch target") non può raggiungere `verified` per nessuna via — `selectMilestonesProvenByVerification` la esclude apposta, perché promuoverla sarebbe fabbricare una verifica. Build verde, milestone inchiodabile, divieto di finire: l'unica azione permessa era rieseguire la build.
 
-**Cosa e' stato applicato:**
+**Applicato:**
 
-* **La scrittura a vuoto e' riconosciuta come tale.** [`redundantWriteDetector.ts`](../electron/core/domain/agent/redundantWriteDetector.ts) confronta il contenuto proposto con quello su disco, normalizzando i soli due scarti che non sono modifiche di codice: fine riga CRLF/LF (la fonte dominante di riscritture fantasma su Windows) e newline finale. Indentazione, righe vuote interne e riformattazioni restano modifiche vere. Il file non viene toccato — nemmeno l'mtime, che e' cio' su cui `scanCommandTouchedFiles` attribuisce i file — e il risultato del tool dichiara il no-op e afferma esplicitamente che la build gia' eseguita resta valida.
-* **Un no-op non e' una mutazione.** `ToolExecutionResult.noOpMutation` esclude la chiamata da `isMutating`: `hasVerifiedBuild` sopravvive, nessuna milestone avanza su prove che non sono cambiate, e il pannello non annuncia un file "Created" che nessuno ha scritto.
-* **La chiusura diventa uno stato dichiarabile.** [`postVerificationClosure.ts`](../electron/core/domain/agent/postVerificationClosure.ts) combina i segnali che esistevano gia' e non erano mai stati messi insieme: se `hasVerifiedBuild` e' vero (verifica passata, nulla scritto dopo) e ogni milestone ancora aperta e' `not_applicable`, allora non resta lavoro che un comando possa dimostrare. Una sola milestone `unsatisfied` — file mancante o placeholder — riporta lo stato a `not_closable` senza guardare il resto.
-* **La direttiva sostituisce il divieto, non ci si affianca.** Quando la chiusura e' legittima, `compileProgressPrompt` rimpiazza **l'intero** blocco della milestone attiva con la direttiva di chiusura, che nomina le milestone inchiodabili e ordina la sequenza esatta: `update_plan` su quelle (via che `milestoneUpdateAuthority` gia' consente per chi non nomina artefatti), poi `finish`. La checklist resta stampata, perche' e' da li' che il modello legge gli id. Stampare entrambi i blocchi sarebbe la contraddizione che ha generato il loop.
-* **Lo stesso testo raggiunge il loop guard, e li' pure sostituisce.** `handleLoopDetection` usa la direttiva di chiusura **al posto** del testo consultivo, in entrambi i rami (ridondanza e stagnazione). Il tetto di `REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS` e l'abort a `LOOP_ESCAPE_ABORT_STREAK` restano intatti: la garanzia di terminazione non e' toccata. Quello che viene sospeso, e solo in stato di chiusura, e' l'escape strutturale — marcare `failed` proprio le milestone che la direttiva sta chiedendo di chiudere metterebbe "fallita" nel report finale per lavoro che era stato fatto.
+* **La scrittura a vuoto è riconosciuta.** [`redundantWriteDetector.ts`](../electron/core/domain/agent/redundantWriteDetector.ts) confronta il contenuto proposto con quello su disco normalizzando i soli due scarti che non sono modifiche di codice: CRLF/LF (fonte dominante di riscritture fantasma su Windows) e newline finale. Indentazione, righe vuote e riformattazioni restano modifiche vere. Il file non viene toccato — nemmeno l'mtime, su cui `scanCommandTouchedFiles` attribuisce i file.
+* **Un no-op non è una mutazione.** `ToolExecutionResult.noOpMutation` lo esclude da `isMutating`: `hasVerifiedBuild` sopravvive, nessuna milestone avanza su prove immutate, il pannello non annuncia file "Created" da nessuno.
+* **La chiusura diventa uno stato dichiarabile.** [`postVerificationClosure.ts`](../electron/core/domain/agent/postVerificationClosure.ts) combina segnali che esistevano già: se `hasVerifiedBuild` è vero e ogni milestone aperta è `not_applicable`, non resta lavoro che un comando possa dimostrare. Una sola milestone `unsatisfied` riporta a `not_closable`.
+* **La direttiva sostituisce il divieto, non ci si affianca.** `compileProgressPrompt` rimpiazza **l'intero** blocco della milestone attiva con la direttiva di chiusura, che nomina le milestone inchiodabili e ordina la sequenza: `update_plan` su quelle, poi `finish`. La checklist resta stampata, perché è da lì che il modello legge gli id.
+* **Lo stesso testo sostituisce anche nel loop guard**, in entrambi i rami. `REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS` e l'abort a `LOOP_ESCAPE_ABORT_STREAK` restano intatti: la garanzia di terminazione non è toccata. Sospeso, e solo in stato di chiusura, è l'escape strutturale — marcare `failed` proprio le milestone che la direttiva chiede di chiudere metterebbe "fallita" nel report per lavoro fatto.
 
-Il Definition of Done Gate non e' stato indebolito: continua a eseguire la verifica reale del progetto prima di onorare `finish`.
+Il DoD Gate non è indebolito: continua a eseguire la verifica reale prima di onorare `finish`.
 
-**Verifica live, ed e' qui che la prima stesura ha sbagliato.** Nel run `live-eresolve` del 2026-08-24 la direttiva e' comparsa al passo esatto giusto — passo 11, dopo un `npm run build` verde al passo 10 — con il contenuto giusto. Il modello l'ha ignorata e ha eseguito un altro comando; la sessione ha esaurito i 16 passi senza chiudere. Il motivo si legge nel log: la direttiva era **terza**, in un messaggio i cui primi due blocchi dicevano *"move to the NEXT unfinished step of your active milestone"* e *"Advance to the next unfinished step instead"*. Il modello ha fatto quello che diceva la prima meta' del messaggio. Nel blocco piano avevo sostituito il testo in conflitto; nel loop guard l'avevo accodato. Corretto: ora sostituisce anche li'. **Un messaggio porta una sola istruzione** — la stessa lezione della nota sul tono in §5.3, in un punto diverso.
+**Verifica live, e qui la prima stesura ha sbagliato.** Nel run `live-eresolve` la direttiva è comparsa al passo giusto — passo 11, dopo un `npm run build` verde al passo 10 — con il contenuto giusto, ed è stata **ignorata**: era **terza**, in un messaggio i cui primi due blocchi dicevano *"move to the NEXT unfinished step"* e *"Advance to the next unfinished step instead"*. Nel blocco piano avevo sostituito il testo in conflitto; nel loop guard l'avevo accodato. Corretto. **Un messaggio porta una sola istruzione.**
 
-Secondo run, stessa sonda, dopo la correzione: la sessione **arriva a `finish`** con un report reale (`Status: COMPLETED`, 16 passi). Va detto per intero, pero': il modello ha ripetuto la build altre quattro volte (passi 12-15) prima di obbedire, e il `finish` e' caduto sull'ultimo passo disponibile. E' un miglioramento misurato, non una risoluzione pulita — e non sorprende, perche' in questa sonda la direttiva raggiunge il modello **solo dentro un intervento del loop guard**, cioe' quando sta gia' girando a vuoto. Il canale forte, il blocco piano ripetuto a ogni turno, qui non esiste affatto.
+Secondo run, stessa sonda: la sessione **arriva a `finish`** (`Status: COMPLETED`, 16 passi). Per intero, però: il modello ha ripetuto la build altre quattro volte (passi 12-15) prima di obbedire, e `finish` è caduto sull'ultimo passo disponibile. Miglioramento misurato, non risoluzione pulita — e prevedibile, perché in quella sonda la direttiva arriva **solo** dentro un intervento del loop guard, cioè quando il modello gira già a vuoto. Il canale forte, il blocco piano ripetuto a ogni turno, lì non esiste (`eresolveRecovery.live.ts` non semina un piano).
 
-Il secondo run ha anche corretto un'imprecisione del testo: la preambola diceva *"it succeeded every time"*, ma sostituisce **entrambi** i rami, e quello di stagnazione lo raggiungono ripetizioni che falliscono — nel log e' finita sopra un `update_plan` rifiutato due volte per assenza di piano. Ora la preambola non si pronuncia sull'esito.
+**Run con piano seminato** (`fullTaskRun.live.ts`, 50 passi): il canale forte funziona come progettato — la direttiva di chiusura ha sostituito il focus block nominando le quattro milestone indimostrabili e lasciando la checklist. Il modello ha obbedito alla direttiva 1 (`update_plan {m-13, verified}`) ma **diciannove passi dopo**, sprecandone due su una milestone già abbandonata; la sessione è finita sul tetto dei 50 passi, non su `finish`.
 
-> Nota sulla sonda: `eresolveRecovery.live.ts` non semina un piano (`update_plan` viene rifiutato con "no active execution plan"), quindi esercita solo la meta' loop-guard della modifica. La meta' che conta di piu' — la direttiva come istruzione **permanente** nel blocco piano — richiede una sonda con piano seminato.
+> **Contraddizione sanata, per quanto l'evidenza lo consente (2026-08-24).** La stesura precedente collocava quel momento *"al passo 31, subito dopo un `npm run build` verde"*, mentre §6 affermava che **nessuno dei tre run** aveva mai avuto una build verde. Le due cose non possono essere entrambe vere: la direttiva di chiusura si costruisce solo con `hasVerifiedBuild`.
+>
+> Cosa regge davvero, controllato:
+>
+> * **Non è il run superstite.** L'unico stato di sessione rimasto (il terzo) porta `write_file` × 63 e `update_plan` × 1, zero comandi: lì `hasVerifiedBuild` non può mai essere stato vero, quindi nessuna direttiva di chiusura è comparsa. E le milestone non tornano — il paragrafo parla di `update_plan {m-13, verified}`, mentre in quello stato m-13 è `failed`. **Il paragrafo descrive un run diverso, il cui log è stato cancellato.**
+> * **`hasVerifiedBuild` non significa solo "build verde".** Lo alzano anche `run_tests` e un `open_in_browser` su un file renderizzabile. Se in quel run la direttiva è davvero comparsa, la causa può non essere stata un `npm run build`: l'affermazione *"subito dopo un `npm run build` verde"* è la parte non sostenuta, non la comparsa della direttiva.
+> * **Anche l'affermazione di §6 era più larga dell'evidenza.** "Nessuno dei tre run" è dimostrato solo per il terzo. Per i primi due non esiste più nulla da leggere.
+>
+> Entrambe le affermazioni sono quindi state ridotte a ciò che si può controllare. Nulla di questo tocca la diagnosi del deadlock, che poggia sul codice (§6) e sul run superstite, né la correzione, che è stata misurata dal vivo. Cosa la settlerebbe: rieseguire la sonda con piano seminato **conservando il log**, e leggere quale tool alza `hasVerifiedBuild` al passo in cui la direttiva compare — la ragione per cui la conservazione del log è ora una voce del tracker e un paragrafo di §6.
 
-**Run con piano seminato** (`fullTaskRun.live.ts`, 50 passi, stessa data). Il canale forte funziona come progettato: al **passo 31**, subito dopo un `npm run build` verde, il blocco piano ha sostituito il focus della milestone attiva con la direttiva di chiusura, nominando le quattro milestone che nessun comando puo' dimostrare (m-11..m-14, nessun path nel titolo) e lasciando stampata la checklist da cui il modello legge gli id. Da li' in poi la direttiva e' tornata a ogni turno.
+**La seconda forma del churn, diagnosticata dal run.** Il tracker ipotizzava "riscrive lo stesso file con contenuto diverso". Il log smentisce: i tre write su `src/services/index.tsx` (passi 22-24) erano tre **placeholder diversi** — `fetchData` stub, poi `getTasks`/`addTask` stub, poi `export default {}`. Non correzioni: tentativi diversi di soddisfare la milestone m-10, *"Create `src/services` folder"*, che nessuna scrittura poteva soddisfare. `extractDeliverablePaths` non trova nulla (una directory non ha estensione), quindi la milestone risolve `not_applicable`; nel frattempo la direttiva 2 prometteva che creare i file l'avrebbe chiusa. **Un'istruzione che non può essere eseguita** — sette passi su cinquanta.
 
-Cio' che il modello ha fatto, per intero: ha obbedito alla direttiva 1 — al passo 50 ha emesso `update_plan {m-13, verified}` — ma ci ha messo diciannove passi, e prima ha sprecato i passi 32-33 su `update_plan m-10`, milestone gia' abbandonata e correttamente rifiutata. La sessione e' finita sul tetto dei 50 passi, non su `finish`.
+* [`unprovableMilestoneDirective.ts`](../electron/core/domain/agent/unprovableMilestoneDirective.ts) sostituisce **la sola direttiva 2** quando la milestone attiva è `not_applicable`: dichiara che nessun file e nessun comando possono dimostrarla, che creare un file nuovo verrà bloccato come loop, e nomina `update_plan` con l'id esatto. Il resto del focus block resta intatto.
+* La direttiva **non** dice di saltare il lavoro. *"Ensure buttons have a 44x44 touch target"* descrive lavoro vero in file esistenti: manca solo la prova. "Chiudila e basta" trasformerebbe ogni milestone inchiodabile in un timbro.
+* Quando anche la chiusura di sessione è legittima, vince quella.
+* **Correzione dal run**: la direttiva è finita su m-5 *"Install Tailwind CSS"*, che porta `Verify with: npm install …`, affermando *"No write and **no command** can prove it"*. Falso — `update_plan` **esegue** il `verificationCommand` e promuove sull'exit code. `shouldDirectUnprovableClosure` ora richiede anche l'assenza di un `verificationCommand`, così l'affermazione centrale è letteralmente vera.
+* Nello stesso run il no-op detector ha lavorato: sette `[NO-OP WRITE]` su `globals.css` dal passo 39, build verde preservata. Il modello ha ripetuto comunque: il rilevatore rende osservabile il fatto e protegge la prova, non convince un 7B a smettere.
 
-**Il budget era gia' bruciato prima.** Ai passi 22-28 il modello ha riscritto `src/services/index.tsx` sei volte **con contenuto ogni volta diverso** — quindi `redundantWriteDetector` non e' intervenuto, e correttamente: quelle erano scritture vere. E' il sintomo B in una forma che questa onda non copre. Il fix chiude la riscrittura *identica*, che era quella che invalidava la build verde; la riscrittura *variata* dello stesso file resta un problema aperto, gestito solo dal controllo di thrashing esistente (4 edit in 6 azioni), che infatti e' scattato al passo 25 e ha portato all'abbandono di m-10.
+> **Strada scartata**: rendere `src/services` estraibile come *deliverable di directory*. Una milestone `not_applicable` è **chiudibile** dal giudizio del modello, una `unsatisfied` **blocca** la chiusura di sessione. Un'estrazione sbagliata — "Move `src/old` to the `src/new` folder" — convertirebbe una milestone chiudibile in una bloccante permanente. Non vale il rischio finché non esiste una regola sintattica che distingua creazione da spostamento.
 
-In sintesi: il meccanismo di chiusura e' verificato end-to-end su entrambi i canali, con il contenuto e il momento giusti. Quello che non e' risolto e' la *velocita'* di obbedienza di un 7B e la seconda forma del churn. Le due cose vanno misurate separatamente dalla prossima onda.
+**La terza forma: consegna parziale.** Milestone m-6, *"Configure Tailwind CSS in `postcss.config.js` and `tailwind.config.js`"*. Il modello ha scritto `postcss.config.js` al passo 19 e lo ha riscritto ai passi 20-29, byte-identico, sempre bloccato. **`tailwind.config.js` non è mai stato scritto in cinquanta passi.** Non era confuso su cosa avesse fatto: non gli è mai stato detto cosa mancava. `advanceActiveMilestoneOnMutation` risolve lo stato del deliverable a ogni scrittura e parlava solo nel ramo `satisfied`; nel ramo `unsatisfied` taceva, pur avendo l'elenco esatto da `findUnsatisfiedDeliverables`.
 
-**La seconda forma del churn, diagnosticata dal run stesso.** Il tracker riportava "riscrittura dello stesso file con contenuto ogni volta diverso" come ipotesi da valutare. Il log la smentisce: i tre write su `src/services/index.tsx` (passi 22, 23, 24) erano tre **placeholder diversi** — `fetchData` stub, poi `getTasks`/`addTask` stub, poi `export default {}`. Non correzioni, non amnesia: tentativi diversi di soddisfare una milestone che nessuna scrittura poteva soddisfare.
+* [`partialDeliveryDirective`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) nomina i file mancanti, dichiara che la milestone non può essere verificata finché non esistono, e dice esplicitamente di **non** riscrivere quello appena consegnato — che viene accreditato, non trattato come errore.
+* Il file appena scritto è escluso dall'elenco confrontando path **normalizzati**: le scansioni dei comandi riportano path assoluti, i deliverable escono dal titolo in forma relativa, e un confronto letterale rilancerebbe come "mancante" ciò che è appena atterrato.
+* Se l'unico deliverable insoddisfatto è proprio quello appena scritto (corpo placeholder), la direttiva tace: contraddirebbe il "Successfully wrote file" appena letto, e di quel caso parlano le regole sui placeholder.
+* Viaggia come episodio `BLOCKED`, l'unico stato che la instrada nel buffer dei fallimenti dove sopravvive al trimming FIFO. La scrittura però **non** è stata bloccata, e la traiettoria stampa il sommario accanto a quella parola: il sommario apre perciò con "Write accepted".
 
-La milestone era m-10, *"Create `src/services` folder"*. `extractDeliverablePaths` non trova nulla — una directory non ha estensione, e il pattern richiede `stem.ext` — quindi la milestone risolve `not_applicable` e nessuna verifica potra' mai promuoverla. Nel frattempo la direttiva 2 del focus block prometteva: *"Once the required files for this milestone are created or updated, invoke `update_plan` to mark it verified"*. Per quella milestone non esistono file da creare. Il modello ha fatto l'unica cosa che la direttiva suggeriva, tre volte, con contenuto diverso ogni volta perche' ogni tentativo lasciava il mondo identico. Poi il controllo di thrashing lo ha bloccato e il loop guard ha abbandonato m-10: sette passi su cinquanta.
-
-E' la stessa forma degli altri difetti di questa sezione — **un'istruzione che non puo' essere eseguita** — e l'uscita esisteva gia' senza essere nominata: `milestoneUpdateAuthority` lascia deliberatamente chiudibile via `update_plan` una milestone che non nomina artefatti, proprio perche' non c'e' nulla su disco che possa contraddire il giudizio del modello.
-
-* [`unprovableMilestoneDirective.ts`](../electron/core/domain/agent/unprovableMilestoneDirective.ts) sostituisce **la sola direttiva 2** quando la milestone attiva e' `not_applicable`: dichiara che nessun file e nessun comando possono dimostrarla, che creare un file nuovo non la soddisfa e verra' bloccato come loop, e nomina `update_plan` con l'id esatto. Il resto del focus block resta intatto — la milestone e' ancora quella attiva e la sessione non e' finita.
-* La direttiva **non** dice di saltare il lavoro. *"Ensure buttons have a 44x44 touch target"* descrive lavoro vero in file che gia' esistono: manca solo la prova. Dire "chiudila e basta" trasformerebbe ogni milestone inchiodabile in un timbro, che e' esattamente cio' che `milestoneVerificationPromotion` e' stato scritto per finire.
-* Quando anche la chiusura di sessione e' legittima, vince quella: a progetto verificato non c'e' piu' una milestone attiva su cui lavorare, e stampare direttive di focus rimetterebbe il modello al lavoro.
-
-> Nota su una strada scartata: rendere estraibile `src/services` come *deliverable di directory*, cosi' che m-10 diventi verificabile. E' allettante e ha un rischio concreto: una milestone oggi `not_applicable` e' **chiudibile** dal giudizio del modello, mentre una `unsatisfied` **blocca** la chiusura di sessione (vedi `assessPostVerificationClosure`). Un'estrazione sbagliata — "Move `src/old` to the `src/new` folder" — convertirebbe una milestone chiudibile in una bloccante permanente. Il guadagno non vale quel rischio finche' non c'e' una regola sintattica che distingua l'intento di creazione da quello di spostamento.
-
-**Verifica live, e di nuovo il run ha corretto la stesura.** La direttiva compare al posto giusto e sostituisce la sola direttiva 2, lasciando intatto il resto del focus block. Ma nel run del 2026-08-24 e' finita su m-5 *"Install Tailwind CSS"*, che porta `Verify with: npm install tailwindcss postcss autoprefixer` — e affermava *"No write and **no command** can prove it"*. Falso: `update_plan` **esegue** il `verificationCommand` dichiarato e promuove sull'exit code. La direttiva stava spingendo il modello a ripiegare sul proprio giudizio mentre un controllo reale era disponibile — il timbro che questo codice continua a dover rimuovere. `shouldDirectUnprovableClosure` ora richiede anche l'assenza di un `verificationCommand`, cosi' che l'affermazione centrale sia letteralmente vera.
-
-Nello stesso run il no-op detector della prima onda ha lavorato per davvero: sette `[NO-OP WRITE]` su `src/styles/globals.css` dal passo 39, con la build verde preservata. Va detto anche il resto: il modello ha ripetuto comunque. Il rilevatore rende osservabile il fatto e protegge la prova, non convince un 7B a smettere.
-
-**La terza forma: consegna parziale.** Nello stesso run, milestone m-6 *"Configure Tailwind CSS in `postcss.config.js` and `tailwind.config.js`"*. Il modello ha scritto `postcss.config.js` al passo 19 e lo ha riscritto ai passi 20, 21, 22, 23, 25, 27, 28 e 29 — byte-identico ogni volta, ognuno bloccato. **`tailwind.config.js` non e' mai stato scritto in tutto il run da cinquanta passi.**
-
-Il modello non era confuso su cosa avesse fatto: non gli e' mai stato detto cosa mancava ancora, e ha continuato a riconsegnare la meta' che ricordava. Il punto in cui l'informazione si perdeva e' preciso — `advanceActiveMilestoneOnMutation` risolve lo stato del deliverable a **ogni** scrittura, e quando risulta `satisfied` emette un messaggio ("tutti i file richiesti sono presenti"). Quando risulta `unsatisfied` non emetteva nulla, pur avendo in mano l'elenco esatto tramite `findUnsatisfiedDeliverables`.
-
-* [`partialDeliveryDirective`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) e' il gemello di `awaitingVerificationNote` per il ramo che taceva: nomina i file mancanti, dichiara che la milestone non puo' essere verificata finche' non esistono, e dice esplicitamente di **non** riscrivere quello appena consegnato. Il file che e' atterrato viene accreditato, non trattato come un errore: e' stato scritto ed e' accettato.
-* Il file appena scritto viene escluso dall'elenco confrontando i path normalizzati e non alla lettera — le scansioni dei comandi riportano path assoluti mentre i deliverable escono dal titolo in forma relativa, e un confronto letterale avrebbe rilanciato al modello come "mancante" il file che aveva appena consegnato.
-* Se l'unico deliverable insoddisfatto e' proprio quello appena scritto — un corpo placeholder, per esempio — la direttiva tace: dirgli che deve ancora consegnarlo contraddirebbe il "Successfully wrote file" che ha appena letto, e di quel caso parlano gia' le regole sui placeholder.
-* La direttiva viaggia come episodio `BLOCKED`, che e' l'unico stato che la instrada nel buffer dei fallimenti dove sopravvive al trimming FIFO. La scrittura pero' **non** e' stata bloccata, e la tabella della traiettoria stampa il sommario accanto a quella parola: il sommario apre percio' con "Write accepted", altrimenti il modello rilegge la propria scrittura riuscita come un rifiuto.
-
-**Verifica live — la prima obbedienza immediata di tutta la serie.** Run del 2026-08-24 con piano seminato:
+**Prima obbedienza immediata di tutta la serie:**
 
 | | senza direttiva | con direttiva |
 | :--- | :--- | :--- |
 | m-1 (`package.json` + `index.html`) | — | passo 1 scrive `package.json`, direttiva nomina `index.html`, **passo 2** lo scrive |
 | m-2 (`vite.config.ts` + `tsconfig.json`) | passo 3 scrive `vite.config.ts`, `tsconfig.json` arriva ai passi 8, 9 e 12 (uno rifiutato dall'AST) | passo 3 scrive `vite.config.ts`, direttiva nomina `tsconfig.json`, **passo 4** lo scrive |
 
-Nove passi contro uno, sulla stessa milestone. Due sole milestone hanno attivato la direttiva in tutto il run — la deduplicazione su tool+target regge, il costo di prompt e' quello previsto.
+Nove passi contro uno, sulla stessa milestone. Due sole milestone hanno attivato la direttiva in tutto il run: la deduplicazione su tool+target regge, il costo di prompt è quello previsto.
 
-**E il resto del run, per intero.** La sessione ha comunque esaurito i cinquanta passi, a **0/15 milestone verificate** contro 2/15 del run precedente. Prima di attribuirlo alla modifica: in **nessuno dei due run** un `npm run build` e' mai andato a buon fine, quindi il canale di promozione per verifica non e' mai stato esercitato in nessuno dei due — le 2/15 precedenti venivano da `update_plan`. I piani sono inoltre rigenerati a ogni run e diversi fra loro. `agent-live-testing.md` classifica questa sonda come *osservazione, non asserzione* proprio per questo: su un 7B una singola coppia di run non sostiene un confronto su quella metrica. Cio' che regge e' la catena causale sopra, che si legge passo per passo.
+**La finestra su cosa è appena successo era occupata dal proprio avviso.** Misurato al passo 48. `### RECENT DETAILED TOOL OUTPUTS` occupava 4.780 caratteri, e quattro dei sei slot erano copie dello stesso `[CRITICAL FILE EDIT LOOP: N EDITS ON src/pages/TasksPage.tsx]`, diverse solo per N: **3.988 su 4.780, l'83%**. Al modello restavano 792 caratteri per ricordare cosa aveva fatto. La causa: `failureLogs` deduplica su tool+target dalla §5.2 — e il suo commento spiega già che il confronto byte a byte non basta, *"loop interventions embed an escalating 'Attempt N' counter"* — mentre `recentFullLogs` era rimasta una FIFO pura. La stessa intuizione applicata a metà.
 
-**La finestra su cosa e' appena successo era occupata dal proprio avviso.** Misurato sul run del 2026-08-24, passo 48. La prima ipotesi scritta nel tracker — "il prompt satura" — era sbagliata due volte: con `num_ctx` a 16.384 il budget e' ~44.236 caratteri e il prompt ne occupava 22.192, **il 50%**, quindi il compattatore non e' mai scattato ne' doveva; e il prompt non e' nemmeno immobile, fra due turni consecutivi cambiano 109 righe su ~200. La lettura di §1.2 (*"fisso a 22.237 caratteri"*) era stata intesa come *al soffitto* invece che come *costante*, e nessuna delle due letture reggeva.
-
-La misura per sezione ha trovato il difetto vero. `### RECENT DETAILED TOOL OUTPUTS` — la finestra da cui il modello vede **cosa ha appena fatto** — occupava 4.780 caratteri, e quattro dei suoi sei slot erano copie dello stesso `[CRITICAL FILE EDIT LOOP: N EDITS ON src/pages/TasksPage.tsx]`, diverse solo per N. **3.988 caratteri su 4.780: l'83%.** Al modello restavano 792 caratteri per ricordare cosa aveva fatto.
-
-La causa e' un dedup applicato a un buffer e non all'altro. `failureLogs` deduplica su tool+target dalla §5.2, e il commento che lo accompagna spiega gia' perche' il confronto byte a byte non basta: *"loop interventions embed an escalating 'Attempt N' counter, so byte-comparison never matched"*. `recentFullLogs` e' rimasto una FIFO pura — il dedup che aveva era solo per `read_file`/`list_dir` consecutivi con output **identico**, che un contatore crescente non e' mai. La stessa intuizione, applicata a meta'.
-
-* Ora un episodio di fallimento con lo stesso tool+target gia' presente nella finestra **sostituisce** il precedente invece di aggiungere uno slot, esattamente come fa il buffer dei fallimenti. Gli slot liberati tornano a mostrare lavoro reale piu' indietro nel tempo.
-* Solo i fallimenti collassano. Due scritture riuscite sullo stesso file portano corpi diversi — ai passi 42 e 43 del run osservato erano 80 e 712 caratteri, il piu' lungo con una direttiva di integrita' degli import — e servono entrambe.
-* L'intestazione diceva "Last N Steps" e non era piu' vera: ora dichiara *N most recent distinct actions*.
-
-Misurato sullo stesso punto della sessione (passo 48) prima e dopo:
+* Un episodio di fallimento con lo stesso tool+target già in finestra **sostituisce** il precedente invece di aggiungere uno slot.
+* Solo i fallimenti collassano: due scritture riuscite sullo stesso file portano corpi diversi (ai passi 42 e 43 erano 80 e 712 caratteri) e servono entrambe.
+* L'intestazione diceva "Last N Steps" e non era più vera: ora dichiara *N most recent distinct actions*.
 
 | | prima | dopo |
 | :--- | ---: | ---: |
 | dimensione della sezione | 4.780 char | 2.758 char |
 | avvisi ripetuti | 3.988 (83%) | 1.465 (53%) |
 | contenuto reale | 792 (16%) | **1.293 (46%)** |
-| passi coperti dalla finestra | 42-47 | 40-47 |
+| passi coperti | 42-47 | 40-47 |
 
-Il contenuto reale visibile al modello cresce del 63% e la finestra arriva piu' indietro, a parita' di slot.
+> **Nota sul metodo**: la prima misura diceva 7.603 caratteri e 89% perché il parsing non delimitava la fine della sezione. I numeri sopra hanno i confini corretti: la direzione non cambia, la grandezza sì.
 
-> Nota sul metodo: la prima misura diceva 7.603 caratteri e 89%, perche' il parsing non delimitava la fine della sezione e l'ultimo blocco inglobava tutto cio' che seguiva. I numeri sopra sono quelli con i confini corretti. La direzione non cambia, la grandezza si'.
-
-Sull'esito complessivo, per intero: la sessione ha di nuovo esaurito i cinquanta passi a 0/15, come la precedente. Nessuna delle tre ultime sessioni ha mai ottenuto un `npm run build` verde, quindi il canale che promuove le milestone non e' mai stato esercitato: e' quello il collo di bottiglia che tutte queste correzioni non toccano, e va isolato prima di leggere qualunque metrica di completamento.
-
-Il churn tardivo resta, su milestone da **un solo file** (`globals.css` ai passi 35-40, `TasksPage.tsx` ai passi 42-47), dove la consegna parziale non ha nulla da dire. Il prompt satura in entrambi i run — 20.914 e 22.192 caratteri, entrambi al soffitto — che e' il problema di §1.2 e resta aperto.
-
-**Resta aperto — feedback sintattico esteso**: `validateAST` copre gia' la sintassi in pre-commit; manca il typecheck incrementale.
+**Esito complessivo, per intero.** La sessione ha di nuovo esaurito i cinquanta passi a 0/15, come la precedente. Il churn tardivo resta su milestone da **un solo file** (`globals.css` passi 35-40, `TasksPage.tsx` passi 42-47), dove la consegna parziale non ha nulla da dire. **Resta aperto**: typecheck incrementale post-write (`validateAST` copre già la sintassi in pre-commit).
 
 ### 5.5. Completato — quali modelli l'app ha davvero provato
 
-Lavoro diverso dalle onde precedenti: non tocca il loop dell'agente, riguarda **cosa l'utente puo' sapere prima di scegliere**.
+Non tocca il loop dell'agente: riguarda **cosa l'utente può sapere prima di scegliere**.
 
-**Il punto di partenza.** Il pannello Impostazioni mostrava il tag del modello e nient'altro, quindi scegliere fra `qwen2.5-coder:7b` e `deepseek-coder:6.7b` presupponeva di conoscere gia' la differenza. E il catalogo esistente ([`hardwareModelCatalog.ts`](../src/services/hardwareModelCatalog.ts)) risponde a una domanda sola — *entra nella VRAM?* — che e' un giudizio di dimensionamento e non dice nulla sul fatto che l'agente funzioni con quel modello. Un 3B entra benissimo in una scheda da 4 GB e non regge un piano da quindici milestone; un modello senza tool calling entra ovunque e fallisce al passo 1.
+Il pannello Impostazioni mostrava solo il tag del modello, quindi scegliere fra `qwen2.5-coder:7b` e `deepseek-coder:6.7b` presupponeva di conoscere già la differenza. Il catalogo esistente ([`hardwareModelCatalog.ts`](../src/services/hardwareModelCatalog.ts)) risponde a una domanda sola — *entra nella VRAM?* — che è dimensionamento, non funzionamento: un 3B entra in una scheda da 4 GB e non regge un piano da quindici milestone; un modello senza tool calling entra ovunque e fallisce al passo 1.
 
-**Le metriche c'erano gia' e venivano buttate.** `/api/tags` riporta per ogni modello `details.context_length`, `parameter_size`, `quantization_level` e `capabilities`; `getModelCapabilities` leggeva quella risposta a ogni chiamata e **teneva solo le capabilities**, scartando il resto. Ora c'e' `getModelMetrics` con canale IPC dedicato ([`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts)), e i badge mostrano numeri letti. Un campo che Ollama non riporta **non viene disegnato**: nessun default plausibile, perche' su un valore inventato l'utente agirebbe.
+**Le metriche c'erano già e venivano buttate.** `/api/tags` riporta `details.context_length`, `parameter_size`, `quantization_level` e `capabilities`; `getModelCapabilities` leggeva la risposta e **teneva solo le capabilities**. Ora c'è `getModelMetrics` con canale IPC dedicato ([`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts)) e i badge mostrano numeri letti. Un campo che Ollama non riporta **non viene disegnato**: su un valore inventato l'utente agirebbe.
 
-**La verifica e' una affermazione, quindi va retta da prove.** [`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts) introduce quattro stati — `verified`, `compatible`, `unsupported`, `unknown` — e `verified` significa una cosa sola: *una sonda live e' stata eseguita end to end contro questo modello e il log e' stato letto.* Non "e' un modello da coding", non "dichiara i tool".
+**`verified` significa una cosa sola**: *una sonda live è stata eseguita end to end contro questo modello e il log è stato letto*. Non "è un modello da coding", non "dichiara i tool". Per questo `VERIFIED_MODELS` ha **una sola voce**, `qwen2.5-coder:7b`. È corta perché è vera. L'evidenza sta nel badge, non nel commento: il tooltip riporta data, sonde e **cosa il run ha fallito**, verbatim — *"scaffolds a project but has not yet produced a green build"*.
 
-Per questo `VERIFIED_MODELS` ha **una sola voce**, `qwen2.5-coder:7b`. E' corta perche' e' vera. Un segno di spunta verde mostrato a un utente che non puo' controllarlo e' esattamente la classe di affermazione non guadagnata che le sezioni precedenti hanno passato quattro onde a rimuovere.
+**Il set 1-click** (`selectWizardCodingSet`) filtra per tier hardware e mette davanti i verificati. L'idoneità hardware viene **prima**: meglio un modello non testato che uno che non entra in VRAM. Restituisce una lista vuota, mai un ripiego.
 
-L'evidenza sta nel badge, non solo nel commento: il tooltip riporta data, sonde eseguite e **cosa il run ha fallito**, verbatim — *"scaffolds a project but has not yet produced a green build"*. Un "verificato" che nascondesse quel fatto sarebbe peggio di nessun badge, perche' l'utente lo leggerebbe come una promessa che l'app non mantiene.
+> **Conseguenza verificata nella UI**: su profilo `entry` il set proposto è `qwen2.5-coder:3b` + `qwen2.5-coder:1.5b`, **nessuno dei due verificato**, perché il 7b non rientra in quel tier. È corretto e si risolve verificando i modelli piccoli, non cambiando l'ordinamento. Sta nel tracker.
 
-**Il set 1-click** ([`selectWizardCodingSet`](../src/services/codingModelMatrix.ts)) filtra per tier hardware e ordina mettendo davanti i verificati. L'idoneita' hardware viene **prima** della verifica: meglio un modello non testato che uno che non entra in VRAM. Restituisce una lista vuota, mai un ripiego, quando nulla entra — il wizard lo rende come tale, perche' installare un modello troppo grande per la macchina e' un danno reale.
+**La sonda live esegue ora il flusso vero.** `seedGeneratedPlan` chiamava solo `generatePlanText`, saltando `agent:plan-interview` e `agent:plan-enrich-prompt`: ogni run misurava un flusso che nessun utente esegue. Ora sono quattro passi, e il prompt arricchito è passato anche a `runAgentOrchestratorLoop`.
 
-> Conseguenza da conoscere, verificata nella UI in esecuzione: su profilo `entry` il set proposto e' `qwen2.5-coder:3b` + `qwen2.5-coder:1.5b`, **nessuno dei due verificato**, perche' il 7b non rientra in quel tier. E' il comportamento corretto e va risolto verificando i modelli piccoli, non cambiando l'ordinamento. Sta nel tracker.
-
-**La sonda live esegue ora il flusso vero.** `seedGeneratedPlan` chiamava solo `generatePlanText`, saltando `agent:plan-interview` e `agent:plan-enrich-prompt`: ogni run misurava un flusso che nessun utente esegue. Ora sono quattro passi e il prompt arricchito viene passato anche a `runAgentOrchestratorLoop`, altrimenti l'agente ridecide a ogni turno cio' che l'intervista aveva fissato.
-
-> Onesta' sul risultato: sul prompt di quella sonda l'intervista **non produce domande**. Verificato chiamando il modello direttamente — risponde `hasQuestions: false` con JSON valido, quindi non e' un fallimento di parsing: la richiesta e' gia' prescrittiva e l'intervista fa il suo mestiere tacendo. L'ipotesi che i loop nascessero da scelte che l'intervista avrebbe fissato **non e' supportata**. L'harness e' corretto, l'effetto su questa sonda e' nullo, e per esercitare quel ramo serve un prompt vago.
-
----
+> **Onestà sul risultato**: su quel prompt l'intervista **non produce domande** — verificato chiamando il modello direttamente, risponde `hasQuestions: false` con JSON valido. Non è un fallimento di parsing: la richiesta è già prescrittiva. L'ipotesi che i loop nascessero da scelte che l'intervista avrebbe fissato **non è supportata**. Per esercitare quel ramo serve un prompt vago.
 
 ### 5.5b. Misurato — come Ollama tratta davvero il contesto
 
-Tre misure fatte contro l'Ollama locale il 2026-08-24. Sono qui perche' **contraddicono cio' che il codice assume**, e perche' rifarle a mano costa tempo.
+Tre misure contro l'Ollama locale del 2026-08-24, qui perché **contraddicono ciò che il codice assume**.
 
-| chiesto | dichiarato dal modello | allocato | errore |
-| :--- | ---: | ---: | :--- |
-| `num_ctx` 32768 a `deepseek-coder:6.7b` | 16.384 | **16.384** | nessuno |
-| `num_ctx` 65536 a `qwen2.5-coder:7b` | 32.768 | **32.768** | nessuno |
+| chiesto | dichiarato dal modello | allocato |
+| :--- | ---: | ---: |
+| `num_ctx` 32768 a `deepseek-coder:6.7b` | 16.384 | **16.384** |
+| `num_ctx` 65536 a `qwen2.5-coder:7b` | 32.768 | **32.768** |
 
-**Ollama tronca al valore dichiarato dal modello, in silenzio.** Chiedere troppo non rompe nulla: dall'altra parte c'e' una protezione. Il valore realmente allocato e' leggibile da `/api/ps` (`context_length`) dopo il primo caricamento.
+**Ollama tronca al valore dichiarato dal modello, in silenzio**, senza errore. Il valore realmente allocato è leggibile da `/api/ps` (`context_length`) dopo il primo caricamento.
 
-**La terza misura e' quella che conta.** Prompt da ~10.000 token con `num_ctx=2048`: la chiamata **non fallisce**, `prompt_eval_count` risulta 1026, e la risposta ignora un marcatore piazzato all'inizio del prompt. **Ollama scarta la TESTA e tiene la coda.** Per questo agente la testa e' il system prompt, il catalogo dei tool e il blocco piano.
+**La terza misura è quella che conta.** Prompt da ~10.000 token con `num_ctx=2048`: la chiamata **non fallisce**, `prompt_eval_count` risulta 1026, e la risposta ignora un marcatore piazzato all'inizio del prompt. **Ollama scarta la TESTA e tiene la coda.** Per questo agente la testa è il system prompt, il catalogo dei tool e il blocco piano.
 
-Il rischio quindi non e' chiedere troppo — e' che `deriveMaxContextChars` derivi il budget dal `num_ctx` che l'app ha **scelto** invece che da quello allocato. Se i due divergono, `HeuristicContextCompactor` non scatta e il prompt perde le istruzioni senza che nulla lo segnali. Oggi non morde (~6k token contro 16.384 reali) ma scala con skill, repo map e storia.
+Il rischio quindi non è chiedere troppo: è che `deriveMaxContextChars` derivi il budget dal `num_ctx` che l'app ha **scelto** invece che da quello allocato. Se divergono, `HeuristicContextCompactor` non scatta e il prompt perde le istruzioni senza che nulla lo segnali. Oggi non morde (~6k token contro 16.384 reali) ma scala con skill, repo map e storia.
 
-> Rettifica collegata: la capacita' dichiarata dal modello **non viene mai letta** dal percorso di runtime. `resolveMaxContextTokens` guarda solo tier VRAM e RAM di sistema; l'unico `contextLength` nel codice sta in `hardwareRecommendationEngine.ts`, che e' UI. Su una macchina da 32 GB tetto hardware e capacita' del modello coincidono a 32.768 **per coincidenza**.
+> **Rettifica collegata**: la capacità dichiarata dal modello **non viene mai letta** dal runtime. `resolveMaxContextTokens` guarda solo tier VRAM e RAM; l'unico `contextLength` nel codice sta in `hardwareRecommendationEngine.ts`, che è UI. Su una macchina da 32 GB tetto hardware e capacità del modello coincidono a 32.768 **per coincidenza**.
 
----
+### 5.6. Applicato — l'arbitro delle direttive e la build irraggiungibile
 
-### 5.6. Poi — le funzionalità del blueprint
+Due difetti che erano lo stesso difetto: **nessuno decideva cosa il modello dovesse leggere ORA**, e in mancanza di quel qualcuno nessuna direttiva ha mai nominato la build.
 
-1. **Modulo Visual Validation**: Implementazione di `visualValidationTool.ts` basato su Electron Offscreen `WebContents` per screenshot automatici e cattura `console.error`. Non affrontato finora per una ragione precisa: richiede il runtime Electron, che il banco di prova headless (`npm run test:live`) non puo' esercitare. Va sviluppato lanciando l'app vera, altrimenti si consegna codice mai visto funzionare.
-2. **First-Class Artifacts Engine**: Creazione del repository e dei canali IPC `artifacts:*` per registrare e mostrare anteprime live di componenti UI e documenti.
-3. **Refactoring Modulare dei Tool**: Scomposizione di `agentToolExecutorService.ts` nella struttura modulare a singoli handler.
+**La diagnosi.** Vedi §6 per l'evidenza completa; in breve: `hasVerifiedBuild` si alza solo con `run_command`/`run_tests` o dentro il finish gate, il finish gate è vietato finché le milestone non sono verificate, e le milestone si verificano solo con una build passata. Cerchio chiuso. In tre run da cinquanta passi il modello non ha emesso **un solo comando**: `write_file` era l'unica mossa che qualcuno gli avesse mai indicato.
+
+**L'arbitro.** [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts) è il punto unico che sceglie la sola direttiva che il blocco piano porta questo turno. La priorità è dichiarata una volta, lì:
+
+| # | stato | quando | cosa ordina |
+| :--- | :--- | :--- | :--- |
+| 1 | `session_closure` | verifica passata, nulla scritto dopo | chiudi la sessione |
+| 2 | `dependencies_undeclared` | il codice importa pacchetti che il manifest non dichiara | `npm install <pkg>` |
+| 3 | `dependencies_missing` | il manifest dichiara pacchetti assenti da `node_modules` | `npm install` |
+| 4 | `verification_due` | nessuna milestone aperta è `unsatisfied`, nulla è ancora verificato | il comando che il progetto stesso dichiara |
+| 5 | `unprovable_milestone` | la milestone attiva non nomina artefatti | `update_plan` su quella milestone |
+| 6 | `focus` | tutto il resto | il blocco piano ordinario |
+
+I primi quattro sostituiscono **l'intero** focus block; il quinto sostituisce **la sola direttiva 2**, come già faceva. Le due forme di sostituzione esistevano sparse: ora sono i due campi di una decisione unica, e `compileProgressPrompt` ne riceve una sola invece di due stringhe indipendenti che nessuno confrontava.
+
+**`verification_due` è la leva che mancava.** Il canale forte — il blocco piano, l'unico che raggiunge il modello a ogni turno — non aveva nulla che portasse a `run_command`. L'unico testo che nominava un comando viveva dentro un intervento del loop guard, cioè arrivava solo a modello già in stallo: sette volte, ignorato sette volte. Ora la direttiva compare **prima**, nel momento in cui scrivere non può più dimostrare nulla, e nomina il comando letto da `resolvePrimaryVerificationCommand` — mai inventato dal modello, per la ragione già stabilita in `projectVerificationResolver.ts`.
+
+**`dependencies_missing` sta prima di proposito.** `npm run build` su un workspace senza `node_modules` fallisce con "vite: not found", un errore che non dice niente sul codice e a cui un modello piccolo risponde riscrivendo `package.json`. Mandarlo contro un comando che non può riuscire è il modo più rapido di far perdere credito a una direttiva. La direttiva vieta esplicitamente quella scorciatoia.
+
+**Il loop guard consuma la stessa decisione** e la **sostituisce** al testo consultivo, in entrambi i rami — non solo per la chiusura, come prima. Il preambolo cambia con lo stato: su progetto verificato "nulla di ciò che esegui può aggiungere altro", altrimenti "ripetere non muove il piano, l'unica azione che lo muove è qui sotto". L'escape strutturale resta sospeso **solo** in stato di chiusura: abbandonare una milestone come `failed` mentre la direttiva chiede di eseguire la build non toglierebbe nulla alla terminazione (lo streak sale comunque, l'abort a `LOOP_ESCAPE_ABORT_STREAK` è intatto) e metterebbe "fallita" nel report per lavoro fatto solo nel caso della chiusura.
+
+**`dependencies_undeclared`, aggiunto dopo il primo run.** Il run che ha rotto il deadlock ha fatto girare la build e l'ha vista fallire su `Cannot find module '@vitejs/plugin-react'` — importato da `vite.config.ts`, dichiarato da nessuno. L'informazione esisteva in due posti e in nessuno dei due era azionabile: il gate per-file la dice al passo che scrive il file, dentro un risultato che porta anche l'esito della scrittura (44 volte in quel run, mai seguita), e `scanWorkspaceDependencies` la dice bene ma gira solo dentro `runProjectVerification`, cioè al `finish`, che quelle sessioni non raggiungono.
+
+Il nuovo [`undeclaredImportScanner.ts`](../electron/core/infrastructure/filesystem/undeclaredImportScanner.ts) è la metà economica: un cammino AST limitato — 150 file, profondità 5, gli stessi `DEFAULT_IGNORED_DIRS` — dello stesso ordine di costo della repo map che ogni turno già costruisce, e riusa `extractBareImportSpecifiers` e `readDeclaredPackages` **verbatim**, così "non dichiarato" significa qui esattamente ciò che significa alla scrittura, con la stessa strettezza voluta. `depcheck` non è stato messo nel giro per turno: è asincrono e porta un timeout da 60 secondi, e pagarlo su cinquanta passi non è uno scambio che questo loop può fare — resta dov'è, come controllo accurato prima della chiusura.
+
+Ordinato **prima** di `dependencies_missing` perché `npm install <pkg>` dichiara e installa insieme. La direttiva nomina il file che importa: a un modello piccolo a cui si dice "manca un pacchetto" tocca indovinare quale, e l'ipotesi osservata in questo progetto è stata riscrivere un file che stava bene. Porta anche il secondo ramo per il caso del pacchetto inventato — `@tailwindcss/react`, trovato su disco e inesistente su npm: se l'install fallisce, riscrivere il file che lo importa.
+
+**Cosa NON è stato toccato, e perché.** La direttiva 5 del focus block (*"If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file"*) resta invariata: è condizionata a un fallimento reale, cambiarla è un'ipotesi separata e non misurata, e nello stato `verification_due` il blocco viene comunque sostituito per intero. Aggiungerla alla lista delle modifiche di quest'onda renderebbe illeggibile quale delle due ha prodotto l'effetto.
+
+**Verifica live — il deadlock è rotto, misurato.** Run del 2026-08-24 sulla sonda `fullTask` con l'arbitro attivo:
+
+| | tre run precedenti | run con arbitro |
+| :--- | ---: | ---: |
+| `run_command` emessi | **0** su 50 passi | **13** su 35 passi |
+| `npm install` | mai | passo 2 |
+| `npm run build` eseguito | mai | passi 15, 16, 28, 30, 34 |
+| `node_modules` | assente | presente |
+
+Le due misure che §5.4 ha insegnato a tenere separate — **comparsa** e **obbedienza** — coincidono per la prima volta nella serie:
+
+* `dependencies_missing` compare nel prompt del passo 2; il modello esegue `npm install` **al passo 2**.
+* `verification_due` compare nel prompt del passo 28; il modello esegue `npm run build` **al passo 28**.
+
+Latenza zero in entrambi i casi, contro i diciannove passi della direttiva di chiusura e le sette volte su sette in cui l'intervento del loop guard era stato ignorato.
+
+Da osservare e non concludere: il modello aveva già eseguito `npm run build` di propria iniziativa ai passi 15-16, dopo un intervento del loop guard al passo 13 — lo stesso testo che nei run precedenti non aveva mai funzionato. Che l'abbia seguito *perché* al passo 2 aveva visto un comando riuscire è un'ipotesi plausibile e non misurata.
+
+**Il run ha anche prodotto una regressione, ed è di quest'onda.** Ai passi 17-18 il modello ripete un `npm run build` che fallisce, e l'escape strutturale marca `FAILED` la milestone m-1 *"Create `package.json`"* — file scritto correttamente al passo 1 e su disco per tutta la sessione — con la nota *"Abandoned after 2 consecutive blocked attempts on 'npm run build'"*. Stessa sorte per m-8. Il caso era irraggiungibile finché il modello non eseguiva comandi: `forceMilestoneAdvance` assume che il loop riguardi il lavoro della milestone attiva, e su un loop di comando l'assunzione è falsa. Il danno è quello che la sospensione dell'escape in stato di chiusura esisteva già per evitare — "fallita" nel report per lavoro fatto.
+
+Corretto con `isActiveMilestoneDelivered`: l'escape non abbandona una milestone quando il target del loop è un comando **e** tutti i file che la milestone nomina sono su disco con contenuto reale. Volutamente stretto — una milestone che deve ancora un file, o che non ne nomina nessuno, può davvero bloccare il piano e lì l'escape conserva tutto il suo potere. La terminazione non è toccata: lo `stagnationStreak` sale comunque e l'abort a `LOOP_ESCAPE_ABORT_STREAK` resta.
+
+**Il collo di bottiglia successivo è già visibile, ed è lo stesso di sempre con la build finalmente in esecuzione.** `npm run build` fallisce su `Cannot find module '@vitejs/plugin-react'`: `vite.config.ts` lo importa e `package.json` non lo dichiara. L'`importDeclarationGate` lo segnala — 44 occorrenze di `UNDECLARED IMPORT` nel log del run — e il modello non agisce mai. `dependencies_missing` non lo copre di proposito: confronta i pacchetti *dichiarati* con `node_modules`, e questo non è dichiarato. Il dato per coprirlo esiste già (`scanWorkspaceDependencies` + `evaluateDependencyIntegrity`) ma gira solo dentro `runProjectVerification`, cioè al `finish`, che la sessione non raggiunge — di nuovo informazione che il sistema possiede e non consegna come azione singola. Sta nel tracker come candidato a uno stato `dependencies_undeclared` dell'arbitro.
+
+**Secondo run live, e il progetto consegnato compila.** Con `dependencies_undeclared` attivo, sonda `fullTask`, 50 passi:
+
+* passo 4 scrive `vite.config.ts`, che importa `@vitejs/plugin-react`;
+* **passo 6** il modello esegue `npm install @vitejs/plugin-react` — il primo passo di comando disponibile dopo la direttiva;
+* l'install fallisce con `ERESOLVE`, e al **passo 7** il modello esegue `npm install vite@^8.0.0`, cioè esattamente il comando che la direttiva di §5.3 gli indica;
+* **passo 10** ripete l'install del plugin, e riesce.
+
+Tre direttive diverse che cooperano invece di contraddirsi, che è ciò per cui l'arbitro esiste. Nel `package.json` finale `@vitejs/plugin-react` **è dichiarato**: il blocco che aveva ucciso il run precedente non c'è più. Verificato a mano nel workspace prodotto: **`npx vite build` esce verde** (`built in 394ms`) — la prima volta in tutta la serie che il progetto consegnato compila.
+
+`verification_due` non è scattato in questo run, e correttamente: qualche milestone è rimasta sempre `unsatisfied`, quindi la sua precondizione non si è mai avverata. L'agente non ha eseguito la build da sé — ha esaurito i cinquanta passi altrove, vedi sotto.
+
+**Quello che il run consuma adesso è churn, non dipendenze.** `globals.css` riscritto ai passi 18-24 e 35-43, `main.tsx` ai passi 27-34: circa venti passi su cinquanta in ripetizioni su milestone da **un solo file**, dove la consegna parziale non ha nulla da dire. È il difetto già descritto in questa sezione, ora primo in ordine di costo.
+
+**E un difetto che il run ha reso visibile: una scrittura rifiutata contava come riuscita.** Ai passi 46, 47, 49 e 50 quattro `write_file` sono stati respinti dalla validazione AST pre-commit — nessuno è arrivato su disco — e tutti e quattro registrati `SUCCESS`. `isFailureOutput` (estratto in [`agentOrchestratorToolResultProcessor.ts`](../electron/core/application/agentOrchestratorToolResultProcessor.ts) proprio per essere verificabile) non elencava il marcatore `[PRE-COMMIT AST VALIDATION ERROR IN`. L'etichetta viene letta tre volte: `recordOutcome` la passa al loop detector, che ha quindi classificato la ripetizione come *riuscita* e ha mandato al modello la direttiva di ridondanza — il cui testo dice *"this is NOT a failure and it is NOT counted against you"* — a proposito di un file che non esiste; solo i fallimenti entrano nel buffer che sopravvive al trimming FIFO, quindi l'errore di sintassi poteva uscire dal contesto; e la tabella di traiettoria dichiarava `SUCCESS` a chi legge il run. Corretto, con test sul predicato.
+
+**Stato dei test:** typecheck pulito, 1349 test su 142 file verdi, catena `npm run lint` completa verde.
+
+### 5.6b. Applicato — le due metà del churn
+
+L'ipotesi a tracker era "il modello riscrive lo stesso file". Vera come sintomo e inutile come causa: il log dice altro, ed è la quarta volta che questo progetto trova la stessa forma — **un'istruzione che non può essere eseguita**.
+
+Milestone m-9 del run del 2026-08-24: *"Add Tailwind directives to `globals.css`"*.
+
+1. Passo 8 — il modello scrive `src/styles/globals.css` con esattamente quelle direttive.
+2. Passo 17 — chiama `update_plan {m-9, verified}`. **Rifiutato**: *"Still missing, empty or placeholder: globals.css. Directives: 1. Write the missing file(s) with write_file, with real content."*
+3. Passi 18, 19, 35, 36, 43 — il modello fa ciò che la direttiva dice: riscrive `globals.css`. Sempre gli stessi 58 byte, sempre un no-op, sempre bloccato come loop.
+
+La causa sta in [`workspaceDeliverableProbe.ts`](../electron/core/infrastructure/filesystem/workspaceDeliverableProbe.ts): il titolo nomina `globals.css` senza directory, il probe lo risolveva **solo contro la radice**, e il file è in `src/styles/`. La milestone era quindi insoddisfacibile per costruzione, e la direttiva che ne discende ordinava l'unica azione che non poteva cambiare nulla.
+
+Verificato leggendo il log, non ipotizzando: i contenuti scritti a ogni passo sono byte-identici (58 caratteri, `@tailwind base/components/utilities`), e il rifiuto di `update_plan` al passo 17 nomina il file per esteso.
+
+* **Un deliverable senza directory è un nome, non una posizione.** Il probe indicizza i basename del workspace (walk limitato, 400 file, profondità 6, stessi ignore) solo quando un nome nudo non risolve alla radice, e una volta sola per probe. Il percorso più corto vince, così una copia alla radice batte sempre una annidata.
+* **Un deliverable che nomina una directory conserva la semantica esatta.** `src/pages/Tasks.tsx` non è soddisfatto da un `Tasks.tsx` altrove: lì il titolo una posizione l'ha dichiarata.
+* **Cosa questo NON risponde**: se il file sia nel posto giusto. Un `tailwind.config.js` sotto `src/styles/` soddisfa una milestone che non nominava directory e non raggiungerà mai il bundler. È un controllo diverso, ancora aperto a tracker; fra i due, la milestone insoddisfacibile è il fallimento peggiore ed è quello misurato.
+
+**L'altra metà: la riconsegna di una milestone già completa.** Stesso run, `src/main.tsx` scritto al passo 25 (milestone m-5 completa) e riscritto ai passi 27, 28, 34 e 37 con contenuto **ogni volta diverso** — 617, 379, 368, 262 e 529 caratteri, e il più corto era un letterale `// TODO: Implement main application logic` sopra codice funzionante. Non identico, quindi il no-op detector taceva correttamente; non parziale, quindi la consegna parziale non aveva nulla da dire. Il focus block indicava m-7 (`tailwind.config.js`, `postcss.config.js`), mai scritti in tutto il run.
+
+Estratto dal log, la cosa che il modello leggeva a ogni riscrittura era una sola riga: `Successfully wrote file src/main.tsx`. Indistinguibile da un avanzamento. Il sistema sapeva: `advanceActiveMilestoneOnMutation` calcola `status === 'satisfied'` a ogni mutazione — e in quel ramo parlava **all'utente** (`emitLog`) e non al modello. È la terza biforcazione dello stesso punto, e l'ultima che taceva.
+
+* [`redeliveredMilestoneDirective`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) dice due cose e basta: questa milestone era già completa **prima** di questa scrittura, quindi la riscrittura non ha mosso il piano; e nomina il file che la milestone attiva sta effettivamente aspettando. Una sola azione concreta — la proprietà che accomuna tutte le direttive obbedite in fretta.
+* Scatta **solo** su una ri-consegna: la milestone porta già la propria nota di attesa-verifica. Una prima consegna legittima resta silenziosa, e una riscrittura byte-identica non arriva neanche qui, perché `redundantWriteDetector` risponde prima.
+* Non accusa: la scrittura è riuscita davvero. E lascia un'uscita invece di un divieto secco — se il modello ritiene il file sbagliato, deve dire cosa c'è che non va nella propria `explanation` prima di cambiarlo.
+* Ripulito nel passaggio: la frase `Awaiting a passing verification command` era un letterale copiato in tre moduli che la leggono. Ora è `AWAITING_VERIFICATION_MARKER` in `milestoneDeliverableResolver.ts`, l'unico che tutti e tre possono importare senza chiudere un ciclo.
+
+### 5.6c. Misurato — cosa hanno prodotto le due correzioni del churn, e cosa hanno scoperto
+
+Run live del 2026-08-24 con entrambe attive, sonda `fullTask`.
+
+| | run precedente | run con le correzioni |
+| :--- | ---: | ---: |
+| riscritture di `globals.css` | 6 (passi 8, 18, 19, 35, 36, 43) | **1** (passo 9) |
+| riscritture di `main.tsx` | 5 (passi 25-37) | **2** (passi 8, 24) |
+| `npm run build` eseguito **dentro la sessione** | mai | **passo 21, esce 0** |
+| milestone verificate | 1/15 | **13/15** |
+| passi usati | 50/50 | 31/50 |
+
+I meccanismi nuovi si vedono lavorare nella traiettoria: `Write accepted — milestone m-9 was already complete before it` al passo 15 e su m-1 ai passi 18-19 (la direttiva di ri-consegna), e i rifiuti AST ai passi 5, 13, 27 e 28 ora registrati `FAILURE` invece che `SUCCESS`.
+
+**E adesso la parte che il numero 13/15 nasconde, che è il vero risultato del run.** Quella build è verde ed è quasi vuota:
+
+```
+transforming... ✓ 2 modules transformed.
+dist/index.html  0.26 kB
+```
+
+Nessun bundle JavaScript. L'`index.html` alla radice non contiene né `<div id="root">` né `<script type="module" src="/src/main.tsx">`, quindi Vite non raggiunge nulla dentro `src/` e compila il solo HTML. Le tredici milestone promosse includono `App.tsx`, `Navbar.tsx`, `DashboardPage.tsx`, `TasksPage.tsx` e `TaskCard.tsx`: **nessuno di questi file è mai stato compilato**.
+
+[`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) poggia, dichiaratamente, su una premessa precisa: *"una build verde è diversa: ha compilato i file che sono su disco adesso, quindi li attesta tutti insieme"*. La premessa è falsa quando l'entrypoint non li referenzia, e in quel caso il canale di promozione ridiventa esattamente il timbro che quel modulo è stato scritto per togliere. È il difetto più grave aperto: rende di nuovo illeggibile la metrica di completamento, un gradino più in là della PRIORITÀ 1 di questa stessa giornata.
+
+Le correzioni del churn funzionano — quello lo dicono i conteggi. Il 13/15 no, e va detto prima che qualcuno lo legga come un progresso di completamento.
+
+### 5.6d. Misurato e applicato — il churn è chiuso, e la terminazione aveva un buco
+
+**Le tre correzioni di §5.6b e §5.6c sono confermate dal vivo** (run del 2026-08-24, sonda `fullTask`):
+
+| | prima | dopo |
+| :--- | ---: | ---: |
+| riscritture di `globals.css` | 6 | **1** |
+| riscritture di `Sidebar.tsx` | 10+ | **1** |
+| riscritture di `main.tsx` | 5 | **1** |
+| riordini dell'install di un pacchetto inesistente | 13 | **2** |
+
+Ogni file scritto esattamente una volta. Il recupero ERESOLVE funziona di nuovo — passo 5 l'install di `@vitejs/plugin-react` fallisce, passo 6 `npm install vite@^8.0.0`, passo 8 l'install riesce — e `@tailwindcss/react`, che su npm non esiste, viene riconosciuto al secondo fallimento e mai più ordinato.
+
+> **Due run intermedi sono stati invalidati da regressioni di queste stesse onde**, non dai difetti che dovevano misurare. La peggiore: `dependencies_uninstallable` contava UN fallimento come prova che un pacchetto non esistesse, e ha passato quarantacinque passi a ordinare la rimozione di `@vitejs/plugin-react` — pacchetto reale — sotto una frase che affermava che il nome non risolve sul registro. Falso, e uccideva il recupero di §5.3. Corretto con la soglia a due fallimenti; la distinzione si legge nei run e non è assunta.
+
+**Il difetto che ha divorato il run pulito, ed è preesistente.** Dai passi 18 a 50, **trentatré turni consecutivi** di `replace_file_content` rifiutata per un `replacementContent` mancante. Il log contiene **zero** `LOOP INTERVENTION PREVENTED`: una chiamata respinta dalla validazione dei parametri non arriva mai a `handleLoopDetection`, perché viene rifiutata prima. E il ramo che la gestisce — `handleMissingToolCall`, caso `hasToolCallAttempt` — registrava l'episodio, mandava il contratto del tool e faceva `return continue` **senza incrementare alcun contatore**. Il guard che esiste su quella funzione, `noToolStreak`, copre solo l'altro ramo, la risposta puramente conversazionale.
+
+Quindi su quel percorso **non esisteva alcuna garanzia di terminazione**: la sessione finiva solo esaurendo i passi. La stessa forma di tutto il resto di questa sezione — un controllo che c'è, messo dove non può scattare.
+
+La direttiva di correzione non è il problema e non è ciò che cambia: è corretta, nomina tool, parametri obbligatori ed envelope JSON esatto, ed è stata mandata **97 volte**. Mandarla la novantottesima non è la risposta — che è la lezione già scritta in `loopEscapePolicy.ts` per la propria scala.
+
+* [`toolRejectionEscalation.ts`](../electron/core/domain/agent/toolRejectionEscalation.ts) porta la stessa scala su questo percorso: contratto per i primi due rifiuti, poi **sostituzione** con una direttiva diversa, poi stop.
+* La sostituzione nomina un'azione **diversa**, non una versione più severa della stessa: `write_file` con il corpo completo del file. È la mutazione più semplice del catalogo, è sempre disponibile, e non richiede il parametro a corrispondenza esatta — che è precisamente la parte che il modello non riesce a produrre. Dice anche perché, perché a un modello a cui si dice solo "fai altro" sceglie qualsiasi cosa.
+* A `REJECTION_ABORT_STREAK` la sessione si chiude come FALLITA con un motivo reale, e dice che i file scritti prima restano sul disco.
+* L'episodio porta ora il nome del tool come `target`, così il buffer episodico collassa i ripetuti su uno slot invece di spendere l'intera finestra recente su di essi — lo stesso rimedio di §5.4.
+
+**Non ancora misurato**: la copertura `whole-project` della verifica di §5.6. Nessuno dei run l'ha esercitata, perché nessuno è arrivato a eseguire una build.
+
+### 5.6e. Misurato — la verifica guarda tutti i file, e il ciclo di correzione non si chiudeva
+
+**La copertura `whole-project` di §5.6 è confermata dal vivo.** Run del 2026-08-24, passo 21: il progetto dichiara solo `vite build` (entry-reachable) e possiede un `tsconfig.json`, quindi `resolvePrimaryVerificationCommand` sceglie il typecheck sintetizzato, e il modello esegue `npx tsc --noEmit`. Il controllo trova **tre errori veri**, tutti in file che una build su entrypoint scollegato non avrebbe mai aperto:
+
+```
+src/main.tsx(4,8): error TS1192: Module 'src/App' has no default export.
+src/routes/index.tsx(8,15): error TS2304: Cannot find name 'DashboardPage'.
+src/routes/index.tsx(12,15): error TS2304: Cannot find name 'TasksPage'.
+```
+
+Milestone verificate: **0/15**. È il numero onesto, e l'attesa era stata dichiarata prima della misura: lo stesso tipo di progetto prendeva 13/15 da una build che non compilava nulla. La promozione ha smesso di essere un timbro.
+
+**Il difetto successivo, e ancora la stessa forma.** Il modello riceve quei tre errori — file, riga, codice, messaggio — e **riesegue il comando ai passi 22-31 senza toccare un file**; al passo 22 risponde a un errore di tipo con `npm install vite@^8.0.0`. Il testo che riceveva diceva, in una frase: *"apply the necessary fix using replace_file_content or write_file, **and re-run the command autonomously**"*. Due imperativi nello stesso messaggio, e il modello ha eseguito il secondo — che è anche il più economico. Con un'aggravante: proponeva per primo `replace_file_content`, il tool che lo stesso run ha mostrato che questo modello non riesce a emettere valido (§5.6d).
+
+* [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) legge dall'output del compilatore file, riga, colonna e codice — informazione che era già lì — e produce **una** istruzione: `write_file` su quel file. Il re-run è dichiarato come conseguenza della correzione, mai come seconda cosa da fare adesso, ed è esplicitamente vietato finché nulla è cambiato, con il motivo scritto.
+* Parser stretto come tutti gli altri di questo progetto: una riga è una diagnostica solo se porta file, numero di riga e la parola `error`. I warning non contano, e ciò che non si localizza con certezza non produce direttiva — una diagnostica falsa manda il modello a modificare un file che non era il problema.
+* **Quando una direttiva più specifica è già scattata** (ERESOLVE, dipendenza mancante, nome npm non valido, prompt interattivo), la coda smette di dare un'istruzione propria e si limita a rimandare a quella. Prima ne aggiungeva una seconda, in concorrenza: la stessa competizione che §5.4 aveva già dovuto togliere altrove.
+* Il ripiego generico, quando nulla si localizza, non dice più "riesegui": dice di non rieseguire immutato e di correggere con `write_file`.
+
+### 5.6f. Misurato — l'entrypoint, il modello grande, e la forma del piano
+
+**Il controllo sull'entrypoint chiude l'ultimo difetto noto della catena.** Una pagina HTML valida che non referenzia nulla è invisibile a ogni compilatore: il codice è corretto e non viene mai caricato. Il 2026-08-25 `tsc` passava su tutti i file e il piano leggeva **14/15** mentre `vite build` emetteva `2 modules transformed` e zero JavaScript. [`entrypointIntegrity.ts`](../electron/core/domain/agent/entrypointIntegrity.ts) segnala solo quando entrambe le metà sono certe — esiste un entry convenzionale su disco **e** la pagina non carica alcuno script locale — e la direttiva dà il tag esatto invece di dire "collega l'entrypoint". Verificato sul prodotto del run successivo: **14 moduli compilati invece di 2**.
+
+**Il modello più grande non è la leva.** Giro con `qwen2.5-coder:14b` (9 GB) a sistema pulito: 0/13 verificate, cinque build fallite, `TaskCard.tsx` riscritto sette volte. Le direttive hanno lavorato — `THE COMPILER NAMED` 61 volte, `ALREADY RAN AND FAILED` 34, `WAS ALREADY COMPLETE` 116 — e l'esito non è migliorato. Un giro per modello non sostiene una classifica, e `agent-live-testing.md` lo dice per questa sonda; ciò che regge è la **somiglianza del profilo di fallimento** su un modello tre volte più grande. Se il limite fosse la capacità, ci si aspetterebbe un fallimento diverso.
+
+**Resta la forma del piano, che questo documento denuncia da §1.5 e nessuno ha mai affrontato.** Dieci milestone su quindici dicono "crea il file X"; nessuna dice "la navigazione fra Dashboard e Tasks funziona". Un piano così si completa al 100% consegnando un'applicazione morta — ed è esattamente il 14/15 di sopra.
+
+* Applicato, deterministico: `ensureRunnableMilestone` in [`planCompilation.ts`](../electron/core/domain/agent/planCompilation.ts) aggiunge come quarto passo della compilazione una milestone che il piano fatto di soli file non può contenere — *"Verify the application builds and runs end to end"* — citando il comando del progetto **verbatim**. Non nomina file, quindi nessuna scrittura la chiude. Se il progetto non dichiara un comando non viene aggiunto nulla: inventarne uno sarebbe la verifica fabbricata che questo codice continua a togliere.
+* **Non applicato**: la riprogettazione a quattro macro-fasi. Il pezzo sopra impedisce al piano di dichiarare 100% su un progetto morto, ma non cambia la forma dei microtask.
+
+### 5.7. Poi — le funzionalità del blueprint
+
+1. **Modulo Visual Validation** (`visualValidationTool.ts` su Electron Offscreen `WebContents`): screenshot automatici e cattura `console.error`. Non affrontato perché richiede il runtime Electron, che il banco headless `npm run test:live` non può esercitare: va sviluppato lanciando l'app vera, altrimenti si consegna codice mai visto funzionare.
+2. **First-Class Artifacts Engine**: repository e canali IPC `artifacts:*` per registrare e mostrare anteprime live.
+3. **Refactoring Modulare dei Tool**: scomposizione di `agentToolExecutorService.ts` nella struttura di §4.
 
 ---
 
 ## 6. Come riprendere questo lavoro
 
-Punto di ingresso per una sessione nuova, che non ha nessun contesto di quelle precedenti.
-
-### Stato
+Punto di ingresso per una sessione nuova, senza contesto delle precedenti.
 
 | sezione | cosa | stato |
 | :--- | :--- | :--- |
 | 5.1 – 5.3 | cicli di feedback, controlli anticipati, conflitti di versione | applicate, testate, verificate su sessioni reali |
-| 5.4 | churn: scritture a vuoto, chiusura di sessione, milestone indimostrabili, consegna parziale, finestra recente | applicate e testate; **meccanismi verificati dal vivo, esito complessivo no** — vedi sotto |
-| 5.5 / 5.5b | matrice modelli verificati e misure sul contesto Ollama | applicate; la matrice ha una sola voce, ed e' il punto |
-| 5.6 | funzionalita' originali del blueprint | non iniziate |
+| 5.4 | churn: scritture a vuoto, chiusura, milestone indimostrabili, consegna parziale, finestra recente | applicate e testate; **meccanismi verificati dal vivo, esito complessivo no** |
+| 5.5 / 5.5b | matrice modelli verificati, misure sul contesto Ollama | applicate; la matrice ha una sola voce, ed è il punto |
+| 5.6 | arbitro delle direttive, dipendenze, churn | applicate e **verificate dal vivo**: build eseguita in sessione, churn da 11 riscritture a 3; scoperto che una build verde può non aver compilato nulla (§5.6c) |
+| 5.7 | funzionalità originali del blueprint | non iniziate |
 
-### Il fatto che conta piu' di tutti
+### Il fatto che conta più di tutti — isolato il 2026-08-24
 
-**In tre run live consecutivi da cinquanta passi, nessuna sessione ha mai ottenuto un `npm run build` verde.** Senza quello `promoteMilestonesProvenBy` non promuove nulla, e ogni run finisce a 0/15 o 2/15 **qualunque cosa facciano i guard**. Finche' non e' isolato, ogni metrica di completamento e' illeggibile e ogni confronto fra due run non dimostra niente.
+**In tre run live consecutivi da cinquanta passi nessuna sessione ha ottenuto un `npm run build` verde** — dimostrato per il terzo, che è l'unico di cui sopravviva lo stato di sessione; per i primi due il log è stato cancellato e resta un'affermazione della stesura precedente, non un fatto ricontrollabile (vedi la nota in §5.4). Senza una build verde `promoteMilestonesProvenBy` non promuove nulla, e il run finisce a 0/15 **qualunque cosa facciano i guard**.
 
-E' la priorita' 1 del tracker. Non partire da un'ipotesi: leggere nel log l'output effettivo di ogni `npm run build` eseguito.
+Delle tre spiegazioni possibili — fallisce, gira su progetto incompleto, non viene mai invocato — vale **la terza**. Nel terzo run, l'unico di cui sopravvive lo stato di sessione (`~/Desktop/onlyrag_live_fulltask/.onlyrag/sessions/.agent_state_live-full-task.json`, 50/50 passi), i 64 episodi sono `write_file` × 63 e `update_plan` × 1: **zero `run_command`, zero `run_tests`**. `node_modules` non esiste nel workspace, quindi nemmeno l'install è mai partito. Il log non era più leggibile (vedi *Conserva il log*), e la prova viene dallo stato di sessione, che per quel run è completo: passi 1-50 tutti presenti, niente tagliato.
+
+**La causa è un deadlock fra promozione e chiusura**, tutto in codice già scritto:
+
+1. `flags.hasVerifiedBuild` diventa vero **solo** come esito di `run_command` / `run_tests` ([`agentOrchestratorCircuitBreakerAndVerification.ts`](../electron/core/application/agentOrchestratorCircuitBreakerAndVerification.ts):393, 416, 437) o dentro il finish gate ([`agentOrchestratorFinishAndLoopGuards.ts`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts):53-93, che esegue `runProjectVerification` per conto proprio).
+2. `promoteMilestonesProvenBy` gira **solo** in quei punti.
+3. La direttiva 4 del focus block ([`planAndSolveGraph.ts`](../electron/core/domain/agent/planAndSolveGraph.ts):319) vieta `finish` finché ogni milestone non è `verified`.
+
+La build automatica esiste, ma si raggiunge **solo passando da `finish`** — vietato finché la build non ha promosso le milestone. Al modello resta `write_file` come unica mossa legale, e brucia i cinquanta passi. È la forma già nominata due volte in §5.4 — **un'istruzione che non può essere eseguita** — questa volta chiusa in cerchio.
+
+**Nessuna direttiva permanente gli dice di eseguire la build.** Il focus block, che è il canale forte perché torna a ogni turno, nomina solo azioni su file, e la sua direttiva 5 spinge nell'altra direzione (*"If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file"*). La regola 11b di [`promptPresets.ts`](../electron/core/domain/agent/promptPresets.ts) (*"before finishing you MUST run a build"*) è condizionata a un `finish` che non arriva. L'unico testo che nomina un comando come azione successiva è l'intervento del loop detector ([`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts):238): arrivato sette volte, ignorato sette volte — cioè solo a modello già in stallo, la stessa debolezza annotata per la sonda ERESOLVE.
+
+**E anche se fosse partita, sarebbe fallita.** `evaluateFileImportIntegrity` sui file rimasti su disco: `vite.config.ts` importa `@vitejs/plugin-react` non dichiarato, `src/App.tsx` importa `react-router-dom` non dichiarato, `src/components/Sidebar.tsx` importa `@tailwindcss/react`, che su npm non esiste. Il gate di §5.2 li rileva tutti e tre e lo dice al passo in cui vengono scritti: l'informazione parte, il modello non agisce. Terza occorrenza della stessa classe di difetto.
+
+**Risolto in §5.6, e misurato.** Lo stato `verification_due` dell'arbitro porta il modello a `run_command` prima che sia in loop, arbitrato invece che accodato. Nel run del 2026-08-24 con l'arbitro attivo: 13 comandi contro zero, `npm install` al passo 2 e `npm run build` al passo 28, entrambi al primo prompt che portava la direttiva. Quanto sopra resta come racconto della diagnosi; **il fatto che conta ora è un altro**, ed è il paragrafo seguente.
+
+### Il fatto che conta adesso
+
+**I difetti di sistema noti sono chiusi; quello che resta è la forma del piano.**
+
+Al 2026-08-25 la catena regge end to end: le dipendenze si risolvono, i pacchetti inventati vengono riconosciuti, il churn è a una scrittura per file, ogni percorso termina invece di bruciare i passi, la verifica legge tutti i file e dice la verità, l'entrypoint viene collegato, e nessuna direttiva contraddice più un'altra. Dodici difetti trovati e corretti in un giorno, tutti della stessa famiglia: **il sistema possedeva l'informazione giusta e ne consegnava una sbagliata, o due in conflitto**.
+
+Escluso anche il modello: un `qwen2.5-coder:14b` fallisce con lo stesso profilo del 7b.
+
+Quello che nessuna di quelle correzioni tocca è **cosa il piano considera "fatto"**. Finché una milestone è "crea il file X", il piano può chiudersi al 100% su un'applicazione che non parte; `ensureRunnableMilestone` impedisce ora il 100% senza che il controllo del progetto sia passato, ma i microtask restano orientati ai file. È il candidato successivo, ed è §1.5 di questo stesso documento — scritto prima che iniziasse tutto il resto.
+
+Regola invariata, e oggi ha pagato tre volte: **leggi il log prima di progettare.** Due volte ho concluso la cosa sbagliata (una volta incolpando il modello, una volta il file sbagliato) e il log mi ha smentito. Tre delle dodici correzioni erano regressioni introdotte dalle onde precedenti, trovate solo dal run successivo. I log di tutti i run sono nello scratchpad della sessione.
 
 ### Prima di toccare qualsiasi cosa
 
@@ -495,22 +629,18 @@ npm run test:live
 
 I difetti che restano sono **comportamentali**: i test unitari li vedono solo dopo che qualcuno li ha capiti leggendo un log. Vedi [agent-live-testing.md](./agent-live-testing.md) per prerequisiti, le trappole che rendono un run inutile senza che sembri, e come si progetta una sonda che il modello non possa aggirare.
 
-`logs/coding_agent_audit.log` viene **appeso** fra un run e l'altro, non sovrascritto: cercando l'ultimo run si trova per primo quello vecchio. Segna la lunghezza del file prima di lanciare.
+**Conserva il log prima di pulire.** `logs/coding_agent_audit.log` viene **appeso** fra un run e l'altro, non sovrascritto: cercando l'ultimo run si trova per primo quello vecchio, quindi segna la lunghezza del file prima di lanciare. E `logs/` è in `.gitignore` e viene cancellata da `clean_workspace.ps1` nei modi `Logs`, `Repo` e `Full`: la diagnosi qui sopra ha dovuto ricostruire un run intero dallo stato di sessione perché il log dei tre run non esisteva più. Copialo via prima di ogni `npm run clean*`.
 
-### Il debito aperto
+### Tre principi, e il secondo è costato più del primo
 
-Sta in `PROJECT_STATUS.json`, non qui: in questo documento c'e' il piano e cio' che e' gia' stato misurato, li' c'e' la lista ordinata di cosa manca.
+**1. Il sistema accumulava sorveglianza invece di chiudere cicli.** Ogni guard nuovo aggiungeva testo al prompt e un'altra azione vietata, e nessuno poteva *fare* qualcosa. Le correzioni applicate non hanno aggiunto guard: hanno reso **osservabile** ciò che già accadeva, **falsificabile** ciò che era una formalità, **azionabile** ciò che era solo un divieto. Prima di aggiungere un controllo, verifica che non ne esista già uno posizionato dove non può scattare — quattro volte su cinque il difetto era informazione che il sistema **possedeva e non consegnava**.
 
-### Due principi, e il secondo e' costato piu' del primo
+**2. Misura prima di progettare, e aspettati che la tua ipotesi sia sbagliata.** Nella sessione che ha prodotto §5.4 l'ipotesi scritta nel tracker era errata **tre volte su quattro**, e ogni volta l'ha corretta il log, non il ragionamento:
 
-**1. Il sistema accumulava sorveglianza invece di chiudere cicli.** Ogni guard nuovo aggiungeva testo al prompt e un'altra azione vietata, e nessuno poteva *fare* qualcosa. Le correzioni applicate non hanno aggiunto guard: hanno reso **osservabile** cio' che gia' accadeva, **falsificabile** cio' che era una formalita', **azionabile** cio' che era solo un divieto. Prima di aggiungere un controllo, verifica che non ne esista gia' uno posizionato dove non puo' scattare — quattro volte su cinque, in questa sezione, il difetto era informazione che il sistema **possedeva e non consegnava**.
+* "riscrive lo stesso file con contenuto diverso" → erano tre *placeholder* diversi per una milestone che nessuna scrittura poteva chiudere;
+* "il prompt satura" → occupava il **50%** del budget; il difetto vero era una finestra da sei slot con quattro copie dello stesso avviso;
+* "i loop nascono da scelte che l'intervista avrebbe fissato" → l'intervista risponde `hasQuestions: false`, correttamente.
 
-**2. Misura prima di progettare, e aspettati che la tua ipotesi sia sbagliata.** Nella sessione che ha prodotto la §5.4 l'ipotesi scritta nel tracker era errata **tre volte su quattro**, e ogni volta l'ha corretta il log live, non il ragionamento:
+Corollario: **un messaggio porta una sola istruzione.** Tre volte in una sessione due testi di sistema si sono contraddetti nello stesso prompt, e il modello ha seguito il primo. Quando una direttiva nuova entra in conflitto con una esistente, **sostituiscila, non accodarla**.
 
-* "il modello riscrive lo stesso file con contenuto diverso" → erano tre *placeholder* diversi per una milestone che nessuna scrittura poteva chiudere;
-* "il prompt satura" → occupava il **50%** del budget, il compattatore non era mai scattato e non doveva; il difetto vero era una finestra da sei slot con quattro copie dello stesso avviso;
-* "i loop nascono da scelte che l'intervista avrebbe fissato" → l'intervista risponde `hasQuestions: false` su quel prompt, correttamente.
-
-Corollario operativo: **un messaggio porta una sola istruzione.** Tre volte in una sessione due testi di sistema si sono contraddetti nello stesso prompt, e il modello ha seguito il primo. Quando una direttiva nuova entra in conflitto con una esistente, **sostituiscila, non accodarla**.
-
-**3. Non affermare cio' che non hai verificato.** Vale per le direttive che il sistema manda al modello e vale per i badge che l'app mostra all'utente. `VERIFIED_MODELS` ha una voce sola perche' un solo modello e' stato eseguito; il tooltip riporta anche cio' che quel run ha fallito. Un segno di spunta che nessuno puo' controllare e' lo stesso difetto delle milestone marcate `verified` senza prove — cambia solo chi legge.
+**3. Non affermare ciò che non hai verificato.** Vale per le direttive che il sistema manda al modello e per i badge che l'app mostra all'utente. `VERIFIED_MODELS` ha una voce sola perché un solo modello è stato eseguito, e il tooltip riporta anche ciò che quel run ha fallito. Un segno di spunta che nessuno può controllare è lo stesso difetto delle milestone marcate `verified` senza prove — cambia solo chi legge.

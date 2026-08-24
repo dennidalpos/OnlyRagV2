@@ -33,6 +33,16 @@ export type DeliverableProbe = (relativePath: string) => DeliverableProbeResult
 export type MilestoneDeliverableStatus = 'satisfied' | 'unsatisfied' | 'not_applicable'
 
 /**
+ * The sentence that marks a milestone whose files are all on disk but which no verification
+ * has proven yet.
+ *
+ * Declared here because three modules read it — the note builder, the active-milestone
+ * selector, and the re-delivery check — and it lived as a copied string literal in each. This
+ * module is the one they can all import without closing a cycle.
+ */
+export const AWAITING_VERIFICATION_MARKER = 'Awaiting a passing verification command'
+
+/**
  * A path-shaped token: an optional directory chain plus a `stem.extension` tail.
  * The extension must START with a letter so version numbers ("React 18.2", "v0.1.0")
  * are not mistaken for files, and the whole token must be free of whitespace.

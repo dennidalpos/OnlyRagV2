@@ -7,7 +7,8 @@ import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domai
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
-import { promoteMilestonesProvenBy, resolveClosureDirective } from './agentOrchestratorCircuitBreakerAndVerification'
+import { isActiveMilestoneDelivered, promoteMilestonesProvenBy, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
+import type { PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
 /**
@@ -205,6 +206,33 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
     : `\n\n[PLAN ADVANCED BY THE SYSTEM]\nMilestone "${stuckMilestone.id}: ${stuckMilestone.title}" has been marked FAILED and ABANDONED. No operational milestones remain: invoke the "finish" tool now with a full final report describing what was and was not completed.`
 }
 
+/**
+ * The sentence that introduces an arbitrated directive inside a loop intervention.
+ *
+ * Each kind gets its own, because the reason repeating is pointless differs: on a verified
+ * project nothing further can be added, while on an unverified one the repeat is simply not
+ * the action that moves the plan. A shared "stop repeating this" would be true in both and
+ * informative in neither.
+ */
+function loopPreambleFor(kind: PlanDirectiveKind, loopTarget: string | undefined, repeats: number): string {
+  const target = loopTarget || 'this action'
+  if (kind === 'session_closure') {
+    return `[SESSION COMPLETE — STOP REPEATING '${target}']
+You have re-issued this call ${repeats} times. Whether it succeeds or fails no longer changes anything: the project's verification has already passed and nothing you run now can add to it.`
+  }
+  return `[STOP REPEATING '${target}' — ONE ACTION MOVES THIS PLAN]
+You have re-issued this call ${repeats} times and the plan has not moved. Repeating it cannot move it. The single action that can is below; execute exactly that.`
+}
+
+/** What the USER is told about an intervention the arbiter decided. */
+function loopInterventionLogDetail(kind: PlanDirectiveKind): string {
+  if (kind === 'session_closure') return 'Progetto già verificato e nulla di aperto da dimostrare: al modello è stato chiesto di chiudere la sessione.'
+  if (kind === 'dependencies_undeclared') return 'Il codice importa pacchetti non dichiarati in package.json: al modello è stato chiesto di installarli.'
+  if (kind === 'dependencies_missing') return 'Dipendenze dichiarate ma non installate: al modello è stato chiesto di eseguire npm install.'
+  if (kind === 'verification_due') return 'Tutti i deliverable sono su disco: al modello è stato chiesto di eseguire il comando di verifica del progetto.'
+  return 'Intervento automatico: cambio di strategia inviato al modello.'
+}
+
 /** Returns null when the call isn't a repeated/oscillating action, so the caller proceeds. */
 export async function handleLoopDetection(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome | null> {
   const loopCheck = ctx.loopDetector.recordAndCheck(parsedTool)
@@ -212,12 +240,12 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
 
-  // The one case where "find something else to do" is the wrong advice: the project's own
-  // verification has already passed, nothing has been written since, and the plan holds
-  // nothing a command could still prove. The model is not repeating itself out of confusion —
-  // it is repeating itself because finishing was forbidden and re-running a green build was
-  // the only action left. Non-null only in that state; see postVerificationClosure.ts.
-  const closureDirective = resolveClosureDirective(ctx.workspacePath, ctx.goalPlanner, ctx.flags.hasVerifiedBuild)
+  // The cases where "find something else to do" is the wrong advice, all decided in one place
+  // (planDirectiveArbiter.ts) so this channel and the plan block can never point the model at
+  // two different next actions in the same turn. There IS a single legal move in each of them
+  // — close the session, install what is missing, or run the project's own check — and the
+  // loop guard's advisory text would talk the model out of it.
+  const planDirective = resolvePlanDirectiveForTurn(ctx.workspacePath, ctx.goalPlanner, ctx.flags.hasVerifiedBuild, ctx.episodicCompactor.getEpisodes())
 
   // REPLACES the advisory text rather than following it. Appended, it lost: the live
   // eresolve run of 2026-08-24 shows the directive arriving at step 11 correctly, third in a
@@ -229,9 +257,25 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   // replaces both branches, and the stagnation branch is reached by repeats that failed. In
   // the live run of 2026-08-24 it landed on an `update_plan` rejected twice for having no
   // plan, under a sentence asserting it "succeeded every time".
-  const closureIntervention = closureDirective
-    ? `[SESSION COMPLETE — STOP REPEATING '${loopTarget || 'this action'}']\nYou have re-issued this call ${loopCheck.consecutiveDuplicateCount} times. Whether it succeeds or fails no longer changes anything: the project's verification has already passed and nothing you run now can add to it.\n\n${closureDirective}`
+  const arbitratedIntervention = planDirective.blockDirective
+    ? `${loopPreambleFor(planDirective.kind, loopTarget, loopCheck.consecutiveDuplicateCount)}
+
+${planDirective.blockDirective}`
     : null
+  const isClosure = planDirective.kind === 'session_closure'
+
+  // A repeated COMMAND says nothing about the active milestone. Live run of 2026-08-24, steps
+  // 17-18: the model re-ran a failing `npm run build` and the structural escape marked m-1
+  // "Create `package.json`" FAILED — a file written correctly at step 1 and on disk
+  // throughout. The report then carried "fallita" for work that was done, which is the same
+  // damage the closure suspension below already exists to prevent. Unreachable before this
+  // wave, because the model never ran a command; reachable now that it does.
+  //
+  // Narrow on purpose: only when the milestone's own files are all delivered. A milestone
+  // still owing a file, or naming none at all, can genuinely deadlock the plan, and the escape
+  // keeps its full power there.
+  const isCommandLoop = parsedTool.tool === 'run_command' || parsedTool.tool === 'run_tests'
+  const loopIsUnrelatedToActiveMilestone = isCommandLoop && isActiveMilestoneDelivered(ctx.workspacePath, ctx.goalPlanner)
 
   // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable
   // exists. Escalating it would abandon a reachable milestone as FAILED (see
@@ -243,7 +287,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   if (isExemptRedundantSuccess) {
     const redundancyIntervention =
-      closureIntervention ||
+      arbitratedIntervention ||
       `${loopCheck.suggestedIntervention}\n\n[REDUNDANCY DIRECTIVE (Attempt ${ctx.state.redundantSuccessStreak})]\nThis is NOT a failure and it is NOT counted against you: '${loopTarget || 'target'}' already ran successfully. The milestone it belongs to is still achievable — do not abandon it and do not report it as blocked.\nDo not re-issue this identical call: its result is already in your recent tool outputs above. Advance to the next unfinished step instead.`
 
     ctx.episodicCompactor.recordStep(
@@ -259,8 +303,8 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     ctx.emitLog(
       'info',
       `♻️ Azione ridondante: ${parsedTool.tool} già riuscito, ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-      closureIntervention
-        ? 'Progetto già verificato e nulla di aperto da dimostrare: al modello è stato chiesto di chiudere la sessione.'
+      arbitratedIntervention
+        ? loopInterventionLogDetail(planDirective.kind)
         : 'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.'
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
@@ -294,7 +338,8 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     // was done. The streak still climbs, so the abort guarantee at LOOP_ESCAPE_ABORT_STREAK
     // is untouched — only the structural escape is withheld.
     canAdvanceMilestone:
-      !closureIntervention &&
+      !isClosure &&
+      !loopIsUnrelatedToActiveMilestone &&
       ctx.goalPlanner
         .getMilestones()
         .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)),
@@ -303,7 +348,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
 
   const enhancedIntervention =
-    closureIntervention ||
+    arbitratedIntervention ||
     `${loopCheck.suggestedIntervention}\n\n[STAGNATION DIRECTIVE (Attempt ${ctx.state.stagnationStreak})]\nYou have been blocked ${ctx.state.stagnationStreak} times for repeating the same operation on '${loopTarget || 'target'}'. What is blocked is the IDENTICAL call, and the block lifts as soon as the situation changes: re-issuing it unchanged will be blocked again, issuing it after a real edit will not.${escapeDirective}${planAdvanceDirective || ''}`
 
   ctx.episodicCompactor.recordStep(
@@ -319,8 +364,8 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   ctx.emitLog(
     'info',
     `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-    closureIntervention
-      ? 'Progetto già verificato e nulla di aperto da dimostrare: al modello è stato chiesto di chiudere la sessione.'
+    arbitratedIntervention
+      ? loopInterventionLogDetail(planDirective.kind)
       : 'Intervento automatico: cambio di strategia inviato al modello.'
   )
   if (ctx.settings.enableCodingAgentDebugLog) {

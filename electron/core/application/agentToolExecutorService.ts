@@ -15,6 +15,8 @@ import { webClient } from '../infrastructure/http/webClient'
 import { applyFuzzyReplace, validateAST } from '../domain/agent/fuzzyPatchEngine'
 import { parseTestRunOutput } from '../domain/agent/testResultParser'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
+import { extractRequestedPackages } from '../domain/agent/installCommandParser'
+import { buildDiagnosticFixDirective } from '../domain/agent/compilerDiagnosticDirective'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
 import { classifyWriteFileTarget } from '../domain/agent/toolSchemaValidator'
 import { detectRedundantWrite, buildRedundantWriteNotice } from '../domain/agent/redundantWriteDetector'
@@ -111,26 +113,6 @@ function isBlockingDevServerCommand(command: string): boolean {
   return subcommands.some((sub) => isBlockingDevServerSubcommand(sub))
 }
 
-/**
- * Extracts the package names an install-with-explicit-targets command names (e.g. "tailwindcss"
- * and "postcss" from `npm install -D tailwindcss postcss`), stripping flags and version
- * specifiers. Returns an empty array for a bare `npm install`/`npm ci` (no explicit targets,
- * which legitimately reinstalls from the lockfile every time) or a non-install command.
- */
-function extractRequestedPackages(command: string): { name: string; hasExplicitVersion: boolean }[] {
-  const match = command.trim().match(/^(?:npm|pnpm|yarn|bun)\s+(?:install|i|add)\b(.*)$/i)
-  if (!match) return []
-  return match[1]
-    .split(/\s+/)
-    .filter((tok) => tok && !tok.startsWith('-'))
-    .map((tok) => {
-      // Scoped package ("@scope/name@version"): keep the scope, strip only a trailing version.
-      const versionSplitIndex = tok.startsWith('@') ? tok.indexOf('@', 1) : tok.indexOf('@')
-      return versionSplitIndex > 0
-        ? { name: tok.slice(0, versionSplitIndex), hasExplicitVersion: true }
-        : { name: tok, hasExplicitVersion: false }
-    })
-}
 
 /**
  * Returns the requested package names if EVERY one is already listed in package.json's
@@ -827,6 +809,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
         }
 
+
         // In-flight AST Pre-Commit Syntax Validation
         const astCheck = validateAST(pathCheck.safePath, content)
         if (!astCheck.isValid) {
@@ -848,7 +831,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
         )
         if (redundant.isRedundant && redundant.kind) {
           return {
-            outputForHistory: buildRedundantWriteNotice(String(filePath), redundant.kind),
+            outputForHistory: buildRedundantWriteNotice(String(filePath), redundant.kind, redundant.isEmpty),
             logMessage: `No-op write: ${path.basename(pathCheck.safePath)} was already up to date`,
             noOpMutation: true,
           }
@@ -1265,6 +1248,25 @@ Do not retry the same installation. Continue without this tool or ask the user t
             const interactivePromptDirective = res.interruptedByPrompt
               ? `\n\n[INTERACTIVE PROMPT DIRECTIVE]\nThe command was aborted because it requested interactive user input (e.g. a [y/n] confirmation or password prompt), which run_command cannot answer. Re-run using the tool's non-interactive flag (e.g. -y, --yes, --force, --batch) so it completes without prompting.`
               : ''
+            // What the model is told to do about the failure, decided ONCE instead of stated
+            // twice. The old tail said "apply the fix ... and re-run the command autonomously",
+            // two imperatives in one sentence, and in the live run of 2026-08-24 the model did
+            // the second: tsc named three files and lines at step 21 and the identical command
+            // was re-run at steps 22-31 with nothing edited in between.
+            //
+            // When the compiler localised the error, the directive names that file and forbids
+            // the re-run until something changes. When a more specific directive above already
+            // fired (ERESOLVE, missing dependency, npm naming, interactive prompt), the tail
+            // stops issuing an instruction of its own and defers to it.
+            const specificDirectiveFired = Boolean(
+              permsDirective || resolutionConflictDirective || viteMissingDirective ||
+              createViteDirective || missingDepDirective || npmNamingDirective || interactivePromptDirective
+            )
+            const diagnosticDirective = specificDirectiveFired ? null : buildDiagnosticFixDirective(rawOutput)
+            const healingTail = specificDirectiveFired
+              ? 'DO NOT ask the user vague clarification questions: carry out the directive above.'
+              : diagnosticDirective ||
+                'AUTO-HEALING DIRECTIVE: The command above failed. DO NOT ask the user vague clarification questions, and do NOT re-run it unchanged — it will fail the same way. Read the output above, identify the one file or command parameter at fault, and fix that with write_file.'
             const autoHealingFeedback = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]
 Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''}${res.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})
 Captured Error Stack Trace & Failure Output:
@@ -1272,7 +1274,7 @@ Captured Error Stack Trace & Failure Output:
 ${rawOutput.slice(0, 4000)}
 \`\`\`${permsDirective}${resolutionConflictDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${npmNamingDirective}${interactivePromptDirective}
 
-AUTO-HEALING DIRECTIVE: The command above produced an error, was interrupted, or timed out. DO NOT ask the user vague clarification questions. Inspect the stack trace, locate the failing file, syntax, or command parameter, apply the necessary fix using replace_file_content or write_file, and re-run the command autonomously.`
+${healingTail}`
             return {
               outputForHistory: autoHealingFeedback,
               logMessage: `Terminal Command Failed (Auto-Healing Diagnostic Captured)`,

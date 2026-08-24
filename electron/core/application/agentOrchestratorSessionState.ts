@@ -78,6 +78,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   // Same pattern, for the counters agentOrchestratorResponseInterpreter.ts advances.
   const responseInterpreterState: SessionState['responseInterpreterState'] = {
     noToolStreak: 0,
+    schemaRejectionStreak: 0,
     stagnationStreak: 0,
     redundantSuccessStreak: 0,
     verificationFixCycles: 0,

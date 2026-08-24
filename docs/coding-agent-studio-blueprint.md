@@ -71,6 +71,9 @@ mindmap
         Dual-mode routing (Native Tool Calling / JSON fenced)
         Pinning KV-cache e profili hardware
         Direttiva di correzione schema su tool call rifiutata
+        Matrice modelli verificati con badge e metriche reali (codingModelMatrix)
+      Presente ma non efficace
+        num_ctx dimensionato da VRAM e RAM, mai dalla capacita' dichiarata dal modello
       Cosa manca
         Template prompt modulari tarati sulla famiglia del modello
 ```
@@ -152,6 +155,9 @@ mindmap
   * Supporto sia per Ollama Native Tool Calling (`POST /api/chat`) che per prompt JSON fenced delimitati.
   * Hardware Ladder unificato con pinning della KV-cache (`keep_alive`, freeze di `num_ctx`).
   * **Correzione schema guidata sugli SLM**: quando una tool call viene rifiutata dalla validazione dei parametri, `buildToolSchemaCorrectionDirective` ([`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts)) rimanda al modello i parametri obbligatori, quelli opzionali e l'envelope JSON esatto da emettere. Il feedback precedente era una singola frase che non nominava ne' il tool ne' il parametro. `zod` non e' stato adottato: il contratto dei parametri e' gia' dichiarato una volta in questo catalogo e una seconda fonte divergerebbe.
+  * **Matrice dei modelli verificati** ([`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts)): quattro stati (`verified` / `compatible` / `unsupported` / `unknown`), badge con metriche lette da `/api/tags`, set 1-click per tier hardware nel wizard. Vedi §5.5.
+* **Presente ma non efficace**:
+  * **Capacita' del modello ignorata dal runtime**: `resolveMaxContextTokens` dimensiona `num_ctx` da tier VRAM e RAM di sistema e non consulta mai la `context_length` che Ollama dichiara. Coincide con la capacita' reale solo per caso. Misure e conseguenze in §5.5b.
 * **Mancante**:
   * **Prompt Adapters per Famiglia di Modello**: Ottimizzazione del formato dei messaggi in base alla famiglia del modello (Qwen, Llama, DeepSeek-R1, Mistral).
 
@@ -403,7 +409,50 @@ Il churn tardivo resta, su milestone da **un solo file** (`globals.css` ai passi
 
 **Resta aperto — feedback sintattico esteso**: `validateAST` copre gia' la sintassi in pre-commit; manca il typecheck incrementale.
 
-### 5.5. Poi — le funzionalità del blueprint
+### 5.5. Completato — quali modelli l'app ha davvero provato
+
+Lavoro diverso dalle onde precedenti: non tocca il loop dell'agente, riguarda **cosa l'utente puo' sapere prima di scegliere**.
+
+**Il punto di partenza.** Il pannello Impostazioni mostrava il tag del modello e nient'altro, quindi scegliere fra `qwen2.5-coder:7b` e `deepseek-coder:6.7b` presupponeva di conoscere gia' la differenza. E il catalogo esistente ([`hardwareModelCatalog.ts`](../src/services/hardwareModelCatalog.ts)) risponde a una domanda sola — *entra nella VRAM?* — che e' un giudizio di dimensionamento e non dice nulla sul fatto che l'agente funzioni con quel modello. Un 3B entra benissimo in una scheda da 4 GB e non regge un piano da quindici milestone; un modello senza tool calling entra ovunque e fallisce al passo 1.
+
+**Le metriche c'erano gia' e venivano buttate.** `/api/tags` riporta per ogni modello `details.context_length`, `parameter_size`, `quantization_level` e `capabilities`; `getModelCapabilities` leggeva quella risposta a ogni chiamata e **teneva solo le capabilities**, scartando il resto. Ora c'e' `getModelMetrics` con canale IPC dedicato ([`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts)), e i badge mostrano numeri letti. Un campo che Ollama non riporta **non viene disegnato**: nessun default plausibile, perche' su un valore inventato l'utente agirebbe.
+
+**La verifica e' una affermazione, quindi va retta da prove.** [`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts) introduce quattro stati — `verified`, `compatible`, `unsupported`, `unknown` — e `verified` significa una cosa sola: *una sonda live e' stata eseguita end to end contro questo modello e il log e' stato letto.* Non "e' un modello da coding", non "dichiara i tool".
+
+Per questo `VERIFIED_MODELS` ha **una sola voce**, `qwen2.5-coder:7b`. E' corta perche' e' vera. Un segno di spunta verde mostrato a un utente che non puo' controllarlo e' esattamente la classe di affermazione non guadagnata che le sezioni precedenti hanno passato quattro onde a rimuovere.
+
+L'evidenza sta nel badge, non solo nel commento: il tooltip riporta data, sonde eseguite e **cosa il run ha fallito**, verbatim — *"scaffolds a project but has not yet produced a green build"*. Un "verificato" che nascondesse quel fatto sarebbe peggio di nessun badge, perche' l'utente lo leggerebbe come una promessa che l'app non mantiene.
+
+**Il set 1-click** ([`selectWizardCodingSet`](../src/services/codingModelMatrix.ts)) filtra per tier hardware e ordina mettendo davanti i verificati. L'idoneita' hardware viene **prima** della verifica: meglio un modello non testato che uno che non entra in VRAM. Restituisce una lista vuota, mai un ripiego, quando nulla entra — il wizard lo rende come tale, perche' installare un modello troppo grande per la macchina e' un danno reale.
+
+> Conseguenza da conoscere, verificata nella UI in esecuzione: su profilo `entry` il set proposto e' `qwen2.5-coder:3b` + `qwen2.5-coder:1.5b`, **nessuno dei due verificato**, perche' il 7b non rientra in quel tier. E' il comportamento corretto e va risolto verificando i modelli piccoli, non cambiando l'ordinamento. Sta nel tracker.
+
+**La sonda live esegue ora il flusso vero.** `seedGeneratedPlan` chiamava solo `generatePlanText`, saltando `agent:plan-interview` e `agent:plan-enrich-prompt`: ogni run misurava un flusso che nessun utente esegue. Ora sono quattro passi e il prompt arricchito viene passato anche a `runAgentOrchestratorLoop`, altrimenti l'agente ridecide a ogni turno cio' che l'intervista aveva fissato.
+
+> Onesta' sul risultato: sul prompt di quella sonda l'intervista **non produce domande**. Verificato chiamando il modello direttamente — risponde `hasQuestions: false` con JSON valido, quindi non e' un fallimento di parsing: la richiesta e' gia' prescrittiva e l'intervista fa il suo mestiere tacendo. L'ipotesi che i loop nascessero da scelte che l'intervista avrebbe fissato **non e' supportata**. L'harness e' corretto, l'effetto su questa sonda e' nullo, e per esercitare quel ramo serve un prompt vago.
+
+---
+
+### 5.5b. Misurato — come Ollama tratta davvero il contesto
+
+Tre misure fatte contro l'Ollama locale il 2026-08-24. Sono qui perche' **contraddicono cio' che il codice assume**, e perche' rifarle a mano costa tempo.
+
+| chiesto | dichiarato dal modello | allocato | errore |
+| :--- | ---: | ---: | :--- |
+| `num_ctx` 32768 a `deepseek-coder:6.7b` | 16.384 | **16.384** | nessuno |
+| `num_ctx` 65536 a `qwen2.5-coder:7b` | 32.768 | **32.768** | nessuno |
+
+**Ollama tronca al valore dichiarato dal modello, in silenzio.** Chiedere troppo non rompe nulla: dall'altra parte c'e' una protezione. Il valore realmente allocato e' leggibile da `/api/ps` (`context_length`) dopo il primo caricamento.
+
+**La terza misura e' quella che conta.** Prompt da ~10.000 token con `num_ctx=2048`: la chiamata **non fallisce**, `prompt_eval_count` risulta 1026, e la risposta ignora un marcatore piazzato all'inizio del prompt. **Ollama scarta la TESTA e tiene la coda.** Per questo agente la testa e' il system prompt, il catalogo dei tool e il blocco piano.
+
+Il rischio quindi non e' chiedere troppo — e' che `deriveMaxContextChars` derivi il budget dal `num_ctx` che l'app ha **scelto** invece che da quello allocato. Se i due divergono, `HeuristicContextCompactor` non scatta e il prompt perde le istruzioni senza che nulla lo segnali. Oggi non morde (~6k token contro 16.384 reali) ma scala con skill, repo map e storia.
+
+> Rettifica collegata: la capacita' dichiarata dal modello **non viene mai letta** dal percorso di runtime. `resolveMaxContextTokens` guarda solo tier VRAM e RAM di sistema; l'unico `contextLength` nel codice sta in `hardwareRecommendationEngine.ts`, che e' UI. Su una macchina da 32 GB tetto hardware e capacita' del modello coincidono a 32.768 **per coincidenza**.
+
+---
+
+### 5.6. Poi — le funzionalità del blueprint
 
 1. **Modulo Visual Validation**: Implementazione di `visualValidationTool.ts` basato su Electron Offscreen `WebContents` per screenshot automatici e cattura `console.error`. Non affrontato finora per una ragione precisa: richiede il runtime Electron, che il banco di prova headless (`npm run test:live`) non puo' esercitare. Va sviluppato lanciando l'app vera, altrimenti si consegna codice mai visto funzionare.
 2. **First-Class Artifacts Engine**: Creazione del repository e dei canali IPC `artifacts:*` per registrare e mostrare anteprime live di componenti UI e documenti.
@@ -413,24 +462,55 @@ Il churn tardivo resta, su milestone da **un solo file** (`globals.css` ai passi
 
 ## 6. Come riprendere questo lavoro
 
-Punto di ingresso per una sessione nuova, che non ha il contesto di quella in cui le tre onde sono state applicate.
+Punto di ingresso per una sessione nuova, che non ha nessun contesto di quelle precedenti.
 
-**Stato.** Le sezioni 5.1, 5.2, 5.3 e 5.4 sono applicate e coperte da test. Le prime tre sono verificate su sessioni reali; la 5.4 e' verificata solo a meta' — vedi la nota sulla sonda in fondo a quella sezione — e la prima cosa da fare qui e' osservarla su un run con piano seminato. La 5.5 e' il blueprint originale, che resta valido ma poggia su queste fondamenta.
+### Stato
 
-**Verifica che la base sia sana** prima di toccare qualsiasi cosa:
+| sezione | cosa | stato |
+| :--- | :--- | :--- |
+| 5.1 – 5.3 | cicli di feedback, controlli anticipati, conflitti di versione | applicate, testate, verificate su sessioni reali |
+| 5.4 | churn: scritture a vuoto, chiusura di sessione, milestone indimostrabili, consegna parziale, finestra recente | applicate e testate; **meccanismi verificati dal vivo, esito complessivo no** — vedi sotto |
+| 5.5 / 5.5b | matrice modelli verificati e misure sul contesto Ollama | applicate; la matrice ha una sola voce, ed e' il punto |
+| 5.6 | funzionalita' originali del blueprint | non iniziate |
+
+### Il fatto che conta piu' di tutti
+
+**In tre run live consecutivi da cinquanta passi, nessuna sessione ha mai ottenuto un `npm run build` verde.** Senza quello `promoteMilestonesProvenBy` non promuove nulla, e ogni run finisce a 0/15 o 2/15 **qualunque cosa facciano i guard**. Finche' non e' isolato, ogni metrica di completamento e' illeggibile e ogni confronto fra due run non dimostra niente.
+
+E' la priorita' 1 del tracker. Non partire da un'ipotesi: leggere nel log l'output effettivo di ogni `npm run build` eseguito.
+
+### Prima di toccare qualsiasi cosa
 
 ```bash
-npm run lint     # catena seriale completa: typecheck, test, build Electron, smoke test
+npm run lint
 ```
 
-**Osserva l'agente davvero**, perche' i difetti che restano sono comportamentali e i test unitari non li vedono:
+Catena seriale completa: typecheck, test, build Electron, smoke test.
+
+### Poi osserva l'agente davvero
 
 ```bash
 npm run test:live
 ```
 
-Vedi [agent-live-testing.md](./agent-live-testing.md) per i prerequisiti, le tre trappole che rendono un run live inutile senza che sembri, e come si progetta una sonda che il modello non possa aggirare.
+I difetti che restano sono **comportamentali**: i test unitari li vedono solo dopo che qualcuno li ha capiti leggendo un log. Vedi [agent-live-testing.md](./agent-live-testing.md) per prerequisiti, le trappole che rendono un run inutile senza che sembri, e come si progetta una sonda che il modello non possa aggirare.
 
-**Il debito aperto** e' in `PROJECT_STATUS.json`, non in questo documento: qui c'e' il piano, li' c'e' la lista di cosa manca.
+`logs/coding_agent_audit.log` viene **appeso** fra un run e l'altro, non sovrascritto: cercando l'ultimo run si trova per primo quello vecchio. Segna la lunghezza del file prima di lanciare.
 
-**Il principio che tiene insieme le tre onde**, e che vale per il lavoro che resta: il sistema accumulava sorveglianza invece di chiudere cicli. Ogni guard nuovo aggiungeva testo al prompt e un'altra azione vietata, e nessuno di loro poteva *fare* qualcosa. Le correzioni applicate non hanno aggiunto guard: hanno reso osservabile cio' che gia' accadeva (l'errore vero), falsificabile cio' che era una formalita' (la verifica delle milestone), e azionabile cio' che era solo un divieto (le direttive). Prima di aggiungere un controllo, verifica che non ne esista gia' uno posizionato dove non puo' scattare.
+### Il debito aperto
+
+Sta in `PROJECT_STATUS.json`, non qui: in questo documento c'e' il piano e cio' che e' gia' stato misurato, li' c'e' la lista ordinata di cosa manca.
+
+### Due principi, e il secondo e' costato piu' del primo
+
+**1. Il sistema accumulava sorveglianza invece di chiudere cicli.** Ogni guard nuovo aggiungeva testo al prompt e un'altra azione vietata, e nessuno poteva *fare* qualcosa. Le correzioni applicate non hanno aggiunto guard: hanno reso **osservabile** cio' che gia' accadeva, **falsificabile** cio' che era una formalita', **azionabile** cio' che era solo un divieto. Prima di aggiungere un controllo, verifica che non ne esista gia' uno posizionato dove non puo' scattare — quattro volte su cinque, in questa sezione, il difetto era informazione che il sistema **possedeva e non consegnava**.
+
+**2. Misura prima di progettare, e aspettati che la tua ipotesi sia sbagliata.** Nella sessione che ha prodotto la §5.4 l'ipotesi scritta nel tracker era errata **tre volte su quattro**, e ogni volta l'ha corretta il log live, non il ragionamento:
+
+* "il modello riscrive lo stesso file con contenuto diverso" → erano tre *placeholder* diversi per una milestone che nessuna scrittura poteva chiudere;
+* "il prompt satura" → occupava il **50%** del budget, il compattatore non era mai scattato e non doveva; il difetto vero era una finestra da sei slot con quattro copie dello stesso avviso;
+* "i loop nascono da scelte che l'intervista avrebbe fissato" → l'intervista risponde `hasQuestions: false` su quel prompt, correttamente.
+
+Corollario operativo: **un messaggio porta una sola istruzione.** Tre volte in una sessione due testi di sistema si sono contraddetti nello stesso prompt, e il modello ha seguito il primo. Quando una direttiva nuova entra in conflitto con una esistente, **sostituiscila, non accodarla**.
+
+**3. Non affermare cio' che non hai verificato.** Vale per le direttive che il sistema manda al modello e vale per i badge che l'app mostra all'utente. `VERIFIED_MODELS` ha una voce sola perche' un solo modello e' stato eseguito; il tooltip riporta anche cio' che quel run ha fallito. Un segno di spunta che nessuno puo' controllare e' lo stesso difetto delle milestone marcate `verified` senza prove — cambia solo chi legge.

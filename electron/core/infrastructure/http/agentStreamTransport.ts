@@ -13,6 +13,7 @@ export interface StreamSession {
   keepAlive?: string
   ollamaEndpoint?: string
   onTokenChunk?: (chunk: string) => void
+  onThoughtChunk?: (chunk: string) => void
   isCancelled: () => boolean
   onCancelHandle?: (abort: () => void) => void
   /**
@@ -62,6 +63,7 @@ export class AgentStreamTransport {
       keepAlive,
       ollamaEndpoint,
       onTokenChunk,
+      onThoughtChunk,
       isCancelled,
       onCancelHandle,
       previousContext,
@@ -176,6 +178,10 @@ export class AgentStreamTransport {
                   buffer,
                   chunk,
                   (parsed) => {
+                    const thinkingDelta = parsed.thinking ?? parsed.message?.thinking
+                    if (thinkingDelta && onThoughtChunk) {
+                      onThoughtChunk(thinkingDelta)
+                    }
                     if (parsed.response) {
                       fullText += parsed.response
                       if (onTokenChunk) {
@@ -250,7 +256,7 @@ export class AgentStreamTransport {
    * parsed identically downstream by toolParser.ts.
    */
   private static async streamChatWithTools(session: StreamSession): Promise<string> {
-    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, isCancelled, onCancelHandle, toolCatalog } = session
+    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, onCancelHandle, toolCatalog } = session
 
     const hostStr = ollamaEndpoint?.trim() || 'http://127.0.0.1:11434'
     let chatUrl: URL
@@ -352,6 +358,10 @@ export class AgentStreamTransport {
               buffer,
               chunk,
               (parsed) => {
+                const thinkingDelta = parsed?.message?.thinking ?? parsed?.thinking
+                if (thinkingDelta && onThoughtChunk) {
+                  onThoughtChunk(thinkingDelta)
+                }
                 const contentDelta = parsed?.message?.content
                 if (contentDelta) {
                   fullText += contentDelta

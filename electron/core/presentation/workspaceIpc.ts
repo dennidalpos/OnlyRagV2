@@ -50,6 +50,14 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.gitCommit(workspaceRoot, commitMessage)
   })
 
+  ipcMain.handle('workspace:get-git-status-and-diff', async (_event: unknown, workspaceRoot?: string) => {
+    return workspaceAppService.getGitStatusAndDiff(workspaceRoot)
+  })
+
+  ipcMain.handle('workspace:init-git', async (_event: unknown, workspaceRoot?: string) => {
+    return workspaceAppService.initGitRepository(workspaceRoot)
+  })
+
   ipcMain.handle('workspace:execute-powershell', async (_event: unknown, command: string, targetCwd?: string, timeoutMs?: number) => {
     return workspaceAppService.executePowerShellCommand(command, targetCwd, timeoutMs)
   })

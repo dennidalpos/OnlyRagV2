@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
@@ -131,6 +132,18 @@ export class WorkspaceAppService {
 
   executePowerShellCommand(command: string, targetCwd?: string, timeoutMs?: number) {
     return taskRunner.executePowerShellCommand(command, targetCwd, timeoutMs)
+  }
+
+  getGitStatusAndDiff(workspacePath?: string | null) {
+    const cwd = workspacePath && fs.existsSync(workspacePath) ? workspacePath : process.cwd()
+    return gitCliRepository.getStatusAndDiff(cwd)
+  }
+
+  initGitRepository(workspacePath?: string | null) {
+    if (!workspacePath || !fs.existsSync(workspacePath)) {
+      return { success: false, message: 'Invalid or missing workspace path' }
+    }
+    return gitCliRepository.init(workspacePath)
   }
 }
 

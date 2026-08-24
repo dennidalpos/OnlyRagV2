@@ -190,19 +190,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         isScrolledUp={isScrolledUp}
         onScroll={handleScroll}
         onScrollToBottom={() => scrollToBottom(true)}
-        plan={plan}
-        isGeneratingPlan={isGeneratingPlan}
-        countdownSeconds={countdownSeconds}
-        isAutoProceedPaused={isAutoProceedPaused}
-        autoProceedEnabled={autoProceedEnabled}
-        interviewQuestions={interviewQuestions}
-        isInterviewActive={isInterviewActive}
-        isAnalyzingInterview={isAnalyzingInterview}
-        onConfirmInterview={onConfirmInterview}
-        onSkipInterview={onSkipInterview}
-        onApprovePlan={onApprovePlan}
-        onRejectPlan={onRejectPlan}
-        onTogglePauseAutoProceed={onTogglePauseAutoProceed}
       />
 
       <PromptComposer

@@ -491,6 +491,8 @@ export interface IElectronAPI {
   fetchWebContent: (url: string, maxChars?: number) => Promise<{ success: boolean; content?: string; title?: string; error?: string }>
   downloadFile: (url: string, targetFilePath: string) => Promise<{ success: boolean; downloadedBytes?: number; error?: string }>
   gitCommit: (commitMessage: string, workspaceRoot?: string) => Promise<{ success: boolean; output?: string; error?: string }>
+  getGitStatusAndDiff?: (workspaceRoot?: string) => Promise<{ isGitRepo: boolean; statusLines: string[]; diffText: string }>
+  initGitRepository?: (workspaceRoot?: string) => Promise<{ success: boolean; message: string }>
   inspectGuestOsEnvironment: () => Promise<GuestOsInfo>
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
@@ -537,6 +539,7 @@ export interface IElectronAPI {
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
   onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
+  onAgentStreamThought?: (callback: (data: { step: number; chunk: string }) => void) => () => void
   onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
   onAgentApprovalRequest: (callback: (req: any) => void) => () => void
   onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void

@@ -1,12 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { Code2, Loader2, ArrowDown, FolderOpen } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { AgentActionLog, WorkspaceFile, CodingSession, InterviewQuestion, UserInterviewAnswer } from '../../types'
-import { AgentPlan } from '../../hooks/usePlanApproval'
+import { AgentActionLog, WorkspaceFile, CodingSession } from '../../types'
 import { useTranslation } from '../../i18n'
 import { AgentTimelineMessage } from './AgentTimelineMessage'
-import { PlanInterviewCard } from './PlanInterviewCard'
-import { PlanChatApprovalCard } from './PlanChatApprovalCard'
 import { resolveWorkspaceQuickActions } from './workspaceQuickActions'
 
 interface AgentTimelineProps {
@@ -29,20 +26,6 @@ interface AgentTimelineProps {
   isScrolledUp: boolean
   onScroll: () => void
   onScrollToBottom: () => void
-  // Plan Flow Props
-  plan?: AgentPlan | null
-  isGeneratingPlan?: boolean
-  countdownSeconds?: number
-  isAutoProceedPaused?: boolean
-  autoProceedEnabled?: boolean
-  interviewQuestions?: InterviewQuestion[]
-  isInterviewActive?: boolean
-  isAnalyzingInterview?: boolean
-  onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
-  onSkipInterview?: () => void
-  onApprovePlan?: () => void
-  onRejectPlan?: () => void
-  onTogglePauseAutoProceed?: () => void
 }
 
 export const AgentTimeline: React.FC<AgentTimelineProps> = ({
@@ -65,19 +48,6 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   isScrolledUp,
   onScroll,
   onScrollToBottom,
-  plan,
-  isGeneratingPlan = false,
-  countdownSeconds = 15,
-  isAutoProceedPaused = false,
-  autoProceedEnabled = true,
-  interviewQuestions = [],
-  isInterviewActive = false,
-  isAnalyzingInterview = false,
-  onConfirmInterview,
-  onSkipInterview,
-  onApprovePlan,
-  onRejectPlan,
-  onTogglePauseAutoProceed,
 }) => {
   const { t } = useTranslation()
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
@@ -204,58 +174,6 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
               </div>
             )
           })}
-        </div>
-      )}
-
-      {/* Pre-flight Clarification Interview Card (In-Chat) */}
-      {isAnalyzingInterview && (
-        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-cyan-500/30 text-xs text-slate-200 space-y-2 shadow-xl animate-in fade-in">
-          <div className="flex items-center gap-2.5">
-            <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-            <span className="font-semibold text-cyan-300">Analisi del Prompt &amp; Scelte Tecniche (Pre-Plan Interview)...</span>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            L'AI sta valutando se sono necessari chiarimenti preliminari per definire il piano ottimale.
-          </p>
-        </div>
-      )}
-
-      {isInterviewActive && interviewQuestions.length > 0 && (
-        <div className="animate-in fade-in">
-          <PlanInterviewCard
-            questions={interviewQuestions}
-            onConfirm={onConfirmInterview || (() => {})}
-            onSkipWithRecommended={onSkipInterview || (() => {})}
-            isGenerating={isGeneratingPlan}
-          />
-        </div>
-      )}
-
-      {/* Plan Generation State */}
-      {isGeneratingPlan && (
-        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-cyan-500/30 text-xs text-slate-200 space-y-2 shadow-xl animate-in fade-in">
-          <div className="flex items-center gap-2.5">
-            <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-            <span className="font-semibold text-cyan-300">Generazione del Piano di Esecuzione in corso...</span>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Delineazione delle milestone e delle verifiche passo-passo prima dell'esecuzione.
-          </p>
-        </div>
-      )}
-
-      {/* Plan Ready & Confirmation Card (In-Chat) */}
-      {plan && plan.status === 'ready' && (
-        <div className="animate-in fade-in">
-          <PlanChatApprovalCard
-            plan={plan}
-            countdownSeconds={countdownSeconds}
-            isAutoProceedPaused={isAutoProceedPaused}
-            autoProceedEnabled={autoProceedEnabled}
-            onTogglePauseAutoProceed={onTogglePauseAutoProceed || (() => {})}
-            onApprove={onApprovePlan || (() => {})}
-            onReject={onRejectPlan || (() => {})}
-          />
         </div>
       )}
 

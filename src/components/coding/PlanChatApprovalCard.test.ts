@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parsePlanChecklist } from './planChecklistParser'
 import type { AgentPlan } from '../../hooks/usePlanApproval'
 
-describe('PlanChatApprovalCard and Checklist Parser Unit Tests', () => {
+describe('PlanChecklistParser Unit Tests', () => {
   it('should parse pre-computed milestones into checklist items correctly', () => {
     const plan: AgentPlan = {
       id: 'plan_1',

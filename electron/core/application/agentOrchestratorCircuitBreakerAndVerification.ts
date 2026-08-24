@@ -56,42 +56,46 @@ export async function runCircuitBreaker(
  * pass, is what keeps them from deadlocking the plan.
  */
 function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, mutatedPaths: Array<string | undefined>) {
-  const activeM = ctx.goalPlanner.getActiveMilestone()
-  if (!activeM || activeM.status === 'verified') return
-
-  // The closing milestone is owned by handleFinishTool — it must never be pre-verified here,
-  // or the plan would read 100% complete before the agent has written its final report.
-  if (isCompletionMilestoneTitle(activeM.title)) return
-
-  const markInProgress = () => {
-    if (activeM.status === 'pending') ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
-  }
-
   const workspacePath = ctx.workspacePath
   if (!workspacePath) {
-    markInProgress()
-    return
-  }
-
-  const evidencePath = mutatedPaths.find((candidate) => isDeliverableOfMilestone(activeM.title, candidate))
-  if (!evidencePath) {
-    markInProgress()
+    const activeM = ctx.goalPlanner.getActiveMilestone()
+    if (activeM && activeM.status === 'pending' && !isCompletionMilestoneTitle(activeM.title)) {
+      ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
+    }
     return
   }
 
   const probe = createWorkspaceDeliverableProbe(workspacePath)
-  if (resolveMilestoneDeliverableStatus(activeM.title, probe) !== 'satisfied') {
-    markInProgress()
-    return
+  let advancedAny = false
+
+  for (const milestone of ctx.goalPlanner.getMilestones()) {
+    if (milestone.status === 'verified' || milestone.status === 'failed' || isCompletionMilestoneTitle(milestone.title)) {
+      continue
+    }
+
+    const evidencePath = mutatedPaths.find((candidate) => isDeliverableOfMilestone(milestone.title, candidate))
+    if (!evidencePath) continue
+
+    const status = resolveMilestoneDeliverableStatus(milestone.title, probe)
+    if (status === 'satisfied') {
+      ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
+      ctx.emitLog(
+        'info',
+        `✏️ Milestone ${milestone.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`
+      )
+      advancedAny = true
+    } else if (milestone.status === 'pending') {
+      ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress')
+      advancedAny = true
+    }
   }
 
-  // Deliberately NOT 'verified'. The file being on disk says it was written, never that it
-  // works: see milestoneVerificationPromotion.ts. A passing verification command promotes it.
-  ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress', awaitingVerificationNote(evidencePath))
-  ctx.emitLog(
-    'info',
-    `✏️ Milestone ${activeM.id}: scritto "${evidencePath}", tutti i file richiesti sono presenti. In attesa di una verifica che passi.`
-  )
+  if (!advancedAny) {
+    const activeM = ctx.goalPlanner.getActiveMilestone()
+    if (activeM && activeM.status === 'pending' && !isCompletionMilestoneTitle(activeM.title)) {
+      ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
+    }
+  }
 }
 
 /**

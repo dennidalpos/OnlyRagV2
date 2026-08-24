@@ -31,6 +31,11 @@ async function dispatchToLlm(
           ctx.session.targetWindow.webContents.send('agent:stream-token', { step: ctx.stepCount, chunk })
         }
       },
+      onThoughtChunk: (chunk) => {
+        if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+          ctx.session.targetWindow.webContents.send('agent:stream-thought', { step: ctx.stepCount, chunk })
+        }
+      },
       isCancelled: () => !ctx.isSessionActive(),
       onCancelHandle: (abort) => {
         ctx.session.activeCancelHandle = abort

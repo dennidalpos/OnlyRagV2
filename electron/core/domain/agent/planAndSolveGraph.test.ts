@@ -349,5 +349,59 @@ Here is the microtask execution plan:
       expect(reparsed[0].title).toBe('Build pulita')
       expect(reparsed[0].verificationCommand).toBe('npm run build')
     })
+
+    it('strips closed and unclosed <think> and <thought> reasoning blocks before parsing plans', () => {
+      const rawWithClosed = `<think>
+Let me construct a 2-step plan.
+</think>
+- [ ] m-1: Implement logic
+- [ ] m-2: Verify build`
+      const parsedClosed = GoalDecompositionPlanner.parsePlanFromText(rawWithClosed)
+      expect(parsedClosed).toHaveLength(2)
+      expect(parsedClosed[0].title).toBe('Implement logic')
+
+      const rawWithThought = `<thought>
+Reasoning here...
+</thought>
+- [ ] m-1: Step 1
+- [ ] m-2: Step 2`
+      const parsedThought = GoalDecompositionPlanner.parsePlanFromText(rawWithThought)
+      expect(parsedThought).toHaveLength(2)
+    })
+
+    it('advances active milestone focus when an in-progress milestone has its deliverables satisfied awaiting verification', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([
+        {
+          id: 'm-1',
+          title: 'Create package.json',
+          status: 'in_progress',
+          notes: '"package.json" was written for this milestone and every file it names is on disk. Awaiting a passing verification command before this can count as verified.',
+        },
+        { id: 'm-2', title: 'Create src/styles/globals.css', status: 'pending' },
+        { id: 'm-3', title: 'Riepilogo finale (invoke finish)', status: 'pending' },
+      ])
+
+      const activeM = planner.getActiveMilestone()
+      expect(activeM?.id).toBe('m-2')
+      expect(activeM?.title).toBe('Create src/styles/globals.css')
+    })
+
+    it('preserves progress during re-planning when milestone titles are rephrased around the same deliverables', () => {
+      const planner = new GoalDecompositionPlanner()
+      planner.initializePlan([
+        { id: 'm-1', title: 'Create `src/styles/globals.css` with Tailwind', status: 'verified' },
+        { id: 'm-2', title: 'Implement `src/components/Sidebar.tsx`', status: 'pending' },
+      ])
+
+      planner.replacePlanPreservingProgress([
+        { id: 'm-1', title: 'Configure and polish `src/styles/globals.css` styles', status: 'pending' },
+        { id: 'm-2', title: 'Implement `src/components/Sidebar.tsx`', status: 'pending' },
+      ])
+
+      const milestones = planner.getMilestones()
+      expect(milestones[0].status).toBe('verified')
+      expect(milestones[1].status).toBe('pending')
+    })
   })
 })

@@ -183,7 +183,7 @@ export function useCodingAgent(settings?: AppSettings) {
     navigateHistory,
   } = useAgentTerminal({ workspacePath, onCommandNotice: handleCommandNotice })
 
-  const { gitStatusLines, gitDiffText, isFetchingGit, fetchGitStatusAndDiff } = useGitStatus(workspacePath)
+  const { gitStatusLines, gitDiffText, isGitRepo, isFetchingGit, fetchGitStatusAndDiff, initGit } = useGitStatus(workspacePath)
   const {
     grepQuery,
     setGrepQuery,
@@ -337,6 +337,12 @@ export function useCodingAgent(settings?: AppSettings) {
       }
     })
 
+    const unsubStreamThought = window.electronAPI.onAgentStreamThought?.((data: { step: number; chunk: string }) => {
+      if (data.chunk) {
+        setStreamingText((prev) => prev + data.chunk)
+      }
+    })
+
     const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string; statusText?: string }) => {
       currentStepRef.current = data.step
       setCurrentStep(data.step)
@@ -397,6 +403,7 @@ export function useCodingAgent(settings?: AppSettings) {
       unsubLog?.()
       unsubFileDeleted?.()
       unsubStreamToken?.()
+      unsubStreamThought?.()
       unsubStep?.()
       unsubApproval?.()
       unsubSkills?.()
@@ -657,6 +664,8 @@ export function useCodingAgent(settings?: AppSettings) {
     setIsPromptModalOpen,
     gitStatusLines,
     gitDiffText,
+    isGitRepo,
+    initGit,
     changeMetrics,
     isFetchingGit,
     guestOsInfo,

@@ -12,7 +12,9 @@ interface GitDiffPanelProps {
   gitStatusLines: string[]
   gitDiffText: string
   isFetchingGit: boolean
+  isGitRepo?: boolean
   onRefreshGit: () => void
+  onInitGit?: () => void
 }
 
 const STATUS_BADGE: Record<DiffFileChange['status'], { label: string; className: string }> = {
@@ -64,21 +66,38 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
   gitStatusLines,
   gitDiffText,
   isFetchingGit,
+  isGitRepo = true,
   onRefreshGit,
+  onInitGit,
 }) => {
-  const cleanStatusLines = gitStatusLines
-    .map((str) => stripAnsi(str).trim())
-    .filter((l) => l && !l.startsWith(']0;') && !l.includes('powershell.exe'))
+  const cleanStatusLines = useMemo(() => {
+    return gitStatusLines
+      .map((str) => stripAnsi(str).trim())
+      .filter(
+        (l) =>
+          l &&
+          !l.startsWith(']0;') &&
+          !l.includes('powershell.exe') &&
+          !l.toLowerCase().includes('no modified files detected') &&
+          !l.toLowerCase().includes('not a git repository')
+      )
+  }, [gitStatusLines])
 
-  const cleanDiffText = stripAnsi(gitDiffText).trim()
+  const cleanDiffText = useMemo(() => {
+    const raw = stripAnsi(gitDiffText).trim()
+    return raw.toLowerCase().includes('no uncommitted changes') ? '' : raw
+  }, [gitDiffText])
 
   // Parsed once per diff payload: the panel re-renders on every poll of the git status.
   const parsedFiles = useMemo(() => parseUnifiedDiff(cleanDiffText), [cleanDiffText])
   const totals = useMemo(() => summarizeDiff(parsedFiles), [parsedFiles])
 
-  const isNotGitRepo = cleanStatusLines.some((l) => l.toLowerCase().includes('not a git repository')) || cleanDiffText.toLowerCase().includes('not a git repository')
+  const notGitRepo =
+    isGitRepo === false ||
+    gitStatusLines.some((l) => l.toLowerCase().includes('not a git repository')) ||
+    cleanDiffText.toLowerCase().includes('not a git repository')
 
-  const isWorkingTreeClean = !isNotGitRepo && (cleanStatusLines.length === 0 || (cleanStatusLines.length === 1 && !cleanStatusLines[0]))
+  const isWorkingTreeClean = !notGitRepo && cleanStatusLines.length === 0
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 select-text">
@@ -101,13 +120,13 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
           onClick={onRefreshGit}
           aria-label="Aggiorna stato Git e visualizzazione diff"
           disabled={isFetchingGit}
-          className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-mono transition-all focus-ring active:scale-95"
+          className="px-3 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-mono transition-all focus-ring active:scale-95 cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isFetchingGit ? 'animate-spin text-cyan-400' : ''}`} /> Refresh
         </button>
       </div>
 
-      {isNotGitRepo ? (
+      {notGitRepo ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
           <div className="p-3 rounded-2xl bg-amber-950/30 border border-amber-800/50 text-amber-400">
             <GitBranch className="w-8 h-8 opacity-80" />
@@ -116,6 +135,16 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
           <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
             La cartella del progetto corrente non contiene una repository Git (<code>.git</code> non trovato). Inizializza Git per tracciare le modifiche.
           </p>
+          {onInitGit && (
+            <button
+              type="button"
+              onClick={onInitGit}
+              disabled={isFetchingGit}
+              className="mt-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all focus-ring active:scale-95 cursor-pointer disabled:opacity-50"
+            >
+              Inizializza Git Repository
+            </button>
+          )}
         </div>
       ) : (
         <>

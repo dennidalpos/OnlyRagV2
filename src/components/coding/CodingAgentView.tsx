@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { GripVertical } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
@@ -105,6 +105,12 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
     setActiveRightTab('plan')
     await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
   }
+
+  useEffect(() => {
+    if (planApproval.isGeneratingPlan || planApproval.isInterviewActive || planApproval.currentPlan?.status === 'ready') {
+      setActiveRightTab('plan')
+    }
+  }, [planApproval.isGeneratingPlan, planApproval.isInterviewActive, planApproval.currentPlan?.status])
 
   const handleInitiateTaskExecution = () => {
     if (!c.agentPrompt.trim()) return
@@ -282,7 +288,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
                 gitStatusLines={c.gitStatusLines}
                 gitDiffText={c.gitDiffText}
                 isFetchingGit={c.isFetchingGit}
+                isGitRepo={c.isGitRepo}
                 onRefreshGit={c.fetchGitStatusAndDiff}
+                onInitGit={c.initGit}
               />
             )}
 

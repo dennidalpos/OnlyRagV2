@@ -1,4 +1,5 @@
 import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
+import { extractDeliverablePaths } from './milestoneDeliverableResolver'
 
 export interface PlanMilestone {
   id: string
@@ -70,18 +71,31 @@ export class GoalDecompositionPlanner {
 
   /**
    * Replaces the plan with a newly emitted one while carrying over the progress already
-   * earned: any incoming milestone whose title matches an existing verified/failed one
-   * keeps that status. Lets the agent re-plan mid-session (scope discovered late, a
-   * milestone that turned out to need splitting) without silently resetting to 0%.
+   * earned: any incoming milestone whose title or deliverable paths match an existing
+   * verified/failed one keeps that status. Lets the agent re-plan mid-session (scope discovered
+   * late, a milestone that turned out to need splitting) without silently resetting to 0%.
    */
   public replacePlanPreservingProgress(milestones: PlanMilestone[]): void {
     const previousByTitle = new Map<string, PlanMilestone>()
+    const previousByDeliverable = new Map<string, PlanMilestone>()
+
     for (const m of this.milestones) {
       previousByTitle.set(m.title.trim().toLowerCase(), m)
+      const deliverables = extractDeliverablePaths(m.title)
+      if (deliverables.length > 0) {
+        previousByDeliverable.set(deliverables.sort().join('|'), m)
+      }
     }
 
     this.milestones = milestones.map((m, idx) => {
-      const previous = previousByTitle.get((m.title || '').trim().toLowerCase())
+      let previous = previousByTitle.get((m.title || '').trim().toLowerCase())
+      if (!previous) {
+        const deliverables = extractDeliverablePaths(m.title || '')
+        if (deliverables.length > 0) {
+          previous = previousByDeliverable.get(deliverables.sort().join('|'))
+        }
+      }
+
       const carriedStatus = previous && (previous.status === 'verified' || previous.status === 'failed')
         ? previous.status
         : m.status || 'pending'
@@ -99,8 +113,40 @@ export class GoalDecompositionPlanner {
     return this.milestones.length > 0
   }
 
-  public getActiveMilestone(): PlanMilestone | undefined {
-    return this.milestones.find((m) => m.status === 'in_progress') || this.milestones.find((m) => m.status === 'pending')
+  /**
+   * Returns the current active milestone that needs work.
+   *
+   * An `in_progress` milestone whose deliverable files are ALREADY on disk (awaiting a later
+   * build/test verification command) must NOT trap the agent into repeating edits on that same file.
+   * The focus cleanly advances to the first milestone with unfinished work (`pending` or `in_progress`
+   * with missing deliverables), and only defaults to verification/completion when all implementation
+   * deliverables are satisfied.
+   */
+  public getActiveMilestone(isDeliverableSatisfied?: (milestone: PlanMilestone) => boolean): PlanMilestone | undefined {
+    // 1. Is there an in_progress milestone that actually needs work?
+    const inProgressUnsatisfied = this.milestones.find((m) => {
+      if (m.status !== 'in_progress') return false
+      if (isCompletionMilestoneTitle(m.title)) return false
+      if (isDeliverableSatisfied) {
+        return !isDeliverableSatisfied(m)
+      }
+      if (m.notes && m.notes.includes('Awaiting a passing verification command')) {
+        return false
+      }
+      return true
+    })
+    if (inProgressUnsatisfied) return inProgressUnsatisfied
+
+    // 2. Is there a pending operational milestone?
+    const nextPending = this.milestones.find((m) => m.status === 'pending' && !isCompletionMilestoneTitle(m.title))
+    if (nextPending) return nextPending
+
+    // 3. If all operational implementation milestones are satisfied, return the first in_progress (e.g. for build verification)
+    const anyInProgress = this.milestones.find((m) => m.status === 'in_progress' && !isCompletionMilestoneTitle(m.title))
+    if (anyInProgress) return anyInProgress
+
+    // 4. Finally, any non-verified milestone (including completion milestone)
+    return this.milestones.find((m) => m.status === 'pending' || m.status === 'in_progress')
   }
 
   /** Same id-or-title-substring lookup updateMilestone uses, exposed so callers can inspect
@@ -319,7 +365,7 @@ export class GoalDecompositionPlanner {
     if (!text || typeof text !== 'string') return []
 
     // Strip thinking tags from reasoning models (e.g. DeepSeek-R1, Qwen) so internal thoughts don't pollute milestones
-    const sanitizedText = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+    const sanitizedText = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '').trim()
 
     // 1. Try extracting <plan>...</plan> JSON or structured checklist
     const planBlockMatch = sanitizedText.match(/<plan>([\s\S]*?)<\/plan>/i)

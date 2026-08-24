@@ -53,9 +53,43 @@ function appendCriteria(milestone: PlanMilestone, criteria: string[]): PlanMiles
   }
 }
 
+function consolidateDuplicateDeliverables(milestones: PlanMilestone[]): PlanMilestone[] {
+  if (milestones.length <= 1) return milestones
+
+  let didConsolidate = false
+  const consolidated: PlanMilestone[] = []
+  for (const m of milestones) {
+    const prev = consolidated[consolidated.length - 1]
+    if (!prev || isCompletionMilestoneTitle(prev.title) || isCompletionMilestoneTitle(m.title)) {
+      consolidated.push(m)
+      continue
+    }
+
+    const prevDeliverables = extractDeliverablePaths(prev.title)
+    const currDeliverables = extractDeliverablePaths(m.title)
+
+    // If both milestones have non-empty deliverables and they target the exact same file set
+    if (
+      prevDeliverables.length > 0 &&
+      currDeliverables.length > 0 &&
+      prevDeliverables.length === currDeliverables.length &&
+      prevDeliverables.every((p) => currDeliverables.includes(p))
+    ) {
+      consolidated[consolidated.length - 1] = appendCriteria(prev, [m.title])
+      didConsolidate = true
+    } else {
+      consolidated.push(m)
+    }
+  }
+
+  if (!didConsolidate) return milestones
+
+  return consolidated.map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
+}
+
 /**
  * Returns a plan in which every entry is falsifiable, with non-falsifiable ones folded in as
- * acceptance criteria and the ids renumbered m-1..m-N.
+ * acceptance criteria, adjacent duplicates consolidated, and the ids renumbered m-1..m-N.
  *
  * A criterion attaches to the preceding falsifiable milestone — the work it qualifies
  * normally comes first — and forward to the next one when it appears before any. A plan with
@@ -64,7 +98,7 @@ function appendCriteria(milestone: PlanMilestone, criteria: string[]): PlanMiles
  */
 export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMilestone[] {
   if (!Array.isArray(milestones) || milestones.length === 0) return []
-  if (milestones.every(isFalsifiableMilestone)) return milestones
+  if (milestones.every(isFalsifiableMilestone)) return consolidateDuplicateDeliverables(milestones)
   if (!milestones.some(isFalsifiableMilestone)) return milestones
 
   const normalized: PlanMilestone[] = []
@@ -94,5 +128,6 @@ export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMi
     normalized[target] = appendCriteria(normalized[target], leadingCriteria)
   }
 
-  return normalized.map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
+  const falsifiableCleaned = normalized.map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
+  return consolidateDuplicateDeliverables(falsifiableCleaned)
 }

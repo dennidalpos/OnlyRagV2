@@ -18,8 +18,8 @@ function sanitizeAndParseJson(raw: string): any {
   try {
     let clean = raw.trim()
 
-    // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>)
-    clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim()
+    // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>, including unclosed tags at text boundaries)
+    clean = clean.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '').trim()
 
     // 2. Normalize Windows file paths with single backslashes (e.g. "filePath": "C:\Users\test" -> "C:\\Users\\test")
     clean = clean.replace(/("(?:filePath|path|dirPath|target_file|file_path|filename|destination)"\s*:\s*)"([^"]*)"/gi, (_m, keyPart, pathVal) => {
@@ -281,11 +281,11 @@ function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
 export function parseAgentToolCall(text: string): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 
-  // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>) to prevent
+  // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>, including unclosed tags at text boundaries) to prevent
   // accidental capture of sample tool calls generated in model reasoning traces
   const cleanText = text
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
+    .replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '')
     .trim()
 
   const candidate =

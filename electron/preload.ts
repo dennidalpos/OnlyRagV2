@@ -52,6 +52,8 @@ const api: IElectronAPI = {
   fetchWebContent: (url: string, maxChars?: number) => ipcRenderer.invoke('workspace:fetch-web', url, maxChars),
   downloadFile: (url: string, targetFilePath: string) => ipcRenderer.invoke('workspace:download-file', url, targetFilePath),
   gitCommit: (commitMessage: string, workspaceRoot?: string) => ipcRenderer.invoke('workspace:git-commit', commitMessage, workspaceRoot),
+  getGitStatusAndDiff: (workspaceRoot?: string) => ipcRenderer.invoke('workspace:get-git-status-and-diff', workspaceRoot),
+  initGitRepository: (workspaceRoot?: string) => ipcRenderer.invoke('workspace:init-git', workspaceRoot),
   inspectGuestOsEnvironment: () => ipcRenderer.invoke('workspace:inspect-guest-os'),
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => ipcRenderer.invoke('workspace:execute-powershell', command, cwd, timeoutMs),
   parseAgentToolCall: (rawText: string) => ipcRenderer.invoke('agent:parse-tool-call', rawText),
@@ -103,6 +105,11 @@ const api: IElectronAPI = {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('agent:stream-token', subscription)
     return () => ipcRenderer.removeListener('agent:stream-token', subscription)
+  },
+  onAgentStreamThought: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('agent:stream-thought', subscription)
+    return () => ipcRenderer.removeListener('agent:stream-thought', subscription)
   },
   onAgentDone: (callback: (res: any) => void) => {
     const subscription = (_: any, res: any) => callback(res)

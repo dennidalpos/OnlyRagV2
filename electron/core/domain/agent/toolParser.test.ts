@@ -324,6 +324,41 @@ I need to write index.html:
     expect(result).toBeNull()
   })
 
+  it('should ignore truncated unclosed <think> blocks at end of generation', () => {
+    const raw = `<think>
+I am considering writing a file:
+\`\`\`json
+{
+  "tool": "write_file",
+  "parameters": {
+    "filePath": "unfinished.txt",
+    "content": "sample"
+  }
+}
+\`\`\`
+and continuing reasoning...`
+    const result = parseAgentToolCall(raw)
+    expect(result).toBeNull()
+  })
+
+  it('should safely parse tool call after thought blocks or unclosed thought blocks', () => {
+    const raw = `<thought>
+Internal reasoning step
+</thought>
+\`\`\`json
+{
+  "tool": "list_dir",
+  "parameters": {
+    "dirPath": "src"
+  }
+}
+\`\`\``
+    const result = parseAgentToolCall(raw)
+    expect(result).not.toBeNull()
+    expect(result?.tool).toBe('list_dir')
+    expect(result?.parameters.dirPath).toBe('src')
+  })
+
   it('should parse markdown code block with HTML filename comment as write_file tool call', () => {
     const raw = `I will create the HTML file now:
 \`\`\`html

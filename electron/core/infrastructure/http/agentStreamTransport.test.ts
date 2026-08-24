@@ -357,4 +357,69 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     expect(capturedBody.options.num_predict).toBe(6144)
     expect(capturedBody.options.stop).toEqual(AGENT_STOP_SEQUENCES)
   })
+
+  it('should stream thinking deltas via onThoughtChunk on /api/generate path', async () => {
+    const mock = await startMockOllama((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.write(JSON.stringify({ thinking: 'Analyzing ', response: '', done: false }) + '\n')
+      res.write(JSON.stringify({ thinking: 'the request...', response: '', done: false }) + '\n')
+      res.write(JSON.stringify({ response: 'Done!', done: true }) + '\n')
+      res.end()
+    })
+    activeServer = mock.server
+
+    const thoughts: string[] = []
+    const tokens: string[] = []
+
+    const output = await AgentStreamTransport.streamCompletion({
+      targetModel: 'deepseek-r1:8b',
+      prompt: 'Refactor code',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      onThoughtChunk: (thought) => thoughts.push(thought),
+      onTokenChunk: (token) => tokens.push(token),
+    })
+
+    expect(thoughts).toEqual(['Analyzing ', 'the request...'])
+    expect(tokens).toEqual(['Done!'])
+    expect(output).toBe('Done!')
+  })
+
+  it('should stream thinking deltas via onThoughtChunk on /api/chat path', async () => {
+    const mock = await startMockOllama((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.write(JSON.stringify({ message: { role: 'assistant', thinking: 'Evaluating tool... ' }, done: false }) + '\n')
+      res.write(
+        JSON.stringify({
+          message: {
+            role: 'assistant',
+            content: '',
+            tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'index.ts' } } }],
+          },
+          done: true,
+        }) + '\n'
+      )
+      res.end()
+    })
+    activeServer = mock.server
+
+    const thoughts: string[] = []
+
+    const output = await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen3:8b',
+      prompt: 'Read index.ts',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      toolCallingCapable: true,
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      onThoughtChunk: (thought) => thoughts.push(thought),
+    })
+
+    expect(thoughts).toEqual(['Evaluating tool... '])
+    const parsedCall = parseAgentToolCall(output)
+    expect(parsedCall?.tool).toBe('read_file')
+    expect(parsedCall?.parameters.filePath).toBe('index.ts')
+  })
 })

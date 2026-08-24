@@ -5,6 +5,29 @@ import { consumeNdjsonChunk } from './ndjsonStreamParser'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
+/**
+ * The per-model facts Ollama already reports on `/api/tags`.
+ *
+ * Every field is optional because Ollama's payload varies by version and by how a model was
+ * imported: a hand-built Modelfile can omit `details` entirely. A settings badge renders what
+ * is there and stays silent about the rest, which is why nothing here is defaulted to a
+ * plausible-looking number.
+ */
+export interface OllamaModelMetrics {
+  /** e.g. ["completion", "tools", "insert"]. Empty when Ollama reports none. */
+  capabilities: string[]
+  /** Trained context length in tokens. Ollama clamps any larger `num_ctx` down to this. */
+  contextLength?: number
+  /** e.g. "7.6B". */
+  parameterSize?: string
+  /** e.g. "Q4_K_M". */
+  quantizationLevel?: string
+  /** e.g. "qwen2". */
+  family?: string
+  /** On-disk weight in bytes. */
+  sizeBytes?: number
+}
+
 export class OllamaHttpClient {
   private activeOllamaReq: http.ClientRequest | null = null
   private activePullReq: http.ClientRequest | null = null
@@ -60,6 +83,77 @@ export class OllamaHttpClient {
         resolve({ success: false, models: [], error: 'Ollama ps query timed out' })
       })
 
+      req.end()
+    })
+  }
+
+  /**
+   * Fetches /api/tags and keeps everything Ollama reports per installed model, not just the
+   * capabilities array.
+   *
+   * `getModelCapabilities` below reads the same endpoint and throws the rest away, which is why
+   * the settings panel could only ever show a model's name: `details.context_length`,
+   * `details.parameter_size` and `details.quantization_level` were fetched on every call and
+   * discarded. `context_length` in particular is the number the app most needs and least has —
+   * measured on 2026-08-24, Ollama silently clamps a requested `num_ctx` down to it and
+   * silently truncates the HEAD of any prompt that exceeds it.
+   *
+   * Returns an empty map (never a rejection) on any failure: metrics are for display and must
+   * not be able to break a settings screen.
+   */
+  getModelMetrics(customHost?: string): Promise<Record<string, OllamaModelMetrics>> {
+    if (customHost) this.setBaseHost(customHost)
+    const urlOpts = this.resolveUrl('/api/tags')
+
+    return new Promise((resolve) => {
+      const req = http.request(
+        {
+          hostname: urlOpts.hostname,
+          port: urlOpts.port,
+          path: urlOpts.path,
+          method: 'GET',
+          agent: httpAgent,
+        },
+        (res) => {
+          let data = ''
+          res.on('data', (chunk) => { data += chunk })
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              resolve({})
+              return
+            }
+            try {
+              const parsed = JSON.parse(data)
+              const map: Record<string, OllamaModelMetrics> = {}
+              if (Array.isArray(parsed.models)) {
+                for (const m of parsed.models) {
+                  const name = m?.name || m?.model
+                  if (!name) continue
+                  const details = m?.details || {}
+                  map[name] = {
+                    capabilities: Array.isArray(m?.capabilities) ? m.capabilities : [],
+                    contextLength: typeof details.context_length === 'number' ? details.context_length : undefined,
+                    parameterSize: typeof details.parameter_size === 'string' ? details.parameter_size : undefined,
+                    quantizationLevel: typeof details.quantization_level === 'string' ? details.quantization_level : undefined,
+                    family: typeof details.family === 'string' ? details.family : undefined,
+                    sizeBytes: typeof m?.size === 'number' ? m.size : undefined,
+                  }
+                }
+              }
+              resolve(map)
+            } catch (err: any) {
+              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags metrics: ${err.message}`)
+              resolve({})
+            }
+          })
+        }
+      )
+
+      req.on('error', () => resolve({}))
+      req.setTimeout(5000, () => {
+        req.destroy()
+        resolve({})
+      })
       req.end()
     })
   }

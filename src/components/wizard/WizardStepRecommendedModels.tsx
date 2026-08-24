@@ -6,6 +6,7 @@ import {
   Activity,
   ShieldAlert,
   Sparkles,
+  BadgeCheck,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
@@ -19,6 +20,14 @@ export interface WizardStepRecommendedModelsProps {
   downloadedModels: string[]
   /** Per-model VRAM verdict for the detected host, rendered inline on every option. */
   getModelFit: (modelName: string) => ModelFitVerdict
+  /**
+   * The coding models this app has been RUN against that also fit the detected hardware tier,
+   * verified ones first. Empty when nothing in the catalog fits, which is rendered as such —
+   * see selectWizardCodingSet.
+   */
+  verifiedCodingSet: string[]
+  /** Applies the set above: first entry as workhorse, second as OOM fallback. */
+  onApplyVerifiedSet: () => void
   // Coding
   selectedCoding: string
   selectedCodingFallback?: string
@@ -57,6 +66,8 @@ export interface WizardStepRecommendedModelsProps {
 export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsProps> = ({
   downloadedModels,
   getModelFit,
+  verifiedCodingSet,
+  onApplyVerifiedSet,
   selectedCoding,
   selectedCodingFallback,
   onChangeCoding,
@@ -140,6 +151,35 @@ export const WizardStepRecommendedModels: React.FC<WizardStepRecommendedModelsPr
           <Code className="w-4 h-4 text-cyan-400" />
           <span>1. AI Coding Agent Studio (Sviluppo Software)</span>
         </div>
+
+        {/* One click for the whole coding slot. Placed above the selects because it is the
+            answer for the user who has no basis to choose between twenty tags on first launch;
+            the selects below stay fully available for anyone who does. */}
+        {verifiedCodingSet.length > 0 ? (
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/25">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-300">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                Set consigliato per il tuo hardware
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight mt-0.5 truncate">
+                {verifiedCodingSet.slice(0, 2).join('  ·  ')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onApplyVerifiedSet}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-[11px] font-bold hover:bg-emerald-500/25 focus-ring"
+            >
+              Applica
+            </button>
+          </div>
+        ) : (
+          <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/25 text-[10px] text-amber-300 leading-tight">
+            Nessun modello del catalogo rientra nel profilo hardware rilevato. Scegli manualmente qui sotto,
+            tenendo conto dell'indicatore di VRAM su ogni opzione.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Workhorse Coding Model */}

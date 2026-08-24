@@ -1066,3 +1066,43 @@ export function parseCatalogSizeGB(sizeBytesApprox: string): number {
 }
 
 
+
+/**
+ * Every coding-capable model tag this app catalogs, as a lookup.
+ *
+ * The badge layer needs to answer one question per model — "is this a tag we know about, or
+ * something the user pulled on their own?" — and needs to answer it for a model that is not
+ * installed, so it cannot go to Ollama for it. See resolveVerificationStatus in
+ * codingModelMatrix.ts, which turns this plus the live capabilities into the badge.
+ */
+export const CODING_CATALOG_MODEL_NAMES: ReadonlySet<string> = new Set(
+  [
+    ...COMPACT_CODING_CATALOG,
+    ...WORKHORSE_CODING_CATALOG,
+    ...REASONING_CODING_CATALOG,
+    ...LARGE_CODING_CATALOG,
+  ].map((entry) => entry.modelName)
+)
+
+/**
+ * The four coding catalogs merged, deduplicated, first-seen order preserved.
+ *
+ * The wizard needs the entries themselves (it reads `recommendedForProfiles`), not just their
+ * names, and building the union at the call site is how the same list ends up assembled three
+ * different ways in three different files.
+ */
+export function buildCodingCatalogForWizard(): RawModelCatalogEntry[] {
+  const seen = new Set<string>()
+  const merged: RawModelCatalogEntry[] = []
+  for (const entry of [
+    ...WORKHORSE_CODING_CATALOG,
+    ...COMPACT_CODING_CATALOG,
+    ...REASONING_CODING_CATALOG,
+    ...LARGE_CODING_CATALOG,
+  ]) {
+    if (seen.has(entry.modelName)) continue
+    seen.add(entry.modelName)
+    merged.push(entry)
+  }
+  return merged
+}

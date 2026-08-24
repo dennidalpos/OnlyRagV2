@@ -447,6 +447,21 @@ export interface PagePreviewData {
   mimeType: string
 }
 
+/**
+ * The per-model facts Ollama reports on /api/tags. Mirrors OllamaModelMetrics in
+ * electron/core/infrastructure/http/ollamaHttpClient.ts — every field optional, because the
+ * payload varies by Ollama version and by how a model was imported.
+ */
+export interface OllamaModelMetrics {
+  capabilities: string[]
+  /** Trained context length in tokens. Ollama clamps any larger num_ctx down to this. */
+  contextLength?: number
+  parameterSize?: string
+  quantizationLevel?: string
+  family?: string
+  sizeBytes?: number
+}
+
 export interface IElectronAPI {
   runDiagnostics: () => Promise<DiagnosticsData>
   getLogs: () => Promise<LogEntry[]>
@@ -498,6 +513,8 @@ export interface IElectronAPI {
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
   checkDiskSpace: (models: string[]) => Promise<{ allowed: boolean; requiredGB: number; freeGB: number; missingGB: number; error?: string }>
   testOllamaConnection: (host?: string) => Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }>
+  /** Per-model facts from Ollama's /api/tags: context length, capabilities, parameter size, quantization. */
+  getOllamaModelMetrics: (host?: string) => Promise<Record<string, OllamaModelMetrics>>
   openExternalUrl?: (url: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>

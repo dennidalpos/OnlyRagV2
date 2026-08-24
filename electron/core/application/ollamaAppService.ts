@@ -1,5 +1,6 @@
 import { checkOllamaStatus } from '../../diagnostics'
-import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
+import { ollamaHttpClient, type OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
+export type { OllamaModelMetrics }
 import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
 
 export class OllamaAppService {
@@ -42,6 +43,11 @@ export class OllamaAppService {
   /** Model name -> Ollama-reported capabilities (e.g. ["completion", "tools"]). */
   getModelCapabilities(host?: string): Promise<Record<string, string[]>> {
     return ollamaHttpClient.getModelCapabilities(host)
+  }
+
+  /** Everything /api/tags reports per model, for the settings and wizard badges. */
+  getModelMetrics(host?: string): Promise<Record<string, OllamaModelMetrics>> {
+    return ollamaHttpClient.getModelMetrics(host)
   }
 
   /** Warms a model into memory ahead of the first turn. Never throws — see preloadModel. */

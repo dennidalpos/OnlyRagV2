@@ -99,7 +99,8 @@ mindmap
   * [`AgentActionLoopDetector`](../electron/core/domain/agent/loopDetector.ts) con hashing SHA-256 e [`loopEscapePolicy.ts`](../electron/core/domain/agent/loopEscapePolicy.ts) per spezzare cicli e avanzare milestone stagnanti.
 * **Presente ma non efficace** (rilevato in `coding_agent_audit.log`, sessione `session-1787562597025-q8a5`):
   * **Definition of Done Gate** ([`verificationGatePolicy.ts`](../electron/core/domain/agent/verificationGatePolicy.ts), [`TransactionalExecutionGuard`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts)): blocca `finish` senza build passata, ma si attiva **solo quando il modello chiama `finish`**. La sessione osservata è morta al passo 45 sul circuit breaker, quindi il gate — e con lui [`dependencyIntegrityGate`](../electron/core/domain/agent/dependencyIntegrityGate.ts), che gira dentro [`agentOrchestratorVerificationRunner.ts`](../electron/core/application/agentOrchestratorVerificationRunner.ts) — non è mai stato raggiunto. Tre import verso pacchetti inesistenti sono rimasti su disco.
-  * **Rilevatore di loop**: identifica correttamente la ripetizione, ma la sua risposta resta in gran parte testo che vieta un'azione. In 12 dei 45 passi ha bloccato senza produrre avanzamento, e le direttive iniettate si accumulano nel prompt fino a saturarlo (dagli step 35–45 il prompt resta fisso a 22.237 caratteri, in gran parte blocchi `[FAILURE at Step N]` quasi identici). Un caso ha ora un'uscita reale invece di un divieto — la ripetizione a progetto già verificato, vedi §5.4 — ma è uno solo dei rami.
+  * **Rilevatore di loop**: identifica correttamente la ripetizione, ma la sua risposta resta in gran parte testo che vieta un'azione. In 12 dei 45 passi ha bloccato senza produrre avanzamento. Un caso ha ora un'uscita reale invece di un divieto — la ripetizione a progetto già verificato, vedi §5.4 — ma è uno solo dei rami.
+  * **Nota di rettifica sul prompt "saturo"**: la stesura precedente diceva che le direttive si accumulano "fino a saturarlo", leggendo *fisso a 22.237 caratteri* come *al soffitto*. La misura del 2026-08-24 smentisce la lettura: con `num_ctx` a 16.384 il budget è di ~44.236 caratteri e il prompt ne occupava 22.192, **il 50%**. Il compattatore non è mai scattato, e correttamente. Il difetto reale era un altro e sta in §5.4.
 * **Mancante**:
   * **Feedback Sintattico/LSP Istantaneo**: Notifica di errori di tipo TypeScript / sintassi subito dopo `write_file`, prima della compilazione globale. **Priorità alta**: nella sessione osservata gli import inventati erano visibili al passo 11 e sono emersi solo trenta passi dopo.
   * **Auto-Reclaim Processi Orfani**: Identificazione e chiusura automatica di processi che occupano porte locali di sviluppo.
@@ -372,6 +373,31 @@ Il modello non era confuso su cosa avesse fatto: non gli e' mai stato detto cosa
 Nove passi contro uno, sulla stessa milestone. Due sole milestone hanno attivato la direttiva in tutto il run — la deduplicazione su tool+target regge, il costo di prompt e' quello previsto.
 
 **E il resto del run, per intero.** La sessione ha comunque esaurito i cinquanta passi, a **0/15 milestone verificate** contro 2/15 del run precedente. Prima di attribuirlo alla modifica: in **nessuno dei due run** un `npm run build` e' mai andato a buon fine, quindi il canale di promozione per verifica non e' mai stato esercitato in nessuno dei due — le 2/15 precedenti venivano da `update_plan`. I piani sono inoltre rigenerati a ogni run e diversi fra loro. `agent-live-testing.md` classifica questa sonda come *osservazione, non asserzione* proprio per questo: su un 7B una singola coppia di run non sostiene un confronto su quella metrica. Cio' che regge e' la catena causale sopra, che si legge passo per passo.
+
+**La finestra su cosa e' appena successo era occupata dal proprio avviso.** Misurato sul run del 2026-08-24, passo 48. La prima ipotesi scritta nel tracker — "il prompt satura" — era sbagliata due volte: con `num_ctx` a 16.384 il budget e' ~44.236 caratteri e il prompt ne occupava 22.192, **il 50%**, quindi il compattatore non e' mai scattato ne' doveva; e il prompt non e' nemmeno immobile, fra due turni consecutivi cambiano 109 righe su ~200. La lettura di §1.2 (*"fisso a 22.237 caratteri"*) era stata intesa come *al soffitto* invece che come *costante*, e nessuna delle due letture reggeva.
+
+La misura per sezione ha trovato il difetto vero. `### RECENT DETAILED TOOL OUTPUTS` — la finestra da cui il modello vede **cosa ha appena fatto** — occupava 4.780 caratteri, e quattro dei suoi sei slot erano copie dello stesso `[CRITICAL FILE EDIT LOOP: N EDITS ON src/pages/TasksPage.tsx]`, diverse solo per N. **3.988 caratteri su 4.780: l'83%.** Al modello restavano 792 caratteri per ricordare cosa aveva fatto.
+
+La causa e' un dedup applicato a un buffer e non all'altro. `failureLogs` deduplica su tool+target dalla §5.2, e il commento che lo accompagna spiega gia' perche' il confronto byte a byte non basta: *"loop interventions embed an escalating 'Attempt N' counter, so byte-comparison never matched"*. `recentFullLogs` e' rimasto una FIFO pura — il dedup che aveva era solo per `read_file`/`list_dir` consecutivi con output **identico**, che un contatore crescente non e' mai. La stessa intuizione, applicata a meta'.
+
+* Ora un episodio di fallimento con lo stesso tool+target gia' presente nella finestra **sostituisce** il precedente invece di aggiungere uno slot, esattamente come fa il buffer dei fallimenti. Gli slot liberati tornano a mostrare lavoro reale piu' indietro nel tempo.
+* Solo i fallimenti collassano. Due scritture riuscite sullo stesso file portano corpi diversi — ai passi 42 e 43 del run osservato erano 80 e 712 caratteri, il piu' lungo con una direttiva di integrita' degli import — e servono entrambe.
+* L'intestazione diceva "Last N Steps" e non era piu' vera: ora dichiara *N most recent distinct actions*.
+
+Misurato sullo stesso punto della sessione (passo 48) prima e dopo:
+
+| | prima | dopo |
+| :--- | ---: | ---: |
+| dimensione della sezione | 4.780 char | 2.758 char |
+| avvisi ripetuti | 3.988 (83%) | 1.465 (53%) |
+| contenuto reale | 792 (16%) | **1.293 (46%)** |
+| passi coperti dalla finestra | 42-47 | 40-47 |
+
+Il contenuto reale visibile al modello cresce del 63% e la finestra arriva piu' indietro, a parita' di slot.
+
+> Nota sul metodo: la prima misura diceva 7.603 caratteri e 89%, perche' il parsing non delimitava la fine della sezione e l'ultimo blocco inglobava tutto cio' che seguiva. I numeri sopra sono quelli con i confini corretti. La direzione non cambia, la grandezza si'.
+
+Sull'esito complessivo, per intero: la sessione ha di nuovo esaurito i cinquanta passi a 0/15, come la precedente. Nessuna delle tre ultime sessioni ha mai ottenuto un `npm run build` verde, quindi il canale che promuove le milestone non e' mai stato esercitato: e' quello il collo di bottiglia che tutte queste correzioni non toccano, e va isolato prima di leggere qualunque metrica di completamento.
 
 Il churn tardivo resta, su milestone da **un solo file** (`globals.css` ai passi 35-40, `TasksPage.tsx` ai passi 42-47), dove la consegna parziale non ha nulla da dire. Il prompt satura in entrambi i run — 20.914 e 22.192 caratteri, entrambi al soffitto — che e' il problema di §1.2 e resta aperto.
 

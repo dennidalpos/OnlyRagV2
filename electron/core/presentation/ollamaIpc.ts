@@ -41,6 +41,14 @@ export function registerOllamaIpcHandlers() {
     return ollamaAppService.benchmarkModel(modelName)
   })
 
+  /**
+   * Per-model facts from /api/tags — context length, capabilities, parameter size and
+   * quantization — so the settings and wizard badges show measurements instead of a name.
+   */
+  ipcMain.handle('ollama:get-model-metrics', async (_, host?: string) => {
+    return ollamaAppService.getModelMetrics(host)
+  })
+
   ipcMain.handle('ollama:get-running-models', async (_, host?: string) => {
     return ollamaAppService.getRunningModels(host)
   })

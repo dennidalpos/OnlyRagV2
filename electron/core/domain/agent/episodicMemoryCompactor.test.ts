@@ -44,7 +44,7 @@ describe('EpisodicMemoryCompactor Domain Unit Tests', () => {
     expect(block).toContain('COMPLETE EXECUTION TRAJECTORY')
     expect(block).toContain('| Step 1 | `read_file` | src/index.ts | SUCCESS | Inspected file contents |')
     expect(block).toContain('| Step 2 | `replace_file_content` | src/index.ts | FAILURE | Target string mismatch |')
-    expect(block).toContain('RECENT DETAILED TOOL OUTPUTS (Last 2 Steps)')
+    expect(block).toContain('RECENT DETAILED TOOL OUTPUTS (2 most recent distinct actions)')
     expect(block).toContain('Target content not found')
   })
 
@@ -135,5 +135,112 @@ describe('failure-block accumulation', () => {
 
     const block = compactor.compilePromptHistoryBlock()
     expect((block.match(/#### \[FAILURE at Step/g) || []).length).toBe(3)
+  })
+})
+
+/**
+ * The recent-outputs window is the model's view of what just happened, and it was a plain FIFO.
+ *
+ * Measured on live-full-task, 2026-08-24, step 48: of the 4.780 characters that section
+ * contributed to the prompt, 3.988 — 83% — were four copies of `[CRITICAL FILE EDIT LOOP: N
+ * EDITS ON src/pages/TasksPage.tsx]`, differing only in N. 792 characters were left for
+ * anything the model had actually done; after this change the same step of a fresh run
+ * carried 1.293.
+ */
+describe('EpisodicMemoryCompactor — the recent window does not fill with one repeated intervention', () => {
+  const loopWarning = (n: number) =>
+    `[CRITICAL FILE EDIT LOOP: ${n} EDITS ON src/pages/TasksPage.tsx WITHOUT VERIFICATION]\nDo not edit it again.`
+
+  function blockedWrite(compactor: EpisodicMemoryCompactor, step: number, editCount: number) {
+    compactor.recordStep(
+      { step, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'BLOCKED', summary: 'loop' },
+      loopWarning(editCount)
+    )
+  }
+
+  it('keeps one slot for a repeated intervention on the same target, not one per attempt', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    compactor.recordStep(
+      { step: 42, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
+      'Successfully wrote file src/pages/TasksPage.tsx'
+    )
+    compactor.recordStep(
+      { step: 43, tool: 'read_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'read' },
+      'export default function App() { return null }'
+    )
+    blockedWrite(compactor, 44, 4)
+    blockedWrite(compactor, 45, 5)
+    blockedWrite(compactor, 46, 6)
+    blockedWrite(compactor, 47, 6)
+
+    const block = compactor.compilePromptHistoryBlock(50_000)
+    const warningCount = block.split('### RECENT DETAILED TOOL OUTPUTS')[1].split('CRITICAL FILE EDIT LOOP').length - 1
+    expect(warningCount).toBe(1)
+  })
+
+  // The point of freeing those slots: the real work the model did stays visible.
+  it('leaves the surrounding real work in the window', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    compactor.recordStep(
+      { step: 42, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
+      'Successfully wrote file src/pages/TasksPage.tsx'
+    )
+    compactor.recordStep(
+      { step: 43, tool: 'read_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'read' },
+      'THE REAL CONTENT THE MODEL NEEDS'
+    )
+    for (let step = 44; step <= 49; step++) blockedWrite(compactor, step, step - 40)
+
+    const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
+    expect(detailed).toContain('THE REAL CONTENT THE MODEL NEEDS')
+    expect(detailed).toContain('Successfully wrote file src/pages/TasksPage.tsx')
+  })
+
+  // Only the newest attempt survives: it carries the current counter and the current advice.
+  it('keeps the most recent copy of the intervention, not the first', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    blockedWrite(compactor, 44, 4)
+    blockedWrite(compactor, 47, 6)
+
+    const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
+    expect(detailed).toContain('6 EDITS ON')
+    expect(detailed).not.toContain('4 EDITS ON')
+  })
+
+  it('collapses an alternating A,B,A,B block pattern, not just consecutive repeats', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    for (const step of [40, 42, 44]) {
+      compactor.recordStep(
+        { step, tool: 'read_file', target: 'src/App.tsx', status: 'BLOCKED', summary: 'loop' },
+        `[READ LOOP] attempt ${step}`
+      )
+      compactor.recordStep(
+        { step: step + 1, tool: 'read_file', target: 'src/pages/Dashboard.tsx', status: 'BLOCKED', summary: 'loop' },
+        `[READ LOOP] attempt ${step + 1}`
+      )
+    }
+
+    const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
+    expect(detailed.split('READ LOOP').length - 1).toBe(2)
+  })
+
+  // Two successful writes to one file carry different bodies and the model needs both — at
+  // steps 42 and 43 of the observed run they were 80 and 712 chars, the longer one carrying an
+  // import-integrity directive.
+  it('never collapses successful actions, even on the same file', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    compactor.recordStep(
+      { step: 42, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
+      'Successfully wrote file'
+    )
+    compactor.recordStep(
+      { step: 43, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
+      'Successfully wrote file\n[UNDECLARED IMPORTS] react-router-dom'
+    )
+
+    const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
+    expect(detailed).toContain('#### [Step 42')
+    expect(detailed).toContain('#### [Step 43')
+    expect(detailed).toContain('UNDECLARED IMPORTS')
   })
 })

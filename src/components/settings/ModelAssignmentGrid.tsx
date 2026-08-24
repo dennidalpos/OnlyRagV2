@@ -17,6 +17,10 @@ import {
   type ModelIntent,
   filterModelsByIntent,
 } from '../../services/modelIntentClassifier'
+import { resolveVerificationStatus } from '../../services/codingModelMatrix'
+import { CODING_CATALOG_MODEL_NAMES } from '../../services/hardwareModelCatalog'
+import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
+import { ModelBadgeStrip } from './ModelBadgeStrip'
 
 interface ModelAssignmentGridProps {
   diagnostics: DiagnosticsData | null
@@ -31,8 +35,26 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
 }) => {
   const { t } = useTranslation()
   const models = diagnostics?.ollama.models || []
+  const { metrics } = useOllamaModelMetrics(settings.ollamaHost)
 
   const isModelInstalled = (name: string) => isOllamaModelInstalled(name, models)
+
+  /**
+   * The badge row for a chosen model.
+   *
+   * Rendered under the select rather than inside it: an HTML `<option>` can hold only text, so
+   * the dropdown itself can never show more than a label — which is exactly why this panel used
+   * to show a bare model tag and nothing else.
+   */
+  const renderBadges = (modelName: string) => {
+    if (!modelName) return null
+    const status = resolveVerificationStatus({
+      modelName,
+      isCatalogued: CODING_CATALOG_MODEL_NAMES.has(modelName),
+      capabilities: metrics[modelName]?.capabilities,
+    })
+    return <ModelBadgeStrip modelName={modelName} status={status} metrics={metrics[modelName]} className="pt-0.5" />
+  }
 
   const buildModelOptions = (currentValue: string, presetOptions: string[], intent: ModelIntent) => {
     return filterModelsByIntent(models, intent, {
@@ -95,6 +117,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 'coding'
               ).map((m) => renderOption(m, m))}
             </select>
+            {renderBadges(settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b')}
             <p className="text-[10px] text-slate-400 leading-tight">
               Esegue i tool, scrive codice e mantiene la KV-cache fissa in GPU a zero latenza.
             </p>
@@ -123,6 +146,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 .filter((m) => m !== (settings.codingModel || 'qwen2.5-coder:7b'))
                 .map((m) => renderOption(m, m))}
             </select>
+            {renderBadges(settings.codingFallbackModel || '')}
             <p className="text-[10px] text-amber-500/80 leading-tight">
               Subentra automaticamente solo in caso di crash o Out Of Memory (OOM) del modello primario.
             </p>

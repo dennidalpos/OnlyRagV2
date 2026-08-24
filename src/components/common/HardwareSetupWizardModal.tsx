@@ -21,6 +21,8 @@ import { WizardStepHardware } from '../wizard/WizardStepHardware'
 import { WizardStepRecommendedModels } from '../wizard/WizardStepRecommendedModels'
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
 import { logger } from '../../lib/logger'
+import { selectWizardCodingSet } from '../../services/codingModelMatrix'
+import { buildCodingCatalogForWizard } from '../../services/hardwareModelCatalog'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -74,6 +76,22 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     recommendations.embeddingTierModels.find((m) => m.isRecommended)?.modelName ||
     recommendations.embeddingTierModels[0]?.modelName ||
     'nomic-embed-text'
+
+  /**
+   * The one-click coding set for the detected hardware tier.
+   *
+   * `recCoding` above answers "what fits this GPU". This answers the question a user actually
+   * has on first launch — "which of these has anyone checked?" — by putting the models this app
+   * has been RUN against ahead of the ones it merely catalogs. See codingModelMatrix.ts, and
+   * note the list there is short because it is evidence-backed rather than aspirational.
+   *
+   * Empty when nothing in the catalog fits the tier, which the step renders as such: a wizard
+   * that installs a model too large for the machine has done the user real harm.
+   */
+  const verifiedCodingSet = selectWizardCodingSet(
+    buildCodingCatalogForWizard(),
+    recommendations.profileTier
+  ).map((entry) => entry.modelName)
 
   // Model State across all Functional Slots
   const [selectedCoding, setSelectedCoding] = useState<string>(
@@ -584,6 +602,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               selectedCodingFallback={selectedCodingFallback}
               onChangeCoding={setSelectedCoding}
               onChangeCodingFallback={setSelectedCodingFallback}
+              verifiedCodingSet={verifiedCodingSet}
+              onApplyVerifiedSet={() => {
+                if (verifiedCodingSet[0]) setSelectedCoding(verifiedCodingSet[0])
+                if (verifiedCodingSet[1]) setSelectedCodingFallback(verifiedCodingSet[1])
+              }}
               codingPresetOptions={[
                 'qwen2.5-coder:7b',
                 'qwen3:8b',

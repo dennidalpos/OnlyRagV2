@@ -59,6 +59,7 @@ const api: IElectronAPI = {
   parseAgentToolCall: (rawText: string) => ipcRenderer.invoke('agent:parse-tool-call', rawText),
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
   testOllamaConnection: (host?: string) => ipcRenderer.invoke('ollama:test-connection', host),
+  getOllamaModelMetrics: (host?: string) => ipcRenderer.invoke('ollama:get-model-metrics', host),
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
   cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),

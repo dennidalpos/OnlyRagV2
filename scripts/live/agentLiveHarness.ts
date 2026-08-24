@@ -14,9 +14,11 @@
  *     used whenever the payload carries none, and its default model is `llama3.2` — which is
  *     not an installed tag, so every turn 404s and the session burns its whole step budget
  *     doing nothing. `loadRealSettings()` below reads the same file the app uses.
- *  2. A plan does not appear by itself. The UI generates it (`agent:plan-generate`), seeds it
- *     into session state (`agent:plan-seed`), and only then starts the agent against the same
- *     sessionId. A run without that sequence executes with no plan at all.
+ *  2. A plan does not appear by itself, and the UI's flow is FOUR steps, not two:
+ *     `agent:plan-interview` -> `agent:plan-enrich-prompt` -> `agent:plan-generate` ->
+ *     `agent:plan-seed`, and only then the agent runs against the same sessionId. A run
+ *     without that sequence executes with no plan at all; a run that skips only the first two
+ *     steps executes against a prompt no user would have submitted (see seedGeneratedPlan).
  *  3. Anything under `electron/**` matching `*.test.ts` is collected by the normal suite. Live
  *     scenarios therefore live here, are named `*.live.ts`, and run under
  *     vitest.live.config.mts.
@@ -26,6 +28,11 @@ import path from 'node:path'
 import type { AppSettings } from '../../src/types'
 import type { PlanMilestone } from '../../electron/core/domain/agent/planAndSolveGraph'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
+import {
+  agentInterviewAppService,
+  type InterviewQuestion,
+  type UserInterviewAnswer,
+} from '../../electron/core/application/agentInterviewAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 
 /** The settings file the packaged app writes, so a live run uses the model you actually use. */
@@ -49,28 +56,82 @@ export function resetWorkspace(workspacePath: string): void {
 }
 
 /**
- * Reproduces the UI's plan flow: generate with the coding model, then seed the milestones into
- * session state so the orchestrator's restore path picks them up for the same sessionId.
+ * How the harness answers the clarification interview, since no human is present.
+ *
+ * `recommended` takes the option the model itself marked as the best default, which is what a
+ * user clicking through the wizard most often does. `skip` bypasses the interview entirely and
+ * reproduces the OLD harness behaviour — kept only so a scenario can isolate the difference.
+ */
+export type InterviewPolicy = 'recommended' | 'skip'
+
+export interface SeededPlan {
+  milestones: PlanMilestone[]
+  /** The prompt the planner actually saw: the original, plus any confirmed decisions. */
+  effectivePrompt: string
+  questions: InterviewQuestion[]
+  answers: UserInterviewAnswer[]
+}
+
+/**
+ * Reproduces the UI's plan flow END TO END, which is four steps and not two.
+ *
+ * The renderer calls `agent:plan-interview`, `agent:plan-enrich-prompt`, `agent:plan-generate`
+ * and `agent:plan-seed`, in that order. This harness used to call only the third and fourth,
+ * so the planner received the RAW prompt and every live run measured a flow no user executes.
+ *
+ * It matters for what the runs then show. In the observed sessions the model invented its own
+ * router, its own postcss setup and its own folder layout, and several of the rewrite loops
+ * started exactly there — those are the choices the interview exists to settle before a single
+ * milestone is drafted.
+ *
+ * The interview is genuinely optional: `conductInterview` answers `hasQuestions: false` for a
+ * request it considers already well-scoped, and also whenever the model's JSON cannot be
+ * repaired. Both cases fall through to the original prompt, so a scenario never blocks on it.
  */
 export async function seedGeneratedPlan(args: {
   sessionId: string
   workspacePath: string
   userTask: string
   settings: AppSettings
-}): Promise<PlanMilestone[]> {
+  /** Defaults to 'recommended': the flow a user actually walks through. */
+  interviewPolicy?: InterviewPolicy
+}): Promise<SeededPlan> {
+  const policy = args.interviewPolicy || 'recommended'
+  const model = args.settings.codingModel
+
+  let questions: InterviewQuestion[] = []
+  let answers: UserInterviewAnswer[] = []
+  let effectivePrompt = args.userTask
+
+  if (policy !== 'skip') {
+    const interview = await agentInterviewAppService.conductInterview(args.userTask, model, args.settings)
+    questions = interview.questions
+    answers = questions.map((q) => ({
+      questionId: q.id,
+      questionText: q.question,
+      selectedOption: q.options[q.recommendedIndex],
+    }))
+    effectivePrompt = agentInterviewAppService.enrichPromptWithAnswers(args.userTask, answers)
+  }
+
   const plan = await planGenerationAppService.generatePlanText({
-    prompt: args.userTask,
-    model: args.settings.codingModel,
+    prompt: effectivePrompt,
+    model,
     settings: args.settings,
     workspacePath: args.workspacePath,
   })
+
+  // The ENRICHED prompt is seeded as the session's task, not the original: the orchestrator
+  // replays it every turn, and a plan drafted against decisions the agent never sees would
+  // have it re-deciding them mid-run.
   await agentSessionStateRepository.seedPlanMilestones(
     args.sessionId,
     args.workspacePath,
     plan.milestones,
-    args.userTask
+    effectivePrompt
   )
-  return plan.milestones
+
+  return { milestones: plan.milestones, effectivePrompt, questions, answers }
 }
 
 /** Every file in the workspace with its size, excluding the noise directories. */

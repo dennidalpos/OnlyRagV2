@@ -56,19 +56,34 @@ describe('live: full task run', () => {
     const settings = loadRealSettings()
     resetWorkspace(WORKSPACE)
 
-    const milestones = await seedGeneratedPlan({
+    const seeded = await seedGeneratedPlan({
       sessionId: SESSION,
       workspacePath: WORKSPACE,
       userTask: USER_TASK,
       settings,
     })
-    console.log(`\nplan (${milestones.length} milestones):`)
-    for (const m of milestones) {
+
+    // The interview is the first thing a user sees and the last thing this probe used to
+    // exercise. Printed in full: the choices it settles are the ones the model otherwise
+    // invents mid-run, and they are the readable difference between two runs of this scenario.
+    console.log(`\nclarification interview: ${seeded.questions.length} question(s)`)
+    for (const [i, q] of seeded.questions.entries()) {
+      console.log(`  Q${i + 1} ${q.question}`)
+      for (const [oi, opt] of q.options.entries()) {
+        console.log(`      ${oi === q.recommendedIndex ? '>' : ' '} ${opt}`)
+      }
+      console.log(`      answered: ${seeded.answers[i]?.selectedOption}`)
+    }
+
+    console.log(`\nplan (${seeded.milestones.length} milestones):`)
+    for (const m of seeded.milestones) {
       console.log(`  ${m.id} | verify=${m.verificationCommand || '-'} | ${m.title}`)
     }
 
+    // The SAME prompt the plan was drafted against. Passing the raw task here instead would
+    // have the agent re-deciding, every turn, what the interview already settled.
     const result = await runAgentOrchestratorLoop(
-      { userTask: USER_TASK, workspacePath: WORKSPACE, agentMode: 'agent', sessionId: SESSION, settings },
+      { userTask: seeded.effectivePrompt, workspacePath: WORKSPACE, agentMode: 'agent', sessionId: SESSION, settings },
       null
     )
 

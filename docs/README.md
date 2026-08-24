@@ -15,6 +15,7 @@ La documentazione del repository risiede esclusivamente in `/docs/` ed è suddiv
 | [**`api.md`**](./api.md) | Specifiche e contratti API completi: canali IPC di Electron (`window.electronAPI`), endpoint REST del FastAPI Sidecar (`/health`, `/ingest`, `/search`, `/documents`, `/export`), payload JSON, schemi TypeScript e gestione errori. |
 | [**`setup-and-env.md`**](./setup-and-env.md) | Guida all'installazione, requisiti minimi di sistema, matrice dei profili hardware (**legacy / entry / midrange / highend / extreme**), formule analitiche di dimensionamento VRAM/RAM/SSD, variabili d'ambiente OS per Ollama, script PowerShell 1-click e comandi seriali di sviluppo/build/test. |
 | [**`libraries-and-domain-implementations.md`**](./libraries-and-domain-implementations.md) | Inventario esaustivo delle librerie esterne utilizzate (Frontend, Electron Main, Python Sidecar), casi d'uso architetturali e motivazioni tecniche delle logiche di dominio sviluppate su misura. |
+| [**`coding-agent-studio-blueprint.md`**](./coding-agent-studio-blueprint.md) | Blueprint architetturale evolutivo di Coding Agent Studio: analisi stato corrente, gap ("cosa c'è e cosa manca"), integrazione librerie universali, validazione visiva browser, generazione artefatti e flusso end-to-end universale per modelli Ollama. |
 
 ---
 

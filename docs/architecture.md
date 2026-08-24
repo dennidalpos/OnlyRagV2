@@ -141,6 +141,8 @@ flowchart TD
 
 ## 5. Agent Studio: Tool Loop, Resilienza & Transazionalità
 
+> Per l'analisi approfondita dei gap, la progettazione del flusso end-to-end e il piano di evoluzione modulare, consultare [**`coding-agent-studio-blueprint.md`**](./coding-agent-studio-blueprint.md).
+
 - **Autonomous Tool Calling Loop**:
   - **Ispezione & Navigazione**: `read_file` (con line slicing), `list_dir`, `grep_search`, `extract_code_symbols` (estrazione AST tramite TypeScript Compiler API per file TS/JS/TSX/JSX e tokenizer poliglotto per altri linguaggi).
   - **Modifica & Patching**: `replace_file_content` (fuzzy matching con tolleranza Levenshtein calcolata via `fast-levenshtein` e AST pre-commit validation via `fuzzyPatchEngine.ts`), `multi_replace_file_content`, `write_file` (con validazione AST sintattica in-flight), `delete_file`.

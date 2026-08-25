@@ -84,10 +84,35 @@ export function isVerificationFailing(
  * compiler's own suggestion. This directive knows only what the fix is NOT: running the check
  * again. So that is all it says.
  */
-export function buildVerificationFailingDirective(verificationCommand: string): string {
-  return [
+export function buildVerificationFailingDirective(
+  verificationCommand: string,
+  /**
+   * The diagnostic directive built from the failing run, to be CARRIED here rather than referred
+   * to. Null when none could be built, and the text then falls back to the pointer.
+   */
+  embeddedDirective: string | null = null
+): string {
+  const head = [
     `[THE PROJECT CHECK ALREADY RAN AND FAILED — DO NOT RUN IT AGAIN YET]`,
     `"${verificationCommand}" has already been executed and reported errors, and nothing has changed since. Running it again will report the same errors: the command reads the code, it does not change it.`,
+  ]
+
+  // Carrying it beats pointing at it, and does not break the rule above: there is still exactly
+  // ONE prescription in the turn, and it is still the diagnostic's — the only thing that has read
+  // the compiler's own suggestion. What changes is which channel delivers it. The plan block is
+  // rebuilt from live state every turn; the tool result it used to point at lives in the history
+  // block and ages out of it, so the reference could dangle, and the model had no way to tell.
+  if (embeddedDirective) {
+    return [
+      ...head,
+      `This is what that failure requires:`,
+      embeddedDirective,
+      `Run "${verificationCommand}" again only after the above has actually changed a file.`,
+    ].join('\n')
+  }
+
+  return [
+    ...head,
     `Its output is in your recent tool results above, together with the directive that says exactly what to do about it — which file to write, or which command to run.`,
     `Directives:`,
     `1. Do what that directive says. It is the only instruction that applies right now.`,

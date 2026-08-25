@@ -21,6 +21,8 @@ import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolF
 import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
+import { buildDiagnosticFixDirective } from '../domain/agent/compilerDiagnosticDirective'
+import { readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
@@ -428,7 +430,13 @@ export function resolvePlanDirectiveForTurn(
   workspacePath: string | null | undefined,
   goalPlanner: GoalDecompositionPlanner,
   hasVerifiedBuild: boolean,
-  episodes: readonly { tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[] = []
+  episodes: readonly { tool: string; target?: string; status: 'SUCCESS' | 'FAILURE' | 'BLOCKED' }[] = [],
+  /**
+   * The raw output of the last failing verification, when the caller can supply it. The plan
+   * block then CARRIES the diagnostic instead of pointing at a tool result that may already have
+   * aged out of the history — see buildVerificationFailingDirective.
+   */
+  lastVerificationFailureOutput: string | null = null
 ): PlanDirectiveDecision {
   if (!workspacePath) return { kind: 'focus', blockDirective: null, closureStepDirective: null }
 
@@ -458,6 +466,11 @@ export function resolvePlanDirectiveForTurn(
     packagesWithFailedInstall: packagesWithFailedInstall(episodes),
     verificationCommand: verification,
     verificationFailing: isVerificationFailing(episodes, verification?.command),
+    verificationFailureDirective: lastVerificationFailureOutput
+      ? buildDiagnosticFixDirective(lastVerificationFailureOutput, (pkg) =>
+          workspacePath ? readPackageExports(workspacePath, pkg) : []
+        )
+      : null,
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
   })
 }

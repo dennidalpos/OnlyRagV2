@@ -96,3 +96,50 @@ describe('buildVerificationFailingDirective', () => {
     expect(buildVerificationFailingDirective(BUILD)).toContain('reads the code, it does not change it')
   })
 })
+
+/**
+ * The directive used to point at a diagnostic instead of carrying it: "do what that directive
+ * says", meaning one sitting in the tool history. Measured 2026-08-25T20:24, the model could not
+ * follow the indirection — steps 34 to 50 were seventeen blocked reissues of a `write_file` on
+ * src/index.html, to the ceiling, while this text told it to consult something elsewhere.
+ *
+ * The two channels have different lifetimes. The plan block is rebuilt from live state every
+ * turn; the tool result it referred to lives in the history block and ages out of it. A pointer
+ * across that boundary can dangle, and nothing tells the model when it has.
+ */
+describe('buildVerificationFailingDirective — carrying the diagnostic', () => {
+  const BUILD_CMD = 'npm run build'
+  const DIAGNOSTIC = [
+    '[THE COMPILER NAMED THE FILE AND THE LINE — FIX THAT FILE]',
+    'Directives:',
+    '1. Your next tool call MUST be "write_file" on "src/App.tsx".',
+  ].join('\n')
+
+  it('embeds the diagnostic rather than referring to it', () => {
+    const directive = buildVerificationFailingDirective(BUILD_CMD, DIAGNOSTIC)
+    expect(directive).toContain('THE COMPILER NAMED THE FILE AND THE LINE')
+    expect(directive).toContain('"write_file" on "src/App.tsx"')
+    // The pointer, and the instruction to go and resolve it, are gone.
+    expect(directive).not.toContain('recent tool results above')
+    expect(directive).not.toContain('Do what that directive says')
+  })
+
+  it('still forbids re-running the check before something changes', () => {
+    const directive = buildVerificationFailingDirective(BUILD_CMD, DIAGNOSTIC)
+    expect(directive).toContain('DO NOT RUN IT AGAIN YET')
+    expect(directive).toContain('only after the above has actually changed a file')
+  })
+
+  it('carries exactly one prescription — the diagnostic\'s own', () => {
+    const directive = buildVerificationFailingDirective(BUILD_CMD, DIAGNOSTIC)
+    // The rule this module records: two places must never both prescribe the next action. What
+    // changed is which channel delivers the single prescription, not how many there are.
+    expect(directive.split('\n').filter((l) => /^\d+\. /.test(l))).toHaveLength(1)
+  })
+
+  it('falls back to the pointer when there is no diagnostic to carry', () => {
+    const directive = buildVerificationFailingDirective(BUILD_CMD, null)
+    expect(directive).toContain('recent tool results above')
+    expect(directive).toContain('Do what that directive says')
+  })
+})

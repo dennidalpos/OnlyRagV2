@@ -258,7 +258,13 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   // two different next actions in the same turn. There IS a single legal move in each of them
   // — close the session, install what is missing, or run the project's own check — and the
   // loop guard's advisory text would talk the model out of it.
-  const planDirective = resolvePlanDirectiveForTurn(ctx.workspacePath, ctx.goalPlanner, ctx.flags.hasVerifiedBuild, ctx.episodicCompactor.getEpisodes())
+  const planDirective = resolvePlanDirectiveForTurn(
+    ctx.workspacePath,
+    ctx.goalPlanner,
+    ctx.flags.hasVerifiedBuild,
+    ctx.episodicCompactor.getEpisodes(),
+    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build')
+  )
 
   // REPLACES the advisory text rather than following it. Appended, it lost: the live
   // eresolve run of 2026-08-24 shows the directive arriving at step 11 correctly, third in a

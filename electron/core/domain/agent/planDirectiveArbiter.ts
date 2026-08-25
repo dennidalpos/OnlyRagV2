@@ -123,6 +123,11 @@ export interface PlanDirectiveInput {
    */
   verificationFailing: boolean
   /**
+   * The diagnostic directive built from the last failing verification, ready to be carried by the
+   * plan block instead of referred to. Null when there is none to embed.
+   */
+  verificationFailureDirective?: string | null
+  /**
    * The project's HTML entry page loads none of its own code. Null when the project has no
    * such page or the question does not apply. See entrypointIntegrity.ts.
    */
@@ -381,7 +386,10 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
     if (input.verificationFailing) {
       return {
         kind: 'verification_failing',
-        blockDirective: buildVerificationFailingDirective(input.verificationCommand.command),
+        blockDirective: buildVerificationFailingDirective(
+          input.verificationCommand.command,
+          input.verificationFailureDirective ?? null
+        ),
         closureStepDirective: null,
       }
     }

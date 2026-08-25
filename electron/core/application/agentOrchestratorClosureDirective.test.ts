@@ -192,6 +192,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
           if (directive) recordedDirectives.push(directive)
         },
         getEpisodes: () => [],
+        lastFailureOutputFor: () => null,
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: plannerWith([
         { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' },
@@ -315,7 +316,7 @@ describe('a repeated command must not abandon a milestone that is already delive
       flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
       surfacedDodReasons: new Set<string>(),
       state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
-      episodicCompactor: { recordStep: () => {}, getEpisodes: () => [] } as unknown as ResponseInterpreterContext['episodicCompactor'],
+      episodicCompactor: { recordStep: () => {}, getEpisodes: () => [], lastFailureOutputFor: () => null } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: planner,
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector: new AgentActionLoopDetector(2),
@@ -430,6 +431,7 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
       episodicCompactor: {
         recordStep: () => {},
         getEpisodes: () => [],
+        lastFailureOutputFor: () => null,
       } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: plannerWith([{ id: 'm-1', title: 'The app renders — `App.tsx`', status: 'in_progress' }]),
       executionGuard: new TransactionalExecutionGuard(tempDir),

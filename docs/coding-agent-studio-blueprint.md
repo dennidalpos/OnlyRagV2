@@ -553,6 +553,36 @@ alternativa di scrivere il componente invece di importarlo.
 * Gli specifier relativi restano fuori: un file locale privo di un export si corregge guardando
   quel file, che è un dato diverso e una direttiva diversa.
 
+### 5.6j-sexies. Una Direttiva Porta la Diagnostica, Non un Rimando a Essa
+
+`verification_failing` diceva: *"Its output is in your recent tool results above, together with
+the directive that says exactly what to do about it"*, e poi *"1. Do what that directive says"*.
+Un **puntatore a una direttiva, non un'azione**.
+
+**Sintomo misurato** — corsa del 2026-08-25T20:24: il modello non risolve l'indirezione e fa
+l'unica cosa che gli viene in mente. **Step 34-50, diciassette `write_file` bloccati** su
+`src/index.html`, fino al tetto.
+
+Il difetto è di confine fra canali: il blocco piano è **ricostruito da stato vivo a ogni turno**,
+mentre il tool result a cui rimandava vive nel blocco history e ne esce con il trimming. Un
+riferimento che attraversa quel confine può restare appeso, e nulla dice al modello quando è
+successo.
+
+`buildVerificationFailingDirective` riceve ora la direttiva diagnostica e la **incorpora**.
+`EpisodicMemoryCompactor.lastFailureOutputFor` recupera l'output dell'ultima verifica fallita, e
+l'application layer ne ricava la diagnostica passandola all'arbitro.
+
+> [!IMPORTANT]
+> Questo **non** viola la regola registrata in
+> [`verificationAttemptTracker.ts`](../electron/core/domain/agent/verificationAttemptTracker.ts)
+> — *"two places must never both prescribe the next action"*. Le prescrizioni restano **una
+> sola**, ed è sempre quella della diagnostica, l'unica che ha letto il suggerimento del
+> compilatore. Cambia quale canale la consegna. La versione che quella regola vietava era
+> diversa: indovinava `write_file` sul primo file nominato, e sbagliava su `TS7016`, che si
+> risolve con un install.
+
+Quando non c'è diagnostica da incorporare il testo torna al rimando, che è il meglio disponibile.
+
 ### 5.6k. Il Repertorio Reale dei Tool — l'agente non legge mai un file
 
 Misurato su **quattro corse `live-full-task` indipendenti** in `logs/coding_agent_audit.log`,

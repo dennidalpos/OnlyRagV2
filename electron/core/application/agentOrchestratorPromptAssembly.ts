@@ -173,7 +173,8 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.workspacePath,
     ctx.goalPlanner,
     ctx.hasVerifiedBuild,
-    ctx.episodicCompactor.getEpisodes()
+    ctx.episodicCompactor.getEpisodes(),
+    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build')
   )
   const planBlock = ctx.goalPlanner.compileProgressPrompt({ directive })
 

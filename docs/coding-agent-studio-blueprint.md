@@ -288,6 +288,33 @@ sullo stesso fatto già raccolto (rispettivamente `packagesWithFailedInstall` e
 l'**opposto** di quella della riga madre.
 
 * **Impatto misurato**: Risolto il deadlock storico (da 0 comandi eseguiti in 50 passi a **13 comandi**, con `npm install` al passo 2 e `npm run build` al passo 28).
+
+> [!WARNING]
+> **La priorità 4 non è mai scattata: 0 volte su 200 turni misurati** (quattro corse
+> `live-full-task` da 50 step, 2026-08-25 08:37 / 11:03 / 12:11 / 12:46). Distribuzione della
+> direttiva viva per turno, contata sul delta di ogni prompt e non sul testo replayato:
+>
+> | Corsa | dipendenze | focus / altro | `verification_due` |
+> | :--- | :---: | :---: | :---: |
+> | 08:37 | 35 | 15 | **0** |
+> | 11:03 | 43 | 7 | **0** |
+> | 12:11 | 28 | 22 | **0** |
+> | 12:46 | 22 | 28 | **0** |
+>
+> La causa non è la precedenza delle priorità 2-3: è la condizione
+> `isEveryDeliverableSatisfied`, che richiede che **ogni** milestone abbia già tutti i deliverable
+> su disco. Con 12-15 milestone in 50 step quello stato non viene raggiunto, quindi lo stato è di
+> fatto irraggiungibile.
+>
+> Le build che pure girano — quattro nella corsa delle 12:46 — sono iniziativa del modello, che
+> segue la regola 11b del prompt di sistema, **non** effetto di questa direttiva. Il
+> `npm run build al passo 28` citato sopra va riletto in questa luce.
+>
+> La decisione se allentare il gate è aperta e ha un compromesso reale: una build lanciata a metà
+> piano fallisce quasi certamente, ma un fallimento produce una diagnostica reale con file e riga,
+> che [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts)
+> converte in un singolo imperativo preciso — più utile a un modello da 7B di "scrivi il prossimo
+> file". Tracciato, non deciso.
 * **Protezione Escape Milestone Consegnate**: `isActiveMilestoneDelivered` impedisce a `loopEscapePolicy` di marcare fallita una milestone i cui file sono già presenti su disco.
 * **Forma di `dependencies_uninstallable` — un pacchetto, un file, il tool nominato per primo**:
   emettere la direttiva non basta a farla eseguire. Corsa live `2026-08-25T12:11`

@@ -7,6 +7,16 @@ import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
 import { runTurnDispatch } from './agentOrchestratorTurnDispatch'
 import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
+import { runProjectVerification } from './agentOrchestratorVerificationRunner'
+import {
+  promoteMilestonesProvenBy,
+  selectMilestonesAwaitingVerification,
+} from './agentOrchestratorCircuitBreakerAndVerification'
+import {
+  budgetExhaustionSummary,
+  shouldVerifyOnBudgetExhaustion,
+} from '../domain/agent/budgetExhaustionVerification'
+import type { BudgetExhaustionOutcome } from '../domain/agent/budgetExhaustionVerification'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -362,8 +372,48 @@ export async function runAgentOrchestratorLoop(
     if (processingOutcome.outcome === 'return') return processingOutcome.result
   }
 
-  const endSummary = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
-    ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
+  // The step budget was the one session exit that verified nothing. `finish` runs the
+  // project's own check and promotes whatever it proves; falling out of the loop went straight
+  // to emitDone, so a run that delivered every file its plan named and never spent a step on
+  // `finish` closed with 0/14 verified and no check ever attempted. See
+  // domain/agent/budgetExhaustionVerification.ts for the measurement (live-full-task,
+  // 2026-08-25T12:11). The promotion criterion is untouched: only a real passing command over
+  // deliverables really on disk promotes anything.
+  const budgetExhausted = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
+  let exhaustionOutcome: BudgetExhaustionOutcome = { kind: 'not_attempted' }
+
+  if (
+    shouldVerifyOnBudgetExhaustion({
+      budgetExhausted,
+      sessionActive: isSessionActive(),
+      hasWorkspace: Boolean(workspacePath),
+      verifyBeforeFinish: (settings as any).verifyBeforeFinish !== false,
+      hasFileMutations: mutableFlags.hasFileMutations,
+      hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
+      promotableMilestoneCount: selectMilestonesAwaitingVerification({ workspacePath, goalPlanner }).length,
+    })
+  ) {
+    emitLog('info', '🔎 Budget di step esaurito: verifica finale del progetto...')
+    const run = await runProjectVerification(workspacePath, (chunk) => emitLog('terminal', chunk))
+    if (!run.hasVerificationCommand) {
+      exhaustionOutcome = { kind: 'no_command' }
+    } else if (run.passed) {
+      mutableFlags.hasVerifiedBuild = true
+      const command = run.command || 'verification command'
+      const promoted = promoteMilestonesProvenBy({ workspacePath, goalPlanner, emitLog }, command)
+      exhaustionOutcome = { kind: 'passed', command, promoted }
+    } else {
+      exhaustionOutcome = { kind: 'failed', command: run.command || 'verification command' }
+      // Printed, not swallowed: the failure is the reason the plan stays unverified, and it is
+      // the only place a user reading the transcript can find out why.
+      emitLog('info', '⛔ Verifica finale fallita: nessuna milestone promossa.', run.failureDetail, {
+        category: 'system_alert',
+      })
+    }
+  }
+
+  const endSummary = budgetExhausted
+    ? budgetExhaustionSummary(MAX_STEPS, exhaustionOutcome)
     : `Completed ${stepCountBox.value} agent steps.`
   clearSessionTimeout()
   emitDone(true, endSummary)

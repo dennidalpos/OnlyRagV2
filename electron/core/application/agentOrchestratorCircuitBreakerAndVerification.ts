@@ -367,22 +367,39 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
 }
 
 /**
- * Promotes every milestone the passing verification has just proven.
+ * The milestones a passing verification WOULD promote, without promoting them.
+ *
+ * Split out so a caller can ask the question before paying for the answer. The terminal check
+ * at budget exhaustion (budgetExhaustionVerification.ts) is worth minutes of `npm run build`
+ * only when the plan actually holds milestones in the state that check would close; asking
+ * here is the difference between spending that on a run it helps and on every run.
+ */
+export function selectMilestonesAwaitingVerification(
+  deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner'>
+): { id: string; title: string }[] {
+  if (!deps.workspacePath) return []
+  const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
+  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), (m) =>
+    resolveMilestoneDeliverableStatus(m.title, probe)
+  )
+}
+
+/**
+ * Promotes every milestone the passing verification has just proven, and reports how many.
  *
  * One green build attests to all the files it compiled, so the promotion is plan-wide rather
  * than limited to whichever milestone happened to be active — that narrow rule is what left
  * earlier milestones stranded while a later one closed.
+ *
+ * The count is returned because the caller at budget exhaustion states it in the session
+ * summary; the callers on the tool-result path ignore it, as they always did.
  */
 export function promoteMilestonesProvenBy(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>,
   verificationCommand: string
-) {
-  if (!deps.workspacePath) return
-  const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
-  const proven = selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), (m) =>
-    resolveMilestoneDeliverableStatus(m.title, probe)
-  )
-  if (proven.length === 0) return
+): number {
+  const proven = selectMilestonesAwaitingVerification(deps)
+  if (proven.length === 0) return 0
 
   for (const milestone of proven) {
     deps.goalPlanner.updateMilestone(milestone.id, 'verified', promotionNote(verificationCommand))
@@ -392,6 +409,7 @@ export function promoteMilestonesProvenBy(
     'info',
     `✅ ${proven.length} milestone verificate da "${verificationCommand}": ${proven.map((m) => m.id).join(', ')} (${progress.completed}/${progress.total}).`
   )
+  return proven.length
 }
 
 /**

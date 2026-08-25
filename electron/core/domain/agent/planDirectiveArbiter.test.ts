@@ -473,3 +473,42 @@ describe('entrypoint_disconnected — a green check on a page that loads nothing
     expect(resolvePlanDirective(input({ disconnectedEntrypoint: null })).kind).toBe('verification_due')
   })
 })
+
+/**
+ * A directive that orders a file rewritten is only executable by a model that can see the file.
+ * Measured across nine live runs: `read_file` called zero times against roughly 170 `write_file`,
+ * and on 2026-08-25T20:52 — the run where the blocked tail finally disappeared — 19 of 30 writes
+ * landed on a file already written, reproducing the errors they were meant to fix.
+ *
+ * The arbiter publishes the path; the prompt assembler reads it off disk and carries the content
+ * (readTurnFileContext in agentOrchestratorPromptAssembly.ts).
+ */
+describe('verification_failing publishes the file it orders rewritten', () => {
+  it('carries the diagnostic target as a rewrite target', () => {
+    const decision = resolvePlanDirective(
+      input({
+        verificationFailing: true,
+        verificationFailureDirective: '[THE COMPILER NAMED THE FILE AND THE LINE]',
+        verificationFailureTargetFile: 'src/components/TaskCard.tsx',
+      })
+    )
+
+    expect(decision.kind).toBe('verification_failing')
+    expect(decision.rewriteTargets).toEqual(['src/components/TaskCard.tsx'])
+    // The directive carries the diagnostic itself, not a pointer to one in the history.
+    expect(decision.blockDirective).toContain('THE COMPILER NAMED THE FILE AND THE LINE')
+  })
+
+  it('carries none when the fix is a command rather than an edit', () => {
+    const decision = resolvePlanDirective(
+      input({
+        verificationFailing: true,
+        verificationFailureDirective: '[INSTALL THE MISSING TYPES]',
+        verificationFailureTargetFile: null,
+      })
+    )
+
+    expect(decision.kind).toBe('verification_failing')
+    expect(decision.rewriteTargets).toBeUndefined()
+  })
+})

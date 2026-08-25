@@ -21,7 +21,7 @@ import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolF
 import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
-import { buildDiagnosticFixDirective } from '../domain/agent/compilerDiagnosticDirective'
+import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
 import { readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
@@ -470,6 +470,9 @@ export function resolvePlanDirectiveForTurn(
       ? buildDiagnosticFixDirective(lastVerificationFailureOutput, (pkg) =>
           workspacePath ? readPackageExports(workspacePath, pkg) : []
         )
+      : null,
+    verificationFailureTargetFile: lastVerificationFailureOutput
+      ? diagnosticFixTargetFile(lastVerificationFailureOutput)
       : null,
     disconnectedEntrypoint: resolveDisconnectedEntrypoint(workspacePath, probe),
   })

@@ -635,10 +635,16 @@ I path arrivano da scanner e da titoli di piano scritti dal modello, quindi ness
 fidato: la lettura è confinata alla radice del workspace, con cap per file e per numero di file.
 
 > [!WARNING]
-> **Copertura parziale, non ancora misurata dal vivo.** Il meccanismo copre i deliverable della
-> milestone attiva e i bersagli nominati da una direttiva; le riscritture di file fuori da quel
-> perimetro restano cieche. Di quel 41% intercetta una parte non quantificata. Verificato da 9
-> unit test, incluso il guard sul path traversal; nessuna corsa live lo ha ancora esercitato.
+> **Copertura misurata, e inizialmente troppo stretta.** Nella corsa del 2026-08-25T19:16 il
+> meccanismo ha raggiunto **1 prompt su 50** e le riscritture cieche sono rimaste al 38% (da 41%):
+> su un turno `focus` il deliverable della milestone attiva di norma **non esiste ancora**, perché
+> è quello che il modello sta creando.
+>
+> Il perimetro è stato poi esteso a `verification_failing`, dove la diagnostica **nomina** il file
+> che il modello sta per riscrivere: `diagnosticFixTargetFile` lo estrae seguendo la stessa
+> precedenza dei rami della direttiva, l'arbitro lo pubblica come `rewriteTargets`, e l'assembler
+> ne carica il contenuto. Nella corsa del 2026-08-25T20:52 quella direttiva è stata emessa **11
+> volte**, quindi è lì che il meccanismo può incidere. Da misurare.
 
 ### 5.7. Roadmap Funzionalità Future
 1. **Modulo Validazione Visiva**: `visualValidationTool.ts` su Electron Offscreen `WebContents` con cattura screenshot, DOM e `console.error`.

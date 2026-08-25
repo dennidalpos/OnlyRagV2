@@ -127,6 +127,8 @@ export interface PlanDirectiveInput {
    * plan block instead of referred to. Null when there is none to embed.
    */
   verificationFailureDirective?: string | null
+  /** The file that directive orders written, so the prompt can carry its current content. */
+  verificationFailureTargetFile?: string | null
   /**
    * The project's HTML entry page loads none of its own code. Null when the project has no
    * such page or the question does not apply. See entrypointIntegrity.ts.
@@ -391,6 +393,9 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
           input.verificationFailureDirective ?? null
         ),
         closureStepDirective: null,
+        // The model rewrites this file next. Nine live runs show it never reads one first, so
+        // showing it is the difference between an edit and a blind replacement.
+        rewriteTargets: input.verificationFailureTargetFile ? [input.verificationFailureTargetFile] : undefined,
       }
     }
 

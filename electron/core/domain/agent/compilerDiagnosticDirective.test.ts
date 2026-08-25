@@ -7,6 +7,7 @@ import {
   parseCompilerDiagnostics,
   extractMissingRelativeModule,
   extractMissingExportMember,
+  diagnosticFixTargetFile,
   resolveRelativeImportPath,
 } from './compilerDiagnosticDirective'
 
@@ -399,5 +400,41 @@ describe('missing export member', () => {
   it('carries one imperative, like every other branch here', () => {
     const directive = buildDiagnosticFixDirective(OUTPUT, () => ['Dialog'])
     expect((directive || '').split('\n').filter((l) => /^\d+\. /.test(l))).toHaveLength(2)
+  })
+})
+
+/**
+ * The caller needs the path as a path, to read that file off disk and hand its current content to
+ * the model. Nine live runs show it never reads one itself: 2026-08-25T20:52 ended with 30
+ * write_file calls against 11 distinct files, 19 of them rewrites, and zero reads.
+ */
+describe('diagnosticFixTargetFile', () => {
+  it('names the importer for an export mismatch', () => {
+    const out = `src/main.tsx(2,8): error TS2613: Module '"./App"' has no default export. Did you mean to use 'import { App } from "./App"' instead?`
+    expect(diagnosticFixTargetFile(out)).toBe('src/main.tsx')
+  })
+
+  it('names the file to CREATE for a missing relative module', () => {
+    const out = "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations."
+    // Does not exist yet, so reading it yields nothing — the correct amount to say about it.
+    expect(diagnosticFixTargetFile(out)).toBe('src/services/api.ts')
+  })
+
+  it('names the importer when a package lacks the member', () => {
+    const out = `src/components/TaskCard.tsx(3,10): error TS2305: Module '"@headlessui/react"' has no exported member 'Card'.`
+    expect(diagnosticFixTargetFile(out)).toBe('src/components/TaskCard.tsx')
+  })
+
+  it('names nothing when the fix is an install, which changes no file', () => {
+    const out = [
+      "src/App.tsx(1,19): error TS7016: Could not find a declaration file for module 'react'.",
+      "  Try `npm i --save-dev @types/react` if it exists.",
+    ].join('\n')
+    expect(diagnosticFixTargetFile(out)).toBeNull()
+  })
+
+  it('falls back to the first diagnostic outside node_modules', () => {
+    const out = 'src/App.tsx(7,3): error TS2322: Type mismatch.'
+    expect(diagnosticFixTargetFile(out)).toBe('src/App.tsx')
   })
 })

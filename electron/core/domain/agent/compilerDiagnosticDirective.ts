@@ -318,6 +318,36 @@ export function extractMissingExportMember(output: string): MissingExportMember 
   return null
 }
 
+/**
+ * The file the directive built from this output will order written, or null when it orders a
+ * command instead.
+ *
+ * Mirrors the branch precedence of buildDiagnosticFixDirective deliberately, rather than being
+ * derived from its text: the caller needs the path as a path — to read that file off disk and
+ * hand its current content to the model — and parsing it back out of a rendered directive would
+ * couple the two through prose.
+ *
+ * The install branch returns null: an install changes no file, so there is nothing to show.
+ * A missing relative module returns the path that has to be CREATED, which by definition does not
+ * exist yet; reading it yields nothing, which is the correct amount to say about a file that is
+ * not there.
+ */
+export function diagnosticFixTargetFile(output: string): string | null {
+  if (extractSuggestedCommand(output)) return null
+
+  const mismatch = extractExportMismatch(output)
+  if (mismatch) return mismatch.diagnostic.file
+
+  const missingRelative = extractMissingRelativeModule(output)
+  if (missingRelative) return missingRelative.expectedPath
+
+  const missingExport = extractMissingExportMember(output)
+  if (missingExport) return missingExport.diagnostic.file
+
+  const first = parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file))[0]
+  return first ? first.file : null
+}
+
 export function buildDiagnosticFixDirective(
   output: string,
   /**

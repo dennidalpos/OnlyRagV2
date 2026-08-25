@@ -24,9 +24,22 @@ export interface CompactPlanState {
  * Recognises the plan's own closing milestone (the "write the final report and stop" entry
  * the planner appends). It is the one milestone the finish tool owns: nothing else may mark
  * it verified, and the Definition of Done gate must not count it as outstanding work.
+ *
+ * The keyword alone is not enough, and the reason arrived with capability-shaped titles. The
+ * previous rule matched the substring anywhere, so *"The user can mark a task finished —
+ * `src/pages/TasksPage.tsx`"* read as the closing milestone: exempt from falsifiability,
+ * skipped by `getActiveMilestone`, and owned by a finish tool that would never write that
+ * file. Italian plans collide on the same edge (`riepilogo` is also a perfectly ordinary
+ * component name), and the plan format now puts real prose in every title.
+ *
+ * A closing milestone names no artefact — it is the report, not a deliverable — so a title
+ * that names a file is work, whatever words it uses. Doubt resolves towards "this is work":
+ * misreading work as the closing entry hides it from the agent entirely, while misreading
+ * the closing entry as work merely leaves it on the checklist for the finish tool to own.
  */
 export function isCompletionMilestoneTitle(title: string): boolean {
-  return /finish|completamento|arresto|riepilogo|final report/i.test(title || '')
+  if (!/finish|completamento|arresto|riepilogo|final report/i.test(title || '')) return false
+  return extractDeliverablePaths(title || '').length === 0
 }
 
 /** One milestone changing status, emitted so callers can record who moved it and why. */

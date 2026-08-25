@@ -27,22 +27,53 @@ import { isCompletionMilestoneTitle, type PlanMilestone } from './planAndSolveGr
  * (`src/App.tsx`) or a command (`npm run build`). Either one gives the milestone a target
  * that can be checked, which is what separates a step from a criterion.
  */
-const BACKTICKED_TOKEN = /`[^`\n]+`/
+/**
+ * A backticked token that something could actually run: a command has whitespace between its
+ * program and its arguments (`npm run build`, `pytest -q`), and a path has an extension, which
+ * `extractDeliverablePaths` already recognises on its own.
+ *
+ * A single backticked word with neither — `` `src/services/` ``, `` `tailwindcss` ``, `` `React` ``
+ * — is a name, not a proof.
+ */
+const RUNNABLE_BACKTICKED_TOKEN = /`[^`\n]*\S\s+\S[^`\n]*`/
 
 /**
- * A milestone is falsifiable when something could show it done or not done: a file it names,
- * a command it names, or an explicit verificationCommand. The closing milestone is exempt —
- * the finish tool owns it, and it must stay a step of its own.
+ * A milestone is falsifiable when something could show it done or not done: a file it names, a
+ * command it names, or an explicit verificationCommand. The closing milestone is exempt — the
+ * finish tool owns it, and it must stay a step of its own.
  *
- * The bar is deliberately low. Folding a real step away loses work; keeping a vague one
- * merely leaves the plan slightly noisier, and nothing downstream will close it without
- * evidence any more. So doubt resolves in favour of keeping the milestone.
+ * The bar is low, but it is no longer "any backtick at all", and the measurement that moved it
+ * is worth keeping. The previous rule accepted every backticked token, so *"The project has a
+ * clean architecture with a services folder — `src/services/`"* passed: a directory has no
+ * extension, `extractDeliverablePaths` finds nothing in it, and the milestone survived as a step
+ * that no file and no command could ever check. Four of the six plans generated on 2026-08-25
+ * opened with exactly that shape, and in one run the model marked it `verified` **by its own
+ * report at step 2** — a stamp inside the completion metric, which is the defect this whole
+ * area exists to remove.
+ *
+ * That also retires the reasoning the old comment gave for the low bar — *"nothing downstream
+ * will close it without evidence any more"*. False, and measured false: a milestone naming no
+ * artefact resolves `not_applicable`, and `not_applicable` is closable by the model's own
+ * judgement by design (§5.4). The bar has to do the work, because nothing after it will.
+ *
+ * Folding one of these loses nothing: the text becomes an acceptance criterion on the adjacent
+ * real milestone, so the agent still reads the requirement, attached to a deliverable that can
+ * be checked. Creating a directory was never a step anyway — writing a file inside it creates it.
  */
 export function isFalsifiableMilestone(milestone: PlanMilestone): boolean {
   if (isCompletionMilestoneTitle(milestone.title)) return true
   if (milestone.verificationCommand) return true
   if (extractDeliverablePaths(milestone.title).length > 0) return true
-  return BACKTICKED_TOKEN.test(milestone.title)
+  return RUNNABLE_BACKTICKED_TOKEN.test(milestone.title)
+}
+
+/**
+ * Keeps a criterion as a step of its own, for the two positions where the only thing left to
+ * fold it into is the closing milestone. The id is assigned by the renumbering pass at the end,
+ * which is the single place ids are decided.
+ */
+function asOwnMilestone(title: string): PlanMilestone {
+  return { id: '', title, status: 'pending' }
 }
 
 function appendCriteria(milestone: PlanMilestone, criteria: string[]): PlanMilestone {
@@ -106,6 +137,15 @@ export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMi
 
   for (const milestone of milestones) {
     if (isFalsifiableMilestone(milestone)) {
+      // Criteria waiting for a home must not land on the closing milestone: it would stop
+      // reading as "write the final report and stop", which is how the finish tool identifies
+      // it. With nothing else to attach them to, they stay steps of their own — the same
+      // choice this module already makes below, and the one its own rule prescribes: in doubt,
+      // keep the entry, because a noisier plan costs less than work that disappears.
+      if (leadingCriteria.length > 0 && isCompletionMilestoneTitle(milestone.title)) {
+        normalized.push(...leadingCriteria.map(asOwnMilestone))
+        leadingCriteria = []
+      }
       normalized.push(appendCriteria(milestone, leadingCriteria))
       leadingCriteria = []
       continue
@@ -122,10 +162,21 @@ export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMi
   }
 
   // Criteria trailing after the closing milestone attach to the last real work instead.
+  //
+  // When there is no real work to attach them to — a plan whose only falsifiable entry is the
+  // closing milestone — they stay milestones of their own. Folding them in would rewrite "write
+  // the final report and stop" into a step that also carries implementation criteria, which is
+  // how the finish tool stops recognising it, and it is the same absorption the branch above
+  // refuses. This module's rule applies here too: doubt resolves in favour of keeping the entry,
+  // because a slightly noisier plan costs less than work that silently disappears.
   if (leadingCriteria.length > 0) {
-    const lastWorkIndex = normalized.findIndex((m) => isCompletionMilestoneTitle(m.title))
-    const target = lastWorkIndex > 0 ? lastWorkIndex - 1 : normalized.length - 1
-    normalized[target] = appendCriteria(normalized[target], leadingCriteria)
+    const closingIndex = normalized.findIndex((m) => isCompletionMilestoneTitle(m.title))
+    const target = closingIndex > 0 ? closingIndex - 1 : closingIndex === -1 ? normalized.length - 1 : -1
+    if (target >= 0) {
+      normalized[target] = appendCriteria(normalized[target], leadingCriteria)
+    } else {
+      normalized.unshift(...leadingCriteria.map(asOwnMilestone))
+    }
   }
 
   const falsifiableCleaned = normalized.map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))

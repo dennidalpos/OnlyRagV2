@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildDiagnosticFixDirective, extractSuggestedCommand, parseCompilerDiagnostics } from './compilerDiagnosticDirective'
+import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote, extractSuggestedCommand, parseCompilerDiagnostics } from './compilerDiagnosticDirective'
 
 /** The exact output `npx tsc --noEmit` produced at step 21 of the live run of 2026-08-24. */
 const TSC_OUTPUT = [
@@ -127,5 +127,66 @@ describe('buildDiagnosticFixDirective — when the compiler named the remedy', (
 
   it('still orders the file fix when no remedy was printed', () => {
     expect(buildDiagnosticFixDirective(TSC_OUTPUT)).toContain('MUST be "write_file" on "src/main.tsx"')
+  })
+})
+
+describe('buildDeferredDiagnosticNote', () => {
+  // Verbatim shape from run 8 of 2026-08-25: a module error and code errors in one output.
+  const MIXED = [
+    "src/App.tsx(3,56): error TS2792: Cannot find module 'react-router-dom'.",
+    "src/components/Button.tsx(6,19): error TS7031: Binding element 'children' implicitly has an 'any' type.",
+    "src/main.tsx(6,8): error TS1192: Module '.../src/App' has no default export.",
+  ].join('\n')
+
+  it('names the code errors the winning directive does not fix', () => {
+    const note = buildDeferredDiagnosticNote(MIXED)!
+
+    expect(note).toContain('ALSO REPORTED, AFTER THE DIRECTIVE ABOVE')
+    expect(note).toContain('src/components/Button.tsx line 6')
+    expect(note).toContain('src/main.tsx line 6')
+    // The module error belongs to the directive above, not here.
+    expect(note).not.toContain('react-router-dom')
+  })
+
+  it('gives no instruction for now, so one message still carries one imperative', () => {
+    const note = buildDeferredDiagnosticNote(MIXED)!
+
+    expect(note).toContain('Do not act on them in this step')
+    expect(note).not.toMatch(/next tool call MUST/i)
+    expect(note).not.toMatch(/\bwrite_file\b/)
+  })
+
+  it('says nothing when every error is about resolving a module', () => {
+    expect(buildDeferredDiagnosticNote("src/App.tsx(3,56): error TS2792: Cannot find module 'x'.")).toBeNull()
+    expect(buildDeferredDiagnosticNote('')).toBeNull()
+  })
+})
+
+describe('diagnostics inside node_modules', () => {
+  // Run 10 of 2026-08-25 pinned typescript@^4.7.3, which then could not parse the @types/node
+  // npm had installed. Every error pointed into a dependency; no edit in the workspace could
+  // have fixed any of them.
+  const IN_DEPS = [
+    'node_modules/@types/node/ffi.d.ts(277,43): error TS1109: Expression expected.',
+    'node_modules/@types/node/ffi.d.ts(285,30): error TS1005: \',\' expected.',
+  ].join('\n')
+
+  it('never orders an edit to a dependency, and names the version mismatch instead', () => {
+    const directive = buildDiagnosticFixDirective(IN_DEPS)!
+
+    expect(directive).toContain('INSIDE AN INSTALLED PACKAGE')
+    expect(directive).toContain('npm install --save-dev typescript@latest')
+    expect(directive).toContain('Do NOT edit any file under node_modules')
+    expect(directive).not.toMatch(/"write_file" on "node_modules/)
+  })
+
+  it('still points at the project file when one is also reported', () => {
+    const mixed = `${IN_DEPS}\nsrc/App.tsx(4,8): error TS1192: Module has no default export.`
+
+    expect(buildDiagnosticFixDirective(mixed)!).toContain('"write_file" on "src/App.tsx"')
+  })
+
+  it('keeps dependency errors out of the deferred note as well', () => {
+    expect(buildDeferredDiagnosticNote(IN_DEPS)).toBeNull()
   })
 })

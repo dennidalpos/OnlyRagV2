@@ -24,7 +24,9 @@ Esegue tutti gli scenari in `scripts/live/*.live.ts`. Per uno solo:
 npx vitest run --config vitest.live.config.mts -t "eresolve"
 ```
 
-Ogni run **sovrascrive** `logs/coding_agent_audit.log`. Se ti serve confrontare due run, copialo via prima del secondo.
+Ogni run **appende** a `logs/coding_agent_audit.log`: `codingAgentLogger` usa `appendFileSync` e ruota su `coding_agent_audit.1.log` solo al superamento della soglia di dimensione — niente svuota il file all'avvio di un run. Cercando "l'ultimo run" si trova quindi per primo quello **vecchio**: segna la lunghezza del file prima di lanciare (`wc -c logs/coding_agent_audit.log`) e leggi solo la coda oltre quel punto, oppure copia via il file prima del run successivo.
+
+> La stesura precedente diceva "ogni run sovrascrive", e il blueprint diceva l'opposto. Ha ragione il blueprint: verificato il 2026-08-25 in `codingAgentLogger.ts` — l'unica scrittura per-entry è `appendFileSync` (riga 114), e le uniche troncature stanno in `clearAuditLog` e nella rotazione per dimensione, che nessun run invoca.
 
 ## 3. Scenari
 

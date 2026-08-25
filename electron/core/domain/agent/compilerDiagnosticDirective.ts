@@ -110,6 +110,49 @@ export function parseCompilerDiagnostics(output: string): CompilerDiagnostic[] {
   return found
 }
 
+/** A diagnostic about resolving a module, which a config or install fix clears, not an edit. */
+const MODULE_DIAGNOSTIC = /cannot find module|could not find a declaration file|failed to resolve import/i
+
+/** A file inside an installed package: never something the agent should be told to edit. */
+const IN_DEPENDENCY = /(^|[\\/])node_modules[\\/]/i
+
+/**
+ * What is left to fix once the directive currently in force has done its job — named, not ordered.
+ *
+ * A build output routinely carries both kinds at once, and the directive that wins suppresses the
+ * other entirely. Measured twice, with two different winners: run 6 of 2026-08-25 lost a `TS1192`
+ * behind the missing-dependency branch, and run 8 lost `TS7031`, `TS1192` and `TS2741` behind the
+ * module-resolution directive — `THE COMPILER NAMED THE FILE AND THE LINE` did not appear once in
+ * fifty steps, and the session closed at 0/14. The code errors were in the prompt the whole time
+ * with nothing pointing at them.
+ *
+ * This is a NOTE, deliberately, and the distinction is the one §5.6 was built on: a message
+ * carries one instruction for **now**. Ordering the config fix and the file edit in the same turn
+ * is how a correct directive gets overwritten by another correct directive. So this states what
+ * the compiler also reported and says it comes after — no imperative, no tool name, no "next tool
+ * call MUST".
+ *
+ * Returns null when every diagnostic is about module resolution, because then the directive in
+ * force already covers all of them and there is nothing further to name.
+ */
+export function buildDeferredDiagnosticNote(output: string): string | null {
+  const codeErrors = parseCompilerDiagnostics(output).filter(
+    (d) => !MODULE_DIAGNOSTIC.test(d.message) && !IN_DEPENDENCY.test(d.file)
+  )
+  if (codeErrors.length === 0) return null
+
+  const shown = codeErrors.slice(0, MAX_REPORTED)
+  const overflow = codeErrors.length - shown.length
+  return [
+    `\n\n[ALSO REPORTED, AFTER THE DIRECTIVE ABOVE]`,
+    `The same output carries ${codeErrors.length} error${codeErrors.length === 1 ? '' : 's'} the directive above does NOT fix. Do not act on ${codeErrors.length === 1 ? 'it' : 'them'} in this step — carry out the directive first; ${codeErrors.length === 1 ? 'it' : 'they'} will still be reported afterwards, and then the file to edit is named here:`,
+    ...shown.map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`),
+    overflow > 0 ? `- and ${overflow} more` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 /**
  * The directive for a command that failed with diagnostics a compiler already localised.
  *
@@ -120,8 +163,25 @@ export function parseCompilerDiagnostics(output: string): CompilerDiagnostic[] {
  * Returns null when nothing parsed, so the caller keeps its ordinary text.
  */
 export function buildDiagnosticFixDirective(output: string): string | null {
-  const diagnostics = parseCompilerDiagnostics(output)
-  if (diagnostics.length === 0) return null
+  const all = parseCompilerDiagnostics(output)
+  if (all.length === 0) return null
+
+  // Errors inside an installed package are never the project's code, and telling the model to
+  // rewrite one sends it editing a dependency. Run 10 of 2026-08-25 pinned `typescript@^4.7.3`
+  // and then could not parse the `@types/node` npm had installed: every diagnostic pointed into
+  // `node_modules/@types/node/ffi.d.ts`. Nothing in the workspace could have fixed that.
+  const diagnostics = all.filter((d) => !IN_DEPENDENCY.test(d.file))
+  if (diagnostics.length === 0) {
+    const example = all[0]
+    return [
+      `[THE ERRORS ARE INSIDE AN INSTALLED PACKAGE — YOUR CODE IS NOT THE PROBLEM]`,
+      `${all.length} error${all.length === 1 ? '' : 's'}, all of them in node_modules, e.g. ${example.file} line ${example.line}: ${example.message}`,
+      `A compiler cannot parse type definitions written for a newer version of itself. This is a toolchain version mismatch, not a defect in any file you wrote.`,
+      `Directives:`,
+      `1. Your next tool call MUST be "run_command" with: npm install --save-dev typescript@latest`,
+      `2. Do NOT edit any file under node_modules, and do NOT rewrite your own source for these errors.`,
+    ].join('\n')
+  }
 
   const first = diagnostics[0]
 

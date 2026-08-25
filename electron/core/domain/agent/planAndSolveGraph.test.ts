@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest'
-import { GoalDecompositionPlanner, PlanMilestone } from './planAndSolveGraph'
+import { GoalDecompositionPlanner, PlanMilestone, isCompletionMilestoneTitle } from './planAndSolveGraph'
+
+describe('isCompletionMilestoneTitle', () => {
+  it('recognises the closing milestone in both languages', () => {
+    expect(isCompletionMilestoneTitle('Riepilogo finale e arresto (invoke finish)')).toBe(true)
+    expect(isCompletionMilestoneTitle('Write the final report and finish')).toBe(true)
+    expect(isCompletionMilestoneTitle('🛑 Completamento dell ultimo task e arresto dell agente')).toBe(true)
+  })
+
+  it('treats a title that names a file as work, whatever words it uses', () => {
+    // The capability-shaped plan format puts prose in every title, and prose collides with
+    // these keywords: without the deliverable check these three read as the closing
+    // milestone, which would hide real work from getActiveMilestone entirely.
+    expect(isCompletionMilestoneTitle('The user can mark a task finished — `src/pages/TasksPage.tsx`')).toBe(false)
+    expect(isCompletionMilestoneTitle('Il riepilogo mostra i totali — `src/components/Riepilogo.tsx`')).toBe(false)
+    expect(isCompletionMilestoneTitle('Create src/components/FinishButton.tsx')).toBe(false)
+  })
+
+  it('keeps ordinary work milestones out', () => {
+    expect(isCompletionMilestoneTitle('Create src/App.tsx')).toBe(false)
+    expect(isCompletionMilestoneTitle('')).toBe(false)
+  })
+})
 
 describe('GoalDecompositionPlanner Unit Tests', () => {
   it('should initialize and compile progress prompt correctly', () => {

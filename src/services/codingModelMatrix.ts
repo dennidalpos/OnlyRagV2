@@ -52,12 +52,16 @@ export interface VerifiedModelRecord {
  * Models this app has been run against end to end.
  *
  * One entry, because one model has been run. `qwen2.5-coder:7b` drove every live session behind
- * blueprint §5.4: five sessions on 2026-08-24 alone, two ERESOLVE probes and three fifty-step
- * full-task runs, all read step by step.
+ * blueprint §5.4 to §5.6f: five sessions on 2026-08-24 alone, two ERESOLVE probes and three
+ * fifty-step full-task runs, plus the 2026-08-25 runs, all read step by step.
  *
- * The outcome is recorded as it happened, failures included. A "verified" badge that hid the
- * fact that no run has yet produced a green build would be worse than no badge: the user would
- * read it as a promise the app cannot keep.
+ * The outcome is recorded as it happened, failures included. The badge says the delivered
+ * project compiles because a run showed it compiling, and says the plan does not finish
+ * because no run has finished one. A "verified" badge that reported only the first half would
+ * be worse than no badge: the user would read it as a promise the app cannot keep.
+ *
+ * `qwen2.5-coder:14b` is deliberately NOT here. It was run once (2026-08-25, fullTask, clean
+ * system) and did worse — 0/13 verified, five failed builds — and one run is not an entry.
  *
  * To add a model here: run `npx vitest run --config vitest.live.config.mts`, read
  * `logs/coding_agent_audit.log`, and write down what it did. See docs/agent-live-testing.md.
@@ -66,10 +70,10 @@ export const VERIFIED_MODELS: VerifiedModelRecord[] = [
   {
     modelName: 'qwen2.5-coder:7b',
     evidence: {
-      date: '2026-08-24',
+      date: '2026-08-25',
       probes: ['eresolveRecovery.live.ts', 'fullTaskRun.live.ts'],
       outcome:
-        'Emits well-formed tool calls, recovers from an npm ERESOLVE conflict without --force, and reaches finish on the focused probe. On the fifty-step full task it scaffolds a project but has not yet produced a green build.',
+        'Emits well-formed tool calls, recovers from an npm ERESOLVE conflict without --force, and reaches finish on the focused probe. On the fifty-step full task it scaffolds a project that compiles, and runs the project\'s own check inside the session. It does not finish the plan: the fifty steps run out first, and a typecheck over every file still reports real errors it does not fix.',
     },
   },
 ]

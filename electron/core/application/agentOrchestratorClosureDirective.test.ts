@@ -369,4 +369,21 @@ describe('a repeated command must not abandon a milestone that is already delive
 
     expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).toBe('failed')
   })
+
+  it('leaves a delivered milestone alone when the loop is on a file it does not name', async () => {
+    // Run 9 of 2026-08-25 lost its last milestone here: m-1 `package.json` was written, correct
+    // and on disk, and it was marked FAILED because the model was looping on DashboardPage.tsx.
+    // The guard covered command loops only, so a loop on somebody else's file still cost a
+    // milestone its status — 12/13 instead of 13/13, with "fallita" in the report for work done.
+    writeWorkspaceFile('package.json', '{ "name": "app", "scripts": { "build": "vite build" } }\n')
+    writeWorkspaceFile('src/pages/DashboardPage.tsx', 'export default function D() { return null }\n')
+    const planner = plannerWith([{ id: 'm-1', title: 'The project declares its dependencies — `package.json`', status: 'in_progress' }])
+
+    await repeatUntilEscape(
+      { tool: 'write_file', parameters: { filePath: 'src/pages/DashboardPage.tsx', content: 'y' } } as AgentToolCall,
+      planner
+    )
+
+    expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).not.toBe('failed')
+  })
 })

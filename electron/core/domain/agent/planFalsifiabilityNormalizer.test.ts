@@ -74,6 +74,61 @@ describe('normalizePlanFalsifiability', () => {
     expect(result[0].title).toContain('Run the application to check it works.')
   })
 
+  it('keeps the entry as its own milestone when the closing one is the only thing to fold into', () => {
+    // The incremental fallback plan has exactly this shape: one implementation step that names
+    // no file (the workspace is unknown when it is written) plus the closing milestone. Folding
+    // here would rewrite "write the final report and stop" into a step carrying implementation
+    // criteria, which is how the finish tool stops recognising it.
+    const result = normalizePlanFalsifiability(
+      plan('Le modifiche richieste dal task sono implementate nei file del progetto', 'Riepilogo finale e arresto (invoke finish)')
+    )
+
+    expect(result).toHaveLength(2)
+    expect(result[0].title).toBe('Le modifiche richieste dal task sono implementate nei file del progetto')
+    expect(result[1].title).toBe('Riepilogo finale e arresto (invoke finish)')
+    expect(result.map((m) => m.id)).toEqual(['m-1', 'm-2'])
+  })
+
+  it('does not accept a bare directory as proof', () => {
+    // Four of the six plans generated live on 2026-08-25 opened with this exact shape, and in one
+    // run the model marked it verified by its own report at step 2: a directory has no extension,
+    // so nothing can check it, and not_applicable is closable by the model's judgement.
+    const directoryOnly = {
+      id: 'm-1',
+      title: 'The project has a clean architecture with a services folder — `src/services/`',
+      status: 'pending' as const,
+    }
+
+    expect(isFalsifiableMilestone(directoryOnly)).toBe(false)
+    expect(isFalsifiableMilestone({ id: 'm-2', title: 'Install `tailwindcss`', status: 'pending' })).toBe(false)
+  })
+
+  it('still accepts a command, which has a shape a directory does not', () => {
+    expect(isFalsifiableMilestone({ id: 'm-1', title: 'The build passes — `npm run build`', status: 'pending' })).toBe(true)
+    expect(isFalsifiableMilestone({ id: 'm-2', title: 'Types check — `npx tsc --noEmit`', status: 'pending' })).toBe(true)
+  })
+
+  it('folds a directory milestone into the real work instead of leaving a stamp', () => {
+    const result = normalizePlanFalsifiability(
+      plan('The project has a services folder — `src/services/`', 'The Tasks page lists tasks — `src/pages/TasksPage.tsx`')
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0].title).toContain('TasksPage.tsx')
+    // The requirement is not lost: it rides along as a criterion on the deliverable it qualifies.
+    expect(result[0].title).toContain('services folder')
+  })
+
+  it('keeps a criterion that trails the closing milestone as its own step, ahead of it', () => {
+    const result = normalizePlanFalsifiability(
+      plan('Riepilogo finale e arresto (invoke finish)', 'Ensure buttons have a 44x44 touch target.')
+    )
+
+    expect(result).toHaveLength(2)
+    expect(result[0].title).toBe('Ensure buttons have a 44x44 touch target.')
+    expect(result[1].title).toBe('Riepilogo finale e arresto (invoke finish)')
+  })
+
   it('preserves every requirement across the fold', () => {
     const criteria = ['Never allow horizontal scrolling.', 'Use responsive spacing and typography.']
     const merged = normalizePlanFalsifiability(plan('Create src/App.tsx', ...criteria))

@@ -4,6 +4,9 @@ import path from 'node:path'
 import os from 'node:os'
 import { planGenerationAppService } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
+import { extractDeliverablePaths } from '../domain/agent/milestoneDeliverableResolver'
+import { isFalsifiableMilestone } from '../domain/agent/planFalsifiabilityNormalizer'
+import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
 import type { AppSettings } from '../../../src/types'
 
 vi.mock('./ollamaAppService', () => ({
@@ -164,6 +167,88 @@ describe('PlanGenerationAppService', () => {
 
       expect(result.milestones[1].title).toBe('Build pulita')
       expect(result.milestones[1].verificationCommand).toBe('npm run build')
+    })
+  })
+
+  /**
+   * The shape rule of blueprint §1.5: a plan whose milestones only name files reaches 100% on a
+   * dead application. These lock the two halves that make the new shape safe — the capability
+   * is stated, and the path is still there for the deliverable probe to check.
+   */
+  describe('capability-shaped microtasks', () => {
+    const capturedPrompt = () => vi.mocked(ollamaAppService.generateStream).mock.calls[0][1] as string
+
+    it('asks the planner for what works, not for the file to create', async () => {
+      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+
+      await planGenerationAppService.generatePlanText({ prompt: 'Crea una dashboard', settings })
+
+      const prompt = capturedPrompt()
+      expect(prompt).toContain('EVERY MICRO-TASK STATES WHAT WORKS, THEN NAMES THE FILE THAT MAKES IT WORK')
+      expect(prompt).toContain('The Tasks page lists the tasks and marks one complete — `src/pages/TasksPage.tsx`')
+      expect(prompt).toContain('DO NOT WRITE: "- [ ] m-7: Create `src/pages/TasksPage.tsx`"')
+      // The entrypoint phase exists because a page that loads no script compiles to nothing
+      // (blueprint §5.6f): 14/15 milestones verified, zero JavaScript emitted.
+      expect(prompt).toContain('Phase B — Wiring')
+      // An inspection step names nothing on disk, so the normalizer folds it away: asking for
+      // one would spend a milestone the plan never gets back.
+      expect(prompt).toContain('Never write a microtask for reading, inspecting or analysing the workspace')
+    })
+
+    it('keeps the greenfield skeleton an imperative, not a cross-reference', async () => {
+      // Measured regression, 2026-08-25: the first live run with the rewritten prompt produced a
+      // plan that began at `src/` and never named index.html, main.tsx, vite.config.ts or
+      // tsconfig.json. Fifty steps, twenty-four writes, zero builds, no entrypoint on disk. The
+      // rewrite had turned "the first microtasks MUST establish the buildable project skeleton"
+      // into "start at phase A", and the model followed the format but not the pointer.
+      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+
+      await planGenerationAppService.generatePlanText({ prompt: 'Crea una dashboard da zero', settings })
+
+      const prompt = capturedPrompt()
+      expect(prompt).toContain('the FIRST microtasks MUST establish the buildable project skeleton')
+      for (const file of ['`package.json`', '`index.html`', '`vite.config.ts`', '`tsconfig.json`', '`src/main.tsx`', '`src/App.tsx`']) {
+        expect(prompt).toContain(file)
+      }
+    })
+
+    it('keeps the deliverable checkable when the title leads with the capability', async () => {
+      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+        onChunk(
+          '- [ ] m-1: La pagina carica lo script di ingresso — `index.html`\n' +
+            '- [ ] m-2: The user can mark a task finished — `src/pages/TasksPage.tsx`\n'
+        )
+        return { success: true }
+      })
+
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Task app', settings })
+
+      expect(result.milestones).toHaveLength(2)
+      expect(extractDeliverablePaths(result.milestones[0].title)).toEqual(['index.html'])
+      expect(extractDeliverablePaths(result.milestones[1].title)).toEqual(['src/pages/TasksPage.tsx'])
+      expect(result.milestones.every(isFalsifiableMilestone)).toBe(true)
+      // "finished" in a capability clause is not the closing milestone: reading it as one would
+      // hand the work to the finish tool and hide it from getActiveMilestone.
+      expect(isCompletionMilestoneTitle(result.milestones[1].title)).toBe(false)
+    })
+
+    it('ships a fallback plan in the shape it asks the planner for', async () => {
+      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'offline' })
+
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Crea una todo app', settings })
+
+      const operational = result.milestones.filter((m) => !isCompletionMilestoneTitle(m.title))
+      expect(operational.length).toBeGreaterThan(0)
+      for (const milestone of operational) {
+        // Every operational entry names a real file, so none of them is unprovable, and none
+        // names a bare directory — the shape that cost seven steps in the run of §5.4.
+        const deliverables = extractDeliverablePaths(milestone.title)
+        expect(deliverables.length).toBeGreaterThan(0)
+        expect(deliverables.some((d) => d.endsWith('/'))).toBe(false)
+      }
+      // No workspace was given, so no command could be resolved: the fallback must not invent one.
+      expect(result.milestones.every((m) => !m.verificationCommand)).toBe(true)
+      expect(result.planText).not.toContain('npm run build')
     })
   })
 })

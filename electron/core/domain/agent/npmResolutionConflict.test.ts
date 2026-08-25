@@ -3,6 +3,7 @@ import {
   buildNpmResolutionDirective,
   npmResolutionDirectiveFor,
   parseNpmResolutionConflict,
+  installableRange,
 } from './npmResolutionConflict'
 
 /** Verbatim from the live run of 2026-08-24 (npm 10 "npm error" prefix). */
@@ -112,5 +113,30 @@ describe('npmResolutionDirectiveFor', () => {
     expect(npmResolutionDirectiveFor(REAL_ERESOLVE_OUTPUT)).toContain('[DEPENDENCY VERSION CONFLICT — ERESOLVE]')
     expect(npmResolutionDirectiveFor(REAL_ERESOLVE_OUTPUT).startsWith('\n\n')).toBe(true)
     expect(npmResolutionDirectiveFor('build succeeded')).toBe('')
+  })
+})
+
+describe('installableRange', () => {
+  it('picks the highest alternative, so the shell never sees an OR operator', () => {
+    // Run 13 of 2026-08-25 ran `npm install eslint@^3 || ^4 || ... || ^9.7`: the shell executed
+    // the first install and then tried to run `^4` as a program. node_modules/.bin ended empty
+    // and the build could not find tsc.
+    expect(installableRange('^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7')).toBe('^9.7')
+  })
+
+  it('leaves an ordinary single range alone', () => {
+    expect(installableRange('^8.0.0')).toBe('^8.0.0')
+    expect(installableRange('>= 7.0.0')).toBe('>=7.0.0')
+  })
+
+  it('produces a command with no shell operator in it', () => {
+    const directive = buildNpmResolutionDirective({
+      installed: { name: 'eslint', version: '9.7.0' },
+      requiredBy: { name: 'eslint-plugin-react', version: '7.32.2' },
+      requiredRange: '^3 || ^4 || ^9.7',
+    } as any)
+
+    expect(directive).toContain('npm install eslint@^9.7')
+    expect(directive).not.toContain('npm install eslint@^3 ||')
   })
 })

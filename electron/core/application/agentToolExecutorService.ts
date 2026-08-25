@@ -14,9 +14,13 @@ import { sanitizePowerShellCommand } from '../domain/agent/shellStreamGuard'
 import { webClient } from '../infrastructure/http/webClient'
 import { applyFuzzyReplace, validateAST } from '../domain/agent/fuzzyPatchEngine'
 import { parseTestRunOutput } from '../domain/agent/testResultParser'
+import { declaredDependencies, findVersionReality, buildVersionRealityDirective } from '../domain/agent/dependencyVersionReality'
+import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
+import { parseVersionNotFound, buildVersionNotFoundDirective } from '../domain/agent/npmVersionNotFound'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
-import { buildDiagnosticFixDirective } from '../domain/agent/compilerDiagnosticDirective'
+import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
+import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
 import { classifyWriteFileTarget } from '../domain/agent/toolSchemaValidator'
 import { detectRedundantWrite, buildRedundantWriteNotice } from '../domain/agent/redundantWriteDetector'
@@ -181,6 +185,8 @@ export class AgentToolExecutorService {
   private repo = new FileSystemRepository()
   private journal = new AtomicWorkspaceJournal()
   private shellSessions = new Map<string, PersistentPowerShellSession>()
+  /** Packages whose registry facts have already been delivered; see versionRealityDirective. */
+  private reportedVersionFacts = new Set<string>()
 
   public getJournal(): AtomicWorkspaceJournal {
     return this.journal
@@ -289,6 +295,66 @@ export class AgentToolExecutorService {
     if (verdict.ok || !verdict.directive) return ''
     logger.log('WARN', 'AgentToolExecutor', `[UNDECLARED_IMPORT] ${filePath} imports ${verdict.undeclared.join(', ')}`)
     return `\n\n${verdict.directive}`
+  }
+
+  /**
+   * The first install target the npm registry does not know, if any.
+   *
+   * Only explicit targets are considered: a bare `npm install` names none and legitimately
+   * reinstalls from the lockfile. A registry that cannot be reached answers "exists", so a
+   * dropped connection never turns into a refused install.
+   */
+  private async firstNonexistentInstallTarget(command: string): Promise<string | null> {
+    const requested = extractRequestedPackages(command)
+    if (requested.length === 0) return null
+    const facts = await npmRegistryClient.lookupAll(requested.map((r) => r.name))
+    return facts.find((f) => !f.exists)?.name ?? null
+  }
+
+  /**
+   * Checks a freshly written `package.json` against the npm registry, and says so.
+   *
+   * The one thing a model with a knowledge cutoff structurally cannot get right on its own.
+   * Across the live runs of 2026-08-25 it wrote `typescript@^4.7.3` (which could not parse the
+   * `@types/node` npm installed alongside it, and took a run to 0/12), `vite@^4.0.0`,
+   * `react@^18.2.0`, and two packages that do not exist on npm at all. The registry answers both
+   * questions in one GET, so the fact arrives at the step that wrote the file rather than as an
+   * unexplained `Cannot find module` twenty steps later.
+   *
+   * Only on `package.json`, and only when something is actually wrong: silence otherwise, so
+   * the ordinary write result is untouched. A registry that cannot be reached says nothing —
+   * "this package does not exist" must never be the way a dropped connection presents.
+   */
+  private async versionRealityDirective(filePath: string | undefined, content: string): Promise<string> {
+    if (!/(^|[\\/])package\.json$/i.test(String(filePath || ''))) return ''
+    let manifest: unknown
+    try {
+      manifest = JSON.parse(content)
+    } catch {
+      return '' // Malformed JSON is the AST validator's business, not this check's.
+    }
+    const declared = declaredDependencies(manifest)
+    if (declared.length === 0) return ''
+
+    const facts = await npmRegistryClient.lookupAll(declared.map((d) => d.name))
+    const findings = findVersionReality(declared, facts)
+
+    // Each package is reported once and then never again. Runs 14 and 15 of 2026-08-25 both
+    // aborted early with `package.json` rewritten over and over: the check runs on every write,
+    // so a range the model chose not to change produced the same directive at every turn. That
+    // is the scale lesson already written in loopEscapePolicy.ts and toolRejectionEscalation.ts
+    // — a directive that did not land the first time does not land on the ninth, it just costs
+    // the steps. The fact has been delivered; what the model does with it is the plan's problem.
+    findings.nonexistent = findings.nonexistent.filter((name) => !this.reportedVersionFacts.has(name))
+    findings.outdated = findings.outdated.filter((o) => !this.reportedVersionFacts.has(o.name))
+
+    const directive = buildVersionRealityDirective(findings)
+    if (!directive) return ''
+    for (const name of [...findings.nonexistent, ...findings.outdated.map((o) => o.name)]) {
+      this.reportedVersionFacts.add(name)
+    }
+    logger.log('WARN', 'AgentToolExecutor', `[VERSION_REALITY] package.json declares versions the registry contradicts`)
+    return directive
   }
 
   /**
@@ -841,7 +907,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {
           return {
-            outputForHistory: `Successfully wrote file ${filePath}${this.importIntegrityDirective(filePath, content, workspacePath)}`,
+            outputForHistory: `Successfully wrote file ${filePath}${this.importIntegrityDirective(filePath, content, workspacePath)}${await this.versionRealityDirective(filePath, content)}`,
             logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}`,
             changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, content),
           }
@@ -1083,6 +1149,23 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: 'Missing command parameter', logMessage: 'Missing command parameter', isTerminal: true }
         }
 
+        // An install of a package the registry has never heard of cannot succeed, so it is
+        // refused before it spends a turn. Measured across 2026-08-25: `@tailwindcss/react` was
+        // ordered six times in run 16 alone and thirteen times across the series, each attempt
+        // costing a step and returning the same npm 404. The registry was already being asked
+        // about `package.json`; asking about the command closes the other half.
+        const unknownPackage = await this.firstNonexistentInstallTarget(cmd)
+        if (unknownPackage) {
+          const refusal = [
+            `[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]`,
+            `The npm registry has no package named "${unknownPackage}". This command was not executed, because no flag makes an install of a non-existent package succeed.`,
+            `Directives:`,
+            `1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.`,
+            `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
+          ].join('\n')
+          return { outputForHistory: refusal, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
+        }
+
         // Shell-Tool Confusion Guard: detect when the model passes a registered
         // tool name as a shell command (e.g. write_file "path" "content").
         // This causes guaranteed timeouts since tool names are not OS executables.
@@ -1231,8 +1314,29 @@ Do not retry the same installation. Continue without this tool or ask the user t
             // missing-dependency branch because ERESOLVE output also mentions unresolved
             // packages, and "install the missing dependency" is the advice that just failed.
             const resolutionConflictDirective = npmResolutionDirectiveFor(rawOutput)
+            // ETARGET: a version that was never published. Its sibling ERESOLVE has been handled
+            // since §5.3 and this case never was, so run 17 of 2026-08-25 repeated the same
+            // refused install until the circuit breaker stopped the session. Placed after
+            // ERESOLVE because that output can also mention versions, and a peer conflict is a
+            // different fix.
+            const versionNotFound = resolutionConflictDirective ? null : parseVersionNotFound(rawOutput)
+            const versionNotFoundDirective = versionNotFound
+              ? buildVersionNotFoundDirective(versionNotFound, (await npmRegistryClient.lookup(versionNotFound.packageName)).latest)
+              : ''
+            // "Cannot find module X" is two different failures wearing one message, and telling
+            // them apart needs the disk, not the text: a package that is already in node_modules
+            // cannot be installed into existence again. See moduleResolutionDiagnostic.ts for the
+            // runs that spent their steps reinstalling packages that were already there.
+            const unresolved = resolutionConflictDirective ? [] : unresolvedPackages(rawOutput)
+            const moduleCause = workspacePath && unresolved.length > 0
+              ? classifyModuleDiagnostic(rawOutput, (pkg) => agentToolFileRepository.missingFromNodeModules(workspacePath, [pkg]).length === 0)
+              : 'none'
+            const moduleResolutionDirective = moduleCause === 'compiler_resolution'
+              ? buildModuleResolutionDirective(rawOutput, unresolved)
+              : ''
             const isMissingDependency =
               !resolutionConflictDirective &&
+              moduleCause !== 'compiler_resolution' &&
               (lowerOut.includes('cannot find module') || lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import'))
             const missingDepDirective = isMissingDependency
               ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation or runtime failed because an imported module/package is missing. Install the missing dependency via run_command (e.g. 'npm install <package-name>') or add it to 'package.json' before re-running.`
@@ -1259,10 +1363,14 @@ Do not retry the same installation. Continue without this tool or ask the user t
             // fired (ERESOLVE, missing dependency, npm naming, interactive prompt), the tail
             // stops issuing an instruction of its own and defers to it.
             const specificDirectiveFired = Boolean(
-              permsDirective || resolutionConflictDirective || viteMissingDirective ||
-              createViteDirective || missingDepDirective || npmNamingDirective || interactivePromptDirective
+              permsDirective || resolutionConflictDirective || versionNotFoundDirective || viteMissingDirective ||
+              createViteDirective || missingDepDirective || moduleResolutionDirective || npmNamingDirective || interactivePromptDirective
             )
             const diagnosticDirective = specificDirectiveFired ? null : buildDiagnosticFixDirective(rawOutput)
+            // The errors the winning directive does not fix, named so they stop being invisible,
+            // and explicitly deferred so this stays one instruction for now. See
+            // buildDeferredDiagnosticNote for the two runs that lost them.
+            const deferredDiagnosticNote = specificDirectiveFired ? buildDeferredDiagnosticNote(rawOutput) || '' : ''
             const healingTail = specificDirectiveFired
               ? 'DO NOT ask the user vague clarification questions: carry out the directive above.'
               : diagnosticDirective ||
@@ -1272,7 +1380,7 @@ Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''}${
 Captured Error Stack Trace & Failure Output:
 \`\`\`
 ${rawOutput.slice(0, 4000)}
-\`\`\`${permsDirective}${resolutionConflictDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${npmNamingDirective}${interactivePromptDirective}
+\`\`\`${permsDirective}${resolutionConflictDirective}${versionNotFoundDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${moduleResolutionDirective}${npmNamingDirective}${interactivePromptDirective}${deferredDiagnosticNote}
 
 ${healingTail}`
             return {

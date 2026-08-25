@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../domain/agent/milestoneDeliverableResolver'
+import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
   awaitingVerificationNote,
@@ -459,11 +459,23 @@ export function resolvePlanDirectiveForTurn(
  */
 export function isActiveMilestoneDelivered(
   workspacePath: string | null | undefined,
-  goalPlanner: GoalDecompositionPlanner
+  goalPlanner: GoalDecompositionPlanner,
+  loopTarget?: string | null
 ): boolean {
   if (!workspacePath) return false
   const active = goalPlanner.getActiveMilestone()
   if (!active || isCompletionMilestoneTitle(active.title)) return false
+
+  // A loop on a file the milestone itself names IS about this milestone, and the escape must
+  // keep its power there. Compared on normalised paths because tool targets arrive absolute
+  // while deliverables come out of the title relative — a literal comparison would call every
+  // loop unrelated and disarm the escape completely.
+  if (loopTarget) {
+    const normalisedTarget = loopTarget.replace(/\\/g, '/').toLowerCase()
+    const ownFiles = extractDeliverablePaths(active.title).map((p) => p.replace(/\\/g, '/').toLowerCase())
+    if (ownFiles.some((file) => normalisedTarget === file || normalisedTarget.endsWith(`/${file}`))) return false
+  }
+
   const probe = createWorkspaceDeliverableProbe(workspacePath)
   return resolveMilestoneDeliverableStatus(active.title, probe) === 'satisfied'
 }

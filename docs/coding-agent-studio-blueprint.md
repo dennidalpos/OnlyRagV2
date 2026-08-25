@@ -60,11 +60,12 @@ mindmap
         Promozione milestone solo con tutti i deliverable presenti
         Direttiva dedicata per milestone senza artefatto (unprovableMilestoneDirective)
         Elenco dei deliverable ancora mancanti dopo una consegna parziale (partialDeliveryDirective)
+        Microtask che dichiarano la capacità e nominano il file (capacità + path, 5.6g)
+        Milestone del controllo di progetto appesa dalla compilazione (ensureRunnableMilestone)
       Presente ma non efficace
-        Microtask orientati ai file invece che alle funzionalità
         Deliverable di directory non riconosciuti (una milestone "crea la cartella X" resta indimostrabile)
       Cosa manca
-        Pianificazione gerarchica a 4 macro-fasi
+        Misura dal vivo della nuova forma del piano
         Sub-task branching dinamico su imprevisti tecnici
     Compatibilita Universale Ollama
       Cosa c'è
@@ -119,10 +120,13 @@ Presenti solo Monaco DiffEditor, Git Diff Panel e cronologia in `.onlyrag/sessio
 
 **Presente ma non efficace**:
 
-* **Microtask orientati ai file**: dieci milestone su quindici dicevano "crea il file X"; nessuna esprimeva un comportamento verificabile. Un piano di questa forma si chiude al 100% consegnando un'applicazione che non parte.
-* **Promozione parziale** ([`agentOrchestratorPlanTool.ts`](../electron/core/application/agentOrchestratorPlanTool.ts)): quando `update_plan` esegue il `verificationCommand` della milestone e questo esce 0, la milestone è promossa **senza alcun controllo sui deliverable** — a differenza della promozione post-build, che passa da [`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts). Così `m-2` ("crea `vite.config.ts` e `tsconfig.json`") è stata verificata senza `tsconfig.json`, rendendo impossibile lo `tsc && vite build` dichiarato dal progetto stesso.
+* **Deliverable di directory non riconosciuti**: `extractDeliverablePaths` richiede `stem.ext`, quindi una milestone *"Create `src/services` folder"* non nomina alcun artefatto e resta `not_applicable`. Costò sette passi su cinquanta in un run (§5.4); la strada per chiuderla è stata valutata e scartata, con il motivo, in §5.4. È l'unica voce di questa sezione ancora aperta.
 
-**Manca**: pianificazione gerarchica a 4 macro-fasi (`Research & Workspace Inventory` → `Core Architecture & Scaffolding` → `Implementation & Component Logic` → `Build Verification, Visual Validation & Artifact Delivery`); sub-task branching dinamico su imprevisti tecnici.
+> **Applicato in §5.6g, e non ancora misurato dal vivo**: i **microtask orientati ai file** — dieci milestone su quindici dicevano "crea il file X" e nessuna esprimeva un comportamento, così il piano poteva chiudersi al 100% su un'applicazione che non parte. Il formato ora dichiara la capacità e nomina il path nello stesso titolo. Perché non basta togliere il path, e perché tre delle quattro macro-fasi qui sotto non potevano essere milestone, sta in §5.6g.
+
+> **Chiuso, e la stesura precedente lo dava ancora per aperto**: la *promozione parziale* di [`agentOrchestratorPlanTool.ts`](../electron/core/application/agentOrchestratorPlanTool.ts) — `update_plan` promuoveva sull'exit code del `verificationCommand` **senza controllare i deliverable**, così `m-2` ("crea `vite.config.ts` e `tsconfig.json`") passava senza `tsconfig.json`. Verificato il 2026-08-25: quel percorso instrada ora ogni aggiornamento in `resolveMilestoneUpdate` ([`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts)) **dopo** l'esecuzione del comando, quindi un comando verde non basta più a promuovere una milestone a cui manca un file (§5.2).
+
+**Manca**: sub-task branching dinamico su imprevisti tecnici. La pianificazione gerarchica a 4 macro-fasi (`Research & Workspace Inventory` → `Core Architecture & Scaffolding` → `Implementation & Component Logic` → `Build Verification, Visual Validation & Artifact Delivery`) è stata affrontata in §5.6g e **solo in parte adottata**: tre delle quattro fasi non potevano diventare milestone, e la lettura del perché sta lì.
 
 ### 1.6. Compatibilità Universale Ollama
 
@@ -373,7 +377,7 @@ Tre misure contro l'Ollama locale del 2026-08-24, qui perché **contraddicono ci
 
 Il rischio quindi non è chiedere troppo: è che `deriveMaxContextChars` derivi il budget dal `num_ctx` che l'app ha **scelto** invece che da quello allocato. Se divergono, `HeuristicContextCompactor` non scatta e il prompt perde le istruzioni senza che nulla lo segnali. Oggi non morde (~6k token contro 16.384 reali) ma scala con skill, repo map e storia.
 
-> **Rettifica collegata**: la capacità dichiarata dal modello **non viene mai letta** dal runtime. `resolveMaxContextTokens` guarda solo tier VRAM e RAM; l'unico `contextLength` nel codice sta in `hardwareRecommendationEngine.ts`, che è UI. Su una macchina da 32 GB tetto hardware e capacità del modello coincidono a 32.768 **per coincidenza**.
+> **Rettifica collegata**: la capacità dichiarata dal modello **non viene mai letta** dal runtime. `resolveMaxContextTokens` ([`hardwareProfileTiers.ts`](../src/services/hardwareProfileTiers.ts), chiamata da `hardwareProfileResolver.ts`) guarda solo tier VRAM e RAM. I due `contextLength` che esistono nel codice sono entrambi di sola presentazione: `hardwareRecommendationEngine.ts` e il `getModelMetrics` di `ollamaHttpClient.ts` (§5.5), che legge `details.context_length` **per disegnare il badge** e non per dimensionare la richiesta. Su una macchina da 32 GB tetto hardware e capacità del modello coincidono a 32.768 **per coincidenza**.
 
 ### 5.6. Applicato — l'arbitro delle direttive e la build irraggiungibile
 
@@ -561,6 +565,124 @@ Milestone verificate: **0/15**. È il numero onesto, e l'attesa era stata dichia
 * Applicato, deterministico: `ensureRunnableMilestone` in [`planCompilation.ts`](../electron/core/domain/agent/planCompilation.ts) aggiunge come quarto passo della compilazione una milestone che il piano fatto di soli file non può contenere — *"Verify the application builds and runs end to end"* — citando il comando del progetto **verbatim**. Non nomina file, quindi nessuna scrittura la chiude. Se il progetto non dichiara un comando non viene aggiunto nulla: inventarne uno sarebbe la verifica fabbricata che questo codice continua a togliere.
 * **Non applicato**: la riprogettazione a quattro macro-fasi. Il pezzo sopra impedisce al piano di dichiarare 100% su un progetto morto, ma non cambia la forma dei microtask.
 
+### 5.6g. Applicato — la forma del piano, e perché tre delle quattro macro-fasi non sono milestone
+
+La PRIORITÀ 1 del tracker, denunciata da §1.5 da prima che iniziasse tutto il resto: dieci milestone su quindici dicono *"crea il file X"*, nessuna dice *"la navigazione fra Dashboard e Tasks funziona"*. Il pezzo deterministico era già stato applicato (`ensureRunnableMilestone`, §5.6f); questa è la riprogettazione della **generazione**.
+
+**La correzione NON è togliere il path, ed è il punto che va letto prima di toccare [`planGenerationAppService.ts`](../electron/core/application/planGenerationAppService.ts).** Il path è ciò che rende la milestone falsificabile: il probe lo controlla su disco, `milestoneUpdateAuthority` rifiuta `verified` finché manca, e soprattutto `normalizePlanFalsifiability` **cancella** ogni voce che non nomina né un path né un comando, foldandola come criterio nella precedente. Una milestone scritta come pura funzionalità — *"la navigazione fra Dashboard e Tasks funziona"* — sparisce dal piano **prima che l'agente la veda**. Il titolo porta quindi entrambi: la capacità davanti, così il piano dichiara cosa significa "fatto", e il path in coda, così il sistema può ancora controllarlo.
+
+Formato applicato: `- [ ] m-7: The Tasks page lists the tasks and marks one complete — \`src/pages/TasksPage.tsx\``, contro il precedente `- [ ] m-7: Create \`src/pages/TasksPage.tsx\``. La granularità non cambia — *1 file = 1 milestone* resta, ed è la regola anti-churn misurata in §5.4 — cambia cosa il titolo afferma.
+
+**Delle quattro macro-fasi proposte da §1.5, una sola poteva essere lavoro e nessuna poteva essere una milestone in più.** Verificato leggendo i moduli, non assunto:
+
+* *Research & Workspace Inventory* **non può essere una milestone**: non nomina niente su disco, quindi il normalizzatore la folda via. È diventata un'istruzione al planner ("non scrivere microtask di analisi: fai quella lettura mentre scrivi il piano"), che è ciò che era davvero.
+* *Core Architecture & Scaffolding* e *Implementation & Component Logic* sono **ordinamento**, non granularità: le fasi A e C del prompt.
+* *Build Verification* esisteva già come `ensureRunnableMilestone`, che la appende con il comando del progetto verbatim. Il prompt ora dice esplicitamente di **non** scriverne una a mano quando il progetto non dichiara comandi — inventarla sarebbe la verifica fabbricata che questo codice continua a togliere.
+* *Visual Validation & Artifact Delivery* non è nel prompt: quel tooling non esiste (§5.7). Chiedere al modello di pianificare una fase che nessun tool può eseguire è la classe di difetto già trovata quattro volte — **un'istruzione che non può essere eseguita**.
+
+È stata aggiunta una fase che la proposta non aveva, e la aggiunge una misura: **fase B, il wiring dell'entrypoint**. Il 2026-08-25 un progetto con `index.html` valido che non referenziava alcuno script compilava zero JavaScript con 14/15 milestone verificate (§5.6c, §5.6f). `entrypointIntegrity` lo ripara a valle; il piano ora lo dichiara a monte.
+
+**Due difetti latenti resi raggiungibili dal nuovo formato, trovati e chiusi qui:**
+
+* **`isCompletionMilestoneTitle` leggeva una sottostringa.** *"The user can mark a task finished — `src/pages/TasksPage.tsx`"* veniva riconosciuto come **milestone di chiusura**: esente dalla falsificabilità, saltato da `getActiveMilestone`, e affidato al finish tool che quel file non scriverà mai. In italiano la collisione è ancora più facile (`riepilogo` è anche un nome di componente). Ora il keyword non basta: una milestone che nomina un artefatto è lavoro, qualunque parola usi. Il dubbio si risolve verso "questo è lavoro", perché scambiare lavoro per la chiusura lo nasconde del tutto, mentre l'errore opposto lascia solo una voce in più in checklist.
+* **Un criterio poteva essere assorbito dalla milestone di chiusura.** `normalizePlanFalsifiability` lo vieta esplicitamente in un ramo e lo faceva nell'altro: quando non esiste lavoro reale a cui attaccarlo, il criterio finiva dentro *"scrivi il report finale e fermati"* — che è come il finish tool smette di riconoscerla. Ora in quel caso resta una milestone propria, coerente con la regola che il modulo dichiara già per sé: nel dubbio si tiene la voce.
+
+**Piani di fallback riscritti nella stessa forma.** Sono il template che l'utente legge nella dialog di approvazione, e portavano tre delle trappole misurate: un deliverable di directory nuda (`src/`, che `extractDeliverablePaths` non estrae — sette passi persi in §5.4), un comando di verifica inventato (`npm run build` su un workspace che non lo dichiara), e un microtask di analisi che nessun disco può dimostrare. Nessuna delle tre è più lì.
+
+**Stato dei test:** typecheck pulito, **1357 test su 142 file** verdi (erano 1349), catena `npm run lint` completa verde.
+
+### 5.6h. Misurato — cinque giri sulla stessa sonda, e cosa ha retto
+
+Il 2026-08-25 la forma nuova è stata misurata dal vivo cinque volte di seguito sulla sonda `fullTask`, `qwen2.5-coder:7b`, workspace azzerato ogni volta. Le uniche cifre affidabili sono le righe `TOOL EXECUTION INITIATED`: il log contiene il prompt intero a ogni passo, quindi contare le occorrenze di un marcatore lo gonfia di un fattore pari al numero di turni — errore commesso e corretto durante questa stessa analisi.
+
+| | run 1 | run 2 | run 3 | run 4 | run 5 |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| `write_file` | 24 | 24 | 24 | 18 | 17 |
+| `run_command` | 4 | 5 | **0** | **12** | 6 |
+| `update_plan` | 5 | 4 | 0 | 2 | 0 |
+| `index.html` su disco | no | no | sì | sì | solo `public/` |
+| milestone verificate | 2/9 | 4/7 | 0/11 | 2/13 | 0/8 |
+
+**Il formato è stato adottato dal modello al primo colpo.** Otto milestone su otto nella forma capacità + path, e fra queste *"Navigation between Dashboard and Tasks pages is working — `src/App.tsx`"*, che è testualmente la frase che §1.5 dichiarava non essere mai comparsa in un piano. Due avvertenze che il log impone: `m-2` e `m-4` del primo run sono **copiate verbatim dagli esempi del prompt**, quindi parte dell'aderenza è imitazione e non generalizzazione; e titoli come *"The Dashboard page is created"* mostrano che il linguaggio da deliverable rientra dalla finestra.
+
+**La prima ondata era una regressione, ed era mia.** Riscrivendo il prompt avevo degradato un imperativo in un rimando — *"the first microtasks MUST establish the buildable project skeleton (`package.json`, `index.html`, …)"* era diventato *"start at phase A"*. Nei run 1 e 2 il piano partiva dalle pagine: nessun entrypoint su disco, zero build in cento passi complessivi, e `entrypointIntegrity` che non può nemmeno scattare perché pretende una pagina HTML da ispezionare. Rimesso l'imperativo con l'elenco dei file, il run 2 ha prodotto **lo stesso identico piano**: la leva del prompt è stata provata due volte e ha fallito due volte. Il motivo si legge nei piani stessi — il task dell'utente prescrive una struttura a cartelle, e vince l'istruzione più vicina e concreta.
+
+**Da lì il rimedio ha cambiato natura**, ed è la mossa che questo codice già conosce: la conoscenza sta nell'app, non nel modello. [`ensureEntrypointMilestone`s in `planCompilation.ts`](../electron/core/domain/agent/planCompilation.ts) antepone deterministicamente le milestone di ingresso, come `ensureRunnableMilestone` appende la prova — quinto passo della compilazione, con la stessa forma capacità + path, e stretto per costruzione: non fa nulla se il workspace ha già manifest o pagina d'ingresso, e **non fa nulla se il piano non nomina file web**, così un piano Python non riceve mai uno scheletro Vite.
+
+**Cosa contiene la lista, e la regola arrivata sbagliando due volte.** Non "uno scaffold", non "il minimo che serve a Vite": **esattamente i file senza i quali il controllo che il progetto stesso dichiara non può passare.**
+
+* `package.json` era stato escluso assumendo che `npm install` lo creasse. Il run 3 ha emesso **zero comandi in cinquanta passi**, e senza manifest nessuna direttiva può nominarne uno: `dependencies_missing` non ha nulla da confrontare, `verification_due` non trova comandi dichiarati, `ensureRunnableMilestone` non appende niente. Un workspace senza manifest non ha percorso verso alcun comando.
+* `tsconfig.json` era stato escluso perché una build Vite non lo richiede — vero di Vite, falso del progetto: il run 4 ha scritto `"build": "tsc && vite build"` nel proprio manifest, e `tsc` senza config esce stampando l'usage.
+
+**Il run 4 è il migliore della serie e il primo con un'applicazione vera.** Piano aperto dalle tre milestone antemesse, 12 comandi contro gli 0 del run precedente, tutti i file pianificati su disco. Build a mano nel workspace consegnato: **38 moduli e 180 kB di JavaScript** (`npx vite build`), contro i 2 moduli e zero JS di §5.6c e i 14 di §5.6f. `npm run build` però falliva, per il `tsconfig.json` assente di cui sopra.
+
+**Il run 5 ha esposto un difetto della guardia**, non del meccanismo: il piano nominava `public/index.html` e un controllo unico *"il piano cita dell'HTML"* spegneva il passo **per intero**, perdendo anche `tsconfig.json` e `src/main.tsx` per via di un solo file fuori posto — che per giunta una build Vite di default non usa come entry. Ogni voce è ora giudicata per conto proprio, e solo un `index.html` alla radice conta come entry già coperto.
+
+**Il run 6, con le voci giudicate indipendentemente, porta la catena dove non era mai arrivata.** Tutte e quattro le milestone di ingresso antemesse e tutte e quattro su disco; 26 `write_file`, 12 `run_command`, dieci file sorgente consegnati. E soprattutto `npm run build` — il comando che il progetto stesso dichiara — **viene eseguito e riporta quattro errori veri**, con file, riga e codice:
+
+```
+src/App.tsx(3,56): error TS2792: Cannot find module 'react-router-dom'.
+src/components/Button.tsx(3,25): error TS2792: Cannot find module 'tailwind-merge'.
+src/components/HamburgerMenu.tsx(3,24): error TS2792: Cannot find module 'react-icons/fa'.
+src/pages/TasksPage.tsx(3,8): error TS1192: Module '…/src/components/TaskCard' has no default export.
+```
+
+Due giri prima quello stesso comando usciva stampando l'usage di `tsc`, e prima ancora non esisteva alcun comando da eseguire. È lo stato che §5.6e descrive come quello voluto: **il controllo raggiunge tutti i file e dice la verità**. Il progetto non compila ancora — 2/14 milestone — ma adesso fallisce dicendo perché.
+
+**E qui il run 6 promuove un'ipotesi del tracker a osservazione.** Quelle quattro diagnostiche sono arrivate al modello (`[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]` le contiene per intero) e la direttiva `THE COMPILER NAMED THE FILE AND THE LINE` **non è comparsa**. È il comportamento progettato in §5.6e — quando una direttiva più specifica è già scattata, la coda diagnostica rimanda invece di aggiungere una seconda istruzione — e tre errori su quattro sono `Cannot find module`, cioè forma-dipendenza. Il costo però ora è visibile: nello stesso output c'era **`TS1192`, che non è una dipendenza** ed è esattamente il caso che la direttiva file+riga esiste per servire, e il ramo dipendenze l'ha soppressa insieme alle altre. Un output misto fa perdere l'errore di codice.
+
+**Il run 7 chiude la milestone-cartella e scopre il collo di bottiglia successivo.** L'asticella di falsificabilità accettava **qualunque** token fra backtick, quindi `` `src/services/` `` passava: nessuna estensione, `extractDeliverablePaths` non trova nulla, la milestone resta `not_applicable` — e `not_applicable` è chiudibile dal giudizio del modello. Quattro piani su sei aprivano così e in un run il timbro è arrivato al passo 2. Il commento che giustificava l'asticella bassa (*"nothing downstream will close it without evidence any more"*) era falso, e la misura lo dimostra. Ora un token fra backtick vale come prova solo se ha la forma di un comando (spazio fra programma e argomenti) o di un file (estensione); una cartella diventa un **criterio** sulla milestone reale accanto, quindi il requisito resta letto e il timbro sparisce. Questo evita la strada scartata in §5.4 — non converte una milestone chiudibile in una bloccante, la converte in un criterio. Risultato al run 7: **quattordici milestone su quattordici nominano un file vero**, per la prima volta in sette giri, e 23 comandi eseguiti (il massimo della serie).
+
+**E il collo di bottiglia adesso è uno solo, identico nei run 6 e 7: un errore di configurazione che si presenta come un errore di dipendenza.** Il `tsconfig.json` che il modello scrive porta `"module": "ESNext"` e **nessun `moduleResolution`**; con quella combinazione TypeScript ripiega su `classic`, che in `node_modules` non guarda, e `tsc` emette `TS2792 Cannot find module` per pacchetti **realmente installati**. L'agente risponde reinstallandoli — al run 7 `@mui/material` cinque volte e `react-router-dom @mui/material` quattro — e brucia lì la sessione. Il dato per distinguere i due casi esiste già (`missingFromNodeModules` dice se il pacchetto è su disco), e `TS2792` stampa da sé il rimedio, che è una modifica a `tsconfig.json`: cioè il ramo `THE COMPILER NAMED THE FIX` che già esiste. È la stessa forma di tutto §5: **il sistema possiede l'informazione giusta e ne consegna una sbagliata.** Sta nel tracker come PRIORITÀ 1 BIS.
+
+**Il run 8 abbatte il muro delle dipendenze, e la direttiva è obbedita.** [`moduleResolutionDiagnostic.ts`](../electron/core/domain/agent/moduleResolutionDiagnostic.ts) distingue le due cause guardando il disco invece del testo: se ogni pacchetto nominato è già in `node_modules` non è una dipendenza mancante, e la direttiva ordina una sola cosa — `write_file` su `tsconfig.json` con `"moduleResolution"` — vietando l'install. Basta un pacchetto davvero assente perché torni a vincere il ramo install: il dubbio si risolve verso la mossa economica e reversibile. Comparsa in 13 turni, **obbedita**: il `tsconfig.json` consegnato porta `"moduleResolution": "bundler"`, e il progetto non riporta più un solo `Cannot find module`. Restano solo errori di codice veri:
+
+```
+src/components/Button.tsx(6,19): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/components/HamburgerMenu.tsx(8,6): error TS2741: Property 'open' is missing in type ...
+src/main.tsx(6,8): error TS1192: Module '.../src/App' has no default export.
+```
+
+**E il difetto dell'output misto resta, con un attore diverso.** `TS7031`, `TS1192` e `TS2741` sono arrivati al modello, e `THE COMPILER NAMED THE FILE AND THE LINE` non è comparso **nemmeno una volta**: negli stessi output sopravviveva qualche `TS2792`, quindi scattava la direttiva di risoluzione, che è `specificDirectiveFired` e sopprime la coda diagnostica. La correzione ha cambiato **quale** direttiva maschera gli errori di codice, non il fatto che vengano mascherati — 0/14 milestone. È la voce già a tracker dopo il run 6, ora confermata da un secondo meccanismo: finché un output porta insieme diagnostiche di modulo ed errori di codice localizzabili, i secondi non ricevono istruzione.
+
+**Il run 9 è il primo che finisce.** `buildDeferredDiagnosticNote` **nomina** gli errori di codice che la direttiva vincente non corregge — file, riga, codice — e li rinvia esplicitamente: nessun imperativo, nessun nome di tool, così il messaggio continua a portare una sola istruzione per adesso, che è la regola di §5.6. Sbloccata la coda diagnostica, `THE COMPILER NAMED THE FILE AND THE LINE` compare per la prima volta nella serie (26 turni), la nota di rinvio in 7.
+
+| | run 8 | **run 9** |
+| :--- | ---: | ---: |
+| milestone verificate | 0/14 | **12/13 (92%)** |
+| `finish` raggiunto | no | **sì** |
+| `npm run build` del progetto | fallisce (5 errori) | **esce 0** |
+| moduli compilati | — | **43, 180 kB** |
+| `write_file` | 23 | 22 |
+
+Per la prima volta le tre cose coincidono: la sessione chiude da sé, il piano dichiara 12/13, e il comando che il progetto stesso dichiara passa davvero — il contrario del 14/15 di §5.6c, dove la percentuale era alta e l'applicazione morta. La catena che va da §5.6g a qui è quindi: il piano dice cosa deve funzionare e nomina i file, la compilazione garantisce manifest ed entrypoint, la verifica del progetto diventa eseguibile, e ogni errore che il compilatore localizza arriva al modello con un'istruzione sola.
+
+### 5.6i. Misurato — il tetto di conoscenza del modello, e cosa il registro può sostituirgli
+
+Dieci giri ulteriori (10-19) sulla stessa sonda. Il tema è quello che nessuna direttiva aveva mai toccato: **ogni versione che un 7B scrive viene dalla sua memoria di training**, e il training ha una data.
+
+Misurato: `typescript@^4.7.3` che non parsa il `@types/node` appena installato (run 10, 0/12); `vite@^4.0.0`, `react@^18.2.0`, `tailwindcss@^3.3.3` vecchie di anni; `@tailwindcss/react` e `react-tailwindcss@^0.0.1` **inesistenti su npm**, ordinate tredici volte nella serie; e `@types/react@^19.3.5`, numero inventato per analogia, che npm rifiuta con `ETARGET`.
+
+**La leva non è la ricerca web — è il registro.** `web_search` e `fetch_web_content` esistono e sono cablati da tempo, e in diciannove giri il modello non li ha chiamati **una sola volta**; ma anche se lo facesse, restituirebbero prosa da interpretare dove il registro npm dà il numero esatto in una GET. [`npmRegistryClient.ts`](../electron/core/infrastructure/http/npmRegistryClient.ts) risponde a due domande — *esiste?* e *qual è la versione corrente?* — e [`dependencyVersionReality.ts`](../electron/core/domain/agent/dependencyVersionReality.ts) le trasforma in una direttiva sola, consegnata al passo che scrive `package.json` invece che come `Cannot find module` venti passi dopo. Un install di un pacchetto inesistente viene ora **rifiutato prima di girare**, e `ETARGET` ha finalmente il fratello di `ERESOLVE` che gli mancava ([`npmVersionNotFound.ts`](../electron/core/domain/agent/npmVersionNotFound.ts)): il registro nomina la versione vera, e se è irraggiungibile la direttiva non inventa un numero — dice di installare senza pin, perché npm non può sbagliare su ciò che npm pubblica.
+
+**Tre difetti in questa onda erano miei, e li ha trovati il log, non il ragionamento:**
+
+* la direttiva portava **due imperativi** (`write_file` e *"then install again"*) — il modello ha eseguito il secondo, `npm install` ripetuto fino all'abort al passo 21 (run 14). È la regola che il tracker chiama "quella che è costata di più", violata scrivendola;
+* ri-scattava a **ogni** scrittura di `package.json`, quindi un range che il modello sceglieva di non cambiare la riproduceva a ogni turno (run 15, abort al 19). Ora ogni pacchetto è segnalato una volta sola, la scala che `loopEscapePolicy` applica da sempre;
+* offriva `"node"` come alternativa a `"bundler"` per `moduleResolution`, e `node10` è stato **rimosso in TypeScript 7** — la versione a cui la direttiva stessa porta (`TS5108`, run 12).
+
+**E un limite che va scritto perché è il confine di ciò che questa direttiva può fare.** Portare `typescript` alla major corrente ha ucciso due giri: il modello scrive il `tsconfig.json` che ha imparato, che precede il compilatore che gli è appena stato fatto installare (`TS5108`, `TS5102`, run 18 con diciassette riscritture e 1/14). Una major si segnala quindi **solo dove la correzione è davvero il numero**: `typescript`, `tailwindcss` ed `eslint` sono esclusi, perché le loro major riscrivono la configurazione. È un problema di tetto di conoscenza, non di versioni, e nessuna GET lo risolve.
+
+**Dove si è fermata la serie.** Il run 19 usa i cinquanta passi senza abortire, senza cicli su `tsconfig`, con la toolchain sana; restano errori di codice puro che il compilatore localizza e per cui stampa lui la correzione — `TS2613`/`TS2614`, export default contro export nominati nei file scritti dal modello stesso. Il collo di bottiglia non è più l'ambiente: è la coerenza del codice che il modello genera.
+
+**Stato dei test:** typecheck pulito, **1406 test su 145 file** verdi, catena `npm run lint` completa verde.
+
+### 5.6h-bis. Stato dei test dell'onda precedente
+
+typecheck pulito, **1380 test su 143 file** verdi, catena `npm run lint` completa verde.
+
+> **Cosa resta non misurato, in sei giri**: `IS EMPTY AND STAYS EMPTY` e `STOP USING` non sono mai comparsi, e per due degli altri la ragione non è la sfortuna ma il disegno della sonda o del sistema. **`ensureRunnableMilestone` è irraggiungibile per costruzione su questa sonda**: su workspace vuoto il progetto non dichiara comandi quando il piano viene generato, quindi non c'è nulla da appendere — serve una sonda pre-seminata con un manifest che dichiari uno script. **La direttiva file+riga è soppressa** ogni volta che nello stesso output compare una diagnostica di dipendenza, come mostrato sopra. La riga del tracker che prometteva "un solo giro live le misura tutte" era falsa, ed è corretta.
+
 ### 5.7. Poi — le funzionalità del blueprint
 
 1. **Modulo Visual Validation** (`visualValidationTool.ts` su Electron Offscreen `WebContents`): screenshot automatici e cattura `console.error`. Non affrontato perché richiede il runtime Electron, che il banco headless `npm run test:live` non può esercitare: va sviluppato lanciando l'app vera, altrimenti si consegna codice mai visto funzionare.
@@ -578,28 +700,26 @@ Punto di ingresso per una sessione nuova, senza contesto delle precedenti.
 | 5.1 – 5.3 | cicli di feedback, controlli anticipati, conflitti di versione | applicate, testate, verificate su sessioni reali |
 | 5.4 | churn: scritture a vuoto, chiusura, milestone indimostrabili, consegna parziale, finestra recente | applicate e testate; **meccanismi verificati dal vivo, esito complessivo no** |
 | 5.5 / 5.5b | matrice modelli verificati, misure sul contesto Ollama | applicate; la matrice ha una sola voce, ed è il punto |
-| 5.6 | arbitro delle direttive, dipendenze, churn | applicate e **verificate dal vivo**: build eseguita in sessione, churn da 11 riscritture a 3; scoperto che una build verde può non aver compilato nulla (§5.6c) |
+| 5.6 | arbitro delle direttive, dipendenze non dichiarate, build irraggiungibile | applicate e **verificate dal vivo**: 13 comandi contro 0, `npm install` al passo 2, `npm run build` al passo 28, progetto consegnato che compila |
+| 5.6b – 5.6c | le due metà del churn (nome nudo del deliverable, ri-consegna) | applicate e **verificate dal vivo**: da 11 riscritture a 3; il run scopre che una build verde può non aver compilato nulla |
+| 5.6d | terminazione sul percorso dei rifiuti di schema | applicata e **verificata dal vivo**: una scrittura per file, escalation a tre livelli sui rifiuti |
+| 5.6e | copertura `whole-project` della verifica, direttiva diagnostica | copertura **confermata dal vivo** (`npx tsc --noEmit`, tre errori veri, 0/15 onesto); la direttiva file+riga **applicata e non ancora vista dal vivo** |
+| 5.6f | entrypoint scollegato, modello grande, forma del piano | entrypoint **verificato dal vivo** (14 moduli invece di 2); `ensureRunnableMilestone` **applicato e non ancora visto dal vivo** |
+| 5.6g | forma del piano: microtask capacità + path, ordine di fasi, due difetti latenti | applicata e testata; **il formato è stato adottato dal modello al primo giro** (§5.6h) |
+| 5.6h | cinque giri live: la regressione dello scheletro e il passo di entrypoint deterministico | **misurata**: dal piano senza entrypoint a un'applicazione che compila (38 moduli, 180 kB); l'ultima correzione non è ancora vista dal vivo |
 | 5.7 | funzionalità originali del blueprint | non iniziate |
 
-### Il fatto che conta più di tutti — isolato il 2026-08-24
+### Il deadlock, che è chiuso — la diagnosi in breve, isolata il 2026-08-24
 
-**In tre run live consecutivi da cinquanta passi nessuna sessione ha ottenuto un `npm run build` verde** — dimostrato per il terzo, che è l'unico di cui sopravviva lo stato di sessione; per i primi due il log è stato cancellato e resta un'affermazione della stesura precedente, non un fatto ricontrollabile (vedi la nota in §5.4). Senza una build verde `promoteMilestonesProvenBy` non promuove nulla, e il run finisce a 0/15 **qualunque cosa facciano i guard**.
+Conservato perché è il caso di scuola della classe di difetto che ha prodotto quasi tutte le correzioni di §5: **il sistema possiede l'informazione giusta e non la consegna come azione**. Risolto e misurato in §5.6; non è più lo stato corrente.
 
-Delle tre spiegazioni possibili — fallisce, gira su progetto incompleto, non viene mai invocato — vale **la terza**. Nel terzo run, l'unico di cui sopravvive lo stato di sessione (`~/Desktop/onlyrag_live_fulltask/.onlyrag/sessions/.agent_state_live-full-task.json`, 50/50 passi), i 64 episodi sono `write_file` × 63 e `update_plan` × 1: **zero `run_command`, zero `run_tests`**. `node_modules` non esiste nel workspace, quindi nemmeno l'install è mai partito. Il log non era più leggibile (vedi *Conserva il log*), e la prova viene dallo stato di sessione, che per quel run è completo: passi 1-50 tutti presenti, niente tagliato.
+**In tre run live da cinquanta passi nessuna sessione ottenne un `npm run build` verde** — dimostrato per il terzo, l'unico di cui sopravviva lo stato di sessione (`~/Desktop/onlyrag_live_fulltask/.onlyrag/sessions/.agent_state_live-full-task.json`, 50/50 passi, niente tagliato); per i primi due il log fu cancellato e l'affermazione resta non ricontrollabile (nota in §5.4). Delle tre spiegazioni — la build fallisce, gira su progetto incompleto, non viene mai invocata — vale **la terza**: i 64 episodi di quel run sono `write_file` × 63 e `update_plan` × 1, **zero `run_command`, zero `run_tests`**, e `node_modules` non esiste nel workspace.
 
-**La causa è un deadlock fra promozione e chiusura**, tutto in codice già scritto:
+**Causa: un deadlock fra promozione e chiusura**, tutto in codice già scritto. `flags.hasVerifiedBuild` si alza **solo** da `run_command` / `run_tests` ([`agentOrchestratorCircuitBreakerAndVerification.ts`](../electron/core/application/agentOrchestratorCircuitBreakerAndVerification.ts):478, 501, 522) o dentro il finish gate ([`agentOrchestratorFinishAndLoopGuards.ts`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts):54-93); `promoteMilestonesProvenBy` gira solo lì; e la direttiva 4 del focus block ([`planAndSolveGraph.ts`](../electron/core/domain/agent/planAndSolveGraph.ts):322) vieta `finish` finché ogni milestone non è `verified`. La build automatica si raggiunge **solo passando da `finish`**, vietato finché la build non ha promosso: al modello resta `write_file`, e brucia i cinquanta passi.
 
-1. `flags.hasVerifiedBuild` diventa vero **solo** come esito di `run_command` / `run_tests` ([`agentOrchestratorCircuitBreakerAndVerification.ts`](../electron/core/application/agentOrchestratorCircuitBreakerAndVerification.ts):393, 416, 437) o dentro il finish gate ([`agentOrchestratorFinishAndLoopGuards.ts`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts):53-93, che esegue `runProjectVerification` per conto proprio).
-2. `promoteMilestonesProvenBy` gira **solo** in quei punti.
-3. La direttiva 4 del focus block ([`planAndSolveGraph.ts`](../electron/core/domain/agent/planAndSolveGraph.ts):319) vieta `finish` finché ogni milestone non è `verified`.
+**E nessuna direttiva permanente gli diceva di eseguire la build.** Il focus block nominava solo azioni su file, e la sua direttiva 5 spinge nell'altra direzione (*"If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file"*); la regola 11b di [`promptPresets.ts`](../electron/core/domain/agent/promptPresets.ts) (*"before finishing you MUST run a build"*) è condizionata a un `finish` che non arriva; l'unico testo che nominava un comando era l'intervento del loop detector ([`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts):238), arrivato **sette volte e ignorato sette volte**, cioè solo a modello già in stallo. E se fosse partita sarebbe fallita comunque: `vite.config.ts` importava `@vitejs/plugin-react` non dichiarato, `src/App.tsx` `react-router-dom` non dichiarato, `src/components/Sidebar.tsx` `@tailwindcss/react`, che su npm non esiste — tutti e tre rilevati dal gate di §5.2 al passo che li scriveva, e mai agiti.
 
-La build automatica esiste, ma si raggiunge **solo passando da `finish`** — vietato finché la build non ha promosso le milestone. Al modello resta `write_file` come unica mossa legale, e brucia i cinquanta passi. È la forma già nominata due volte in §5.4 — **un'istruzione che non può essere eseguita** — questa volta chiusa in cerchio.
-
-**Nessuna direttiva permanente gli dice di eseguire la build.** Il focus block, che è il canale forte perché torna a ogni turno, nomina solo azioni su file, e la sua direttiva 5 spinge nell'altra direzione (*"If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file"*). La regola 11b di [`promptPresets.ts`](../electron/core/domain/agent/promptPresets.ts) (*"before finishing you MUST run a build"*) è condizionata a un `finish` che non arriva. L'unico testo che nomina un comando come azione successiva è l'intervento del loop detector ([`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts):238): arrivato sette volte, ignorato sette volte — cioè solo a modello già in stallo, la stessa debolezza annotata per la sonda ERESOLVE.
-
-**E anche se fosse partita, sarebbe fallita.** `evaluateFileImportIntegrity` sui file rimasti su disco: `vite.config.ts` importa `@vitejs/plugin-react` non dichiarato, `src/App.tsx` importa `react-router-dom` non dichiarato, `src/components/Sidebar.tsx` importa `@tailwindcss/react`, che su npm non esiste. Il gate di §5.2 li rileva tutti e tre e lo dice al passo in cui vengono scritti: l'informazione parte, il modello non agisce. Terza occorrenza della stessa classe di difetto.
-
-**Risolto in §5.6, e misurato.** Lo stato `verification_due` dell'arbitro porta il modello a `run_command` prima che sia in loop, arbitrato invece che accodato. Nel run del 2026-08-24 con l'arbitro attivo: 13 comandi contro zero, `npm install` al passo 2 e `npm run build` al passo 28, entrambi al primo prompt che portava la direttiva. Quanto sopra resta come racconto della diagnosi; **il fatto che conta ora è un altro**, ed è il paragrafo seguente.
+**Risolto in §5.6, e misurato**: lo stato `verification_due` dell'arbitro porta a `run_command` prima dello stallo — 13 comandi contro zero, `npm install` al passo 2, `npm run build` al passo 28, entrambi al primo prompt che portava la direttiva.
 
 ### Il fatto che conta adesso
 
@@ -609,7 +729,9 @@ Al 2026-08-25 la catena regge end to end: le dipendenze si risolvono, i pacchett
 
 Escluso anche il modello: un `qwen2.5-coder:14b` fallisce con lo stesso profilo del 7b.
 
-Quello che nessuna di quelle correzioni tocca è **cosa il piano considera "fatto"**. Finché una milestone è "crea il file X", il piano può chiudersi al 100% su un'applicazione che non parte; `ensureRunnableMilestone` impedisce ora il 100% senza che il controllo del progetto sia passato, ma i microtask restano orientati ai file. È il candidato successivo, ed è §1.5 di questo stesso documento — scritto prima che iniziasse tutto il resto.
+Quello che nessuna di quelle correzioni toccava era **cosa il piano considera "fatto"**. Il 2026-08-25 è stato affrontato (§5.6g): i microtask dichiarano ora la capacità e nominano il file, `ensureRunnableMilestone` impedisce il 100% senza che il controllo del progetto sia passato, e due difetti latenti che il nuovo formato rendeva raggiungibili sono chiusi. **Nessun run ha ancora usato quel prompt**: della catena è dimostrata la meccanica, non l'effetto.
+
+**Il fatto che conta per la sessione seguente è quindi uno solo: nulla di quanto applicato dal 2026-08-25 è stato visto dal vivo.** Cinque correzioni aspettano un giro — la coda **DA MISURARE** del tracker — e la lezione già pagata due volte in questo progetto è che accumulare correzioni non misurate produce run invalidati da regressioni proprie invece che dai difetti che dovevano misurare. Il prossimo passo non è progettare: è lanciare `npm run test:live`, conservare il log, e leggerlo.
 
 Regola invariata, e oggi ha pagato tre volte: **leggi il log prima di progettare.** Due volte ho concluso la cosa sbagliata (una volta incolpando il modello, una volta il file sbagliato) e il log mi ha smentito. Tre delle dodici correzioni erano regressioni introdotte dalle onde precedenti, trovate solo dal run successivo. I log di tutti i run sono nello scratchpad della sessione.
 

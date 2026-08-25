@@ -274,8 +274,14 @@ ${planDirective.blockDirective}`
   // Narrow on purpose: only when the milestone's own files are all delivered. A milestone
   // still owing a file, or naming none at all, can genuinely deadlock the plan, and the escape
   // keeps its full power there.
-  const isCommandLoop = parsedTool.tool === 'run_command' || parsedTool.tool === 'run_tests'
-  const loopIsUnrelatedToActiveMilestone = isCommandLoop && isActiveMilestoneDelivered(ctx.workspacePath, ctx.goalPlanner)
+  // Extended after run 9 of 2026-08-25, which lost its last milestone to exactly this: m-1
+  // `package.json` — written, correct, on disk — was marked FAILED because the model was
+  // looping on `src/pages/DashboardPage.tsx`, a file m-1 does not name. The guard covered
+  // command loops only, so a loop on somebody else's file still cost a milestone its status.
+  // The question is not which tool repeated, it is whether the repeat is about THIS milestone:
+  // `isActiveMilestoneDelivered` answers false when the loop target is one of the milestone's
+  // own files, so the escape keeps full power exactly where the milestone is the problem.
+  const loopIsUnrelatedToActiveMilestone = isActiveMilestoneDelivered(ctx.workspacePath, ctx.goalPlanner, loopTarget)
 
   // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable
   // exists. Escalating it would abandon a reachable milestone as FAILED (see

@@ -129,6 +129,33 @@ function describeRequirer(conflict: NpmResolutionConflict): string {
  * the version spec from a shell-quoted `pkg@"^8.0.0"` and ran a bare `npm install pkg`, which
  * changes nothing.
  */
+/**
+ * The one range the command can actually carry, out of what npm printed.
+ *
+ * A peer requirement is often a list of alternatives — run 13 of 2026-08-25 hit
+ * `eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7"` — and copying that into a command hands
+ * the shell its own OR operator: `npm install eslint@^3` runs, then the shell tries to execute
+ * `^4` as a program. That run ended with an empty `node_modules/.bin` and a build that could not
+ * find `tsc`.
+ *
+ * Quoting would fix the shell and keep the ambiguity; the highest alternative removes both. It
+ * is also what "upgrade to satisfy this peer" means, and it leaves the directive naming exactly
+ * one action, which is the property every obeyed directive in this project shares.
+ */
+export function installableRange(requiredRange: string): string {
+  const alternatives = (requiredRange || '')
+    .split('||')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (alternatives.length <= 1) return (requiredRange || '').replace(/\s+/g, '')
+
+  const majorOf = (range: string) => {
+    const match = /(\d+)/.exec(range)
+    return match ? Number(match[1]) : -1
+  }
+  return alternatives.reduce((best, candidate) => (majorOf(candidate) > majorOf(best) ? candidate : best)).replace(/\s+/g, '')
+}
+
 export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): string {
   const installedLabel = `${conflict.installed.name}@${conflict.installed.version}`
   const requirer = describeRequirer(conflict)
@@ -137,7 +164,7 @@ export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): st
         conflict.declaredScope && conflict.declaredScope !== 'prod' ? ` under ${conflict.declaredScope}Dependencies` : ''
       })`
     : ''
-  const upgradeCommand = `npm install ${conflict.installed.name}@${conflict.requiredRange.replace(/\s+/g, '')}`
+  const upgradeCommand = `npm install ${conflict.installed.name}@${installableRange(conflict.requiredRange)}`
 
   return [
     '[DEPENDENCY VERSION CONFLICT — ERESOLVE]',

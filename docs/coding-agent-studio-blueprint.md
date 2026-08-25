@@ -256,6 +256,10 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 * **Direttiva Milestone Indimostrabili**: [`unprovableMilestoneDirective.ts`](../electron/core/domain/agent/unprovableMilestoneDirective.ts) guida il modello a chiudere via `update_plan` compiti che non producono file o comandi (es. requisiti di accessibilità o stile diffuso).
 * **Direttiva Consegna Parziale**: [`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts) nomina i file ancora mancanti di una milestone composita, vietando la riscrittura del file già accettato (risolto in 1 passo vs 9 passi precedenti).
 * **Compattazione Output Recenti**: [`recentFullLogs`](../electron/core/domain/agent/diagnosticOutputReducer.ts) collassa i fallimenti ripetuti per `tool + target`, liberando oltre il 46% di spazio utile nel prompt.
+* **Verifica Terminale a Budget Esaurito (risolto 2026-08-25)**: la sessione ha due uscite e una sola verificava qualcosa. `finish` esegue il controllo del progetto e promuove ciò che dimostra ([`agentOrchestratorFinishAndLoopGuards.ts`](../electron/core/application/agentOrchestratorFinishAndLoopGuards.ts)); l'esaurimento del budget di step andava dritto a `emitDone`, quindi una corsa che aveva consegnato ogni file del piano e non aveva mai speso uno step su `finish` chiudeva con **0 milestone verificate e nessun controllo mai tentato**. [`budgetExhaustionVerification.ts`](../electron/core/domain/agent/budgetExhaustionVerification.ts) decide se spendere un ultimo comando; [`agentOrchestratorAppService.ts`](../electron/core/application/agentOrchestratorAppService.ts) lo esegue e chiama `promoteMilestonesProvenBy`, e il riepilogo di sessione dichiara l'esito invece del solo tetto raggiunto.
+  * **Sintomo misurato**: `live-full-task` del 2026-08-25T12:11 (`qwen2.5-coder:7b`, 50/50 step) — 12 file scritti, 14/14 milestone `in_progress` con la nota "Awaiting a passing verification command", e nell'intera sessione **zero** transizioni `-> VERIFIED`, **zero** righe di promozione e **zero** rifiuti `update_plan` per deliverable mancanti. Tutti e 12 i `run_command` erano `npm install`; `finish` non è mai stato invocato. Il criterio di §6.2.3 non era in causa: rieseguito sui titoli e sui file reali, `selectMilestonesProvenByVerification` restituisce tutte e 14 le milestone ([`agentOrchestratorBudgetExhaustion.test.ts`](../electron/core/application/agentOrchestratorBudgetExhaustion.test.ts)).
+  * **Lezione**: la promozione non era permissiva né restrittiva, era irraggiungibile. Un criterio corretto raggiunto da un solo percorso vale quanto quel percorso, e qui il percorso dipendeva da una scelta del modello — invocare `finish` — che nessuna delle tre corse osservate ha compiuto. Il criterio resta invariato: promuove solo un comando reale che passa su deliverable realmente presenti.
+  * **Costo**: il controllo parte solo se il piano contiene milestone che una promozione chiuderebbe davvero (`promotableMilestoneCount > 0`), quindi una corsa già verificata o una che non ha consegnato nulla non paga i minuti di una build a freddo.
 
 ### 5.5. Matrice Modelli e Context Budgeting Ollama
 * **Metriche Reali Modelli**: [`getModelMetrics`](../electron/core/infrastructure/http/ollamaHttpClient.ts) legge `context_length`, `parameter_size` e quantizzazione reale da `/api/tags`.
@@ -270,13 +274,66 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 | :---: | :--- | :--- | :--- |
 | **1** | `session_closure` | Build verificata e zero scritture successive | Chiudere la sessione con `finish` |
 | **2** | `dependencies_undeclared` | Il codice importa package non dichiarati nel manifest | `npm install <pkg>` (via `undeclaredImportScanner.ts`) |
+| **2b** | `dependencies_uninstallable` | Ogni package non dichiarato è già stato installato e fallito ≥2 volte | Un solo `write_file` sul file che importa il primo nome |
 | **3** | `dependencies_missing` | Manifest dichiara package assenti da `node_modules` | `npm install` |
+| **3b** | `entrypoint_disconnected` | La pagina HTML d'ingresso non carica codice del progetto | Iniettare il tag script esatto (§5.6f) |
 | **4** | `verification_due` | Nessuna milestone unsatisfied e verifica non ancora eseguita | Eseguire il comando di verifica primaria del progetto |
+| **4b** | `verification_failing` | La verifica è già stata eseguita, è fallita, nulla è stato scritto dopo | Correggere il file nominato, **non** rieseguire |
 | **5** | `unprovable_milestone` | Milestone attiva priva di deliverable su disco | `update_plan` con ID milestone |
 | **6** | `focus` | Avanzamento ordinario | Microtask della milestone attiva |
 
+`2b` e `4b` non sono priorità separate ma le due biforcazioni delle rispettive righe: si scelgono
+sullo stesso fatto già raccolto (rispettivamente `packagesWithFailedInstall` e
+`verificationFailing`), e il motivo per cui esistono è che in entrambi i casi l'azione giusta è
+l'**opposto** di quella della riga madre.
+
 * **Impatto misurato**: Risolto il deadlock storico (da 0 comandi eseguiti in 50 passi a **13 comandi**, con `npm install` al passo 2 e `npm run build` al passo 28).
 * **Protezione Escape Milestone Consegnate**: `isActiveMilestoneDelivered` impedisce a `loopEscapePolicy` di marcare fallita una milestone i cui file sono già presenti su disco.
+* **Forma di `dependencies_uninstallable` — un pacchetto, un file, il tool nominato per primo**:
+  emettere la direttiva non basta a farla eseguire. Corsa live `2026-08-25T12:11`
+  (`qwen2.5-coder:7b`, sessione `live-full-task`): la direttiva è comparsa **24 volte** nominando
+  `@tailwindcss/react` e `src/pages/DashboardPage.tsx`, e il modello non ha riscritto quel file
+  nemmeno una volta mentre gliela si ordinava. Negli stessi turni alternati la direttiva sorella
+  `dependencies_undeclared`, calcolata dagli stessi fatti, è stata **obbedita 6 volte su 6**
+  (passi 9, 16, 19, 30, 45, 46). La differenza è solo testuale: quella obbedita apre con
+  `Your next tool call MUST be "run_command" with the command: ...`, questa apriva con
+  `"pkg" — remove it from <file>` e relegava l'azione vera all'ultima riga numerata
+  (*"Rewrite that file..."*) — i due imperativi concorrenti di §6.2.2, con il modello che sceglie
+  il più economico. Con due import non installabili la lista chiudeva su *"Rewrite those files"*
+  (passi 33, 42, 43, 47): un ordine che `write_file`, che scrive **un** file, non può eseguire.
+  [`buildUninstallablePackageDirective`](../electron/core/domain/agent/planDirectiveArbiter.ts)
+  nomina ora un solo pacchetto, un solo file e `write_file` in prima posizione; gli altri import
+  sono riportati come **conteggio**, non come istruzioni ulteriori, e l'ordinamento è deterministico
+  perché una direttiva da obbedire su più turni deve dire due volte la stessa cosa.
+* **Nessuna asserzione sull'invenzione del nome**: la direttiva affermava che un nome che non si
+  risolve *"was invented rather than looked up"*. `@mui/material` è reale: ai passi 45-46 della
+  stessa corsa è fallito con `ERESOLVE` perché tre `npm install react@^16.8.0` avevano fissato
+  l'albero a `react@16.14.0`. Il modello ha obbedito al passo 49 cancellando una dipendenza
+  legittima. L'arbitro riceve conteggi di fallimento, mai risposte del registro
+  ([`packagesWithFailedInstall`](../electron/core/domain/agent/installCommandParser.ts)): quella
+  frase non era un fatto che fosse in grado di affermare, ed è stata rimossa.
+
+> [!WARNING]
+> **La direttiva corretta non è ancora sufficiente, e la causa residua è fuori dall'arbitro**
+> (misurato sulla stessa corsa `2026-08-25T12:11`). Nei passi 9-28 il prompt conteneva
+> simultaneamente il blocco piano vivo (*«riscrivi `src/pages/DashboardPage.tsx`»*) e, riprodotto
+> **due volte** dai canali `CRITICAL PREVIOUS TOOL FAILURES` e `RECENT DETAILED TOOL OUTPUTS`, il
+> risultato del passo 8: *«Do NOT re-write "src/pages/DashboardPage.tsx" — it is already correct
+> and re-writing it will be blocked as a loop»*
+> ([`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts)).
+> In quei 20 passi le riscritture di quel file sono state **zero**; la prima è arrivata al passo
+> 43, quando il messaggio contraddittorio era uscito dalla finestra di replay. §6.2.2 è violata a
+> livello di **prompt**, non di arbitro: i canali di storia riservono direttive già superate come
+> se fossero correnti, e una di esse nega esplicitamente quella viva.
+>
+> Il modello inoltre non ha mai chiamato `read_file` (0 su 42 tool call) e nessun prompt della
+> sessione conteneva i blocchi `EXPLICITLY REFERENCED (PINNED) WORKSPACE FILES` o
+> `Active File Open in Editor`: quando ha finalmente obbedito (passi 43, 48, 49) ha riscritto il
+> file **alla cieca**, prima sostituendo un import inventato con un altro (`@mui/material`) e poi
+> riducendolo a 208 byte. Una direttiva che ordina di riscrivere un file esige che il contenuto di
+> quel file sia un **dato fornito** (§6.2.1), e la decisione su quali blocchi entrino nel prompt
+> per turno è di [`turnContextPolicy.ts`](../electron/core/domain/agent/turnContextPolicy.ts)
+> (§5.6j), non dell'arbitro.
 
 ### 5.6b – 5.6c. Risoluzione Deliverable e Gestione Riconsegne
 * **Risoluzione Basename nel Workspace**: [`workspaceDeliverableProbe.ts`](../electron/core/infrastructure/filesystem/workspaceDeliverableProbe.ts) risolve i file con nome nudo (es. `globals.css`) cercando nell'albero del workspace (es. `src/styles/globals.css`), eliminando i loop di riscrittura (da 6 riscritture a 1).

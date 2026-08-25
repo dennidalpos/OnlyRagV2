@@ -1,20 +1,28 @@
 {
   "todos": [
-    "PRIORITA' 1 — Coerenza codice generato: estendere compilerDiagnosticDirective.ts per citare verbatim i suggerimenti del compilatore TypeScript su export/import mismatch (TS2613/TS2614).",
-    "PRIORITA' 2 — Matrice modelli verificati: eseguire sonde live su modelli target (qwen2.5-coder 1.5b/3b/14b, deepseek-coder:6.7b, qwen3:8b) e popolare codingModelMatrix.ts.",
-    "PRIORITA' 3 — Wizard 1-click: verificare modelli leggeri (1.5b/3b) per popolare set verificati anche sui profili hardware entry.",
-    "PRIORITA' 4 — Context budgeting Ollama: allineare num_ctx e deriveMaxContextChars alla context_length effettivamente allocata da Ollama (/api/ps) per evitare troncamenti silenziosi della testa del prompt.",
-    "PRIORITA' 5 — Conservazione log live: implementare snapshot automatico con timestamp per-run in scripts/live/agentLiveHarness.ts per prevenire perdite su rotazione a 10 MB o clean_workspace.ps1.",
+    "Verifica live direttiva TS2613/TS2614: la citazione verbatim del suggerimento di import e' coperta solo da unit test; nessuna corsa live ha ancora esercitato il ramo su qwen2.5-coder:7b.",
+    "Direzione del fix export/import: la direttiva TS2613/TS2614 propaga la sola correzione suggerita da tsc (cambiare l'import). Il caso in cui la correzione giusta e' cambiare l'export del modulo importato non e' coperto.",
+    "bug: la direttiva [THESE PACKAGES CANNOT BE INSTALLED] viene emessa ma non obbedita: nella corsa live del 2026-08-25T12:11 e' comparsa 24 volte ordinando di rimuovere \"@tailwindcss/react\" da src/pages/DashboardPage.tsx, e il modello non ha mai riscritto quel file. Con piu' pacchetti inventati l'arbitro oscilla tra dependencies_undeclared e dependencies_uninstallable (19 vs 24 occorrenze), quindi il bersaglio si sposta a ogni turno.",
+    "bug: nessuna milestone promossa a verified nonostante 16 file su disco (corsa live 2026-08-25T12:11: 0 verified / 0 failed / 14 pending, m-14 in_progress con i suoi file presenti). Verificare perche' milestoneUpdateAuthority non promuove.",
+    "Pacchetti inventati ricorrenti oltre @tailwindcss/react: use-optimistic, @mui/material, tsconfig-preset-react, piu' downgrade ripetuti a react@^16.8.0 su un progetto React 19. Valutare se npmRegistryClient debba essere consultato in fase di piano e non solo all'install.",
+    "Escalation immediata su 404 del registro npm: il registro e' autoritativo, un solo rifiuto prova che il pacchetto non esiste, ma FAILURES_BEFORE_UNINSTALLABLE=2 in installCommandParser.ts impone comunque un secondo tentativo sprecato. Distinguere il rifiuto del registro dall'install fallito.",
+    "bug: SESSION_TRACKER.md perde la sezione '5. Raw Agent Summary' su finish accettato: handleFinishTool lo scrive con buildSessionTracker(summary), poi la persistCurrentState() finale riscrive lo stesso file con buildSessionTracker() senza summaryText (agentOrchestratorFinishAndLoopGuards.ts, agentOrchestratorSessionPersistence.ts).",
+    "Motivo di terminazione persistito: lo stato di sessione non registra COME la sessione si e' chiusa (finish accettato, tetto step, cancel, timeout, circuit breaker). readRunMetrics in scripts/live/agentLiveHarness.ts deve dedurre il finish dalle due summary letterali dell'orchestratore; un campo esplicito renderebbe l'asserzione diretta.",
     "Typecheck incrementale post-write: implementare validazione AST/tipo in-flight post write_file per anticipare diagnostiche di tipo prima del DoD Gate.",
     "Guard percorsi radice: intercettare file di configurazione essenziali (es. tailwind.config.js, index.html) scritti erroneamente in src/ anziche' alla radice.",
+    "Badge compatible da capability live: derivare lo stato 'compatible' di codingModelMatrix.ts dalle capability e dal context_length riportati da /api/tags, invece che dal catalogo curato a mano. 'verified' resta ai soli modelli con sonda live eseguita e letta.",
+    "Handshake tool-calling: latchare nei primi turni il modo osservato (native vs JSON fenced) quando /api/tags non dichiara capability (Ollama datati), oggi coperto dal solo allow-list di famiglia in ollamaToolCallingCapability.ts.",
+    "Verifica contesto allocato: confrontare /api/ps con il num_ctx richiesto per confermare che il clamp su context_length corrisponda a quanto Ollama alloca davvero. Segnale di verifica, non fonte di dimensionamento.",
+    "Regressione live turnContextPolicy: eseguire fullTaskRun.live.ts per verificare che la soppressione della repo map nei turni dependencies_* e verification_* non degradi il tasso di milestone verificate.",
     "Cleanup codice morto: rimuovere o collegare il parametro inutilizzato isDeliverableSatisfied? in GoalDecompositionPlanner.getActiveMilestone.",
     "Deliverable directory: formalizzare una regola sintattica per distinguere milestone di creazione da spostamento directory ed evitare cartelle non dimostrabili.",
-    "Validazione visiva (Blueprint §5.7): implementare visualValidationTool.ts su Electron Offscreen WebContents per cattura screenshot, DOM e console.error.",
-    "First-Class Artifacts Engine (Blueprint §5.7): implementare canali IPC artifacts:* e pannello Live Preview sandboxato per componenti e report.",
-    "Refactoring modulare tool (Blueprint §4): scorporare agentToolExecutorService.ts nei moduli SRP sotto electron/core/domain/agent/tools/.",
+    "Conservazione log live: implementare snapshot automatico con timestamp per-run in scripts/live/agentLiveHarness.ts per prevenire perdite su rotazione a 10 MB o clean_workspace.ps1.",
+    "Validazione visiva (Blueprint 5.7): implementare visualValidationTool.ts su Electron Offscreen WebContents per cattura screenshot, DOM e console.error.",
+    "First-Class Artifacts Engine (Blueprint 5.7): implementare canali IPC artifacts:* e pannello Live Preview sandboxato per componenti e report.",
+    "Refactoring modulare tool (Blueprint 4): scorporare agentToolExecutorService.ts nei moduli SRP sotto electron/core/domain/agent/tools/.",
     "Aderenza skill: validare che il codice generato rispetti i vincoli delle skill attive (es. divieto direttive @tailwind legacy con Tailwind v4).",
     "Pulizia e scope skill: arricchire le skill minimali (canvas-design, frontend-design) e chiarire lo scope di auto-install dell'hub (workspace vs userData).",
     "Ricerca web azionabile: definire trigger e direttive per abilitare l'uso effettivo di web_search e fetch_web_content su pattern di librerie aggiornate.",
-    "Sonde live dedicate: creare sonda con workspace pre-seminato (per testare ensureRunnableMilestone) e sonda con prompt vago (per testare agent:plan-interview e arricchimento prompt)."
+    "Sonda live workspace pre-seminato: creare sonda con workspace gia' popolato per esercitare ensureRunnableMilestone su un progetto esistente."
   ]
 }

@@ -102,8 +102,28 @@ mindmap
 
 ### 1.6. Compatibilità Universale Ollama
 * **Presente**: [`toolParser.ts`](../electron/core/domain/agent/toolParser.ts) con pre-stripping CoT (`<think>`) e riparazione via `jsonrepair`; dual-mode Native Tool Calling (`POST /api/chat`) e JSON fenced; hardware ladder con pinning KV-cache; [`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts) per contratti schema e direttive di correzione; [`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts).
-* **Presente ma non efficace**: `resolveMaxContextTokens` dimensiona `num_ctx` in base all'hardware e non consulta `context_length` restituito da Ollama, con rischio di troncamento silencioso del prompt.
-* **Manca**: Prompt adapter specifici per famiglia (Qwen, Llama, DeepSeek, Mistral).
+* **Presente**: `num_ctx` clampato al `context_length` addestrato del modello letto da `/api/tags` ([`selectModelForTurn`](../electron/core/application/agentOrchestratorPromptAssembly.ts)), con `num_predict` e `maxContextChars` riderivati dalla finestra clampata.
+
+> **Decisione architetturale — adattamento per capability, non per famiglia.**
+> L'adattamento del prompt avviene esclusivamente sulle **capability** che Ollama stesso dichiara
+> su `/api/tags` (`tools`, `vision`), risolte da
+> [`ollamaToolCallingCapability.ts`](../electron/core/domain/agent/ollamaToolCallingCapability.ts) e
+> applicate come partial condizionali in
+> [`promptCompiler.ts`](../electron/core/domain/agent/promptCompiler.ts). **Non esiste, e non deve
+> esistere, branching per famiglia di modello** (Qwen, Llama, DeepSeek, Mistral).
+>
+> Motivazione: l'app è usata con modelli aggiornati in modo indipendente tra loro. Un adapter per
+> famiglia è manutenzione moltiplicata per il numero di famiglie e invecchia a ogni release,
+> mentre una capability dichiarata dal runtime è vera il giorno in cui il modello viene
+> installato. Un modello nuovo funziona senza che nessuno lo abbia mai misurato. È lo stesso
+> principio di §6.2.1 applicato alla compatibilità: preferire un dato oggettivo del sistema a una
+> tassonomia mantenuta a mano.
+>
+> Corollario sul badge di [`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts):
+> `compatible` si deriva dalle capability live, `verified` resta riservato ai modelli per cui una
+> sonda live è stata realmente eseguita e letta (oggi solo `qwen2.5-coder:7b`).
+
+* **Manca**: Handshake automatico nei primi turni che latchi il modo di tool calling osservato quando `/api/tags` non dichiara nulla (Ollama datati), oggi coperto dal solo allow-list di famiglia come fallback.
 
 ---
 
@@ -225,6 +245,10 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 * **Risoluzione Automatica `npm ERESOLVE`**: [`npmResolutionConflict.ts`](../electron/core/domain/agent/npmResolutionConflict.ts) estrae le versioni in conflitto dal log npm e genera il comando esatto con range copiato **verbatim** (es. `npm install vite@^8.0.0`), senza delegare la scelta o usare `--force`.
 * **Validazione Nome vs Versione**: Il guard riconosce comandi con versione esplicita (`pkg@version`) evitando blocchi errati di "già installato".
 * **Validazione Nomi Tool**: `normalizeToolName` valida i comandi contro [`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts) rifiutando nomi allucinati (es. `npm_install`).
+* **Rifiuto del Registro = Fallimento dell'Install (risolto 2026-08-25)**: il guard del registro in [`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts) rifiuta l'install di un pacchetto inesistente **senza eseguirlo**, restituendo il marcatore `[PACKAGE DOES NOT EXIST`. Quel marcatore non era in [`isFailureOutput`](../electron/core/application/agentOrchestratorToolResultProcessor.ts), quindi l'episodio veniva registrato `SUCCESS` — e `packagesWithFailedInstall` ([`installCommandParser.ts`](../electron/core/domain/agent/installCommandParser.ts)) usa un `SUCCESS` per **azzerare** il contatore dei fallimenti del pacchetto. La soglia `FAILURES_BEFORE_UNINSTALLABLE` diventava percio' irraggiungibile e l'arbitro non passava mai a `dependencies_uninstallable`, continuando a ordinare l'unico install che non poteva riuscire mentre il guard continuava a rifiutarlo.
+  * **Sintomo misurato**: sessione `live-full-task` del 2026-08-25T11:03 (e identicamente quella delle 08:37) — `npm install @tailwindcss/react` ordinato agli step 9, 11, 18, 19, 25, 26, 32, 33, 39, 40, 46 e 48, con il loop detector a bloccare i turni intermedi, fino al tetto dei 50 step con **0 milestone verificate**. Due canali davano al modello istruzioni opposte nello stesso turno: il tool-result diceva "Do NOT run this install again", il plan-directive diceva "Your next tool call MUST be `npm install @tailwindcss/react`".
+  * **Lezione**: la via d'uscita era gia' costruita e semplicemente non armata. Un marcatore assente da un elenco di classificazione non e' una lacuna cosmetica: e' un esito su cui l'intero loop ragiona al contrario. Vale anche per §1.2 ("loop detector solo restrittivo"): il detector non era il problema, bloccava correttamente una ripetizione inutile — mancava il segnale che avrebbe reso quella ripetizione non necessaria.
+  * **Replay sugli episodi reali**: con la classificazione corretta la soglia e' raggiunta subito dopo lo step 11, cioe' l'escape sarebbe scattato allo step 12 anziche' mai.
 
 ### 5.4. Riduzione Churn e Criteri di Chiusura
 * **Rilevamento Scritture a Vuoto (No-Op)**: [`redundantWriteDetector.ts`](../electron/core/domain/agent/redundantWriteDetector.ts) normalizza CRLF/LF e newline finale. Se il contenuto è identico, non tocca il file e imposta `noOpMutation: true`, preservando `flags.hasVerifiedBuild`.
@@ -236,7 +260,8 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 ### 5.5. Matrice Modelli e Context Budgeting Ollama
 * **Metriche Reali Modelli**: [`getModelMetrics`](../electron/core/infrastructure/http/ollamaHttpClient.ts) legge `context_length`, `parameter_size` e quantizzazione reale da `/api/tags`.
 * **Matrice Modelli Verificati**: [`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts) badge `verified` assegnato esclusivamente a modelli testati end-to-end su sonde live (`qwen2.5-coder:7b`).
-* **Truncamento Ollama Silenzioso**: Ollama tronca `num_ctx` al massimo dichiarato dal modello scartando la **testa** del prompt (system prompt e blocco piano). Il calcolo del budget in `deriveMaxContextChars` deve basarsi sul contesto effettivamente allocato (da `/api/ps`).
+* **Truncamento Ollama Silenzioso (risolto)**: Ollama clampa `num_ctx` al `context_length` addestrato del modello e scarta la **testa** del prompt — system prompt e blocco piano. Il danno non era il clamp ma `maxContextChars` derivato dalla finestra **non** clampata: dichiarava a `HeuristicContextCompactor` uno spazio inesistente, quindi il compattatore non interveniva e la decapitazione era garantita anziché possibile. [`selectModelForTurn`](../electron/core/application/agentOrchestratorPromptAssembly.ts) clampa ora `num_ctx` su `context_length` e rideriva da lì `num_predict` e `maxContextChars`; [`freezeOrGrowContextWindow`](../electron/core/application/agentOrchestratorPromptAssembly.ts) applica lo stesso tetto al valore **in uscita**, perché il freeze è per sessione mentre il tetto è per modello e il fallback di resilienza può scambiare i modelli a metà sessione.
+* **Fonte autorevole della finestra**: `context_length` da `/api/tags` ([`getModelMetrics`](../electron/core/infrastructure/http/ollamaHttpClient.ts)), noto **prima** del caricamento e recuperato nella stessa lettura che fornisce le capability. `/api/ps` riporta il contesto allocato *per la nostra stessa richiesta*: è a valle della decisione da prendere, quindi utile come segnale di verifica ma circolare come fonte di dimensionamento.
 
 ### 5.6. Arbitro delle Direttive e Risoluzione Deadlock
 [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts) stabilisce la singola direttiva attiva per turno secondo una priorità deterministica:
@@ -262,7 +287,7 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 
 ### 5.6e – 5.6f. Whole-Project Verification & Integrità Entrypoint
 * **Typecheck Globale Sintetizzato**: In assenza di script dedicato, [`resolvePrimaryVerificationCommand`](../electron/core/domain/agent/projectVerificationResolver.ts) sintetizza `npx tsc --noEmit`, intercettando errori in tutti i file e non solo nell'albero importato.
-* **Direttiva Diagnostica Compilatore**: [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) estrae file, riga e codice errore, prescrivendo un **singolo imperativo** di correzione (`write_file`), con rinvio esplicito degli errori secondari tramite [`buildDeferredDiagnosticNote`](../electron/core/domain/agent/compilerDiagnosticDirective.ts).
+* **Direttiva Diagnostica Compilatore**: [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) estrae file, riga e codice errore, prescrivendo un **singolo imperativo** di correzione (`write_file`), con rinvio esplicito degli errori secondari tramite [`buildDeferredDiagnosticNote`](../electron/core/domain/agent/compilerDiagnosticDirective.ts). Quando il compilatore ha stampato il rimedio lo passa verbatim invece di riformularlo: il comando di install per `TS7016` ([`extractSuggestedCommand`](../electron/core/domain/agent/compilerDiagnosticDirective.ts)) e la riga di import per `TS2613`/`TS2614` ([`extractExportMismatch`](../electron/core/domain/agent/compilerDiagnosticDirective.ts), §5.6i).
 * **Controllo Entrypoint HTML/JS**: [`entrypointIntegrity.ts`](../electron/core/domain/agent/entrypointIntegrity.ts) rileva file `index.html` privi di script verso `src/main.tsx` o root component, iniettando il tag esatto (compilazione passata da 2 moduli a 43 moduli / 180 kB).
 
 ### 5.6g – 5.6h. Generazione Piano & Iniezione Strutturale
@@ -271,11 +296,68 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 * **Iniezione Milestone di Verifica**: [`ensureRunnableMilestone`](../electron/core/domain/agent/planCompilation.ts) appende la milestone di verifica end-to-end con il comando reale del progetto.
 * **Risultato Misurato (Run 9)**: **12/13 milestone verificate (92%)**, `finish` raggiunto autonomamente, `npm run build` con exit code 0 e 43 moduli compilati.
 
+> [!WARNING]
+> **Run 9 non è riproducibile allo stato attuale (verificato 2026-08-25).** Due esecuzioni di
+> `fullTaskRun.live.ts` su `qwen2.5-coder:7b` nella stessa giornata — una alle 08:37 e una alle
+> 11:03, la prima precedente a qualunque modifica della sessione di lavoro — hanno entrambe
+> raggiunto il tetto dei **50 step con 0 milestone verificate e senza `finish`**. Le due corse
+> sono in `logs/coding_agent_audit.log` e concordano tra loro, quindi la divergenza da Run 9 non
+> è varianza fra modelli né effetto di una modifica recente.
+>
+> **`npm run test:live` esce comunque con codice 0** in entrambi i casi: le sonde asseriscono
+> molto meno dei numeri che questa sezione pubblicizza. Finché non asseriscono il tasso di
+> milestone verificate e il raggiungimento di `finish`, un `PASS` della sonda non è evidenza di
+> ciò che è scritto qui.
+>
+> Questa nota resta finché una corsa non riproduce il risultato o non lo sostituisce. Cancellare
+> il numero sarebbe perdere il riferimento; lasciarlo senza la nota violerebbe §6.2.3.
+
 ### 5.6i. Registro npm vs Limiti di Training
 * **Consultazione Registro npm**: [`npmRegistryClient.ts`](../electron/core/infrastructure/http/npmRegistryClient.ts) valida l'esistenza dei pacchetti e recupera la versione stabile reale prima dell'installazione.
 * **Normalizzazione Versioni & `ETARGET`**: [`dependencyVersionReality.ts`](../electron/core/domain/agent/dependencyVersionReality.ts) e [`npmVersionNotFound.ts`](../electron/core/domain/agent/npmVersionNotFound.ts) correggono pacchetti inesistenti (es. `@tailwindcss/react`) e versioni allucinate.
 * **Preservazione Configurazioni Major**: Esclusione automatica di major breaking (`typescript`, `tailwindcss`, `eslint`) che richiederebbero modifiche di configurazione estranee al training del modello.
-* **Bottleneck Attuale**: Coerenza tra export default ed export nominati generati dal modello (`TS2613`/`TS2614`).
+* **Coerenza Export/Import (`TS2613`/`TS2614`)**: `tsc` chiude entrambi i messaggi con la frase *"Did you mean to use '<import>' instead?"*, cioè con l'istruzione già scritta. [`extractExportMismatch`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) la estrae e la direttiva la cita **verbatim** su riga propria, nominando file e riga e prescrivendo un solo `write_file` sul file importante. Sostituisce la direttiva file+riga ordinaria (§6.2.2), non la affianca, e vince sull'errore in prima posizione quando il mismatch è più in basso: fra gli errori a tabellino è l'unico la cui correzione è già nota. Resta subordinata all'installazione quando il compilatore ha anche nominato un pacchetto mancante.
+* **Limite noto**: la direttiva applica la sola correzione che il compilatore propone — cambiare l'import. Se la scelta corretta fosse cambiare l'export del modulo importato, il modello non lo dedurrà da qui.
+
+### 5.6j. Politica di Contesto per Turno — il secondo asse di arbitrato
+
+L'arbitro di §5.6 decide **cosa dire** al modello. Non decideva **cosa mostrargli**: ogni blocco
+opzionale partiva a ogni turno, dimensionato a quote fisse del budget (repo map 18%, RAG 12% in
+[`agentPromptAssembler.ts`](../electron/core/domain/agent/agentPromptAssembler.ts); pinned, file
+attivo e skill a frazioni fisse del tier 2 in
+[`heuristicContextCompactor.ts`](../electron/core/domain/agent/heuristicContextCompactor.ts)). Su un
+7B a 8k questo spende metà finestra in contesto che la milestone attiva spesso non usa, e il blocco
+che lo paga — quando il compattatore esaurisce lo spazio — è la **history**, l'unico che porta ciò
+che è già stato fatto.
+
+[`turnContextPolicy.ts`](../electron/core/domain/agent/turnContextPolicy.ts) chiude la lacuna
+**senza aggiungere alcuna inferenza**: il `PlanDirectiveKind` che l'arbitro ha già risolto è di per
+sé la risposta a "cosa serve davanti al modello adesso". Un turno la cui azione prescritta è
+`npm install react` non è reso più corretto da una mappa del repository.
+
+| `PlanDirectiveKind` | Azione prescritta | Map | RAG | Skill | Pinned | File attivo |
+| :--- | :--- | :-: | :-: | :-: | :-: | :-: |
+| `session_closure` | `finish` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `dependencies_undeclared` | `npm install <pkg>` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `dependencies_missing` | `npm install` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `verification_due` | comando di verifica | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `unprovable_milestone` | `update_plan <id>` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `dependencies_uninstallable` | riscrivere l'import | ⬜ | ⬜ | ✅ | ✅ | ✅ |
+| `verification_failing` | correggere il file diagnosticato | ⬜ | ⬜ | ✅ | ✅ | ✅ |
+| `entrypoint_disconnected` | iniettare il tag esatto | ⬜ | ⬜ | ⬜ | ✅ | ⬜ |
+| `focus` | microtask della milestone | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+* **Invariante strutturale**: system prompt, blocco piano e tool history **non hanno un campo** in
+  `TurnContextPolicy`, quindi nessuna policy può sopprimerli. Sono la testa immutabile e la coda di
+  progresso, cioè esattamente ciò che la troncatura di Ollama distrugge (§5.5). Sopprimere un
+  blocco opzionale libera la sua allocazione a favore della history.
+* **Esaustività forzata**: la risoluzione è uno `switch` senza `default`, così un nuovo
+  `PlanDirectiveKind` diventa un errore di compilazione anziché ereditare un fallback silenzioso.
+* **Effetto collaterale sulla latenza**: quando la mappa non è ammessa, `generateCompactRepoMap`
+  non viene proprio invocata — è un tree walk del workspace a ogni turno.
+* **Relazione con i principi (§6.2)**: è il Principio 1 applicato al contesto anziché alle
+  istruzioni. Quando il sistema conosce già l'azione del turno, non deve far riscoprire al modello
+  quale degli otto blocchi fosse pertinente.
 
 ### 5.7. Roadmap Funzionalità Future
 1. **Modulo Validazione Visiva**: `visualValidationTool.ts` su Electron Offscreen `WebContents` con cattura screenshot, DOM e `console.error`.
@@ -291,6 +373,8 @@ Tutte le ottimizzazioni sono state guidate da metriche e sonde reali (`scripts/l
 | Modulo / Area | Responsabilità | Stato |
 | :--- | :--- | :---: |
 | [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts) | Selezione della singola direttiva prioritaria di turno | ✅ Verificato Live |
+| [`turnContextPolicy.ts`](../electron/core/domain/agent/turnContextPolicy.ts) | Selezione dei blocchi di contesto ammessi nel turno (§5.6j) | ✅ Unit test |
+| [`selectModelForTurn`](../electron/core/application/agentOrchestratorPromptAssembly.ts) | Clamp di `num_ctx` sul `context_length` reale del modello (§5.5) | ✅ Unit test |
 | [`npmResolutionConflict.ts`](../electron/core/domain/agent/npmResolutionConflict.ts) | Risoluzione deterministica conflitti `ERESOLVE` npm | ✅ Verificato Live |
 | [`redundantWriteDetector.ts`](../electron/core/domain/agent/redundantWriteDetector.ts) | Riconoscimento no-op writes e preservazione build verde | ✅ Verificato Live |
 | [`postVerificationClosure.ts`](../electron/core/domain/agent/postVerificationClosure.ts) | Sblocco chiusura sessione su milestone residue non dimostrabili | ✅ Verificato Live |

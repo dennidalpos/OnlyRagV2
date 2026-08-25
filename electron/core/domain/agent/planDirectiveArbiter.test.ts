@@ -327,6 +327,94 @@ describe('dependencies_uninstallable — a failed install is not re-ordered', ()
 })
 
 /**
+ * The shape regression, measured on the live run of 2026-08-25T12:11 (`qwen2.5-coder:7b`,
+ * 50/50 steps, session `live-full-task` in `logs/coding_agent_audit.log`).
+ *
+ * The directive fired — 24 times, correctly, naming `@tailwindcss/react` and
+ * `src/pages/DashboardPage.tsx` — and the model never wrote that file while it was being told
+ * to. The sibling `dependencies_undeclared` directive, computed from the same facts on the
+ * alternating turns, was obeyed six times out of six (steps 9, 16, 19, 30, 45, 46). The one
+ * textual difference between them is that the obeyed one names the tool —
+ * `Your next tool call MUST be "run_command" with the command: ...` — and this one named none;
+ * it opened with a bare `"pkg" — remove it from file` and deferred the actual action to a
+ * trailing "Rewrite that file...", i.e. the two competing imperatives §6.2.2 forbids.
+ *
+ * Steps 33, 42, 43 and 47 make the second half of the defect visible: with two uninstallable
+ * imports the directive grew to three numbered lines ending in "Rewrite those files", which no
+ * single `write_file` call can satisfy — an instruction the tool contract cannot execute.
+ */
+describe('dependencies_uninstallable — the directive has to name the tool and one file', () => {
+  const dashboard = { packageName: '@tailwindcss/react', importedBy: ['src/pages/DashboardPage.tsx'] }
+  const sidebar = { packageName: 'use-optimistic', importedBy: ['src/components/Sidebar.tsx'] }
+
+  function uninstallable(deps: readonly { packageName: string; importedBy: string[] }[]): string {
+    return resolvePlanDirective(
+      input({
+        undeclaredDependencies: deps,
+        packagesWithFailedInstall: deps.map((d) => d.packageName),
+      })
+    ).blockDirective!
+  }
+
+  it('orders the write_file the same way the install directive orders run_command', () => {
+    const directive = uninstallable([dashboard])
+
+    expect(directive).toContain(
+      'Your next tool call MUST be "write_file" on "src/pages/DashboardPage.tsx"'
+    )
+    expect(directive).toContain('@tailwindcss/react')
+  })
+
+  it('carries one imperative and one prohibition, never two things to do', () => {
+    const numbered = uninstallable([dashboard])
+      .split('\n')
+      .filter((line) => /^\d+\. /.test(line))
+
+    // Two numbered lines: the action, then what not to do. The measured run emitted N+1 lines,
+    // of which the last ("Rewrite that file...") competed with the first ("remove it from X").
+    expect(numbered).toHaveLength(2)
+    expect(numbered[0]).toContain('Your next tool call MUST be "write_file"')
+    expect(numbered[1]!.startsWith('2. Do NOT')).toBe(true)
+  })
+
+  it('names exactly one file even when several imports are uninstallable', () => {
+    const directive = uninstallable([dashboard, sidebar])
+
+    // `write_file` writes one file. "Rewrite those files" was an order the tool contract could
+    // not carry out, and the run answered it by rewriting neither.
+    expect(directive).toContain('src/pages/DashboardPage.tsx')
+    expect(directive).not.toContain('src/components/Sidebar.tsx')
+    expect(directive).not.toContain('use-optimistic')
+  })
+
+  it('reports the remaining imports as a count, not as further instructions', () => {
+    const directive = uninstallable([dashboard, sidebar])
+    const numbered = directive.split('\n').filter((line) => /^\d+\. /.test(line))
+
+    expect(numbered).toHaveLength(2)
+    expect(directive).toContain('1 other import')
+  })
+
+  it('pins the same target whatever order the scanner reports the imports in', () => {
+    // The tracker entry for this run reads "il bersaglio si sposta a ogni turno". The caller's
+    // array follows the workspace scan, so the head moved whenever a different file was written
+    // last; the model was handed a different target on alternating turns.
+    expect(uninstallable([dashboard, sidebar])).toEqual(uninstallable([sidebar, dashboard]))
+  })
+
+  it('does not assert that the package was invented', () => {
+    // `@mui/material` is real. On steps 45-46 of the same run it failed with ERESOLVE, because
+    // three `npm install react@^16.8.0` calls had pinned the tree to react@16.14.0 — and the
+    // directive then told the model the name "was invented rather than looked up" and to delete
+    // the import. Step 49 obeyed and dropped a legitimate dependency. The arbiter is given
+    // failure counts, not registry answers, so it cannot make that claim.
+    const directive = uninstallable([{ packageName: '@mui/material', importedBy: ['src/pages/DashboardPage.tsx'] }])
+
+    expect(directive).not.toContain('invented')
+  })
+})
+
+/**
  * The contradiction the arbiter itself was producing, measured on 2026-08-24 steps 26-34: the
  * plan block ordered the build while the tool result from that same build ordered a file fix
  * and forbade re-running. `hasVerifiedBuild` is false both before the first run and after a

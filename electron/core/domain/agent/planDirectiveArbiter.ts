@@ -63,6 +63,25 @@ export interface PlanDirectiveDecision {
   blockDirective: string | null
   /** Replaces ONLY directive 2 inside the focus block; the rest of the block stands. */
   closureStepDirective: string | null
+  /**
+   * Workspace files this directive orders the model to REWRITE, when it names any.
+   *
+   * A directive that says "rewrite src/pages/DashboardPage.tsx so nothing imports X" is only
+   * executable by a model that can see that file. In session live-full-task of 2026-08-25T12:11
+   * the model executed `read_file` zero times in fifty steps, and no prompt in that session
+   * carried a pinned-files or active-file block — the live probe is headless and pins nothing.
+   * It rewrote the file anyway, from nothing, and the result was a 208-byte stub: a blind
+   * rewrite destroys the file instead of removing one import from it, which regenerates the
+   * problem on the next turn.
+   *
+   * The arbiter is pure domain and cannot read disk, so it publishes the paths and the prompt
+   * assembly layer supplies the content (agentOrchestratorPromptAssembly.ts). Blueprint §6.2.1:
+   * the system knows which file it is talking about, so it hands over the file rather than
+   * asking the model to remember it.
+   *
+   * Empty for directives that order a command rather than an edit.
+   */
+  rewriteTargets?: readonly string[]
 }
 
 /** A package the code imports and package.json does not declare. */
@@ -186,20 +205,61 @@ export function buildUndeclaredDependencyDirective(undeclared: readonly Undeclar
  * steps. The way out was already written in it, as directive 2 under an imperative directive 1,
  * and a model follows the first one. Once the install has demonstrably failed there is only one
  * instruction left, so it is the only one printed.
+ *
+ * That promotion fixed which fact was delivered and not what was asked for, and the live run of
+ * 2026-08-25T12:11 (`qwen2.5-coder:7b`, session `live-full-task`) measured the difference.
+ * The directive fired 24 times, naming `@tailwindcss/react` and `src/pages/DashboardPage.tsx`
+ * correctly, and the model did not write that file once while it was being told to — it wrote
+ * TaskCard, TasksPage, Button, HamburgerMenu, App instead. On the alternating turns of the same
+ * run the sibling install directive was obeyed six times out of six (steps 9, 16, 19, 30, 45,
+ * 46). The two are computed from the same facts, so the difference is textual, and it is this:
+ *
+ *  * **No tool was named.** The obeyed sibling opens `Your next tool call MUST be "run_command"
+ *    with the command: ...`; this one opened with `"pkg" — remove it from file`, which names a
+ *    goal and leaves the model to pick the move. The same shape as `write_file` is what
+ *    `dependencyVersionReality.ts` already uses for the manifest, so it is what is used here.
+ *  * **The action was the LAST line.** "Rewrite that file" trailed a numbered list whose first
+ *    entry read as the instruction — §6.2.2 exactly: two imperatives, and the model takes the
+ *    cheaper. Cheaper here meant writing a file that did not exist yet over rewriting one whose
+ *    content it did not have.
+ *  * **It addressed more files than the tool can write.** With two uninstallable imports the
+ *    list ended in "Rewrite those files" (steps 33, 42, 43, 47). `write_file` writes one file;
+ *    the run answered that order by rewriting neither.
+ *
+ * So: one package, one file, `write_file` named first, and the rest reported as a count. The
+ * remaining imports are still on disk and this directive is recomputed every turn, so they are
+ * reached in order rather than dropped — the note says so, as a fact and not as a second order.
+ *
+ * The claim that the name "was invented rather than looked up" is gone, and not for tone.
+ * `@mui/material` is real; on steps 45-46 of that run it failed with ERESOLVE because three
+ * `npm install react@^16.8.0` calls had pinned the tree to react@16.14.0. The directive asserted
+ * the name was invented and ordered its removal, and step 49 obeyed — deleting a legitimate
+ * dependency to satisfy a guard that was reading a version conflict as a missing package. This
+ * function is handed failure counts, never registry answers (see `packagesWithFailedInstall` in
+ * installCommandParser.ts), so that sentence was never a fact it was in a position to state.
  */
 export function buildUninstallablePackageDirective(undeclared: readonly UndeclaredDependency[]): string {
-  const shown = undeclared.slice(0, 6)
-  const lines = shown.map(
-    (u, i) => `${i + 1}. "${u.packageName}" — remove it from ${u.importedBy.slice(0, 3).join(', ')}`
-  )
+  // Deterministic target. The caller's array follows the workspace scan, so its head moved
+  // whenever a different file was written last, and the tracker entry for the 12:11 run reads
+  // "il bersaglio si sposta a ogni turno". Sorting pins one name until it is actually fixed:
+  // a directive the model is meant to obey over several turns has to say the same thing twice.
+  const ordered = [...undeclared].sort((a, b) => a.packageName.localeCompare(b.packageName))
+  const target = ordered[0]
+  const file = [...target.importedBy].sort()[0]
+  const others = ordered.length - 1
 
   return [
-    `[THESE PACKAGES CANNOT BE INSTALLED — STOP TRYING]`,
-    `You have run the install for ${shown.length === 1 ? 'this package' : 'these packages'} more than once in this session and it failed every time, including after any version conflict was resolved. Whatever the registry is answering, it is not going to change on another attempt.`,
-    `The file that imports it is the thing to change now, not the command. A name that never resolves is usually one that was invented rather than looked up.`,
+    `[THIS PACKAGE CANNOT BE INSTALLED — STOP TRYING]`,
+    `You have run the install for "${target.packageName}" more than once in this session and it failed every time, including after any version conflict was resolved. Whatever the registry is answering, it is not going to change on another attempt.`,
+    `The file that imports it is the thing to change now, not the command.`,
+    ...(others > 0
+      ? [
+          `${others} other import${others === 1 ? '' : 's'} in this project ${others === 1 ? 'has' : 'have'} the same problem. ${others === 1 ? 'It is' : 'They are'} handled one at a time, after this one; this turn is about "${file}" only.`,
+        ]
+      : []),
     `Directives:`,
-    ...lines,
-    `${shown.length + 1}. Rewrite ${shown.length === 1 ? 'that file' : 'those files'} using only packages package.json already declares. Do NOT run any install command for ${shown.length === 1 ? 'this name' : 'these names'} again.`,
+    `1. Your next tool call MUST be "write_file" on "${file}", with the complete file rewritten so that nothing in it imports "${target.packageName}", using only packages package.json already declares, and keeping the rest of the file's content intact.`,
+    `2. Do NOT run any install command for "${target.packageName}" again, and do NOT write any other file this step.`,
   ].join('\n')
 }
 
@@ -285,6 +345,9 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
       kind: 'dependencies_uninstallable',
       blockDirective: buildUninstallablePackageDirective(uninstallable),
       closureStepDirective: null,
+      // The files that import the package which cannot be installed: exactly the files this
+      // directive orders rewritten, and therefore exactly the ones the model must be able to see.
+      rewriteTargets: Array.from(new Set(uninstallable.flatMap((u) => u.importedBy))),
     }
   }
 

@@ -32,10 +32,12 @@ Ogni run **appende** a `logs/coding_agent_audit.log`: `codingAgentLogger` usa `a
 
 | File | Cosa fa | Come si legge |
 | :--- | :--- | :--- |
-| `fullTaskRun.live.ts` | Riesegue il task originale dell'audit (dashboard responsive React+Tailwind) su workspace vuoto | Osservazione, non asserzione: un 7B varia molto fra run. Guarda il dump e il log. |
+| `fullTaskRun.live.ts` | Riesegue il task originale dell'audit (dashboard responsive React+Tailwind) su workspace vuoto | **Asserisce la consegna**: rapporto di milestone `verified` ≥ 12/13 e `finish` che chiude la sessione, le due metriche di Run 9 (blueprint §5.6h). Rosso = l'agente non ha consegnato; il blocco `run metrics` dice di quanto. |
 | `eresolveRecovery.live.ts` | Installa davvero `vite@4`, poi chiede un plugin che pretende una vite molto più recente | Deve comparire `[DEPENDENCY VERSION CONFLICT — ERESOLVE]`, il comando successivo deve essere l'upgrade indicato, e `vite installed` deve essersi mosso da 4.5.14 |
 
 Gli scenari scrivono in `~/Desktop/onlyrag_live_*`. Sono directory usa-e-getta, azzerate a ogni run.
+
+Fino al 2026-08-25 `fullTaskRun.live.ts` asseriva solo `expect(result).toBeTruthy()`: due corse che hanno bruciato tutti i 50 step con 0 milestone verificate e senza mai chiamare `finish` sono uscite comunque con codice 0. Una sonda che non può diventare rossa non è evidenza dei numeri che il blueprint pubblica a partire da essa. `reportRun()` restituisce ora un oggetto `LiveRunMetrics` (step usati e tetto, milestone verified/failed/pending, `finish` invocato/accettato, comandi eseguiti, tool call fallite) letto dallo stato di sessione che l'orchestratore già persiste in `.onlyrag/sessions/.agent_state_<id>.json`: è quello, non il log condiviso, il canale di osservazione su cui si asserisce.
 
 ## 4. Le tre trappole
 

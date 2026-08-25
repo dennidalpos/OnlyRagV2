@@ -22,7 +22,7 @@ import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredIm
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
 import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
-import { readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
+import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
@@ -467,8 +467,11 @@ export function resolvePlanDirectiveForTurn(
     verificationCommand: verification,
     verificationFailing: isVerificationFailing(episodes, verification?.command),
     verificationFailureDirective: lastVerificationFailureOutput
-      ? buildDiagnosticFixDirective(lastVerificationFailureOutput, (pkg) =>
-          workspacePath ? readPackageExports(workspacePath, pkg) : []
+      ? buildDiagnosticFixDirective(
+          lastVerificationFailureOutput,
+          (pkg) => (workspacePath ? readPackageExports(workspacePath, pkg) : []),
+          (importingFile, specifier) =>
+            workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []
         )
       : null,
     verificationFailureTargetFile: lastVerificationFailureOutput

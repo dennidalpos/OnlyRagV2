@@ -180,6 +180,22 @@ export function classifyWriteFileTarget(filePath: string | undefined, content: s
   return (content || '').trim() ? 'contradictory' : 'directory'
 }
 
+const ROOT_CONFIG_FILE = /^(?:index\.html|package\.json|tsconfig(?:\.[^.]+)?\.json|(?:vite|tailwind|postcss)\.config\.[cm]?[jt]s)$/i
+
+/**
+ * Returns the path a project-root configuration file should use when it was aimed below src/.
+ * These files configure the build that consumes src/, so placing them inside that source tree
+ * makes the default Vite/TypeScript/Tailwind entrypoints invisible to their own tools.
+ */
+export function rootConfigPathForMisplacedSourceFile(filePath: string | undefined): string | null {
+  const normalized = String(filePath || '').trim().replace(/\\/g, '/')
+  const parts = normalized.split('/').filter(Boolean)
+  const sourceIndex = parts.map((part) => part.toLowerCase()).lastIndexOf('src')
+  const fileName = parts.at(-1) || ''
+  if (sourceIndex < 0 || !ROOT_CONFIG_FILE.test(fileName)) return null
+  return [...parts.slice(0, sourceIndex), fileName].join('/')
+}
+
 /**
  * Normalizes tool name alias to canonical SupportedToolName.
  */

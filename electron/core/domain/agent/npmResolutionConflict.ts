@@ -24,6 +24,8 @@
  * Pure domain: text in, verdict out.
  */
 
+import { majorOf } from './dependencyVersionReality'
+
 /** The two sides of an ERESOLVE peer conflict, as npm reported them. */
 export interface NpmResolutionConflict {
   /** The package already resolved in the tree, and the version npm found. */
@@ -138,22 +140,31 @@ function describeRequirer(conflict: NpmResolutionConflict): string {
  * `^4` as a program. That run ended with an empty `node_modules/.bin` and a build that could not
  * find `tsc`.
  *
- * Quoting would fix the shell and keep the ambiguity; the highest alternative removes both. It
- * is also what "upgrade to satisfy this peer" means, and it leaves the directive naming exactly
- * one action, which is the property every obeyed directive in this project shares.
+ * Quoting would fix the shell and keep the ambiguity; one alternative removes both. The
+ * alternative must not be below the version already in the tree: the measured React 18 case
+ * turned a transitive React 16 peer into a root downgrade, which the executor then refused on
+ * every turn while this directive kept ordering it.
  */
-export function installableRange(requiredRange: string): string {
+export function installableRange(requiredRange: string, installedVersion?: string): string | null {
   const alternatives = (requiredRange || '')
     .split('||')
     .map((part) => part.trim())
     .filter(Boolean)
-  if (alternatives.length <= 1) return (requiredRange || '').replace(/\s+/g, '')
+  const installedMajor = installedVersion ? majorOf(installedVersion) : null
+  const nonDowngrading = alternatives.filter((candidate) => {
+    if (installedMajor === null) return true
+    // Caret, tilde and exact major selectors cap compatibility to that major. Comparator
+    // ranges such as ">=7" remain eligible because they also admit the installed major.
+    if (!/^[~^]?\d/.test(candidate)) return true
+    const candidateMajor = majorOf(candidate)
+    return candidateMajor === null || candidateMajor >= installedMajor
+  })
+  if (nonDowngrading.length === 0) return null
+  if (nonDowngrading.length === 1) return nonDowngrading[0].replace(/\s+/g, '')
 
-  const majorOf = (range: string) => {
-    const match = /(\d+)/.exec(range)
-    return match ? Number(match[1]) : -1
-  }
-  return alternatives.reduce((best, candidate) => (majorOf(candidate) > majorOf(best) ? candidate : best)).replace(/\s+/g, '')
+  return nonDowngrading
+    .reduce((best, candidate) => (Number(majorOf(candidate) ?? -1) > Number(majorOf(best) ?? -1) ? candidate : best))
+    .replace(/\s+/g, '')
 }
 
 export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): string {
@@ -164,7 +175,23 @@ export function buildNpmResolutionDirective(conflict: NpmResolutionConflict): st
         conflict.declaredScope && conflict.declaredScope !== 'prod' ? ` under ${conflict.declaredScope}Dependencies` : ''
       })`
     : ''
-  const upgradeCommand = `npm install ${conflict.installed.name}@${installableRange(conflict.requiredRange)}`
+  const targetRange = installableRange(conflict.requiredRange, conflict.installed.version)
+
+  if (!targetRange) {
+    return [
+      '[DEPENDENCY VERSION CONFLICT — ROOT DOWNGRADE REFUSED]',
+      `${installedLabel} is in the tree${declaredNote}, but ${requirer} requires ${conflict.installed.name}@${conflict.requiredRange}.`,
+      `Every explicit compatible branch is below the installed ${conflict.installed.name} major. Keep ${installedLabel}; changing the root dependency would downgrade the project to satisfy the package that does not fit.`,
+      '',
+      'Do this now, exactly:',
+      `     npm view ${conflict.requiredBy.name} versions --json`,
+      `Then install a version of ${conflict.requiredBy.name} whose peer dependencies support ${conflict.installed.name}@${conflict.installed.version}, or remove ${conflict.requiredBy.name} if none does.`,
+      '',
+      `Do NOT downgrade ${conflict.installed.name}, and never use --force or --legacy-peer-deps: they install a mismatched tree anyway.`,
+    ].join('\n')
+  }
+
+  const upgradeCommand = `npm install ${conflict.installed.name}@${targetRange}`
 
   return [
     '[DEPENDENCY VERSION CONFLICT — ERESOLVE]',

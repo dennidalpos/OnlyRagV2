@@ -129,6 +129,7 @@ const IN_DEPENDENCY = /(^|[\\/])node_modules[\\/]/i
  * `[^']+` is enough and no escaping is involved.
  */
 const SUGGESTED_IMPORT_PATTERN = /\bDid you mean to use '([^']+)' instead\?/
+const IMPORT_SPECIFIER_PATTERN = /\bfrom\s+["']([^"']+)["']/
 
 /**
  * The only codes this remedy is read from.
@@ -144,6 +145,8 @@ export interface ExportMismatch {
   diagnostic: CompilerDiagnostic
   /** The compiler's own replacement line, copied out of its message with nothing added. */
   suggestedImport: string
+  /** Module named by that import, used to distinguish editable local code from a package. */
+  moduleSpecifier: string
 }
 
 function findExportMismatch(diagnostics: CompilerDiagnostic[]): ExportMismatch | null {
@@ -151,7 +154,10 @@ function findExportMismatch(diagnostics: CompilerDiagnostic[]): ExportMismatch |
     if (!diagnostic.code || !EXPORT_MISMATCH_CODES.has(diagnostic.code)) continue
     const match = SUGGESTED_IMPORT_PATTERN.exec(diagnostic.message)
     if (!match) continue
-    return { diagnostic, suggestedImport: match[1].trim() }
+    const suggestedImport = match[1].trim()
+    const specifier = IMPORT_SPECIFIER_PATTERN.exec(suggestedImport)?.[1]?.trim()
+    if (!specifier) continue
+    return { diagnostic, suggestedImport, moduleSpecifier: specifier }
   }
   return null
 }
@@ -159,14 +165,10 @@ function findExportMismatch(diagnostics: CompilerDiagnostic[]): ExportMismatch |
 /**
  * The first export/import mismatch the output reports, with the compiler's replacement line.
  *
- * The same reasoning as `extractSuggestedCommand`, applied to an edit instead of an install:
- * tsc has already decided which of the two sides is wrong and printed the statement that fixes
- * it, and paraphrasing that into "correct the import" discards the one thing a 7B model cannot
- * recover on its own — whether the target module exports a default or a name, and which name.
- * Blueprint §6.2.1, structure before directives: hand over the objective datum, do not restate
- * it. The clause survived parsing already (it is part of `message`), but nothing ever pointed
- * at it, and it reached the model buried mid-sentence in a line whose only instruction was
- * "write the complete corrected content of that file".
+ * TypeScript prints one mechanically valid import, but it does not know whether the task's
+ * intended public API instead requires changing the local module's export. Both the suggestion
+ * and its module specifier are retained so the directive can distinguish an editable local
+ * contract from an external package whose exports are authoritative.
  *
  * Errors inside `node_modules` are dropped here too: a mismatch against a dependency's own
  * declaration file is never fixed by editing that file.
@@ -303,6 +305,12 @@ export interface MissingExportMember {
   memberName: string
 }
 
+interface MissingLocalExportMember {
+  diagnostic: CompilerDiagnostic
+  specifier: string
+  memberName: string
+}
+
 const MISSING_EXPORT_MEMBER = /module\s+'"?([^'"]+)"?'\s+has no exported member\s+'([^']+)'/i
 
 /** The first import of a name a PACKAGE does not export. */
@@ -314,6 +322,18 @@ export function extractMissingExportMember(output: string): MissingExportMember 
     const packageName = match[1].trim()
     if (!packageName || packageName.startsWith('.') || packageName.startsWith('/')) continue
     return { diagnostic, packageName, memberName: match[2] }
+  }
+  return null
+}
+
+function extractMissingLocalExportMember(output: string): MissingLocalExportMember | null {
+  for (const diagnostic of parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file))) {
+    if (diagnostic.code && diagnostic.code !== 'TS2305') continue
+    const match = MISSING_EXPORT_MEMBER.exec(diagnostic.message)
+    if (!match) continue
+    const specifier = match[1].trim()
+    if (!specifier.startsWith('.')) continue
+    return { diagnostic, specifier, memberName: match[2] }
   }
   return null
 }
@@ -336,7 +356,11 @@ export function diagnosticFixTargetFile(output: string): string | null {
   if (extractSuggestedCommand(output)) return null
 
   const mismatch = extractExportMismatch(output)
-  if (mismatch) return mismatch.diagnostic.file
+  if (mismatch) {
+    return mismatch.moduleSpecifier.startsWith('.')
+      ? resolveRelativeImportPath(mismatch.diagnostic.file, mismatch.moduleSpecifier)
+      : mismatch.diagnostic.file
+  }
 
   const missingRelative = extractMissingRelativeModule(output)
   if (missingRelative) return missingRelative.expectedPath
@@ -355,7 +379,9 @@ export function buildDiagnosticFixDirective(
    * a .d.ts under node_modules. Returning an empty array means "could not read it", and the
    * directive then says less rather than claiming the package exports nothing.
    */
-  resolvePackageExports: (packageName: string) => string[] = () => []
+  resolvePackageExports: (packageName: string) => string[] = () => [],
+  /** Export names from a relative module, injected to keep filesystem access out of domain. */
+  resolveLocalModuleExports: (importingFile: string, specifier: string) => string[] = () => []
 ): string | null {
   const all = parseCompilerDiagnostics(output)
   if (all.length === 0) return null
@@ -412,13 +438,35 @@ export function buildDiagnosticFixDirective(
       .map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`)
       .join('\n')
 
+    const localModule = mismatch.moduleSpecifier.startsWith('.') ||
+      mismatch.moduleSpecifier.startsWith('/') ||
+      /^[A-Za-z]:[\\/]/.test(mismatch.moduleSpecifier)
+    if (localModule) {
+      const importedTarget = mismatch.moduleSpecifier.startsWith('.')
+        ? resolveRelativeImportPath(target.file, mismatch.moduleSpecifier)
+        : mismatch.moduleSpecifier
+      return [
+        `[IMPORT AND EXPORT DISAGREE — PRESERVE THE INTENDED PUBLIC API]`,
+        `${target.file}, line ${target.line}${target.column ? `, column ${target.column}` : ''} (${target.code})`,
+        `  ${target.message}`,
+        `TypeScript printed one mechanically valid fix:`,
+        `  ${mismatch.suggestedImport}`,
+        `That suggestion proves the two sides disagree; it does not prove which public API the task requires. If the existing export contract in "${importedTarget}" is intended, apply the suggested import in "${target.file}". If the task requires the current import contract, change the export in "${importedTarget}" instead.`,
+        rest ? `Also reported${restOverflow > 0 ? ` (${restOverflow} more not listed)` : ''}:\n${rest}` : '',
+        `Directives:`,
+        `1. Change exactly one side now with "write_file", preserving the task's intended public API; do not change both sides merely to silence the compiler.`,
+        `2. Do NOT re-run the command until you have changed a file. It will report exactly these errors again, because nothing will have changed.`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
+
     return [
-      `[THE COMPILER WROTE THE CORRECT IMPORT FOR YOU — COPY IT VERBATIM]`,
+      `[THE PACKAGE EXPORT CONTRACT IS AUTHORITATIVE — USE THE COMPILER'S IMPORT]`,
       `${target.file}, line ${target.line}${target.column ? `, column ${target.column}` : ''} (${target.code})`,
       `  ${target.message}`,
-      `The import and the export of that module disagree. The compiler resolved which side is wrong and printed the statement that fixes it, character for character:`,
+      `The imported module is an external package, so its export contract is not editable workspace code. TypeScript printed the compatible import:`,
       `  ${mismatch.suggestedImport}`,
-      `Use that line exactly as printed. Do NOT rename the export, do NOT edit the module being imported, and do NOT guess a different member name — the compiler read that module and you have not.`,
       rest ? `Also reported${restOverflow > 0 ? ` (${restOverflow} more not listed)` : ''}:\n${rest}` : '',
       `Directives:`,
       `1. Your next tool call MUST be "write_file" on "${target.file}", with the complete content of that file, in which line ${target.line} is replaced by exactly: ${mismatch.suggestedImport}`,
@@ -453,6 +501,28 @@ export function buildDiagnosticFixDirective(
     ]
       .filter(Boolean)
       .join('\n')
+  }
+
+  const missingLocalExport = extractMissingLocalExportMember(output)
+  if (missingLocalExport) {
+    const target = missingLocalExport.diagnostic
+    const available = resolveLocalModuleExports(target.file, missingLocalExport.specifier)
+    const shownNames = available.slice(0, 24)
+    const overflowNames = available.length - shownNames.length
+
+    return [
+      `[LOCAL MODULE DOES NOT EXPORT THAT NAME]`,
+      `${target.file}, line ${target.line}${target.code ? ` (${target.code})` : ''}`,
+      `  ${target.message}`,
+      available.length > 0
+        ? `"${missingLocalExport.specifier}" actually exports: ${shownNames.join(', ')}${overflowNames > 0 ? `, and ${overflowNames} more` : ''}.`
+        : `The local module "${missingLocalExport.specifier}" could not be read, so its exported names are unknown here.`,
+      `Directives:`,
+      available.length > 0
+        ? `1. Your next tool call MUST be "write_file" on "${target.file}", importing only names from the list above, or add "${missingLocalExport.memberName}" to the local module if that is the API the task requires.`
+        : `1. Your next tool call MUST be "write_file" on "${target.file}", removing or correcting the unsupported "${missingLocalExport.memberName}" import.`,
+      `2. Do NOT re-run the command with the same import; the local module does not currently export that name.`,
+    ].join('\n')
   }
 
   // Ordered with the other branches that carry the fix rather than only the fault. TS2305 says

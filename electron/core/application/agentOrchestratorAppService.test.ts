@@ -6,6 +6,7 @@ import { runAgentOrchestratorLoop, cancelActiveAgentTask, respondToApproval } fr
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
+import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import type { AppSettings } from '../../../src/types'
 
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
@@ -89,6 +90,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(true)
     expect(res.summary).toBe('All tasks done perfectly.')
+    const tracker = fs.readFileSync(path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md'), 'utf-8')
+    expect(tracker).toContain('## 5. Raw Agent Summary')
+    expect(tracker).toContain('All tasks done perfectly.')
   })
 
   it('should intercept repetitive loop calls and inject intervention directive', async () => {
@@ -688,6 +692,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   }
 
   describe('finish gate runs the project verification instead of waiving it', () => {
+    const finishVerificationSettings = {
+      ...buildDefaultAgentSettings(),
+      verifyBeforeFinish: true,
+    } as AppSettings
+
     it('lets finish through when the verification passes', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({
         hasVerificationCommand: true,
@@ -697,7 +706,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       scriptTurns(verificationWriteJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
-        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir, settings: finishVerificationSettings },
         null
       )
 
@@ -718,7 +727,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
-        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir, settings: finishVerificationSettings },
         null
       )
 
@@ -737,7 +746,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
-        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir, settings: finishVerificationSettings },
         null
       )
 
@@ -754,7 +763,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
-        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir },
+        { userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir, settings: finishVerificationSettings },
         null
       )
 

@@ -16,38 +16,51 @@ async function dispatchToLlm(
   contextReuseDecision: OllamaContextReuseDecision,
   wasCompacted: boolean
 ): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
+  const latchProtocol = (protocol: 'native' | 'text') => {
+    ctx.session.toolCallingProtocolByModel = {
+      ...ctx.session.toolCallingProtocolByModel,
+      [selection.targetModel]: protocol,
+    }
+  }
+  const stream = (toolCallingCapable: boolean) => AgentStreamTransport.streamCompletion({
+    targetModel: selection.targetModel,
+    prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
+    runtimeOpts: selection.runtimeOpts,
+    keepAlive: '30m',
+    ollamaEndpoint: ctx.settings.ollamaHost,
+    toolCallingCapable,
+    toolCatalog: toolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
+    previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
+    onTokenChunk: (chunk) => {
+      if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+        ctx.session.targetWindow.webContents.send('agent:stream-token', { step: ctx.stepCount, chunk })
+      }
+    },
+    onThoughtChunk: (chunk) => {
+      if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+        ctx.session.targetWindow.webContents.send('agent:stream-thought', { step: ctx.stepCount, chunk })
+      }
+    },
+    isCancelled: () => !ctx.isSessionActive(),
+    onCancelHandle: (abort) => { ctx.session.activeCancelHandle = abort },
+    onToolProtocolObserved: selection.targetModelToolCallingProbe ? latchProtocol : undefined,
+    onContextReceived: (contextTokens, respondingModel) => {
+      if (wasCompacted) return
+      ctx.session.ollamaContextTokens = contextTokens
+      ctx.session.ollamaContextModel = respondingModel
+      ctx.session.ollamaContextStableSection = assembled.stableSection
+      ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
+    },
+  })
   try {
-    const streamedOutput = await AgentStreamTransport.streamCompletion({
-      targetModel: selection.targetModel,
-      prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
-      runtimeOpts: selection.runtimeOpts,
-      keepAlive: '30m',
-      ollamaEndpoint: ctx.settings.ollamaHost,
-      toolCallingCapable: selection.targetModelToolCallingCapable,
-      toolCatalog: selection.targetModelToolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
-      previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
-      onTokenChunk: (chunk) => {
-        if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-          ctx.session.targetWindow.webContents.send('agent:stream-token', { step: ctx.stepCount, chunk })
-        }
-      },
-      onThoughtChunk: (chunk) => {
-        if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-          ctx.session.targetWindow.webContents.send('agent:stream-thought', { step: ctx.stepCount, chunk })
-        }
-      },
-      isCancelled: () => !ctx.isSessionActive(),
-      onCancelHandle: (abort) => {
-        ctx.session.activeCancelHandle = abort
-      },
-      onContextReceived: (contextTokens, respondingModel) => {
-        if (wasCompacted) return
-        ctx.session.ollamaContextTokens = contextTokens
-        ctx.session.ollamaContextModel = respondingModel
-        ctx.session.ollamaContextStableSection = assembled.stableSection
-        ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
-      },
-    })
+    let streamedOutput: string
+    try {
+      streamedOutput = await stream(selection.targetModelToolCallingCapable)
+    } catch (probeError) {
+      if (!selection.targetModelToolCallingProbe) throw probeError
+      latchProtocol('text')
+      streamedOutput = await stream(false)
+    }
     ctx.session.activeCancelHandle = null
     return { streamedOutput, usedModel: selection.targetModel }
   } catch (err: any) {

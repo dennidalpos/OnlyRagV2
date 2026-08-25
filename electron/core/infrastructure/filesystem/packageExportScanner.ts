@@ -107,3 +107,26 @@ export function readPackageExports(workspacePath: string, packageName: string): 
     return []
   }
 }
+
+/** Export names from the local module named by a relative import in a compiler diagnostic. */
+export function readLocalModuleExports(workspacePath: string, importingFile: string, specifier: string): string[] {
+  if (!workspacePath || !importingFile || !specifier.startsWith('.')) return []
+  try {
+    const workspaceRoot = path.resolve(workspacePath)
+    const base = path.resolve(workspaceRoot, path.dirname(importingFile), specifier)
+    const candidates = [
+      base,
+      ...['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'].map((extension) => `${base}${extension}`),
+      ...['index.ts', 'index.tsx', 'index.js', 'index.jsx'].map((fileName) => path.join(base, fileName)),
+    ]
+    const sourcePath = candidates.find((candidate) => {
+      const relative = path.relative(workspaceRoot, candidate)
+      return relative && !relative.startsWith('..') && !path.isAbsolute(relative) && fs.existsSync(candidate)
+    })
+    if (!sourcePath || fs.statSync(sourcePath).size > MAX_DECLARATION_BYTES) return []
+    return extractExportedNames(fs.readFileSync(sourcePath, 'utf-8')).slice(0, MAX_NAMES)
+  } catch (err: any) {
+    logger.log('WARN', 'PackageExportScanner', `Could not read local exports for ${specifier}: ${err.message}`)
+    return []
+  }
+}

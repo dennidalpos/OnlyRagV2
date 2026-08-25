@@ -40,6 +40,13 @@ describe('ensureEntrypointMilestones', () => {
     expect(plan.some((m) => m.title.includes('vite.config'))).toBe(false)
   })
 
+  it('requires the generated tsconfig to typecheck without emitting JavaScript into src', () => {
+    const tsconfig = ensureEntrypointMilestones(pagePlan, greenfield).find((m) => m.title.includes('`tsconfig.json`'))
+
+    expect(tsconfig?.title).toContain('`noEmit: true`')
+    expect(tsconfig?.falsifiableHypothesis).toContain('noEmit')
+  })
+
   it('adds only what the plan is missing', () => {
     const withEntry = [
       { id: 'm-1', title: 'The entry script mounts the app — `src/main.tsx`', status: 'pending' as const },

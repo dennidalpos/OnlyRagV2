@@ -147,15 +147,6 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     }
   }
 
-  if (ctx.workspacePath) {
-    // Same builder and same writer as every checkpoint — the final save only adds the
-    // agent's closing summary on top of the live session state.
-    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
-    if (saved) {
-      ctx.emitLog('info', '📝 Session Debt Tracker salvato in .onlyrag/assistant/SESSION_TRACKER.md')
-    }
-  }
-
   ctx.emitLog('info', `Task Finished: ${summary}`, summary, {
     category: 'final_report',
   })
@@ -165,6 +156,14 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
   }
   await ctx.persistCurrentState()
+  if (ctx.workspacePath) {
+    // The ordinary checkpoint above projects the live plan without a closing summary. Write
+    // the final projection last, or that checkpoint immediately erases section 5 again.
+    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
+    if (saved) {
+      ctx.emitLog('info', '📝 Session Debt Tracker salvato in .onlyrag/assistant/SESSION_TRACKER.md')
+    }
+  }
   ctx.finalizeSession()
   return { outcome: 'return', result: { success: true, summary } }
 }

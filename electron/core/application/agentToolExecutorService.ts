@@ -21,10 +21,10 @@ import { parseVersionNotFound, buildVersionNotFoundDirective } from '../domain/a
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { requestedInstallVersions, findManifestDowngrades, buildInstallDowngradeRefusal } from '../domain/agent/installVersionDowngrade'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
-import { readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
+import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
-import { classifyWriteFileTarget } from '../domain/agent/toolSchemaValidator'
+import { classifyWriteFileTarget, rootConfigPathForMisplacedSourceFile } from '../domain/agent/toolSchemaValidator'
 import { detectRedundantWrite, buildRedundantWriteNotice } from '../domain/agent/redundantWriteDetector'
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { computeLineDiff, countDiffLines, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../domain/agent/diffEngine'
@@ -33,6 +33,7 @@ import { documentIoRepository } from '../infrastructure/filesystem/documentIoRep
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
+import { workspaceIncrementalTypecheck } from '../infrastructure/process/workspaceIncrementalTypecheck'
 import {
   DEV_TOOL_ALLOWLIST,
   buildInstallCommand,
@@ -924,6 +925,15 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
         }
 
+        const workspaceRelativePath = workspacePath ? path.relative(workspacePath, pathCheck.safePath) : String(filePath)
+        const rootConfigPath = rootConfigPathForMisplacedSourceFile(workspaceRelativePath)
+        if (rootConfigPath) {
+          return {
+            outputForHistory: `[ROOT CONFIG PATH REJECTED]\n"${workspaceRelativePath}" is a project configuration or entry file, so build tools will not discover it under src/.\nWrite the same complete content to "${rootConfigPath}" instead.`,
+            logMessage: `Write File Rejected: root config targeted under src (${workspaceRelativePath})`,
+          }
+        }
+
 
         // In-flight AST Pre-Commit Syntax Validation
         const astCheck = validateAST(pathCheck.safePath, content)
@@ -955,8 +965,11 @@ Do not retry the same installation. Continue without this tool or ask the user t
         this.journal.recordBeforeModification(pathCheck.safePath)
         const res = await this.repo.writeFile(pathCheck.safePath, content)
         if (res.success) {
+          const typecheckDiagnostic = workspacePath
+            ? workspaceIncrementalTypecheck.checkWrittenFile(workspacePath, pathCheck.safePath) || ''
+            : ''
           return {
-            outputForHistory: `Successfully wrote file ${filePath}${this.importIntegrityDirective(filePath, content, workspacePath)}${await this.versionRealityDirective(filePath, content)}`,
+            outputForHistory: `Successfully wrote file ${filePath}${this.importIntegrityDirective(filePath, content, workspacePath)}${await this.versionRealityDirective(filePath, content)}${typecheckDiagnostic}`,
             logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}`,
             changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, content),
           }
@@ -1458,8 +1471,11 @@ Do not retry the same installation. Continue without this tool or ask the user t
             )
             const diagnosticDirective = specificDirectiveFired
               ? null
-              : buildDiagnosticFixDirective(rawOutput, (pkg) =>
-                  workspacePath ? readPackageExports(workspacePath, pkg) : []
+              : buildDiagnosticFixDirective(
+                  rawOutput,
+                  (pkg) => (workspacePath ? readPackageExports(workspacePath, pkg) : []),
+                  (importingFile, specifier) =>
+                    workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []
                 )
             // The errors the winning directive does not fix, named so they stop being invisible,
             // and explicitly deferred so this stays one instruction for now. See

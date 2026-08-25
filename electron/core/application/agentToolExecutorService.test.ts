@@ -153,6 +153,31 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(fs.existsSync(filePath)).toBe(true)
   })
 
+  it('should report a semantic TypeScript error immediately after write_file persists valid syntax', async () => {
+    fs.mkdirSync(path.join(tempDir, 'src'))
+    fs.writeFileSync(
+      path.join(tempDir, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: { strict: true, noEmit: true }, include: ['src'] }),
+      'utf-8'
+    )
+    const filePath = path.join(tempDir, 'src', 'value.ts')
+
+    const res = await agentToolExecutorService.executeTool(
+      {
+        tool: 'write_file',
+        parameters: { filePath, content: 'const value: number = "wrong"\nexport { value }\n' },
+      },
+      tempDir,
+      settings
+    )
+
+    expect(fs.existsSync(filePath)).toBe(true)
+    expect(res.outputForHistory).toContain('Successfully wrote file')
+    expect(res.outputForHistory).toContain('[POST-WRITE TYPECHECK DIAGNOSTIC]')
+    expect(res.outputForHistory).toContain('TS2322')
+    expect(res.outputForHistory).toContain('src/value.ts(1,7)')
+  })
+
   it('should extract code symbols from TypeScript file', async () => {
     const filePath = path.join(tempDir, 'symbols.ts')
     const codeContent = `
@@ -327,6 +352,39 @@ async def async_handler():
     })
   })
 
+  describe('root configuration path guard', () => {
+    it('refuses index.html under src and points to the project root', async () => {
+      const misplaced = path.join(tempDir, 'src', 'index.html')
+      const res = await agentToolExecutorService.executeTool(
+        {
+          tool: 'write_file',
+          parameters: { filePath: misplaced, content: '<div id="root"></div>' },
+        },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[ROOT CONFIG PATH REJECTED]')
+      expect(res.outputForHistory).toContain('index.html')
+      expect(fs.existsSync(misplaced)).toBe(false)
+    })
+
+    it('allows index.html at the project root', async () => {
+      const rootEntry = path.join(tempDir, 'index.html')
+      const res = await agentToolExecutorService.executeTool(
+        {
+          tool: 'write_file',
+          parameters: { filePath: rootEntry, content: '<div id="root"></div>' },
+        },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('Successfully wrote file')
+      expect(fs.existsSync(rootEntry)).toBe(true)
+    })
+  })
+
   describe('undeclared import gate', () => {
     it('tells the model immediately when a written file imports a package the project never declared', async () => {
       fs.writeFileSync(
@@ -466,7 +524,7 @@ async def async_handler():
 
       expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
       // The exact regression: this is the directive the relative-path match used to suppress.
-      expect(res.outputForHistory).toContain('COMPILER WROTE THE CORRECT IMPORT FOR YOU')
+      expect(res.outputForHistory).toContain('IMPORT AND EXPORT DISAGREE')
       expect(res.outputForHistory).toContain(`import Button from "../components/Button"`)
     })
 

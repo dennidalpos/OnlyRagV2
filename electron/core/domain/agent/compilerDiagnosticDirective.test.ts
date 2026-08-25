@@ -154,6 +154,7 @@ describe('extractExportMismatch', () => {
   it('takes the replacement import the compiler printed, verbatim', () => {
     expect(extractExportMismatch(TS2613_OUTPUT)!.suggestedImport).toBe('import { App } from "C:/w/src/App"')
     expect(extractExportMismatch(TS2614_OUTPUT)!.suggestedImport).toBe('import Dashboard from "../pages/Dashboard"')
+    expect(extractExportMismatch(TS2614_OUTPUT)!.moduleSpecifier).toBe('../pages/Dashboard')
   })
 
   it('carries the diagnostic that owns the suggestion, not just the text', () => {
@@ -196,40 +197,41 @@ describe('buildDiagnosticFixDirective — export/import mismatch', () => {
     expect(directive).toContain('\n  import { App } from "C:/w/src/App"\n')
   })
 
-  it('prescribes exactly one write_file, on the file the compiler named', () => {
+  it('does not treat the compiler suggestion as proof that the local import is the wrong side', () => {
     const directive = buildDiagnosticFixDirective(TS2614_OUTPUT)!
 
-    expect(directive).toContain(
-      '1. Your next tool call MUST be "write_file" on "src/routes/index.tsx", with the complete content of that file, in which line 3 is replaced by exactly: import Dashboard from "../pages/Dashboard"'
-    )
-    // §6.2.2: one imperative for now. The prohibition on re-running is the only other numbered
-    // line, exactly as in the ordinary file-and-line directive.
+    expect(directive).toContain('one mechanically valid fix')
+    expect(directive).toContain('does not prove which public API the task requires')
+    expect(directive).toContain('src/pages/Dashboard.tsx')
+    expect(directive).toContain('import Dashboard from "../pages/Dashboard"')
+    expect(directive).toContain('Change exactly one side')
     expect(directive.match(/^\d+\. /gm)).toHaveLength(2)
     expect(directive).toContain('Do NOT re-run the command until you have changed a file')
   })
 
-  it('forbids editing the other side of the mismatch, which the model cannot see', () => {
+  it('allows the imported local module to define the intended export contract', () => {
     const directive = buildDiagnosticFixDirective(TS2613_OUTPUT)!
 
-    expect(directive).toContain('Do NOT rename the export')
-    expect(directive).toContain('do NOT edit the module being imported')
+    expect(directive).toContain('If the task requires the current import contract')
+    expect(directive).not.toContain('Do NOT rename the export')
+    expect(directive).not.toContain('do NOT edit the module being imported')
   })
 
   it('replaces the generic file-and-line directive instead of being appended to it', () => {
     const directive = buildDiagnosticFixDirective(TS2613_OUTPUT)!
 
-    expect(directive).toContain('THE COMPILER WROTE THE CORRECT IMPORT FOR YOU')
+    expect(directive).toContain('IMPORT AND EXPORT DISAGREE')
     expect(directive).not.toContain('THE COMPILER NAMED THE FILE AND THE LINE')
   })
 
-  it('wins over an unrelated first error, because its fix is the one already written down', () => {
+  it('prioritizes the mismatch while still listing an unrelated first error', () => {
     const mixed = [
       "src/routes/index.tsx(8,15): error TS2304: Cannot find name 'TasksPage'.",
       TS2613_OUTPUT,
     ].join('\n')
     const directive = buildDiagnosticFixDirective(mixed)!
 
-    expect(directive).toContain('"write_file" on "src/main.tsx"')
+    expect(directive).toContain('Change exactly one side now with "write_file"')
     // The other error is named, never ordered.
     expect(directive).toContain("src/routes/index.tsx line 8 (TS2304): Cannot find name 'TasksPage'.")
     expect(directive.match(/^\d+\. /gm)).toHaveLength(2)
@@ -381,6 +383,19 @@ describe('missing export member', () => {
     expect(extractMissingExportMember(local)).toBeNull()
   })
 
+  it('offers the names exported by a relative local module', () => {
+    const local = `src/App.tsx(2,10): error TS2305: Module '"./Button"' has no exported member 'Button'.`
+    const directive = buildDiagnosticFixDirective(local, () => [], (importingFile, specifier) => {
+      expect(importingFile).toBe('src/App.tsx')
+      expect(specifier).toBe('./Button')
+      return ['PrimaryButton', 'ButtonProps']
+    })
+
+    expect(directive).toContain('[LOCAL MODULE DOES NOT EXPORT THAT NAME]')
+    expect(directive).toContain('actually exports: PrimaryButton, ButtonProps')
+    expect(directive).toContain('"write_file" on "src/App.tsx"')
+  })
+
   it('offers the names the package really exports', () => {
     const directive = buildDiagnosticFixDirective(OUTPUT, () => ['Dialog', 'Menu', 'Listbox', 'Switch'])
     expect(directive).toContain('THAT PACKAGE DOES NOT EXPORT THAT NAME')
@@ -409,9 +424,9 @@ describe('missing export member', () => {
  * write_file calls against 11 distinct files, 19 of them rewrites, and zero reads.
  */
 describe('diagnosticFixTargetFile', () => {
-  it('names the importer for an export mismatch', () => {
+  it('names the imported local module for an export mismatch', () => {
     const out = `src/main.tsx(2,8): error TS2613: Module '"./App"' has no default export. Did you mean to use 'import { App } from "./App"' instead?`
-    expect(diagnosticFixTargetFile(out)).toBe('src/main.tsx')
+    expect(diagnosticFixTargetFile(out)).toBe('src/App.tsx')
   })
 
   it('names the file to CREATE for a missing relative module', () => {

@@ -2,6 +2,7 @@ import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
+import type { ObservedToolCallingProtocol } from '../../domain/agent/ollamaToolCallingCapability'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
@@ -37,6 +38,7 @@ export interface StreamSession {
    * model that produced it. Not invoked by streamChatWithTools.
    */
   onContextReceived?: (context: number[], respondingModel: string) => void
+  onToolProtocolObserved?: (protocol: ObservedToolCallingProtocol) => void
 }
 
 /**
@@ -380,6 +382,7 @@ export class AgentStreamTransport {
 
           res.on('end', () => {
             cleanupTimers()
+            session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
             resolve(resolvedToolCall ?? fullText)
           })
         }

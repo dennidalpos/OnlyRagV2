@@ -76,6 +76,7 @@ export type TurnDispatchOutcome =
 export interface ModelSelection {
   targetModel: string
   targetModelToolCallingCapable: boolean
+  targetModelToolCallingProbe: boolean
   fallbackModel: string
   runtimeOpts: OllamaRuntimeOptions
   /**

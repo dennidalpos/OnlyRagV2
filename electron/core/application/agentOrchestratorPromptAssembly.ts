@@ -7,7 +7,7 @@ import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/ag
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
 import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
-import { supportsNativeToolCalling } from '../domain/agent/ollamaToolCallingCapability'
+import { resolveToolCallingRoute } from '../domain/agent/ollamaToolCallingCapability'
 import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
@@ -32,7 +32,12 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   // Native tool-calling routing: when the primary model is detected as tool-calling capable
   // (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool
   // catalog instead of relying solely on the prompt-engineered JSON convention.
-  const targetModelToolCallingCapable = supportsNativeToolCalling(targetModel, ctx.modelCapabilities)
+  const route = resolveToolCallingRoute(
+    targetModel,
+    ctx.modelCapabilities,
+    ctx.session.toolCallingProtocolByModel?.[targetModel]
+  )
+  const targetModelToolCallingCapable = route.capable
   if (targetModelToolCallingCapable) {
     ctx.session.ollamaContextModel = undefined
   }
@@ -78,6 +83,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   return {
     targetModel,
     targetModelToolCallingCapable,
+    targetModelToolCallingProbe: route.probe,
     fallbackModel,
     runtimeOpts,
     contextCeiling,

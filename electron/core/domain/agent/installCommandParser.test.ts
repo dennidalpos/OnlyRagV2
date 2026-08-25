@@ -2,8 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { extractRequestedPackages, packagesWithFailedInstall } from './installCommandParser'
 import type { InstallAttemptRecord } from './installCommandParser'
 
-function attempt(target: string, status: InstallAttemptRecord['status'], tool = 'run_command'): InstallAttemptRecord {
-  return { tool, target, status }
+function attempt(
+  target: string,
+  status: InstallAttemptRecord['status'],
+  tool = 'run_command',
+  summary?: string
+): InstallAttemptRecord {
+  return { tool, target, status, summary }
 }
 
 describe('extractRequestedPackages', () => {
@@ -49,6 +54,19 @@ describe('packagesWithFailedInstall', () => {
     const episodes = [
       attempt('npm install @tailwindcss/react', 'FAILURE'),
       attempt('npm install @tailwindcss/react', 'FAILURE'),
+    ]
+
+    expect(packagesWithFailedInstall(episodes)).toEqual(['@tailwindcss/react'])
+  })
+
+  it('reports a package after one authoritative registry refusal', () => {
+    const episodes = [
+      attempt(
+        'npm install @tailwindcss/react',
+        'FAILURE',
+        'run_command',
+        'Install refused: @tailwindcss/react does not exist on npm'
+      ),
     ]
 
     expect(packagesWithFailedInstall(episodes)).toEqual(['@tailwindcss/react'])

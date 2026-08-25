@@ -138,6 +138,49 @@ describe('failure-block accumulation', () => {
   })
 })
 
+describe('workspace-state output expiry', () => {
+  it('expires a compiler diagnostic after a successful file mutation changes the workspace', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    compactor.recordStep(
+      { step: 1, tool: 'run_command', target: 'npm run build', status: 'FAILURE', summary: 'build failed' },
+      '[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nTS2305: Module has no exported member Card'
+    )
+
+    expect(compactor.lastFailureOutputFor('run_command', 'npm run build')).toContain('TS2305')
+
+    compactor.recordStep(
+      { step: 2, tool: 'write_file', target: 'src/Card.tsx', status: 'SUCCESS', summary: 'wrote Card' },
+      'Successfully wrote file src/Card.tsx'
+    )
+
+    const block = compactor.compilePromptHistoryBlock(50_000)
+    expect(block).not.toContain('TS2305')
+    expect(block).toContain('| Step 1 | `run_command` | npm run build | FAILURE | build failed |')
+    expect(compactor.lastFailureOutputFor('run_command', 'npm run build')).toBeNull()
+  })
+
+  it('keeps only the newest detailed output for a file while retaining unrelated reads', () => {
+    const compactor = new EpisodicMemoryCompactor(6)
+    compactor.recordStep(
+      { step: 1, tool: 'read_file', target: 'src/Keep.tsx', status: 'SUCCESS', summary: 'read' },
+      'UNRELATED FILE CONTENT'
+    )
+    compactor.recordStep(
+      { step: 2, tool: 'write_file', target: 'src/App.tsx', status: 'SUCCESS', summary: 'first write' },
+      'Successfully wrote file src/App.tsx\n[UNDECLARED IMPORTS] stale-package'
+    )
+    compactor.recordStep(
+      { step: 3, tool: 'write_file', target: 'src\\App.tsx', status: 'SUCCESS', summary: 'second write' },
+      'Successfully wrote file src/App.tsx\nImports are now valid'
+    )
+
+    const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
+    expect(detailed).toContain('UNRELATED FILE CONTENT')
+    expect(detailed).not.toContain('stale-package')
+    expect(detailed).toContain('Imports are now valid')
+  })
+})
+
 /**
  * The recent-outputs window is the model's view of what just happened, and it was a plain FIFO.
  *
@@ -224,23 +267,4 @@ describe('EpisodicMemoryCompactor — the recent window does not fill with one r
     expect(detailed.split('READ LOOP').length - 1).toBe(2)
   })
 
-  // Two successful writes to one file carry different bodies and the model needs both — at
-  // steps 42 and 43 of the observed run they were 80 and 712 chars, the longer one carrying an
-  // import-integrity directive.
-  it('never collapses successful actions, even on the same file', () => {
-    const compactor = new EpisodicMemoryCompactor(6)
-    compactor.recordStep(
-      { step: 42, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
-      'Successfully wrote file'
-    )
-    compactor.recordStep(
-      { step: 43, tool: 'write_file', target: 'src/pages/TasksPage.tsx', status: 'SUCCESS', summary: 'wrote' },
-      'Successfully wrote file\n[UNDECLARED IMPORTS] react-router-dom'
-    )
-
-    const detailed = compactor.compilePromptHistoryBlock(50_000).split('### RECENT DETAILED TOOL OUTPUTS')[1]
-    expect(detailed).toContain('#### [Step 42')
-    expect(detailed).toContain('#### [Step 43')
-    expect(detailed).toContain('UNDECLARED IMPORTS')
-  })
 })

@@ -26,6 +26,8 @@ export interface InstallAttemptRecord {
   tool: string
   target?: string
   status: 'SUCCESS' | 'FAILURE' | 'BLOCKED'
+  /** Stable executor result summary; carries an authoritative preflight registry refusal. */
+  summary?: string
 }
 
 export interface RequestedPackage {
@@ -67,10 +69,12 @@ export function extractRequestedPackages(command: string): RequestedPackage[] {
  * to fix: install the version npm names, then retry. The rule killed that recovery and stated
  * something untrue while doing it.
  *
- * Two failures with no success in between is what actually separates the two cases, and the
+ * Two ordinary failures with no success in between is what actually separates the two cases, and the
  * separation is visible in the runs rather than assumed: a real package in conflict fails once
  * and then succeeds after the recovery command; an invented name (`@tailwindcss/react`, which
- * does not exist on npm) fails every single time it is attempted.
+ * does not exist on npm) fails every single time it is attempted. The exception is the executor's
+ * preflight registry refusal: it is already an HTTP 404 fact, not an inference from npm failure,
+ * so requiring the same lookup twice only repeats a command known to be impossible.
  */
 const FAILURES_BEFORE_UNINSTALLABLE = 2
 
@@ -91,9 +95,13 @@ export function packagesWithFailedInstall(episodes: readonly InstallAttemptRecor
     if (episode.tool !== 'run_command') continue
     const packages = extractRequestedPackages(episode.target || '')
     if (packages.length === 0) continue
+    const registryRefusal = /^Install refused: (.+) does not exist on npm$/.exec(episode.summary || '')
 
     for (const pkg of packages) {
-      if (episode.status === 'FAILURE') failures.set(pkg.name, (failures.get(pkg.name) ?? 0) + 1)
+      if (episode.status === 'FAILURE') {
+        const incremented = (failures.get(pkg.name) ?? 0) + 1
+        failures.set(pkg.name, registryRefusal?.[1] === pkg.name ? FAILURES_BEFORE_UNINSTALLABLE : incremented)
+      }
       else if (episode.status === 'SUCCESS') failures.set(pkg.name, 0)
     }
   }

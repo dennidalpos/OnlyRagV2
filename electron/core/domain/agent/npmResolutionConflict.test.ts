@@ -139,4 +139,27 @@ describe('installableRange', () => {
     expect(directive).toContain('npm install eslint@^9.7')
     expect(directive).not.toContain('npm install eslint@^3 ||')
   })
+
+  it('refuses every alternative when each one would downgrade the installed major', () => {
+    expect(installableRange('^16.8.0', '18.2.0')).toBeNull()
+    expect(installableRange('^15 || ^16', '18.2.0')).toBeNull()
+  })
+
+  it('selects a non-downgrading alternative instead of an older compatible branch', () => {
+    expect(installableRange('^16 || ^18 || ^19', '18.2.0')).toBe('^19')
+  })
+
+  it('redirects an ERESOLVE to the requiring package when satisfying it would downgrade the root dependency', () => {
+    const directive = buildNpmResolutionDirective({
+      installed: { name: 'react', version: '18.2.0' },
+      declaredRange: '^18.2.0',
+      requiredBy: { name: 'use-optimistic', version: '1.0.0' },
+      requiredRange: '^16.8.0',
+    })
+
+    expect(directive).not.toContain('npm install react@^16.8.0')
+    expect(directive).toContain('Keep react@18.2.0')
+    expect(directive).toContain('npm view use-optimistic versions --json')
+    expect(directive).toContain('Do NOT downgrade react')
+  })
 })

@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import type { ObservedToolCallingProtocol } from '../domain/agent/ollamaToolCallingCapability'
 
 export interface ApprovalResponse {
   approved: boolean
@@ -25,6 +26,8 @@ export interface AgentSession {
   ollamaContextModel?: string
   ollamaContextStableSection?: string
   ollamaContextHistoryBlock?: string
+  /** Protocol observed from the first capability-less Ollama turn, keyed by exact model tag. */
+  toolCallingProtocolByModel?: Record<string, ObservedToolCallingProtocol>
   /**
    * Set while the loop is paused inside an approval gate (see `requestApproval` in
    * runAgentOrchestratorLoop), so an in-flight `agent:approval-response` and a

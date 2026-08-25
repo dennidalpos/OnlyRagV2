@@ -30,6 +30,7 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
 
   it('should route to /api/chat streamed (stream:true) with a tools array when toolCallingCapable + toolCatalog are set, and serialize a populated tool_calls response into the {"name","arguments"} shape toolParser.ts understands (AGT7: incremental streaming, tool_calls arrives on the final NDJSON line)', async () => {
     let capturedBody: any = null
+    const observed: string[] = []
     const mock = await startMockOllama((req, res) => {
       let raw = ''
       req.on('data', (c) => (raw += c))
@@ -61,6 +62,7 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
       isCancelled: () => false,
       toolCallingCapable: true,
       toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      onToolProtocolObserved: (protocol) => observed.push(protocol),
     })
 
     expect(capturedBody.tools).toBeDefined()
@@ -73,9 +75,11 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     expect(parsedCall).not.toBeNull()
     expect(parsedCall?.tool).toBe('read_file')
     expect(parsedCall?.parameters.filePath).toBe('app.py')
+    expect(observed).toEqual(['native'])
   })
 
   it('should fall back to the accumulated raw text content when tool_calls is empty (e.g. a "tools"-capable model that echoes the call as JSON text instead), streamed across multiple content deltas', async () => {
+    const observed: string[] = []
     const mock = await startMockOllama((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.write(JSON.stringify({ message: { role: 'assistant', content: '{"name": "read_file", ' }, done: false }) + '\n')
@@ -92,12 +96,14 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
       isCancelled: () => false,
       toolCallingCapable: true,
       toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+      onToolProtocolObserved: (protocol) => observed.push(protocol),
     })
 
     expect(output).toContain('read_file')
     const parsedCall = parseAgentToolCall(output)
     expect(parsedCall?.tool).toBe('read_file')
     expect(parsedCall?.parameters.filePath).toBe('app.py')
+    expect(observed).toEqual(['text'])
   })
 
   it('should invoke onTokenChunk live for each content delta on the native tool-calling path (AGT7: the UI previously received no feedback until the whole response landed)', async () => {

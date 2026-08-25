@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { validateAndSanitize } from './toolSchemaValidator'
+import { rootConfigPathForMisplacedSourceFile, validateAndSanitize } from './toolSchemaValidator'
 import type { AgentToolCall } from './agentTypes'
 
 describe('ToolSchemaValidator Unit Tests', () => {
+  it('maps build configuration files out of a source directory without flattening a nested project', () => {
+    expect(rootConfigPathForMisplacedSourceFile('src/tailwind.config.js')).toBe('tailwind.config.js')
+    expect(rootConfigPathForMisplacedSourceFile('apps/web/src/index.html')).toBe('apps/web/index.html')
+    expect(rootConfigPathForMisplacedSourceFile('src/components/App.tsx')).toBeNull()
+    expect(rootConfigPathForMisplacedSourceFile('index.html')).toBeNull()
+  })
+
   it('should validate and coerce read_file parameters correctly', () => {
     const raw: AgentToolCall = {
       tool: 'read_file',

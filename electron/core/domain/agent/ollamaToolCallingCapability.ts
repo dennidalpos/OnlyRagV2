@@ -46,6 +46,27 @@ const VISION_ONLY_FAMILY_PREFIXES = ['qwen2.5vl', 'qwen2vl', 'qwen3vl', 'llama3.
 
 /** Map of installed model name -> capabilities array, as reported by /api/tags. */
 export type ModelCapabilitiesMap = Record<string, string[]>
+export type ObservedToolCallingProtocol = 'native' | 'text'
+
+export interface ToolCallingRoute {
+  capable: boolean
+  /** True only until the first response establishes the protocol for this session/model. */
+  probe: boolean
+}
+
+/** Resolves explicit Ollama metadata first, then the protocol latched from an earlier turn. */
+export function resolveToolCallingRoute(
+  modelName: string,
+  capabilities: ModelCapabilitiesMap | undefined,
+  observed?: ObservedToolCallingProtocol
+): ToolCallingRoute {
+  const reported = capabilities?.[modelName]
+  if (Array.isArray(reported) && reported.length > 0) {
+    return { capable: reported.includes('tools'), probe: false }
+  }
+  if (observed) return { capable: observed === 'native', probe: false }
+  return { capable: true, probe: true }
+}
 
 /**
  * Allow-list fallback: does the model's family (name before the `:tag`)

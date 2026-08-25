@@ -28,10 +28,6 @@ function broadcastUpdates(state: ModelUpdatesState) {
   }
 }
 
-export function getGlobalUpdatesState(): ModelUpdatesState {
-  return globalUpdatesState
-}
-
 export function clearModelUpdateAvailable(modelName: string) {
   if (!modelName) return
   const nextAvailable = { ...globalUpdatesState.updateAvailableMap }

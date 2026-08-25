@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { readPackageExports, extractExportedNames } from './packageExportScanner'
+import { readLocalModuleExports, readPackageExports, extractExportedNames } from './packageExportScanner'
 
 /**
  * Measured 2026-08-25T19:59, session live-full-task, steps 42-43. The build reported that
@@ -92,5 +92,22 @@ describe('readPackageExports', () => {
       'package.json': JSON.stringify({ name: 'escapee', types: '../../../secrets.d.ts' }),
     })
     expect(readPackageExports(tempDir, 'escapee')).toEqual([])
+  })
+})
+
+describe('readLocalModuleExports', () => {
+  it('resolves a relative source module from the importing file', () => {
+    const modulePath = path.join(tempDir, 'src', 'components', 'Button.tsx')
+    fs.mkdirSync(path.dirname(modulePath), { recursive: true })
+    fs.writeFileSync(modulePath, 'export function PrimaryButton() {}\nexport interface ButtonProps {}\n', 'utf-8')
+
+    expect(readLocalModuleExports(tempDir, 'src/App.tsx', './components/Button')).toEqual([
+      'PrimaryButton',
+      'ButtonProps',
+    ])
+  })
+
+  it('does not resolve a relative specifier outside the workspace', () => {
+    expect(readLocalModuleExports(tempDir, 'src/App.tsx', '../../outside')).toEqual([])
   })
 })

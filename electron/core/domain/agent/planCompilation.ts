@@ -129,9 +129,15 @@ export function ensureEntrypointMilestones(
   const named = milestones.flatMap((m) => extractDeliverablePaths(m.title))
   if (!named.some((p) => WEB_SOURCE_FILE.test(p))) return milestones
 
-  const missing: Array<{ title: string; path: string }> = [
+  const missing: Array<{ title: string; path: string; falsifiableHypothesis?: string }> = [
     { title: 'The project declares its dependencies and its build script', path: 'package.json' },
-    { title: 'The TypeScript compiler knows which files to check', path: 'tsconfig.json' },
+    {
+      title: 'TypeScript checks source without emitting JavaScript into src (`noEmit: true`)',
+      path: 'tsconfig.json',
+      // A generated `tsconfig` without noEmit made `tsc && vite build` scatter .js and .js.map
+      // beside every source file. Vite owns production emission; this compiler pass is a check.
+      falsifiableHypothesis: '`tsconfig.json` sets `compilerOptions.noEmit` to true.',
+    },
     { title: 'The page loads the application entry script', path: 'index.html' },
     { title: 'The entry script mounts the root component into the page', path: 'src/main.tsx' },
   ].filter((entry) => !named.includes(entry.path))
@@ -144,6 +150,7 @@ export function ensureEntrypointMilestones(
     id: '',
     title: `${entry.title} — \`${entry.path}\``,
     status: 'pending',
+    falsifiableHypothesis: entry.falsifiableHypothesis,
   }))
 
   return [...prepended, ...milestones].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))

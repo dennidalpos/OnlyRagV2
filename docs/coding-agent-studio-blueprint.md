@@ -677,11 +677,7 @@ Misurato: `typescript@^4.7.3` che non parsa il `@types/node` appena installato (
 
 **Stato dei test:** typecheck pulito, **1406 test su 145 file** verdi, catena `npm run lint` completa verde.
 
-### 5.6h-bis. Stato dei test dell'onda precedente
-
-typecheck pulito, **1380 test su 143 file** verdi, catena `npm run lint` completa verde.
-
-> **Cosa resta non misurato, in sei giri**: `IS EMPTY AND STAYS EMPTY` e `STOP USING` non sono mai comparsi, e per due degli altri la ragione non è la sfortuna ma il disegno della sonda o del sistema. **`ensureRunnableMilestone` è irraggiungibile per costruzione su questa sonda**: su workspace vuoto il progetto non dichiara comandi quando il piano viene generato, quindi non c'è nulla da appendere — serve una sonda pre-seminata con un manifest che dichiari uno script. **La direttiva file+riga è soppressa** ogni volta che nello stesso output compare una diagnostica di dipendenza, come mostrato sopra. La riga del tracker che prometteva "un solo giro live le misura tutte" era falsa, ed è corretta.
+> **Cosa resta non misurato, dopo diciannove giri.** `IS EMPTY AND STAYS EMPTY` e `STOP USING` non sono mai comparsi. **`ensureRunnableMilestone` è irraggiungibile per costruzione su questa sonda**: su workspace vuoto il progetto non dichiara comandi quando il piano viene generato, quindi non c'è nulla da appendere — servirebbe una sonda pre-seminata con un manifest che dichiari uno script. La direttiva file+riga invece **è stata vista** (run 9, 26 turni), dopo che la nota di rinvio ha smesso di farla sopprimere. La riga del tracker che prometteva "un solo giro live le misura tutte" era falsa, ed è corretta.
 
 ### 5.7. Poi — le funzionalità del blueprint
 
@@ -706,7 +702,8 @@ Punto di ingresso per una sessione nuova, senza contesto delle precedenti.
 | 5.6e | copertura `whole-project` della verifica, direttiva diagnostica | copertura **confermata dal vivo** (`npx tsc --noEmit`, tre errori veri, 0/15 onesto); la direttiva file+riga **applicata e non ancora vista dal vivo** |
 | 5.6f | entrypoint scollegato, modello grande, forma del piano | entrypoint **verificato dal vivo** (14 moduli invece di 2); `ensureRunnableMilestone` **applicato e non ancora visto dal vivo** |
 | 5.6g | forma del piano: microtask capacità + path, ordine di fasi, due difetti latenti | applicata e testata; **il formato è stato adottato dal modello al primo giro** (§5.6h) |
-| 5.6h | cinque giri live: la regressione dello scheletro e il passo di entrypoint deterministico | **misurata**: dal piano senza entrypoint a un'applicazione che compila (38 moduli, 180 kB); l'ultima correzione non è ancora vista dal vivo |
+| 5.6h | cinque giri live: la regressione dello scheletro e il passo di entrypoint deterministico | **misurata**: dal piano senza entrypoint a un'applicazione che compila (38 moduli, 180 kB) |
+| 5.6i | dieci giri live: registro npm, ETARGET, e il tetto di conoscenza del modello | **misurata**: miglior risultato della serie 12/13 con `finish` e build verde; resta la coerenza del codice generato |
 | 5.7 | funzionalità originali del blueprint | non iniziate |
 
 ### Il deadlock, che è chiuso — la diagnosi in breve, isolata il 2026-08-24
@@ -729,11 +726,19 @@ Al 2026-08-25 la catena regge end to end: le dipendenze si risolvono, i pacchett
 
 Escluso anche il modello: un `qwen2.5-coder:14b` fallisce con lo stesso profilo del 7b.
 
-Quello che nessuna di quelle correzioni toccava era **cosa il piano considera "fatto"**. Il 2026-08-25 è stato affrontato (§5.6g): i microtask dichiarano ora la capacità e nominano il file, `ensureRunnableMilestone` impedisce il 100% senza che il controllo del progetto sia passato, e due difetti latenti che il nuovo formato rendeva raggiungibili sono chiusi. **Nessun run ha ancora usato quel prompt**: della catena è dimostrata la meccanica, non l'effetto.
+Quello che nessuna di quelle correzioni toccava era **cosa il piano considera "fatto"**, ed è stato affrontato e poi misurato in diciannove giri live (§5.6g, §5.6h, §5.6i). Esito: dal 0/15 con build impossibile a **12/13 con `finish` e un progetto che compila** — 43 moduli e 180 kB di JavaScript, contro i 2 moduli e zero JS del punto di partenza.
 
-**Il fatto che conta per la sessione seguente è quindi uno solo: nulla di quanto applicato dal 2026-08-25 è stato visto dal vivo.** Cinque correzioni aspettano un giro — la coda **DA MISURARE** del tracker — e la lezione già pagata due volte in questo progetto è che accumulare correzioni non misurate produce run invalidati da regressioni proprie invece che dai difetti che dovevano misurare. Il prossimo passo non è progettare: è lanciare `npm run test:live`, conservare il log, e leggerlo.
+### Il fatto che conta per la sessione seguente
 
-Regola invariata, e oggi ha pagato tre volte: **leggi il log prima di progettare.** Due volte ho concluso la cosa sbagliata (una volta incolpando il modello, una volta il file sbagliato) e il log mi ha smentito. Tre delle dodici correzioni erano regressioni introdotte dalle onde precedenti, trovate solo dal run successivo. I log di tutti i run sono nello scratchpad della sessione.
+**La direzione è cambiata, ed è una decisione dell'utente del 2026-08-25: costruire la struttura sotto, invece di continuare a impartire direttive che forzano il modello a metodi che non conosce.**
+
+Il criterio che ne discende — e che spiega, a posteriori, quali correzioni hanno retto e quali no: **quando il sistema sa una cosa che il modello non può sapere** — il workspace è vuoto, il pacchetto non esiste, la versione pubblicata, l'entrypoint manca — **il sistema la fa o la fornisce come dato, non la chiede con una direttiva.** Le direttive restano per ciò che solo il modello può decidere.
+
+Le misure lo sostengono. Ciò che ha retto è struttura: entrypoint antemesso alla compilazione del piano, manifest garantito, install di pacchetti inesistenti rifiutato prima di girare, versione presa dal registro. Ciò che ha prodotto abort erano direttive che chiedevano al modello di fare qualcosa che non sa fare, e il caso peggiore è stato spingerlo verso TypeScript 7 chiedendogli un `tsconfig.json` che il suo training non contiene. Da qui il corollario, già applicato in `dependencyVersionReality.ts`: **un aggiornamento che richiede conoscenza fuori dal training va dato dalla struttura o non dato affatto.**
+
+**Il collo di bottiglia attuale non è più l'ambiente.** Il run 19 usa i cinquanta passi senza abortire, senza cicli, con la toolchain sana, e si ferma su `TS2613`/`TS2614` — export default contro export nominati fra file scritti dal modello stesso. Il compilatore stampa lui la correzione (*"Did you mean `import TaskCard from ...`"*), e citarla verbatim è il candidato scritto nel tracker, sulla falsariga di come `npmResolutionConflict` copia gli intervalli di npm.
+
+Regola invariata, e in questa serie ha pagato sei volte: **leggi il log prima di progettare.** Ha smentito l'attribuzione delle build alla sonda sbagliata, due esclusioni di file decise per assunzione (`package.json` e `tsconfig.json`, entrambe rimesse da un run), e tre difetti introdotti dalle direttive scritte in questa stessa sessione — fra cui, ancora una volta, due imperativi nello stesso messaggio.
 
 ### Prima di toccare qualsiasi cosa
 
@@ -751,7 +756,7 @@ npm run test:live
 
 I difetti che restano sono **comportamentali**: i test unitari li vedono solo dopo che qualcuno li ha capiti leggendo un log. Vedi [agent-live-testing.md](./agent-live-testing.md) per prerequisiti, le trappole che rendono un run inutile senza che sembri, e come si progetta una sonda che il modello non possa aggirare.
 
-**Conserva il log prima di pulire.** `logs/coding_agent_audit.log` viene **appeso** fra un run e l'altro, non sovrascritto: cercando l'ultimo run si trova per primo quello vecchio, quindi segna la lunghezza del file prima di lanciare. E `logs/` è in `.gitignore` e viene cancellata da `clean_workspace.ps1` nei modi `Logs`, `Repo` e `Full`: la diagnosi qui sopra ha dovuto ricostruire un run intero dallo stato di sessione perché il log dei tre run non esisteva più. Copialo via prima di ogni `npm run clean*`.
+**Conserva il log prima di pulire.** `logs/coding_agent_audit.log` viene **appeso** fra un run e l'altro, non sovrascritto: cercando l'ultimo run si trova per primo quello vecchio, quindi segna la lunghezza del file prima di lanciare. Attenzione a una seconda trappola, incontrata il 2026-08-25: a 10 MB il file **ruota** in `coding_agent_audit.1.log`, e da quel momento ogni estrazione basata sull'offset di byte restituisce zero — il segmento di un run è finito vuoto proprio così. Chi confronta due run concateni `.1.log` e `.log`, o copi il file prima di lanciare. E `logs/` è in `.gitignore` e viene cancellata da `clean_workspace.ps1` nei modi `Logs`, `Repo` e `Full`: la diagnosi qui sopra ha dovuto ricostruire un run intero dallo stato di sessione perché il log dei tre run non esisteva più. Copialo via prima di ogni `npm run clean*`.
 
 ### Tre principi, e il secondo è costato più del primo
 

@@ -221,6 +221,68 @@ export function buildDeferredDiagnosticNote(output: string): string | null {
  *
  * Returns null when nothing parsed, so the caller keeps its ordinary text.
  */
+/**
+ * A relative import that resolves to nothing.
+ *
+ * `TS2307: Cannot find module './api'` is reported ON the importing file, and the generic branch
+ * below would therefore order that file rewritten. Rewriting it cannot create the module: the
+ * file that is missing is the one being IMPORTED. This is the same wrong assumption
+ * verificationAttemptTracker.ts records being made three times in one day — that every compiler
+ * error is fixed by editing the file it points at.
+ *
+ * Measured 2026-08-25T19:44, session live-full-task, step 21: `src/services/index.ts` imported
+ * './api' and './auth', neither of which existed. The directive ordered `write_file` on
+ * `src/services/index.ts`. The run ended 0/14 with a workspace holding a .js twin of every .tsx
+ * file, which is what a model does when told to rewrite a file that is not the problem.
+ *
+ * Package imports are excluded here on purpose: a bare specifier that does not resolve is a
+ * missing dependency, and the install branch above already owns that case.
+ */
+export interface MissingRelativeModule {
+  diagnostic: CompilerDiagnostic
+  /** The specifier as written, e.g. `./api`. */
+  specifier: string
+  /** Workspace-relative path of the file that has to be created. */
+  expectedPath: string
+}
+
+const RELATIVE_MODULE_MISSING = /cannot find module\s+'(\.[^']*)'/i
+
+/**
+ * Resolves a relative specifier against the importing file, and gives the new file the
+ * importer's own extension — `.ts` importing `./api` wants `api.ts`, `.tsx` importing
+ * `./Button` wants `Button.tsx`. A specifier that already carries an extension keeps it.
+ */
+export function resolveRelativeImportPath(importingFile: string, specifier: string): string {
+  const normalised = importingFile.replace(/\\/g, '/')
+  const dir = normalised.split('/').slice(0, -1)
+  const out = [...dir]
+  for (const part of specifier.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  const joined = out.join('/')
+  if (/\.[A-Za-z0-9]+$/.test(joined)) return joined
+  const ext = normalised.match(/(\.[A-Za-z0-9]+)$/)
+  return ext ? joined + ext[1] : joined
+}
+
+/** The first diagnostic whose failure is a relative import pointing at a file that is not there. */
+export function extractMissingRelativeModule(output: string): MissingRelativeModule | null {
+  for (const diagnostic of parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file))) {
+    if (diagnostic.code && diagnostic.code !== 'TS2307') continue
+    const match = RELATIVE_MODULE_MISSING.exec(diagnostic.message)
+    if (!match) continue
+    return {
+      diagnostic,
+      specifier: match[1],
+      expectedPath: resolveRelativeImportPath(diagnostic.file, match[1]),
+    }
+  }
+  return null
+}
+
 export function buildDiagnosticFixDirective(output: string): string | null {
   const all = parseCompilerDiagnostics(output)
   if (all.length === 0) return null
@@ -288,6 +350,33 @@ export function buildDiagnosticFixDirective(output: string): string | null {
       `Directives:`,
       `1. Your next tool call MUST be "write_file" on "${target.file}", with the complete content of that file, in which line ${target.line} is replaced by exactly: ${mismatch.suggestedImport}`,
       `2. Do NOT re-run the command until you have changed a file. It will report exactly these errors again, because nothing will have changed.`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  // Ordered after the export mismatch and before the generic branch: like that one this knows
+  // the exact fix, unlike that one the file to write is NOT the file the error is reported on.
+  const missingRelative = extractMissingRelativeModule(output)
+  if (missingRelative) {
+    const target = missingRelative.diagnostic
+    const remaining = diagnostics.filter((d) => d !== target)
+    const restShown = remaining.slice(0, MAX_REPORTED - 1)
+    const restOverflow = remaining.length - restShown.length
+    const rest = restShown
+      .map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`)
+      .join('\n')
+
+    return [
+      `[THE IMPORTED FILE DOES NOT EXIST — CREATE IT]`,
+      `${target.file}, line ${target.line}${target.code ? ` (${target.code})` : ''}`,
+      `  ${target.message}`,
+      `The error is reported on the file that IMPORTS. The file that is missing is the one being imported, and rewriting the importer cannot bring it into existence.`,
+      rest ? `Also reported:\n${rest}` : '',
+      restOverflow > 0 ? `(and ${restOverflow} more)` : '',
+      `Directives:`,
+      `1. Your next tool call MUST be "write_file" on "${missingRelative.expectedPath}", creating that file with the exports "${target.file}" imports from "${missingRelative.specifier}".`,
+      `2. Do NOT rewrite "${target.file}", and do NOT re-run the command until that file exists.`,
     ]
       .filter(Boolean)
       .join('\n')

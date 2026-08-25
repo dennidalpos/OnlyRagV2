@@ -478,6 +478,30 @@ bloccate** dello stesso tentativo fino al tetto.
 > Questa è la ragione per cui la citazione verbatim di §5.6i non aveva mostrato alcun effetto:
 > veniva soppressa proprio nel caso normale, cioè una build che fallisce con errori misti.
 
+**Corsa di verifica (2026-08-25T19:44)**: la diagnostica del compilatore scatta ora davvero, e lo
+stallo dei sedici turni è sparito (10 comandi contro 28). Ma la corsa ha esposto il difetto
+successivo, nello stesso punto.
+
+### 5.6j-ter. Per un Import Relativo il File da Creare è Quello Importato
+
+`TS2307: Cannot find module './api'` è riportato **sul file che importa**, e il ramo generico
+ordinava di riscrivere quel file. Riscriverlo non può creare il modulo: il file mancante è quello
+**importato**. È la stessa assunzione sbagliata che
+[`verificationAttemptTracker.ts`](../electron/core/domain/agent/verificationAttemptTracker.ts)
+registra come commessa tre volte in un giorno — che ogni errore del compilatore si corregga
+modificando il file che lo segnala.
+
+**Sintomo misurato** — step 21 della corsa 19:44: `src/services/index.ts` importa `./api` e
+`./auth`, nessuno dei due esiste. La direttiva ordina `write_file` su `src/services/index.ts`. La
+corsa chiude 0/14 con un workspace che contiene un gemello `.js` di ogni `.tsx`, che è quello che
+fa un modello a cui si ordina di riscrivere un file che non è il problema.
+
+`extractMissingRelativeModule` risolve ora lo specifier contro il file importatore e gli dà la sua
+estensione (`.ts` che importa `./api` vuole `api.ts`; `.tsx` che importa `./Button` vuole
+`Button.tsx`), e la direttiva ordina di **creare** quel file, vietando esplicitamente di riscrivere
+l'importatore. Gli specifier nudi restano fuori: un pacchetto che non risolve è una dipendenza
+mancante, e quel caso appartiene al ramo install.
+
 ### 5.6k. Il Repertorio Reale dei Tool — l'agente non legge mai un file
 
 Misurato su **quattro corse `live-full-task` indipendenti** in `logs/coding_agent_audit.log`,

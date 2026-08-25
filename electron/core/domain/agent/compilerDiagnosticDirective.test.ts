@@ -5,6 +5,8 @@ import {
   extractExportMismatch,
   extractSuggestedCommand,
   parseCompilerDiagnostics,
+  extractMissingRelativeModule,
+  resolveRelativeImportPath,
 } from './compilerDiagnosticDirective'
 
 /** The exact output `npx tsc --noEmit` produced at step 21 of the live run of 2026-08-24. */
@@ -302,5 +304,53 @@ describe('diagnostics inside node_modules', () => {
 
   it('keeps dependency errors out of the deferred note as well', () => {
     expect(buildDeferredDiagnosticNote(IN_DEPS)).toBeNull()
+  })
+})
+
+/**
+ * Measured 2026-08-25T19:44, session live-full-task, step 21. `src/services/index.ts` imported
+ * './api' and './auth', neither of which existed. The directive ordered `write_file` on
+ * `src/services/index.ts` — the file that reports the error, not the file that is missing.
+ * Rewriting the importer cannot create the module, so the same two errors came back and the run
+ * ended 0/14 with a .js twin of every .tsx file in the workspace.
+ *
+ * verificationAttemptTracker.ts already records this exact assumption being made three times in
+ * one day: that every compiler error is fixed by editing the file it points at.
+ */
+describe('missing relative module', () => {
+  const OUTPUT = [
+    "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations.",
+    "src/services/index.ts(3,15): error TS2307: Cannot find module './auth' or its corresponding type declarations.",
+  ].join('\n')
+
+  it('resolves the specifier against the importing file and keeps its extension', () => {
+    expect(resolveRelativeImportPath('src/services/index.ts', './api')).toBe('src/services/api.ts')
+    expect(resolveRelativeImportPath('src/App.tsx', './Button')).toBe('src/Button.tsx')
+    expect(resolveRelativeImportPath('src/pages/Home.tsx', '../components/Card')).toBe('src/components/Card.tsx')
+  })
+
+  it('leaves a specifier that already carries an extension alone', () => {
+    expect(resolveRelativeImportPath('src/main.ts', './styles.css')).toBe('src/styles.css')
+  })
+
+  it('names the imported file, not the importing one', () => {
+    const found = extractMissingRelativeModule(OUTPUT)
+    expect(found?.expectedPath).toBe('src/services/api.ts')
+    expect(found?.specifier).toBe('./api')
+    expect(found?.diagnostic.file).toBe('src/services/index.ts')
+  })
+
+  it('ignores a bare package specifier, which the install branch owns', () => {
+    const pkg = "src/main.tsx(2,25): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations."
+    expect(extractMissingRelativeModule(pkg)).toBeNull()
+  })
+
+  it('orders creating the missing file and forbids rewriting the importer', () => {
+    const directive = buildDiagnosticFixDirective(OUTPUT)
+    expect(directive).toContain('THE IMPORTED FILE DOES NOT EXIST')
+    expect(directive).toContain('"write_file" on "src/services/api.ts"')
+    expect(directive).toContain('Do NOT rewrite "src/services/index.ts"')
+    // One imperative for now, as everywhere else in this module.
+    expect((directive || '').split('\n').filter((l) => /^\d+\. /.test(l))).toHaveLength(2)
   })
 })

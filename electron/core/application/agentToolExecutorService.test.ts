@@ -441,8 +441,11 @@ async def async_handler():
 
       // `packageOfSpecifier` already knows relative imports belong to no package; this gate now asks it.
       expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
-      // And because nothing specific fired, the compiler diagnostic is free to name the file.
-      expect(res.outputForHistory).toContain('THE COMPILER NAMED THE FILE AND THE LINE')
+      // And because the bogus dependency directive no longer fires, the compiler diagnostic is
+      // free to run — landing on the branch that names the file that is actually missing rather
+      // than the one that reports the error.
+      expect(res.outputForHistory).toContain('THE IMPORTED FILE DOES NOT EXIST')
+      expect(res.outputForHistory).toContain('"write_file" on "src/services/api.ts"')
     })
 
     it('lets the compiler fix survive alongside relative-path resolution errors', async () => {

@@ -420,6 +420,63 @@ sé la risposta a "cosa serve davanti al modello adesso". Un turno la cui azione
   istruzioni. Quando il sistema conosce già l'azione del turno, non deve far riscoprire al modello
   quale degli otto blocchi fosse pertinente.
 
+### 5.6k. Il Repertorio Reale dei Tool — l'agente non legge mai un file
+
+Misurato su **quattro corse `live-full-task` indipendenti** in `logs/coding_agent_audit.log`,
+modello `qwen2.5-coder:7b`:
+
+| Corsa | `write_file` | `run_command` | `read_file` | `replace_file_content` |
+| :--- | :---: | :---: | :---: | :---: |
+| 1 | 17 | 8 | **0** | **0** |
+| 2 | 9 | 14 | **0** | **0** |
+| 3 | 28 | 12 | **0** | **0** |
+| 4 | 20 | 14 | **0** | **0** |
+
+**74 scritture, zero letture, zero edit chirurgici.** L'agente usa 3 tool sui ~15 del catalogo.
+E su 73 `write_file` di cui è stato possibile risolvere il bersaglio, **30 (41%) riscrivono un
+file che l'agente aveva già scritto** senza averlo mai riletto — 57% nella corsa 3. È così che
+`src/pages/DashboardPage.tsx` ha chiuso una corsa a 208 byte.
+
+#### Perché non è disattenzione
+
+Il prompt lo prescrive già, alla regola 7 di dodici in
+[`promptPresets.ts`](../electron/core/domain/agent/promptPresets.ts): *"consult the repository map
+and read files before acting. If a file already exists and satisfies the requirement, edit it —
+never overwrite it wholesale."* Ignorata 74 volte su 74. La causa è strutturale, non attentiva:
+
+1. `replace_file_content` richiede `TargetContent` che combaci **byte per byte**, quindi è
+   irraggiungibile senza una lettura precedente.
+2. Una lettura costa uno dei 50 step e non muove alcuna milestone, perché
+   `workspaceDeliverableProbe` misura file su disco.
+3. **Ogni** direttiva che `planDirectiveArbiter` può emettere nomina `write_file` o
+   `run_command`. Nessuna nomina una lettura.
+
+`write_file` è l'unico tool che in un singolo passo produce sempre progresso misurabile. Quindi è
+l'unico che viene usato, e una scrittura integrale senza conoscenza del file corrente lo
+sostituisce con uno stub.
+
+#### La correzione, e quella che è stata scartata
+
+Scartata: rendere più insistente la regola 7, o aggiungerne una tredicesima. È esattamente la
+mossa che §6.2.1 esclude — l'incentivo che la contraddice resterebbe intatto.
+
+Adottata: quando il turno sta per scrivere un file che **esiste già**, il sistema gliene consegna
+il contenuto. In [`agentOrchestratorPromptAssembly.ts`](../electron/core/application/agentOrchestratorPromptAssembly.ts),
+`resolveTurnFileTargets` sceglie i bersagli — i `rewriteTargets` pubblicati dalla direttiva
+attiva, oppure, su un turno `focus`, i deliverable della milestone attiva estratti da
+`extractDeliverablePaths` — e `readTurnFileContext` ne inietta il contenuto sul canale pinned che
+la policy di §5.6j già ammette in quegli stati. Il blocco porta con sé l'istruzione: *edit this,
+do not replace it with a shorter file*.
+
+I path arrivano da scanner e da titoli di piano scritti dal modello, quindi nessuno dei due è
+fidato: la lettura è confinata alla radice del workspace, con cap per file e per numero di file.
+
+> [!WARNING]
+> **Copertura parziale, non ancora misurata dal vivo.** Il meccanismo copre i deliverable della
+> milestone attiva e i bersagli nominati da una direttiva; le riscritture di file fuori da quel
+> perimetro restano cieche. Di quel 41% intercetta una parte non quantificata. Verificato da 9
+> unit test, incluso il guard sul path traversal; nessuna corsa live lo ha ancora esercitato.
+
 ### 5.7. Roadmap Funzionalità Future
 1. **Modulo Validazione Visiva**: `visualValidationTool.ts` su Electron Offscreen `WebContents` con cattura screenshot, DOM e `console.error`.
 2. **First-Class Artifacts Engine**: Canali IPC `artifacts:*`, repository artefatti e Live Preview sandboxata.
@@ -435,6 +492,7 @@ sé la risposta a "cosa serve davanti al modello adesso". Un turno la cui azione
 | :--- | :--- | :---: |
 | [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts) | Selezione della singola direttiva prioritaria di turno | ✅ Verificato Live |
 | [`turnContextPolicy.ts`](../electron/core/domain/agent/turnContextPolicy.ts) | Selezione dei blocchi di contesto ammessi nel turno (§5.6j) | ✅ Unit test |
+| [`readTurnFileContext`](../electron/core/application/agentOrchestratorPromptAssembly.ts) | Consegna del contenuto dei file che il turno sta per riscrivere (§5.6k) | ⚠️ Unit test — nessuna corsa live |
 | [`selectModelForTurn`](../electron/core/application/agentOrchestratorPromptAssembly.ts) | Clamp di `num_ctx` sul `context_length` reale del modello (§5.5) | ✅ Unit test |
 | [`npmResolutionConflict.ts`](../electron/core/domain/agent/npmResolutionConflict.ts) | Risoluzione deterministica conflitti `ERESOLVE` npm | ✅ Verificato Live |
 | [`redundantWriteDetector.ts`](../electron/core/domain/agent/redundantWriteDetector.ts) | Riconoscimento no-op writes e preservazione build verde | ✅ Verificato Live |

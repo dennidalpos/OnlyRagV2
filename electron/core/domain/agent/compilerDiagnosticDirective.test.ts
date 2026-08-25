@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote, extractSuggestedCommand, parseCompilerDiagnostics } from './compilerDiagnosticDirective'
+import {
+  buildDiagnosticFixDirective,
+  buildDeferredDiagnosticNote,
+  extractExportMismatch,
+  extractSuggestedCommand,
+  parseCompilerDiagnostics,
+} from './compilerDiagnosticDirective'
 
 /** The exact output `npx tsc --noEmit` produced at step 21 of the live run of 2026-08-24. */
 const TSC_OUTPUT = [
@@ -127,6 +133,114 @@ describe('buildDiagnosticFixDirective — when the compiler named the remedy', (
 
   it('still orders the file fix when no remedy was printed', () => {
     expect(buildDiagnosticFixDirective(TSC_OUTPUT)).toContain('MUST be "write_file" on "src/main.tsx"')
+  })
+})
+
+/**
+ * The bottleneck blueprint §5.6i names: the model writes a default import against a named
+ * export, or a named import against a default one. Both messages are the shapes `tsc` prints,
+ * and both end with the statement that fixes the file.
+ */
+const TS2613_OUTPUT =
+  'src/main.tsx(2,8): error TS2613: Module \'"C:/w/src/App"\' has no default export. Did you mean to use \'import { App } from "C:/w/src/App"\' instead?'
+const TS2614_OUTPUT =
+  'src/routes/index.tsx(3,10): error TS2614: Module \'"../pages/Dashboard"\' has no exported member \'Dashboard\'. Did you mean to use \'import Dashboard from "../pages/Dashboard"\' instead?'
+
+describe('extractExportMismatch', () => {
+  it('takes the replacement import the compiler printed, verbatim', () => {
+    expect(extractExportMismatch(TS2613_OUTPUT)!.suggestedImport).toBe('import { App } from "C:/w/src/App"')
+    expect(extractExportMismatch(TS2614_OUTPUT)!.suggestedImport).toBe('import Dashboard from "../pages/Dashboard"')
+  })
+
+  it('carries the diagnostic that owns the suggestion, not just the text', () => {
+    expect(extractExportMismatch(TS2614_OUTPUT)!.diagnostic).toMatchObject({
+      file: 'src/routes/index.tsx',
+      line: 3,
+      column: 10,
+      code: 'TS2614',
+    })
+  })
+
+  it('finds the mismatch even when it is not the first error reported', () => {
+    const output = `src/routes/index.tsx(8,15): error TS2304: Cannot find name 'TasksPage'.\n${TS2613_OUTPUT}`
+
+    expect(extractExportMismatch(output)!.diagnostic.file).toBe('src/main.tsx')
+  })
+
+  it('says nothing for the codes that print no suggestion to copy', () => {
+    // TS1192 also says "has no default export", but names no replacement. Inventing one is
+    // exactly what this branch exists not to do.
+    expect(extractExportMismatch(TSC_OUTPUT)).toBeNull()
+    expect(extractExportMismatch('')).toBeNull()
+  })
+
+  it('ignores a mismatch reported against a file inside an installed package', () => {
+    const inDeps =
+      'node_modules/some-lib/dist/index.d.ts(4,8): error TS2613: Module \'"./inner"\' has no default export. Did you mean to use \'import { Inner } from "./inner"\' instead?'
+
+    expect(extractExportMismatch(inDeps)).toBeNull()
+  })
+})
+
+describe('buildDiagnosticFixDirective — export/import mismatch', () => {
+  it('quotes the compiler suggestion verbatim, naming file and line', () => {
+    const directive = buildDiagnosticFixDirective(TS2613_OUTPUT)!
+
+    expect(directive).toContain('src/main.tsx, line 2, column 8 (TS2613)')
+    // The whole message, suggestion included, plus the suggestion isolated on its own line.
+    expect(directive).toContain('Did you mean to use \'import { App } from "C:/w/src/App"\' instead?')
+    expect(directive).toContain('\n  import { App } from "C:/w/src/App"\n')
+  })
+
+  it('prescribes exactly one write_file, on the file the compiler named', () => {
+    const directive = buildDiagnosticFixDirective(TS2614_OUTPUT)!
+
+    expect(directive).toContain(
+      '1. Your next tool call MUST be "write_file" on "src/routes/index.tsx", with the complete content of that file, in which line 3 is replaced by exactly: import Dashboard from "../pages/Dashboard"'
+    )
+    // §6.2.2: one imperative for now. The prohibition on re-running is the only other numbered
+    // line, exactly as in the ordinary file-and-line directive.
+    expect(directive.match(/^\d+\. /gm)).toHaveLength(2)
+    expect(directive).toContain('Do NOT re-run the command until you have changed a file')
+  })
+
+  it('forbids editing the other side of the mismatch, which the model cannot see', () => {
+    const directive = buildDiagnosticFixDirective(TS2613_OUTPUT)!
+
+    expect(directive).toContain('Do NOT rename the export')
+    expect(directive).toContain('do NOT edit the module being imported')
+  })
+
+  it('replaces the generic file-and-line directive instead of being appended to it', () => {
+    const directive = buildDiagnosticFixDirective(TS2613_OUTPUT)!
+
+    expect(directive).toContain('THE COMPILER WROTE THE CORRECT IMPORT FOR YOU')
+    expect(directive).not.toContain('THE COMPILER NAMED THE FILE AND THE LINE')
+  })
+
+  it('wins over an unrelated first error, because its fix is the one already written down', () => {
+    const mixed = [
+      "src/routes/index.tsx(8,15): error TS2304: Cannot find name 'TasksPage'.",
+      TS2613_OUTPUT,
+    ].join('\n')
+    const directive = buildDiagnosticFixDirective(mixed)!
+
+    expect(directive).toContain('"write_file" on "src/main.tsx"')
+    // The other error is named, never ordered.
+    expect(directive).toContain("src/routes/index.tsx line 8 (TS2304): Cannot find name 'TasksPage'.")
+    expect(directive.match(/^\d+\. /gm)).toHaveLength(2)
+  })
+
+  it('still defers to the install when the compiler also named a package to install', () => {
+    // A missing declaration package blocks the file the same way it blocked TS7016 for
+    // thirty-three steps; the edit is worth nothing until the install lands.
+    const mixed = `${TS7016_OUTPUT}\n${TS2613_OUTPUT}`
+
+    expect(buildDiagnosticFixDirective(mixed)!).toContain('MUST be "run_command" with the command: npm install --save-dev @types/react')
+  })
+
+  it('leaves TS1192 on the ordinary directive, since there is nothing to quote', () => {
+    expect(buildDiagnosticFixDirective(TSC_OUTPUT)!).toContain('THE COMPILER NAMED THE FILE AND THE LINE')
   })
 })
 

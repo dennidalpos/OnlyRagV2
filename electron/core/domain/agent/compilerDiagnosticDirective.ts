@@ -117,6 +117,65 @@ const MODULE_DIAGNOSTIC = /cannot find module|could not find a declaration file|
 const IN_DEPENDENCY = /(^|[\\/])node_modules[\\/]/i
 
 /**
+ * The import statement TypeScript itself proposes when an import and an export disagree.
+ *
+ * `TS2613` — *Module '"X"' has no default export. Did you mean to use 'import { Y } from "X"'
+ * instead?* — and `TS2614` — *Module '"X"' has no exported member 'Y'. Did you mean to use
+ * 'import Y from "X"' instead?* — are the two halves of one defect, and blueprint §5.6i names it
+ * the current bottleneck of generated code: the model writes a default import against a named
+ * export, or the reverse.
+ *
+ * The statement is single-quoted and carries double quotes around the module specifier, so
+ * `[^']+` is enough and no escaping is involved.
+ */
+const SUGGESTED_IMPORT_PATTERN = /\bDid you mean to use '([^']+)' instead\?/
+
+/**
+ * The only codes this remedy is read from.
+ *
+ * `TS1192` also says "has no default export", but prints no suggestion after it — there is
+ * nothing verbatim to copy, so it keeps falling through to the ordinary file-and-line directive
+ * instead of reaching a branch that would have to invent the replacement line itself.
+ */
+const EXPORT_MISMATCH_CODES = new Set(['TS2613', 'TS2614'])
+
+/** A diagnostic whose fix the compiler already wrote out as a complete import statement. */
+export interface ExportMismatch {
+  diagnostic: CompilerDiagnostic
+  /** The compiler's own replacement line, copied out of its message with nothing added. */
+  suggestedImport: string
+}
+
+function findExportMismatch(diagnostics: CompilerDiagnostic[]): ExportMismatch | null {
+  for (const diagnostic of diagnostics) {
+    if (!diagnostic.code || !EXPORT_MISMATCH_CODES.has(diagnostic.code)) continue
+    const match = SUGGESTED_IMPORT_PATTERN.exec(diagnostic.message)
+    if (!match) continue
+    return { diagnostic, suggestedImport: match[1].trim() }
+  }
+  return null
+}
+
+/**
+ * The first export/import mismatch the output reports, with the compiler's replacement line.
+ *
+ * The same reasoning as `extractSuggestedCommand`, applied to an edit instead of an install:
+ * tsc has already decided which of the two sides is wrong and printed the statement that fixes
+ * it, and paraphrasing that into "correct the import" discards the one thing a 7B model cannot
+ * recover on its own — whether the target module exports a default or a name, and which name.
+ * Blueprint §6.2.1, structure before directives: hand over the objective datum, do not restate
+ * it. The clause survived parsing already (it is part of `message`), but nothing ever pointed
+ * at it, and it reached the model buried mid-sentence in a line whose only instruction was
+ * "write the complete corrected content of that file".
+ *
+ * Errors inside `node_modules` are dropped here too: a mismatch against a dependency's own
+ * declaration file is never fixed by editing that file.
+ */
+export function extractExportMismatch(output: string): ExportMismatch | null {
+  return findExportMismatch(parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file)))
+}
+
+/**
  * What is left to fix once the directive currently in force has done its job — named, not ordered.
  *
  * A build output routinely carries both kinds at once, and the directive that wins suppresses the
@@ -199,6 +258,41 @@ export function buildDiagnosticFixDirective(output: string): string | null {
       `2. Do NOT rewrite "${first.file}" for this error. It will report the same thing until the package is installed.`,
     ].join('\n')
   }
+  // The compiler wrote the replacement import itself. This REPLACES the file-and-line directive
+  // below rather than being appended to it — blueprint §6.2.2, a message carries one imperative,
+  // and two correct directives in one turn is how the previous one got overwritten (see the note
+  // on buildDeferredDiagnosticNote). The remaining errors are still listed, without an imperative.
+  //
+  // It is picked ahead of `diagnostics[0]` when the mismatch is not the first error reported:
+  // among the errors on the table this is the one whose fix is already written down, so it is
+  // the one where a single write_file is certain to change the outcome. Blueprint §5.6i lists
+  // export/import coherence as the standing bottleneck of this model's output.
+  const mismatch = findExportMismatch(diagnostics)
+  if (mismatch) {
+    const target = mismatch.diagnostic
+    const remaining = diagnostics.filter((d) => d !== target)
+    const restShown = remaining.slice(0, MAX_REPORTED - 1)
+    const restOverflow = remaining.length - restShown.length
+    const rest = restShown
+      .map((d) => `- ${d.file} line ${d.line}${d.code ? ` (${d.code})` : ''}: ${d.message}`)
+      .join('\n')
+
+    return [
+      `[THE COMPILER WROTE THE CORRECT IMPORT FOR YOU — COPY IT VERBATIM]`,
+      `${target.file}, line ${target.line}${target.column ? `, column ${target.column}` : ''} (${target.code})`,
+      `  ${target.message}`,
+      `The import and the export of that module disagree. The compiler resolved which side is wrong and printed the statement that fixes it, character for character:`,
+      `  ${mismatch.suggestedImport}`,
+      `Use that line exactly as printed. Do NOT rename the export, do NOT edit the module being imported, and do NOT guess a different member name — the compiler read that module and you have not.`,
+      rest ? `Also reported${restOverflow > 0 ? ` (${restOverflow} more not listed)` : ''}:\n${rest}` : '',
+      `Directives:`,
+      `1. Your next tool call MUST be "write_file" on "${target.file}", with the complete content of that file, in which line ${target.line} is replaced by exactly: ${mismatch.suggestedImport}`,
+      `2. Do NOT re-run the command until you have changed a file. It will report exactly these errors again, because nothing will have changed.`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
   const shown = diagnostics.slice(0, MAX_REPORTED)
   const overflow = diagnostics.length - shown.length
   const others = shown

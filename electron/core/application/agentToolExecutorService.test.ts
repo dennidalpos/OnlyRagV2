@@ -445,6 +445,51 @@ async def async_handler():
     }, 15000)
   })
 
+  describe('install downgrade guard', () => {
+    it('refuses the install that pinned the tree to react@16 in the run of 2026-08-25T12:11', async () => {
+      // versionRealityDirective only ever saw `write_file` on package.json, so this command --
+      // which rewrites the same file -- succeeded three times unchallenged (steps 21, 30, 31)
+      // and left `react@"^16.14.0" from the root project`. Every later install of a package
+      // built for react@18 then failed on ERESOLVE, and at step 49 the model deleted
+      // @mui/material believing the name was invented.
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install react@^16.8.0' } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]')
+      expect(res.outputForHistory).toContain('"react": "^18.2.0"')
+      expect(res.isTerminal).toBe(true)
+      // Refused, not run: the manifest is untouched, which is the whole point of catching this
+      // before execution rather than diffing package.json afterwards.
+      expect(JSON.parse(fs.readFileSync(path.join(tempDir, 'package.json'), 'utf-8')).dependencies.react).toBe('^18.2.0')
+    }, 20000)
+
+    it('lets an upgrade through', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        // --dry-run --offline keeps the assertion about the guard, not about npm's network.
+        { tool: 'run_command', parameters: { command: 'npm install react@^19.0.0 --dry-run --offline --no-audit --no-fund', timeoutSeconds: 30 } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).not.toContain('[VERSION DOWNGRADE REFUSED')
+    }, 20000)
+  })
+
   it('should block run_command via Shell-Tool Confusion Guard when a registered tool name is passed as a shell command', async () => {
     const res = await agentToolExecutorService.executeTool(
       {

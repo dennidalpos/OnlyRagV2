@@ -19,6 +19,7 @@ import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
 import { parseVersionNotFound, buildVersionNotFoundDirective } from '../domain/agent/npmVersionNotFound'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
+import { requestedInstallVersions, findManifestDowngrades, buildInstallDowngradeRefusal } from '../domain/agent/installVersionDowngrade'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
 import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
@@ -309,6 +310,53 @@ export class AgentToolExecutorService {
     if (requested.length === 0) return null
     const facts = await npmRegistryClient.lookupAll(requested.map((r) => r.name))
     return facts.find((f) => !f.exists)?.name ?? null
+  }
+
+  /**
+   * The first install target that would take a declared dependency backwards past a major,
+   * if any.
+   *
+   * Deliberately placed next to `firstNonexistentInstallTarget`, and called from the same spot:
+   * both answer "is what this command names real for this project", one against the registry and
+   * one against the manifest, and the registry facts the message quotes are already in the
+   * client's per-session cache by the time this runs.
+   *
+   * This is the check `versionRealityDirective` cannot perform. That one is gated on
+   * `write_file` of `package.json`, so `npm install react@^16.8.0` — which rewrites the same
+   * file — walked past it three times in the `live-full-task` run of 2026-08-25T12:11 and pinned
+   * the tree to `react@16.14.0`. See installVersionDowngrade.ts for the cascade that followed.
+   *
+   * Before execution rather than after, and the choice is not a preference. After the fact the
+   * only evidence left is a diff of `package.json`, which costs a snapshot on every command and
+   * still arrives too late: the manifest and `node_modules` are already repinned, and undoing
+   * that needs a second install, i.e. a second imperative in the same message — the defect
+   * §6.2.2 exists to prevent. Beforehand the command names `pkg@version` itself, so the verdict
+   * is read straight off the text with nothing inferred, and refusing leaves the project exactly
+   * as it was.
+   */
+  private async firstDowngradingInstallTarget(
+    command: string,
+    workspacePath: string | null | undefined
+  ): Promise<{ refusal: string; name: string } | null> {
+    if (!workspacePath) return null
+    const targets = requestedInstallVersions(command)
+    if (targets.length === 0) return null
+
+    const pkgJsonRes = await this.repo.readFile(path.join(workspacePath, 'package.json'))
+    if (!pkgJsonRes.success || !pkgJsonRes.content) return null
+    let manifest: unknown
+    try {
+      manifest = JSON.parse(pkgJsonRes.content)
+    } catch {
+      return null // A manifest nothing can read declares nothing to contradict.
+    }
+    const declaredRanges: Record<string, string> = {}
+    for (const dep of declaredDependencies(manifest)) declaredRanges[dep.name] = dep.range
+
+    const downgrade = findManifestDowngrades(targets, declaredRanges)[0]
+    if (!downgrade) return null
+    const latest = (await npmRegistryClient.lookup(downgrade.name)).latest
+    return { refusal: buildInstallDowngradeRefusal(downgrade, latest), name: downgrade.name }
   }
 
   /**
@@ -1164,6 +1212,22 @@ Do not retry the same installation. Continue without this tool or ask the user t
             `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
           ].join('\n')
           return { outputForHistory: refusal, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
+        }
+
+        // The same reality check, against the manifest instead of the registry: an install that
+        // moves a declared dependency backwards past a major is refused before it can rewrite
+        // package.json. `versionRealityDirective` below only sees `write_file`, so until this
+        // guard existed a version installed by command was compared against nothing at all --
+        // three successful `npm install react@^16.8.0` in the run of 2026-08-25T12:11, on a
+        // project declaring `^18.2.0`, and the ERESOLVE cascade that followed.
+        const downgrade = await this.firstDowngradingInstallTarget(cmd, workspacePath)
+        if (downgrade) {
+          logger.log('WARN', 'AgentToolExecutor', `[VERSION_DOWNGRADE_REFUSED] ${cmd}`)
+          return {
+            outputForHistory: downgrade.refusal,
+            logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`,
+            isTerminal: true,
+          }
         }
 
         // Shell-Tool Confusion Guard: detect when the model passes a registered

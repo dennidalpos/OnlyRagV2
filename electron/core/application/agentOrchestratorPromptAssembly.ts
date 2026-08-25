@@ -15,6 +15,8 @@ import { agentSessionStateRepository } from '../infrastructure/filesystem/agentS
 import { skillAppService } from './skillAppService'
 import { resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import { resolveTurnContextPolicy, omittedBlockNames } from '../domain/agent/turnContextPolicy'
+import { extractDeliverablePaths } from '../domain/agent/milestoneDeliverableResolver'
+import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
@@ -82,35 +84,84 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   }
 }
 
-/** Per-file cap for injected rewrite targets. Generous: the model must emit the whole file back. */
-const REWRITE_TARGET_CHAR_CAP = 12000
-/** The directive names at most a handful of files; more than this is a plan problem, not a prompt one. */
-const MAX_REWRITE_TARGETS = 3
+/** Per-file cap for injected file content. Generous: the model must emit the whole file back. */
+const INJECTED_FILE_CHAR_CAP = 12000
+/** A turn is about a handful of files; more than this is a plan problem, not a prompt one. */
+const MAX_INJECTED_FILES = 3
 
 /**
- * Reads the files the active directive orders rewritten, so the order is executable.
+ * Hands the model the current content of the files this turn is about to rewrite.
  *
- * Silent on every failure: a target that cannot be read is a target the model will have to
- * `read_file` itself, which is worse but not broken. Failing the turn over it would be.
+ * ## Why the system supplies this rather than asking for it
+ *
+ * The coding prompt already says it (rule 7: "consult the repository map and read files before
+ * acting. If a file already exists and satisfies the requirement, edit it — never overwrite it
+ * wholesale"). Across four independent full-task runs in logs/coding_agent_audit.log the model
+ * issued 74 `write_file` calls and `read_file` exactly ZERO times — and `replace_file_content`
+ * zero times too. It uses three tools out of the fifteen in the catalog.
+ *
+ * That is not inattention, it is arithmetic. `replace_file_content` needs `TargetContent` to
+ * match the file byte for byte, so it is unreachable without a prior read; a read costs one of
+ * the fifty steps and moves no milestone, since the deliverable probe measures files on disk;
+ * and every directive the arbiter can emit names `write_file` or `run_command`, never a read.
+ * `write_file` is the only tool that always makes measurable progress in a single step, so it is
+ * the only tool used — and a wholesale write with no knowledge of the current file replaces it
+ * with a stub. That is how "src/pages/DashboardPage.tsx" ended a run at 208 bytes.
+ *
+ * Blueprint §6.2.1: when the system holds a datum the model cannot deduce, it hands the datum
+ * over instead of instructing the model to go and get it. Adding a twelfth rule telling it to
+ * read harder is precisely the move that principle exists to rule out.
+ *
+ * Silent on every failure: a file that cannot be read is one the model will have to fetch
+ * itself, which is worse but not broken. Failing the turn over it would be.
  */
-function readRewriteTargets(ctx: TurnDispatchContext, targets: readonly string[] | undefined): string {
+export function readTurnFileContext(
+  ctx: TurnDispatchContext,
+  targets: readonly string[] | undefined,
+  reason: string
+): string {
   if (!targets?.length || !ctx.workspacePath) return ''
 
+  const root = path.resolve(ctx.workspacePath)
   const blocks: string[] = []
-  for (const relativePath of targets.slice(0, MAX_REWRITE_TARGETS)) {
+  for (const relativePath of targets.slice(0, MAX_INJECTED_FILES)) {
     try {
-      const absolute = path.resolve(ctx.workspacePath, relativePath)
-      // Never read outside the workspace on a path that came from a scanner.
-      if (!absolute.startsWith(path.resolve(ctx.workspacePath))) continue
+      const absolute = path.resolve(root, relativePath)
+      // Never read outside the workspace on a path that came from a scanner or a plan title.
+      if (!absolute.startsWith(root)) continue
       const content = fs.readFileSync(absolute, 'utf-8')
-      blocks.push(`--- ${relativePath} (the file the directive above orders you to rewrite) ---\n${content.slice(0, REWRITE_TARGET_CHAR_CAP)}`)
+      if (!content.trim()) continue
+      blocks.push(`--- ${relativePath} (${reason}) ---\n${content.slice(0, INJECTED_FILE_CHAR_CAP)}`)
     } catch {
-      // Missing or unreadable: the directive still names it, and read_file still exists.
+      // Missing or unreadable: nothing to hand over, and read_file still exists.
     }
   }
 
   if (blocks.length === 0) return ''
-  return `CURRENT CONTENT OF THE FILE(S) THE ACTIVE DIRECTIVE TARGETS:\n${blocks.join('\n\n')}\n`
+  return `CURRENT ON-DISK CONTENT OF THE FILE(S) THIS TURN IS ABOUT — EDIT THIS, DO NOT REPLACE IT WITH A SHORTER FILE:\n${blocks.join('\n\n')}\n`
+}
+
+/**
+ * The files this turn is about: the ones the active directive orders rewritten, or — on an
+ * ordinary progress turn — the deliverables the active milestone names, which are the files the
+ * model is about to write. Only those already on disk produce anything; a milestone whose files
+ * do not exist yet has nothing to hand over and needs none.
+ */
+export function resolveTurnFileTargets(
+  ctx: TurnDispatchContext,
+  directive: PlanDirectiveDecision
+): { targets: readonly string[]; reason: string } {
+  if (directive.rewriteTargets?.length) {
+    return { targets: directive.rewriteTargets, reason: 'the file the directive above orders you to rewrite' }
+  }
+  if (directive.kind !== 'focus') return { targets: [], reason: '' }
+
+  const activeTitle = ctx.goalPlanner.getActiveMilestone()?.title
+  if (!activeTitle) return { targets: [], reason: '' }
+  return {
+    targets: extractDeliverablePaths(activeTitle),
+    reason: 'already on disk for the active milestone — edit it rather than overwrite it',
+  }
 }
 
 export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection, compiledHistoryBlock: string) {
@@ -147,7 +198,8 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   // is the same principle as every other injection in this codebase: the system holds an
   // objective datum the model cannot deduce, so it hands the datum over rather than issuing an
   // instruction that assumes the model already has it (blueprint §6.2.1).
-  const rewriteTargetBlock = policy.includePinnedFiles ? readRewriteTargets(ctx, directive.rewriteTargets) : ''
+  const turnFiles = resolveTurnFileTargets(ctx, directive)
+  const rewriteTargetBlock = policy.includePinnedFiles ? readTurnFileContext(ctx, turnFiles.targets, turnFiles.reason) : ''
 
   const skillsBlock = !policy.includeSkills
     ? ''

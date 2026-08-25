@@ -1,6 +1,7 @@
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode, AppSettings } from '../../../src/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
+import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
@@ -31,6 +32,8 @@ export interface TurnDispatchContext {
   payload: AgentTaskPayload
   availableModels: string[]
   modelCapabilities: Record<string, string[]>
+  /** `/api/tags` facts per model tag. Carries the trained `context_length` that caps `num_ctx`. */
+  modelMetrics: Record<string, OllamaModelMetrics>
   attachedContext: string
   pinnedFilesContextStr: string
   projectContextMapStr: string
@@ -75,4 +78,11 @@ export interface ModelSelection {
   targetModelToolCallingCapable: boolean
   fallbackModel: string
   runtimeOpts: OllamaRuntimeOptions
+  /**
+   * The largest `num_ctx` Ollama will honour for `targetModel`: its trained `context_length`,
+   * as reported on `/api/tags`. Null when Ollama reported none, in which case nothing caps the
+   * hardware profile's own sizing. `runtimeOpts` is already clamped to this — the field is kept
+   * so the per-turn growth in freezeOrGrowContextWindow cannot climb back over the ceiling.
+   */
+  contextCeiling: number | null
 }

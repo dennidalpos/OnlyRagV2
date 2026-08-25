@@ -17,7 +17,9 @@ vi.mock('../infrastructure/http/agentStreamTransport', () => ({
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {
     getInstalledModels: vi.fn().mockResolvedValue(['llama3.2:3b', 'qwen2.5-coder:7b', 'deepseek-r1:8b']),
-    getModelCapabilities: vi.fn().mockResolvedValue({}),
+    // Session setup reads capabilities and the trained context_length from the same /api/tags
+    // record; an empty map means "Ollama told us nothing", which is the default here.
+    getModelMetrics: vi.fn().mockResolvedValue({}),
     preloadModel: vi.fn().mockResolvedValue({ success: true }),
   },
 }))

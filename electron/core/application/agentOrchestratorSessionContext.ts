@@ -15,6 +15,7 @@ import { documentIoRepository } from '../infrastructure/filesystem/documentIoRep
 import { skillAppService } from './skillAppService'
 import { skillInstallApprovalService, type SkillInstallCandidate } from './skillInstallApprovalService'
 import { ollamaAppService } from './ollamaAppService'
+import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
@@ -45,6 +46,13 @@ export interface SessionContext {
   projectContextMapStr: string
   availableModels: string[]
   modelCapabilities: Record<string, string[]>
+  /**
+   * The per-model facts Ollama reports on `/api/tags`, keyed by model tag. `contextLength` is
+   * the one the turn dispatcher needs and the one nothing used to carry: Ollama clamps any
+   * larger `num_ctx` down to it and then truncates the HEAD of the prompt — the system prompt
+   * and the plan block — without saying so. Empty when the fetch failed.
+   */
+  modelMetrics: Record<string, OllamaModelMetrics>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
   skillsBlock: string
@@ -82,9 +90,16 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     : ''
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
-  // Native tool-calling capability map (see ollamaToolCallingCapability.ts). Fetched once
-  // per session; failures resolve to an empty map, which falls back to the family allow-list.
-  const modelCapabilities = await ollamaAppService.getModelCapabilities(settings.ollamaHost)
+  // One `/api/tags` read, both facts. `getModelMetrics` returns the capabilities array AND the
+  // trained `context_length` in the same record; the older `getModelCapabilities` call fetched
+  // the identical payload and threw the context length away, so the turn dispatcher sized
+  // `num_ctx` from hardware alone and never learned the ceiling Ollama would clamp it to.
+  // Failures resolve to an empty map: capabilities then fall back to the family allow-list in
+  // ollamaToolCallingCapability.ts, and the context ceiling is simply unknown rather than wrong.
+  const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)
+  const modelCapabilities: Record<string, string[]> = Object.fromEntries(
+    Object.entries(modelMetrics).map(([name, metrics]) => [name, metrics.capabilities])
+  )
 
   const warmUpModel = settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
 
@@ -150,6 +165,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     projectContextMapStr,
     availableModels,
     modelCapabilities,
+    modelMetrics,
     skillMatchContext,
     skillMatchingOptions,
     skillsBlock,

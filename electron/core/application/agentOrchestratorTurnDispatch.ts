@@ -69,7 +69,7 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
 
   const selection = selectModelForTurn(ctx)
   const { assembled, compactionResult, turnPrompt } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
-  freezeOrGrowContextWindow(ctx, turnPrompt, selection.runtimeOpts)
+  freezeOrGrowContextWindow(ctx, turnPrompt, selection.runtimeOpts, selection.contextCeiling)
 
   ctx.emitLog(
     'tool_call',

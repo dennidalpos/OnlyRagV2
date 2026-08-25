@@ -7,6 +7,7 @@ import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import type { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
+import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
@@ -52,6 +53,7 @@ export interface AgentSessionBootstrap {
   projectContextMapStr: string
   availableModels: string[]
   modelCapabilities: Record<string, string[]>
+  modelMetrics: Record<string, OllamaModelMetrics>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
   skillsBlock: string

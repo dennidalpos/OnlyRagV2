@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   requestedInstallVersions,
   findManifestDowngrades,
+  findRegistryInstallIssue,
   buildInstallDowngradeRefusal,
+  buildRegistryInstallRefusal,
   type ManifestDowngrade,
 } from './installVersionDowngrade'
 
@@ -85,6 +87,49 @@ describe('findManifestDowngrades', () => {
   })
 })
 
+describe('findRegistryInstallIssue', () => {
+  const viteFacts = {
+    name: 'vite',
+    exists: true,
+    latest: '8.0.0',
+    versions: ['4.5.14', '5.4.21', '8.0.0'],
+  }
+
+  it('catches the first install of an undeclared package at an old major', () => {
+    expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [viteFacts])).toEqual({
+      kind: 'stale_major',
+      name: 'vite',
+      requested: '^4.0.0',
+      resolved: '4.5.14',
+      latest: '8.0.0',
+    })
+  })
+
+  it('catches a requested range that matches no published version', () => {
+    expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^9.3.5'), {}, [viteFacts])).toEqual({
+      kind: 'unpublished',
+      name: 'vite',
+      requested: '^9.3.5',
+      latest: '8.0.0',
+    })
+  })
+
+  it('allows a current published range and does not guess from incomplete registry facts', () => {
+    expect(findRegistryInstallIssue(requestedInstallVersions('npm install vite@^8.0.0'), {}, [viteFacts])).toBeNull()
+    expect(
+      findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [
+        { name: 'vite', exists: true },
+      ])
+    ).toBeNull()
+  })
+
+  it('leaves declared old majors to the manifest downgrade rule', () => {
+    expect(
+      findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), { vite: '^4.5.0' }, [viteFacts])
+    ).toBeNull()
+  })
+})
+
 describe('buildInstallDowngradeRefusal', () => {
   const downgrade: ManifestDowngrade = {
     name: 'react',
@@ -125,5 +170,30 @@ describe('buildInstallDowngradeRefusal', () => {
     expect(imperatives).toHaveLength(2)
     expect(imperatives[0]).toMatch(/^1\. Do NOT/)
     expect(imperatives[1]).toContain('replace that package')
+  })
+})
+
+describe('buildRegistryInstallRefusal', () => {
+  it('replaces an old first-install range with the registry current version', () => {
+    const refusal = buildRegistryInstallRefusal({
+      kind: 'stale_major',
+      name: 'vite',
+      requested: '^4.0.0',
+      resolved: '4.5.14',
+      latest: '8.0.0',
+    })
+    expect(refusal).toContain('[STALE INSTALL VERSION — INSTALL NOT RUN]')
+    expect(refusal).toContain('npm install vite@8.0.0')
+  })
+
+  it('names the registry version after an unpublished request', () => {
+    const refusal = buildRegistryInstallRefusal({
+      kind: 'unpublished',
+      name: 'vite',
+      requested: '^9.3.5',
+      latest: '8.0.0',
+    })
+    expect(refusal).toContain('[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]')
+    expect(refusal).toContain('npm install vite@8.0.0')
   })
 })

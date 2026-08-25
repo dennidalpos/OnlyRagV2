@@ -61,6 +61,7 @@
 
 import { extractRequestedPackages } from './installCommandParser'
 import { majorOf } from './dependencyVersionReality'
+import { major, maxSatisfying, validRange } from 'semver'
 
 /** A package an install command names together with an explicit version specifier. */
 export interface InstallVersionTarget {
@@ -79,6 +80,18 @@ export interface ManifestDowngrade {
   declared: string
   declaredMajor: number
 }
+
+/** Registry facts consumed structurally so the domain does not depend on the HTTP adapter. */
+export interface RegistryPackageVersions {
+  name: string
+  exists: boolean
+  latest?: string
+  versions?: readonly string[]
+}
+
+export type RegistryInstallIssue =
+  | { kind: 'unpublished'; name: string; requested: string; latest: string }
+  | { kind: 'stale_major'; name: string; requested: string; resolved: string; latest: string }
 
 /**
  * The `name@spec` pairs an install command names.
@@ -135,6 +148,37 @@ export function findManifestDowngrades(
 }
 
 /**
+ * Finds the first explicit install target contradicted by the registry.
+ *
+ * A parseable range that matches no published version is impossible and would otherwise spend a
+ * command on ETARGET. For a first install only, resolving below the registry's current major is
+ * stale scaffolding rather than a project compatibility decision. Declared dependencies stay
+ * under the manifest rule above: their existing range is the project's source of truth.
+ *
+ * Missing version data is deliberately inconclusive. The HTTP adapter uses that shape for
+ * network failures, and an unreachable registry must never become a false refusal.
+ */
+export function findRegistryInstallIssue(
+  targets: readonly InstallVersionTarget[],
+  declaredRanges: Readonly<Record<string, string>>,
+  registryFacts: readonly RegistryPackageVersions[]
+): RegistryInstallIssue | null {
+  for (const target of targets) {
+    const facts = registryFacts.find((item) => item.name === target.name)
+    if (!facts?.exists || !facts.latest || !facts.versions || !validRange(target.spec)) continue
+    const resolved = maxSatisfying([...facts.versions], target.spec, { includePrerelease: true })
+    if (!resolved) {
+      return { kind: 'unpublished', name: target.name, requested: target.spec, latest: facts.latest }
+    }
+    if (typeof declaredRanges[target.name] === 'string') continue
+    if (major(resolved) < major(facts.latest)) {
+      return { kind: 'stale_major', name: target.name, requested: target.spec, resolved, latest: facts.latest }
+    }
+  }
+  return null
+}
+
+/**
  * The refusal, in the shape the sibling refusal in this executor already uses: one prohibition,
  * then one thing to do, and nothing else.
  *
@@ -163,5 +207,27 @@ export function buildInstallDowngradeRefusal(downgrade: ManifestDowngrade, lates
     `Directives:`,
     `1. Do NOT install ${name} below "${declared}", and do NOT add --force or --legacy-peer-deps.`,
     `2. Whatever demanded ${name}@${requested} is the side that does not fit this project: replace that package with one that supports ${name}@${downgrade.declaredMajor}, or drop it.`,
+  ].join('\n')
+}
+
+/** One registry-backed replacement command; no guessed version and no failed install first. */
+export function buildRegistryInstallRefusal(issue: RegistryInstallIssue): string {
+  if (issue.kind === 'unpublished') {
+    return [
+      `[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]`,
+      `${issue.name}@${issue.requested} matches no published version. The registry reports ${issue.name}@${issue.latest} as current.`,
+      `The command was not executed because npm would reject it with ETARGET.`,
+      `Directives:`,
+      `1. Your next tool call MUST be "run_command" with: npm install ${issue.name}@${issue.latest}`,
+      `2. Do NOT re-run the refused command, and do NOT guess another version.`,
+    ].join('\n')
+  }
+  return [
+    `[STALE INSTALL VERSION — INSTALL NOT RUN]`,
+    `${issue.name}@${issue.requested} resolves to ${issue.resolved}, but the registry reports ${issue.name}@${issue.latest} as current.`,
+    `This package is not declared in package.json, so there is no existing project constraint that justifies starting a new dependency on an older major.`,
+    `Directives:`,
+    `1. Your next tool call MUST be "run_command" with: npm install ${issue.name}@${issue.latest}`,
+    `2. Do NOT re-run the refused command, and do NOT guess another version.`,
   ].join('\n')
 }

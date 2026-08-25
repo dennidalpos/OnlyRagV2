@@ -24,6 +24,8 @@ export interface PackageFacts {
   name: string
   /** Absent when the registry does not know this package at all (HTTP 404). */
   latest?: string
+  /** Published versions, absent when the registry could not be reached or returned malformed data. */
+  versions?: string[]
   exists: boolean
 }
 
@@ -51,15 +53,27 @@ export class NpmRegistryClient {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
-      const res = await fetch(`${REGISTRY}/${name.replace('/', '%2F')}/latest`, { signal: controller.signal })
+      const res = await fetch(`${REGISTRY}/${encodeURIComponent(name)}`, {
+        signal: controller.signal,
+        // The install-v1 representation omits README and other authoring metadata while retaining
+        // dist-tags and published versions, which are the only registry facts the agent needs.
+        headers: { Accept: 'application/vnd.npm.install-v1+json' },
+      })
       if (res.status === 404) {
         const missing: PackageFacts = { name, exists: false }
         cache.set(name, missing)
         return missing
       }
       if (!res.ok) return { name, exists: true }
-      const body = (await res.json()) as { version?: string }
-      const facts: PackageFacts = { name, exists: true, latest: typeof body?.version === 'string' ? body.version : undefined }
+      const body = (await res.json()) as { 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> }
+      const latest = body?.['dist-tags']?.latest
+      const versions = body?.versions && typeof body.versions === 'object' ? Object.keys(body.versions) : undefined
+      const facts: PackageFacts = {
+        name,
+        exists: true,
+        latest: typeof latest === 'string' ? latest : undefined,
+        versions,
+      }
       cache.set(name, facts)
       return facts
     } catch (err: any) {

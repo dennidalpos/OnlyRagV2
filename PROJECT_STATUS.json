@@ -1,5 +1,8 @@
 {
   "todos": [
+    "plan: Auditare marcatori, test disabilitati e backlog contro il codice; eliminare le voci obsolete e ordinare le residue per impatto.",
+    "plan: Riprodurre con un test il task prioritario e implementare la correzione minima nel percorso di produzione.",
+    "plan: Eseguire test mirati, npm run lint e npm run test:sidecar; rileggere il diff e rimuovere dal tracker il task completato e tutte le righe plan:.",
     "installVersionDowngrade non copre il primo install di un pacchetto non dichiarato a una major antica, ne' una versione mai pubblicata nominata dal comando (resta a ETARGET, al costo di un turno).",
     "Aderenza skill: validare che il codice generato rispetti i vincoli delle skill attive (es. divieto direttive @tailwind legacy con Tailwind v4).",
     "Deliverable directory: regola sintattica che distingua le milestone di creazione da quelle di spostamento, per evitare cartelle non dimostrabili.",

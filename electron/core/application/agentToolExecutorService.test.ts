@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { execSync } from 'node:child_process'
 import { agentToolExecutorService } from './agentToolExecutorService'
+import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import type { AppSettings } from '../../../src/types'
 
 describe('AgentToolExecutorService Unit Tests', () => {
@@ -24,9 +25,11 @@ describe('AgentToolExecutorService Unit Tests', () => {
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-executor-test-'))
+    npmRegistryClient.clearCache()
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     try {
       fs.rmSync(tempDir, { recursive: true, force: true })
     } catch {}
@@ -633,6 +636,44 @@ async def async_handler():
 
       expect(res.outputForHistory).not.toContain('[VERSION DOWNGRADE REFUSED')
     }, 20000)
+  })
+
+  describe('registry install version guard', () => {
+    const registryPackument = {
+      'dist-tags': { latest: '8.0.0' },
+      versions: { '4.5.14': {}, '5.4.21': {}, '8.0.0': {} },
+    }
+
+    beforeEach(() => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify(registryPackument), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      )
+      fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'x' }), 'utf-8')
+    })
+
+    it('refuses an old major on the first install of an undeclared package', async () => {
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install vite@^4.0.0' } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[STALE INSTALL VERSION — INSTALL NOT RUN]')
+      expect(res.outputForHistory).toContain('npm install vite@8.0.0')
+      expect(res.isTerminal).toBe(true)
+    })
+
+    it('refuses a range that matches no published version before npm can return ETARGET', async () => {
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'npm install vite@^9.3.5' } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[THAT VERSION DOES NOT EXIST — INSTALL NOT RUN]')
+      expect(res.outputForHistory).toContain('npm install vite@8.0.0')
+      expect(res.isTerminal).toBe(true)
+    })
   })
 
   it('should block run_command via Shell-Tool Confusion Guard when a registered tool name is passed as a shell command', async () => {

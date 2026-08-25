@@ -19,7 +19,13 @@ import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
 import { parseVersionNotFound, buildVersionNotFoundDirective } from '../domain/agent/npmVersionNotFound'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
-import { requestedInstallVersions, findManifestDowngrades, buildInstallDowngradeRefusal } from '../domain/agent/installVersionDowngrade'
+import {
+  requestedInstallVersions,
+  findManifestDowngrades,
+  findRegistryInstallIssue,
+  buildInstallDowngradeRefusal,
+  buildRegistryInstallRefusal,
+} from '../domain/agent/installVersionDowngrade'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
@@ -359,6 +365,29 @@ export class AgentToolExecutorService {
     if (!downgrade) return null
     const latest = (await npmRegistryClient.lookup(downgrade.name)).latest
     return { refusal: buildInstallDowngradeRefusal(downgrade, latest), name: downgrade.name }
+  }
+
+  /** Registry-backed preflight for stale first installs and ranges that publish no version. */
+  private async firstInvalidRegistryInstallTarget(
+    command: string,
+    workspacePath: string | null | undefined
+  ): Promise<{ refusal: string; name: string; kind: 'unpublished' | 'stale_major' } | null> {
+    const targets = requestedInstallVersions(command)
+    if (targets.length === 0) return null
+    const facts = await npmRegistryClient.lookupAll(targets.map((target) => target.name))
+    const declaredRanges: Record<string, string> = {}
+    if (workspacePath) {
+      const pkgJsonRes = await this.repo.readFile(path.join(workspacePath, 'package.json'))
+      if (pkgJsonRes.success && pkgJsonRes.content) {
+        try {
+          for (const dep of declaredDependencies(JSON.parse(pkgJsonRes.content))) declaredRanges[dep.name] = dep.range
+        } catch {
+          // An unreadable manifest cannot establish an existing compatibility constraint.
+        }
+      }
+    }
+    const issue = findRegistryInstallIssue(targets, declaredRanges, facts)
+    return issue ? { refusal: buildRegistryInstallRefusal(issue), name: issue.name, kind: issue.kind } : null
   }
 
   /**
@@ -1226,6 +1255,20 @@ Do not retry the same installation. Continue without this tool or ask the user t
             `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
           ].join('\n')
           return { outputForHistory: refusal, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
+        }
+
+
+        // A package name can exist while the explicit version still cannot produce a sound new
+        // dependency: either the range matches nothing (preflight ETARGET), or an undeclared
+        // package is being introduced at an obsolete major copied from model training data.
+        const invalidRegistryTarget = await this.firstInvalidRegistryInstallTarget(cmd, workspacePath)
+        if (invalidRegistryTarget) {
+          logger.log('WARN', 'AgentToolExecutor', `[INSTALL_VERSION_REFUSED] ${cmd}`)
+          return {
+            outputForHistory: invalidRegistryTarget.refusal,
+            logMessage: `Install refused: ${invalidRegistryTarget.name} has a ${invalidRegistryTarget.kind} requested version`,
+            isTerminal: true,
+          }
         }
 
         // The same reality check, against the manifest instead of the registry: an install that

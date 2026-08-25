@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isFailureOutput } from './agentOrchestratorToolResultProcessor'
+import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
+import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 
 /**
  * This predicate decides one label, and the label is read three times: the loop detector is
@@ -49,5 +51,73 @@ describe('isFailureOutput', () => {
     // handler is not a failed write, and widening this to a substring match would label every
     // such write a failure.
     expect(isFailureOutput('Successfully wrote file src/errorBoundary.tsx')).toBe(false)
+  })
+})
+
+/**
+ * The same class of bug as the pre-commit marker above, found in the runs of 2026-08-25, and
+ * the reason two consecutive live sessions ended at the 50-step cap with nothing verified.
+ *
+ * The registry guard refuses to install a package npm has never heard of. That refusal was not
+ * on the marker list, so it was recorded SUCCESS — and a SUCCESS is what
+ * packagesWithFailedInstall uses to RESET a package's failure count. The count could never
+ * reach the threshold, so planDirectiveArbiter never escalated to `dependencies_uninstallable`
+ * and kept ordering the one install that could not work. The guard refused it again. Repeat
+ * until the step cap.
+ *
+ * These tests pin the whole path, not just the label: refusal -> counted as a failure ->
+ * arbiter tells the model to rewrite the import instead of installing.
+ */
+describe('refused installs reach the plan directive arbiter', () => {
+  const REFUSAL =
+    '[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]\n' +
+    'The npm registry has no package named "@tailwindcss/react". This command was not executed, ' +
+    'because no flag makes an install of a non-existent package succeed.\n' +
+    'Directives:\n1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.'
+
+  it('reports a registry-refused install as a failure', () => {
+    expect(isFailureOutput(REFUSAL)).toBe(true)
+  })
+
+  it('counts refusals toward the uninstallable threshold instead of resetting it', () => {
+    const episodes = [
+      { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'FAILURE' as const },
+      { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'FAILURE' as const },
+    ]
+    expect(packagesWithFailedInstall(episodes)).toContain('@tailwindcss/react')
+  })
+
+  it('was defeated by the old SUCCESS label, which reset the count', () => {
+    // Pins the mechanism that caused the livelock, so a future change that reclassifies the
+    // refusal back to SUCCESS fails here rather than in a fifty-step live run.
+    const episodes = [
+      { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'FAILURE' as const },
+      { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'SUCCESS' as const },
+      { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'FAILURE' as const },
+    ]
+    expect(packagesWithFailedInstall(episodes)).not.toContain('@tailwindcss/react')
+  })
+
+  it('stops ordering the install and orders the import rewrite once the package is known bad', () => {
+    const undeclared = [{ packageName: '@tailwindcss/react', importedBy: ['src/pages/DashboardPage.tsx'] }]
+    const base = {
+      hasVerifiedBuild: false,
+      milestones: [],
+      activeMilestone: undefined,
+      deliverableStatusOf: () => ({ satisfied: false, missing: [], resolved: [] }) as any,
+      missingDependencies: [],
+      undeclaredDependencies: undeclared,
+      verificationCommand: null,
+      verificationFailing: false,
+      disconnectedEntrypoint: null,
+    }
+
+    // Before the package is known bad, ordering the install is the right call.
+    expect(resolvePlanDirective({ ...base, packagesWithFailedInstall: [] }).kind).toBe('dependencies_undeclared')
+
+    // Once it is, ordering it again "is not a directive, it is a loop with a preamble".
+    const escalated = resolvePlanDirective({ ...base, packagesWithFailedInstall: ['@tailwindcss/react'] })
+    expect(escalated.kind).toBe('dependencies_uninstallable')
+    expect(escalated.blockDirective).toContain('@tailwindcss/react')
   })
 })

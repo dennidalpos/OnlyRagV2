@@ -75,6 +75,21 @@ export function isFailureOutput(outputForHistory: string): boolean {
     output.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
     output.includes('[REPLACE FILE ERROR') ||
     output.includes('[PRE-COMMIT AST VALIDATION ERROR IN') ||
+    // A refused install is a failed install. The registry guard in agentToolExecutorService.ts
+    // returns this marker WITHOUT running npm, and because it was absent from this list the
+    // refusal was recorded as SUCCESS — which packagesWithFailedInstall (installCommandParser.ts)
+    // reads as "this package installed fine" and uses to RESET the package's failure count to
+    // zero. The count could therefore never reach FAILURES_BEFORE_UNINSTALLABLE, the arbiter
+    // never reached `dependencies_uninstallable`, and it went on ordering the same impossible
+    // install every turn while the guard went on refusing it.
+    //
+    // Measured in logs/coding_agent_audit.log, session live-full-task 2026-08-25T11:03: the
+    // model was ordered to install "@tailwindcss/react" (a package that does not exist) at
+    // steps 9, 11, 18, 19, 25, 26, 32, 33, 39, 40, 46 and 48, with the loop detector blocking
+    // the turns in between, until the 50-step cap ended the session with 0 milestones verified.
+    // The 08:37 run of the same day did the same. The escape those runs needed was already
+    // built and simply never armed.
+    output.includes('[PACKAGE DOES NOT EXIST') ||
     output.includes('Security Violation') ||
     output.toLowerCase().startsWith('error:')
   )

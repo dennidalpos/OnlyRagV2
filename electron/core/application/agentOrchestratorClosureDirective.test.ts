@@ -387,3 +387,87 @@ describe('a repeated command must not abandon a milestone that is already delive
     expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).not.toBe('failed')
   })
 })
+
+/**
+ * Measured 2026-08-25T19:59, session live-full-task. `verification_due` fired for the first time
+ * in 250 recorded turns — the day's fixes had finally put every deliverable on disk — and
+ * collided with the loop guard on its first appearance. Steps 44 to 50 were seven blocked
+ * `npm run build`s delivered under a directive reading "EVERY DELIVERABLE IS ON DISK — VERIFY THE
+ * PROJECT NOW": the guard blocked the call and then, as the single action that moves the plan,
+ * ordered that same call. No move satisfies both, so the run died at the ceiling.
+ *
+ * Same shape as the install deadlock fixed earlier the same day — two subsystems, opposite
+ * orders, neither aware of the other.
+ */
+describe('the loop guard yields when the arbitrated directive orders the blocked call', () => {
+  const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
+
+  function verificationDueContext(): { ctx: ResponseInterpreterContext; loopDetector: AgentActionLoopDetector } {
+    // A delivered milestone plus a project that offers a check is exactly verification_due.
+    fs.writeFileSync(
+      path.join(tempDir, 'package.json'),
+      JSON.stringify({ name: 'p', scripts: { build: 'tsc' } }),
+      'utf-8'
+    )
+    fs.writeFileSync(path.join(tempDir, 'App.tsx'), 'export const App = () => null\n', 'utf-8')
+
+    const loopDetector = new AgentActionLoopDetector(2)
+    const ctx = {
+      streamedOutput: '',
+      agentMode: 'agent',
+      stepCount: 44,
+      maxSteps: 50,
+      isUnlimitedSteps: false,
+      workspacePath: tempDir,
+      settings: { enableCodingAgentDebugLog: false } as unknown as AppSettings,
+      sessionId: 'session-yield-test',
+      hasRecentToolFailure: false,
+      errorCountInHistory: 0,
+      compiledHistoryBlock: '',
+      flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
+      surfacedDodReasons: new Set<string>(),
+      state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
+      episodicCompactor: {
+        recordStep: () => {},
+        getEpisodes: () => [],
+      } as unknown as ResponseInterpreterContext['episodicCompactor'],
+      goalPlanner: plannerWith([{ id: 'm-1', title: 'The app renders — `App.tsx`', status: 'in_progress' }]),
+      executionGuard: new TransactionalExecutionGuard(tempDir),
+      loopDetector,
+      emitLog: () => {},
+      emitDone: () => {},
+      persistCurrentState: async () => {},
+      finalizeSession: () => {},
+      buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
+    } as unknown as ResponseInterpreterContext
+    return { ctx, loopDetector }
+  }
+
+  it('does not block the very command the plan block is ordering', async () => {
+    const { ctx } = verificationDueContext()
+
+    // The state that makes the collision possible.
+    const directive = resolvePlanDirectiveForTurn(tempDir, ctx.goalPlanner, false, [])
+    expect(directive.kind).toBe('verification_due')
+    expect(directive.blockDirective).toContain('npm run build')
+
+    // Repeat past the loop threshold: without the yield this returns a blocking outcome.
+    let outcome = await handleLoopDetection(ctx, buildCall)
+    for (let i = 0; i < 4 && outcome === null; i++) {
+      outcome = await handleLoopDetection(ctx, buildCall)
+    }
+    expect(outcome).toBeNull()
+  })
+
+  it('still blocks a repeat the directive is not asking for', async () => {
+    const { ctx } = verificationDueContext()
+    // verification_due names the build; it says nothing about this file, so the guard keeps its power.
+    const unrelated: AgentToolCall = { tool: 'write_file', parameters: { filePath: 'src/Unrelated.tsx', content: 'x' } }
+
+    let outcome = await handleLoopDetection(ctx, unrelated)
+    for (let i = 0; i < 4 && outcome === null; i++) {
+      outcome = await handleLoopDetection(ctx, unrelated)
+    }
+    expect(outcome).not.toBeNull()
+  })
+})

@@ -502,6 +502,29 @@ estensione (`.ts` che importa `./api` vuole `api.ts`; `.tsx` che importa `./Butt
 l'importatore. Gli specifier nudi restano fuori: un pacchetto che non risolve è una dipendenza
 mancante, e quel caso appartiene al ramo install.
 
+### 5.6j-quater. Il Guard Anti-Loop Cede Quando la Direttiva Ordina la Chiamata Bloccata
+
+L'intervento anti-loop **sostituisce** il proprio avviso con la direttiva arbitrata, perché
+l'arbitro conosce l'unica mossa legale (§5.6). Il caso non previsto è che quella mossa sia
+**esattamente la chiamata appena bloccata**: il preambolo afferma allora *"repeating it cannot
+move the plan"* e subito sotto consegna, come unica azione che la muove, la ripetizione stessa.
+Nessuna mossa soddisfa entrambi.
+
+**Sintomo misurato** — corsa `live-full-task` del 2026-08-25T19:59. `verification_due` scatta per
+la **prima volta in 250 turni registrati** (i fix della giornata avevano finalmente messo tutti i
+deliverable su disco) e collide con il guard alla sua prima accensione: **step 44-50, sette
+`npm run build` bloccati** sotto una direttiva che recita `[EVERY DELIVERABLE IS ON DISK — VERIFY
+THE PROJECT NOW]`, fino al tetto.
+
+È la stessa forma del deadlock degli install risolto la mattina dello stesso giorno: due
+sottosistemi, ordini opposti, nessuno dei due al corrente dell'altro.
+
+**Correzione**: quando la direttiva arbitrata nomina la chiamata bloccata, è il **blocco a
+cedere** — l'arbitro è l'autorità sulla mossa legale. Non può avvitarsi: una verifica che gira e
+fallisce senza scritture successive rende vero `isVerificationFailing`, e l'arbitro passa allora a
+`verification_failing`, che ordina l'opposto. Al massimo una corsa in più per ogni scrittura
+interposta.
+
 ### 5.6k. Il Repertorio Reale dei Tool — l'agente non legge mai un file
 
 Misurato su **quattro corse `live-full-task` indipendenti** in `logs/coding_agent_audit.log`,

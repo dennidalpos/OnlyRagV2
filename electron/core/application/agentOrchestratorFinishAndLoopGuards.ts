@@ -207,6 +207,19 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
 }
 
 /**
+ * True when an arbitrated directive names the exact call the loop guard blocked.
+ *
+ * Loose containment, for the same reason isVerificationFailing matches loosely: the model does
+ * not always spell the command identically, and a project's check can be reached by more than
+ * one spelling.
+ */
+function commandIsOrderedBy(blockDirective: string | null, loopTarget: string | undefined): boolean {
+  if (!blockDirective || !loopTarget) return false
+  const needle = loopTarget.trim().toLowerCase()
+  return needle.length > 0 && blockDirective.toLowerCase().includes(needle)
+}
+
+/**
  * The sentence that introduces an arbitrated directive inside a loop intervention.
  *
  * Each kind gets its own, because the reason repeating is pointless differs: on a verified
@@ -257,6 +270,31 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
   // replaces both branches, and the stagnation branch is reached by repeats that failed. In
   // the live run of 2026-08-24 it landed on an `update_plan` rejected twice for having no
   // plan, under a sentence asserting it "succeeded every time".
+  // The one case the replacement above did not anticipate: the arbitrated directive ordering the
+  // very call that was just blocked. The preamble then asserts "repeating it cannot move the
+  // plan" and hands the model, as the single action that can, the repeat itself. There is no
+  // move that satisfies both, so the model reissues the call and is blocked again.
+  //
+  // Measured 2026-08-25T19:59, session live-full-task. `verification_due` fired for the first
+  // time in 250 recorded turns — every deliverable was finally on disk — and collided with the
+  // guard on its first appearance: steps 44 to 50 were seven blocked `npm run build`s under a
+  // directive reading "EVERY DELIVERABLE IS ON DISK — VERIFY THE PROJECT NOW", until the ceiling
+  // ended the run.
+  //
+  // The arbiter is the authority on the single legal move, so when it names the blocked call the
+  // block is what gives way. This cannot spin: a check that runs and fails with nothing written
+  // after it makes `isVerificationFailing` true, and the arbiter then returns `verification_failing`
+  // instead, which orders the opposite. At most one extra run per intervening write.
+  if (planDirective.kind === 'verification_due' && commandIsOrderedBy(planDirective.blockDirective, loopTarget)) {
+    ctx.emitLog(
+      'info',
+      `▶️ Loop guard yielded: "${loopTarget}" is the action the plan directive orders (verification_due).`,
+      'Bloccarlo avrebbe lasciato il modello senza alcuna mossa eseguibile.',
+      { category: 'system_alert' }
+    )
+    return null
+  }
+
   const arbitratedIntervention = planDirective.blockDirective
     ? `${loopPreambleFor(planDirective.kind, loopTarget, loopCheck.consecutiveDuplicateCount)}
 

@@ -1398,12 +1398,37 @@ Do not retry the same installation. Continue without this tool or ask the user t
             const moduleResolutionDirective = moduleCause === 'compiler_resolution'
               ? buildModuleResolutionDirective(rawOutput, unresolved)
               : ''
+            // `Cannot find module './api'` is not a missing dependency. `packageOfSpecifier` in
+            // moduleResolutionDiagnostic.ts already knows this — "Relative imports belong to no
+            // package" — but this gate matched the raw text instead of asking it, so a project
+            // file that had not been written yet was diagnosed as an uninstalled package.
+            //
+            // Measured 2026-08-25T19:16, session live-full-task, step 34. `npm run build` reported
+            // four errors: a TS2614 export/import mismatch carrying the compiler's own verbatim
+            // fix, a TS2322, and two `Cannot find module` on './api' and './auth' — files the plan
+            // had not created yet. This gate fired on the relative ones, which set
+            // `specificDirectiveFired` and therefore suppressed buildDiagnosticFixDirective, so
+            // the one directive that could name a file and a fix never reached the model. What
+            // reached it was an order to install a package the text never names. The model
+            // guessed `@mui/material`, the loop guard blocked it, and steps 35-50 were sixteen
+            // consecutive blocked repeats of that guess until the step ceiling ended the run.
+            //
+            // The two non-tsc phrasings stay on the raw match: the `Cannot find module 'x'` regex
+            // does not parse them, so requiring a resolved package name would silence genuine
+            // bundler failures.
+            const cannotFindModulePhrasing = lowerOut.includes('cannot find module')
+            const bundlerMissingPhrasing =
+              lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import')
             const isMissingDependency =
               !resolutionConflictDirective &&
               moduleCause !== 'compiler_resolution' &&
-              (lowerOut.includes('cannot find module') || lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import'))
+              ((cannotFindModulePhrasing && unresolved.length > 0) || bundlerMissingPhrasing)
+            // Naming them is the whole difference between an instruction and a riddle: the old
+            // text shipped the literal placeholder `<package-name>` and left the model to invent
+            // one. `unresolved` already holds the answer (§6.2.1).
+            const missingDepList = unresolved.slice(0, 5).map((p) => `"${p}"`).join(', ')
             const missingDepDirective = isMissingDependency
-              ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation or runtime failed because an imported module/package is missing. Install the missing dependency via run_command (e.g. 'npm install <package-name>') or add it to 'package.json' before re-running.`
+              ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation failed because ${missingDepList ? `${missingDepList} ${unresolved.length === 1 ? 'is' : 'are'} imported but not installed` : 'an imported module/package is missing'}.\nDirectives:\n1. Your next tool call MUST be "run_command" with: npm install ${missingDepList ? unresolved.slice(0, 5).join(' ') : '<the package named in the error above>'}\n2. Do NOT re-run the project check until that install has completed.`
               : ''
             const isNpmNamingRestriction =
               lowerOut.includes('npm naming restrictions') ||

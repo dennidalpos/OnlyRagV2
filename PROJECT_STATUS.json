@@ -1,5 +1,6 @@
 {
   "todos": [
+    "bug: verificare dal vivo che la direttiva verification_failing non resti un rimando a vuoto. Dice 'do what that directive says' puntando a una direttiva nel tool result; se quella e' stata soppressa il modello resta senza azione eseguibile. Il caso misurato (soppressione da import relativi) e' corretto, ma l'indirezione fra blocco piano e history resta fragile: sono due canali con vite diverse.",
     "Verifica live direttiva TS2613/TS2614: la citazione verbatim del suggerimento di import e' coperta solo da unit test; nessuna corsa live ha ancora esercitato il ramo su qwen2.5-coder:7b.",
     "bug: l'agente non chiama mai read_file ne' replace_file_content (0 su 4 corse live, contro 74 write_file; 41% delle scritture riscrive un file gia' scritto). Mitigato in parte da readTurnFileContext (Blueprint 5.6k), che consegna il contenuto dei soli deliverable della milestone attiva e dei bersagli nominati da una direttiva. Restano cieche le riscritture fuori da quel perimetro: misurare con una corsa live quanta parte del 41% viene intercettata.",
     "bug: loop install/build su @vitejs/plugin-react e vite@^8.0.0 (corsa 2026-08-25T14:46): installati agli step 8, 9, 10, 13, 14, 22, 26, 29, 30 con npm run build fallita agli step 23, 27, 31, 35. Il livelock del pacchetto inesistente e' risolto, questo e' un pattern diverso su pacchetti reali.",

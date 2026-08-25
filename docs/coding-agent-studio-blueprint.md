@@ -447,6 +447,37 @@ sé la risposta a "cosa serve davanti al modello adesso". Un turno la cui azione
   istruzioni. Quando il sistema conosce già l'azione del turno, non deve far riscoprire al modello
   quale degli otto blocchi fosse pertinente.
 
+### 5.6j-bis. Un Import Relativo Non È Una Dipendenza Mancante
+
+`Cannot find module './api'` non è un pacchetto da installare: è un file del progetto non ancora
+scritto. [`moduleResolutionDiagnostic.ts`](../electron/core/domain/agent/moduleResolutionDiagnostic.ts)
+lo sa già — `packageOfSpecifier` restituisce `null` per gli specifier relativi — ma il gate in
+[`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts)
+verificava il testo grezzo (`lowerOut.includes('cannot find module')`) invece di interrogarlo.
+
+**Sintomo misurato** — sessione `live-full-task` del 2026-08-25T19:16, step 34. `npm run build`
+riporta quattro errori: un `TS2614` che porta con sé il fix verbatim del compilatore, un `TS2322`,
+e due `TS2307` su `./api` e `./auth`. Il gate scatta sui due relativi; scattando imposta
+`specificDirectiveFired`, che **sopprime** `buildDiagnosticFixDirective`. L'unica direttiva capace
+di nominare un file e una correzione non raggiunge mai il modello.
+
+Quello che lo raggiunge è un ordine di installare un pacchetto che il testo non nomina — la
+direttiva spediva il placeholder letterale `<package-name>`. Il modello indovina
+`@mui/material`, il guard anti-loop lo blocca, e gli **step 35-50 sono sedici ripetizioni
+bloccate** dello stesso tentativo fino al tetto.
+
+**Doppia correzione**:
+1. Il gate richiede ora almeno un pacchetto reale risolto (`unresolved.length > 0`) quando l'unico
+   segnale è `cannot find module`. Le due formulazioni non-tsc (`module_not_found`,
+   `failed to resolve import`) restano sul match grezzo, perché la regex non le analizza e
+   pretendere un nome le silenzierebbe.
+2. La direttiva **nomina i pacchetti** invece di spedire un segnaposto (§6.2.1), e prescrive un
+   solo imperativo con il comando esatto.
+
+> [!NOTE]
+> Questa è la ragione per cui la citazione verbatim di §5.6i non aveva mostrato alcun effetto:
+> veniva soppressa proprio nel caso normale, cioè una build che fallisce con errori misti.
+
 ### 5.6k. Il Repertorio Reale dei Tool — l'agente non legge mai un file
 
 Misurato su **quattro corse `live-full-task` indipendenti** in `logs/coding_agent_audit.log`,

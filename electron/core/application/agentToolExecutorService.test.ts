@@ -405,6 +405,90 @@ async def async_handler():
     expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
   })
 
+  /**
+   * Measured 2026-08-25T19:16, session live-full-task, step 34. `npm run build` reported a TS2614
+   * carrying the compiler's own verbatim import fix, a TS2322, and two `Cannot find module` on
+   * './api' and './auth' — project files the plan had not written yet. The missing-dependency
+   * gate matched the raw text, fired on the relative specifiers, and by firing set
+   * `specificDirectiveFired`, which suppressed the compiler diagnostic entirely. The model was
+   * left with an order to install a package the text never named; it guessed `@mui/material`,
+   * the loop guard blocked it, and steps 35-50 were sixteen blocked repeats to the step ceiling.
+   */
+  describe('missing dependency diagnostic', () => {
+    function failingBuild(lines: string[]): string {
+      return [
+        'const lines = ' + JSON.stringify(lines) + ';',
+        'for (const line of lines) console.error(line);',
+        'process.exit(2);',
+      ].join('\n')
+    }
+
+    it('does not call an unwritten project file a missing dependency', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'build.js'),
+        failingBuild([
+          "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations.",
+          "src/services/index.ts(3,15): error TS2307: Cannot find module './auth' or its corresponding type declarations.",
+        ]),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'node build.js', timeoutSeconds: 30 } },
+        tempDir,
+        settings
+      )
+
+      // `packageOfSpecifier` already knows relative imports belong to no package; this gate now asks it.
+      expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
+      // And because nothing specific fired, the compiler diagnostic is free to name the file.
+      expect(res.outputForHistory).toContain('THE COMPILER NAMED THE FILE AND THE LINE')
+    })
+
+    it('lets the compiler fix survive alongside relative-path resolution errors', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'build.js'),
+        failingBuild([
+          `src/components/TaskCard.tsx(3,10): error TS2614: Module '"../components/Button"' has no exported member 'Button'. Did you mean to use 'import Button from "../components/Button"' instead?`,
+          "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations.",
+        ]),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'node build.js', timeoutSeconds: 30 } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
+      // The exact regression: this is the directive the relative-path match used to suppress.
+      expect(res.outputForHistory).toContain('COMPILER WROTE THE CORRECT IMPORT FOR YOU')
+      expect(res.outputForHistory).toContain(`import Button from "../components/Button"`)
+    })
+
+    it('names the package instead of shipping the literal placeholder', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'build.js'),
+        failingBuild([
+          "src/main.tsx(2,25): error TS2307: Cannot find module 'react-router-dom' or its corresponding type declarations.",
+        ]),
+        'utf-8'
+      )
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'node build.js', timeoutSeconds: 30 } },
+        tempDir,
+        settings
+      )
+
+      expect(res.outputForHistory).toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
+      expect(res.outputForHistory).toContain('npm install react-router-dom')
+      // The old text handed the model `<package-name>` and left it to invent one.
+      expect(res.outputForHistory).not.toContain('<package-name>')
+    })
+  })
+
   describe('redundant install guard', () => {
     it('skips an install whose packages are both declared and present in node_modules', async () => {
       fs.writeFileSync(

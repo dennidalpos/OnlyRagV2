@@ -6,6 +6,7 @@ import {
   extractSuggestedCommand,
   parseCompilerDiagnostics,
   extractMissingRelativeModule,
+  extractMissingExportMember,
   resolveRelativeImportPath,
 } from './compilerDiagnosticDirective'
 
@@ -351,6 +352,52 @@ describe('missing relative module', () => {
     expect(directive).toContain('"write_file" on "src/services/api.ts"')
     expect(directive).toContain('Do NOT rewrite "src/services/index.ts"')
     // One imperative for now, as everywhere else in this module.
+    expect((directive || '').split('\n').filter((l) => /^\d+\. /.test(l))).toHaveLength(2)
+  })
+})
+
+/**
+ * The measured case, 2026-08-25T19:59 steps 42-43: `@headlessui/react` exports neither `Card` nor
+ * `List`. The generic branch ordered the importing file rewritten and said nothing about what the
+ * package does export, so the model rewrote it with the identical import — it had no second
+ * candidate and no way to obtain one.
+ */
+describe('missing export member', () => {
+  const OUTPUT = [
+    `src/components/TaskCard.tsx(3,10): error TS2305: Module '"@headlessui/react"' has no exported member 'Card'.`,
+    `src/components/TaskCard.tsx(3,16): error TS2305: Module '"@headlessui/react"' has no exported member 'List'.`,
+  ].join('\n')
+
+  it('names the package and the member that is not there', () => {
+    const found = extractMissingExportMember(OUTPUT)
+    expect(found?.packageName).toBe('@headlessui/react')
+    expect(found?.memberName).toBe('Card')
+    expect(found?.diagnostic.file).toBe('src/components/TaskCard.tsx')
+  })
+
+  it('ignores a relative specifier, which is a different datum and a different fix', () => {
+    const local = `src/App.tsx(2,10): error TS2305: Module '"./Button"' has no exported member 'Button'.`
+    expect(extractMissingExportMember(local)).toBeNull()
+  })
+
+  it('offers the names the package really exports', () => {
+    const directive = buildDiagnosticFixDirective(OUTPUT, () => ['Dialog', 'Menu', 'Listbox', 'Switch'])
+    expect(directive).toContain('THAT PACKAGE DOES NOT EXPORT THAT NAME')
+    expect(directive).toContain('actually exports: Dialog, Menu, Listbox, Switch')
+    expect(directive).toContain('"write_file" on "src/components/TaskCard.tsx"')
+    expect(directive).toContain(`Do NOT re-import "Card"`)
+  })
+
+  it('says the names are unknown rather than claiming the package exports nothing', () => {
+    const directive = buildDiagnosticFixDirective(OUTPUT, () => [])
+    expect(directive).toContain('could not be read')
+    expect(directive).not.toContain('actually exports:')
+    // With no list to choose from, the only honest instruction is to write the thing.
+    expect(directive).toContain('building "Card" yourself')
+  })
+
+  it('carries one imperative, like every other branch here', () => {
+    const directive = buildDiagnosticFixDirective(OUTPUT, () => ['Dialog'])
     expect((directive || '').split('\n').filter((l) => /^\d+\. /.test(l))).toHaveLength(2)
   })
 })

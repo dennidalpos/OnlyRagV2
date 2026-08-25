@@ -525,6 +525,34 @@ fallisce senza scritture successive rende vero `isVerificationFailing`, e l'arbi
 `verification_failing`, che ordina l'opposto. Al massimo una corsa in più per ogni scrittura
 interposta.
 
+### 5.6j-quinquies. Cosa il Pacchetto Esporta Davvero
+
+`TS2305: Module '"@headlessui/react"' has no exported member 'Card'` dice cosa è sbagliato e
+niente su cosa sarebbe giusto. Il modello non ha modo di scoprirlo: non chiama mai `read_file`
+(§5.6k), e la risposta sta in un `.d.ts` dentro `node_modules`.
+
+**Sintomo misurato** — corsa del 2026-08-25T19:59, step 42-43. La build riporta che
+`@headlessui/react` non esporta né `Card` né `List`; la direttiva ordina di riscrivere
+`TaskCard.tsx`; il modello lo riscrive **con lo stesso identico import**. Non stava disobbedendo:
+non aveva un secondo candidato.
+
+[`packageExportScanner.ts`](../electron/core/infrastructure/filesystem/packageExportScanner.ts)
+legge le dichiarazioni di tipo del pacchetto installato — seguendo `types`/`typings` del manifest,
+con fallback su `index.d.ts` — ed estrae i nomi esportati. La direttiva li elenca, e propone come
+alternativa di scrivere il componente invece di importarlo.
+
+* **Puro per iniezione**: `buildDiagnosticFixDirective` riceve un risolutore
+  `(packageName) => string[]`, come `classifyModuleDiagnostic` riceve il suo predicato. Il dominio
+  non tocca il disco.
+* **Lista vuota significa "non leggibile", mai "non esporta nulla"**: in quel caso la direttiva
+  dichiara che i nomi sono ignoti e ordina di scrivere il componente. Affermare che il pacchetto
+  non esporta niente sarebbe una pretesa che lo scanner non ha guadagnato (§6.2.3).
+* **Regex e non un programma TypeScript**: alimenta una frase di una direttiva, dove una lista
+  quasi completa vale molto più dei secondi che un type-checker costerebbe a ogni build fallita, e
+  un buco degrada nel dire meno, mai nel dire il falso.
+* Gli specifier relativi restano fuori: un file locale privo di un export si corregge guardando
+  quel file, che è un dato diverso e una direttiva diversa.
+
 ### 5.6k. Il Repertorio Reale dei Tool — l'agente non legge mai un file
 
 Misurato su **quattro corse `live-full-task` indipendenti** in `logs/coding_agent_audit.log`,

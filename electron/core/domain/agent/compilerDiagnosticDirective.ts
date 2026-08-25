@@ -283,7 +283,50 @@ export function extractMissingRelativeModule(output: string): MissingRelativeMod
   return null
 }
 
-export function buildDiagnosticFixDirective(output: string): string | null {
+/**
+ * A name imported from a package the package does not export.
+ *
+ * `TS2305` states what is wrong and nothing about what would be right. Measured 2026-08-25T19:59,
+ * steps 42-43: `@headlessui/react` was reported as exporting neither `Card` nor `List`, the
+ * directive ordered TaskCard.tsx rewritten, and the model rewrote it with the identical import.
+ * It was not disobeying — it had no second candidate, and no way to obtain one, since it never
+ * calls `read_file` and the answer lives in a .d.ts inside node_modules.
+ *
+ * Relative specifiers are excluded: a local file that lacks an export is fixed by looking at
+ * that file, which is a different datum and a different directive.
+ */
+export interface MissingExportMember {
+  diagnostic: CompilerDiagnostic
+  /** The package the import names, e.g. `@headlessui/react`. */
+  packageName: string
+  /** The member that is not there, e.g. `Card`. */
+  memberName: string
+}
+
+const MISSING_EXPORT_MEMBER = /module\s+'"?([^'"]+)"?'\s+has no exported member\s+'([^']+)'/i
+
+/** The first import of a name a PACKAGE does not export. */
+export function extractMissingExportMember(output: string): MissingExportMember | null {
+  for (const diagnostic of parseCompilerDiagnostics(output).filter((d) => !IN_DEPENDENCY.test(d.file))) {
+    if (diagnostic.code && diagnostic.code !== 'TS2305') continue
+    const match = MISSING_EXPORT_MEMBER.exec(diagnostic.message)
+    if (!match) continue
+    const packageName = match[1].trim()
+    if (!packageName || packageName.startsWith('.') || packageName.startsWith('/')) continue
+    return { diagnostic, packageName, memberName: match[2] }
+  }
+  return null
+}
+
+export function buildDiagnosticFixDirective(
+  output: string,
+  /**
+   * What a package exports, injected because this module is pure domain and the answer lives in
+   * a .d.ts under node_modules. Returning an empty array means "could not read it", and the
+   * directive then says less rather than claiming the package exports nothing.
+   */
+  resolvePackageExports: (packageName: string) => string[] = () => []
+): string | null {
   const all = parseCompilerDiagnostics(output)
   if (all.length === 0) return null
 
@@ -377,6 +420,36 @@ export function buildDiagnosticFixDirective(output: string): string | null {
       `Directives:`,
       `1. Your next tool call MUST be "write_file" on "${missingRelative.expectedPath}", creating that file with the exports "${target.file}" imports from "${missingRelative.specifier}".`,
       `2. Do NOT rewrite "${target.file}", and do NOT re-run the command until that file exists.`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  // Ordered with the other branches that carry the fix rather than only the fault. TS2305 says
+  // what is wrong and nothing about what would be right, and the model has no way to find out:
+  // it never calls read_file, and the answer is in a .d.ts inside node_modules. Measured
+  // 2026-08-25T19:59 steps 42-43 — told that @headlessui/react exports neither `Card` nor
+  // `List`, it rewrote the file with the identical import, because it had no second candidate.
+  const missingExport = extractMissingExportMember(output)
+  if (missingExport) {
+    const target = missingExport.diagnostic
+    const available = resolvePackageExports(missingExport.packageName)
+    const shownNames = available.slice(0, 24)
+    const nameList = shownNames.join(', ')
+    const overflowNames = available.length - shownNames.length
+
+    return [
+      `[THAT PACKAGE DOES NOT EXPORT THAT NAME]`,
+      `${target.file}, line ${target.line}${target.code ? ` (${target.code})` : ''}`,
+      `  ${target.message}`,
+      available.length > 0
+        ? `"${missingExport.packageName}" actually exports: ${nameList}${overflowNames > 0 ? `, and ${overflowNames} more` : ''}.`
+        : `The installed copy of "${missingExport.packageName}" could not be read, so the names it does export are unknown here.`,
+      `Directives:`,
+      available.length > 0
+        ? `1. Your next tool call MUST be "write_file" on "${target.file}", importing only names from the list above, or building "${missingExport.memberName}" yourself with plain JSX instead of importing it.`
+        : `1. Your next tool call MUST be "write_file" on "${target.file}", building "${missingExport.memberName}" yourself with plain JSX instead of importing it from "${missingExport.packageName}".`,
+      `2. Do NOT re-import "${missingExport.memberName}" from "${missingExport.packageName}", and do NOT install another package to obtain it.`,
     ]
       .filter(Boolean)
       .join('\n')

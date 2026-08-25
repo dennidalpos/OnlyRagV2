@@ -21,6 +21,7 @@ import { parseVersionNotFound, buildVersionNotFoundDirective } from '../domain/a
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { requestedInstallVersions, findManifestDowngrades, buildInstallDowngradeRefusal } from '../domain/agent/installVersionDowngrade'
 import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
+import { readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
 import { classifyWriteFileTarget } from '../domain/agent/toolSchemaValidator'
@@ -1455,7 +1456,11 @@ Do not retry the same installation. Continue without this tool or ask the user t
               permsDirective || resolutionConflictDirective || versionNotFoundDirective || viteMissingDirective ||
               createViteDirective || missingDepDirective || moduleResolutionDirective || npmNamingDirective || interactivePromptDirective
             )
-            const diagnosticDirective = specificDirectiveFired ? null : buildDiagnosticFixDirective(rawOutput)
+            const diagnosticDirective = specificDirectiveFired
+              ? null
+              : buildDiagnosticFixDirective(rawOutput, (pkg) =>
+                  workspacePath ? readPackageExports(workspacePath, pkg) : []
+                )
             // The errors the winning directive does not fix, named so they stop being invisible,
             // and explicitly deferred so this stays one instruction for now. See
             // buildDeferredDiagnosticNote for the two runs that lost them.

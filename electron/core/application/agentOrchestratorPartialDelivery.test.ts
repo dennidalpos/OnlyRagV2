@@ -70,7 +70,10 @@ describe('partial delivery — the model is told which file it still owes', () =
     const directive = recordedDirectives.find((d) => d.includes('STILL MISSING'))
     expect(directive).toBeDefined()
     expect(directive).toContain('"tailwind.config.js"')
-    expect(directive).toContain('Do NOT re-write "postcss.config.js"')
+    // Steers away from the delivered file without certifying it or threatening a block: that
+    // wording outlived its turn in the history block and contradicted a later live directive.
+    // See milestoneVerificationPromotion.ts.
+    expect(directive).toContain('rather than the file you have already delivered')
   })
 
   it('says nothing once every file the milestone names is on disk', async () => {

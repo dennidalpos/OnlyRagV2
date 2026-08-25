@@ -1,5 +1,7 @@
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import os from 'node:os'
+import fs from 'node:fs'
+import path from 'node:path'
 import { findMatchingInstalledModel } from '../domain/agent/modelTagMatcher'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
@@ -80,6 +82,37 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   }
 }
 
+/** Per-file cap for injected rewrite targets. Generous: the model must emit the whole file back. */
+const REWRITE_TARGET_CHAR_CAP = 12000
+/** The directive names at most a handful of files; more than this is a plan problem, not a prompt one. */
+const MAX_REWRITE_TARGETS = 3
+
+/**
+ * Reads the files the active directive orders rewritten, so the order is executable.
+ *
+ * Silent on every failure: a target that cannot be read is a target the model will have to
+ * `read_file` itself, which is worse but not broken. Failing the turn over it would be.
+ */
+function readRewriteTargets(ctx: TurnDispatchContext, targets: readonly string[] | undefined): string {
+  if (!targets?.length || !ctx.workspacePath) return ''
+
+  const blocks: string[] = []
+  for (const relativePath of targets.slice(0, MAX_REWRITE_TARGETS)) {
+    try {
+      const absolute = path.resolve(ctx.workspacePath, relativePath)
+      // Never read outside the workspace on a path that came from a scanner.
+      if (!absolute.startsWith(path.resolve(ctx.workspacePath))) continue
+      const content = fs.readFileSync(absolute, 'utf-8')
+      blocks.push(`--- ${relativePath} (the file the directive above orders you to rewrite) ---\n${content.slice(0, REWRITE_TARGET_CHAR_CAP)}`)
+    } catch {
+      // Missing or unreadable: the directive still names it, and read_file still exists.
+    }
+  }
+
+  if (blocks.length === 0) return ''
+  return `CURRENT CONTENT OF THE FILE(S) THE ACTIVE DIRECTIVE TARGETS:\n${blocks.join('\n\n')}\n`
+}
+
 export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection, compiledHistoryBlock: string) {
   // One decision, arbitrated in planDirectiveArbiter.ts, for the channel that reaches the
   // model on every single turn. The states it selects between are the ones in which the plan
@@ -101,6 +134,20 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   if (omitted.length > 0) {
     ctx.emitLog('info', `🎯 Context policy [${directive.kind}]: ${policy.rationale} — omitting ${omitted.join(', ')}.`)
   }
+
+  // A directive that orders "rewrite this file so it stops importing X" is only executable by a
+  // model that can see the file. In session live-full-task of 2026-08-25T12:11 the model called
+  // `read_file` zero times in fifty steps, and no prompt in that session carried a pinned-files
+  // or active-file block: the live probe is headless, so it pins nothing and has no editor. The
+  // model rewrote the file from nothing and produced a 208-byte stub — a blind rewrite deletes
+  // the file's content instead of removing one import from it, which puts the problem straight
+  // back for the next turn.
+  //
+  // The arbiter names the files (rewriteTargets) but is pure domain and cannot read them. This
+  // is the same principle as every other injection in this codebase: the system holds an
+  // objective datum the model cannot deduce, so it hands the datum over rather than issuing an
+  // instruction that assumes the model already has it (blueprint §6.2.1).
+  const rewriteTargetBlock = policy.includePinnedFiles ? readRewriteTargets(ctx, directive.rewriteTargets) : ''
 
   const skillsBlock = !policy.includeSkills
     ? ''
@@ -149,7 +196,9 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     workspacePath: ctx.workspacePath,
     isStandaloneMode: ctx.isStandaloneMode,
     activeFile: policy.includeActiveFile ? ctx.payload.activeFile : null,
-    pinnedFilesContextStr: policy.includePinnedFiles ? ctx.pinnedFilesContextStr : '',
+    pinnedFilesContextStr: policy.includePinnedFiles
+      ? [ctx.pinnedFilesContextStr, rewriteTargetBlock].filter(Boolean).join('\n')
+      : '',
     skillsBlock,
     planBlock,
     toolOutputHistory: compiledHistoryBlock,

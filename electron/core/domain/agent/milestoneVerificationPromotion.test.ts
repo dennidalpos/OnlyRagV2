@@ -76,15 +76,36 @@ describe('partialDeliveryDirective', () => {
   })
 
   // The observed loop WAS re-writing the delivered file. Saying only "write the missing one"
-  // leaves that behaviour untouched; naming it as blocked closes it.
-  it('tells the model not to rewrite the file it already delivered', () => {
+  // leaves that behaviour untouched; the delivered file has to be named as the wrong target.
+  it('points the next write away from the file it already delivered', () => {
     const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
-    expect(directive).toContain('Do NOT re-write "postcss.config.js"')
+    expect(directive).toContain('rather than the file you have already delivered')
+    expect(directive).toContain('Write "tailwind.config.js" next')
   })
 
   it('credits the write that landed rather than reading as a failure', () => {
     const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
-    expect(directive).toContain('was written and is accepted')
+    expect(directive).toContain('"postcss.config.js" is on disk with real content')
+  })
+
+  /**
+   * This text is a tool result, so it is replayed in the history block for as long as it
+   * survives trimming, while the plan block is rebuilt from live state every turn. In session
+   * live-full-task of 2026-08-25T12:11 the old wording forbade rewriting
+   * "src/pages/DashboardPage.tsx" and threatened a block, while the active plan block ordered
+   * exactly that rewrite because the file imported a package that does not exist. The model
+   * did not touch the file for the whole window the forbidding text survived, and rewrote it
+   * fifteen steps after it aged out.
+   *
+   * So: state what was measured, and nothing else. The probe establishes that a file exists
+   * with non-placeholder content — not that its content is correct — and whether a rewrite is
+   * blocked belongs to the loop detector, not to this milestone.
+   */
+  it('claims neither that the delivered file is correct nor that a rewrite will be blocked', () => {
+    const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
+    expect(directive).not.toContain('already correct')
+    expect(directive).not.toContain('blocked as a loop')
+    expect(directive).not.toContain('Do NOT re-write')
   })
 
   it('lists every missing file and agrees with itself on number', () => {

@@ -80,6 +80,27 @@ export function awaitingVerificationNote(evidencePath: string): string {
  * one is the next action. It names the files rather than saying "deliverables are missing":
  * a model told something is missing will guess, and the guess it made here was to rewrite the
  * file it already had.
+ *
+ * ## What this directive may NOT claim
+ *
+ * It said "it is already correct and re-writing it will be blocked as a loop". Neither half was
+ * supported. The probe behind it (workspaceDeliverableProbe.ts) establishes that a file exists
+ * and is not placeholder content — never that its content is CORRECT — and whether a rewrite is
+ * blocked depends on the loop detector's window, not on this milestone.
+ *
+ * Both halves outlive their turn. This text is a tool result, so it is replayed inside the
+ * history block for as long as it survives trimming, while the plan block above it is rebuilt
+ * from live state every turn. In session live-full-task of 2026-08-25T12:11 the two ended up in
+ * the same prompt saying opposite things: this directive (emitted at step 8) forbade rewriting
+ * "src/pages/DashboardPage.tsx" and threatened a block, while the active plan block ordered
+ * exactly that rewrite because the file imports a package that does not exist. The forbidding
+ * text sat in the prompt for steps 9-20 and 24-28; the model did not touch that file once in
+ * that window, and first rewrote it at step 43 — fifteen steps after the text aged out.
+ *
+ * So the rule this docstring exists to record: a directive states what was MEASURED and what to
+ * do next. It does not certify content it never read, and it does not threaten a consequence
+ * another subsystem owns. A stale certificate outranks a live instruction, because the model
+ * cannot tell which of the two is older. See blueprint §6.2.3.
  */
 export function partialDeliveryDirective(
   milestoneId: string,
@@ -91,10 +112,10 @@ export function partialDeliveryDirective(
 
   return [
     `[MILESTONE ${milestoneId} IS NOT DONE YET: ${missingPaths.length} ${plural.toUpperCase()} STILL MISSING]`,
-    `"${writtenPath}" was written and is accepted. Milestone ${milestoneId} also requires ${list}, which ${missingPaths.length === 1 ? 'is' : 'are'} NOT on disk (or holds placeholder content).`,
+    `"${writtenPath}" is on disk with real content, so it is not what this milestone is still waiting on. Milestone ${milestoneId} also requires ${list}, which ${missingPaths.length === 1 ? 'is' : 'are'} NOT on disk (or holds placeholder content).`,
     `This milestone CANNOT be verified until every file it names exists with real content.`,
     `Directives:`,
-    `1. Write ${list} next. Do NOT re-write "${writtenPath}" — it is already correct and re-writing it will be blocked as a loop.`,
+    `1. Write ${list} next, rather than the file you have already delivered.`,
     `2. Then run this milestone's verification command, or mark it with update_plan.`,
   ].join('\n')
 }

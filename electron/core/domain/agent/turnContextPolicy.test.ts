@@ -105,3 +105,28 @@ describe('omittedBlockNames', () => {
     ])
   })
 })
+
+/**
+ * The `codeFixOnly` states admit pinned files and the active file on the assumption that those
+ * carry the code the directive is about. Session live-full-task of 2026-08-25T12:11 showed the
+ * assumption does not hold where it matters most: a headless run pins nothing and has no editor,
+ * so both blocks were absent from every prompt, the model called `read_file` zero times in fifty
+ * steps, and it answered "rewrite src/pages/DashboardPage.tsx" with a 208-byte stub.
+ *
+ * The content is supplied by the assembler through the pinned channel (see readRewriteTargets in
+ * agentOrchestratorPromptAssembly.ts), which is only reachable while these states keep
+ * `includePinnedFiles` true. That is what this pins.
+ */
+describe('states that order a file rewrite keep the channel that carries the file', () => {
+  it.each(['dependencies_uninstallable', 'verification_failing'] as const)(
+    '%s admits pinned files, the channel the directive target is injected on',
+    (kind) => {
+      expect(resolveTurnContextPolicy(kind).includePinnedFiles).toBe(true)
+    }
+  )
+
+  it('command-only states do not, because no file content could change the command', () => {
+    expect(resolveTurnContextPolicy('verification_due').includePinnedFiles).toBe(false)
+    expect(resolveTurnContextPolicy('dependencies_missing').includePinnedFiles).toBe(false)
+  })
+})

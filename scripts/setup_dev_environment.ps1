@@ -41,6 +41,13 @@ try {
 
     npm ci
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage "Installazione delle dipendenze npm fallita con exit code $LASTEXITCODE." }
+    $electronInstallScript = Join-Path $rootDir 'node_modules/electron/install.js'
+    if (-not (Test-Path -LiteralPath $electronInstallScript)) { Stop-WithMessage "Script di installazione Electron non trovato dopo npm ci." }
+    & node $electronInstallScript
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage "Download del runtime Electron fallito con exit code $LASTEXITCODE." }
+    if ($env:OS -eq 'Windows_NT' -and -not (Test-Path -LiteralPath (Join-Path $rootDir 'node_modules/electron/dist/electron.exe'))) {
+        Stop-WithMessage 'Runtime Electron non presente dopo il download.'
+    }
     $venvDir = Join-Path $rootDir '.venv'
     $venvPython = if ($env:OS -eq 'Windows_NT') { Join-Path (Join-Path $venvDir 'Scripts') 'python.exe' } else { Join-Path (Join-Path $venvDir 'bin') 'python' }
     $venvIsValid = $false

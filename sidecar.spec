@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_dynamic_libs
 
 datas = [
     # translator.py locates these via a __file__-relative path (sidecar/assets/fonts); PyInstaller
@@ -11,14 +11,19 @@ datas = [
 binaries = []
 hiddenimports = []
 
-for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rapidocr_onnxruntime', 'onnxruntime', 'wordfreq', 'langdetect', 'chonkie', 'ftfy', 'puremagic', 'tabulate', 'chevron']:
+for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rapidocr_onnxruntime', 'wordfreq', 'langdetect', 'ftfy', 'puremagic', 'tabulate', 'chevron']:
     try:
         tmp_ret = collect_all(pkg)
         datas += tmp_ret[0]
         binaries += tmp_ret[1]
         hiddenimports += tmp_ret[2]
-    except Exception:
-        pass
+    except Exception as exc:
+        raise RuntimeError(f"Failed to collect PyInstaller assets for {pkg}") from exc
+
+# onnxruntime's optional quantization helpers import the separate `onnx` package. The sidecar
+# only runs inference, so collect the runtime data and DLLs without traversing those helpers.
+datas += collect_data_files('onnxruntime')
+binaries += collect_dynamic_libs('onnxruntime')
 
 sidecar_script = os.path.abspath(os.path.join(SPECPATH, 'sidecar', 'main.py'))
 

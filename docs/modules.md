@@ -203,7 +203,7 @@ Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
 * **`vocab_service.py`**: Servizio asincrono di sincronizzazione e aggiornamento dei dizionari e vocabolari multi-lingua (`VocabSyncService`), eseguito in background allo startup del sidecar. Scarica e memorizza atomicamente in `%APPDATA%/onlyrag-v2/vocab/` i pacchetti di frequenza per le lingue supportate con timeout di fail-fast e fallback 100% offline-first.
 
 ### 3.2. Dominio & Infrastruttura (`sidecar/domain/` & `sidecar/infrastructure/`)
-* **`domain/ingestion.py`**: Logica di chunking semantico gerarchico strutturato basato su `chonkie` (`RecursiveChunker`) con anteposizione degli header Anthropic (`[Documento: <file> | Sezione: <header>]`). Include:
+* **`domain/ingestion.py`**: Logica di chunking semantico gerarchico locale, con anteposizione degli header Anthropic (`[Documento: <file> | Sezione: <header>]`). Include:
   - Generazione tabelle Markdown conformi e allineate tramite `tabulate` (`df.to_markdown(tablefmt="pipe", index=False)`).
   - Gestione avanzata del troncamento tabulare CSV/TSV/XLSX: applicazione di limiti configurabili ed emissione di note esplicite in Markdown (`> [!NOTE]\n> Tabella troncata a X righe (su Y totali)...`).
   - Estrazione immagini raster da pacchetti DOCX (`word/media/*`) con passaggio al motore OCR selezionato ed inclusione nel flusso Markdown.

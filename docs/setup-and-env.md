@@ -199,7 +199,7 @@ npm run clean:full   # Factory reset completo (Repo + Logs + UserData)
 ```
 
 Gli script di automazione falliscono esplicitamente se mancano comandi, directory o file richiesti;
-il controllo CI verifica anche gli exit code di `npm ci` e dell'installazione Python. Il controllo
+il controllo CI verifica anche gli exit code di `npm ci`, dell'installazione esplicita del runtime Electron e dell'installazione Python. Il controllo
 Pytest esegue una sola prova e conserva stderr, senza retry diagnostici o passaggi silenziosi.
 `npm run format:check` verifica il whitespace del diff con `git diff --check HEAD`; non è un
 formatter AST. Non esiste ancora un gate coverage: prima di introdurlo servono un provider Vitest

@@ -35,6 +35,7 @@ let logs: string[]
 function contextWith(modelMetrics: Record<string, OllamaModelMetrics>): TurnDispatchContext {
   return {
     settings: { codingModel: MODEL, defaultModel: MODEL, hardwareProfile: 'High' } as unknown as AppSettings,
+    hardwareFacts: { hasGpu: true, vramTotalMB: 24576, systemRamGB: 32, cpuCount: 16 },
     currentOverriddenModel: null,
     availableModels: [MODEL],
     modelCapabilities: { [MODEL]: ['completion', 'tools'] },

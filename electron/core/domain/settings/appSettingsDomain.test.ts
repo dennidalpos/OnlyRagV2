@@ -8,7 +8,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.hardwareProfile).toBe('Auto')
     expect(defaults.ocrEngine).toBe('native_cuda')
     expect(defaults.language).toBe('it')
-    expect(defaults.autoInstallHubSkills).toBe('auto')
+    expect(defaults.autoInstallHubSkills).toBe('disabled')
     expect(defaults.enableSkillRouter).toBe(true)
     expect(defaults.maxToolCallSteps).toBe(50)
   })
@@ -105,5 +105,15 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(updated.language).toBe('it')
     expect(updated.maxToolCallSteps).toBe(0)
   })
-})
 
+  it('sanitizes per-model context preferences with a 4096-token floor', () => {
+    const sanitized = sanitizeAppSettings({
+      modelContextLengths: {
+        ' qwen2.5-coder:7b ': 8192.9,
+        tooSmall: 2048,
+        invalid: Number.NaN,
+      },
+    })
+    expect(sanitized.modelContextLengths).toEqual({ 'qwen2.5-coder:7b': 8192 })
+  })
+})

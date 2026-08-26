@@ -12,6 +12,7 @@ import os from 'node:os'
 import { jsonrepair } from 'jsonrepair'
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
+import { resolveModelContextLength } from '../domain/settings/modelContextPreference'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import type { AppSettings } from '../../../src/types'
 
@@ -75,13 +76,16 @@ export class AgentInterviewAppService {
     const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
     const cachedGpu = getCachedGpuInfo()
     const memInfo = getMemoryInfo()
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(settings.hardwareProfile, {
+    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: cachedGpu?.hasNvidiaGpu,
       vramTotalMB: cachedGpu?.vramTotalMB,
       systemRamGB: memInfo?.totalRAMGB,
       cpuCount: os.cpus()?.length,
-      enableSystemRamOffloading: settings.enableSystemRamOffloading,
+      enableSystemRamOffloading: false,
     })
+    runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx)
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
 
     const fullPrompt = `${INTERVIEW_SYSTEM_PROMPT}\n\nUser request to analyze:\n\n${prompt}`
 

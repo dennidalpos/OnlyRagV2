@@ -3,6 +3,7 @@ import { customHubRepository } from '../infrastructure/filesystem/customHubRepos
 import { skillHubClient } from '../infrastructure/http/skillHubClient'
 import { projectStackDetectionRepository } from '../infrastructure/filesystem/projectStackDetectionRepository'
 import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock, SkillMatchContext } from '../domain/skills/skillMatcher'
+import { compareHubSkillQuality } from '../domain/skills/skillQuality'
 import {
   SkillDefinition,
   HubSkillItem,
@@ -98,14 +99,19 @@ export class SkillAppService {
 
       for (const item of skills) {
         const key = item.name.toLowerCase()
-        if (seenNames.has(key)) continue
-        seenNames.add(key)
-        merged.push({
+        const candidate = {
           ...item,
           hubId: item.hubId || source.id,
           hubName: item.hubName || source.name,
           isInstalled: installedNames.has(key) || installedNames.has(item.id.toLowerCase()),
-        })
+        }
+        const existingIndex = merged.findIndex((existing) => existing.name.toLowerCase() === key)
+        if (existingIndex < 0) {
+          seenNames.add(key)
+          merged.push(candidate)
+        } else if (compareHubSkillQuality(candidate, merged[existingIndex]) < 0) {
+          merged[existingIndex] = candidate
+        }
       }
     }
 
@@ -314,7 +320,7 @@ export class SkillAppService {
     options?: SkillMatchingOptions
   ): Promise<SkillDefinition[]> {
     try {
-      if (options?.enableSkillRouter === false || options?.autoInstallHubSkills === 'disabled') {
+      if (options?.enableSkillRouter === false) {
         return []
       }
 

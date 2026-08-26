@@ -116,6 +116,15 @@ describe('SkillAppService Unit Tests', () => {
     expect(installed.some((s) => s.name === 'bigquery-sql')).toBe(false)
   })
 
+  it('should still match installed skills when hub auto-install is disabled', async () => {
+    await skillAppService.installFromHub('react19-modern-patterns', tempDir, 'official-core')
+    const matched = await skillAppService.getMatchedSkills('Create a React 19 component', tempDir, 3, {
+      autoInstallHubSkills: 'disabled',
+    })
+
+    expect(matched.some((skill) => skill.name === 'react19-modern-patterns')).toBe(true)
+  })
+
   it('should install an auto-discovered hub skill in prompt mode only after the user confirms', async () => {
     const candidates: { skillName: string; hubName: string; score: number }[] = []
     const matched = await skillAppService.getMatchedSkills(

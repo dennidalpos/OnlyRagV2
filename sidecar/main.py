@@ -143,6 +143,7 @@ async def ingest_document_by_path(req: IngestPathRequest):
             req.vision_model, req.vision_prompt,
             normalize_with_llm=bool(req.normalize_with_llm),
             normalization_model=req.normalization_model,
+            num_ctx=req.num_ctx,
             max_tabular_rows=req.max_tabular_rows,
             max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
             max_excel_sheets=req.max_excel_sheets
@@ -165,6 +166,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
                 vision_model=req.vision_model, vision_prompt=req.vision_prompt,
                 normalize_with_llm=bool(req.normalize_with_llm),
                 normalization_model=req.normalization_model,
+                num_ctx=req.num_ctx,
                 max_tabular_rows=req.max_tabular_rows,
                 max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
                 max_sheets=req.max_excel_sheets
@@ -197,7 +199,8 @@ async def translate_document_inplace_endpoint(doc_id: str, req: TranslateInplace
             req.target_lang,
             req.model or "llama3.2",
             req.backup_original if req.backup_original is not None else True,
-            req.target_dir
+            req.target_dir,
+            req.num_ctx
         )
     except UnsupportedDocumentTypeError as type_err:
         raise HTTPException(status_code=400, detail=str(type_err))
@@ -217,7 +220,8 @@ async def translate_document_inplace_stream_endpoint(doc_id: str, req: Translate
                 req.source_lang,
                 req.target_lang,
                 model=req.model or "llama3.2",
-                target_dir=req.target_dir
+                target_dir=req.target_dir,
+                num_ctx=req.num_ctx
             ),
             media_type="application/x-ndjson"
         )

@@ -31,7 +31,7 @@ export const PromptComposerToolsMenu: React.FC<PromptComposerToolsMenuProps> = (
   onOpenPromptModal,
   onOpenDiagnosticsModal,
   onOpenPromptHistorySearch,
-  autoInstallHubSkills = 'auto',
+  autoInstallHubSkills = 'disabled',
   onToggleAutoInstallSkills,
 }) => {
   const { t } = useTranslation()

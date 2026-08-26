@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
-import { logger, generateDiagnosticsReport, DiagnosticsData } from './diagnostics'
+import { logger, generateDiagnosticsReport, DiagnosticsData, sanitizeLogMessage } from './diagnostics'
 
 describe('SystemDiagnosticsLogger Tests', () => {
   it('should write logs and clear both in-memory buffer and physical file on disk', () => {
@@ -51,5 +51,21 @@ describe('SystemDiagnosticsLogger Tests', () => {
     expect(report).toContain('qwen2.5-coder:7b')
     expect(report).toContain('Indexed Documents: 5 docs (42 vector chunks)')
     expect(report).toContain('Report generation test log')
+  })
+
+  it('should redact URLs, local paths, and exception details from operational logs', () => {
+    const message = 'Failed reading C:\\Users\\Utente\\workspace\\secret.txt from https://example.test/private: Error: token=secret'
+
+    expect(sanitizeLogMessage(message)).toBe('Failed reading [path] from [url]: Error: [details redacted]')
+
+    logger.log('ERROR', 'TestCategory', message)
+    const inMemory = logger.getLogs().at(-1)?.message ?? ''
+    const onDisk = fs.readFileSync(logger.getLogFilePath(), 'utf-8')
+
+    expect(inMemory).not.toContain('C:\\Users\\Utente')
+    expect(inMemory).not.toContain('https://example.test')
+    expect(inMemory).not.toContain('token=secret')
+    expect(onDisk).toContain('[details redacted]')
+    expect(onDisk).not.toContain('token=secret')
   })
 })

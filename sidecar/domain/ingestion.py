@@ -89,7 +89,8 @@ def run_page_ocr(
     filename: str = "",
     page_num: int = 1,
     num_pages: int = 1,
-    active_page_content: str = ""
+    active_page_content: str = "",
+    num_ctx: Optional[int] = None
 ) -> str:
     """
     Routes one page/image bitmap to the OCR engine the user selected.
@@ -101,12 +102,13 @@ def run_page_ocr(
     """
     if is_vision_ocr_requested(vision_prompt):
         prompt = render_vision_prompt(vision_prompt, filename, page_num, num_pages, active_page_content)
-        vision_text = run_vision_ocr(
-            image_bytes,
-            prompt,
-            ollama_url=OLLAMA_BASE_URL,
-            model=vision_model or "llama3.2-vision"
-        )
+        vision_kwargs = {
+            "ollama_url": OLLAMA_BASE_URL,
+            "model": vision_model or "llama3.2-vision",
+        }
+        if num_ctx is not None:
+            vision_kwargs["num_ctx"] = num_ctx
+        vision_text = run_vision_ocr(image_bytes, prompt, **vision_kwargs)
         if vision_text.strip():
             return vision_text
         logger.warning(f"Vision OCR yielded no content on page {page_num}; falling back to RapidOCR.")
@@ -126,6 +128,7 @@ def prepare_pdf_page_work_item(
     normalization_model: Optional[str] = None,
     filename: str = "",
     num_pages: int = 1,
+    num_ctx: Optional[int] = None,
     **kwargs: Any
 ) -> Dict[str, Any]:
     """
@@ -152,6 +155,7 @@ def prepare_pdf_page_work_item(
         "normalization_model": normalization_model,
         "filename": filename,
         "num_pages": num_pages,
+        "num_ctx": num_ctx,
     }
 
 def _ocr_work_item_image(work_item: Dict[str, Any], active_page_content: str = "") -> str:
@@ -163,7 +167,8 @@ def _ocr_work_item_image(work_item: Dict[str, Any], active_page_content: str = "
         filename=work_item.get("filename", ""),
         page_num=work_item["page_num"],
         num_pages=work_item.get("num_pages", 1),
-        active_page_content=active_page_content
+        active_page_content=active_page_content,
+        num_ctx=work_item.get("num_ctx")
     )
 
 def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
@@ -213,7 +218,8 @@ def extract_pdf_document(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
-    filename: str = ""
+    filename: str = "",
+    num_ctx: Optional[int] = None
 ) -> List[Tuple[int, str]]:
     """
     Extracts markdown per page preserving layout, native tables, and high-fidelity OCR.
@@ -252,7 +258,8 @@ def extract_pdf_document(
             normalize_with_llm=normalize_with_llm,
             normalization_model=normalization_model,
             filename=filename,
-            num_pages=num_pages
+            num_pages=num_pages,
+            num_ctx=num_ctx
         ))
 
     with ThreadPoolExecutor(max_workers=min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))) as executor:
@@ -266,7 +273,8 @@ def extract_tabular_document(
     file_path: Optional[str],
     max_rows: Optional[int] = None,
     max_excel_rows: Optional[int] = None,
-    max_sheets: Optional[int] = None
+    max_sheets: Optional[int] = None,
+    num_ctx: Optional[int] = None
 ) -> List[Tuple[int, str]]:
     """Extracts CSV, TSV, XLSX, XLS, Parquet, and JSON data formatted cleanly into Markdown tables with truncation tracking."""
     ext = os.path.splitext(filename)[1].lower()
@@ -352,7 +360,8 @@ def extract_document_markdown(
     normalization_model: Optional[str] = None,
     max_tabular_rows: Optional[int] = None,
     max_excel_rows: Optional[int] = None,
-    max_sheets: Optional[int] = None
+    max_sheets: Optional[int] = None,
+    num_ctx: Optional[int] = None
 ) -> Tuple[str, int]:
     """Fast-routed, sanitized, and pagination-preserving document markdown extractor with progress callback."""
     category = classify_file_type(filename)
@@ -378,7 +387,8 @@ def extract_document_markdown(
                 vision_prompt=vision_prompt,
                 normalize_with_llm=normalize_with_llm,
                 normalization_model=normalization_model,
-                filename=filename
+                filename=filename,
+                num_ctx=num_ctx
             )
         finally:
             pdf_doc.close()
@@ -394,7 +404,8 @@ def extract_document_markdown(
             img_bytes,
             vision_model=vision_model,
             vision_prompt=vision_prompt,
-            filename=filename
+            filename=filename,
+            num_ctx=num_ctx
         )
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if normalize_with_llm and sanitized_ocr:
@@ -467,7 +478,8 @@ def extract_document_markdown(
                                 img_data,
                                 vision_model=vision_model,
                                 vision_prompt=vision_prompt,
-                                filename=filename
+                                filename=filename,
+                                num_ctx=num_ctx
                             )
                             clean_ocr = sanitize_extracted_text(ocr_text)
                             if clean_ocr and clean_ocr not in ("[Empty Page Content]", "[Scanned page - No readable text detected]"):

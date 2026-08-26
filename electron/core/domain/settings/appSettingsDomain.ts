@@ -8,12 +8,26 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   ollamaHost: 'http://127.0.0.1:11434',
   ollamaMode: 'local',
   language: 'it',
-  autoInstallHubSkills: 'auto',
+  autoInstallHubSkills: 'disabled',
   autoInstallMinScore: 8.0,
   enableSkillRouter: true,
   maxToolCallSteps: 50,
   enableCodingAgentDebugLog: true,
   hasCompletedInitialSetup: false,
+}
+
+export const MIN_MODEL_CONTEXT_LENGTH = 4096
+
+export function sanitizeModelContextLengths(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const result: Record<string, number> = {}
+  for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
+    const normalizedModel = model.trim()
+    if (!normalizedModel || typeof value !== 'number' || !Number.isFinite(value)) continue
+    const context = Math.floor(value)
+    if (context >= MIN_MODEL_CONTEXT_LENGTH) result[normalizedModel] = context
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 export function getDefaultAppSettings(): AppSettings {
@@ -86,6 +100,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     maxToolCallSteps: typeof raw.maxToolCallSteps === 'number' && (raw.maxToolCallSteps === 0 || (raw.maxToolCallSteps >= 5 && raw.maxToolCallSteps <= 500)) ? raw.maxToolCallSteps : defaults.maxToolCallSteps,
     enableCodingAgentDebugLog: typeof raw.enableCodingAgentDebugLog === 'boolean' ? raw.enableCodingAgentDebugLog : defaults.enableCodingAgentDebugLog,
     hasCompletedInitialSetup: typeof raw.hasCompletedInitialSetup === 'boolean' ? raw.hasCompletedInitialSetup : defaults.hasCompletedInitialSetup,
+    modelContextLengths: sanitizeModelContextLengths(raw.modelContextLengths),
   }
 
   // Optional string models

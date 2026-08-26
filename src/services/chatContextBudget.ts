@@ -171,7 +171,8 @@ export function resolveChatThreadCount(cpuCount?: number): number | undefined {
  */
 export function resolveChatContextBudget(
   facts: HardwareFacts = {},
-  declaredProfile: DeclaredHardwareProfile = 'Auto'
+  declaredProfile: DeclaredHardwareProfile = 'Auto',
+  maxNumCtxOverride?: number
 ): ChatContextBudget {
   const profileTier = declaredProfile !== 'Auto'
     ? resolveEffectiveTier(declaredProfile, facts)
@@ -182,5 +183,5 @@ export function resolveChatContextBudget(
   const isMinimal = declaredProfile === 'Auto' && isMinimalHardwareHost(facts)
   const budget = isMinimal ? MINIMAL_HOST_BUDGET : TIER_BUDGETS[profileTier]
 
-  return { profileTier, isMinimal, ...budget }
+  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(4096, Math.min(maxNumCtxOverride, budget.maxNumCtx)) : budget.maxNumCtx }
 }

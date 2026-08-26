@@ -13,14 +13,15 @@ class IngestResponse(BaseModel):
     used_fallback_embeddings: Optional[bool] = False
 
 class IngestPathRequest(BaseModel):
-    file_path: str
-    vision_model: Optional[str] = None
-    vision_prompt: Optional[str] = None
+    file_path: str = Field(..., min_length=1, max_length=4096, pattern=r".*\S.*")
+    vision_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    vision_prompt: Optional[str] = Field(default=None, min_length=1, max_length=20000)
     normalize_with_llm: Optional[bool] = False
-    normalization_model: Optional[str] = None
-    max_tabular_rows: Optional[int] = None
-    max_excel_rows_per_sheet: Optional[int] = None
-    max_excel_sheets: Optional[int] = None
+    normalization_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
+    max_tabular_rows: Optional[int] = Field(default=None, ge=1, le=1_000_000)
+    max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_000_000)
+    max_excel_sheets: Optional[int] = Field(default=None, ge=1, le=1_000)
 
 class UpdateDocumentRequest(BaseModel):
     markdown_content: str
@@ -32,6 +33,7 @@ class TranslateInplaceRequest(BaseModel):
     model: Optional[str] = None
     backup_original: Optional[bool] = True
     target_dir: Optional[str] = None
+    num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
 
 class PagePreviewResponse(BaseModel):
     doc_id: str
@@ -56,8 +58,8 @@ class SearchResult(BaseModel):
     score: float
 
 class ExportRequest(BaseModel):
-    markdown_content: str
-    export_format: str = "pdf"
+    markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
+    export_format: str = Field(default="pdf", min_length=1, max_length=10, pattern=r"^[A-Za-z]+$")
 
 # ---------------------------------------------------------------------------
 # Log Diagnostics Schemas

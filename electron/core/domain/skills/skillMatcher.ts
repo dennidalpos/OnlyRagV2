@@ -1,4 +1,5 @@
 import type { SkillDefinition, HubSkillItem } from './skillTypes'
+import { assessHubSkillQuality } from './skillQuality'
 
 const STOP_WORDS = new Set([
   'about', 'above', 'after', 'again', 'against', 'all', 'and', 'any', 'because',
@@ -266,9 +267,11 @@ export function matchHubSkillsForTask(
     }
 
     if (totalScore >= minScore) {
+      const quality = assessHubSkillQuality(item)
+      totalScore += quality.contentScore / 20 + quality.sourceScore / 40
       results.push({ item, score: totalScore })
     }
   }
 
-  return results.sort((a, b) => b.score - a.score)
+  return results.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
 }

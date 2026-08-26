@@ -405,7 +405,9 @@ export function useIngestion(settings?: AppSettings) {
         targetFilePath,
         settings?.visionModel,
         visionPrompt,
-        false
+        false,
+        undefined,
+        settings?.modelContextLengths?.[visionModelName]
       )
 
       if (isCancelledRef.current) return

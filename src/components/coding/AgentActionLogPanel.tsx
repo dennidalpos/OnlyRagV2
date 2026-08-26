@@ -134,13 +134,13 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onTogglePauseAutoProceed,
   onUpdateSettings,
 }) => {
-  const autoInstallHubSkills = settings?.autoInstallHubSkills || 'auto'
+  const autoInstallHubSkills = settings?.autoInstallHubSkills || 'disabled'
   const handleToggleAutoInstallSkills = onUpdateSettings
     ? () => {
         const nextVal = autoInstallHubSkills === 'auto' ? 'disabled' : 'auto'
         onUpdateSettings({
           autoInstallHubSkills: nextVal,
-          enableSkillRouter: nextVal === 'auto',
+          enableSkillRouter: true,
         })
       }
     : undefined

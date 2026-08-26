@@ -261,7 +261,7 @@ def _should_skip_translation(s: str) -> bool:
     return False
 
 
-def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str, is_batch: bool = False, expected_items: int = 1) -> str:
+def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model: str, is_batch: bool = False, expected_items: int = 1, num_ctx: Optional[int] = None) -> str:
     if is_batch:
         system_content = (
             f"You are an automated professional document translation engine.\n"
@@ -304,6 +304,8 @@ def _call_ollama_translate(text: str, source_lang: str, target_lang: str, model:
         "stream": False,
         "options": {"temperature": 0.0}
     }
+    if num_ctx is not None:
+        chat_payload["options"]["num_ctx"] = num_ctx
 
     for attempt in range(1, _TRANSLATE_MAX_ATTEMPTS + 1):
         try:
@@ -407,7 +409,7 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     return cleaned.strip() or source_text
 
 
-def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str) -> List[str]:
+def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None) -> List[str]:
     """Translates batched texts via structured XML segment Ollama call with individual fallback."""
     if not texts:
         return []
@@ -422,7 +424,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
         if _should_skip_translation(clean_texts[0]) or is_block_in_target_lang(clean_texts[0], target_lang):
             return clean_texts
         masked_text, token_map = _mask_immutable_entities(clean_texts[0])
-        single = _call_ollama_translate(masked_text, source_lang, target_lang, model, is_batch=False)
+        single = _call_ollama_translate(masked_text, source_lang, target_lang, model, is_batch=False) if num_ctx is None else _call_ollama_translate(masked_text, source_lang, target_lang, model, is_batch=False, num_ctx=num_ctx)
         cleaned = _clean_translated_segment(single, masked_text) if single.strip() else clean_texts[0]
         unmasked = _unmask_immutable_entities(cleaned, token_map)
         return [unmasked]
@@ -448,6 +450,8 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
 
     raw_batch_output = _call_ollama_translate(
         batch_prompt, source_lang, target_lang, model, is_batch=True, expected_items=len(active_texts)
+    ) if num_ctx is None else _call_ollama_translate(
+        batch_prompt, source_lang, target_lang, model, is_batch=True, expected_items=len(active_texts), num_ctx=num_ctx
     )
 
     parsed_batch: Dict[int, str] = {}
@@ -477,7 +481,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
             cleaned = _clean_translated_segment(trans, active_texts[k])
             # If echoed verbatim or empty, try single call
             if not cleaned or cleaned.strip().lower() == active_texts[k].strip().lower():
-                single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False)
+                single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False) if num_ctx is None else _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False, num_ctx=num_ctx)
                 if single.strip():
                     cleaned = _clean_translated_segment(single, active_texts[k])
             unmasked = _unmask_immutable_entities(cleaned, token_maps[k])
@@ -489,7 +493,7 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
         "falling back to per-item translation for this batch."
     )
     for k, orig_idx in enumerate(active_indices):
-        single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False)
+        single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False) if num_ctx is None else _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False, num_ctx=num_ctx)
         if single.strip():
             cleaned = _clean_translated_segment(single, active_texts[k])
             results[orig_idx] = _unmask_immutable_entities(cleaned, token_maps[k])
@@ -498,10 +502,10 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     return results
 
 
-def _translate_batch(runs: List["docx.text.run.Run"], source_lang: str, target_lang: str, model: str) -> None:
+def _translate_batch(runs: List["docx.text.run.Run"], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None) -> None:
     """Translates one batch of runs in place (see _translate_texts_with_fallback for the
     batching/fallback contract)."""
-    translated = _translate_texts_with_fallback([run.text for run in runs], source_lang, target_lang, model)
+    translated = _translate_texts_with_fallback([run.text for run in runs], source_lang, target_lang, model, num_ctx)
     for run, text in zip(runs, translated):
         run.text = text
 
@@ -512,7 +516,8 @@ def translate_docx_inplace(
     target_lang: str,
     model: str = "llama3.2",
     backup_original: bool = True,
-    target_dir: Optional[str] = None
+    target_dir: Optional[str] = None,
+    num_ctx: Optional[int] = None
 ) -> IngestResponse:
     """
     Translates a DOCX document's text: creates a backup of the original or writes to target_dir if provided.
@@ -540,7 +545,7 @@ def translate_docx_inplace(
         f"({source_lang} -> {target_lang}, model={model})"
     )
     for batch in batches:
-        _translate_batch(batch, source_lang, target_lang, model)
+        _translate_batch(batch, source_lang, target_lang, model, num_ctx)
 
     if backup_original and not target_dir and os.path.exists(file_path):
         import shutil
@@ -733,14 +738,14 @@ def _batch_by_char_count(lengths: List[int], max_chars: int = _TRANSLATE_BATCH_M
     return batches
 
 
-def _translate_pdf_blocks(blocks: List[Dict[str, Any]], source_lang: str, target_lang: str, model: str) -> None:
+def _translate_pdf_blocks(blocks: List[Dict[str, Any]], source_lang: str, target_lang: str, model: str, num_ctx: Optional[int] = None) -> None:
     """Translates block texts in place (mutates each block's 'text'), batching consecutive
     blocks under _TRANSLATE_BATCH_MAX_CHARS chars per call via _translate_texts_with_fallback."""
     lengths = [len(b["text"]) for b in blocks]
     for idx_batch in _batch_by_char_count(lengths, _TRANSLATE_BATCH_MAX_CHARS):
         batch_blocks = [blocks[i] for i in idx_batch]
         translated = _translate_texts_with_fallback(
-            [b["text"] for b in batch_blocks], source_lang, target_lang, model
+            [b["text"] for b in batch_blocks], source_lang, target_lang, model, num_ctx
         )
         for b, text in zip(batch_blocks, translated):
             b["text"] = text
@@ -870,7 +875,8 @@ def translate_pdf_inplace_fine(
     target_lang: str,
     model: str = "llama3.2",
     backup_original: bool = True,
-    target_dir: Optional[str] = None
+    target_dir: Optional[str] = None,
+    num_ctx: Optional[int] = None
 ) -> IngestResponse:
     """
     'Fine-mode' PDF in-place translation: for every page, permanently redacts each original text
@@ -911,7 +917,7 @@ def translate_pdf_inplace_fine(
         for page, blocks in page_blocks:
             if not blocks:
                 continue
-            _translate_pdf_blocks(blocks, source_lang, target_lang, model)
+            _translate_pdf_blocks(blocks, source_lang, target_lang, model, num_ctx)
             _redact_and_reinsert_pdf_blocks(page, blocks, font_file)
 
         if backup_original and not target_dir and os.path.exists(file_path):
@@ -948,7 +954,8 @@ async def translate_document_stream_generator(
     source_lang: str,
     target_lang: str,
     model: str = "llama3.2",
-    target_dir: Optional[str] = None
+    target_dir: Optional[str] = None,
+    num_ctx: Optional[int] = None
 ):
     """
     Asynchronous generator yielding NDJSON events for document translation with real-time page progress.
@@ -980,7 +987,7 @@ async def translate_document_stream_generator(
         for i, batch in enumerate(batches):
             percent = int((i / max(1, len(batches))) * 90)
             yield json.dumps({"type": "progress", "page": 1, "total_pages": 1, "phase": "translating_runs", "percent": percent}) + "\n"
-            await asyncio.to_thread(_translate_batch, batch, source_lang, target_lang, model)
+            await asyncio.to_thread(_translate_batch, batch, source_lang, target_lang, model, num_ctx)
 
         docx_doc.save(out_file_path)
         yield json.dumps({
@@ -1043,7 +1050,7 @@ async def translate_document_stream_generator(
                     "phase": "translating_blocks",
                     "percent": int(((page_idx + 0.5) / total_pages) * 100)
                 }) + "\n"
-                await asyncio.to_thread(_translate_pdf_blocks, blocks, source_lang, target_lang, model)
+                await asyncio.to_thread(_translate_pdf_blocks, blocks, source_lang, target_lang, model, num_ctx)
 
                 yield json.dumps({
                     "type": "progress",
@@ -1086,7 +1093,8 @@ def translate_document_inplace(
     target_lang: str,
     model: str = "llama3.2",
     backup_original: bool = True,
-    target_dir: Optional[str] = None
+    target_dir: Optional[str] = None,
+    num_ctx: Optional[int] = None
 ) -> IngestResponse:
     """
     Dispatches translation to the DOCX or PDF fine-mode pipeline based on the document's
@@ -1096,9 +1104,9 @@ def translate_document_inplace(
     record = _load_doc_record(doc_id)
     file_type = record.get("file_type", "")
     if file_type == "docx":
-        return translate_docx_inplace(doc_id, source_lang, target_lang, model, backup_original, target_dir)
+        return translate_docx_inplace(doc_id, source_lang, target_lang, model, backup_original, target_dir, num_ctx)
     if file_type == "pdf":
-        return translate_pdf_inplace_fine(doc_id, source_lang, target_lang, model, backup_original, target_dir)
+        return translate_pdf_inplace_fine(doc_id, source_lang, target_lang, model, backup_original, target_dir, num_ctx)
     raise UnsupportedDocumentTypeError(
         f"In-place translation is not supported for file type '{file_type}'. Supported: docx, pdf."
     )

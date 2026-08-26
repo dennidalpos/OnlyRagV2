@@ -8,6 +8,9 @@ eccezione non sanitizzati.
 
 - Il logger Electron mantiene gli ultimi 1000 eventi in memoria e ruota `app.log` a 2 MiB,
   conservando due generazioni (`app.1.log`, `app.2.log`).
+- Prima della persistenza e dell'esposizione in memoria, i messaggi operativi redigono URL,
+  percorsi locali e dettagli dopo un contesto di errore; il contesto stabile resta disponibile,
+  ma il supporto non deve aspettarsi valori locali dal testo del log.
 - Il global error handler REST mantiene HTTP 500, restituisce solo `detail` generico e `error_id`,
   e registra un JSON con `event`, `error_id`, metodo, path e tipo di eccezione. Il messaggio e lo
   stack dell'eccezione non vengono esposti.
@@ -34,4 +37,3 @@ linee cambiate). Non è ancora disponibile un contatore centralizzato per richie
 errori per endpoint o correlazione distribuita tra renderer, Electron e sidecar. Il follow-up deve
 aggiungere queste metriche con cardinalità limitata a endpoint, status e tipo di errore, senza URL
 completi, query, percorsi locali o identificativi utente.
-

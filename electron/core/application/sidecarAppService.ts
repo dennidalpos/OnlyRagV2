@@ -42,7 +42,7 @@ export class SidecarAppService {
     return { success: isOnline, message: isOnline ? 'Sidecar engine restarted successfully.' : 'Failed to restart Sidecar.' }
   }
 
-  ingestFile(filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string) {
+  ingestFile(filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid file path' })
     }
@@ -59,6 +59,7 @@ export class SidecarAppService {
         vision_prompt: visionPrompt || undefined,
         normalize_with_llm: normalizeWithLlm || undefined,
         normalization_model: normalizationModel || undefined,
+        num_ctx: numCtx || undefined,
       })
       const taskId = `ingest-${Date.now()}`
 
@@ -259,7 +260,7 @@ export class SidecarAppService {
     })
   }
 
-  translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string) {
+  translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string, numCtx?: number) {
     if (!docId || typeof docId !== 'string') {
       return Promise.resolve({ success: false, error: 'Invalid document ID' })
     }
@@ -270,6 +271,7 @@ export class SidecarAppService {
       model: model || undefined,
       backup_original: backupOriginal,
       target_dir: targetDir || undefined,
+      num_ctx: numCtx || undefined,
     })
 
     return new Promise((resolve) => {

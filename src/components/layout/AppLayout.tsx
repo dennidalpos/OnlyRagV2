@@ -89,7 +89,7 @@ export const AppLayout: React.FC = () => {
       ollamaHost: 'http://127.0.0.1:11434',
       ollamaMode: 'local',
       language: 'it',
-      autoInstallHubSkills: 'auto',
+      autoInstallHubSkills: 'disabled',
       autoInstallMinScore: 8.0,
       enableSkillRouter: true,
       maxToolCallSteps: 50,

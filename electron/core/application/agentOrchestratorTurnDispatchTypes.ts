@@ -10,6 +10,7 @@ import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import type { HardwareFacts } from '../../../src/services/hardwareProfileTiers'
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -28,6 +29,8 @@ export interface TurnDispatchContext {
   workspacePath: string | null
   isStandaloneMode: boolean
   settings: AppSettings
+  /** Optional hardware snapshot for deterministic callers/tests; production resolves it once upstream. */
+  hardwareFacts?: HardwareFacts
   sessionId: string
   payload: AgentTaskPayload
   availableModels: string[]

@@ -79,12 +79,13 @@ export const apiService = {
     visionModel?: string,
     visionPrompt?: string,
     normalizeWithLlm?: boolean,
-    normalizationModel?: string
+    normalizationModel?: string,
+    numCtx?: number
   ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Initiating ingestion for file: ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`)
-      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel)
+      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Ingestion warning/error: ${res.error}`)
       } else {
@@ -114,11 +115,11 @@ export const apiService = {
     }
   },
 
-  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
+  async translateDocumentInplace(docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal: boolean = true, targetDir?: string, numCtx?: number): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Translating document in place ${docId} (${sourceLang} -> ${targetLang})`)
-      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir)
+      const res = await window.electronAPI.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Translate in-place warning/error: ${res.error}`)
       } else {

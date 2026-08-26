@@ -34,6 +34,20 @@ describe('AgentInterviewAppService', () => {
     expect(result.questions).toHaveLength(0)
   })
 
+  it('applies the selected coding model context preference to the pre-flight interview', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+
+    await service.conductInterview(
+      'Crea una funzione somma',
+      'qwen2.5-coder:7b',
+      { ...mockSettings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } }
+    )
+
+    expect(vi.mocked(ollamaAppService.generateStream).mock.calls[0][4]).toEqual(
+      expect.objectContaining({ num_ctx: 8192 })
+    )
+  })
+
   it('parses and repairs structured multiple choice questions from markdown json block', async () => {
     const rawResponse = `Ecco le scelte:\n\`\`\`json\n{\n  "hasQuestions": true,\n  "questions": [\n    {\n      "id": "q1",\n      "question": "Quale stile di animazione preferisci?",\n      "options": ["CSS Keyframes", "Web Animations API", "Tailwind CSS"],\n      "recommendedIndex": 0\n    }\n  ]\n}\n\`\`\``
     

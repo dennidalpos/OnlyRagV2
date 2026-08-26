@@ -68,6 +68,26 @@ export interface LogEntry {
   category: string
 }
 
+const URL_PATTERN = /\b(?:https?|ftp):\/\/[^\s"'<>]+/gi
+const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:[\\/]|\\\\)[^\s"'<>]+/g
+const POSIX_PATH_PATTERN = /(?<![\w])\/(?:[^/\s"'<>]+\/)+[^/\s"'<>]*/g
+const EXCEPTION_DETAIL_PATTERN = /(^|\n)([^\n]*(?:failed|failure|error|exception|could not|unable)[^:\n]*:\s*)([^\n]+)/gi
+
+/**
+ * Operational logs are support telemetry, not a second payload channel.
+ * Keep the stable failure context while removing values that can identify local data or hosts.
+ */
+export function sanitizeLogMessage(message: string): string {
+  return String(message)
+    .replace(URL_PATTERN, (url) => {
+      const punctuation = url.match(/[.,;:!?)]*$/)?.[0] ?? ''
+      return `[url]${punctuation}`
+    })
+    .replace(WINDOWS_PATH_PATTERN, '[path]')
+    .replace(POSIX_PATH_PATTERN, '[path]')
+    .replace(EXCEPTION_DETAIL_PATTERN, '$1$2[details redacted]')
+}
+
 class SystemDiagnosticsLogger {
   private logFilePath: string
   private logsBuffer: LogEntry[] = []
@@ -119,13 +139,14 @@ class SystemDiagnosticsLogger {
 
   public log(level: LogLevel, category: string, message: string): LogEntry {
     const timestamp = new Date().toISOString()
-    const entry: LogEntry = { timestamp, level, message, category }
+    const safeMessage = sanitizeLogMessage(message)
+    const entry: LogEntry = { timestamp, level, message: safeMessage, category }
     this.logsBuffer.push(entry)
     if (this.logsBuffer.length > this.maxBufferLength) {
       this.logsBuffer.shift()
     }
 
-    const logFormatted = `[${timestamp}] [${level}] [${category}]: ${message}\n`
+    const logFormatted = `[${timestamp}] [${level}] [${category}]: ${safeMessage}\n`
     try {
       this.rotateLogsIfNeeded()
       fs.appendFileSync(this.logFilePath, logFormatted, 'utf-8')

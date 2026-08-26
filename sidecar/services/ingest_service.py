@@ -32,6 +32,7 @@ def process_and_index_document(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
+    num_ctx: Optional[int] = None,
     max_tabular_rows: Optional[int] = None,
     max_excel_rows_per_sheet: Optional[int] = None,
     max_excel_sheets: Optional[int] = None,
@@ -59,6 +60,7 @@ def process_and_index_document(
         vision_model=vision_model, vision_prompt=vision_prompt,
         normalize_with_llm=normalize_with_llm,
         normalization_model=normalization_model,
+        num_ctx=num_ctx,
         max_tabular_rows=max_tabular_rows,
         max_excel_rows=max_excel_rows_per_sheet,
         max_sheets=effective_max_sheets
@@ -147,6 +149,7 @@ def process_and_index_document_generator(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
+    num_ctx: Optional[int] = None,
     max_tabular_rows: Optional[int] = None,
     max_excel_rows_per_sheet: Optional[int] = None,
     max_excel_sheets: Optional[int] = None,
@@ -288,6 +291,7 @@ def process_and_index_document_generator(
                 vision_model=vision_model, vision_prompt=vision_prompt,
                 normalize_with_llm=normalize_with_llm,
                 normalization_model=normalization_model,
+                num_ctx=num_ctx,
                 max_tabular_rows=max_tabular_rows,
                 max_excel_rows=max_excel_rows_per_sheet,
                 max_sheets=effective_max_sheets

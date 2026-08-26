@@ -233,6 +233,8 @@ export interface AppSettings {
   enableSoundEffects?: boolean
   // Editor & Display Options
   editorWordWrap?: boolean
+  /** Per-model context preference in tokens; Ollama's reported context_length remains the ceiling. */
+  modelContextLengths?: Record<string, number>
 }
 
 /** Aggregate size of the file changes an agent session has applied so far. */
@@ -470,6 +472,18 @@ export interface OllamaModelUpdateInfo {
   error?: string
 }
 
+/** Canonical camelCase payload crossing the renderer/main IPC boundary. */
+export interface PromptHistoryIndexPayload {
+  id: string
+  sessionId: string
+  workspacePath: string
+  prompt: string
+  summary?: string
+  outcome: ExecutedPromptOutcome
+  startedAt: string
+  completedAt?: string
+}
+
 export interface IElectronAPI {
   runDiagnostics: () => Promise<DiagnosticsData>
   getLogs: () => Promise<LogEntry[]>
@@ -490,10 +504,11 @@ export interface IElectronAPI {
     visionModel?: string,
     visionPrompt?: string,
     normalizeWithLlm?: boolean,
-    normalizationModel?: string
+    normalizationModel?: string,
+    numCtx?: number
   ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean }>
@@ -553,16 +568,7 @@ export interface IElectronAPI {
   getAppSettings?: () => Promise<AppSettings | null>
   saveAppSettings?: (settings: AppSettings) => Promise<boolean>
   /** Fire-and-forget: embeds and upserts one completed prompt into the semantic history index. */
-  indexPromptHistory?: (payload: {
-    id: string
-    sessionId: string
-    workspacePath: string
-    prompt: string
-    summary?: string
-    outcome: ExecutedPromptOutcome
-    startedAt: string
-    completedAt?: string
-  }) => Promise<{ success: boolean }>
+  indexPromptHistory?: (payload: PromptHistoryIndexPayload) => Promise<{ success: boolean }>
   /** Semantic search across every indexed project's prompt history. */
   searchPromptHistory?: (query: string, topK?: number, projectPaths?: string[]) => Promise<PromptHistorySearchResult[]>
   onAgentLog: (callback: (log: AgentActionLog) => void) => () => void

@@ -111,6 +111,19 @@ describe('PlanGenerationAppService', () => {
     )
   })
 
+  it('applies the selected coding model context preference to planning', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+
+    await planGenerationAppService.generatePlanText({
+      prompt: 'Task',
+      settings: { ...settings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } },
+    })
+
+    expect(vi.mocked(ollamaAppService.generateStream).mock.calls[0][4]).toEqual(
+      expect.objectContaining({ num_ctx: 8192 })
+    )
+  })
+
   it('parsePlanText should re-parse arbitrary plan text through the same canonical parser', () => {
     const milestones = planGenerationAppService.parsePlanText('1. First step\n2. Second step\n3. Third step')
     expect(milestones).toHaveLength(3)

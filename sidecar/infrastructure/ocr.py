@@ -450,7 +450,8 @@ def run_vision_ocr(
     image_bytes: bytes,
     prompt: str = "Extract all text, tables, and key structure from this document image in clean Markdown format.",
     ollama_url: str = "http://127.0.0.1:11434",
-    model: str = "llama3.2-vision"
+    model: str = "llama3.2-vision",
+    num_ctx: Optional[int] = None
 ) -> str:
     """Uses Ollama Vision model for OCR and document vision parsing with adaptive timeout for CPU/GPU hosts."""
     is_cuda_avail = _rapidocr_cuda_available() or detect_gpu_acceleration().get("has_cuda", False)
@@ -478,6 +479,8 @@ def run_vision_ocr(
                 "stream": False,
                 "keep_alive": 0
             }
+            if num_ctx is not None:
+                payload["options"] = {"num_ctx": num_ctx}
             try:
                 res = httpx_client.post(f"{ollama_url}/api/generate", json=payload, timeout=vision_timeout)
                 if res.status_code == 200:

@@ -98,6 +98,35 @@ def test_export_empty_markdown_raises_400():
     response = client.post("/export", json=payload)
     assert response.status_code == 400
 
+def test_ingest_path_contract_rejects_invalid_limits_and_accepts_options(tmp_path):
+    source = tmp_path / "document.pdf"
+    source.write_bytes(b"not a real pdf")
+
+    valid = client.post(
+        "/ingest-path",
+        json={
+            "file_path": str(source),
+            "vision_model": "llama3.2-vision",
+            "vision_prompt": "Read the document",
+            "normalize_with_llm": True,
+            "normalization_model": "qwen2.5:7b",
+            "max_tabular_rows": 300,
+            "max_excel_rows_per_sheet": 150,
+            "max_excel_sheets": 10,
+        },
+    )
+    assert valid.status_code != 422
+
+    invalid = client.post(
+        "/ingest-path",
+        json={"file_path": str(source), "max_excel_sheets": 0},
+    )
+    assert invalid.status_code == 422
+
+def test_export_contract_rejects_blank_or_malformed_format():
+    assert client.post("/export", json={"markdown_content": "   ", "export_format": "pdf"}).status_code == 400
+    assert client.post("/export", json={"markdown_content": "# title", "export_format": "pdf/../../x"}).status_code == 422
+
 def test_vector_search_endpoint():
     payload = {
         "query": "test query",

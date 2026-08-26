@@ -15,6 +15,7 @@
 import os from 'node:os'
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
+import { resolveModelContextLength } from '../domain/settings/modelContextPreference'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
 import { MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
 import { compilePlanFromText, type WorkspaceScaffoldFacts } from '../domain/agent/planCompilation'
@@ -194,13 +195,14 @@ export class PlanGenerationAppService {
     const model = req.model || req.settings.codingModel || req.settings.defaultModel || 'qwen2.5-coder:7b'
     const cachedGpu = getCachedGpuInfo()
     const memInfo = getMemoryInfo()
-    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(req.settings.hardwareProfile, {
+    const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: cachedGpu?.hasNvidiaGpu,
       vramTotalMB: cachedGpu?.vramTotalMB,
       systemRamGB: memInfo?.totalRAMGB,
       cpuCount: os.cpus()?.length,
-      enableSystemRamOffloading: req.settings.enableSystemRamOffloading,
+      enableSystemRamOffloading: false,
     })
+    runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx)
     const residueBlock = buildResidueReconciliationBlock(req.pendingResidueMilestones)
     const verificationBlock = buildVerificationCommandsBlock(req.workspacePath)
     const fullPrompt =

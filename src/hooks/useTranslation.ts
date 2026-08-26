@@ -429,7 +429,8 @@ export function useInplaceTranslation(settings?: AppSettings) {
         targetLang,
         modelToUse,
         false,
-        targetDir
+        targetDir,
+        modelToUse ? settings?.modelContextLengths?.[modelToUse] : undefined
       )
 
       if (res.success && res.data) {

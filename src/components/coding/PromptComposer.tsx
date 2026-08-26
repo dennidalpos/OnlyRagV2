@@ -88,7 +88,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   maxContextLimit = 0,
   isContextHeavy = false,
   onCompactContext,
-  autoInstallHubSkills = 'auto',
+  autoInstallHubSkills = 'disabled',
   onToggleAutoInstallSkills,
 }) => {
   const { t } = useTranslation()

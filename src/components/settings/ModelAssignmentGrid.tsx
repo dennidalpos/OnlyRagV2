@@ -21,6 +21,7 @@ import { resolveVerificationStatus } from '../../services/codingModelMatrix'
 import { CODING_CATALOG_MODEL_NAMES } from '../../services/hardwareModelCatalog'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { ModelBadgeStrip } from './ModelBadgeStrip'
+import { ModelContextControl } from './ModelContextControl'
 
 interface ModelAssignmentGridProps {
   diagnostics: DiagnosticsData | null
@@ -118,6 +119,12 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               ).map((m) => renderOption(m, m))}
             </select>
             {renderBadges(settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b')}
+            <ModelContextControl
+              model={settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'}
+              settings={settings}
+              metrics={metrics[settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b']}
+              onUpdateSettings={onUpdateSettings}
+            />
             <p className="text-[10px] text-slate-400 leading-tight">
               Esegue i tool, scrive codice e mantiene la KV-cache fissa in GPU a zero latenza.
             </p>
@@ -182,6 +189,12 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 'chat'
               ).map((m) => renderOption(m, m))}
             </select>
+            <ModelContextControl
+              model={settings.chatModel || settings.defaultModel || 'llama3.1:8b'}
+              settings={settings}
+              metrics={metrics[settings.chatModel || settings.defaultModel || 'llama3.1:8b']}
+              onUpdateSettings={onUpdateSettings}
+            />
           </div>
 
           <div className="space-y-1.5 pt-1">
@@ -232,6 +245,12 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 'translation'
               ).map((m) => renderOption(m, m))}
             </select>
+            <ModelContextControl
+              model={settings.translationModel || settings.defaultModel || 'qwen2.5:7b'}
+              settings={settings}
+              metrics={metrics[settings.translationModel || settings.defaultModel || 'qwen2.5:7b']}
+              onUpdateSettings={onUpdateSettings}
+            />
           </div>
 
           <div className="space-y-1.5 pt-1">
@@ -290,6 +309,12 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
                 'vision'
               ).map((m) => renderOption(m, m))}
             </select>
+            <ModelContextControl
+              model={settings.visionModel || 'llama3.2-vision:11b'}
+              settings={settings}
+              metrics={metrics[settings.visionModel || 'llama3.2-vision:11b']}
+              onUpdateSettings={onUpdateSettings}
+            />
           </div>
 
           {/* Vector Embedding */}

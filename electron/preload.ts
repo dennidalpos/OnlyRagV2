@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IElectronAPI, AppSettings, CodingSession, PlanMilestone, SkillInstallApprovalRequest } from '../src/types'
+import type { IElectronAPI, AppSettings, CodingSession, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload } from '../src/types'
 
 const api: IElectronAPI = {
   runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),
@@ -16,10 +16,10 @@ const api: IElectronAPI = {
   restartSidecar: () => ipcRenderer.invoke('sidecar:restart'),
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:open-file', options),
   openDirectoryDialog: (options?: { title?: string }) => ipcRenderer.invoke('dialog:open-directory', options),
-  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string) =>
-    ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel),
+  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number) =>
+    ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx),
   updateIngestedDocument: (docId: string, markdownContent: string) => ipcRenderer.invoke('ingest:update', docId, markdownContent),
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, backupOriginal, targetDir),
+  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx),
   getDocumentPagePreview: (docId: string, pageNumber: number) => ipcRenderer.invoke('ingest:page-preview', docId, pageNumber),
   getIngestedDocuments: () => ipcRenderer.invoke('ingest:list'),
   deleteIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:delete', docId),
@@ -87,7 +87,7 @@ const api: IElectronAPI = {
   getAppSettings: () => ipcRenderer.invoke('settings:get'),
   saveAppSettings: (settings: AppSettings) => ipcRenderer.invoke('settings:save', settings),
   /** Cross-project semantic prompt history (see sidecar's /history/* routes). */
-  indexPromptHistory: (payload: any) => ipcRenderer.invoke('history:index', payload),
+  indexPromptHistory: (payload: PromptHistoryIndexPayload) => ipcRenderer.invoke('history:index', payload),
   searchPromptHistory: (query: string, topK?: number, projectPaths?: string[]) => ipcRenderer.invoke('history:search', query, topK, projectPaths),
   onAgentLog: (callback: (log: any) => void) => {
     const subscription = (_: any, log: any) => callback(log)

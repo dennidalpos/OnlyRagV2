@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { sidecarAppService } from '../application/sidecarAppService'
+import { parsePromptHistoryIndexPayload, parsePromptHistorySearchPayload } from '../domain/promptHistoryContract'
 
 export function registerSidecarIpcHandlers() {
   ipcMain.handle('sidecar:status', async () => {
@@ -10,16 +11,16 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.restartSidecar()
   })
 
-  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string) => {
-    return sidecarAppService.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel)
+  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number) => {
+    return sidecarAppService.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx)
   })
 
   ipcMain.handle('ingest:update', async (_, docId: string, markdownContent: string) => {
     return sidecarAppService.updateDocument(docId, markdownContent)
   })
 
-  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string) => {
-    return sidecarAppService.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir)
+  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => {
+    return sidecarAppService.translateDocumentInplace(docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx)
   })
 
   ipcMain.handle('ingest:page-preview', async (_, docId: string, pageNumber: number) => {
@@ -42,11 +43,12 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.exportDocument(markdownContent, format, outputFolder)
   })
 
-  ipcMain.handle('history:index', async (_, payload: any) => {
-    return sidecarAppService.indexPromptHistory(payload)
+  ipcMain.handle('history:index', async (_, payload: unknown) => {
+    return sidecarAppService.indexPromptHistory(parsePromptHistoryIndexPayload(payload))
   })
 
   ipcMain.handle('history:search', async (_, query: string, topK?: number, projectPaths?: string[]) => {
-    return sidecarAppService.searchPromptHistory(query, topK, projectPaths)
+    const payload = parsePromptHistorySearchPayload(query, topK, projectPaths)
+    return sidecarAppService.searchPromptHistory(payload.query, payload.topK, payload.projectPaths)
   })
 }

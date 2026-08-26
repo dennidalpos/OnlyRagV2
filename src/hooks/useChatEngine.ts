@@ -10,6 +10,7 @@ import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
 import { normalizeError } from '../lib/errors/errorNormalizer'
+import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -49,8 +50,16 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   // detected host instead of a single hardcoded budget — see chatContextBudget.ts.
   const hardwareFacts = useMemo(() => extractHardwareFacts(diagnostics), [diagnostics])
   const contextBudget = useMemo(
-    () => resolveChatContextBudget(hardwareFacts, settings.hardwareProfile || 'Auto'),
-    [hardwareFacts, settings.hardwareProfile]
+    () => resolveChatContextBudget(
+      hardwareFacts,
+      'Auto',
+      resolveModelContextLength(
+        settings.chatModel || settings.defaultModel || 'llama3.2',
+        settings.modelContextLengths,
+        32768
+      )
+    ),
+    [hardwareFacts, settings.chatModel, settings.defaultModel, settings.modelContextLengths]
   )
   const budgetRef = useRef(contextBudget)
   budgetRef.current = contextBudget

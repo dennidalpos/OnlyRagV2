@@ -116,7 +116,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
       agentMode,
       warmUpModel,
       workspacePath,
-      settings.hardwareProfile
+      'Auto'
     )
   }
 
@@ -131,7 +131,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   }
 
   const skillMatchingOptions = {
-    enableSkillRouter: settings.enableSkillRouter !== false && settings.autoInstallHubSkills !== 'disabled',
+    enableSkillRouter: settings.enableSkillRouter !== false,
     autoInstallHubSkills: settings.autoInstallHubSkills,
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {

@@ -18,11 +18,18 @@ import { resolveTurnContextPolicy, omittedBlockNames } from '../domain/agent/tur
 import { extractDeliverablePaths } from '../domain/agent/milestoneDeliverableResolver'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
+import { resolveModelContextLength } from '../domain/settings/modelContextPreference'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const cachedGpu = getCachedGpuInfo()
   const memInfo = getMemoryInfo()
+  const hardwareFacts = ctx.hardwareFacts ?? {
+    hasGpu: cachedGpu?.hasNvidiaGpu,
+    vramTotalMB: cachedGpu?.vramTotalMB,
+    systemRamGB: memInfo.totalRAMGB,
+    cpuCount: os.cpus()?.length,
+  }
 
   const candidateCoding = ctx.settings.codingModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
   const targetModel: string = ctx.currentOverriddenModel
@@ -43,13 +50,10 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   }
 
   const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
-    ctx.settings.hardwareProfile,
+    'Auto',
     {
-      hasGpu: cachedGpu?.hasNvidiaGpu,
-      vramTotalMB: cachedGpu?.vramTotalMB,
-      systemRamGB: memInfo.totalRAMGB,
-      cpuCount: os.cpus()?.length,
-      enableSystemRamOffloading: ctx.settings.enableSystemRamOffloading,
+      ...hardwareFacts,
+      enableSystemRamOffloading: false,
     }
   )
 
@@ -64,12 +68,25 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   // declined to compact and handed Ollama a prompt guaranteed to be beheaded. Deriving both
   // num_predict and maxContextChars from the clamped value turns a silent decapitation into
   // ordinary, visible compaction of the tail.
-  const contextCeiling = ctx.modelMetrics?.[targetModel]?.contextLength ?? null
+  const hardwareContext = runtimeOpts.num_ctx
+  const trainedContext = ctx.modelMetrics?.[targetModel]?.contextLength
+  const preferredContext = resolveModelContextLength(
+    targetModel,
+    ctx.settings.modelContextLengths,
+    hardwareContext,
+    trainedContext
+  )
+  const contextCeiling = trainedContext ?? null
+  if (contextCeiling !== null && contextCeiling < hardwareContext) {
+    ctx.emitLog('info', `📏 Context clamped to model limit: ${hardwareContext} → ${contextCeiling} tokens (${targetModel} was trained at ${contextCeiling}; Ollama would have truncated the prompt head).`)
+  }
+  if (preferredContext < runtimeOpts.num_ctx) {
+    ctx.emitLog('info', `📏 Context preference applied: ${runtimeOpts.num_ctx} → ${preferredContext} tokens (${targetModel}).`)
+    runtimeOpts.num_ctx = preferredContext
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(preferredContext)
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(preferredContext)
+  }
   if (contextCeiling !== null && contextCeiling < runtimeOpts.num_ctx) {
-    ctx.emitLog(
-      'info',
-      `📏 Context clamped to model limit: ${runtimeOpts.num_ctx} → ${contextCeiling} tokens (${targetModel} was trained at ${contextCeiling}; Ollama would have truncated the prompt head).`
-    )
     runtimeOpts.num_ctx = contextCeiling
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(contextCeiling)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(contextCeiling)

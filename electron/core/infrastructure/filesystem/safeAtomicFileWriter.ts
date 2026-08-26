@@ -76,11 +76,18 @@ export async function safeAtomicWrite(filePath: string, content: string | Buffer
 
   fileWriteQueues.set(
     normalizedPath,
-    currentOp.finally(() => {
-      if (fileWriteQueues.get(normalizedPath) === currentOp) {
-        fileWriteQueues.delete(normalizedPath)
+    currentOp.then(
+      () => {
+        if (fileWriteQueues.get(normalizedPath) === currentOp) {
+          fileWriteQueues.delete(normalizedPath)
+        }
+      },
+      () => {
+        if (fileWriteQueues.get(normalizedPath) === currentOp) {
+          fileWriteQueues.delete(normalizedPath)
+        }
       }
-    })
+    )
   )
 
   return currentOp

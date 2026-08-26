@@ -76,6 +76,8 @@ Infrastructure Layer (File System, PTY, HTTP Clients, Database)
 | **Domain** | `electron/core/domain/` | Logica pura di business: `lifecycleCoordinator`, `toolParser`, `contextWindowCalculator`, `agentPromptAssembler`, `hardwareProfileResolver`. Zero dipendenze da I/O o framework. | Nessuna (Puro TS) |
 | **Infrastructure** | `electron/core/infrastructure/` | Interazione con I/O: `ollamaHttpClient`, `agentStreamTransport`, `fileSystemRepository`, `skillRepository`, `ptySessionManager`. | Standard APIs, Node.js libs |
 
+Stato audit: `systemIpc.ts` delega cancellazione task e pulizia temporanei a `taskAppService.ts`; restano da portare dietro facciate Application gli accessi Infrastructure presenti in `diagnosticsIpc.ts` e `agentIpc.ts`.
+
 ---
 
 ## 3. Router Gerarchico a 2 Livelli (Zero VRAM Thrashing)

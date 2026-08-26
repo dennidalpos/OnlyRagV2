@@ -10,6 +10,8 @@ if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
 import asyncio
+import json
+import uuid
 from typing import List, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,10 +66,17 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global unhandled exception at {request.url.path}: {str(exc)}", exc_info=True)
+    error_id = uuid.uuid4().hex[:12]
+    logger.error(json.dumps({
+        "event": "unhandled_exception",
+        "error_id": error_id,
+        "method": request.method,
+        "path": request.url.path,
+        "error_type": type(exc).__name__,
+    }, sort_keys=True))
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"}
+        content={"detail": "Internal Server Error", "error_id": error_id}
     )
 
 @app.get("/health")

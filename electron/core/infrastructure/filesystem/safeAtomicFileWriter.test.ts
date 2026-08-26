@@ -37,6 +37,16 @@ describe('safeAtomicFileWriter Unit Tests', () => {
     expect(fs.readFileSync(target, 'utf-8')).toBe(content)
   })
 
+  it('does not leave a rejected queue-cleanup promise after a write failure', async () => {
+    const blockingParent = path.join(testDir, 'parent-file')
+    fs.writeFileSync(blockingParent, 'not a directory', 'utf-8')
+    const target = path.join(blockingParent, 'settings.json')
+
+    await expect(safeAtomicWrite(target, 'content')).rejects.toMatchObject({
+      code: expect.stringMatching(/^(EEXIST|ENOTDIR)$/),
+    })
+  })
+
   it('handles multiple concurrent writes to the same destination sequentially without corruption', async () => {
     const target = path.join(testDir, 'concurrent.txt')
     const writes = Array.from({ length: 10 }, (_, i) => safeAtomicWrite(target, `content-${i}`))

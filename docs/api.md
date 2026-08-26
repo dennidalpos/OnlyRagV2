@@ -8,6 +8,18 @@ OnlyRag V2 implementa due livelli di interfaccia:
 
 ## 1. REST API — Python FastAPI Sidecar (`http://127.0.0.1:8000`)
 
+### 1.0. Versioning e compatibilità
+
+La REST API non usa prefissi di versione nell'URL. Il campo `version` di `GET /health` identifica
+la versione del sidecar (`2.3.0`) e non modifica il percorso degli endpoint. Le modifiche ai campi
+obbligatori o ai codici di errore sono breaking change e devono essere accompagnate da una nota di
+migrazione in questo documento; i client devono tollerare campi aggiuntivi nelle risposte.
+
+Gli errori non gestiti restituiscono `500` con `{ "detail": "Internal Server Error", "error_id": "..." }`.
+Il log registra invece un evento JSON con `event`, `error_id`, metodo, path e tipo di eccezione, senza
+messaggio o traceback. Il client deve riportare `error_id` nel supporto; il maintainer lo usa per correlare
+l'evento senza esporre dati locali.
+
 ### 1.1. Health Check
 * **Endpoint:** `GET /health`
 * **Descrizione:** Verifica lo stato operativo del sidecar, la connessione al database LanceDB e l'accelerazione GPU.
@@ -95,6 +107,11 @@ OnlyRag V2 implementa due livelli di interfaccia:
   "doc_ids": ["doc_a1b2c3d4"]
 }
 ```
+
+`top_k` è opzionale, ha default `5` e deve essere un intero maggiore o uguale a `1`.
+Una richiesta non valida riceve `422 Unprocessable Entity` con il formato standard FastAPI.
+Il valore `0` e i valori negativi, precedentemente accettati senza risultati, sono ora rifiutati:
+la migrazione consiste nell'omettere il campo o normalizzarlo a un intero positivo.
 * **Risposta (200 OK):**
 ```json
 [
@@ -412,4 +429,3 @@ const report = await analyzeLogs()
 | `ingest:delete` | `deleteIngestedDocument(docId)` | `docId: string` | `{ success: boolean }` | Eliminazione del documento e dei relativi vettori da LanceDB. |
 | `vector:search` | `searchVectorDb(...)` | `query, topK?, embeddingModel?, docIds?` | `VectorSearchResult[]` | Ricerca ibrida (vettoriale densa + BM25) su LanceDB. |
 | `export:document` | `exportDocument(...)` | `markdownContent, format, outputFolder?` | `{ success: boolean, message?: string, error?: string }` | Compilazione ed esportazione compressa in PDF, DOCX o Markdown. |
-

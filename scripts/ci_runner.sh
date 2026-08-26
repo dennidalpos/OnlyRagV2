@@ -7,6 +7,18 @@ set -euo pipefail
 
 trap 'echo "[ERROR] CI execution failed at line $LINENO" >&2; exit 1' ERR
 
+for required_command in node npm python; do
+    command -v "$required_command" >/dev/null 2>&1 || {
+        echo "[ERROR] Required command not found: $required_command" >&2
+        exit 1
+    }
+done
+
+if [ ! -d "sidecar" ]; then
+    echo "[ERROR] Required directory not found: sidecar" >&2
+    exit 1
+fi
+
 echo "====================================================="
 echo " OnlyRag V2 - CI/CD Script Verification Runner"
 echo "====================================================="
@@ -18,12 +30,8 @@ echo "[2/3] Running Vitest Unit Tests..."
 npm run test:fast
 
 echo "[3/3] Running Python Sidecar Syntax Check..."
-if [ -d "sidecar" ]; then
-    find sidecar -name "*.py" -exec python -m py_compile {} +
-    echo "[PASS] Python sidecar syntax clean."
-else
-    echo "[SKIP] sidecar directory not found, skipping syntax check."
-fi
+find sidecar -name "*.py" -exec python -m py_compile {} +
+echo "[PASS] Python sidecar syntax clean."
 
 echo "====================================================="
 echo " ALL CI CHECKS PASSED SUCCESSFULLY!"

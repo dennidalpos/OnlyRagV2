@@ -8,6 +8,7 @@
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
     "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
+    "format:check": "git diff --check HEAD",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:fast": "vitest run --reporter=dot",

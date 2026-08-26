@@ -30,12 +30,23 @@ jobs:
           cache: 'pip'
 
       - name: Install Node Dependencies
-        run: npm ci
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
 
       - name: Install Python Dependencies
+        shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path -LiteralPath 'sidecar/requirements-dev.txt')) {
+            throw 'Required sidecar dependency file not found: sidecar/requirements-dev.txt'
+          }
           python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed with exit code $LASTEXITCODE." }
           pip install -r sidecar/requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw "Python dependency installation failed with exit code $LASTEXITCODE." }
 
       - name: Run Serial Quality & Lint Script (Fail-Fast)
         shell: pwsh

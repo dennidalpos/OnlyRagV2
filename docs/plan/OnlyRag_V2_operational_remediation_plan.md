@@ -3,7 +3,7 @@
 **Destinatario:** agente AI incaricato di analizzare, correggere e verificare il progetto  
 **Versione:** 1.0  
 **Data:** 26 agosto 2026  
-**Input considerati:** audit critico precedente, `PROJECT_STATUS.json`, `specifica_audit_prompt_onlyrag.txt`, `README.md`, `architecture.md`, `api.md`, `modules.md`, `libraries-and-domain-implementations.md`, `agent-live-testing.md` e `setup-and-env.md`.
+**Input considerati:** audit critico precedente, [`PROJECT_STATUS.json`](../../PROJECT_STATUS.json), [`specifica_audit_prompt_onlyrag.txt`](../archive/specifica_audit_prompt_onlyrag.txt), [`README.md`](../README.md), [`architecture.md`](../architecture.md), [`api.md`](../api.md), [`modules.md`](../modules.md), [`libraries-and-domain-implementations.md`](../libraries-and-domain-implementations.md), [`agent-live-testing.md`](../agent-live-testing.md) e [`setup-and-env.md`](../setup-and-env.md).
 
 ## 1. Mandato operativo
 
@@ -284,18 +284,6 @@ Sei l'agente di remediation di OnlyRag V2. Non iniziare modifiche finché non ha
 
 Output obbligatorio: piano riconciliato, modifiche effettuate, test e comandi con exit code, metriche per-run, modello e capability probe, rischi residui, rollback e decisioni che richiedono approvazione umana.
 ```
-
-## Riferimenti
-
-[1]: /home/ubuntu/upload/PROJECT_STATUS.json "Tracker operativo delle attività pendenti"
-[2]: /home/ubuntu/upload/specifica_audit_prompt_onlyrag.txt "Specifica tecnica dell'infrastruttura di audit prompt"
-[3]: /home/ubuntu/OnlyRag_V2_critical_audit.md "Audit critico di OnlyRag V2"
-[4]: /home/ubuntu/upload/architecture.md "Architettura di Sistema & Flussi Dati — OnlyRag V2"
-[5]: /home/ubuntu/upload/api.md "Riferimento API & Contratti di Comunicazione — OnlyRag V2"
-[6]: /home/ubuntu/upload/modules.md "Specifiche Tecniche dei Moduli — OnlyRag V2"
-[7]: /home/ubuntu/upload/agent-live-testing.md "Live Agent Testing"
-[8]: /home/ubuntu/upload/setup-and-env.md "Guida di Installazione, Ambiente e Configurazione Hardware"
-
 
 # Addendum correttivo — Debito repository, Zod e semplificazione
 

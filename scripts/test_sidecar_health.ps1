@@ -98,6 +98,10 @@ try {
         Write-Host "`n[4/4] Running Pytest test suite (sidecar/tests/)..." -ForegroundColor Yellow
     }
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
+    $testsDir = Join-Path $rootDir 'sidecar/tests'
+    if (-not (Test-Path -LiteralPath $testsDir)) {
+        throw "[FAIL] Required sidecar test directory not found: $testsDir"
+    }
     $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
     $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
     $pythonExeName = if ($isWindowsHost) { "python.exe" } else { "python" }
@@ -105,7 +109,7 @@ try {
     $pytestBin = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pytestExeName)
 
     if (Test-Path $pytestBin) {
-        & $pytestBin "$rootDir\sidecar\tests" -q
+        & $pytestBin $testsDir -q
         if ($LASTEXITCODE -ne 0) {
             throw "[FAIL] Pytest test suite failed with exit code $LASTEXITCODE."
         }
@@ -114,12 +118,9 @@ try {
         $appDataPy = if ($env:APPDATA) { Join-Path (Join-Path $env:APPDATA "onlyrag-v2\python_venv") (Join-Path $venvBinDir $pythonExeName) } else { $null }
         $pyCmd = if (Test-Path $appDataPy) { $appDataPy } else { "python" }
 
-        & $pyCmd -m pytest "$rootDir\sidecar\tests" -q 2>$null
+        & $pyCmd -m pytest $testsDir -q
         if ($LASTEXITCODE -ne 0) {
-            & $pyCmd -m pytest "$rootDir\sidecar\tests"
-            if ($LASTEXITCODE -ne 0) {
-                throw "[FAIL] Sidecar test suite failed with exit code $LASTEXITCODE."
-            }
+            throw "[FAIL] Sidecar test suite failed with exit code $LASTEXITCODE."
         }
         if (-not $Fast -or $Full) { Write-Host "[PASS] Sidecar test suite clean." -ForegroundColor Green }
     }

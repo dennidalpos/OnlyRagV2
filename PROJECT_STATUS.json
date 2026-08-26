@@ -1,16 +1,21 @@
 {
   "todos": [
-    "bug: npm run test:fast resta instabile per ordine/timeout: ultima esecuzione 1555/1557, 2 fallimenti nell'orchestratore e un ENOENT asincrono nei test di sessione.",
-    "bug: Audit major rinviato: Electron 44, js-yaml 5 e TypeScript 7 richiedono una migrazione dedicata con smoke, typecheck e test.",
-    "Ricerca web azionabile: trigger e direttive per usare davvero web_search e fetch_web_content sui pattern di librerie aggiornate.",
-    "Badge compatible da capability live: derivarlo da /api/tags invece che dal catalogo curato a mano in codingModelMatrix.ts.",
-    "Verifica contesto allocato: confrontare /api/ps con il num_ctx richiesto. Segnale di verifica, non fonte di dimensionamento.",
-    "Sonda live con workspace pre-seminato, per esercitare ensureRunnableMilestone su un progetto esistente.",
-    "Conservazione log live: snapshot per-run con timestamp in agentLiveHarness.ts, contro la rotazione a 10 MB e clean_workspace.ps1.",
-    "Verifiche live mancanti, coperte solo da unit test: direttiva TS2305 con lista export, citazione verbatim TS2613/TS2614, nuova forma di buildUninstallablePackageDirective, guard installVersionDowngrade (downgrade, major vecchia ed ETARGET preflight), ramo terminale budgetExhaustionVerification, soppressione repo map di turnContextPolicy.",
-    "Pulizia e scope skill: arricchire le skill minimali e chiarire lo scope di auto-install dell'hub (workspace vs userData).",
-    "Refactoring modulare tool (Blueprint 4): scorporare agentToolExecutorService.ts nei moduli SRP sotto electron/core/domain/agent/tools/.",
-    "Validazione visiva (Blueprint 5.7): visualValidationTool.ts su Electron Offscreen WebContents per screenshot, DOM e console.error.",
-    "First-Class Artifacts Engine (Blueprint 5.7): canali IPC artifacts:* e pannello Live Preview sandboxato."
+    "Metriche HTTP e tracing end-to-end: aggiungere contatori/durate per endpoint, status e tipo errore con cardinalità limitata, senza URL completi, query o percorsi locali; impatto medio, urgenza bassa, sforzo M.",
+    "Audit redazione log operativi: sostituire filename, percorsi locali, URL e messaggi eccezione nei log non ancora sanitizzati con contesto sicuro; impatto alto, urgenza media, sforzo M.",
+    "Audit contratti residui REST/IPC: introdurre schemi runtime per payload IPC e vincoli coerenti per IngestPathRequest, export e history, con fixture OpenAPI e migrazione versionata; impatto alto, urgenza media, sforzo L.",
+    "Boundary presentation residue: spostare sidecarProcessManager da diagnosticsIpc.ts e agentSessionStateRepository da agentIpc.ts dietro application facades, con test IPC; impatto medio, urgenza bassa, sforzo M.",
+    "bug: Audit major rinviato: Electron 44, js-yaml 5 e TypeScript 7 richiedono una migrazione dedicata con smoke, typecheck e test; impatto medio, urgenza bassa, sforzo L.",
+    "Coverage CI: introdurre provider Vitest e soglie solo dopo una baseline misurata, mantenendo il gate rapido separato; impatto medio, urgenza bassa, sforzo M.",
+    "Automatizzare nel gate di qualità il controllo dei link Markdown locali e degli esempi npm documentati; impatto basso, urgenza bassa, sforzo S.",
+    "Ricerca web azionabile: trigger e direttive per usare davvero web_search e fetch_web_content sui pattern di librerie aggiornate; impatto medio, urgenza bassa, sforzo M.",
+    "Badge compatible da capability live: derivarlo da /api/tags invece che dal catalogo curato a mano in codingModelMatrix.ts; impatto medio, urgenza media, sforzo M.",
+    "Verifica contesto allocato: confrontare /api/ps con il num_ctx richiesto. Segnale di verifica, non fonte di dimensionamento; impatto medio, urgenza bassa, sforzo S.",
+    "Sonda live con workspace pre-seminato, per esercitare ensureRunnableMilestone su un progetto esistente; impatto medio, urgenza bassa, sforzo M.",
+    "Conservazione log live: snapshot per-run con timestamp in agentLiveHarness.ts, contro la rotazione a 10 MB e clean_workspace.ps1; impatto medio, urgenza media, sforzo S.",
+    "Verifiche live mancanti, coperte solo da unit test: direttiva TS2305 con lista export, citazione verbatim TS2613/TS2614, nuova forma di buildUninstallablePackageDirective, guard installVersionDowngrade (downgrade, major vecchia ed ETARGET preflight), ramo terminale budgetExhaustionVerification, soppressione repo map di turnContextPolicy; impatto medio, urgenza media, sforzo M.",
+    "Pulizia e scope skill: arricchire le skill minimali e chiarire lo scope di auto-install dell'hub (workspace vs userData); impatto medio, urgenza bassa, sforzo M.",
+    "Refactoring modulare tool (Blueprint 4): scorporare agentToolExecutorService.ts nei moduli SRP sotto electron/core/domain/agent/tools/; impatto medio, urgenza bassa, sforzo L.",
+    "Validazione visiva (Blueprint 5.7): visualValidationTool.ts su Electron Offscreen WebContents per screenshot, DOM e console.error; impatto medio, urgenza bassa, sforzo L.",
+    "First-Class Artifacts Engine (Blueprint 5.7): canali IPC artifacts:* e pannello Live Preview sandboxato; impatto alto, urgenza bassa, sforzo XL."
   ]
 }

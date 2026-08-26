@@ -127,6 +127,7 @@ Orchestra i casi d'uso di sistema implementando la logica applicativa:
 * **`ollamaAppService.ts`**: Facade per la gestione dello stato del daemon Ollama (locale o server in rete remoto via standard HTTP REST API), test della connessione (`testConnection`), scaricamento modelli dalla memoria (`unloadModel`), controllo aggiornamenti automatico (`checkModelUpdates`) e recupero delle specifiche e metriche estese (`parameterSize`, `quantizationLevel`, `contextLength`, `family`, `sizeBytes`, `capabilities`, `digest`) da `/api/tags` e `/api/ps`. Integra il mutex di concorrenza per garantire che venga eseguito il pull/aggiornamento di un solo modello alla volta.
 * **`ollamaModelUpdateAppService.ts`**: Gestione del ciclo di vita per l'aggiornamento automatico e controllato dei modelli Ollama installati localmente. Esegue controlli asincroni e non bloccanti confrontando i digest SHA256 dei manifest locali (`/api/tags`) con i manifest ufficiali del registro (`registry.ollama.ai`), gestisce il mutex di aggiornamento (`acquireUpdateLock`/`releaseUpdateLock`) e previene race condition.
 * **`systemAppService.ts`**: Ispezione delle risorse hardware e verifica preventiva dello spazio su disco per i download.
+* **`taskAppService.ts`**: Facade applicativa per cancellazione task e pulizia dei residui temporanei; `systemIpc.ts` non accede direttamente al runner infrastrutturale.
 
 ### 2.3. Domain Layer (`electron/core/domain/`)
 Contiene entità pure, logica decisionale e regole di business indipendenti dall'infrastruttura:
@@ -235,6 +236,9 @@ Implementa l'interazione con il sistema operativo, i protocolli di rete e l'I/O:
 ---
 
 ## 4. Script di Build, Quality Assurance & Automazione (`scripts/`)
+
+Questa sezione assegna responsabilità agli script. I comandi canonici, i prerequisiti e le procedure
+di esecuzione sono documentati esclusivamente in [`setup-and-env.md`](./setup-and-env.md).
 
 * **`scripts/test_bundle_smoke.ps1`**:
   * **Responsabilità**: Esegue lo smoke test automatizzato del bundle Electron (`dist-electron/main.js`). Compila con Vite ed esegue il main process in modalità headless (`--smoke-test` / `ONLYRAG_SMOKE_TEST=1`), verificando che tutti i moduli runtime (incluso `depcheck` e i parser) e i canali IPC si inizializzino correttamente prima di emettere `[SMOKE_TEST_PASS]` ed uscire con codice 0.

@@ -40,6 +40,7 @@ try {
     if ($pythonVersion -notmatch 'Python 3\.12\.') { Stop-WithMessage "Rilevato ${pythonVersion}: richiesto Python 3.12." }
 
     npm ci
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage "Installazione delle dipendenze npm fallita con exit code $LASTEXITCODE." }
     $venvDir = Join-Path $rootDir '.venv'
     $venvPython = if ($env:OS -eq 'Windows_NT') { Join-Path (Join-Path $venvDir 'Scripts') 'python.exe' } else { Join-Path (Join-Path $venvDir 'bin') 'python' }
     $venvIsValid = $false

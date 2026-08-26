@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class IngestResponse(BaseModel):
     id: str
@@ -42,7 +42,7 @@ class PagePreviewResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str
-    top_k: Optional[int] = 5
+    top_k: Optional[int] = Field(default=5, ge=1)
     embedding_model: Optional[str] = "nomic-embed-text"
     doc_id: Optional[str] = None
     doc_ids: Optional[List[str]] = None
@@ -124,4 +124,3 @@ class PromptHistoryRemoveRequest(BaseModel):
     session_ids: Optional[List[str]] = None
     # Raw workspace path; hashed internally to the same project_id used at index time.
     project_path: Optional[str] = None
-

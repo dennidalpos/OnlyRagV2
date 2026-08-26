@@ -1,16 +1,49 @@
 import os
 import sys
+import asyncio
+import json
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 # Ensure root workspace directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from sidecar.main import app
+from sidecar.main import app, global_exception_handler
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.router import classify_file_type, DocumentCategory
 
 client = TestClient(app)
+
+def test_global_error_contract_is_safe_and_correlatable(monkeypatch):
+    request = Request({
+        "type": "http",
+        "method": "POST",
+        "path": "/contract-test",
+        "query_string": b"",
+        "headers": [],
+        "scheme": "http",
+        "server": ("testserver", 80),
+        "client": ("testclient", 1),
+    })
+    logged = []
+    monkeypatch.setattr("sidecar.main.logger.error", lambda message: logged.append(message))
+
+    response = asyncio.run(global_exception_handler(request, RuntimeError("secret path C:/private/token")))
+    payload = json.loads(response.body)
+    event = json.loads(logged[0])
+
+    assert response.status_code == 500
+    assert payload["detail"] == "Internal Server Error"
+    assert payload["error_id"] == event["error_id"]
+    assert event == {
+        "error_id": payload["error_id"],
+        "error_type": "RuntimeError",
+        "event": "unhandled_exception",
+        "method": "POST",
+        "path": "/contract-test",
+    }
+    assert "secret path" not in logged[0]
 
 def test_health_endpoint():
     response = client.get("/health")
@@ -95,6 +128,13 @@ def test_vector_search_empty_query():
     assert response.status_code == 200
     data = response.json()
     assert data == []
+
+def test_vector_search_rejects_non_positive_top_k():
+    response = client.post("/vector/search", json={"query": "test query", "top_k": 0})
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["loc"] == ["body", "top_k"]
+    assert error["type"] == "greater_than_equal"
 
 def test_tasks_cancel_endpoint():
     response = client.post("/tasks/cancel?task_id=test-123")

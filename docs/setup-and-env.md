@@ -172,6 +172,9 @@ La suite Python gira sempre su uno store LanceDB temporaneo isolato: `sidecar/te
 
 ### Script di Automazione e Qualità (`scripts/`)
 ```powershell
+# Verifica whitespace sul diff rispetto a HEAD
+npm run format:check
+
 # Gate seriale del repository (JSON + TypeScript + sintassi Python + Vitest + Smoke Test)
 .\scripts\lint_format.ps1 -Fast
 
@@ -194,6 +197,13 @@ npm run clean:full   # Factory reset completo (Repo + Logs + UserData)
 # Verifica dello stato di salute del sidecar locale
 .\scripts\test_sidecar_health.ps1 -Fast
 ```
+
+Gli script di automazione falliscono esplicitamente se mancano comandi, directory o file richiesti;
+il controllo CI verifica anche gli exit code di `npm ci` e dell'installazione Python. Il controllo
+Pytest esegue una sola prova e conserva stderr, senza retry diagnostici o passaggi silenziosi.
+`npm run format:check` verifica il whitespace del diff con `git diff --check HEAD`; non è un
+formatter AST. Non esiste ancora un gate coverage: prima di introdurlo servono un provider Vitest
+compatibile e una baseline misurata, per evitare soglie arbitrarie o test più lenti del gate rapido.
 
 ### Build di Produzione e Creazione Installer NSIS
 ```powershell

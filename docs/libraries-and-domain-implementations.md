@@ -70,7 +70,7 @@ Questo documento costituisce la fonte di verità sulle dipendenze esterne utiliz
 | Libreria | Versione | Caso d'Uso Specifico nel Repository |
 | :--- | :--- | :--- |
 | **`dpdm`** | `^4.3.0` | Analisi statica dei cicli di importazione e dipendenze circolari (*circular dependencies*) tra moduli TypeScript/JavaScript (`src/main.tsx`, `electron/main.ts`), con risoluzione nativa di `tsconfig.json`. |
-| **`knip`** | `^6.32.2` | Analisi di code hygiene completa: rilevamento di file orfani, funzioni/tipi esportati ma non utilizzati, e dipendenze fantasma o non dichiarate in `package.json` (`knip.json`). |
+| **`knip`** | `^6.32.3` | Analisi di code hygiene completa: rilevamento di file orfani, funzioni/tipi esportati ma non utilizzati, e dipendenze fantasma o non dichiarate in `package.json` (`knip.json`). |
 | **`skott`** | `^0.35.11` | Generazione del grafo di dipendenze architetturali con esportazione CLI ad albero (`file-tree`) e Web UI interattiva locale (`--displayMode=webapp`) per esplorare visivamente i collegamenti tra moduli. |
 
 ---

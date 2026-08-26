@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow, shell } from 'electron'
 import { systemAppService } from '../application/systemAppService'
-import { taskRunner } from '../infrastructure/process/taskRunner'
+import { taskAppService } from '../application/taskAppService'
 
 export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle(
@@ -38,15 +38,13 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
 
   ipcMain.handle('task:cancel', async (_, taskId?: string) => {
     if (taskId) {
-      return taskRunner.cancelTask(taskId)
+      return taskAppService.cancelTask(taskId)
     } else {
-      taskRunner.cancelAllTasks()
-      return { success: true, message: 'All active tasks cancelled.' }
+      return taskAppService.cancelAllTasks()
     }
   })
 
   ipcMain.handle('task:clean-residuals', async () => {
-    return await taskRunner.cleanTempResiduals()
+    return await taskAppService.cleanTempResiduals()
   })
 }
-

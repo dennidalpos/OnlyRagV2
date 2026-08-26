@@ -23,7 +23,7 @@ try {
     $nodeVersion = (& node --version).Trim().TrimStart('v')
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Node.js non trovato nel PATH. Installare Node.js 22 LTS o superiore.' }
     $nodeMajor = [int]($nodeVersion.Split('.')[0])
-    if ($nodeMajor -lt 22) { Stop-WithMessage "Node.js $nodeVersion rilevato: richiesto >=22." }
+    if ($nodeMajor -lt 22 -or $nodeMajor -ge 26) { Stop-WithMessage "Node.js $nodeVersion rilevato: richiesto >=22 e <26." }
 
     $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pythonLauncher) {

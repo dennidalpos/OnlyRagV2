@@ -16,9 +16,12 @@ LLM, nor mark a milestone verified without a real command exiting 0 (blueprint �
 | Type check | `npx tsc --noEmit` |
 | Python sidecar tests | `npm run test:sidecar` |
 | Live agent probe | `npm run test:live` |
+| Repository cleanup | `npm run clean` |
 
 `npm run lint` is **not** a linter: it is the whole serial gate — format, typecheck, vitest, build,
 bundle smoke. CI runs it plus `test:sidecar`, and nothing else. Runtimes: Node 22–25, Python 3.12.
+`npm run package:win` richiede un `.venv` Python 3.12 e produce il sidecar standalone prima di NSIS;
+il percorso separato `npm run build` non compila il sidecar.
 
 ## 3. Local environment
 `npm run test:live` needs Ollama on `127.0.0.1:11434` with the coding model pulled, takes ~5 min,

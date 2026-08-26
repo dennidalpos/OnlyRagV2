@@ -50,9 +50,21 @@ try {
     $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
     $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
     $pyinstallerExeName = if ($isWindowsHost) { "pyinstaller.exe" } else { "pyinstaller" }
+    $venvPythonExeName = if ($isWindowsHost) { "python.exe" } else { "python" }
+    $venvPython = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $venvPythonExeName)
     $venvPyInstaller = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pyinstallerExeName)
 
-    if (-not $SkipSidecar -and (Test-Path $venvPyInstaller)) {
+    if (-not $SkipSidecar) {
+        if (-not (Test-Path -LiteralPath $venvPython)) {
+            throw "[ERRORE] Python del virtualenv non trovato in $venvPython. Eseguire npm run setup:dev."
+        }
+        $venvPythonVersion = (& $venvPython --version 2>&1).ToString()
+        if ($LASTEXITCODE -ne 0 -or $venvPythonVersion -notmatch 'Python 3\.12\.') {
+            throw "[ERRORE] Virtualenv non compatibile: rilevato $venvPythonVersion, richiesto Python 3.12. Eseguire npm run setup:dev."
+        }
+        if (-not (Test-Path -LiteralPath $venvPyInstaller)) {
+            throw "[ERRORE] PyInstaller non trovato in $venvPyInstaller. Eseguire npm run setup:dev."
+        }
         # --distpath must point to sidecar_dist (not PyInstaller's default ./dist), which is what
         # package.json's electron-builder extraResources actually reads from. Without this flag,
         # PyInstaller wrote to ./dist/sidecar, colliding with -- and getting wiped by -- the
@@ -62,9 +74,13 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "[ERRORE] Compilazione PyInstaller Sidecar fallita con codice $LASTEXITCODE."
         }
+        $sidecarExe = Join-Path $rootDir "sidecar_dist\sidecar\sidecar.exe"
+        if (-not (Test-Path -LiteralPath $sidecarExe)) {
+            throw "[ERRORE] PyInstaller ha terminato senza produrre $sidecarExe."
+        }
         if (-not $Fast) { Write-Host "[OK] Standalone sidecar.exe generato con successo in sidecar_dist/sidecar." -ForegroundColor Green }
     } else {
-        if (-not $Fast) { Write-Host "[WARN] PyInstaller non trovato in .venv o flag SkipSidecar attivo. L'installer utilizzerà l'auto-installer dinamico Python." -ForegroundColor Yellow }
+        if (-not $Fast) { Write-Host "[WARN] Flag SkipSidecar attivo: l'installer non includerà il sidecar standalone." -ForegroundColor Yellow }
     }
 
     # 3. Compilazione Bundle Vite & Smoke Test del Main Process
@@ -78,6 +94,9 @@ try {
 
     # 4. Impacchettamento NSIS tramite electron-builder
     if (-not $Fast) { Write-Host "`n[4/5] Avvio impacchettamento NSIS (electron-builder)..." -ForegroundColor Yellow }
+    if (-not $SkipSidecar -and -not (Test-Path -LiteralPath (Join-Path $rootDir "sidecar_dist\sidecar"))) {
+        throw "[ERRORE] Sorgente sidecar mancante prima del packaging NSIS."
+    }
     $distPath = Join-Path $rootDir "dist"
     if (Test-Path $distPath) {
         Remove-Item -Path (Join-Path $distPath "win-unpacked") -Recurse -Force -ErrorAction SilentlyContinue

@@ -3,6 +3,7 @@ import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -19,7 +20,7 @@ export interface SessionWatchdogParams {
   settings: AppSettings
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string) => void
-  persistCurrentState: () => Promise<void>
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
   stepCountBox: { value: number }
   isSessionActive: () => boolean
   /** Removes this run's session from the module-level registry (the Map lives in agentOrchestratorAppService.ts). */
@@ -70,7 +71,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, false, timeoutSummary)
     emitDone(false, timeoutSummary)
     agentToolExecutorService.rollbackJournal()
-    await persistCurrentState()
+    await persistCurrentState('timeout')
     finalizeSession()
   }, SESSION_TIMEOUT_MS)
 

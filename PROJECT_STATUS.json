@@ -1,7 +1,5 @@
 {
   "todos": [
-    "Deliverable directory: regola sintattica che distingua le milestone di creazione da quelle di spostamento, per evitare cartelle non dimostrabili.",
-    "Lo stato di sessione non registra COME si e' chiusa (finish, tetto step, cancel, timeout, breaker): la sonda lo deduce dal testo della summary.",
     "Ricerca web azionabile: trigger e direttive per usare davvero web_search e fetch_web_content sui pattern di librerie aggiornate.",
     "Badge compatible da capability live: derivarlo da /api/tags invece che dal catalogo curato a mano in codingModelMatrix.ts.",
     "Verifica contesto allocato: confrontare /api/ps con il num_ctx richiesto. Segnale di verifica, non fonte di dimensionamento.",

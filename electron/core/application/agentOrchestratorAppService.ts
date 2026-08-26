@@ -28,6 +28,7 @@ const activeAgentSessions = new Map<string, AgentSession>()
 
 function cleanupSession(session: AgentSession) {
   session.isCancelled = true
+  void session.persistCancellation?.()
   // A step paused inside requestApproval() must not block forever just because the task was
   // cancelled instead of answered: resolving false lets the awaited Promise settle, the
   // paused `while` loop observe isCancelled on its next check, and exit cleanly.
@@ -289,7 +290,7 @@ export async function runAgentOrchestratorLoop(
       if (settings.enableCodingAgentDebugLog) {
         codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, true, `Proposed tool call: ${parsedTool.tool}`)
       }
-      await persistCurrentState()
+      await persistCurrentState('plan_proposal')
       finalizeSession()
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
@@ -373,6 +374,12 @@ export async function runAgentOrchestratorLoop(
     if (processingOutcome.outcome === 'return') return processingOutcome.result
   }
 
+  // Cancellation and timeout persist their own terminal checkpoint. Do not fall through to
+  // the ordinary epilogue, which would overwrite that reason with a successful completion.
+  if (session.isCancelled) {
+    return { success: false, summary: "Task interrotto dall'utente." }
+  }
+
   // The step budget was the one session exit that verified nothing. `finish` runs the
   // project's own check and promotes whatever it proves; falling out of the loop went straight
   // to emitDone, so a run that delivered every file its plan named and never spent a step on
@@ -421,7 +428,7 @@ export async function runAgentOrchestratorLoop(
   if (settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, true, endSummary)
   }
-  await persistCurrentState()
+  await persistCurrentState(budgetExhausted ? 'step_budget' : undefined)
   finalizeSession()
   return { success: true, summary: endSummary }
 }

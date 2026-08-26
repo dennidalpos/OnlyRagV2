@@ -3,7 +3,7 @@ import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryComp
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
-import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { agentSessionStateRepository, type AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export interface SessionPersistenceParams {
@@ -26,7 +26,7 @@ export interface SessionPersistenceParams {
 export interface SessionPersistence {
   /** Builds the single SESSION_TRACKER.md payload from live session state. */
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
-  persistCurrentState: () => Promise<void>
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
   emitStepUpdate: (statusText?: string) => void
 }
 
@@ -75,7 +75,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
     })
   }
 
-  const persistCurrentState = async () => {
+  const persistCurrentState = async (terminationReason?: AgentSessionTerminationReason) => {
     // Only the plan's completion flag is persisted: every other field of the compact
     // state is a projection of planMilestones, which is already stored below.
     const isPlanCompleted = goalPlanner.hasPlan()
@@ -95,6 +95,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       initialUserTask,
       updatedAt: new Date().toISOString(),
       status: isPlanCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+      terminationReason,
     })
 
     if (workspacePath) {

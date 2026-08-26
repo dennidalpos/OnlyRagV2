@@ -84,7 +84,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
         if (ctx.settings.enableCodingAgentDebugLog) {
           codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, decision.summary)
         }
-        await ctx.persistCurrentState()
+        await ctx.persistCurrentState('verification_failed')
         ctx.finalizeSession()
         return { outcome: 'return', result: { success: false, summary: decision.summary } }
       }
@@ -155,7 +155,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
     codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
   }
-  await ctx.persistCurrentState()
+  await ctx.persistCurrentState('finish')
   if (ctx.workspacePath) {
     // The ordinary checkpoint above projects the live plan without a closing summary. Write
     // the final projection last, or that checkpoint immediately erases section 5 again.
@@ -439,7 +439,7 @@ ${planDirective.blockDirective}`
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, stagSummary)
     }
     ctx.emitDone(false, stagSummary)
-    await ctx.persistCurrentState()
+    await ctx.persistCurrentState('circuit_breaker')
     ctx.finalizeSession()
     return { outcome: 'return', result: { success: false, summary: stagSummary } }
   }

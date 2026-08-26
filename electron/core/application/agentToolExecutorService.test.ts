@@ -26,6 +26,7 @@ describe('AgentToolExecutorService Unit Tests', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-executor-test-'))
     npmRegistryClient.clearCache()
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
   })
 
   afterEach(() => {

@@ -57,6 +57,31 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loadedAfterClear).toBeNull()
   })
 
+  it('persists the terminal reason as structured state rather than requiring summary parsing', async () => {
+    const reasons = ['finish', 'step_budget', 'cancelled', 'timeout', 'circuit_breaker'] as const
+
+    for (const terminationReason of reasons) {
+      const sessionId = `terminal-${terminationReason}`
+      await expect(
+        agentSessionStateRepository.saveSessionState({
+          sessionId,
+          workspacePath: tempDir,
+          agentMode: 'agent',
+          stepCount: 1,
+          maxSteps: 50,
+          episodes: [],
+          recentFullLogs: [],
+          planMilestones: [],
+          userTask: 'Terminal state test',
+          updatedAt: new Date().toISOString(),
+          terminationReason,
+        })
+      ).resolves.toBe(true)
+
+      await expect(agentSessionStateRepository.loadSessionState(sessionId, tempDir)).resolves.toMatchObject({ terminationReason })
+    }
+  })
+
   it('should clear all session states in workspace and fallback directories', async () => {
     const s1: SavedAgentSessionState = {
       sessionId: 'session-1',

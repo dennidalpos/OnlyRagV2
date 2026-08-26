@@ -30,12 +30,22 @@ import { isCompletionMilestoneTitle, type PlanMilestone } from './planAndSolveGr
 /**
  * A backticked token that something could actually run: a command has whitespace between its
  * program and its arguments (`npm run build`, `pytest -q`), and a path has an extension, which
- * `extractDeliverablePaths` already recognises on its own.
+ * `extractDeliverablePaths` already recognises on its own. Directory creation and relocation
+ * expressions also have whitespace, but mutate structure instead of proving a result.
  *
  * A single backticked word with neither — `` `src/services/` ``, `` `tailwindcss` ``, `` `React` ``
  * — is a name, not a proof.
  */
-const RUNNABLE_BACKTICKED_TOKEN = /`[^`\n]*\S\s+\S[^`\n]*`/
+const BACKTICKED_TOKEN = /`([^`\n]+)`/g
+const DIRECTORY_MUTATION_TOKEN = /^(?:(?:mkdir|md|move|mv|copy|cp|rename|ren|rmdir|rd|remove|rm)\b|git\s+(?:mv|rm)\b|(?:\.{1,2}[\\/]|[a-z0-9_.-]+[\\/])[^`\n]*\s+(?:to|into|->|→)\s+(?:\.{1,2}[\\/]|[a-z0-9_.-]+[\\/]))/i
+
+function hasRunnableBacktickedCommand(title: string): boolean {
+  for (const match of title.matchAll(BACKTICKED_TOKEN)) {
+    const token = match[1].trim()
+    if (/\S\s+\S/.test(token) && !DIRECTORY_MUTATION_TOKEN.test(token)) return true
+  }
+  return false
+}
 
 /**
  * A milestone is falsifiable when something could show it done or not done: a file it names, a
@@ -64,7 +74,7 @@ export function isFalsifiableMilestone(milestone: PlanMilestone): boolean {
   if (isCompletionMilestoneTitle(milestone.title)) return true
   if (milestone.verificationCommand) return true
   if (extractDeliverablePaths(milestone.title).length > 0) return true
-  return RUNNABLE_BACKTICKED_TOKEN.test(milestone.title)
+  return hasRunnableBacktickedCommand(milestone.title)
 }
 
 /**

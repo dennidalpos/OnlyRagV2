@@ -8,6 +8,15 @@ import type { PlanMilestone } from '../../domain/agent/planAndSolveGraph'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 
+export type AgentSessionTerminationReason =
+  | 'finish'
+  | 'step_budget'
+  | 'cancelled'
+  | 'timeout'
+  | 'circuit_breaker'
+  | 'verification_failed'
+  | 'plan_proposal'
+
 export interface SavedAgentSessionState {
   sessionId: string
   workspacePath: string | null
@@ -21,6 +30,8 @@ export interface SavedAgentSessionState {
   initialUserTask?: string
   updatedAt: string
   status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  /** Present only after a terminal path persists its final checkpoint. */
+  terminationReason?: AgentSessionTerminationReason
 }
 
 export class AgentSessionStateRepository {

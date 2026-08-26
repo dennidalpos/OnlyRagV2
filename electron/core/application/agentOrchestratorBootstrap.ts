@@ -14,6 +14,7 @@ import type { ResponseInterpreterState } from './agentOrchestratorResponseInterp
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { resolveSessionContext } from './agentOrchestratorSessionContext'
 import { initializeSessionState } from './agentOrchestratorSessionState'
 import { buildSessionPersistence } from './agentOrchestratorSessionPersistence'
@@ -79,7 +80,7 @@ export interface AgentSessionBootstrap {
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string) => void
   emitStepUpdate: (statusText?: string) => void
-  persistCurrentState: () => Promise<void>
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
   requestApproval: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
   finalizeSession: () => void
@@ -143,6 +144,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     session,
     isSessionActive,
   })
+  session.persistCancellation = () => persistence.persistCurrentState('cancelled')
 
   const watchdog = armSessionWatchdog({
     session,

@@ -8,6 +8,7 @@ import type { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultProcessor'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
+import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -68,7 +69,7 @@ export interface ResponseInterpreterContext {
   loopDetector: AgentActionLoopDetector
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string) => void
-  persistCurrentState: () => Promise<void>
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
   finalizeSession: () => void
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
 }

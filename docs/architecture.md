@@ -192,7 +192,7 @@ flowchart TD
   - Passaggio istantaneo tra conversazioni nello stesso progetto con persistenza dello storico delle modifiche.
 - **Cronologia Sessioni su Filesystem (`sessionHistoryRepository`)**:
   - Unica fonte di verità della cronologia: `<workspace>/.onlyrag/sessions/session_history.json` (fallback `~/.onlyrag_v2/sessions/session_history.json` per sessioni standalone), esposta al renderer dai canali CRUD `sessions:*`.
-  - Ogni sessione contiene i suoi `ExecutedPrompt` (prompt, timestamp ISO 8601, modalità, esito, step totali, file toccati, righe +/-) e i suoi `AgentPlan` (versioni di piano con milestone canonici). Lo stato runtime dell'agente (`.onlyrag/sessions/.agent_state_*.json`) resta limitato a quanto necessario per riprendere il loop.
+  - Ogni sessione contiene i suoi `ExecutedPrompt` (prompt, timestamp ISO 8601, modalità, esito, step totali, file toccati, righe +/-) e i suoi `AgentPlan` (versioni di piano con milestone canonici). Lo stato runtime dell'agente (`.onlyrag/sessions/.agent_state_*.json`) resta limitato a quanto necessario per riprendere il loop, incluso `terminationReason` strutturato per le uscite terminali.
 - **Session State Checkpointing (`persistCurrentState`)**:
   - Lo stato di sessione viene persistito ogni N step (default 5) e immediatamente dopo ogni mutazione file riuscita, garantendo persistenza incondizionata su ogni percorso di uscita (finish, cancel, errore LLM, timeout, circuit breaker).
 

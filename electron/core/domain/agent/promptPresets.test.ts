@@ -64,6 +64,9 @@ describe('core directives survive in the consolidated prompts', () => {
     expect(CODING_CORE_DIRECTIVES).toMatch(/NEVER SURRENDER/)
     expect(CODING_CORE_DIRECTIVES).toMatch(/VERIFY FOR REAL/)
     expect(CODING_CORE_DIRECTIVES).toMatch(/ONE MILESTONE AT A TIME/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/CURRENT LIBRARY FACTS/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/web_search/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/fetch_web_content/)
   })
 
   it('the tool block still advertises the finish tool', () => {

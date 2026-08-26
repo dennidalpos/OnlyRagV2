@@ -97,7 +97,7 @@ mindmap
 
 ### 1.5. Planner Strutturato
 * **Presente**: [`planAndSolveGraph.ts`](../electron/core/domain/agent/planAndSolveGraph.ts) con normalizzazione falsificabilità; [`planMilestoneCapper.ts`](../electron/core/domain/agent/planMilestoneCapper.ts) (max 15); [`workspaceDeliverableProbe.ts`](../electron/core/infrastructure/filesystem/workspaceDeliverableProbe.ts) anti-placeholder; filtri di sicurezza comando in [`verificationCommandSafety.ts`](../electron/core/domain/agent/verificationCommandSafety.ts) (6 famiglie di rifiuto); [`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts) che subordina la promozione alla presenza effettiva dei deliverable.
-* **Presente ma non efficace**: Le milestone che nominano cartelle nude (`src/services/`) non sono dimostrabili direttamente come deliverable e vengono normalizzate in criteri di milestone reali.
+* **Directory non dimostrabili**: Le milestone che nominano cartelle nude (`src/services/`) o operazioni mutanti di directory (`mkdir`, `git mv`, `src/a/ to src/b/`) non sono prove; vengono normalizzate in criteri di milestone reali.
 * **Manca**: Sub-task branching dinamico su errori complessi.
 
 ### 1.6. Compatibilità Universale Ollama

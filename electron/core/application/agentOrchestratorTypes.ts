@@ -35,4 +35,6 @@ export interface AgentSession {
    * once instead of leaving the paused `while` loop blocked forever.
    */
   pendingApprovalResolve?: (response: ApprovalResponse) => void
+  /** Registered after bootstrap so user cancellation can persist its terminal cause. */
+  persistCancellation?: () => Promise<void>
 }

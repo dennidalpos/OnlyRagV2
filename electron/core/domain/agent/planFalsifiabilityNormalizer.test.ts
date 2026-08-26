@@ -108,6 +108,12 @@ describe('normalizePlanFalsifiability', () => {
     expect(isFalsifiableMilestone({ id: 'm-2', title: 'Types check — `npx tsc --noEmit`', status: 'pending' })).toBe(true)
   })
 
+  it('rejects directory creation and relocation syntax disguised as commands', () => {
+    expect(isFalsifiableMilestone({ id: 'm-1', title: 'Create the services folder — `mkdir src/services`', status: 'pending' })).toBe(false)
+    expect(isFalsifiableMilestone({ id: 'm-2', title: 'Relocate services — `src/services/ to src/domain/`', status: 'pending' })).toBe(false)
+    expect(isFalsifiableMilestone({ id: 'm-3', title: 'Relocate services — `git mv src/services src/domain`', status: 'pending' })).toBe(false)
+  })
+
   it('folds a directory milestone into the real work instead of leaving a stamp', () => {
     const result = normalizePlanFalsifiability(
       plan('The project has a services folder — `src/services/`', 'The Tasks page lists tasks — `src/pages/TasksPage.tsx`')

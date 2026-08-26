@@ -443,7 +443,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     cancelActiveAgentTask(sessionId)
 
-    await resultPromise
+    await expect(resultPromise).resolves.toMatchObject({ success: false })
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
     expect(respondToApproval(sessionId, true)).toBe(false)
   })

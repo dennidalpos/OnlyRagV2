@@ -121,6 +121,11 @@ describe('findRegistryInstallIssue', () => {
         { name: 'vite', exists: true },
       ])
     ).toBeNull()
+    expect(
+      findRegistryInstallIssue(requestedInstallVersions('npm install vite@^4.0.0'), {}, [
+        { ...viteFacts, latest: 'not-semver' },
+      ])
+    ).toBeNull()
   })
 
   it('leaves declared old majors to the manifest downgrade rule', () => {

@@ -39,6 +39,7 @@ import { documentIoRepository } from '../infrastructure/filesystem/documentIoRep
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
+import { buildSkillAdherenceRefusal, validateSkillAdherence } from '../domain/skills/skillAdherenceValidator'
 import { workspaceIncrementalTypecheck } from '../infrastructure/process/workspaceIncrementalTypecheck'
 import {
   DEV_TOOL_ALLOWLIST,
@@ -608,7 +609,8 @@ export class AgentToolExecutorService {
     workspacePath: string | null | undefined,
     settings: AppSettings,
     onTerminalOutput?: (data: string) => void,
-    onProcessSpawned?: (proc: ChildProcess) => void
+    onProcessSpawned?: (proc: ChildProcess) => void,
+    activeSkillGuidelines: string = ''
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
 
@@ -963,6 +965,13 @@ Do not retry the same installation. Continue without this tool or ask the user t
           }
         }
 
+        const skillViolation = validateSkillAdherence(workspaceRelativePath, content, activeSkillGuidelines)
+        if (skillViolation) {
+          return {
+            outputForHistory: buildSkillAdherenceRefusal(workspaceRelativePath, skillViolation),
+            logMessage: `Write File Rejected: violates active skill ${skillViolation.skillName}`,
+          }
+        }
 
         // In-flight AST Pre-Commit Syntax Validation
         const astCheck = validateAST(pathCheck.safePath, content)
@@ -1126,6 +1135,13 @@ Do not retry the same installation. Continue without this tool or ask the user t
           const fuzzyRes = applyFuzzyReplace(currentContent, targetContent, replacementContent)
 
           if (fuzzyRes.success && fuzzyRes.updatedContent !== undefined) {
+            const skillViolation = validateSkillAdherence(String(filePath), replacementContent, activeSkillGuidelines)
+            if (skillViolation) {
+              return {
+                outputForHistory: buildSkillAdherenceRefusal(String(filePath), skillViolation),
+                logMessage: `File Replace Rejected: violates active skill ${skillViolation.skillName}`,
+              }
+            }
             const astCheck = validateAST(pathCheck.safePath, fuzzyRes.updatedContent)
             if (!astCheck.isValid) {
               return {
@@ -1164,6 +1180,17 @@ Do not retry the same installation. Continue without this tool or ask the user t
           return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Multi Replace Rejected: ${pathCheck.error}` }
         }
         if (filePath && replacements.length > 0) {
+          const skillViolation = validateSkillAdherence(
+            String(filePath),
+            replacements.map((replacement) => replacement.replacementContent).join('\n'),
+            activeSkillGuidelines
+          )
+          if (skillViolation) {
+            return {
+              outputForHistory: buildSkillAdherenceRefusal(String(filePath), skillViolation),
+              logMessage: `Multi Replace Rejected: violates active skill ${skillViolation.skillName}`,
+            }
+          }
           const beforeContent = this.readContentSafely(pathCheck.safePath)
           this.journal.recordBeforeModification(pathCheck.safePath)
           const res = await this.repo.multiReplaceChunks(pathCheck.safePath, replacements)
@@ -1256,7 +1283,6 @@ Do not retry the same installation. Continue without this tool or ask the user t
           ].join('\n')
           return { outputForHistory: refusal, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
         }
-
 
         // A package name can exist while the explicit version still cannot produce a sound new
         // dependency: either the range matches nothing (preflight ETARGET), or an undeclared

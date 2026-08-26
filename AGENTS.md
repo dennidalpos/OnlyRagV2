@@ -1,6 +1,6 @@
 # AGENTS.md — OnlyRag V2
 
-`rules v1.0 · 2026-08-25` · commands verified on `2026-08-25`
+`rules v1.0 · 2026-08-25` · commands verified on `2026-08-26`
 
 ## 1. Project
 Electron app: local RAG on LanceDB, plus a Coding Agent Studio driving **local Ollama models**

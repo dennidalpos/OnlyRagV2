@@ -59,9 +59,9 @@
  * Pure domain: command text and the manifest's declared ranges in, verdict out.
  */
 
+import { major, maxSatisfying, valid, validRange } from 'semver'
 import { extractRequestedPackages } from './installCommandParser'
 import { majorOf } from './dependencyVersionReality'
-import { major, maxSatisfying, validRange } from 'semver'
 
 /** A package an install command names together with an explicit version specifier. */
 export interface InstallVersionTarget {
@@ -166,13 +166,15 @@ export function findRegistryInstallIssue(
   for (const target of targets) {
     const facts = registryFacts.find((item) => item.name === target.name)
     if (!facts?.exists || !facts.latest || !facts.versions || !validRange(target.spec)) continue
+    const latest = valid(facts.latest)
+    if (!latest) continue
     const resolved = maxSatisfying([...facts.versions], target.spec, { includePrerelease: true })
     if (!resolved) {
-      return { kind: 'unpublished', name: target.name, requested: target.spec, latest: facts.latest }
+      return { kind: 'unpublished', name: target.name, requested: target.spec, latest }
     }
     if (typeof declaredRanges[target.name] === 'string') continue
-    if (major(resolved) < major(facts.latest)) {
-      return { kind: 'stale_major', name: target.name, requested: target.spec, resolved, latest: facts.latest }
+    if (major(resolved) < major(latest)) {
+      return { kind: 'stale_major', name: target.name, requested: target.spec, resolved, latest }
     }
   }
   return null

@@ -340,7 +340,8 @@ export async function runAgentOrchestratorLoop(
       (terminalChunk) => emitLog('terminal', terminalChunk),
       (childProc) => {
         session.activeChildProcess = childProc
-      }
+      },
+      skillsBlock
     )
     agentToolExecutorService.endJournalStep()
 

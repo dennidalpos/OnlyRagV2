@@ -638,6 +638,83 @@ async def async_handler():
     }, 20000)
   })
 
+  describe('active skill adherence gate', () => {
+    const tailwindV4Skill = [
+      '### SKILL: tailwind-css-v4',
+      '```markdown',
+      '- In Tailwind v4, use `@import "tailwindcss";` in the main CSS file.',
+      '- DO NOT write `@tailwind base; @tailwind components; @tailwind utilities;`.',
+      '```',
+    ].join('\n')
+
+    it('blocks a write that introduces syntax explicitly forbidden by an active skill', async () => {
+      const filePath = path.join(tempDir, 'src', 'index.css')
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath, content: '@tailwind base;\n@tailwind utilities;\n' } },
+        tempDir,
+        settings,
+        undefined,
+        undefined,
+        tailwindV4Skill
+      )
+
+      expect(res.outputForHistory).toContain('[ACTIVE SKILL CONSTRAINT — MUTATION NOT APPLIED]')
+      expect(res.outputForHistory).toContain('tailwind-css-v4')
+      expect(fs.existsSync(filePath)).toBe(false)
+    })
+
+    it('allows the current form required by the same skill', async () => {
+      const filePath = path.join(tempDir, 'src', 'index.css')
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath, content: '@import "tailwindcss";\n' } },
+        tempDir,
+        settings,
+        undefined,
+        undefined,
+        tailwindV4Skill
+      )
+
+      expect(res.outputForHistory).toContain('Successfully wrote file')
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('@import "tailwindcss";\n')
+    })
+
+    it('blocks replace and multi-replace before either can persist a forbidden fragment', async () => {
+      const filePath = path.join(tempDir, 'src', 'index.css')
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
+      fs.writeFileSync(filePath, '@import "tailwindcss";\n', 'utf-8')
+
+      const replace = await agentToolExecutorService.executeTool(
+        {
+          tool: 'replace_file_content',
+          parameters: { filePath, targetContent: '@import "tailwindcss";', replacementContent: '@tailwind base;' },
+        },
+        tempDir,
+        settings,
+        undefined,
+        undefined,
+        tailwindV4Skill
+      )
+      const multi = await agentToolExecutorService.executeTool(
+        {
+          tool: 'multi_replace_file_content',
+          parameters: {
+            filePath,
+            replacements: [{ targetContent: '@import "tailwindcss";', replacementContent: '@tailwind utilities;' }],
+          },
+        },
+        tempDir,
+        settings,
+        undefined,
+        undefined,
+        tailwindV4Skill
+      )
+
+      expect(replace.outputForHistory).toContain('[ACTIVE SKILL CONSTRAINT')
+      expect(multi.outputForHistory).toContain('[ACTIVE SKILL CONSTRAINT')
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('@import "tailwindcss";\n')
+    })
+  })
+
   describe('registry install version guard', () => {
     const registryPackument = {
       'dist-tags': { latest: '8.0.0' },

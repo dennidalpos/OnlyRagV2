@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
+    "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:fast": "vitest run --reporter=dot",
@@ -31,6 +32,10 @@
   "keywords": [],
   "author": "Danny Perondi <https://github.com/dennidalpos>",
   "license": "MIT",
+  "engines": {
+    "node": ">=22 <26",
+    "npm": ">=10"
+  },
   "dependencies": {
     "cheerio": "^1.2.0",
     "depcheck": "^1.4.7",
@@ -67,7 +72,7 @@
     "electron-builder": "^26.15.3",
     "gpt-tokenizer": "^4.0.0",
     "happy-dom": "^20.11.2",
-    "knip": "^6.32.2",
+    "knip": "^6.32.3",
     "lucide-react": "^1.31.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -132,5 +137,11 @@
       "runAfterFinish": true,
       "include": "installer/installer.nsh"
     }
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "electron-winstaller@5.4.0": true,
+    "node-pty@1.1.0": true,
+    "electron@43.4.1": true
   }
 }

@@ -98,7 +98,11 @@ try {
         Write-Host "`n[4/4] Running Pytest test suite (sidecar/tests/)..." -ForegroundColor Yellow
     }
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
-    $pytestBin = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\pytest.exe"
+    $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
+    $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
+    $pythonExeName = if ($isWindowsHost) { "python.exe" } else { "python" }
+    $pytestExeName = if ($isWindowsHost) { "pytest.exe" } else { "pytest" }
+    $pytestBin = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pytestExeName)
 
     if (Test-Path $pytestBin) {
         & $pytestBin "$rootDir\sidecar\tests" -q
@@ -107,7 +111,7 @@ try {
         }
         if (-not $Fast -or $Full) { Write-Host "[PASS] Pytest sidecar test suite clean." -ForegroundColor Green }
     } else {
-        $appDataPy = "$env:APPDATA\onlyrag-v2\python_venv\Scripts\python.exe"
+        $appDataPy = if ($env:APPDATA) { Join-Path (Join-Path $env:APPDATA "onlyrag-v2\python_venv") (Join-Path $venvBinDir $pythonExeName) } else { $null }
         $pyCmd = if (Test-Path $appDataPy) { $appDataPy } else { "python" }
 
         & $pyCmd -m pytest "$rootDir\sidecar\tests" -q 2>$null

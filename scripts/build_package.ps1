@@ -47,7 +47,10 @@ try {
     # 2. Compilazione PyInstaller Standalone Executable per Sidecar Python
     if (-not $Fast) { Write-Host "`n[2/5] Compilazione PyInstaller Standalone Executable per Sidecar Python..." -ForegroundColor Yellow }
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
-    $venvPyInstaller = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\pyinstaller.exe"
+    $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
+    $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
+    $pyinstallerExeName = if ($isWindowsHost) { "pyinstaller.exe" } else { "pyinstaller" }
+    $venvPyInstaller = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pyinstallerExeName)
 
     if (-not $SkipSidecar -and (Test-Path $venvPyInstaller)) {
         # --distpath must point to sidecar_dist (not PyInstaller's default ./dist), which is what
@@ -75,7 +78,7 @@ try {
 
     # 4. Impacchettamento NSIS tramite electron-builder
     if (-not $Fast) { Write-Host "`n[4/5] Avvio impacchettamento NSIS (electron-builder)..." -ForegroundColor Yellow }
-    $distPath = Join-Path -Path $PSScriptRoot -ChildPath "..\dist"
+    $distPath = Join-Path $rootDir "dist"
     if (Test-Path $distPath) {
         Remove-Item -Path (Join-Path $distPath "win-unpacked") -Recurse -Force -ErrorAction SilentlyContinue
         Get-ChildItem -Path $distPath -Filter "*.exe" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -89,7 +92,7 @@ try {
 
     # 5. Validazione Artifact NSIS generati
     if (-not $Fast) { Write-Host "`n[5/5] Verifica degli artifact di installazione NSIS in dist/..." -ForegroundColor Yellow }
-    $distPath = Join-Path -Path $PSScriptRoot -ChildPath "..\dist"
+    $distPath = Join-Path $rootDir "dist"
     $nsisInstaller = Get-ChildItem -Path $distPath -Filter "*.exe" | Where-Object { $_.Name -like "*Setup*.exe" } | Select-Object -First 1
 
     if ($null -eq $nsisInstaller) {

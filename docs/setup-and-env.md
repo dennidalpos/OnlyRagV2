@@ -7,8 +7,8 @@ Questo documento costituisce la guida operativa e tecnica di riferimento per l'i
 ## 1. Requisiti di Sistema e Prerequisiti
 
 * **Sistema Operativo:** Windows 10/11 x64 (PowerShell con codifica UTF-8 abilitata).
-* **Runtime Node.js:** Node.js $\ge 18.x$ e npm $\ge 9.x$.
-* **Ambiente Python:** Python $\ge 3.10$ con modulo standard `venv`.
+* **Runtime Node.js:** Node.js 22 LTS o superiore compatibile con il range in `package.json` (npm $\ge 10$).
+* **Ambiente Python:** Python 3.12 con modulo standard `venv`.
 * **Runtime LLM Locale:** **Ollama** ($\ge 0.5.x$) installato e attivo su `http://127.0.0.1:11434`.
 * **Accelerazione Hardware (Opzionale ma Raccomandata):** GPU NVIDIA con supporto CUDA (Architettura Turing, Ampere, Ada Lovelace, Blackwell).
 
@@ -122,15 +122,11 @@ cd OnlyRagV2
 
 ### 2. Installazione Dipendenze Node.js (Electron & React)
 ```powershell
-npm install
+npm run setup:dev
 ```
 
 ### 3. Configurazione Virtual Environment Python (Sidecar)
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r sidecar/requirements.txt
-```
+Lo script risolve la root da `$PSScriptRoot`, quindi funziona anche se lanciato da una directory diversa dalla cartella del repository. Crea `.venv` con Python 3.12 e installa `sidecar/requirements-dev.txt`, che include runtime, `pytest` e `pyinstaller`.
 
 ---
 
@@ -176,8 +172,11 @@ La suite Python gira sempre su uno store LanceDB temporaneo isolato: `sidecar/te
 
 ### Script di Automazione e Qualità (`scripts/`)
 ```powershell
-# Validazione completa seriale (TypeScript + Vitest + Pytest + Smoke Test)
+# Gate seriale del repository (JSON + TypeScript + sintassi Python + Vitest + Smoke Test)
 .\scripts\lint_format.ps1 -Fast
+
+# Suite Pytest del sidecar, separata dal gate npm
+npm run test:sidecar
 
 # Audit architettura e code hygiene completo (dpdm + knip + skott)
 npm run audit:all

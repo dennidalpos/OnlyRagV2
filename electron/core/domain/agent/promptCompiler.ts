@@ -171,7 +171,7 @@ export function compilePromptWithSampleVars(
 
   const resolvedWorkspacePath = contextOverrides?.isStandaloneMode
     ? 'Standalone (No Workspace)'
-    : (contextOverrides?.workspacePath || (typeof window !== 'undefined' ? localStorage.getItem('onlyrag_last_workspace_path') : null) || 'd:/GITHUB/OnlyRagV2')
+    : (contextOverrides?.workspacePath || (typeof window !== 'undefined' ? localStorage.getItem('onlyrag_last_workspace_path') : null) || '[workspace path]')
 
   const samples: Record<string, string> = {}
   for (const variable of node.variables) {

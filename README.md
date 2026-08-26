@@ -34,7 +34,10 @@ All architectural, operational, API and setup specifications reside strictly in 
 - 🧩 [**Modules & Responsibilities**](./docs/modules.md): Complete mapping of Frontend, Electron Main Core, Python Sidecar, and Skill Hub components with input/output contracts.
 - 🔌 [**API Reference & Contracts**](./docs/api.md): REST endpoints (`/health`, `/ingest`, `/search`, `/documents`, `/export`), Electron IPC channels (`window.electronAPI`), TypeScript schemas and error codes.
 - ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware tiers (**legacy / entry / midrange / highend / extreme**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
+- 🤖 [**Coding Agent Studio Blueprint**](./docs/coding-agent-studio-blueprint.md): Canonical agent architecture, implementation evidence, gaps and roadmap.
+- 🧪 [**Live Agent Testing**](./docs/agent-live-testing.md): Prerequisites, live scenarios, isolation rules and audit-log interpretation.
 - 📚 [**Libraries & Domain Implementations**](./docs/libraries-and-domain-implementations.md): External libraries inventory and technical rationale for custom domain implementations.
+- 🛡️ [**Dependency Audit**](./docs/dependency-audit.md): CVE snapshot, outdated packages, false positives, risks and follow-up.
 - 📖 [**Documentation Master Index**](./docs/README.md): Navigable master index.
 
 ---
@@ -149,8 +152,8 @@ graph TD
 
 ### Prerequisites
 * **OS**: Windows 10 / 11 (64-bit)
-* **Node.js**: v18.0.0 or later
-* **Python**: 3.10 or later
+* **Node.js**: 22 LTS or later, within the range declared in `package.json`
+* **Python**: 3.12
 * **Ollama**: Installed and running locally (`http://127.0.0.1:11434`)
 
 ### Installation & Run
@@ -160,11 +163,8 @@ graph TD
 git clone https://github.com/dennidalpos/OnlyRagV2.git
 cd OnlyRagV2
 
-# 2. Install Node.js dependencies
-npm install
-
-# 3. Install Python Sidecar dependencies
-pip install -r sidecar/requirements.txt
+# 2. Prepare the Node.js and Python development environments
+npm run setup:dev
 
 # 4. Start in development mode (Vite + Electron)
 npm run dev
@@ -177,11 +177,12 @@ npm run dev
 | Script | Description |
 |---|---|
 | `npm run dev` | Starts Vite Dev Server and launches Electron with hot module replacement |
+| `npm run setup:dev` | Checks Node.js/Python versions, installs npm dependencies, and prepares `.venv` from the repository root |
 | `npm run typecheck` | Validates TypeScript types across the codebase (`tsc --noEmit`) |
 | `npm run test` | Executes full Vitest unit and integration test suite |
 | `npm run test:fast` | Runs Vitest in summarized fast mode with dot reporter |
 | `npm run test:sidecar` | Runs Python Pytest suite against FastAPI sidecar endpoints |
-| `npm run lint` | Runs TypeScript and Python linters with fail-fast PowerShell script |
+| `npm run lint` | Runs the serial repository gate: JSON, TypeScript, Python syntax, Vitest, and bundle smoke test |
 | `npm run clean` | Cleans build artifacts and repository cache (`scripts/clean_workspace.ps1`) |
 | `npm run clean:full` | Full reset: cleans repo cache and user LanceDB storage in AppData |
 | `npm run package:win` | Packages Windows NSIS installer setup binary (`scripts/build_package.ps1`) |
@@ -240,4 +241,4 @@ OnlyRagV2/
 
 ## 📄 License
 
-This project is open-source and licensed under the **[MIT License](LICENSE)**.
+This project is open-source and licensed under the MIT license.

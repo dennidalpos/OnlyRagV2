@@ -83,7 +83,7 @@ const CODING_VARIABLES: PromptVariableMeta[] = [
     description: "The user's coding instruction for this run",
     sample: '[User instruction / task prompt entered in the chat]',
   },
-  { name: 'workspacePath', description: 'Absolute root path of the active workspace', sample: 'd:/GITHUB/OnlyRagV2' },
+  { name: 'workspacePath', description: 'Absolute root path of the active workspace', sample: '[workspace path]' },
   { name: 'currentDate', description: 'Current date, injected each turn', sample: '2026-08-24 (Monday, August 24, 2026)' },
 ]
 

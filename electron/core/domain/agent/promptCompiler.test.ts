@@ -134,7 +134,7 @@ describe('compilePromptWithSampleVars', () => {
     // 2. coding:directives
     const codingDirectives = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:directives'), 'coding:directives')
     expect(codingDirectives).toContain('LANGUAGE:')
-    expect(codingDirectives).toContain('d:/GITHUB/OnlyRagV2')
+    expect(codingDirectives).toContain('[workspace path]')
 
     // 3. coding:tools
     const codingTools = compilePromptWithSampleVars(PromptCompiler.getDefaultTemplate('coding:tools'), 'coding:tools')

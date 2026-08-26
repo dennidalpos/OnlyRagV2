@@ -1,22 +1,25 @@
-# OnlyRag V2 — Indice Documentazione Ufficiale
+# OnlyRag V2 — Indice della documentazione
 
 Benvenuti nella documentazione ufficiale e centralizzata di **OnlyRag V2**, l'ecosistema AI desktop locale, autonomo e zero-cloud per Retrieval-Augmented Generation (RAG), AI Coding Agent Studio, traduzione strutturata ad alta fedeltà e ingestion multimodale basato su **Electron**, **Ollama**, **LanceDB** e **FastAPI Sidecar**.
 
 ---
 
-## 📚 Indice della Documentazione (Single Source of Truth)
+## 📚 Indice e fonti canoniche
 
-La documentazione del repository risiede esclusivamente in `/docs/` ed è suddivisa nei seguenti documenti canonici:
+La documentazione operativa risiede in `/docs/`. Per evitare divergenze, ogni argomento ha un solo documento autorevole; codice, test e `package.json` restano la fonte normativa per i dettagli eseguibili.
 
-| Documento | Descrizione |
-| :--- | :--- |
-| [**`architecture.md`**](./architecture.md) | Architettura di sistema, topologia multi-process, Clean Architecture a 4 livelli, diagrammi Mermaid, Router Gerarchico a 2 Livelli, Pipeline RAG Ibrida (LanceDB + BM25 + RRF + Re-Ranker) e Agent Studio tool loop. |
-| [**`modules.md`**](./modules.md) | Mappatura dettagliata di tutti i moduli e servizi (Frontend React 19, Electron Main/Presentation/Application/Domain/Infrastructure, Python Sidecar, Skill Hub). Responsabilità, entry point, contratti di input/output e dipendenze. |
-| [**`api.md`**](./api.md) | Specifiche e contratti API completi: canali IPC di Electron (`window.electronAPI`), endpoint REST del FastAPI Sidecar (`/health`, `/ingest`, `/search`, `/documents`, `/export`), payload JSON, schemi TypeScript e gestione errori. |
-| [**`setup-and-env.md`**](./setup-and-env.md) | Guida all'installazione, requisiti minimi di sistema, matrice dei profili hardware (**legacy / entry / midrange / highend / extreme**), formule analitiche di dimensionamento VRAM/RAM/SSD, variabili d'ambiente OS per Ollama, script PowerShell 1-click e comandi seriali di sviluppo/build/test. |
-| [**`libraries-and-domain-implementations.md`**](./libraries-and-domain-implementations.md) | Inventario esaustivo delle librerie esterne utilizzate (Frontend, Electron Main, Python Sidecar), casi d'uso architetturali e motivazioni tecniche delle logiche di dominio sviluppate su misura. |
-| [**`coding-agent-studio-blueprint.md`**](./coding-agent-studio-blueprint.md) | Blueprint architetturale evolutivo di Coding Agent Studio: stato corrente su tre assi ("cosa c'è" / "presente ma non efficace" / "cosa manca"), librerie adottate e proposte, piano di sviluppo per onde con quanto già applicato e verificato, e la sezione **§6 "Come riprendere questo lavoro"** come punto di ingresso per una sessione nuova. |
-| [**`agent-live-testing.md`**](./agent-live-testing.md) | Come far girare il Coding Agent per davvero (modello Ollama reale, workspace reale, nessuna UI) tramite `npm run test:live`: prerequisiti, scenari disponibili, le tre trappole che rendono un run live inutile senza che sembri, e come progettare una sonda che il modello non possa aggirare. |
+## Fonti canoniche per argomento
+
+| Argomento | Fonte autorevole | Contenuto e confini |
+| :--- | :--- | :--- |
+| Topologia e confini architetturali | [`architecture.md`](./architecture.md) | Panoramica multi-process, Clean Architecture, pipeline RAG e integrazione agentica; rimanda al blueprint per i dettagli. |
+| Moduli, responsabilità e percorsi | [`modules.md`](./modules.md) | Inventario di Frontend, Electron, Sidecar, skill e script; nessun duplicato di contratti API. |
+| Contratti REST e IPC | [`api.md`](./api.md) | Endpoint, canali, payload, tipi ed errori; verificare sempre handler, preload e tipi del codice. |
+| Installazione, hardware e comandi | [`setup-and-env.md`](./setup-and-env.md) | Prerequisiti, tier hardware, dimensionamento, Ollama e procedure operative. |
+| Coding Agent Studio e roadmap | [`coding-agent-studio-blueprint.md`](./coding-agent-studio-blueprint.md) | Stato implementato, gap, evidenze, roadmap e principi dell’agente. |
+| Prove live dell’agente | [`agent-live-testing.md`](./agent-live-testing.md) | Prerequisiti, scenari, isolamento e interpretazione dei log live. |
+| Dipendenze e implementazioni custom | [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) | Librerie e logiche custom; le versioni effettive sono nei manifest. |
+| Sicurezza e salute delle dipendenze | [`dependency-audit.md`](./dependency-audit.md) | Snapshot CVE, obsolescenza, ridondanze, rischi e follow-up. |
 
 ---
 
@@ -32,3 +35,7 @@ La documentazione del repository risiede esclusivamente in `/docs/` ed è suddiv
 ## 🔄 Protocollo di Governance
 
 Come stabilito in [`AGENTS.md`](../AGENTS.md), la cartella `/docs/` costituisce l'**unica fonte di verità**. A ogni modifica di codice (architettura, moduli, API, configurazioni o comandi), i file in `/docs/` devono essere contestualmente sincronizzati.
+
+## Archivio
+
+[`archive/`](./archive/) contiene materiale storico non normativo. Non usarlo per dedurre l’architettura, i tool o i comandi correnti: i contenuti sono conservati per riferimento e non fanno parte dell’indice canonico.

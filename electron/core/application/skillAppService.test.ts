@@ -198,5 +198,7 @@ describe('SkillAppService Unit Tests', () => {
     expect(new Set(names).size).toBe(names.length)
     expect(acrossSources.every((s) => Boolean(s.hubId))).toBe(true)
     expect(sources.some((src) => acrossSources.some((s) => s.hubId === src.id))).toBe(true)
+    expect(acrossSources.every((s, index) => s.globalRank === index + 1)).toBe(true)
+    expect(acrossSources.every((s) => s.qualityScore !== undefined)).toBe(true)
   })
 })

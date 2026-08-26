@@ -4,6 +4,8 @@ import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useTranslation } from '../i18n'
 
+export const ALL_SKILL_SOURCES = '__all__'
+
 /**
  * All state and API-calling handlers behind SkillHubModal: loading installed/marketplace
  * skills, switching hub sources, and every install/save/reset/delete/add-hub action. Kept
@@ -15,7 +17,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
   const [installedSkills, setInstalledSkills] = useState<SkillDefinition[]>([])
   const [hubSkills, setHubSkills] = useState<HubSkillItem[]>([])
   const [sources, setSources] = useState<SkillHubSource[]>([])
-  const [selectedSourceId, setSelectedSourceId] = useState<string>('official-core')
+  const [selectedSourceId, setSelectedSourceId] = useState<string>(ALL_SKILL_SOURCES)
   const [isLoading, setIsLoading] = useState(false)
   const [installingSkillId, setInstallingSkillId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -36,10 +38,12 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
       setInstalledSkills(installed)
       setSources(sourcesList)
 
-      const activeSourceId = sourceIdToUse || selectedSourceId || sourcesList[0]?.id || 'official-core'
+      const activeSourceId = sourceIdToUse || selectedSourceId || ALL_SKILL_SOURCES
       setSelectedSourceId(activeSourceId)
 
-      const hub = await apiService.listHubSkillsBySource(activeSourceId, workspacePath || undefined)
+      const hub = activeSourceId === ALL_SKILL_SOURCES
+        ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
+        : await apiService.listHubSkillsBySource(activeSourceId, workspacePath || undefined)
       setHubSkills(hub)
     } catch (err: any) {
       logger.error('SkillHubModal', `Error loading skills/sources: ${err.message}`)
@@ -74,7 +78,9 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     setIsLoading(true)
     if (forceRefresh) setHubSkills([]) // Clear previous items when explicitly refreshing
     try {
-      const hub = await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
+      const hub = newSourceId === ALL_SKILL_SOURCES
+        ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined, forceRefresh)
+        : await apiService.listHubSkillsBySource(newSourceId, workspacePath || undefined, forceRefresh)
       setHubSkills(hub)
     } catch (err: any) {
       logger.error('SkillHubModal', `Error changing source: ${err.message}`)
@@ -89,7 +95,9 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     if (tab === 'hub') {
       setIsLoading(true)
       try {
-        const hub = await apiService.listHubSkillsBySource(selectedSourceId, workspacePath || undefined)
+        const hub = selectedSourceId === ALL_SKILL_SOURCES
+          ? await apiService.listHubSkillsAcrossSources(workspacePath || undefined)
+          : await apiService.listHubSkillsBySource(selectedSourceId, workspacePath || undefined)
         setHubSkills(hub)
       } catch (err: any) {
         logger.error('SkillHubModal', `Error fetching hub skills on tab switch: ${err.message}`)
@@ -204,7 +212,7 @@ export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, 
     const res = await apiService.removeCustomHubSource(sourceId)
     if (res.success) {
       setActionMessage({ type: 'success', text: t('skills.msgHubRemoved') })
-      const nextSourceId = selectedSourceId === sourceId ? 'official-core' : selectedSourceId
+      const nextSourceId = selectedSourceId === sourceId ? ALL_SKILL_SOURCES : selectedSourceId
       await loadSourcesAndSkills(nextSourceId)
     } else {
       setActionMessage({ type: 'error', text: res.error || t('common.error') })

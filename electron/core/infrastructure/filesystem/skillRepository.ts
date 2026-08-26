@@ -54,6 +54,7 @@ export function parseSkillFrontmatter(rawContent: string): { metadata: SkillMeta
       originHubId: (data.originHubId || data.origin_hub_id) ? String(data.originHubId || data.origin_hub_id).trim() : undefined,
       originChecksum: (data.originChecksum || data.origin_checksum) ? String(data.originChecksum || data.origin_checksum).trim() : undefined,
       isModified: data.isModified !== undefined ? Boolean(data.isModified) : (data.is_modified !== undefined ? Boolean(data.is_modified) : undefined),
+      requiredModel: (data.requiredModel || data.required_model || data.model) ? String(data.requiredModel || data.required_model || data.model).trim() : undefined,
       triggers: toStringArray(data.triggers),
       tags: toStringArray(data.tags),
     }
@@ -106,6 +107,9 @@ export function serializeSkillContent(body: string, metadata: Partial<SkillMetad
   }
   if (metadata.isModified !== undefined) {
     lines.push(`is_modified: ${metadata.isModified}`)
+  }
+  if (metadata.requiredModel) {
+    lines.push(`required_model: "${metadata.requiredModel}"`)
   }
 
   lines.push('---', '', body.trim(), '')

@@ -127,6 +127,22 @@ def test_export_contract_rejects_blank_or_malformed_format():
     assert client.post("/export", json={"markdown_content": "   ", "export_format": "pdf"}).status_code == 400
     assert client.post("/export", json={"markdown_content": "# title", "export_format": "pdf/../../x"}).status_code == 422
 
+def test_request_contracts_reject_unknown_fields_and_oversized_values():
+    assert client.post("/vector/search", json={"query": "test", "unexpected": True}).status_code == 422
+    assert client.post("/vector/search", json={"query": "test", "top_k": 101}).status_code == 422
+    assert client.post("/export", json={"markdown_content": "# title", "export_format": "txt"}).status_code == 422
+    assert client.put("/documents/doc-1", json={"markdown_content": "# title", "extra": True}).status_code == 422
+
+def test_translation_contract_requires_bounded_non_blank_languages():
+    assert client.post(
+        "/documents/doc-1/translate-inplace",
+        json={"source_lang": " ", "target_lang": "en"},
+    ).status_code == 422
+    assert client.post(
+        "/documents/doc-1/translate-inplace",
+        json={"source_lang": "en", "target_lang": "x" * 101},
+    ).status_code == 422
+
 def test_vector_search_endpoint():
     payload = {
         "query": "test query",

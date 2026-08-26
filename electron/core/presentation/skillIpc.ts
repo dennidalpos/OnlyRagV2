@@ -23,6 +23,10 @@ export function registerSkillIpcHandlers() {
     return skillAppService.listHubSkillsBySource(sourceId, workspaceRoot, forceRefresh)
   })
 
+  ipcMain.handle('skills:list-hub-all', async (_event, workspaceRoot?: string, forceRefresh?: boolean) => {
+    return skillAppService.listHubSkillsAcrossSources(workspaceRoot, forceRefresh)
+  })
+
   ipcMain.handle('skills:toggle-active', async (_event, skillId: string, isActive: boolean) => {
     return skillAppService.toggleSkillActive(skillId, isActive)
   })

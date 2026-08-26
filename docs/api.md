@@ -15,6 +15,10 @@ la versione del sidecar (`2.3.0`) e non modifica il percorso degli endpoint. Le 
 obbligatori o ai codici di errore sono breaking change e devono essere accompagnate da una nota di
 migrazione in questo documento; i client devono tollerare campi aggiuntivi nelle risposte.
 
+La fixture machine-readable versionata è [`sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json).
+Si rigenera con `npm run generate:openapi`; `npm run test:sidecar` verifica che la fixture coincida
+con lo schema FastAPI runtime, così una modifica contrattuale non può restare non documentata.
+
 Gli errori non gestiti restituiscono `500` con `{ "detail": "Internal Server Error", "error_id": "..." }`.
 Il log registra invece un evento JSON con `event`, `error_id`, metodo, path e tipo di eccezione, senza
 messaggio o traceback. Il client deve riportare `error_id` nel supporto; il maintainer lo usa per correlare
@@ -335,7 +339,7 @@ const report = await analyzeLogs()
 
 | Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- | :--- |
-| `agent:plan-generate` | `agentPlanGenerate(prompt, model, settings, pendingResidueMilestones?)` | prompt/model/settings + milestone residui opzionali | `{ planText: string; milestones: PlanMilestone[] }` | Genera un piano instradato attraverso le opzioni runtime del profilo hardware, parsato dal parser canonico `GoalDecompositionPlanner`. I milestone residui non verificati del piano precedente vengono inclusi come contesto di riconciliazione. |
+| `agent:plan-generate` | `agentPlanGenerate(prompt, model, settings, pendingResidueMilestones?)` | prompt/model/settings + milestone residui opzionali | `{ planText: string; milestones: PlanMilestone[] }` | Genera un piano applicando la preferenza `modelContextLengths` entro il tetto hardware, parsato dal parser canonico `GoalDecompositionPlanner`. I milestone residui non verificati del piano precedente vengono inclusi come contesto di riconciliazione. |
 | `agent:plan-parse-text` | `agentPlanParseText(planText)` | `planText: string` | `PlanMilestone[]` | Ri-parsa testo di piano (es. modificato manualmente) con lo stesso parser canonico usato in generazione. |
 | `agent:get-plan-state` | `agentGetPlanState(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `{ planMilestones: PlanMilestone[]; status?; stepCount } \| null` | Legge lo stato dei milestone persistito dal backend (`GoalDecompositionPlanner`, unica fonte di verità) per una sessione. |
 | `agent:plan-seed` | `agentPlanSeed(sessionId, workspacePath, planMilestones, userTask?)` | `sessionId`, `workspacePath`, milestone approvati, `userTask?` | `boolean` | Inietta i milestone di un piano approvato nello stato di sessione persistito prima dell'avvio dell'esecuzione, cosicché il loop agentico li carichi come stato iniziale. |
@@ -408,6 +412,7 @@ const report = await analyzeLogs()
 | `skills:add-custom-source` | `input: CustomHubInput` | `{ success: boolean, source?: SkillHubSource, error?: string }` | Aggiunta e persistenza di una sorgente JSON Catalog o GitHub Repository. |
 | `skills:remove-custom-source` | `sourceId: string` | `{ success: boolean, error?: string }` | Rimozione di una sorgente di hub personalizzata. |
 | `skills:list-hub-by-source` | `sourceId: string, workspaceRoot?: string, forceRefresh?: boolean` | `HubSkillItem[]` | Elenco delle skill da una sorgente specifica con supporto a caching TTL e refresh forzato. |
+| `skills:list-hub-all` | `workspaceRoot?: string, forceRefresh?: boolean` | `HubSkillItem[]` | Classifica globale deduplicata di tutte le sorgenti configurate; include `globalRank`, `qualityScore` e `compatibility` calcolati dal probe locale Ollama/checksum. |
 | `skills:toggle-active` | `skillId: string, isActive: boolean` | `boolean` | Attivazione/disattivazione manuale con salvataggio persistente su disco (`active_skills.json`). |
 | `skills:install-from-hub` | `hubSkillId: string, workspaceRoot?: string, hubSourceId?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Installazione di una skill da hub con calcolo SHA-256 e metadata provenance. |
 | `skills:install-from-url` | `url: string, workspaceRoot?: string, customName?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Importazione diretta di una skill tramite URL raw markdown. |

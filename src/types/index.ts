@@ -380,6 +380,19 @@ export interface HubSkillItem {
   hubId?: string
   hubName?: string
   isInstalled?: boolean
+  requiredModel?: string
+  qualityScore?: number
+  globalRank?: number
+  compatibility?: HubSkillCompatibility
+}
+
+export interface HubSkillCompatibility {
+  status: 'compatible' | 'modified' | 'incompatible' | 'unknown'
+  modelStatus: 'not_required' | 'available' | 'missing' | 'unknown'
+  checksumStatus: 'not_installed' | 'match' | 'changed' | 'unknown'
+  localChecksum?: string
+  remoteChecksum?: string
+  matchedModel?: string
 }
 
 export type HubSourceType = 'builtin' | 'json-catalog' | 'github-repo'
@@ -593,6 +606,7 @@ export interface IElectronAPI {
   addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>
   removeCustomHubSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>
   listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) => Promise<HubSkillItem[]>
+  listHubSkillsAcrossSources: (workspaceRoot?: string, forceRefresh?: boolean) => Promise<HubSkillItem[]>
   toggleSkillActive: (skillId: string, isActive: boolean) => Promise<boolean>
   installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>

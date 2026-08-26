@@ -15,6 +15,7 @@ LLM, nor mark a milestone verified without a real command exiting 0 (blueprint Â
 | Unit tests / one file | `npx vitest run [path]` |
 | Type check | `npx tsc --noEmit` |
 | Python sidecar tests | `npm run test:sidecar` |
+| OpenAPI fixture | `npm run generate:openapi` |
 | Live agent probe | `npm run test:live` |
 | Repository cleanup | `npm run clean` |
 

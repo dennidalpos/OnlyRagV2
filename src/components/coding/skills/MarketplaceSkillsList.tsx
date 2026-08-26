@@ -176,6 +176,13 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">{hubItem.description}</p>
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-300">
+                    {hubItem.globalRank ? <span>#{hubItem.globalRank}</span> : null}
+                    {hubItem.qualityScore !== undefined ? <span>quality {hubItem.qualityScore.toFixed(0)}/100</span> : null}
+                    {hubItem.compatibility && hubItem.compatibility.status !== 'compatible' ? (
+                      <span className="text-amber-300" title="Local compatibility probe">{hubItem.compatibility.status}</span>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {hubItem.tags.map((tg) => (
                       <span key={tg} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-400">

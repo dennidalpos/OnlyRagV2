@@ -1,5 +1,12 @@
-from typing import Optional, List
-from pydantic import BaseModel, Field
+from typing import Literal, Optional, List
+from pydantic import BaseModel, ConfigDict, Field
+
+NON_BLANK = r".*\S.*"
+MODEL_NAME = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
+PATH_VALUE = Field(default=None, min_length=1, max_length=4096, pattern=NON_BLANK)
+
+class StrictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 class IngestResponse(BaseModel):
     id: str
@@ -12,27 +19,27 @@ class IngestResponse(BaseModel):
     ingested_at: str
     used_fallback_embeddings: Optional[bool] = False
 
-class IngestPathRequest(BaseModel):
-    file_path: str = Field(..., min_length=1, max_length=4096, pattern=r".*\S.*")
-    vision_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    vision_prompt: Optional[str] = Field(default=None, min_length=1, max_length=20000)
+class IngestPathRequest(StrictRequest):
+    file_path: str = Field(..., min_length=1, max_length=4096, pattern=NON_BLANK)
+    vision_model: Optional[str] = MODEL_NAME
+    vision_prompt: Optional[str] = Field(default=None, min_length=1, max_length=20000, pattern=NON_BLANK)
     normalize_with_llm: Optional[bool] = False
-    normalization_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    normalization_model: Optional[str] = MODEL_NAME
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
     max_tabular_rows: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_sheets: Optional[int] = Field(default=None, ge=1, le=1_000)
 
-class UpdateDocumentRequest(BaseModel):
-    markdown_content: str
+class UpdateDocumentRequest(StrictRequest):
+    markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
 
 
-class TranslateInplaceRequest(BaseModel):
-    source_lang: str
-    target_lang: str
-    model: Optional[str] = None
+class TranslateInplaceRequest(StrictRequest):
+    source_lang: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
+    target_lang: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
+    model: Optional[str] = MODEL_NAME
     backup_original: Optional[bool] = True
-    target_dir: Optional[str] = None
+    target_dir: Optional[str] = PATH_VALUE
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
 
 class PagePreviewResponse(BaseModel):
@@ -42,12 +49,12 @@ class PagePreviewResponse(BaseModel):
     image_base64: str
     mime_type: str = "image/png"
 
-class SearchRequest(BaseModel):
-    query: str
-    top_k: Optional[int] = Field(default=5, ge=1)
-    embedding_model: Optional[str] = "nomic-embed-text"
-    doc_id: Optional[str] = None
-    doc_ids: Optional[List[str]] = None
+class SearchRequest(StrictRequest):
+    query: str = Field(..., min_length=1, max_length=100_000)
+    top_k: Optional[int] = Field(default=5, ge=1, le=100)
+    embedding_model: Optional[str] = Field(default="nomic-embed-text", min_length=1, max_length=200, pattern=NON_BLANK)
+    doc_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
+    doc_ids: Optional[List[str]] = Field(default=None, max_length=100)
 
 class SearchResult(BaseModel):
     chunk_id: str
@@ -57,16 +64,16 @@ class SearchResult(BaseModel):
     text: str
     score: float
 
-class ExportRequest(BaseModel):
+class ExportRequest(StrictRequest):
     markdown_content: str = Field(..., min_length=1, max_length=10_000_000)
-    export_format: str = Field(default="pdf", min_length=1, max_length=10, pattern=r"^[A-Za-z]+$")
+    export_format: Literal["pdf", "docx", "html", "htm"] = "pdf"
 
 # ---------------------------------------------------------------------------
 # Log Diagnostics Schemas
 # ---------------------------------------------------------------------------
 
-class LogDiagnosticQuery(BaseModel):
-    extra_paths: Optional[List[str]] = None
+class LogDiagnosticQuery(StrictRequest):
+    extra_paths: Optional[List[str]] = Field(default=None, max_length=100)
 
 
 class AnomalyRecordSchema(BaseModel):
@@ -90,23 +97,23 @@ class LogDiagnosticReportSchema(BaseModel):
 # Prompt History Semantic Search Schemas
 # ---------------------------------------------------------------------------
 
-class IndexPromptHistoryRequest(BaseModel):
-    id: str
-    session_id: str
-    project_path: str
-    prompt: str
-    summary: Optional[str] = None
-    outcome: str
-    started_at: str
-    completed_at: Optional[str] = None
+class IndexPromptHistoryRequest(StrictRequest):
+    id: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
+    session_id: str = Field(..., min_length=1, max_length=200, pattern=NON_BLANK)
+    project_path: str = Field(..., min_length=1, max_length=4096, pattern=NON_BLANK)
+    prompt: str = Field(..., min_length=1, max_length=100_000, pattern=NON_BLANK)
+    summary: Optional[str] = Field(default=None, max_length=20_000)
+    outcome: Literal["running", "success", "failed", "cancelled", "unknown"]
+    started_at: str = Field(..., min_length=1, max_length=100, pattern=NON_BLANK)
+    completed_at: Optional[str] = Field(default=None, min_length=1, max_length=100, pattern=NON_BLANK)
 
 
-class PromptHistorySearchRequest(BaseModel):
-    query: str
-    top_k: Optional[int] = 10
+class PromptHistorySearchRequest(StrictRequest):
+    query: str = Field(..., min_length=1, max_length=100_000)
+    top_k: Optional[int] = Field(default=10, ge=1, le=100)
     # Raw workspace paths, not the internal hashed project_id -- callers should never need to
     # replicate the id-derivation hash themselves. Empty/omitted searches across all projects.
-    project_paths: Optional[List[str]] = None
+    project_paths: Optional[List[str]] = Field(default=None, max_length=100)
 
 
 class PromptHistorySearchResult(BaseModel):
@@ -122,7 +129,7 @@ class PromptHistorySearchResult(BaseModel):
     score: float
 
 
-class PromptHistoryRemoveRequest(BaseModel):
-    session_ids: Optional[List[str]] = None
+class PromptHistoryRemoveRequest(StrictRequest):
+    session_ids: Optional[List[str]] = Field(default=None, max_length=100)
     # Raw workspace path; hashed internally to the same project_id used at index time.
-    project_path: Optional[str] = None
+    project_path: Optional[str] = PATH_VALUE

@@ -1,7 +1,5 @@
 {
   "todos": [
-    "Audit contratti residui REST/IPC: completare schemi runtime oltre history:index/history:search e vincoli coerenti per IngestPathRequest, export e altri canali, con fixture OpenAPI e migrazione versionata; impatto alto, urgenza media, sforzo L.",
-    "Skill Hub: probe locale di compatibilità per modello/checksum e classifica globale esposta nel Marketplace; impatto alto, urgenza media, sforzo M.",
     "First-Class Artifacts Engine (Blueprint 5.7): canali IPC artifacts:* e pannello Live Preview sandboxato; impatto alto, urgenza bassa, sforzo XL.",
     "Badge compatible da capability live: derivarlo da /api/tags invece che dal catalogo curato a mano in codingModelMatrix.ts; impatto medio, urgenza media, sforzo M.",
     "Conservazione log live: snapshot per-run con timestamp in agentLiveHarness.ts, contro la rotazione a 10 MB e clean_workspace.ps1; impatto medio, urgenza media, sforzo S.",

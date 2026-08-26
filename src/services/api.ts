@@ -363,6 +363,16 @@ export const apiService = {
     }
   },
 
+  async listHubSkillsAcrossSources(workspaceRoot?: string, forceRefresh?: boolean): Promise<HubSkillItem[]> {
+    if (!window.electronAPI?.listHubSkillsAcrossSources) return []
+    try {
+      return await window.electronAPI.listHubSkillsAcrossSources(workspaceRoot, forceRefresh)
+    } catch (err: any) {
+      logger.error('ApiService:Skills', `Failed listing skills across hubs: ${err.message}`)
+      return []
+    }
+  },
+
   async toggleSkillActive(skillId: string, isActive: boolean): Promise<boolean> {
     if (!window.electronAPI?.toggleSkillActive) return false
     try {

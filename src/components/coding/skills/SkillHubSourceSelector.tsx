@@ -4,6 +4,8 @@ import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
 import { SkillHubSource } from '../../../types'
 import { useTranslation } from '../../../i18n'
 
+const ALL_SKILL_SOURCES = '__all__'
+
 interface SkillHubSourceSelectorProps {
   sources: SkillHubSource[]
   selectedSourceId: string
@@ -30,6 +32,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const selectedSource = sources.find((s) => s.id === selectedSourceId) || sources[0]
+  const isAllSources = selectedSourceId === ALL_SKILL_SOURCES
 
   // Close dropdown on outside click or Escape key
   useEffect(() => {
@@ -122,9 +125,11 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             <div className="flex items-center gap-2.5 min-w-0">
               {getSourceIcon(selectedSource?.type, selectedSource?.isBuiltin)}
               <span className="font-semibold text-slate-100 truncate">
-                {selectedSource ? selectedSource.name : t('skills.hubTitle')}
+                {isAllSources ? `${t('common.all')} sources` : selectedSource ? selectedSource.name : t('skills.hubTitle')}
               </span>
-              {selectedSource?.isBuiltin ? (
+              {isAllSources ? (
+                <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-[10px] font-mono text-cyan-300">Global</span>
+              ) : selectedSource?.isBuiltin ? (
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-[10px] font-mono text-emerald-300">
                   Official
                 </span>
@@ -158,7 +163,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
             role="listbox"
             className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/60 backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150"
           >
-            {sources.map((s) => {
+            {[{ id: ALL_SKILL_SOURCES, name: `${t('common.all')} sources`, description: 'Global ranking across configured hubs.', type: 'builtin' as const, isBuiltin: true, isReadOnly: true, url: '' }, ...sources].map((s) => {
               const isSelected = s.id === selectedSourceId
               return (
                 <div
@@ -186,7 +191,9 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-xs text-slate-100">{s.name}</span>
-                        {s.isBuiltin ? (
+                      {s.id === ALL_SKILL_SOURCES ? (
+                        <span className="px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-[9px] font-mono text-cyan-300">Global</span>
+                      ) : s.isBuiltin ? (
                           <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-800 text-[9px] font-mono text-emerald-400">
                             Official
                           </span>
@@ -213,7 +220,7 @@ export const SkillHubSourceSelector: React.FC<SkillHubSourceSelectorProps> = ({
         )}
       </div>
 
-      {selectedSource && (
+      {selectedSource && !isAllSources && (
         <div className="text-[11px] text-slate-400 flex items-center justify-between pt-0.5">
           <span className="truncate mr-2">{selectedSource.description}</span>
           <span className="font-mono text-slate-400 text-[10px] truncate max-w-xs shrink-0">{selectedSource.url}</span>

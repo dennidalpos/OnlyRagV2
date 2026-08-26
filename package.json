@@ -18,6 +18,7 @@
     "test:live": "vitest run --config vitest.live.config.mts",
     "test:skills": "vitest run --reporter=dot electron/core/domain/skills",
     "test:sidecar": "powershell -ExecutionPolicy Bypass -File ./scripts/test_sidecar_health.ps1 -Fast",
+    "generate:openapi": "powershell -ExecutionPolicy Bypass -File ./scripts/generate_openapi.ps1",
     "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/test_bundle_smoke.ps1 -Fast",
     "lint": "powershell -ExecutionPolicy Bypass -File ./scripts/lint_format.ps1 -Fast",
     "clean": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_repo.ps1",

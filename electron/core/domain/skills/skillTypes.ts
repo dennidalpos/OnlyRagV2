@@ -9,6 +9,7 @@ export interface SkillMetadata {
   originHubId?: string
   originChecksum?: string
   isModified?: boolean
+  requiredModel?: string
 }
 
 export type SkillOriginType = 'local_custom' | 'hub_original' | 'hub_modified'
@@ -48,6 +49,19 @@ export interface HubSkillItem {
   hubId?: string
   hubName?: string
   isInstalled?: boolean
+  requiredModel?: string
+  qualityScore?: number
+  globalRank?: number
+  compatibility?: HubSkillCompatibility
+}
+
+export interface HubSkillCompatibility {
+  status: 'compatible' | 'modified' | 'incompatible' | 'unknown'
+  modelStatus: 'not_required' | 'available' | 'missing' | 'unknown'
+  checksumStatus: 'not_installed' | 'match' | 'changed' | 'unknown'
+  localChecksum?: string
+  remoteChecksum?: string
+  matchedModel?: string
 }
 
 export type HubSourceType = 'builtin' | 'json-catalog' | 'github-repo'

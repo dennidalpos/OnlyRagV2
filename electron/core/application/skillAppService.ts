@@ -3,7 +3,9 @@ import { customHubRepository } from '../infrastructure/filesystem/customHubRepos
 import { skillHubClient } from '../infrastructure/http/skillHubClient'
 import { projectStackDetectionRepository } from '../infrastructure/filesystem/projectStackDetectionRepository'
 import { matchSkillsForTask, matchHubSkillsForTask, compileSkillsContextBlock, SkillMatchContext } from '../domain/skills/skillMatcher'
-import { compareHubSkillQuality } from '../domain/skills/skillQuality'
+import { assessHubSkillQuality, compareHubSkillQuality } from '../domain/skills/skillQuality'
+import { assessHubSkillCompatibility, LocalModelProbe } from '../domain/skills/skillCompatibility'
+import { ollamaHttpClient } from '../infrastructure/http/ollamaHttpClient'
 import {
   SkillDefinition,
   HubSkillItem,
@@ -24,6 +26,44 @@ export interface SkillMatchingOptions {
 }
 
 export class SkillAppService {
+  private localModelProbe: Promise<LocalModelProbe[]> | null = null
+
+  private async getLocalModelProbe(forceRefresh = false): Promise<LocalModelProbe[]> {
+    if (forceRefresh || !this.localModelProbe) {
+      this.localModelProbe = ollamaHttpClient.getModelMetrics().then((metrics) =>
+        Object.keys(metrics).map((name) => ({ name }))
+      )
+    }
+    return this.localModelProbe
+  }
+
+  private decorateHubSkill(
+    item: HubSkillItem,
+    installed: SkillDefinition[],
+    localModels: readonly LocalModelProbe[],
+  ): HubSkillItem {
+    const parsed = item.rawContent ? parseSkillFrontmatter(item.rawContent) : null
+    const enriched = parsed && parsed.metadata.requiredModel
+      ? { ...item, requiredModel: parsed.metadata.requiredModel }
+      : item
+    const installedSkill = installed.find((skill) =>
+      skill.name.toLowerCase() === item.name.toLowerCase() || skill.id.toLowerCase() === item.id.toLowerCase()
+    )
+    const remoteChecksum = parsed ? calculateSkillChecksum(parsed.body || item.rawContent || '') : undefined
+    const qualityScore = assessHubSkillQuality(enriched).totalScore
+    return {
+      ...enriched,
+      qualityScore,
+      compatibility: assessHubSkillCompatibility({
+        item: enriched,
+        installed: installedSkill,
+        localModels,
+        remoteChecksum,
+      }),
+      isInstalled: Boolean(installedSkill),
+    }
+  }
+
   async listInstalledSkills(workspaceRoot?: string | null): Promise<SkillDefinition[]> {
     return skillRepository.listInstalledSkills(workspaceRoot)
   }
@@ -58,13 +98,11 @@ export class SkillAppService {
     if (!source) return []
 
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
-    const installedNames = new Set(installed.map((s) => s.name.toLowerCase()))
-
     const skills = await skillHubClient.fetchSkillsFromSource(source, forceRefresh)
-    return skills.map((item) => ({
-      ...item,
-      isInstalled: installedNames.has(item.name.toLowerCase()) || installedNames.has(item.id.toLowerCase()),
-    }))
+    const localModels = await this.getLocalModelProbe(forceRefresh)
+    return skills
+      .map((item) => this.decorateHubSkill(item, installed, localModels))
+      .sort(compareHubSkillQuality)
   }
 
   async listHubSkills(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
@@ -83,9 +121,8 @@ export class SkillAppService {
     if (sources.length === 0) return []
 
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
-    const installedNames = new Set(installed.map((s) => s.name.toLowerCase()))
+    const localModels = await this.getLocalModelProbe(forceRefresh)
 
-    const seenNames = new Set<string>()
     const merged: HubSkillItem[] = []
 
     for (const source of sources) {
@@ -99,15 +136,13 @@ export class SkillAppService {
 
       for (const item of skills) {
         const key = item.name.toLowerCase()
-        const candidate = {
+        const candidate = this.decorateHubSkill({
           ...item,
           hubId: item.hubId || source.id,
           hubName: item.hubName || source.name,
-          isInstalled: installedNames.has(key) || installedNames.has(item.id.toLowerCase()),
-        }
+        }, installed, localModels)
         const existingIndex = merged.findIndex((existing) => existing.name.toLowerCase() === key)
         if (existingIndex < 0) {
-          seenNames.add(key)
           merged.push(candidate)
         } else if (compareHubSkillQuality(candidate, merged[existingIndex]) < 0) {
           merged[existingIndex] = candidate
@@ -116,6 +151,8 @@ export class SkillAppService {
     }
 
     return merged
+      .sort(compareHubSkillQuality)
+      .map((item, index) => ({ ...item, globalRank: index + 1 }))
   }
 
   toggleSkillActive(skillId: string, isActive: boolean): boolean {

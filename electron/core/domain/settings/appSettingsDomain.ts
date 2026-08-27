@@ -1,9 +1,8 @@
-import type { AppSettings, HardwareProfile } from '../../../../src/types'
+import type { AppSettings } from '../../../../src/types'
 import { PROMPT_NODE_IDS, type PromptNodeId } from '../agent/promptHierarchyRegistry'
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultModel: '',
-  hardwareProfile: 'Auto',
   ocrEngine: 'native_cuda',
   ollamaHost: 'http://127.0.0.1:11434',
   ollamaMode: 'local',
@@ -34,25 +33,10 @@ export function getDefaultAppSettings(): AppSettings {
   return { ...DEFAULT_APP_SETTINGS }
 }
 
-const VALID_HARDWARE_PROFILES = new Set<string>([
-  'Auto', 'auto',
-  'Low', 'low', 'legacy', 'Legacy',
-  'Medium', 'medium', 'entry', 'Entry', 'midrange', 'Midrange', 'MidRange',
-  'High', 'high', 'highend', 'HighEnd', 'extreme', 'Extreme'
-])
 const VALID_OCR_ENGINES = new Set<string>(['native_cuda', 'vision_model'])
 const VALID_AUTO_INSTALL_POLICIES = new Set<string>(['disabled', 'prompt', 'auto'])
 const VALID_LANGUAGES = new Set<string>(['it', 'en'])
 const VALID_OLLAMA_MODES = new Set<string>(['local', 'remote'])
-
-export function normalizeHardwareProfile(rawVal: unknown): HardwareProfile {
-  if (typeof rawVal !== 'string') return 'Auto'
-  const trimmed = rawVal.trim().toLowerCase()
-  if (trimmed === 'low' || trimmed === 'legacy') return 'Low'
-  if (trimmed === 'medium' || trimmed === 'entry' || trimmed === 'midrange') return 'Medium'
-  if (trimmed === 'high' || trimmed === 'highend' || trimmed === 'extreme') return 'High'
-  return 'Auto'
-}
 
 export function sanitizeAppSettings(input: unknown): AppSettings {
   if (!input || typeof input !== 'object') {
@@ -61,11 +45,6 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
 
   const raw = input as Record<string, any>
   const defaults = getDefaultAppSettings()
-
-  const hardwareProfile: HardwareProfile =
-    typeof raw.hardwareProfile === 'string' && VALID_HARDWARE_PROFILES.has(raw.hardwareProfile.trim())
-      ? normalizeHardwareProfile(raw.hardwareProfile)
-      : defaults.hardwareProfile
 
   const ocrEngine =
     typeof raw.ocrEngine === 'string' && VALID_OCR_ENGINES.has(raw.ocrEngine)
@@ -89,7 +68,6 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
 
   const sanitized: AppSettings = {
     defaultModel: typeof raw.defaultModel === 'string' ? raw.defaultModel.trim() : defaults.defaultModel,
-    hardwareProfile,
     ocrEngine,
     ollamaHost: typeof raw.ollamaHost === 'string' && raw.ollamaHost.trim() ? raw.ollamaHost.trim() : defaults.ollamaHost,
     ollamaMode,
@@ -135,7 +113,6 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
   const optionalBoolKeys: (keyof AppSettings)[] = [
     'allowTerminalExecution',
     'allowFileModifications',
-    'enableSystemRamOffloading',
     'normalizeWithLlm',
     'noWorkspaceMode',
     'requirePlanApproval',

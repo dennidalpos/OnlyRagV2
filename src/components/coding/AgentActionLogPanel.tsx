@@ -158,8 +158,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
           cpuCount: diagnostics.system.cpusCount || 4,
         }
       : {}
-    return resolveMaxContextTokens(settings?.hardwareProfile, facts, settings?.enableSystemRamOffloading)
-  }, [diagnostics, settings?.hardwareProfile, settings?.enableSystemRamOffloading])
+    return resolveMaxContextTokens('Auto', facts)
+  }, [diagnostics])
 
   const BASE_PROMPT_OVERHEAD_TOKENS = 650
   const recentLogsTokens = React.useMemo(() => {

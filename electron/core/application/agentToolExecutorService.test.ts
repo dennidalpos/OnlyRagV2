@@ -11,7 +11,6 @@ describe('AgentToolExecutorService Unit Tests', () => {
   let tempDir: string
   const settings: AppSettings = {
     defaultModel: 'llama3.2',
-    hardwareProfile: 'Auto',
     ocrEngine: 'native_cuda',
     ollamaHost: '',
     codingModel: 'llama3.2',

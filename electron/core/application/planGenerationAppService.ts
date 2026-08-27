@@ -200,7 +200,6 @@ export class PlanGenerationAppService {
       vramTotalMB: cachedGpu?.vramTotalMB,
       systemRamGB: memInfo?.totalRAMGB,
       cpuCount: os.cpus()?.length,
-      enableSystemRamOffloading: false,
     })
     runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx)
     const residueBlock = buildResidueReconciliationBlock(req.pendingResidueMilestones)

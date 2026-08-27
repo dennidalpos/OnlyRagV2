@@ -1,6 +1,5 @@
 import os from 'node:os'
-import type { HardwareProfile } from '../../../../src/types'
-import { resolveMaxContextTokens } from '../../../../src/services/hardwareProfileTiers'
+import { resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../src/services/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
   num_ctx: number
@@ -39,7 +38,6 @@ export interface HardwareEnvironment {
   vramTotalMB?: number
   systemRamGB?: number
   cpuCount?: number
-  enableSystemRamOffloading?: boolean
 }
 
 export class HardwareProfileResolver {
@@ -83,7 +81,7 @@ export class HardwareProfileResolver {
    * one configured model, so a machine has exactly one runtime profile.
    */
   static resolveOllamaOptions(
-    profile: HardwareProfile = 'Auto',
+    profile: DeclaredHardwareProfile = 'Auto',
     env?: HardwareEnvironment
   ): OllamaRuntimeOptions {
     const cpuCores = env?.cpuCount || os.cpus()?.length || 4
@@ -91,7 +89,7 @@ export class HardwareProfileResolver {
 
     // Sizing and RAM-aware scaling is delegated to resolveMaxContextTokens in hardwareProfileTiers.ts
     // (single source of truth across Electron domain, Recommendation Engine, and React UI).
-    const numCtx = resolveMaxContextTokens(profile, env, env?.enableSystemRamOffloading)
+    const numCtx = resolveMaxContextTokens(profile, env)
 
     return {
       num_ctx: numCtx,

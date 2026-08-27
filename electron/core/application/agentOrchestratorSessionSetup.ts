@@ -49,7 +49,6 @@ export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspaceP
 export function buildDefaultAgentSettings(): AppSettings {
   return {
     defaultModel: 'llama3.2',
-    hardwareProfile: 'Auto',
     ocrEngine: 'native_cuda',
     ollamaHost: '',
     codingModel: 'llama3.2',

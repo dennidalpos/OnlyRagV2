@@ -337,8 +337,7 @@ export function assessModelHardwareCompatibility(
   vramTotalMB: number,
   totalRamGB: number,
   contextTargetTokens: number = 4096,
-  details?: RunningModelDetails,
-  enableSystemRamOffloading: boolean = false
+  details?: RunningModelDetails
 ): {
   isCompatible: boolean
   footprintGB: number
@@ -367,23 +366,13 @@ export function assessModelHardwareCompatibility(
         compatibilityStatus: 'tight_vram',
         warning: 'Uso VRAM elevato: possibile rallentamento o swap con contesti lunghi.',
       }
-    } else if (enableSystemRamOffloading && footprintGB <= safeVramBudgetGB + safeRamBudget) {
-      return {
-        isCompatible: true,
-        footprintGB,
-        safeVramBudgetGB,
-        compatibilityStatus: 'tight_vram',
-        warning: 'Offloading ibrido su RAM di sistema attivo: i layer eccedenti saranno allocati ed eseguiti in RAM.',
-      }
     } else {
       return {
         isCompatible: false,
         footprintGB,
         safeVramBudgetGB,
         compatibilityStatus: 'exceeds_vram',
-        warning: enableSystemRamOffloading
-          ? 'Memoria combinata (VRAM + RAM) insufficiente per eseguire questo modello.'
-          : "VRAM insufficiente: rischio elevato di Out-Of-Memory (OOM). Abilita l'Offloading su RAM nelle impostazioni per usare modelli più grandi.",
+        warning: 'VRAM insufficiente: rischio elevato di Out-Of-Memory (OOM).',
       }
     }
   }
@@ -420,8 +409,7 @@ export interface ModelFitVerdict {
  * lookup assesses any model name on demand so every selectable option can carry its footprint.
  */
 export function buildModelFitLookup(
-  diagnostics: DiagnosticsData | null,
-  enableSystemRamOffloading: boolean = false
+  diagnostics: DiagnosticsData | null
 ): (modelName: string) => ModelFitVerdict {
   const facts = extractHardwareFacts(diagnostics)
   const vramTotalMB = facts.vramTotalMB || 0
@@ -437,8 +425,7 @@ export function buildModelFitLookup(
       vramTotalMB,
       systemRamGB,
       4096,
-      diagnostics?.ollama.modelDetails?.[modelName],
-      enableSystemRamOffloading
+      diagnostics?.ollama.modelDetails?.[modelName]
     )
     const verdict: ModelFitVerdict = {
       compatibilityStatus: assessment.compatibilityStatus,
@@ -456,13 +443,12 @@ export { isOllamaModelInstalled } from '../../electron/core/domain/agent/modelTa
  * strictly bound by net usable VRAM budget: VRAM_Disponibile_Reale = (VRAM_Totale * 0.75) - 1.5 GB.
  */
 export function analyzeHardwareAndRecommend(
-  diagnostics: DiagnosticsData | null,
-  enableSystemRamOffloading: boolean = false
+  diagnostics: DiagnosticsData | null
 ): HardwareRecommendations {
   const { profileTier, profileName, vramTotalMB, systemRamGB, safeVramBudgetGB, gpuSummary, ramSummary } =
     resolveHardwareProfile(diagnostics)
 
-  const enrich = buildModelEnricher(diagnostics, vramTotalMB, systemRamGB, profileTier, enableSystemRamOffloading)
+  const enrich = buildModelEnricher(diagnostics, vramTotalMB, systemRamGB, profileTier)
 
   return {
     profileTier,
@@ -553,8 +539,7 @@ function buildModelEnricher(
   diagnostics: DiagnosticsData | null,
   vramTotalMB: number,
   systemRamGB: number,
-  profileTier: HardwareProfileTier,
-  enableSystemRamOffloading: boolean = false
+  profileTier: HardwareProfileTier
 ) {
   return (item: RawModelCatalogEntry): ModelRecommendation => {
     const assessment = assessModelHardwareCompatibility(
@@ -562,18 +547,10 @@ function buildModelEnricher(
       vramTotalMB,
       systemRamGB,
       4096,
-      diagnostics?.ollama.modelDetails?.[item.modelName],
-      enableSystemRamOffloading
+      diagnostics?.ollama.modelDetails?.[item.modelName]
     )
     const isRecommendedByProfile = item.recommendedForProfiles.includes(profileTier)
-    // Hybrid offloading lets a host reach one rung further up the ladder than its VRAM alone
-    // allows, so a model curated for a HIGHER profile becomes recommendable once it fits.
-    const hostRank = PROFILE_RANK.indexOf(profileTier)
-    const isReachableViaOffloading =
-      enableSystemRamOffloading &&
-      assessment.isCompatible &&
-      item.recommendedForProfiles.some((p) => PROFILE_RANK.indexOf(p) > hostRank)
-    const isRecommended = isRecommendedByProfile || isReachableViaOffloading
+    const isRecommended = isRecommendedByProfile
 
     return {
       modelName: item.modelName,
@@ -589,9 +566,6 @@ function buildModelEnricher(
     }
   }
 }
-
-/** Hardware profiles from least to most capable, for "is this model a rung above the host?". */
-const PROFILE_RANK: HardwareProfileTier[] = ['legacy', 'entry', 'midrange', 'highend', 'extreme']
 
 /**
  * Builds the single coding-model list from the four legacy tier catalogs.

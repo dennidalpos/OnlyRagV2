@@ -20,6 +20,8 @@ import {
 import { resolveVerificationStatus } from '../../services/codingModelMatrix'
 import { CODING_CATALOG_MODEL_NAMES } from '../../services/hardwareModelCatalog'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
+import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
+import { resolveMaxContextTokens } from '../../services/hardwareProfileTiers'
 import { ModelBadgeStrip } from './ModelBadgeStrip'
 import { ModelContextControl } from './ModelContextControl'
 
@@ -37,6 +39,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
   const { t } = useTranslation()
   const models = diagnostics?.ollama.models || []
   const { metrics } = useOllamaModelMetrics(settings.ollamaHost)
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
 
   const isModelInstalled = (name: string) => isOllamaModelInstalled(name, models)
 
@@ -123,6 +126,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               model={settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'}
               settings={settings}
               metrics={metrics[settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b']}
+              hardwareDefault={hardwareDefault}
               onUpdateSettings={onUpdateSettings}
             />
             <p className="text-[10px] text-slate-400 leading-tight">
@@ -193,6 +197,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               model={settings.chatModel || settings.defaultModel || 'llama3.1:8b'}
               settings={settings}
               metrics={metrics[settings.chatModel || settings.defaultModel || 'llama3.1:8b']}
+              hardwareDefault={hardwareDefault}
               onUpdateSettings={onUpdateSettings}
             />
           </div>
@@ -249,6 +254,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               model={settings.translationModel || settings.defaultModel || 'qwen2.5:7b'}
               settings={settings}
               metrics={metrics[settings.translationModel || settings.defaultModel || 'qwen2.5:7b']}
+              hardwareDefault={hardwareDefault}
               onUpdateSettings={onUpdateSettings}
             />
           </div>
@@ -313,6 +319,7 @@ export const ModelAssignmentGrid: React.FC<ModelAssignmentGridProps> = ({
               model={settings.visionModel || 'llama3.2-vision:11b'}
               settings={settings}
               metrics={metrics[settings.visionModel || 'llama3.2-vision:11b']}
+              hardwareDefault={hardwareDefault}
               onUpdateSettings={onUpdateSettings}
             />
           </div>

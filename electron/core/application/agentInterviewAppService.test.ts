@@ -12,7 +12,6 @@ vi.mock('./ollamaAppService', () => ({
 describe('AgentInterviewAppService', () => {
   let service: AgentInterviewAppService
   const mockSettings: AppSettings = {
-    hardwareProfile: 'balanced',
     codingModel: 'qwen2.5-coder:7b',
   } as any
 

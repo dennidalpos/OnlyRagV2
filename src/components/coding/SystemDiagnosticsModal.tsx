@@ -215,7 +215,6 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 font-mono text-[11px]">
                   <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
                     <span className="text-slate-400 text-[10px]">Profilo Hardware</span>
-                    <div className="font-bold text-slate-200">{settings?.hardwareProfile || 'Midrange'}</div>
                   </div>
                   <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
                     <span className="text-slate-400 text-[10px]">Modello Attivo</span>

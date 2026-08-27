@@ -65,7 +65,6 @@ export interface LogEntry {
   category: string
 }
 
-export type HardwareProfile = 'Low' | 'Medium' | 'High' | 'Auto'
 
 export interface IngestedDocument {
   id: string
@@ -195,9 +194,6 @@ export interface AppSettings {
   legalFallbackModel?: string
   allowTerminalExecution?: boolean
   allowFileModifications?: boolean
-  hardwareProfile: HardwareProfile
-  /** Enables hybrid offloading to system RAM (DDR4/DDR5) for running larger models (14B/32B) beyond physical VRAM capacity. */
-  enableSystemRamOffloading?: boolean
   ocrEngine: 'native_cuda' | 'vision_model'
   normalizeWithLlm?: boolean
   ollamaHost: string

@@ -43,7 +43,7 @@ interface TranslationViewProps {
 export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
   const { t } = useTranslation()
   const [activeTool, setActiveTool] = useState<'markdown' | 'inplace'>('markdown')
-  const tr = useDocumentTranslation(settings)
+  const tr = useDocumentTranslation(settings, diagnostics)
   const toast = useToast()
   const [copiedTranslation, setCopiedTranslation] = useState(false)
   const initialLeftWidth = typeof window !== 'undefined'

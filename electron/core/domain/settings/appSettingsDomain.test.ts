@@ -5,7 +5,6 @@ describe('AppSettingsDomain Unit Tests', () => {
   it('should return valid default settings', () => {
     const defaults = getDefaultAppSettings()
     expect(defaults.defaultModel).toBe('')
-    expect(defaults.hardwareProfile).toBe('Auto')
     expect(defaults.ocrEngine).toBe('native_cuda')
     expect(defaults.language).toBe('it')
     expect(defaults.autoInstallHubSkills).toBe('disabled')
@@ -23,7 +22,6 @@ describe('AppSettingsDomain Unit Tests', () => {
     const custom = {
       defaultModel: '  qwen2.5-coder:7b  ',
       chatModel: 'llama3.2:3b',
-      hardwareProfile: 'HighEnd',
       ocrEngine: 'vision_model',
       ollamaHost: 'http://localhost:11434',
       language: 'en',
@@ -34,7 +32,6 @@ describe('AppSettingsDomain Unit Tests', () => {
     const sanitized = sanitizeAppSettings(custom)
     expect(sanitized.defaultModel).toBe('qwen2.5-coder:7b')
     expect(sanitized.chatModel).toBe('llama3.2:3b')
-    expect(sanitized.hardwareProfile).toBe('High')
     expect(sanitized.ocrEngine).toBe('vision_model')
     expect(sanitized.language).toBe('en')
     expect(sanitized.hasCompletedInitialSetup).toBe(true)
@@ -53,17 +50,6 @@ describe('AppSettingsDomain Unit Tests', () => {
 
     const invalidTooHigh = sanitizeAppSettings({ maxToolCallSteps: 9999 })
     expect(invalidTooHigh.maxToolCallSteps).toBe(50)
-  })
-
-  it('should correctly normalize all hardware profile casing and tier aliases to Low/Medium/High/Auto', () => {
-    expect(sanitizeAppSettings({ hardwareProfile: 'Medium' }).hardwareProfile).toBe('Medium')
-    expect(sanitizeAppSettings({ hardwareProfile: 'Low' }).hardwareProfile).toBe('Low')
-    expect(sanitizeAppSettings({ hardwareProfile: 'High' }).hardwareProfile).toBe('High')
-    expect(sanitizeAppSettings({ hardwareProfile: 'Auto' }).hardwareProfile).toBe('Auto')
-    expect(sanitizeAppSettings({ hardwareProfile: 'legacy' }).hardwareProfile).toBe('Low')
-    expect(sanitizeAppSettings({ hardwareProfile: 'midrange' }).hardwareProfile).toBe('Medium')
-    expect(sanitizeAppSettings({ hardwareProfile: 'highend' }).hardwareProfile).toBe('High')
-    expect(sanitizeAppSettings({ hardwareProfile: 'extreme' }).hardwareProfile).toBe('High')
   })
 
   it('drops prompt override keys that do not name a prompt node', () => {

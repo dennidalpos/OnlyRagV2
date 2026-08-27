@@ -90,15 +90,14 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
     }
   })
 
-  it('should upgrade effective tier to Medium on GPU-less machine when enableSystemRamOffloading is true and RAM is >= 16GB, then RAM-scale context to 32K', () => {
+  it('should keep CPU-only context on the detected hardware tier without RAM offloading', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Auto', {
       hasGpu: false,
       vramTotalMB: 0,
       systemRamGB: 32,
       cpuCount: 8,
-      enableSystemRamOffloading: true,
     })
-    expect(opts.num_ctx).toBe(32768)
+    expect(opts.num_ctx).toBe(16384)
     expect(opts.maxContextChars).toBe(HardwareProfileResolver.deriveMaxContextChars(opts.num_ctx))
   })
 })

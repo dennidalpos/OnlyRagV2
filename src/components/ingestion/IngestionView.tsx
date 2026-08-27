@@ -49,7 +49,7 @@ interface IngestionViewProps {
 
 export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
   const { t } = useTranslation()
-  const ing = useIngestion(settings)
+  const ing = useIngestion(settings, diagnostics)
   const toast = useToast()
   const {
     width: sidebarWidth,

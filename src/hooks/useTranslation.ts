@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { IngestedDocument, AppSettings, TranslateProgressPayload } from '../types'
+import { IngestedDocument, AppSettings, DiagnosticsData, TranslateProgressPayload } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { getEffectivePrompt } from '../constants/promptConfig'
@@ -7,6 +7,7 @@ import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
+import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
 
 export const LANGUAGES = [
   'English',
@@ -83,7 +84,7 @@ export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): s
   return fullMarkdown
 }
 
-export function useDocumentTranslation(settings?: AppSettings) {
+export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
   const { t } = useI18n()
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
@@ -430,7 +431,7 @@ export function useInplaceTranslation(settings?: AppSettings) {
         modelToUse,
         false,
         targetDir,
-        modelToUse ? settings?.modelContextLengths?.[modelToUse] : undefined
+        modelToUse ? resolveModelContextLength(modelToUse, settings?.modelContextLengths, 4096) : undefined
       )
 
       if (res.success && res.data) {

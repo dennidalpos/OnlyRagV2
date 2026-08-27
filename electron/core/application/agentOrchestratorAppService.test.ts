@@ -154,7 +154,6 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     const settings: AppSettings = {
       defaultModel: 'llama3.2',
-      hardwareProfile: 'Auto',
       ocrEngine: 'native_cuda',
       ollamaHost: '',
       codingModel: 'qwen2.5-coder:7b',

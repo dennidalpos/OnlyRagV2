@@ -28,7 +28,7 @@ export class AiDebugBundleService {
    * Generates a self-contained AI-optimized debug diagnostic bundle in Markdown.
    */
   public async generateDebugBundle(options: AiDebugBundleOptions): Promise<string> {
-    const { sessionId, workspacePath, settings, activeModelName = 'LLM', activeSkills = [] } = options
+    const { sessionId, workspacePath, activeModelName = 'LLM', activeSkills = [] } = options
     const timestamp = new Date().toISOString()
 
     // 1. Host & Toolchain facts
@@ -133,7 +133,6 @@ export class AiDebugBundleService {
 ## 1. System & Runtime Environment
 - **Host OS:** ${hostInfo}
 - **Toolchain Status:** ${toolchainStatuses}
-- **Hardware Profile:** ${settings?.hardwareProfile || 'Midrange'}
 - **Active Model:** \`${activeModelName}\`
 - **Active Workspace:** \`${workspacePath || 'Standalone'}\`
 - **Active Skills:** ${activeSkills.length > 0 ? activeSkills.map((s) => `\`${s}\``).join(', ') : 'None'}

@@ -15,7 +15,6 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
     chatModel: 'llama3.1:8b',
     medicalModel: 'adrienbrault/biomistral-7b:Q4_K_M',
     legalModel: 'saul-instruct:7b',
-    hardwareProfile: 'Auto',
     ocrEngine: 'native_cuda',
     ollamaHost: 'http://127.0.0.1:11434',
   }
@@ -130,7 +129,6 @@ describe('Domain & Intent Sub-Router Unit Tests', () => {
     it('should fallback gracefully to defaultModel when specialist models are undefined', () => {
       const minimalSettings: AppSettings = {
         defaultModel: 'llama3.2',
-        hardwareProfile: 'Auto',
         ocrEngine: 'native_cuda',
         ollamaHost: '',
       }

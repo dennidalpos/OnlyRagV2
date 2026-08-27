@@ -115,8 +115,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
       userTask,
       agentMode,
       warmUpModel,
-      workspacePath,
-      'Auto'
+      workspacePath
     )
   }
 

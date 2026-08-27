@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { IngestedDocument, AppSettings } from '../types'
+import { IngestedDocument, AppSettings, DiagnosticsData } from '../types'
 import { apiService } from '../services/api'
 import { logger } from '../lib/logger'
 import { useIngestedDocuments, notifyDocumentsChanged } from './useIngestedDocuments'
@@ -7,6 +7,9 @@ import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { resolveNodeTemplate } from '../constants/promptConfig'
+import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { resolveMaxContextTokens } from '../services/hardwareProfileTiers'
+import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
 
 /**
  * The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR.
@@ -63,7 +66,8 @@ export function getTotalLines(content: string): number {
   return content ? content.split('\n').length : 1
 }
 
-export function useIngestion(settings?: AppSettings) {
+export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
   const { t } = useI18n()
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
@@ -407,7 +411,7 @@ export function useIngestion(settings?: AppSettings) {
         visionPrompt,
         false,
         undefined,
-        settings?.modelContextLengths?.[visionModelName]
+        resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault)
       )
 
       if (isCancelledRef.current) return

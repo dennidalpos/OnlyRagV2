@@ -8,9 +8,9 @@ import { useIngestedDocuments } from './useIngestedDocuments'
 import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from '../services/chatContextBudget'
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
-import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
+import { resolveMaxContextTokens } from '../services/hardwareProfileTiers'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -49,6 +49,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   // Retrieval context, replayed history and the generation window are all sized from the
   // detected host instead of a single hardcoded budget — see chatContextBudget.ts.
   const hardwareFacts = useMemo(() => extractHardwareFacts(diagnostics), [diagnostics])
+  const hardwareDefault = useMemo(() => resolveMaxContextTokens('Auto', hardwareFacts), [hardwareFacts])
   const contextBudget = useMemo(
     () => resolveChatContextBudget(
       hardwareFacts,
@@ -56,10 +57,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       resolveModelContextLength(
         settings.chatModel || settings.defaultModel || 'llama3.2',
         settings.modelContextLengths,
-        32768
+        hardwareDefault
       )
     ),
-    [hardwareFacts, settings.chatModel, settings.defaultModel, settings.modelContextLengths]
+    [hardwareFacts, hardwareDefault, settings.chatModel, settings.defaultModel, settings.modelContextLengths]
   )
   const budgetRef = useRef(contextBudget)
   budgetRef.current = contextBudget
@@ -472,10 +473,9 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         streamThrottleTimer.current = intervalId
 
         try {
-          const dynamicNumCtx = calculateDynamicContextWindow(finalPrompt, budget.maxNumCtx)
           logger.info(
             'ChatEngine',
-            `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: prompt -> num_ctx ${dynamicNumCtx} (max ${budget.maxNumCtx})`
+            `Context budget [${budget.profileTier}${budget.isMinimal ? '/minimal' : ''}]: selected num_ctx ${budget.maxNumCtx}`
           )
 
           await window.electronAPI.generateOllamaStream(
@@ -486,7 +486,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
               pendingChunk = true
             },
             {
-              num_ctx: dynamicNumCtx,
+              num_ctx: budget.maxNumCtx,
               num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
               keep_alive: budget.keepAlive,
             }

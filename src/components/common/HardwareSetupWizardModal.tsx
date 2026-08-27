@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Modal } from './Modal'
-import { AppSettings, DiagnosticsData, HardwareProfile } from '../../types'
+import { AppSettings, DiagnosticsData } from '../../types'
 import {
   analyzeHardwareAndRecommend,
   buildModelFitLookup,
@@ -45,14 +45,12 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 }) => {
   const { t } = useTranslation()
   const [step, setStep] = useState<number>(1)
-  const enableSystemRamOffloading = Boolean(settings.enableSystemRamOffloading)
   const enableSoundEffects = settings.enableSoundEffects !== false
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(
     diagnostics,
-    enableSystemRamOffloading
   )
   // Assesses any model tag against the host, including preset options absent from the catalogs.
-  const getModelFit = buildModelFitLookup(diagnostics, enableSystemRamOffloading)
+  const getModelFit = buildModelFitLookup(diagnostics)
 
   const downloadedModels = diagnostics?.ollama.models ?? []
 
@@ -126,9 +124,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   )
 
   // Runtime Preferences State
-  const [hardwareProfile, setHardwareProfile] = useState<HardwareProfile>(
-    settings.hardwareProfile || 'Auto'
-  )
   const [ocrEngine, setOcrEngine] = useState<'native_cuda' | 'vision_model'>(
     settings.ocrEngine || 'native_cuda'
   )
@@ -172,7 +167,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       setSelectedLegal(settings.legalModel || '')
       if (settings.visionModel) setSelectedVision(settings.visionModel)
       if (settings.embeddingModel) setSelectedEmbedding(settings.embeddingModel)
-      if (settings.hardwareProfile) setHardwareProfile(settings.hardwareProfile)
       if (settings.ocrEngine) setOcrEngine(settings.ocrEngine)
       setPullErrorDetail(null)
       setFailedModelIndex(null)
@@ -197,9 +191,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       legalModel: selectedLegal || settings.legalModel,
       visionModel: selectedVision || settings.visionModel,
       embeddingModel: selectedEmbedding || settings.embeddingModel,
-      hardwareProfile,
       ocrEngine,
-      enableSystemRamOffloading,
       enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
@@ -216,9 +208,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     selectedLegal,
     selectedVision,
     selectedEmbedding,
-    hardwareProfile,
     ocrEngine,
-    enableSystemRamOffloading,
     enableSoundEffects,
     settings,
     onClose,
@@ -448,7 +438,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     setSelectedTranslation(recTrans)
     setSelectedVision(recVision)
     setSelectedEmbedding(recEmbedding)
-    setHardwareProfile('Auto')
     setOcrEngine('native_cuda')
     setPullErrorDetail(null)
     setFailedModelIndex(null)
@@ -461,9 +450,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       translationModel: recTrans,
       visionModel: recVision,
       embeddingModel: recEmbedding,
-      hardwareProfile: 'Auto',
       ocrEngine: 'native_cuda',
-      enableSystemRamOffloading,
       enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
@@ -483,9 +470,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       legalModel: selectedLegal,
       visionModel: selectedVision,
       embeddingModel: selectedEmbedding,
-      hardwareProfile,
       ocrEngine,
-      enableSystemRamOffloading,
       enableSoundEffects,
       hasCompletedInitialSetup: true,
     })
@@ -655,7 +640,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               selectedLegal={selectedLegal}
               selectedVision={selectedVision}
               selectedEmbedding={selectedEmbedding}
-              hardwareProfile={hardwareProfile}
               ocrEngine={ocrEngine}
               isAllSlotsPopulated={isAllSlotsPopulated}
               missingModels={missingModels}

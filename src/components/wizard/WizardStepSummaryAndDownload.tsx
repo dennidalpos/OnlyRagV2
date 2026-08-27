@@ -1,7 +1,6 @@
 import React from 'react'
 import { ShieldCheck, AlertTriangle, Download, Check, StopCircle } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import { HardwareProfile } from '../../types'
 import { getModelApproxSize } from '../../services/hardwareRecommendationEngine'
 
 export interface WizardStepSummaryAndDownloadProps {
@@ -15,7 +14,6 @@ export interface WizardStepSummaryAndDownloadProps {
   selectedLegal?: string
   selectedVision: string
   selectedEmbedding: string
-  hardwareProfile: HardwareProfile
   ocrEngine: 'native_cuda' | 'vision_model'
   isAllSlotsPopulated: boolean
   missingModels: string[]
@@ -42,7 +40,6 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
   selectedLegal,
   selectedVision,
   selectedEmbedding,
-  hardwareProfile,
   ocrEngine,
   isAllSlotsPopulated,
   missingModels,
@@ -117,7 +114,7 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center md:col-span-2">
             <span className="text-slate-400 font-medium">⚙️ {t('sidebar.quickStatus')}:</span>
             <span className="font-mono text-slate-200 font-semibold">
-              {hardwareProfile} • {ocrEngine === 'native_cuda' ? 'CUDA Native' : 'Vision Model'}
+              {ocrEngine === 'native_cuda' ? 'CUDA Native' : 'Vision Model'}
             </span>
           </div>
         </div>

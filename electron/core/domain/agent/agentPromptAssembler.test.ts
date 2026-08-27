@@ -6,7 +6,6 @@ import type { AppSettings } from '../../../../src/types'
 describe('AgentPromptAssembler Domain Unit Tests', () => {
   const defaultSettings: AppSettings = {
     defaultModel: 'llama3.2',
-    hardwareProfile: 'Medium',
     ocrEngine: 'native_cuda',
     ollamaHost: '',
     codingModel: 'llama3.2',

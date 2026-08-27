@@ -76,17 +76,17 @@ describe('selectModelForTurn — context ceiling', () => {
   it('falls back to the hardware window when Ollama reports no context length', () => {
     const selection = selectModelForTurn(contextWith(metricsWith(undefined)))
     expect(selection.contextCeiling).toBeNull()
-    expect(selection.runtimeOpts.num_ctx).toBe(32768)
+    expect(selection.runtimeOpts.num_ctx).toBe(4096)
   })
 
   it('falls back to the hardware window when the model is absent from the metrics map', () => {
     const selection = selectModelForTurn(contextWith({}))
     expect(selection.contextCeiling).toBeNull()
-    expect(selection.runtimeOpts.num_ctx).toBe(32768)
+    expect(selection.runtimeOpts.num_ctx).toBe(4096)
   })
 })
 
-describe('freezeOrGrowContextWindow — the frozen window versus the model ceiling', () => {
+describe('freezeOrGrowContextWindow — selected ctx versus prompt budget', () => {
   it('freezes the window on the first turn and holds it on the next', () => {
     const ctx = contextWith(metricsWith(131072))
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts }
@@ -96,19 +96,18 @@ describe('freezeOrGrowContextWindow — the frozen window versus the model ceili
     expect(ctx.sessionNumCtxBox.value).toBe(frozen)
   })
 
-  it('grows the frozen window when the prompt outgrows it and the model can hold more', () => {
+  it('does not resize the selected ctx when the prompt grows', () => {
     const ctx = contextWith(metricsWith(131072))
     ctx.sessionNumCtxBox.value = 2048
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts, num_predict: 1024 }
     freezeOrGrowContextWindow(ctx, 'x '.repeat(12_000), runtimeOpts, 131072)
-    expect(ctx.sessionNumCtxBox.value).toBeGreaterThan(2048)
-    expect(logs.some((l) => l.includes('Context window grown'))).toBe(true)
+    expect(ctx.sessionNumCtxBox.value).toBe(2048)
+    expect(runtimeOpts.num_ctx).toBe(32768)
+    expect(logs.some((l) => l.includes('Context window grown'))).toBe(false)
   })
 
   /**
-   * The reachable regression. The freeze is per session, the ceiling is per model, and the
-   * resilience fallback swaps models mid-session: the box keeps the 32k the first model earned
-   * and the function's last line wrote it straight back into runtimeOpts, undoing the clamp.
+   * A fallback model gets its own selected context; the session box is diagnostic state only.
    */
   it('holds a frozen window down to the ceiling when a smaller model is swapped in', () => {
     const ctx = contextWith(metricsWith(8192))
@@ -116,9 +115,7 @@ describe('freezeOrGrowContextWindow — the frozen window versus the model ceili
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts }
     freezeOrGrowContextWindow(ctx, 'short prompt', runtimeOpts, 8192)
     expect(runtimeOpts.num_ctx).toBe(8192)
-    // The box is NOT rewritten: a later turn back on the larger model still gets its window.
     expect(ctx.sessionNumCtxBox.value).toBe(32768)
-    expect(logs.some((l) => l.includes("exceeds this model's ceiling"))).toBe(true)
   })
 
   it('leaves the frozen window untouched when no ceiling is known', () => {
@@ -126,6 +123,6 @@ describe('freezeOrGrowContextWindow — the frozen window versus the model ceili
     ctx.sessionNumCtxBox.value = 16384
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts }
     freezeOrGrowContextWindow(ctx, 'short prompt', runtimeOpts, null)
-    expect(runtimeOpts.num_ctx).toBe(16384)
+    expect(runtimeOpts.num_ctx).toBe(4096)
   })
 })

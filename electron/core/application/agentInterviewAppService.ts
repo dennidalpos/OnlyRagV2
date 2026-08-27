@@ -81,7 +81,6 @@ export class AgentInterviewAppService {
       vramTotalMB: cachedGpu?.vramTotalMB,
       systemRamGB: memInfo?.totalRAMGB,
       cpuCount: os.cpus()?.length,
-      enableSystemRamOffloading: false,
     })
     runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx)
     runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)

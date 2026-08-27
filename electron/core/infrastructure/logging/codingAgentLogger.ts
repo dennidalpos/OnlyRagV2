@@ -122,15 +122,13 @@ export class CodingAgentLogger {
     userTask: string,
     mode: string,
     model: string,
-    workspacePath?: string | null,
-    hardwareProfile?: string
+    workspacePath?: string | null
   ): void {
     const content = [
       `Session ID: ${sessionId}`,
       `Starting Mode: ${mode.toUpperCase()}`,
       `Active Model: ${model}`,
       `Workspace Path: ${workspacePath || 'Standalone'}`,
-      `Hardware Profile: ${hardwareProfile || 'Auto'}`,
       `User Task:`,
       `"""`,
       `${userTask}`,

@@ -20,9 +20,8 @@ import {
  *
  * The budgets below shrink the retrieval context, the replayed history and the per-document
  * preview together, so the four never combine into a prompt the host cannot evaluate
- * quickly. `maxNumCtx` is a ceiling, not a fixed size: the caller pairs it with
- * `calculateDynamicContextWindow` so a short turn on a large machine still allocates a
- * small KV cache.
+ * quickly. `maxNumCtx` is the resolved model preference; prompt compaction operates inside it
+ * and never changes the value sent to Ollama.
  */
 export interface ChatContextBudget {
   /** Detected (or declared) host tier this budget was derived from. */
@@ -41,7 +40,7 @@ export interface ChatContextBudget {
   historyChars: number
   /** How many chunks to request from the vector search. */
   vectorTopK: number
-  /** Upper bound for the dynamically sized `num_ctx` of the generation call. */
+  /** User-selected `num_ctx` sent to the generation call. */
   maxNumCtx: number
   /** How long Ollama should keep the chat model resident after the turn. */
   keepAlive: string
@@ -61,13 +60,12 @@ const CHARS_PER_TOKEN = 3.5
  * held back.
  *
  * The per-segment budgets above (retrieval, document previews, history) were each sized on their
- * own, with no budget for the assembled turn: history alone was allowed `maxNumCtx * 2.0` chars
+ * own, with no budget for the assembled turn: history alone used to be allowed `maxNumCtx * 2.0` chars
  * — 16384 on midrange, against 5500 for the selected documents. Summed with the system prompt and
  * the document context that filled almost the entire window, leaving the ANSWER with what was
  * left over: ~1245 tokens on midrange, 346 on a minimal host, and 61 on legacy. Nothing enforced
- * a ceiling because `calculateDynamicContextWindow` clamps its result to `maxNumCtx` instead of
- * trimming the prompt, so an over-budget turn was simply sent as-is and the reply was squeezed
- * into whatever remained.
+ * the prompt is now compacted to the available prompt budget, while the selected `num_ctx`
+ * remains unchanged.
  */
 export function resolvePromptCharBudget(maxNumCtx: number): number {
   const usableTokens = Math.max(512, maxNumCtx - GENERATION_RESERVE_TOKENS)
@@ -183,5 +181,5 @@ export function resolveChatContextBudget(
   const isMinimal = declaredProfile === 'Auto' && isMinimalHardwareHost(facts)
   const budget = isMinimal ? MINIMAL_HOST_BUDGET : TIER_BUDGETS[profileTier]
 
-  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(4096, Math.min(maxNumCtxOverride, budget.maxNumCtx)) : budget.maxNumCtx }
+  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(4096, Math.floor(maxNumCtxOverride)) : budget.maxNumCtx }
 }

@@ -84,7 +84,6 @@ export const AppLayout: React.FC = () => {
     }
     return {
       defaultModel: '',
-      hardwareProfile: 'Auto',
       ocrEngine: 'native_cuda',
       ollamaHost: 'http://127.0.0.1:11434',
       ollamaMode: 'local',
@@ -396,18 +395,8 @@ export const AppLayout: React.FC = () => {
               </span>
             </div>
 
-            {/* Hybrid Offloading RAM metric (used / remaining) */}
             <div
               className="flex items-center justify-between text-[11px]"
-              title={
-                diagnostics?.memory
-                  ? t('sidebar.hybridRamTooltip')
-                      .replace('{used}', String(diagnostics.memory.usedRAMGB))
-                      .replace('{free}', String(diagnostics.memory.freeRAMGB))
-                      .replace('{total}', String(diagnostics.memory.totalRAMGB))
-                      .replace('{percent}', String(diagnostics.memory.ramUsagePercent))
-                  : 'Offloading Ibrido su RAM di Sistema (Hybrid GPU + RAM)'
-              }
             >
               <span className="text-slate-400 flex items-center gap-1.5">
                 <HardDrive className="w-3 h-3 text-sky-400" />

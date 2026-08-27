@@ -100,9 +100,5 @@ describe('hardwareProfileTiers', () => {
       expect(resolveMaxContextTokens('Auto', legacyHost)).toBe(4096)
     })
 
-    it('should upgrade Low to Medium when enableSystemRamOffloading is true on Auto with >=16GB RAM', () => {
-      const cpuHost = { hasGpu: false, systemRamGB: 32 }
-      expect(resolveMaxContextTokens('Auto', cpuHost, true)).toBe(32768)
-    })
   })
 })

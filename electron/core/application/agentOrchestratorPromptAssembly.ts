@@ -6,7 +6,6 @@ import { findMatchingInstalledModel } from '../domain/agent/modelTagMatcher'
 import { HardwareProfileResolver, type OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import { assembleTurnPrompt as assembleDomainTurnPrompt } from '../domain/agent/agentPromptAssembler'
 import { HeuristicContextCompactor } from '../domain/agent/heuristicContextCompactor'
-import { calculateDynamicContextWindow } from '../domain/agent/contextWindowCalculator'
 import { resolveToolCallingRoute } from '../domain/agent/ollamaToolCallingCapability'
 import { resolveOllamaContextReuse, type OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
@@ -53,7 +52,6 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
     'Auto',
     {
       ...hardwareFacts,
-      enableSystemRamOffloading: false,
     }
   )
 
@@ -80,17 +78,12 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   if (contextCeiling !== null && contextCeiling < hardwareContext) {
     ctx.emitLog('info', `📏 Context clamped to model limit: ${hardwareContext} → ${contextCeiling} tokens (${targetModel} was trained at ${contextCeiling}; Ollama would have truncated the prompt head).`)
   }
-  if (preferredContext < runtimeOpts.num_ctx) {
+  if (preferredContext !== runtimeOpts.num_ctx) {
     ctx.emitLog('info', `📏 Context preference applied: ${runtimeOpts.num_ctx} → ${preferredContext} tokens (${targetModel}).`)
-    runtimeOpts.num_ctx = preferredContext
-    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(preferredContext)
-    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(preferredContext)
   }
-  if (contextCeiling !== null && contextCeiling < runtimeOpts.num_ctx) {
-    runtimeOpts.num_ctx = contextCeiling
-    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(contextCeiling)
-    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(contextCeiling)
-  }
+  runtimeOpts.num_ctx = preferredContext
+  runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(preferredContext)
+  runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(preferredContext)
 
   // Resilience fallback only — the model swapped in when the primary OOMs or crashes.
   // It is NOT a routing tier: nothing selects it based on task difficulty.
@@ -316,52 +309,20 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   return { assembled, compactionResult, turnPrompt }
 }
 
-/**
- * num_ctx is frozen for the lifetime of the session and only ever allowed to GROW. Ollama
- * reallocates its KV cache whenever num_ctx changes, which evicts the prompt cache —
- * recomputing it per step silently defeats the `context` continuation reuse below (AGT1), and
- * on CPU-only machines costs a model reload almost every turn. Growth is still permitted so a
- * prompt that outgrows the frozen window is never silently truncated; the cached baseline is
- * dropped in that case because the tokens it holds no longer correspond to the new window.
- *
- * The freeze is per SESSION; `contextCeiling` is per MODEL, and the two part company the moment
- * the resilience fallback swaps a smaller model in mid-session. The box still holds the window
- * the first model earned, and the last line of this function used to write it straight back into
- * `runtimeOpts` — silently undoing the clamp selectModelForTurn had just applied and handing
- * Ollama a window it answers by truncating the prompt head. Hence the ceiling is applied to the
- * value that LEAVES this function, not only to the one that enters the box.
- */
+/** Keeps the selected per-model context stable; prompt size is handled by compaction, not ctx resizing. */
 export function freezeOrGrowContextWindow(
   ctx: TurnDispatchContext,
   turnPrompt: string,
   runtimeOpts: OllamaRuntimeOptions,
   contextCeiling: number | null = null
 ) {
-  // Headroom is the profile's own generation reserve (num_predict), not a second independent
-  // constant: the two used to be set apart and disagreed about how much of the window the
-  // completion needed.
-  const requiredNumCtx = calculateDynamicContextWindow(turnPrompt, runtimeOpts.num_ctx, runtimeOpts.num_predict)
   if (ctx.sessionNumCtxBox.value === null) {
-    ctx.sessionNumCtxBox.value = requiredNumCtx
-  } else if (requiredNumCtx > ctx.sessionNumCtxBox.value) {
-    ctx.emitLog('info', `📐 Context window grown: ${ctx.sessionNumCtxBox.value} → ${requiredNumCtx} tokens (prompt outgrew the frozen window).`)
-    ctx.sessionNumCtxBox.value = requiredNumCtx
-    ctx.session.ollamaContextModel = undefined
-    ctx.session.ollamaContextTokens = undefined
-    ctx.session.ollamaContextStableSection = undefined
-    ctx.session.ollamaContextHistoryBlock = undefined
+    ctx.sessionNumCtxBox.value = runtimeOpts.num_ctx
   }
-
-  const frozen = ctx.sessionNumCtxBox.value
-  if (contextCeiling !== null && frozen > contextCeiling) {
-    ctx.emitLog(
-      'info',
-      `📏 Frozen window ${frozen} exceeds this model's ceiling: holding at ${contextCeiling} tokens and compacting the tool history instead of requesting a window Ollama would clamp.`
-    )
-    runtimeOpts.num_ctx = contextCeiling
-    return
-  }
-  runtimeOpts.num_ctx = frozen
+  // The model selector has already resolved the user preference against the model maximum.
+  // `turnPrompt` and the session box are intentionally not allowed to rewrite it.
+  void turnPrompt
+  void contextCeiling
 }
 
 /**

@@ -74,7 +74,6 @@ export interface TranslationSchema {
     ollamaLocal: string
     gpuVram: string
     systemRam: string
-    hybridRamTooltip: string
     cpuOnly: string
     installLaunchOllama: string
     logsConsole: string
@@ -454,7 +453,6 @@ export interface TranslationSchema {
     description: string
     hardwareWizard: string
     hardwareScan: string
-    hardwareProfile: string
     chatModel: string
     translationModel: string
     ollamaSection: string
@@ -503,18 +501,8 @@ export interface TranslationSchema {
     vectorStoreLabel: string
     pullModelPlaceholder: string
     pullModelAria: string
-    hardwareProfileDesc: string
     executionLimitsDesc: string
     autoScaleDesc: string
-    hardwareProfileLowName: string
-    hardwareProfileLowDesc: string
-    hardwareProfileMediumName: string
-    hardwareProfileMediumDesc: string
-    hardwareProfileHighName: string
-    hardwareProfileHighDesc: string
-    hardwareProfileTargetLabel: string
-    enableSystemRamOffloadingTitle: string
-    enableSystemRamOffloadingDesc: string
     toolCallStepsTitle: string
     toolCallStepsDesc: string
     toolCallStepsUnlimited: string
@@ -687,7 +675,6 @@ export interface TranslationSchema {
     legalModelTitle: string
     legalModelDesc: string
     optionalDomainModel: string
-    hardwareProfileSection: string
     ocrEngineSection: string
     nativeCudaOcr: string
     visionModelOcr: string

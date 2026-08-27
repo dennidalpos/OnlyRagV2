@@ -25,7 +25,6 @@ import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { PromptConfigurationModal } from './PromptConfigurationModal'
 import { ToggleSwitch } from '../common/ToggleSwitch'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
-import { HardwareProfileSelector } from './HardwareProfileSelector'
 import { OcrEngineSelector } from './OcrEngineSelector'
 import { AgentExecutionLimitsConfig } from './AgentExecutionLimitsConfig'
 import { OllamaServerConfig } from './OllamaServerConfig'
@@ -35,6 +34,9 @@ import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { useTranslation, Language } from '../../i18n'
 import { apiService } from '../../services/api'
 import { compareContextAllocation } from '../../services/contextAllocation'
+import { ModelContextControl } from './ModelContextControl'
+import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
+import { resolveMaxContextTokens } from '../../services/hardwareProfileTiers'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -56,6 +58,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const { t, language, setLanguage } = useTranslation()
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
   const {
     updateAvailableMap,
     isCheckingUpdates,
@@ -312,12 +315,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
         </div>
 
-        {/* Hardware Profile Selector */}
-        <HardwareProfileSelector
-          settings={settings}
-          onUpdateSettings={onUpdateSettings}
-        />
-
         {/* Ollama Server Configuration (Local vs Remote Network Server) */}
         <OllamaServerConfig
           settings={settings}
@@ -440,10 +437,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   const hasUpdate = Boolean(updateAvailableMap[modelName])
                   const isUpdatingThis = isModelUpdating(modelName)
                   const vramBytes = runningInfo?.size_vram || 0
-                  const totalBytes = runningInfo?.size || 0
                   const vramGB = (vramBytes / 1024 ** 3).toFixed(1)
-                  const ramBytes = Math.max(0, totalBytes - vramBytes)
-                  const ramGB = (ramBytes / 1024 ** 3).toFixed(1)
                   const requestedContext = settings.modelContextLengths?.[modelName]
                   const contextStatus = compareContextAllocation(requestedContext, runningInfo?.context_length)
 
@@ -477,12 +471,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               Su Disco
                             </span>
                           )}
-                        </div>
+                      </div>
 
-                        {/* Running VRAM / RAM detail if active */}
+                      <ModelContextControl
+                        model={modelName}
+                        settings={settings}
+                        metrics={modelMetrics[modelName]}
+                        hardwareDefault={hardwareDefault}
+                        onUpdateSettings={onUpdateSettings}
+                      />
+
+                      {/* Running VRAM / RAM detail if active */}
                         {isRunning && (
                           <div className="space-y-1 text-[10px] font-mono text-emerald-400/90 bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-900/40">
-                            <div>VRAM: {vramGB} GB {parseFloat(ramGB) > 0.1 ? `+ RAM: ${ramGB} GB (Hybrid)` : ''}</div>
+                            <div>VRAM: {vramGB} GB</div>
                             {runningInfo?.context_length !== undefined && (
                               <div className={contextStatus === 'underallocated' ? 'text-amber-300' : undefined}>
                                 Context allocato: {runningInfo.context_length} token

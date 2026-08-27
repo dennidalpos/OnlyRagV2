@@ -102,7 +102,7 @@ mindmap
 
 ### 1.6. Compatibilità Universale Ollama
 * **Presente**: [`toolParser.ts`](../electron/core/domain/agent/toolParser.ts) con pre-stripping CoT (`<think>`) e riparazione via `jsonrepair`; dual-mode Native Tool Calling (`POST /api/chat`) e JSON fenced; hardware ladder con pinning KV-cache; [`ollamaToolSchemaCatalog.ts`](../electron/core/domain/agent/ollamaToolSchemaCatalog.ts) per contratti schema e direttive di correzione; [`codingModelMatrix.ts`](../src/services/codingModelMatrix.ts).
-* **Presente**: `num_ctx` clampato al `context_length` addestrato del modello letto da `/api/tags` ([`selectModelForTurn`](../electron/core/application/agentOrchestratorPromptAssembly.ts)), con `num_predict` e `maxContextChars` riderivati dalla finestra clampata.
+* **Presente**: `num_ctx` risolto dalla preferenza per modello e limitato al `context_length` riportato da `/api/tags`; `num_predict` e `maxContextChars` sono derivati dal valore risolto, mentre la compattazione del prompt resta separata.
 
 > **Decisione architetturale — adattamento per capability, non per famiglia.**
 > L'adattamento del prompt avviene esclusivamente sulle **capability** che Ollama stesso dichiara

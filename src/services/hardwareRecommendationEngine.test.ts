@@ -591,38 +591,10 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     })
   })
 
-  describe('Hybrid System RAM Offloading Compatibility', () => {
-    it('should allow 14B model on 8GB GPU when enableSystemRamOffloading is true and system RAM is sufficient', () => {
-      // 8GB GPU (safe VRAM ~4.5GB), 32GB System RAM (safe RAM ~22.4GB).
-      // Model 14B requires ~9GB footprint.
-      const withoutOffload = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 32, 4096, undefined, false)
-      expect(withoutOffload.isCompatible).toBe(false)
-      expect(withoutOffload.compatibilityStatus).toBe('exceeds_vram')
-
-      const withOffload = assessModelHardwareCompatibility('qwen2.5-coder:14b', 8192, 32, 4096, undefined, true)
-      expect(withOffload.isCompatible).toBe(true)
-      expect(withOffload.warning).toContain('Offloading ibrido')
-    })
-
-    it('should recommend a 14B coding model when enableSystemRamOffloading is true on a midrange GPU', () => {
-      const diag = createMockDiagnostics(true, 8192, 32)
-      const withoutOffload = analyzeHardwareAndRecommend(diag, false)
-      const m14bWithout = withoutOffload.codingModels.find((m) => m.modelName.includes('14b'))
-      expect(m14bWithout?.isRecommended).toBe(false)
-      expect(m14bWithout?.isHardwareCompatible).toBe(false)
-
-      const withOffload = analyzeHardwareAndRecommend(diag, true)
-      const m14bWith = withOffload.codingModels.find((m) => m.modelName.includes('14b'))
-      expect(m14bWith?.isRecommended).toBe(true)
-      expect(m14bWith?.isHardwareCompatible).toBe(true)
-      expect(m14bWith?.compatibilityStatus).toBe('tight_vram')
-    })
-  })
-
   describe('buildModelFitLookup (Setup Wizard per-option VRAM verdict)', () => {
     it('should assess a model name that is absent from every built-in catalog', () => {
       const diag = createMockDiagnostics(true, 8192, 16)
-      const getFit = buildModelFitLookup(diag, false)
+      const getFit = buildModelFitLookup(diag)
 
       const fit = getFit('some-unlisted-model:70b')
       expect(fit.footprintGB).toBeGreaterThan(0)
@@ -631,10 +603,10 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     it('should agree with assessModelHardwareCompatibility for the same host', () => {
       const diag = createMockDiagnostics(true, 8192, 16)
-      const getFit = buildModelFitLookup(diag, false)
+      const getFit = buildModelFitLookup(diag)
 
       for (const model of ['qwen2.5-coder:1.5b', 'qwen2.5-coder:14b']) {
-        const direct = assessModelHardwareCompatibility(model, 8192, 16, 4096, undefined, false)
+        const direct = assessModelHardwareCompatibility(model, 8192, 16, 4096, undefined)
         expect(getFit(model)).toEqual({
           compatibilityStatus: direct.compatibilityStatus,
           footprintGB: direct.footprintGB,
@@ -642,14 +614,8 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
       }
     })
 
-    it('should honour the RAM offloading flag', () => {
-      const diag = createMockDiagnostics(true, 8192, 32)
-      expect(buildModelFitLookup(diag, false)('qwen2.5-coder:14b').compatibilityStatus).toBe('exceeds_vram')
-      expect(buildModelFitLookup(diag, true)('qwen2.5-coder:14b').compatibilityStatus).toBe('tight_vram')
-    })
-
     it('should return a stable memoized verdict for repeated lookups', () => {
-      const getFit = buildModelFitLookup(createMockDiagnostics(true, 8192, 16), false)
+      const getFit = buildModelFitLookup(createMockDiagnostics(true, 8192, 16))
       expect(getFit('qwen2.5-coder:7b')).toEqual(getFit('qwen2.5-coder:7b'))
     })
   })

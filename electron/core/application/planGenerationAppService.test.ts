@@ -18,7 +18,6 @@ vi.mock('./ollamaAppService', () => ({
 describe('PlanGenerationAppService', () => {
   const settings: AppSettings = {
     defaultModel: 'llama3.2',
-    hardwareProfile: 'Medium',
     ocrEngine: 'native_cuda',
     ollamaHost: '',
     codingModel: 'qwen2.5-coder:7b',

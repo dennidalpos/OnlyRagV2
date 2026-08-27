@@ -5,7 +5,6 @@
  * independent threshold ladders that had already drifted apart:
  *   - hardwareRecommendationEngine.classifyHardwareTier   (raw VRAM GB: 4 / 8 / 12 / 20)
  *   - hardwareRecommendationEngine.getRecommendedOllamaEnvVars (raw VRAM GB: 4 / 8 / 12 / 24)
- *   - hardwareProfileResolver.resolveOllamaOptions        (safe budget GB: 3.0 / 7.5)
  * A 24GB workstation was therefore `extreme` for the model matrix but `highend` for the
  * Ollama OS parameters, and a 6GB laptop GPU was `entry` for recommendations but `Low`
  * for the agent runtime options.
@@ -16,7 +15,7 @@
 
 export type HardwareProfileTier = 'legacy' | 'entry' | 'midrange' | 'highend' | 'extreme'
 
-/** Coarse user-facing profile selector persisted in AppSettings.hardwareProfile. */
+/** Internal compatibility profiles used only by the recommendation/runtime calculation. */
 export type DeclaredHardwareProfile = 'Low' | 'Medium' | 'High' | 'Auto'
 
 /**
@@ -115,8 +114,7 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
  */
 export function resolveMaxContextTokens(
   declared: DeclaredHardwareProfile = 'Auto',
-  facts: HardwareFacts = {},
-  enableSystemRamOffloading: boolean = false
+  facts: HardwareFacts = {}
 ): number {
   const hardwareTier = resolveEffectiveTier(declared, facts)
   let effectiveTier: 'Low' | 'Medium' | 'High' =
@@ -125,13 +123,6 @@ export function resolveMaxContextTokens(
       : hardwareTier === 'entry' || hardwareTier === 'midrange'
         ? 'Medium'
         : 'High'
-
-  if (enableSystemRamOffloading && declared === 'Auto') {
-    const ramGB = facts.systemRamGB || 0
-    if (effectiveTier === 'Low' && ramGB >= 16) {
-      effectiveTier = 'Medium'
-    }
-  }
 
   const vramBaseCtx = effectiveTier === 'Low' ? 4096 : effectiveTier === 'Medium' ? 8192 : 16384
   const ramGB = facts.systemRamGB ?? 0

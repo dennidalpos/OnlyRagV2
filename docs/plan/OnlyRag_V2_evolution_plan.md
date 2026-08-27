@@ -1,230 +1,82 @@
-# OnlyRag V2 — Piano evolutivo
+# OnlyRag V2 — Piano implementativo temporaneo
 
-**Stato:** proposta di roadmap, da valutare prima di ogni wave  
-**Ultima verifica del repository:** 27 agosto 2026  
-**Ambito:** stabilità, sicurezza, Coding Agent, verificabilità e manutenzione
+**Stato:** approvato per l'implementazione
+**Ambito:** stabilità, sicurezza, Coding Agent e verificabilità
+**Durata:** questo documento viene cancellato al completamento verificato di tutti gli step del tracker.
 
-## 1. Scopo e regole decisionali
+## Principi vincolanti
 
-Questo documento è il piano evolutivo unico per le attività trasversali di OnlyRag V2. Non sostituisce:
+1. Nessuna compatibilità legacy: una migrazione sostituisce il percorso precedente e rimuove immediatamente codice, contratti e test superati.
+2. Ogni confine pubblico o interno coinvolto dalla roadmap usa un unico contratto Zod; non sono ammessi schemi paralleli.
+3. Ogni capacità mutante o con accesso esterno passa da un solo gateway di policy.
+4. Si preferiscono librerie mature quando riducono codice custom e rischio operativo.
+5. Ogni wave ha fixture isolate, prove deterministiche, rollback e un gate prima della wave successiva.
+6. Non si implementano funzionalità già presenti, né adapter temporanei, fallback legacy o doppie fonti di verità.
 
-- [`architecture.md`](../architecture.md) per topologia e confini;
-- [`modules.md`](../modules.md) per responsabilità e percorsi;
-- [`api.md`](../api.md) per i contratti IPC/REST;
-- [`setup-and-env.md`](../setup-and-env.md) per ambiente e procedure;
-- [`coding-agent-studio-blueprint.md`](../coding-agent-studio-blueprint.md) per il comportamento dettagliato dell’agente;
-- [`PROJECT_STATUS.json`](../../PROJECT_STATUS.json) per il debito tecnico pendente.
+## Protocollo di esecuzione per Luna — ragionamento medio
 
-Ogni intervento futuro deve rispettare queste regole:
+Le prossime sessioni usano `gpt-5.6-luna` con ragionamento `medium`. Il tracker è organizzato in task atomici: una sessione completa un solo ID, oppure si ferma senza modifiche se discovery o baseline dimostrano che lo scope non è valido.
 
-1. prima discovery e baseline, poi modifica;
-2. una milestone deve avere una prova di accettazione concreta;
-3. la presenza di un file non equivale a implementazione verificata;
-4. le prove deterministiche prevalgono sul giudizio di un LLM;
-5. le feature con rete, installazione o sovrascrittura devono avere consenso, limiti, audit e rollback;
-6. il codice esistente va preservato: niente riscritture generali o nuove architetture senza evidenza;
-7. ogni cambiamento ad API, dipendenze, manifest o dati richiede valutazione separata.
+Per ogni task la sessione deve ricevere soltanto: ID del tracker, obiettivo osservabile, file/moduli in scope, vincoli di sicurezza, test di accettazione e criterio di completamento. Non caricare l'intera roadmap, cronologie estese o strumenti non necessari. Il prompt deve dichiarare una sola volta autorizzazioni e confini; tool, contesto e output diagnostico vanno ridotti al minimo utile.
 
-## 2. Stato verificato
+Ogni task segue questa sequenza fissa:
 
-Il repository è un progetto Electron/React con sidecar Python, Ollama e LanceDB. Il working tree è pulito e il typecheck e la validazione documentale risultano superati.
+1. leggere i file in scope, i chiamanti e i test; registrare baseline Git;
+2. modificare esclusivamente lo scope del task;
+3. aggiungere o aggiornare il test di accettazione richiesto;
+4. eseguire test mirato, typecheck/lint se applicabili e verificare il diff;
+5. aggiornare il tracker solo se tutti i controlli richiesti passano.
 
-Sono già presenti:
+Non combinare estrazioni di tool, cambi di contratto, nuove dipendenze o cambi di policy nella stessa sessione. Se un task richiede un prerequisito non pianificato, fermarsi, non creare compatibilità provvisoria e aggiungere un task atomico prima del task bloccato.
 
-- riconoscimento dello stack e lettura dei manifest;
-- repo map compatta con estrazione dei simboli;
-- planner con microtask, stati dei milestone e riconciliazione del residuo;
-- parser tollerante delle tool call con validazione e riparazione JSON;
-- journal del workspace con rollback completo e rollback dell’ultimo step;
-- policy sui comandi di verifica, path safety, circuit breaker e DoD gate;
-- supporto a Ollama locale/remoto e fallback tra tool calling nativo e prompt engineering;
-- tool web con mitigazione SSRF, limiti e contenuto remoto marcato come non attendibile;
-- contratti Zod già utilizzati per diversi confini IPC/domain.
+## Wave 1 — Sessione e baseline persistente
 
-Gap verificati o ancora pendenti:
+Implementare un `SessionManifest` e un `BaselineSnapshot` persistenti, separati da log e stato del planner. Il manifest registra ID sessione, root, commit e stato Git iniziali, hash di manifest/config, timestamp e classificazione del workspace. Il baseline distingue le modifiche preesistenti da quelle della sessione e supporta checkpoint idempotenti.
 
-- `agentToolExecutorService.ts` concentra ancora numerosi handler; il refactoring P1 è pendente;
-- non esiste un `ProjectProfile` esplicito come contratto unificato;
-- non esistono i contratti espliciti `baseline_snapshot`, `offline-strict` e `MODEL_UNSUITABLE`;
-- non esiste il tool di validazione visuale headless per screenshot, DOM e console/HTTP errors;
-- Promptfoo, Langfuse, DeepEval e Ragas non sono dipendenze del progetto;
-- [`PROJECT_STATUS.json`](../../PROJECT_STATUS.json) contiene attività pendenti, non un backlog funzionale autorizzato.
+Implementare log per-run redatti, con retention limitata e nessun dato sensibile nel payload persistito. Rimuovere ogni utilizzo di log o stato planner come sostituto del baseline.
 
-## 3. Roadmap proposta
+**Gate:** una sessione su working tree dirty viene interrotta e recuperata da checkpoint senza modificare il lavoro preesistente.
 
-Le wave sono ordinate per rischio e dipendenze. Una wave non va avviata se il gate della precedente non è verificabile.
+## Wave 2 — Gateway di policy e I/O sicuro
 
-### Wave 0 — Baseline e contratti
+Implementare `CapabilityPolicyGateway` come unico punto di controllo per filesystem, shell, HTTP/download, Git e browser. Definire le modalità `offline-strict`, `local-only` e `network-approved`, con consenso esplicito, audit strutturato e limiti centralizzati.
 
-**Da implementare**
+Completare cancellazione tramite `AbortSignal` per HTTP, processi e preview; aggiungere MIME sniffing, limiti byte, policy redirect e provenance/hash per download e installazione skill. Rimuovere le policy duplicate dagli handler e la modalità `auto` per l'installazione skill: restano solo `disabled` e `prompt`.
 
-- manifest di sessione con session ID, commit, stato Git e hash dei manifest/config;
-- snapshot persistente del baseline, separato dai log e dallo stato del piano;
-- classificazione esplicita del workspace: vuoto, esistente, monorepo o multi-progetto;
-- inventario dei contratti tool/IPC e identificazione delle fonti duplicate;
-- log per-run isolati e minimizzati.
+**Gate:** i test negativi dimostrano assenza di effetti persistenti per path fuori scope, egress offline, installazioni senza consenso, MIME non ammessi e operazioni cancellate.
 
-**Non implementare in questa wave**
+## Wave 3 — Profilo reale del progetto
 
-- nuove feature agentiche;
-- tracing remoto;
-- riscrittura dell’orchestratore;
-- installazioni o modifiche automatiche dell’ambiente.
+Implementare un solo `ProjectProfile`, validato con Zod, costruito da struttura, manifest, lockfile, toolchain, test e build. Classificare esplicitamente workspace `empty`, `existing`, `monorepo` e `multi-project`; risolvere per ciascun progetto i comandi di verifica e l'esito `verified`, `failed` o `unverifiable`.
 
-**Gate:** una sessione dirty può distinguere modifiche preesistenti da quelle proprie e può essere recuperata da un checkpoint.
+Sostituire il resolver attuale con il profile builder e rimuovere l'hardcoding dai prompt. Aggiungere fixture per workspace vuoto, esistente, monorepo, multi-progetto e progetto senza manifest/test.
 
-### Wave 1 — Sicurezza e affidabilità
+**Gate:** ogni comando deriva dal profilo osservato e nessun progetto esistente viene scaffoldato o riscritto.
 
-**Da implementare o completare**
+## Wave 4 — Refactor completo del dispatcher tool
 
-- path containment uniforme per ogni tool che legge o scrive;
-- timeout e cancellazione effettivi per shell, rete, sidecar e preview;
-- policy esplicita per egress/offline, con audit delle chiamate remote;
-- limiti di dimensione e MIME per download/upload;
-- provenance, hash e consenso per installazione di skill;
-- test negativi per autorizzazioni, rollback, tool sconosciuti, path fuori scope e output malformato.
+Ridurre `agentToolExecutorService.ts` a un dispatcher sottile. Estrarre i servizi `FsToolService`, `ProcessToolService`, `WebToolService`, `GitToolService`, `BrowserToolService` e `RecoveryToolService`.
 
-**Da mantenere con guardrail**
+Ogni tool usa il contratto unico `schema → precondizioni → policy → effetto → evidenza → rollback`. Dopo ogni estrazione rimuovere il relativo handler dal servizio originario, senza deleghe permanenti. Introdurre l'esito terminale `MODEL_UNSUITABLE` per capability mancanti, senza loop forzati.
 
-- ricerca web, download e Ollama remoto;
-- `ensure_tool`, solo con separazione detect/propose/approve/install;
-- aggiornamento modelli e vocabolari fuori dal loop della sessione;
-- traduzione PDF in-place solo con backup obbligatorio e sostituzione atomica;
-- preview automatica solo in sandbox.
+**Gate:** il dispatcher ha contract test completi; cancellazione, rollback e no-loop sono verificati; nessun handler concreto rimane nell'executor.
 
-**Default obbligatorio:** `autoInstallHubSkills = "disabled"`.
+## Wave 5 — Validazione visuale con Playwright
 
-**Gate:** nessuna azione unsafe nei test negativi; un errore di rete o tracing non blocca il loop; ogni mutazione è recuperabile.
+Adottare `playwright` come unica dipendenza per la validazione visuale headless. Non implementare Electron Offscreen WebContents né un secondo runner browser.
 
-### Wave 2 — Discovery e planning riconciliato
+Implementare runner sandboxato per artifact locale, screenshot, DOM snapshot, console error/warn, HTTP 4xx/5xx, timeout, cleanup garantito, redazione e stato `UNAVAILABLE`. Integrare l'esito solo come evidenza aggiuntiva: non sostituisce build, test o typecheck.
 
-**Da implementare**
+**Gate:** fixture positive e negative coprono artifact valido/non valido, path fuori scope, timeout, console error, 404/500 e runtime indisponibile.
 
-- `ProjectProfile` costruito dai manifest, configurazioni, test, build e struttura reale;
-- resolver dei comandi di verifica per stack, senza hardcoding nei prompt principali;
-- distinzione tra file presenti, milestone in corso e milestone verificate;
-- supporto esplicito a workspace senza test con stato `unverifiable`;
-- fixture per workspace vuoto, esistente, monorepo e progetto senza manifest.
+## Wave 6 — Suite deterministica e release hardening
 
-**Da non fare**
+Implementare fixture locali per sicurezza, rollback, tool sconosciuti, output malformato, progetto senza test, monorepo e sessione interrotta. Misurare per-run task success, false verified, unsafe action, recovery e tool validity. Rendere bloccante la soglia di zero falsi `verified` negli scenari controllati.
 
-- promuovere un deliverable a `verified` solo perché esiste;
-- applicare un comando della root a tutti i sottoprogetti;
-- usare `PROJECT_STATUS.json` come autorizzazione ad ampliare lo scope.
+Eseguire clean install riproducibile, verifica lockfile, SBOM e audit supply chain. Promptfoo è valutabile soltanto dopo la suite locale; Langfuse, DeepEval e Ragas restano fuori scope senza un caso d'uso misurabile.
 
-**Gate:** un progetto preesistente non viene riscritto da zero e ogni comando di verifica deriva dal profilo del progetto.
+**Gate:** tutti i controlli di rilascio passano e non rimangono attività nel tracker.
 
-### Wave 3 — Refactoring del Coding Agent
+## Ordine e chiusura
 
-**Da implementare gradualmente**
-
-- estrazione degli handler di `agentToolExecutorService.ts` per domini: filesystem, execution, web, git, browser e recovery;
-- contratto unico per schema, policy, precondizioni, effetto, evidenza e rollback;
-- capability probe osservato per tool calling, structured output, contesto, vision e coding;
-- microtask brevi, una mutazione per turno e riduzione del contesto sugli errori;
-- esito esplicito per modello non adatto, senza loop forzato;
-- contract test del dispatcher prima e dopo ogni estrazione.
-
-**Da non implementare**
-
-- una riscrittura completa dell’orchestratore;
-- un planner LLM esterno che sostituisca il planner canonico;
-- una nuova astrazione se non elimina una duplicazione o abilita un test concreto.
-
-**Gate:** comportamento invariato dei tool esistenti, test di cancellazione/no-loop/rollback superati, build invariata.
-
-### Wave 4 — Verifica hardware e setup
-
-**Da implementare solo se supportato da evidenza**
-
-- test parametrizzati per profili VRAM e costi di pesi, KV-cache e overhead;
-- distinzione tra capability dichiarata e capability osservata;
-- verifica health e contesto allocato dopo l’avvio Ollama;
-- setup riproducibile e script derivato dal profilo reale.
-
-**Da non fare**
-
-- raccomandare un modello solo in base al nome;
-- confondere `num_ctx` richiesto con memoria effettivamente disponibile;
-- aggiornare il modello durante una sessione agentica attiva.
-
-**Gate:** nessun modello raccomandato supera il profilo hardware verificato.
-
-### Wave 5 — Audit dei prompt e validazione visuale
-
-**Da implementare dopo le wave precedenti**
-
-- suite deterministica di invarianti e scenari su fixture isolate;
-- runner esterno opzionale per confrontare modelli e prompt;
-- validazione visuale sandboxata con screenshot, DOM, console errors e 404/500;
-- metriche per-run: task success, false verified, unsafe action, recovery e tool validity;
-- giudice semantico solo `advisory`.
-
-**Da non fare**
-
-- dichiarare successo sulla base di Answer Relevancy o Faithfulness soltanto;
-- usare screenshot come sostituto di build, test o typecheck;
-- rendere obbligatori Promptfoo, Langfuse, DeepEval o Ragas prima di avere fixture locali affidabili.
-
-**Gate:** falsi `verified` pari a zero negli scenari controllati e metriche isolate tra sessioni.
-
-### Wave 6 — Release hardening
-
-**Da valutare**
-
-- pin delle dipendenze e dei modelli;
-- clean install riproducibile;
-- SBOM e verifica della supply chain;
-- packaging e firma quando richiesti dal canale di distribuzione;
-- checklist di rilascio e report dei rischi residui.
-
-Questa wave non deve precedere la stabilizzazione dei contratti e dei test fondamentali.
-
-## 4. Criteri per decidere cosa implementare
-
-Ogni proposta futura deve compilare questa scheda:
-
-```text
-Obiettivo utente:
-Problema osservabile:
-Evidenza nel codice/test/log:
-Scope autorizzato:
-File o moduli coinvolti:
-Rischio introdotto:
-Prova di accettazione:
-Rollback:
-Decisione: implementare | mantenere e irrobustire | rinviare | non implementare
-```
-
-Una feature va mantenuta e irrobustita quando ha valore reale e il rischio è mitigabile. Va rinviata quando mancano una prova o una dipendenza necessaria. Va esclusa quando è inutilizzata, duplicata, non testabile o irreversibilmente distruttiva senza rollback.
-
-## 5. Strategia di valutazione degli step
-
-Prima di ogni wave:
-
-1. aggiornare la discovery e verificare il working tree;
-2. correlare la proposta con `PROJECT_STATUS.json`;
-3. definire una fixture o un test riproducibile;
-4. registrare precondizioni, file fuori scope e piano di rollback.
-
-Dopo ogni modifica:
-
-1. eseguire i test mirati;
-2. eseguire typecheck, lint, build e smoke test quando applicabili;
-3. verificare diff, file generati e assenza di segreti;
-4. aggiornare la documentazione canonica e il tracker del debito;
-5. classificare il risultato come `verified`, `failed` o `unverifiable`.
-
-Il successo dell’agente non è “risposta plausibile”: è una combinazione di modifica nello scope, prova eseguita, workspace recuperabile e assenza di violazioni di sicurezza.
-
-## 6. Decisioni rinviate
-
-Restano da decidere con evidenza o approvazione esplicita:
-
-- scelta tra Electron Offscreen WebContents e `playwright-core` per la preview headless;
-- forma finale del `ProjectProfile` e sua posizione nei layer;
-- eventuale migrazione completa dei contratti custom a Zod, evitando due fonti di verità;
-- formato del log locale per-run e politica di redazione;
-- uso di runner e giudici LLM in CI o soltanto come strumenti locali;
-- eventuale supporto a commit automatici: di default resta vietato senza approvazione umana.
-
+L'ordine obbligatorio è Wave 1 → Wave 2 → Wave 3 → Wave 4 → Wave 5 → Wave 6. Il tracker in `PROJECT_STATUS.json` è la checklist esecutiva canonica. Al suo completamento, dopo verifica completa e revisione del diff, cancellare questo file di piano e aggiornare la documentazione canonica risultante.

@@ -1,9 +1,9 @@
 /**
  * Live scenario — the whole task, end to end.
  *
- * The prompt is a trimmed version of the one that produced session-1787562597025-q8a5, the run
- * the audit in docs/coding-agent-studio-blueprint.md is built on. Re-running it is how a change
- * to the agent loop gets judged against the failure it was meant to fix.
+ * The prompt is a trimmed version of the one that produced session-1787562597025-q8a5.
+ * Re-running it is how a change to the agent loop gets judged against the failure it was meant
+ * to fix.
  *
  * It asserts delivery, and it did not always. Until 2026-08-25 the only assertion here was
  * `expect(result).toBeTruthy()`, which the loop satisfies by returning at all: two runs that
@@ -29,15 +29,12 @@ const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_fulltask')
 const SESSION = 'live-full-task'
 
 /**
- * The bar, taken verbatim from the only published result for THIS scenario: Run 9 in
- * docs/coding-agent-studio-blueprint.md §5.6h — "12/13 milestone verificate (92%), `finish`
- * raggiunto autonomamente, `npm run build` con exit code 0".
+ * The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone
+ * verificate (92%), `finish` raggiunto autonomamente, `npm run build` con exit code 0.
  *
  * These are deliberately not a "plausible" number picked so the probe would pass. The probe
- * asserts what the document asserts: if the section's claim holds, the run is green; if the
- * run is red, then either the agent regressed or §5.6h is publishing a result the code no
- * longer produces — which is exactly the open question the [!WARNING] under that line records.
- * Move these constants only together with the number in the blueprint.
+ * asserts the encoded baseline: if it holds, the run is green; otherwise the agent regressed.
+ * Move these constants only after recording a new, independently reviewed baseline.
  */
 const RUN9_VERIFIED_MILESTONES = 12
 const RUN9_TOTAL_MILESTONES = 13

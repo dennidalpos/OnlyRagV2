@@ -4,8 +4,8 @@
  * A live run drives `runAgentOrchestratorLoop` exactly as the renderer does, but with no
  * Electron window and no UI: the orchestrator accepts `win: null`, and every repository that
  * needs `app.getPath('userData')` already falls back to `<cwd>/userdata_dev` outside Electron.
- * That makes the whole agent loop observable from a terminal, which is how the guards added in
- * docs/coding-agent-studio-blueprint.md §5 were verified.
+ * That makes the whole agent loop observable from a terminal and suitable for regression
+ * verification of the agent guards.
  *
  * Three things are easy to get wrong here, and each one silently produces a run that proves
  * nothing:

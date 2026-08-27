@@ -12,13 +12,12 @@ La documentazione operativa risiede in `/docs/`. Per evitare divergenze, ogni ar
 
 | Argomento | Fonte autorevole | Contenuto e confini |
 | :--- | :--- | :--- |
-| Topologia e confini architetturali | [`architecture.md`](./architecture.md) | Panoramica multi-process, Clean Architecture, pipeline RAG e integrazione agentica; rimanda al blueprint per i dettagli. |
+| Topologia e confini architetturali | [`architecture.md`](./architecture.md) | Panoramica multi-process, Clean Architecture, pipeline RAG e integrazione agentica. |
 | Moduli, responsabilità e percorsi | [`modules.md`](./modules.md) | Inventario di Frontend, Electron, Sidecar, skill e script; nessun duplicato di contratti API. |
 | Contratti REST e IPC | [`api.md`](./api.md) | Endpoint, canali, payload, tipi ed errori; verificare sempre handler, preload e tipi del codice. |
 | Osservabilità e diagnosi | [`observability.md`](./observability.md) | Log strutturati, gestione errori, soglie, limiti, segnali critici e lacune metriche. |
 | Installazione, hardware e comandi | [`setup-and-env.md`](./setup-and-env.md) | Prerequisiti, tier hardware, dimensionamento, Ollama e procedure operative. |
 | Qualità del workspace | `npm run format:check` e `npm run lint` | Controllo whitespace sul diff e gate seriale; non esiste ancora un formatter AST dedicato. |
-| Coding Agent Studio e roadmap | [`coding-agent-studio-blueprint.md`](./coding-agent-studio-blueprint.md) | Stato implementato, gap, evidenze, roadmap e principi dell’agente. |
 | Prove live dell’agente | [`agent-live-testing.md`](./agent-live-testing.md) | Prerequisiti, scenari, isolamento e interpretazione dei log live. |
 | Piano evolutivo e governance dell’agente | [`plan/OnlyRag_V2_evolution_plan.md`](./plan/OnlyRag_V2_evolution_plan.md) | Roadmap verificabile, criteri per decidere cosa implementare e gestione dei rischi; non duplica i contratti correnti. |
 | Dipendenze e implementazioni custom | [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) | Librerie e logiche custom; le versioni effettive sono nei manifest. |

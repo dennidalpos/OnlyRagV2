@@ -34,7 +34,6 @@ All architectural, operational, API and setup specifications reside strictly in 
 - 🧩 [**Modules & Responsibilities**](./docs/modules.md): Complete mapping of Frontend, Electron Main Core, Python Sidecar, and Skill Hub components with input/output contracts.
 - 🔌 [**API Reference & Contracts**](./docs/api.md): REST endpoints (`/health`, `/ingest`, `/search`, `/documents`, `/export`), Electron IPC channels (`window.electronAPI`), TypeScript schemas and error codes.
 - ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware tiers (**legacy / entry / midrange / highend / extreme**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
-- 🤖 [**Coding Agent Studio Blueprint**](./docs/coding-agent-studio-blueprint.md): Canonical agent architecture, implementation evidence, gaps and roadmap.
 - 🧪 [**Live Agent Testing**](./docs/agent-live-testing.md): Prerequisites, live scenarios, isolation rules and audit-log interpretation.
 - 📚 [**Libraries & Domain Implementations**](./docs/libraries-and-domain-implementations.md): External libraries inventory and technical rationale for custom domain implementations.
 - 🛡️ [**Dependency Audit**](./docs/dependency-audit.md): CVE snapshot, outdated packages, false positives, risks and follow-up.

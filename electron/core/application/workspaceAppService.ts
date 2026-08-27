@@ -4,6 +4,9 @@ import { taskRunner } from '../infrastructure/process/taskRunner'
 import { webClient } from '../infrastructure/http/webClient'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
+import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
+import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
+import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
 
 export class WorkspaceAppService {
   private repo = new FileSystemRepository()
@@ -55,16 +58,51 @@ export class WorkspaceAppService {
     return this.repo.grepSearch(dirPath, query, isRegex, caseInsensitive)
   }
 
-  searchWeb(query: string, maxResults?: number) {
+  async searchWeb(query: string, maxResults?: number) {
+    const policyError = await this.networkPolicyError('web_search', 'connect', query)
+    if (policyError) {
+      return { success: false, results: [], error: policyError }
+    }
     return webClient.searchWeb(query, maxResults)
   }
 
-  fetchWebContent(url: string, maxChars?: number) {
+  async fetchWebContent(url: string, maxChars?: number) {
+    const policyError = await this.networkPolicyError('fetch_web_content', 'connect', url)
+    if (policyError) {
+      return { success: false, error: policyError }
+    }
     return webClient.fetchWebContent(url, maxChars)
   }
 
-  downloadFile(url: string, targetFilePath: string, workspaceRoot?: string) {
+  async downloadFile(url: string, targetFilePath: string, workspaceRoot?: string) {
+    const policyError = await this.networkPolicyError('download_file', 'download', url, workspaceRoot)
+    if (policyError) {
+      return { success: false, error: policyError }
+    }
     return webClient.downloadFile(url, targetFilePath, workspaceRoot)
+  }
+
+  private async networkPolicyError(
+    toolName: string,
+    operation: 'connect' | 'download',
+    target: string,
+    workspaceRoot?: string,
+  ): Promise<string | null> {
+    const settings = await appSettingsRepository.loadSettings()
+    const mode = settings?.capabilityPolicyMode
+    if (!mode || !['offline-strict', 'local-only'].includes(mode)) return null
+    const request = {
+      sessionId: 'workspace-ipc',
+      toolName,
+      capability: 'http-download',
+      operation,
+      mode,
+      workspaceRoot: workspaceRoot || process.cwd(),
+      target,
+      consent: { requested: false, granted: false },
+    } as const
+    const policy = mode === 'local-only' ? authorizeLocalOnly(request) : authorizeOfflineStrict(request)
+    return policy.allowed ? null : policy.reason
   }
 
   gitCommit(workspaceRoot: string | undefined, commitMessage: string) {

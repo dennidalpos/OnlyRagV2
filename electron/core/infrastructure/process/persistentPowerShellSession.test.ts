@@ -83,4 +83,15 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     const followUp = await session.execute('Write-Output "still alive"')
     expect(followUp.stdout).toContain('still alive')
   })
+
+  it('returns a cancellation result immediately when AbortSignal is already aborted', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+    const controller = new AbortController()
+    controller.abort()
+
+    const res = await session.execute('Start-Sleep -Seconds 30', undefined, undefined, 25000, controller.signal)
+
+    expect(res.code).toBe(130)
+    expect(res.stderr).toContain('cancelled before execution')
+  })
 })

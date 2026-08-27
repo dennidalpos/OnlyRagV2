@@ -70,8 +70,12 @@ export class PersistentPowerShellSession {
     command: string,
     onOutputChunk?: (data: string) => void,
     onChildProcess?: (proc: ChildProcess) => void,
-    timeoutMs = 60000
+    timeoutMs = 60000,
+    signal?: AbortSignal
   ): Promise<ShellExecutionOutput> {
+    if (signal?.aborted) {
+      return { stdout: '', stderr: '[Command cancelled before execution]', code: 130 }
+    }
     if (!this.proc || this.proc.killed) {
       this.initProcess()
     }
@@ -97,10 +101,28 @@ export class PersistentPowerShellSession {
 
       const cleanup = () => {
         if (timer) clearTimeout(timer)
+        signal?.removeEventListener('abort', abortHandler)
         if (this.proc?.stdout) this.proc.stdout.removeListener('data', onStdout)
         if (this.proc?.stderr) this.proc.stderr.removeListener('data', onStderr)
         this.isBusy = false
       }
+
+      const abortHandler = () => {
+        if (isSettled) return
+        isSettled = true
+        cleanup()
+        try {
+          if (process.platform === 'win32' && this.proc?.pid) {
+            spawn('taskkill', ['/pid', this.proc.pid.toString(), '/f', '/t'])
+          } else {
+            this.proc?.kill('SIGKILL')
+          }
+        } catch {}
+        this.initProcess()
+        resolve({ stdout: fullOutput.trim(), stderr: '[Command cancelled by AbortSignal]', code: 130 })
+      }
+
+      signal?.addEventListener('abort', abortHandler, { once: true })
 
       const timer = setTimeout(() => {
         if (!isSettled) {

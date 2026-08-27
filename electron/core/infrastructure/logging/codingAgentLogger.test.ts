@@ -1,14 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { CodingAgentLogger } from './codingAgentLogger'
 
 describe('CodingAgentLogger Unit Tests', () => {
   let loggerInstance: CodingAgentLogger
   let logPath: string
+  let tempDir: string | undefined
 
   beforeEach(() => {
     loggerInstance = new CodingAgentLogger()
     logPath = loggerInstance.getLogFilePath()
+    loggerInstance.clearAuditLog()
+  })
+
+  afterEach(() => {
+    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
   it('should format and write session start log entry', () => {
@@ -124,5 +132,33 @@ second run`)
     expect(content).toContain('[STEP 12 - MILESTONE m-4: IN_PROGRESS -> VERIFIED]')
     expect(content).toContain('Create src/components/TaskCard.tsx')
     expect(content).toContain('Cause: Verified: "src/components/TaskCard.tsx" was written for this milestone.')
+  })
+
+  it('redacts secrets from agent payloads before persisting them', () => {
+    loggerInstance.logToolCall('redaction-session', 1, 'run_command', {
+      command: 'curl https://example.test?access_token=secret-value',
+      authorization: 'Bearer secret-value',
+      password: 'secret-password',
+    })
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('[url]')
+    expect(content).toContain('[redacted]')
+    expect(content).not.toContain('secret-value')
+    expect(content).not.toContain('secret-password')
+  })
+
+  it('keeps only the configured number of audit-log generations', () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-audit-retention-'))
+    const retainedPath = path.join(tempDir, 'coding_agent_audit.log')
+    const retainedLogger = new CodingAgentLogger({ logFilePath: retainedPath, maxSizeBytes: 1, maxRetainedFiles: 2 })
+
+    retainedLogger.logSessionStart('retention-1', 'first', 'agent', 'model')
+    retainedLogger.logSessionStart('retention-2', 'second', 'agent', 'model')
+    retainedLogger.logSessionStart('retention-3', 'third', 'agent', 'model')
+
+    expect(fs.existsSync(retainedPath)).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'coding_agent_audit.1.log'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, 'coding_agent_audit.2.log'))).toBe(false)
   })
 })

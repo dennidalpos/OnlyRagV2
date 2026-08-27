@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import * as ts from 'typescript'
 import { logger } from '../../../diagnostics'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
+import { MAX_FILE_READ_BYTES } from '../../domain/agent/ioLimits'
 
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): string | null {
   const result = domainValidatePathSafety(filePath, workspaceRoot)
@@ -118,11 +119,10 @@ export class FileSystemRepository {
       }
 
       const stats = await fs.promises.stat(resolved)
-      const MAX_READ_SIZE_BYTES = 50 * 1024 * 1024
-      if (stats.size > MAX_READ_SIZE_BYTES) {
+      if (stats.size > MAX_FILE_READ_BYTES) {
         return {
           success: false,
-          error: `File size exceeds 50MB limit (${(stats.size / (1024 * 1024)).toFixed(1)}MB). Select a smaller file for editor preview.`,
+          error: `File size exceeds ${MAX_FILE_READ_BYTES / (1024 * 1024)}MB limit (${(stats.size / (1024 * 1024)).toFixed(1)}MB). Select a smaller file for editor preview.`,
         }
       }
 

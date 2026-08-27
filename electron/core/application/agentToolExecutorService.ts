@@ -56,6 +56,9 @@ import {
 import { probeDevTool, probeToolchain } from '../domain/agent/tools/execution/devToolchainTools'
 import { executeRunTestsTool } from './runTestsTool'
 import type { AppSettings } from '../../../src/types'
+import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
+import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
+import type { Capability, CapabilityOperation } from '../domain/agent/capabilityPolicyContract'
 import {
   INSTALL_COMMAND_TIMEOUT_MS,
   findAlreadyInstalledPackages,
@@ -72,6 +75,42 @@ export class AgentToolExecutorService {
   private shellSessions = new Map<string, PersistentPowerShellSession>()
   /** Packages whose registry facts have already been delivered; see versionRealityDirective. */
   private reportedVersionFacts = new Set<string>()
+
+  private offlinePolicyBlock(parsedTool: AgentToolCall, workspacePath: string | null | undefined, settings: AppSettings): ToolExecutionResult | null {
+    if (!settings.capabilityPolicyMode || !['offline-strict', 'local-only'].includes(settings.capabilityPolicyMode)) return null
+
+    const networkTool = ({
+      web_search: ['http-download', 'connect', parsedTool.parameters.query],
+      fetch_web_content: ['http-download', 'connect', parsedTool.parameters.url],
+      download_file: ['http-download', 'download', parsedTool.parameters.url],
+      open_in_browser: ['browser', 'open', parsedTool.parameters.url || parsedTool.parameters.filePath || parsedTool.parameters.path],
+      run_command: ['shell', 'execute', parsedTool.parameters.command],
+      ensure_tool: ['http-download', 'download', parsedTool.parameters.toolName || parsedTool.parameters.tool || parsedTool.parameters.name],
+    } as Record<string, [Capability, CapabilityOperation, unknown]>)[parsedTool.tool]
+
+    if (!networkTool) return null
+    const [capability, operation, target] = networkTool
+    const request = {
+      sessionId: 'agent-execution',
+      toolName: parsedTool.tool,
+      capability,
+      operation,
+      mode: settings.capabilityPolicyMode,
+      workspaceRoot: workspacePath || 'standalone',
+      target: target ? String(target) : undefined,
+      consent: { requested: false, granted: false },
+    } as const
+    const policy = settings.capabilityPolicyMode === 'local-only'
+      ? authorizeLocalOnly(request)
+      : authorizeOfflineStrict(request)
+    if (policy.allowed) return null
+
+    return {
+      outputForHistory: `[POLICY BLOCK] ${policy.reason}`,
+      logMessage: `[POLICY BLOCK] ${parsedTool.tool}: ${policy.reason}`,
+      isTerminal: true,
+    }
+  }
 
   public getJournal(): AtomicWorkspaceJournal {
     return this.journal
@@ -268,9 +307,13 @@ export class AgentToolExecutorService {
     settings: AppSettings,
     onTerminalOutput?: (data: string) => void,
     onProcessSpawned?: (proc: ChildProcess) => void,
-    activeSkillGuidelines: string = ''
+    activeSkillGuidelines: string = '',
+    signal?: AbortSignal
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
+
+    const policyBlock = this.offlinePolicyBlock(parsedTool, workspacePath, settings)
+    if (policyBlock) return policyBlock
 
     switch (tool) {
       case 'read_file': {
@@ -357,7 +400,8 @@ ${toolchain}`
               if (onTerminalOutput) onTerminalOutput(chunk.trim())
             },
             onProcessSpawned,
-            INSTALL_COMMAND_TIMEOUT_MS
+            INSTALL_COMMAND_TIMEOUT_MS,
+            signal
           )
 
           // A fresh install lands on PATH only for processes started afterwards: without
@@ -435,12 +479,12 @@ Do not retry the same installation. Continue without this tool or ask the user t
 
       case 'web_search': {
         const query = parameters.query || ''
-        return executeWebSearch(query, parameters.maxResults || 8, (searchQuery, maxResults) => webClient.searchWeb(searchQuery, maxResults))
+        return executeWebSearch(query, parameters.maxResults || 8, (searchQuery, maxResults) => webClient.searchWeb(searchQuery, maxResults, signal))
       }
 
       case 'fetch_web_content': {
         const targetUrl = parameters.url || ''
-        return executeWebContentFetch(targetUrl, (url) => webClient.fetchWebContent(url))
+        return executeWebContentFetch(targetUrl, (url) => webClient.fetchWebContent(url, 16000, signal))
       }
 
       case 'write_file': {
@@ -630,7 +674,7 @@ Do not retry the same installation. Continue without this tool or ask the user t
         }
         if (url && filePath) {
           this.journal.recordBeforeModification(pathCheck.safePath)
-          const dlRes = await webClient.downloadFile(url, pathCheck.safePath, workspacePath)
+          const dlRes = await webClient.downloadFile(url, pathCheck.safePath, workspacePath, signal)
           if (dlRes.success) {
             return { outputForHistory: `Successfully downloaded ${dlRes.downloadedBytes} bytes from ${url} to ${filePath}`, logMessage: `Successfully downloaded ${dlRes.downloadedBytes} bytes to ${path.basename(filePath)}` }
           }
@@ -819,7 +863,8 @@ Do not retry the same installation. Continue without this tool or ask the user t
               if (onTerminalOutput) onTerminalOutput(chunk.trim())
             },
             onProcessSpawned,
-            COMMAND_TIMEOUT_MS
+            COMMAND_TIMEOUT_MS,
+            signal
           )
 
           const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)

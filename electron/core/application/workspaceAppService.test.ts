@@ -1,20 +1,46 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { workspaceAppService } from './workspaceAppService'
+import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
+import { webClient } from '../infrastructure/http/webClient'
 
 describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () => {
   let tmpDir: string
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-delete-test-'))
+    vi.spyOn(appSettingsRepository, 'loadSettings').mockResolvedValue(null)
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (fs.existsSync(tmpDir)) {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     }
+  })
+
+  it('blocks non-agent web access when offline-strict is enabled', async () => {
+    vi.mocked(appSettingsRepository.loadSettings).mockResolvedValue({ capabilityPolicyMode: 'offline-strict' } as any)
+    const search = vi.spyOn(webClient, 'searchWeb')
+
+    const result = await workspaceAppService.searchWeb('blocked query')
+
+    expect(result).toMatchObject({ success: false, error: 'Network egress is disabled in offline-strict mode' })
+    expect(search).not.toHaveBeenCalled()
+  })
+
+  it('allows loopback fetches but blocks external fetches in local-only mode', async () => {
+    vi.mocked(appSettingsRepository.loadSettings).mockResolvedValue({ capabilityPolicyMode: 'local-only' } as any)
+    const fetchContent = vi.spyOn(webClient, 'fetchWebContent').mockResolvedValue({ success: true, content: 'local' })
+
+    const localResult = await workspaceAppService.fetchWebContent('http://127.0.0.1:11434/api')
+    const externalResult = await workspaceAppService.fetchWebContent('https://example.test')
+
+    expect(localResult).toMatchObject({ success: true })
+    expect(externalResult).toMatchObject({ success: false, error: 'Only loopback network targets are allowed in local-only mode' })
+    expect(fetchContent).toHaveBeenCalledTimes(1)
   })
 
   it('should successfully delete a single file on disk and return success', async () => {

@@ -63,6 +63,58 @@ describe('AgentToolExecutorService Unit Tests', () => {
   })
 
   describe('web research directives', () => {
+    it('blocks network tools before the web client in offline-strict mode', async () => {
+      const search = vi.spyOn(webClient, 'searchWeb')
+      const result = await agentToolExecutorService.executeTool(
+        { tool: 'web_search', parameters: { query: 'should never leave process' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'offline-strict' },
+      )
+
+      expect(result).toMatchObject({ isTerminal: true })
+      expect(result.outputForHistory).toContain('[POLICY BLOCK]')
+      expect(search).not.toHaveBeenCalled()
+    })
+
+    it('blocks egress shell commands before spawning a process in offline-strict mode', async () => {
+      const result = await agentToolExecutorService.executeTool(
+        { tool: 'run_command', parameters: { command: 'Invoke-WebRequest https://example.test' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'offline-strict' },
+      )
+
+      expect(result).toMatchObject({ isTerminal: true })
+      expect(result.outputForHistory).toContain('network egress')
+    })
+
+    it('blocks downloads and tool installation before any external adapter runs in offline-strict mode', async () => {
+      const download = vi.spyOn(webClient, 'downloadFile')
+      const downloadResult = await agentToolExecutorService.executeTool(
+        { tool: 'download_file', parameters: { url: 'https://example.test/file.zip', filePath: 'file.zip' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'offline-strict' },
+      )
+      const installResult = await agentToolExecutorService.executeTool(
+        { tool: 'ensure_tool', parameters: { toolName: 'node' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'offline-strict' },
+      )
+
+      expect(downloadResult.outputForHistory).toContain('[POLICY BLOCK]')
+      expect(installResult.outputForHistory).toContain('[POLICY BLOCK]')
+      expect(download).not.toHaveBeenCalled()
+    })
+
+    it('blocks opening an external URL in the browser before Electron shell access', async () => {
+      const result = await agentToolExecutorService.executeTool(
+        { tool: 'open_in_browser', parameters: { url: 'https://example.test' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'offline-strict' },
+      )
+
+      expect(result.outputForHistory).toContain('[POLICY BLOCK]')
+    })
+
     it('requires fetching primary documentation after a successful web search', async () => {
       vi.spyOn(webClient, 'searchWeb').mockResolvedValue({
         success: true,

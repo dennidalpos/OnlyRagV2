@@ -31,6 +31,7 @@ describe('AppSettingsRepository Unit Tests', () => {
       defaultModel: 'qwen2.5-coder:7b',
       chatModel: 'llama3.2:3b',
       hasCompletedInitialSetup: true,
+      capabilityPolicyMode: 'offline-strict' as const,
     }
 
     const saved = await repo.saveSettings(sample)
@@ -41,6 +42,7 @@ describe('AppSettingsRepository Unit Tests', () => {
     expect(loaded?.defaultModel).toBe('qwen2.5-coder:7b')
     expect(loaded?.chatModel).toBe('llama3.2:3b')
     expect(loaded?.hasCompletedInitialSetup).toBe(true)
+    expect(loaded?.capabilityPolicyMode).toBe('offline-strict')
   })
 
   it('should recover gracefully from corrupted settings.json', async () => {

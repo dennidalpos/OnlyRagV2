@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { isPathWithinRoot } from './pathContainment'
 
 export const DEFAULT_IGNORED_DIRS = new Set([
   '.git',
@@ -246,9 +247,7 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
     }
 
     if (resolvedRoot) {
-      const relative = path.relative(resolvedRoot, resolvedPath)
-      const isOutside = relative.startsWith('..') || path.isAbsolute(relative)
-      if (isOutside && resolvedPath !== resolvedRoot) {
+      if (!isPathWithinRoot(resolvedRoot, resolvedPath)) {
         return { safePath: null, error: `Directory Traversal Blocked: Path '${filePath}' is outside workspace root '${workspaceRoot}'.` }
       }
     }

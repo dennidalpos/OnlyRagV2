@@ -1,15 +1,6 @@
 {
   "todos": [
-    "W1.01 | Definire e testare i contratti Zod SessionManifest e BaselineSnapshot.",
-    "W1.02 | Implementare la persistenza atomica di SessionManifest con ID, root, commit/stato Git iniziali, hash manifest/config, timestamp e classificazione workspace.",
-    "W1.03 | Implementare la persistenza atomica di BaselineSnapshot separata da log e stato planner.",
-    "W1.04 | Implementare checkpoint idempotenti e recovery della sola sessione, preservando modifiche preesistenti.",
-    "W1.05 | Rimuovere i percorsi che usano log o stato planner come baseline.",
-    "W1.06 | Implementare redazione centralizzata dei log per-run e retention limitata.",
-    "W1.07 | Aggiungere fixture/test per sessione dirty, interruzione, recovery, rollback e assenza di segreti persistiti.",
-    "W1.08 | Eseguire test wave, typecheck, lint e revisione diff della Wave 1.",
-    "W2.01 | Definire il contratto Zod CapabilityPolicyGateway e le capacità filesystem, shell, HTTP/download, Git e browser.",
-    "W2.02 | Implementare la modalità offline-strict e testare il blocco totale dell'egress.",
+    "W2.02 | Implementare la modalità offline-strict e testare il blocco totale dell’egress.",
     "W2.03 | Implementare la modalità local-only e testare i confini verso rete e host locale.",
     "W2.04 | Implementare la modalità network-approved con consenso esplicito e audit strutturato.",
     "W2.05 | Centralizzare path containment e limiti I/O per i tool filesystem; rimuovere le policy duplicate coinvolte.",

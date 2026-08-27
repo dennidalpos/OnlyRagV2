@@ -1,6 +1,8 @@
 import { ipcMain, BrowserWindow, shell } from 'electron'
 import { systemAppService } from '../application/systemAppService'
 import { taskAppService } from '../application/taskAppService'
+import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
+import { isLoopbackTarget } from '../domain/agent/localOnlyPolicy'
 
 export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle(
@@ -22,6 +24,9 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
 
   ipcMain.handle('system:open-external', async (_, url: string) => {
     if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
+      const settings = await appSettingsRepository.loadSettings()
+      if (settings?.capabilityPolicyMode === 'offline-strict') return false
+      if (settings?.capabilityPolicyMode === 'local-only' && !isLoopbackTarget(url)) return false
       await shell.openExternal(url)
       return true
     }

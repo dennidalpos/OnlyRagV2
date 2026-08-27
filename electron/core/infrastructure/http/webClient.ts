@@ -7,6 +7,7 @@ import TurndownService from 'turndown'
 import * as cheerio from 'cheerio'
 import { logger } from '../../../diagnostics'
 import { validatePathSafety } from '../../domain/agent/contextFilter'
+import { MAX_DOWNLOAD_BYTES } from '../../domain/agent/ioLimits'
 import { httpMetrics } from './httpMetrics'
 
 export interface WebSearchResultItem {
@@ -174,7 +175,7 @@ export class WebClient {
     }
   }
 
-  async searchWeb(query: string, maxResults: number = 8): Promise<{ success: boolean; results: WebSearchResultItem[]; error?: string }> {
+  async searchWeb(query: string, maxResults: number = 8, signal?: AbortSignal): Promise<{ success: boolean; results: WebSearchResultItem[]; error?: string }> {
     if (!query || typeof query !== 'string' || !query.trim()) {
       return { success: false, results: [], error: 'Search query is empty' }
     }
@@ -182,11 +183,11 @@ export class WebClient {
     logger.log('INFO', 'WebClient', `Executing web search for query: "${cleanQuery}"`)
 
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`
-    const fetchRes = await this.fetchWebContent(searchUrl)
+    const fetchRes = await this.fetchWebContent(searchUrl, 16000, signal)
 
     if (!fetchRes.success || !fetchRes.content) {
       // Fallback: search via instant API
-      return this.searchInstantApi(cleanQuery)
+      return this.searchInstantApi(cleanQuery, signal)
     }
 
     const results = parseDuckDuckGoHtmlResults(fetchRes.rawHtml || fetchRes.content, maxResults)
@@ -197,10 +198,10 @@ export class WebClient {
     return { success: true, results }
   }
 
-  private async searchInstantApi(query: string): Promise<{ success: boolean; results: WebSearchResultItem[]; error?: string }> {
+  private async searchInstantApi(query: string, signal?: AbortSignal): Promise<{ success: boolean; results: WebSearchResultItem[]; error?: string }> {
     try {
       const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
-      const res = await this.fetchWebContent(apiUrl)
+      const res = await this.fetchWebContent(apiUrl, 16000, signal)
       if (!res.success || !res.content) {
         return { success: false, results: [], error: res.error || 'Web search returned no results' }
       }
@@ -233,7 +234,8 @@ export class WebClient {
     }
   }
 
-  async fetchWebContent(urlStr: string, maxChars: number = 16000): Promise<{ success: boolean; content?: string; rawHtml?: string; title?: string; error?: string }> {
+  async fetchWebContent(urlStr: string, maxChars: number = 16000, signal?: AbortSignal): Promise<{ success: boolean; content?: string; rawHtml?: string; title?: string; error?: string }> {
+    if (signal?.aborted) return { success: false, error: 'Request cancelled by AbortSignal' }
     const urlCheck = this.validateUrlSafety(urlStr)
     if (!urlCheck.safeUrl) {
       return { success: false, error: urlCheck.error }
@@ -266,7 +268,7 @@ export class WebClient {
           if (res.statusCode && (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
             record(res.statusCode, 'none')
             const redirectUrl = new URL(res.headers.location, targetUrl).toString()
-            return this.fetchWebContent(redirectUrl, maxChars).then(resolve)
+            return this.fetchWebContent(redirectUrl, maxChars, signal).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
@@ -311,14 +313,22 @@ export class WebClient {
         record(0, 'timeout')
         resolve({ success: false, error: `Request timed out (15s limit) for URL ${urlStr}` })
       })
+
+      signal?.addEventListener('abort', () => {
+        req.destroy()
+        record(0, 'timeout')
+        resolve({ success: false, error: 'Request cancelled by AbortSignal' })
+      }, { once: true })
     })
   }
 
   async downloadFile(
     urlStr: string,
     targetFilePath: string,
-    workspaceRoot?: string | null
+    workspaceRoot?: string | null,
+    signal?: AbortSignal
   ): Promise<{ success: boolean; downloadedBytes?: number; error?: string }> {
+    if (signal?.aborted) return { success: false, error: 'Download cancelled by AbortSignal' }
     const urlCheck = this.validateUrlSafety(urlStr)
     if (!urlCheck.safeUrl) {
       return { success: false, error: urlCheck.error }
@@ -350,8 +360,6 @@ export class WebClient {
 
       const fileStream = fs.createWriteStream(safeDestPath)
       let downloadedBytes = 0
-      const MAX_FILE_BYTES = 100 * 1024 * 1024 // 100MB limit
-
       const req = client.get(
         targetUrl,
         {
@@ -366,7 +374,7 @@ export class WebClient {
             fileStream.close()
             try { fs.unlinkSync(safeDestPath) } catch {}
             const redirectUrl = new URL(res.headers.location, urlCheck.safeUrl!).toString()
-            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot).then(resolve)
+            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
@@ -378,7 +386,7 @@ export class WebClient {
 
           res.on('data', (chunk) => {
             downloadedBytes += chunk.length
-            if (downloadedBytes > MAX_FILE_BYTES) {
+            if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
               req.destroy()
               fileStream.close()
               try { fs.unlinkSync(safeDestPath) } catch {}
@@ -413,6 +421,14 @@ export class WebClient {
         try { fs.unlinkSync(safeDestPath) } catch {}
         resolve({ success: false, error: 'Download request timed out (60s limit)' })
       })
+
+      signal?.addEventListener('abort', () => {
+        req.destroy()
+        fileStream.close()
+        try { fs.unlinkSync(safeDestPath) } catch {}
+        record(0, 'timeout')
+        resolve({ success: false, error: 'Download cancelled by AbortSignal' })
+      }, { once: true })
     })
   }
 }

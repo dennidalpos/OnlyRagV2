@@ -18,6 +18,11 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(sanitizeAppSettings('corrupted')).toEqual(getDefaultAppSettings())
   })
 
+  it('preserves a valid capability policy mode and drops invalid values', () => {
+    expect(sanitizeAppSettings({ capabilityPolicyMode: 'offline-strict' }).capabilityPolicyMode).toBe('offline-strict')
+    expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBeUndefined()
+  })
+
   it('should preserve valid custom settings and trim strings', () => {
     const custom = {
       defaultModel: '  qwen2.5-coder:7b  ',

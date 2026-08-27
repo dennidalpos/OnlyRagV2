@@ -163,4 +163,20 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       fs.rmSync(tempRoot, { recursive: true, force: true })
     }
   })
+
+  it('cancels fetch and download immediately when the signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const cancelledPath = path.join(os.tmpdir(), `onlyrag-cancelled-${Date.now()}.zip`)
+
+    await expect(client.fetchWebContent('https://example.com', 16000, controller.signal)).resolves.toMatchObject({
+      success: false,
+      error: 'Request cancelled by AbortSignal',
+    })
+    await expect(client.downloadFile('https://example.com/file.zip', cancelledPath, path.dirname(cancelledPath), controller.signal)).resolves.toMatchObject({
+      success: false,
+      error: 'Download cancelled by AbortSignal',
+    })
+    expect(fs.existsSync(cancelledPath)).toBe(false)
+  })
 })

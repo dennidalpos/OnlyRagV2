@@ -37,6 +37,7 @@ const VALID_OCR_ENGINES = new Set<string>(['native_cuda', 'vision_model'])
 const VALID_AUTO_INSTALL_POLICIES = new Set<string>(['disabled', 'prompt', 'auto'])
 const VALID_LANGUAGES = new Set<string>(['it', 'en'])
 const VALID_OLLAMA_MODES = new Set<string>(['local', 'remote'])
+const VALID_CAPABILITY_POLICY_MODES = new Set<string>(['offline-strict', 'local-only', 'network-approved'])
 
 export function sanitizeAppSettings(input: unknown): AppSettings {
   if (!input || typeof input !== 'object') {
@@ -66,11 +67,17 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
       ? (raw.ollamaMode as 'local' | 'remote')
       : defaults.ollamaMode
 
+  const capabilityPolicyMode =
+    typeof raw.capabilityPolicyMode === 'string' && VALID_CAPABILITY_POLICY_MODES.has(raw.capabilityPolicyMode)
+      ? (raw.capabilityPolicyMode as NonNullable<AppSettings['capabilityPolicyMode']>)
+      : undefined
+
   const sanitized: AppSettings = {
     defaultModel: typeof raw.defaultModel === 'string' ? raw.defaultModel.trim() : defaults.defaultModel,
     ocrEngine,
     ollamaHost: typeof raw.ollamaHost === 'string' && raw.ollamaHost.trim() ? raw.ollamaHost.trim() : defaults.ollamaHost,
     ollamaMode,
+    capabilityPolicyMode,
     language,
     autoInstallHubSkills,
     autoInstallMinScore: typeof raw.autoInstallMinScore === 'number' && !isNaN(raw.autoInstallMinScore) ? raw.autoInstallMinScore : defaults.autoInstallMinScore,

@@ -213,6 +213,8 @@ export interface AppSettings {
   legalFallbackModel?: string
   allowTerminalExecution?: boolean
   allowFileModifications?: boolean
+  /** Agent capability policy. Undefined preserves the legacy unrestricted mode until configured. */
+  capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
   ocrEngine: 'native_cuda' | 'vision_model'
   normalizeWithLlm?: boolean
   ollamaHost: string

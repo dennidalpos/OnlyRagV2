@@ -2,13 +2,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
+import { sanitizeLogMessage } from '../../../logRedactor'
 
 /** Below this, eliding a shared prefix costs more in explanation than it saves. */
 const MIN_ELIDABLE_PREFIX_CHARS = 400
 
 export class CodingAgentLogger {
   private logFilePath: string
-  private maxSizeBytes = 10 * 1024 * 1024 // 10 MB per audit log
+  private maxSizeBytes: number
+  private maxRetainedFiles: number
   /**
    * Previous turn prompt of each live session, kept to elide the part the next one repeats.
    *
@@ -24,7 +26,7 @@ export class CodingAgentLogger {
    */
   private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
 
-  constructor() {
+  constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
     const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
     const logDir = path.join(baseDir, 'logs')
     if (!fs.existsSync(logDir)) {
@@ -34,7 +36,10 @@ export class CodingAgentLogger {
         console.error('Failed creating log directory for coding agent audit:', err)
       }
     }
-    this.logFilePath = path.join(logDir, 'coding_agent_audit.log')
+    this.logFilePath = options?.logFilePath || path.join(logDir, 'coding_agent_audit.log')
+    this.maxSizeBytes = options?.maxSizeBytes ?? 10 * 1024 * 1024
+    this.maxRetainedFiles = Math.max(1, options?.maxRetainedFiles ?? 2)
+    this.cleanupRetainedFiles()
   }
 
   public getLogFilePath(): string {
@@ -47,9 +52,9 @@ export class CodingAgentLogger {
         fs.writeFileSync(this.logFilePath, '', 'utf-8')
       }
       const logDir = path.dirname(this.logFilePath)
-      const oldFile = path.join(logDir, 'coding_agent_audit.1.log')
-      if (fs.existsSync(oldFile)) {
-        fs.writeFileSync(oldFile, '', 'utf-8')
+      for (let index = 1; index < this.maxRetainedFiles; index++) {
+        const retainedFile = path.join(logDir, `coding_agent_audit.${index}.log`)
+        if (fs.existsSync(retainedFile)) fs.writeFileSync(retainedFile, '', 'utf-8')
       }
       return true
     } catch (err: any) {
@@ -91,12 +96,16 @@ export class CodingAgentLogger {
       const stats = fs.statSync(this.logFilePath)
       if (stats.size >= this.maxSizeBytes) {
         const logDir = path.dirname(this.logFilePath)
-        const oldFile = path.join(logDir, 'coding_agent_audit.1.log')
+        this.cleanupRetainedFiles()
         try {
-          if (fs.existsSync(oldFile)) {
-            fs.unlinkSync(oldFile)
+          for (let index = this.maxRetainedFiles - 1; index >= 2; index--) {
+            const source = path.join(logDir, `coding_agent_audit.${index - 1}.log`)
+            const target = path.join(logDir, `coding_agent_audit.${index}.log`)
+            if (fs.existsSync(target)) fs.unlinkSync(target)
+            if (fs.existsSync(source)) fs.renameSync(source, target)
           }
-          fs.renameSync(this.logFilePath, oldFile)
+          if (this.maxRetainedFiles > 1) fs.renameSync(this.logFilePath, path.join(logDir, 'coding_agent_audit.1.log'))
+          else fs.writeFileSync(this.logFilePath, '', 'utf-8')
         } catch {
           fs.writeFileSync(this.logFilePath, '', 'utf-8')
         }
@@ -106,11 +115,23 @@ export class CodingAgentLogger {
     }
   }
 
+  private cleanupRetainedFiles(): void {
+    const logDir = path.dirname(this.logFilePath)
+    try {
+      for (const entry of fs.readdirSync(logDir)) {
+        const match = entry.match(/^coding_agent_audit\.(\d+)\.log$/)
+        if (match && Number(match[1]) >= this.maxRetainedFiles) fs.unlinkSync(path.join(logDir, entry))
+      }
+    } catch (err: any) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed cleaning retained audit logs: ${err?.message}`)
+    }
+  }
+
   private writeEntry(sectionHeader: string, bodyContent: string): void {
     try {
       this.rotateIfNeeded()
       const timestamp = new Date().toISOString()
-      const formatted = `\n================================================================================\n[${timestamp}] ${sectionHeader}\n================================================================================\n${bodyContent.trim()}\n`
+      const formatted = `\n================================================================================\n[${timestamp}] ${sanitizeLogMessage(sectionHeader)}\n================================================================================\n${sanitizeLogMessage(bodyContent).trim()}\n`
       fs.appendFileSync(this.logFilePath, formatted, 'utf-8')
     } catch (err: any) {
       logger.log('WARN', 'CodingAgentLogger', `Failed writing agent audit log: ${err?.message}`)

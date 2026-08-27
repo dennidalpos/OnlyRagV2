@@ -1,6 +1,6 @@
 {
   "todos": [
-    "Verifiche live mancanti, coperte solo da unit test: citazione verbatim TS2613/TS2614, nuova forma di buildUninstallablePackageDirective, guard installVersionDowngrade (downgrade, major vecchia ed ETARGET preflight), ramo terminale budgetExhaustionVerification, soppressione repo map di turnContextPolicy; la sonda TS2305 con lista export è verificata da ts2305ExportRecovery.live.ts il 2026-08-27; impatto medio, urgenza media, sforzo M.",
+    "Verifiche live mancanti, coperte solo da unit test: nuova forma di buildUninstallablePackageDirective, guard installVersionDowngrade per major vecchia ed ETARGET preflight, ramo terminale budgetExhaustionVerification, soppressione repo map di turnContextPolicy; TS2305, TS2613 e TS2614 sono verificate live; impatto medio, urgenza media, sforzo M.",
     "First-Class Artifacts Engine (Blueprint 5.7): canali IPC artifacts:* e pannello Live Preview sandboxato; impatto alto, urgenza bassa, sforzo XL.",
     "Boundary presentation residue: completare i test IPC delle facciate per sidecarProcessManager e agentSessionStateRepository già spostati dietro application services; impatto medio, urgenza bassa, sforzo S.",
     "Ricerca web azionabile: trigger e direttive per usare davvero web_search e fetch_web_content sui pattern di librerie aggiornate; impatto medio, urgenza bassa, sforzo M.",

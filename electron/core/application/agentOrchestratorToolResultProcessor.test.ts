@@ -79,6 +79,10 @@ describe('refused installs reach the plan directive arbiter', () => {
     expect(isFailureOutput(REFUSAL)).toBe(true)
   })
 
+  it('reports a preflight downgrade refusal as a failure', () => {
+    expect(isFailureOutput('[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]\nThe command was not executed.')).toBe(true)
+  })
+
   it('counts refusals toward the uninstallable threshold instead of resetting it', () => {
     const episodes = [
       { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'FAILURE' as const },

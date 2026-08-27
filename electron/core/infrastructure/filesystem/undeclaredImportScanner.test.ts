@@ -81,13 +81,13 @@ describe('scanUndeclaredImports', () => {
     expect(scanUndeclaredImports(workspace)).toEqual([])
   })
 
-  it('says nothing for a manifest that declares no dependency yet', () => {
+  it('reports external imports for a manifest that declares no dependency', () => {
     write('package.json', JSON.stringify({ name: 'too-early' }))
     write('src/App.tsx', "import React from 'react'\nexport default React\n")
 
-    // Too early for the question to mean anything: every import would be reported, which is
-    // the false accusation the per-file gate refuses to make for the same reason.
-    expect(scanUndeclaredImports(workspace)).toEqual([])
+    expect(scanUndeclaredImports(workspace)).toEqual([
+      { packageName: 'react', importedBy: ['src/App.tsx'] },
+    ])
   })
 
   it('never walks into node_modules', () => {

@@ -19,7 +19,7 @@ import { resolvePrimaryVerificationCommand } from '../domain/agent/projectVerifi
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
 import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
-import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
+import { extractRequestedPackages, packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { isVerificationFailing } from '../domain/agent/verificationAttemptTracker'
 import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from '../domain/agent/compilerDiagnosticDirective'
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
@@ -521,6 +521,18 @@ export function isActiveMilestoneDelivered(
  * Milestone auto-verification is driven by run_tests, open_in_browser, and successful build/test commands.
  */
 export function trackVerification(ctx: ToolResultProcessingContext, isToolFailure: boolean) {
+  if (
+    ctx.parsedTool.tool === 'run_command' &&
+    isToolFailure &&
+    extractRequestedPackages(ctx.parsedTool.parameters?.command || '').length > 0
+  ) {
+    // A failed dependency install invalidates a prior green check even when npm left no files
+    // behind: the check predates the dependency-resolution attempt and cannot prove the current
+    // dependency state. Without this reset, a build in step 1 hid `dependencies_uninstallable`
+    // after the install failed, so the closure directive kept the agent away from the importer.
+    invalidateVerifiedBuild(ctx)
+  }
+
   if (ctx.toolRes.verification?.ran) {
     const activeM = ctx.goalPlanner.getActiveMilestone()
     if (ctx.toolRes.verification.passed) {

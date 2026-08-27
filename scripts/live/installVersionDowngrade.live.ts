@@ -61,7 +61,7 @@ describe('live: version downgrade guard', () => {
     )
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
-    expect(metrics.commands).toContain('[step 1] BLOCKED npm install vite@^4.0.0')
+    expect(metrics.commands).toContain('[step 1] FAILURE npm install vite@^4.0.0')
     expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
     expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
     expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')

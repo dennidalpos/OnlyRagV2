@@ -107,6 +107,14 @@ describe('readLocalModuleExports', () => {
     ])
   })
 
+  it('reports a local default export for import mismatch recovery', () => {
+    const modulePath = path.join(tempDir, 'src', 'Button.ts')
+    fs.mkdirSync(path.dirname(modulePath), { recursive: true })
+    fs.writeFileSync(modulePath, 'const Button = "button"\nexport default Button\n', 'utf-8')
+
+    expect(readLocalModuleExports(tempDir, 'src/App.tsx', './Button')).toEqual(['default'])
+  })
+
   it('does not resolve a relative specifier outside the workspace', () => {
     expect(readLocalModuleExports(tempDir, 'src/App.tsx', '../../outside')).toEqual([])
   })

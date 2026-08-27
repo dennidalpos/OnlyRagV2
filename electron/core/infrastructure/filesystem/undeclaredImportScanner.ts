@@ -44,10 +44,9 @@ export interface UndeclaredImport {
  * Every undeclared package the workspace imports, sorted by name.
  *
  * Returns an empty list — never a partial one presented as complete — when there is no
- * manifest, or when it declares nothing at all: the project is then too early for the question
- * to mean anything, and every import would be reported. That is the same guard the per-file
- * gate applies, and it is what keeps a freshly created workspace from being told its first
- * `import React` is a defect.
+ * manifest. A readable manifest with no dependencies is still authoritative: an external import
+ * in that project is undeclared, while a fresh workspace with no source imports naturally yields
+ * nothing.
  */
 export function scanUndeclaredImports(
   workspacePath: string | null | undefined,
@@ -56,7 +55,7 @@ export function scanUndeclaredImports(
   if (!workspacePath || !fs.existsSync(workspacePath)) return []
 
   const declared = agentToolFileRepository.readDeclaredPackages(workspacePath)
-  if (!declared || declared.names.size === 0) return []
+  if (!declared) return []
 
   const aliasPrefixes = declared.aliasPrefixes || []
   const byPackage = new Map<string, Set<string>>()

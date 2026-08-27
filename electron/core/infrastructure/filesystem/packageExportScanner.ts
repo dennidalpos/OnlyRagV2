@@ -124,7 +124,10 @@ export function readLocalModuleExports(workspacePath: string, importingFile: str
       return relative && !relative.startsWith('..') && !path.isAbsolute(relative) && fs.existsSync(candidate)
     })
     if (!sourcePath || fs.statSync(sourcePath).size > MAX_DECLARATION_BYTES) return []
-    return extractExportedNames(fs.readFileSync(sourcePath, 'utf-8')).slice(0, MAX_NAMES)
+    const source = fs.readFileSync(sourcePath, 'utf-8')
+    const names = extractExportedNames(source)
+    if (/\bexport\s+default\b/.test(source)) names.unshift('default')
+    return names.slice(0, MAX_NAMES)
   } catch (err: any) {
     logger.log('WARN', 'PackageExportScanner', `Could not read local exports for ${specifier}: ${err.message}`)
     return []

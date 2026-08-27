@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePlanDirective, type PlanDirectiveInput } from './planDirectiveArbiter'
+import { buildExplicitFirstCommandDirective, resolvePlanDirective, type PlanDirectiveInput } from './planDirectiveArbiter'
 import type { PlanMilestone } from './planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
 
@@ -16,6 +16,20 @@ import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
  */
 
 const VERIFICATION = { command: 'npm run build', source: 'package.json script "build"' }
+
+describe('buildExplicitFirstCommandDirective', () => {
+  it('pins an explicitly requested first command', () => {
+    const directive = buildExplicitFirstCommandDirective('Run exactly `npm install vite@^4.0.0` first.', true)!
+
+    expect(directive).toContain('MUST be "run_command" with the command: npm install vite@^4.0.0')
+    expect(directive).toContain('Do NOT run a build')
+  })
+
+  it('does not override later turns or ordinary wording', () => {
+    expect(buildExplicitFirstCommandDirective('Run exactly `npm install vite@^4.0.0` first.', false)).toBeNull()
+    expect(buildExplicitFirstCommandDirective('Please run `npm install vite@^4.0.0`.', true)).toBeNull()
+  })
+})
 
 function milestone(id: string, title: string, status: PlanMilestone['status'] = 'in_progress'): PlanMilestone {
   return { id, title, status }

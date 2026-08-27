@@ -15,6 +15,7 @@ import { skillAppService } from './skillAppService'
 import { resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import { resolveTurnContextPolicy, omittedBlockNames } from '../domain/agent/turnContextPolicy'
 import { extractDeliverablePaths } from '../domain/agent/milestoneDeliverableResolver'
+import { buildExplicitFirstCommandDirective } from '../domain/agent/planDirectiveArbiter'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 import { resolveModelContextLength } from '../domain/settings/modelContextPreference'
@@ -192,7 +193,12 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.episodicCompactor.getEpisodes(),
     ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build')
   )
-  const planBlock = ctx.goalPlanner.compileProgressPrompt({ directive })
+  const planBlock = [
+    buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1),
+    ctx.goalPlanner.compileProgressPrompt({ directive }),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 
   // The same decision, spent twice. `directive.kind` was computed on every turn and discarded;
   // it already answers which of the optional blocks below this turn can use. See

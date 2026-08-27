@@ -171,6 +171,20 @@ export function buildDependencyInstallDirective(missing: readonly string[]): str
   ].join('\n')
 }
 
+/** Preserves an explicit user-requested first command against competing plan heuristics. */
+export function buildExplicitFirstCommandDirective(userTask: string, isFirstTurn: boolean): string | null {
+  if (!isFirstTurn) return null
+  const match = userTask.match(/\bRun exactly\s+`([^`]+)`\s+first\b/i)
+  if (!match) return null
+  return [
+    `[USER-MANDATED FIRST COMMAND]`,
+    `The user explicitly required this command as the first action: ${match[1]}`,
+    `Directives:`,
+    `1. Your next tool call MUST be "run_command" with the command: ${match[1]}`,
+    `2. Do NOT run a build, edit a file, or call any other tool before it.`,
+  ].join('\n')
+}
+
 /**
  * What the model is told when the code imports a package nobody declared.
  *

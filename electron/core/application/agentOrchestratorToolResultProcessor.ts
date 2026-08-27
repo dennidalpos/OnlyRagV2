@@ -90,6 +90,7 @@ export function isFailureOutput(outputForHistory: string): boolean {
     // The 08:37 run of the same day did the same. The escape those runs needed was already
     // built and simply never armed.
     output.includes('[PACKAGE DOES NOT EXIST') ||
+    output.includes('[VERSION DOWNGRADE REFUSED') ||
     output.includes('Security Violation') ||
     output.toLowerCase().startsWith('error:')
   )

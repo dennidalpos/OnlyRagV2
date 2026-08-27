@@ -161,4 +161,14 @@ describe('build freshness — a verification command does not invalidate itself'
     trackVerification(ctx, false)
     expect(flags.hasVerifiedBuild).toBe(true)
   })
+
+  it('invalidates stale verification after a failed dependency install', () => {
+    const flags = freshFlags()
+    const ctx = makeContext('npm install @onlyrag/not-published-probe', flags)
+    ctx.toolRes = { outputForHistory: '[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]', logMessage: 'Install refused' }
+
+    trackVerification(ctx, true)
+
+    expect(flags.hasVerifiedBuild).toBe(false)
+  })
 })

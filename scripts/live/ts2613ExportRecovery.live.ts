@@ -1,10 +1,11 @@
 /**
- * Live scenario — recovery from a local named/default export mismatch.
+ * Live scenario — recovery from a default import against a named local export.
  *
- * The compiler prints the exact replacement import for TS2614. The module's default export is
- * the intended contract, so a passing build requires the model to rewrite only the importer.
+ * TS2613 is the inverse of the TS2614 probe: the compiler prints the complete named import
+ * that fixes the importer, while the exported module is held constant. The scenario observes
+ * whether the real local model follows that verbatim suggestion.
  *
- *   npx vitest run --config vitest.live.config.mts -t "TS2614"
+ *   npx vitest run --config vitest.live.config.mts -t "TS2613"
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -14,10 +15,10 @@ import { runAgentOrchestratorLoop } from '../../electron/core/application/agentO
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { loadRealSettings, reportRun, resetWorkspace } from './agentLiveHarness'
 
-const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_ts2614')
-const SESSION = 'live-ts2614'
+const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_ts2613')
+const SESSION = 'live-ts2613'
 
-function seedWorkspace(): { packageJson: string; buttonSource: string } {
+function seedWorkspace(): { packageJson: string; widgetSource: string } {
   resetWorkspace(WORKSPACE)
   fs.mkdirSync(path.join(WORKSPACE, 'src'), { recursive: true })
   fs.mkdirSync(path.join(WORKSPACE, 'node_modules', 'typescript'), { recursive: true })
@@ -25,7 +26,7 @@ function seedWorkspace(): { packageJson: string; buttonSource: string } {
 
   const packageJson = JSON.stringify(
     {
-      name: 'ts2614-probe',
+      name: 'ts2613-probe',
       version: '1.0.0',
       private: true,
       scripts: { build: 'tsc --noEmit' },
@@ -33,7 +34,7 @@ function seedWorkspace(): { packageJson: string; buttonSource: string } {
     null,
     2
   )
-  const buttonSource = 'const Button = "button"\nexport default Button\n'
+  const widgetSource = 'export const Widget = "widget"\n'
   fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
   fs.writeFileSync(
     path.join(WORKSPACE, 'tsconfig.json'),
@@ -44,31 +45,31 @@ function seedWorkspace(): { packageJson: string; buttonSource: string } {
     ),
     'utf-8'
   )
-  fs.writeFileSync(path.join(WORKSPACE, 'src', 'Button.ts'), buttonSource, 'utf-8')
-  fs.writeFileSync(path.join(WORKSPACE, 'src', 'TaskCard.ts'), "import { Button } from './Button'\nexport const taskCard = Button\n", 'utf-8')
+  fs.writeFileSync(path.join(WORKSPACE, 'src', 'Widget.ts'), widgetSource, 'utf-8')
+  fs.writeFileSync(path.join(WORKSPACE, 'src', 'Dashboard.ts'), "import Widget from './Widget'\nexport const dashboard = Widget\n", 'utf-8')
   fs.cpSync(path.join(process.cwd(), 'node_modules', 'typescript'), path.join(WORKSPACE, 'node_modules', 'typescript'), { recursive: true })
   for (const launcher of ['tsc', 'tsc.cmd', 'tsc.ps1']) {
     const source = path.join(process.cwd(), 'node_modules', '.bin', launcher)
     if (fs.existsSync(source)) fs.copyFileSync(source, path.join(WORKSPACE, 'node_modules', '.bin', launcher))
   }
-  return { packageJson, buttonSource }
+  return { packageJson, widgetSource }
 }
 
-describe('live: TS2614 export recovery', () => {
+describe('live: TS2613 export recovery', () => {
   it('rewrites the importer using the compiler suggestion', async () => {
     const fixture = seedWorkspace()
     await agentSessionStateRepository.seedPlanMilestones(
       SESSION,
       WORKSPACE,
-      [{ id: 'm-ts2614', title: 'Fix src/TaskCard.ts', status: 'pending', verificationCommand: 'npm run build' }],
-      'Fix the TypeScript build error in src/TaskCard.ts.'
+      [{ id: 'm-ts2613', title: 'Fix src/Dashboard.ts', status: 'pending', verificationCommand: 'npm run build' }],
+      'Fix the TypeScript build error in src/Dashboard.ts.'
     )
 
     const result = await runAgentOrchestratorLoop(
       {
         userTask:
-          'Run `npm run build` first and fix the TypeScript error in src/TaskCard.ts. ' +
-          'The local module src/Button.ts is correct and must not be edited. Stop only after npm run build passes.',
+          'Run `npm run build` first and fix the TypeScript error in src/Dashboard.ts. ' +
+          'The local module src/Widget.ts is correct and must not be edited. Stop only after npm run build passes.',
         workspacePath: WORKSPACE,
         agentMode: 'agent',
         sessionId: SESSION,
@@ -77,14 +78,14 @@ describe('live: TS2614 export recovery', () => {
       null
     )
 
-    const metrics = reportRun({ label: 'TS2614 export recovery', workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
-    const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'TaskCard.ts'), 'utf-8')
+    const metrics = reportRun({ label: 'TS2613 export recovery', workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
+    const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'Dashboard.ts'), 'utf-8')
 
     expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)
     expect(result.success).toBe(true)
-    expect(source).toMatch(/import Button from ["']\.\/Button["']/)
-    expect(source).not.toMatch(/import\s*\{\s*Button\s*\}\s*from\s+["']\.\/Button["']/)
-    expect(fs.readFileSync(path.join(WORKSPACE, 'src', 'Button.ts'), 'utf-8')).toBe(fixture.buttonSource)
+    expect(source).toContain("import { Widget } from './Widget'")
+    expect(source).not.toContain("import Widget from './Widget'")
+    expect(fs.readFileSync(path.join(WORKSPACE, 'src', 'Widget.ts'), 'utf-8')).toBe(fixture.widgetSource)
     expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
   })
 })

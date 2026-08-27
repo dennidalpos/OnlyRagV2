@@ -445,6 +445,22 @@ export function buildDiagnosticFixDirective(
       const importedTarget = mismatch.moduleSpecifier.startsWith('.')
         ? resolveRelativeImportPath(target.file, mismatch.moduleSpecifier)
         : mismatch.moduleSpecifier
+      const localExports = resolveLocalModuleExports(target.file, mismatch.moduleSpecifier)
+      if (localExports.includes('default') && /^import\s+[^'{]+\s+from\s+/.test(mismatch.suggestedImport)) {
+        return [
+          `[THE LOCAL MODULE EXPORT CONTRACT IS AUTHORITATIVE — APPLY THE COMPILER'S IMPORT]`,
+          `${target.file}, line ${target.line}${target.column ? `, column ${target.column}` : ''} (${target.code})`,
+          `  ${target.message}`,
+          `The imported local module "${importedTarget}" exports default, so keep that module unchanged and apply TypeScript's exact compatible import:`,
+          `  ${mismatch.suggestedImport}`,
+          rest ? `Also reported${restOverflow > 0 ? ` (${restOverflow} more not listed)` : ''}:\n${rest}` : '',
+          `Directives:`,
+          `1. Your next tool call MUST be "write_file" on "${target.file}", with the complete content of that file, replacing line ${target.line} with exactly: ${mismatch.suggestedImport}`,
+          `2. Do NOT edit "${importedTarget}" and do NOT re-run the command until the importer has changed.`,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      }
       return [
         `[IMPORT AND EXPORT DISAGREE — PRESERVE THE INTENDED PUBLIC API]`,
         `${target.file}, line ${target.line}${target.column ? `, column ${target.column}` : ''} (${target.code})`,

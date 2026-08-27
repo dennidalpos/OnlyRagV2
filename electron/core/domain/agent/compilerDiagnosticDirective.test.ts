@@ -209,6 +209,15 @@ describe('buildDiagnosticFixDirective — export/import mismatch', () => {
     expect(directive).toContain('Do NOT re-run the command until you have changed a file')
   })
 
+  it('orders the suggested import when the local module confirms a default export', () => {
+    const directive = buildDiagnosticFixDirective(TS2614_OUTPUT, undefined, () => ['default'])!
+
+    expect(directive).toContain('THE LOCAL MODULE EXPORT CONTRACT IS AUTHORITATIVE')
+    expect(directive).toContain('MUST be "write_file" on "src/routes/index.tsx"')
+    expect(directive).toContain('replacing line 3 with exactly: import Dashboard from "../pages/Dashboard"')
+    expect(directive).toContain('Do NOT edit "src/pages/Dashboard.tsx"')
+  })
+
   it('allows the imported local module to define the intended export contract', () => {
     const directive = buildDiagnosticFixDirective(TS2613_OUTPUT)!
 

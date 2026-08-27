@@ -33,7 +33,8 @@ import { detectRedundantWrite, buildRedundantWriteNotice } from '../domain/agent
 import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { computeLineDiff, countDiffLines } from '../domain/agent/diffEngine'
 import { reconcileApprovedHunks } from '../domain/agent/tools/fs/hunkApproval'
-import { performGitCommit } from '../domain/agent/tools/git/gitCommitTool'
+import { executeFileInfoTool } from '../domain/agent/tools/fs/fileInfoTool'
+import { executeGitDiff, executeGitStatus, performGitCommit } from '../domain/agent/tools/git/gitCommitTool'
 import { executeWebContentFetch, executeWebSearch } from '../domain/agent/tools/web/webResearchTools'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
@@ -1307,21 +1308,7 @@ ${healingTail}`
 
       case 'git_status': {
         const cwd = workspacePath || process.cwd()
-        try {
-          const stdout = gitCliRepository.run(cwd, 'status --short', 10000)
-          const outStr = stdout.trim()
-            ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
-            : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
-          return {
-            outputForHistory: outStr,
-            logMessage: `Git Status checked in ${path.basename(cwd)}`,
-          }
-        } catch (err: any) {
-          return {
-            outputForHistory: `Git Status Error: ${err.message}`,
-            logMessage: `Git Status Error: ${err.message}`,
-          }
-        }
+        return executeGitStatus(cwd, (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs))
       }
 
       case 'git_diff': {
@@ -1330,31 +1317,7 @@ ${healingTail}`
         const isStaged = Boolean(parameters.staged)
         const pathCheck = targetPath ? validatePathSafety(targetPath, workspacePath) : null
 
-        if (targetPath && pathCheck && !pathCheck.safePath) {
-          return {
-            outputForHistory: `Security Violation: ${pathCheck.error}`,
-            logMessage: `Git Diff Rejected: ${pathCheck.error}`,
-          }
-        }
-
-        try {
-          const fileArg = pathCheck?.safePath ? ` -- "${pathCheck.safePath}"` : ''
-          const stagedFlag = isStaged ? ' --staged' : ''
-          const stdout = gitCliRepository.run(cwd, `diff${stagedFlag}${fileArg}`, 15000)
-          const truncated = stdout.trim().slice(0, 8000)
-          const outStr = stdout.trim()
-            ? `[GIT DIFF (${isStaged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`
-            : `[GIT DIFF: ${targetPath || cwd}]\nNo differences detected.\n[END GIT DIFF]`
-          return {
-            outputForHistory: outStr,
-            logMessage: `Git Diff completed for ${targetPath ? path.basename(targetPath) : 'workspace'}`,
-          }
-        } catch (err: any) {
-          return {
-            outputForHistory: `Git Diff Error: ${err.message}`,
-            logMessage: `Git Diff Error: ${err.message}`,
-          }
-        }
+        return executeGitDiff(cwd, targetPath, isStaged, pathCheck, (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs))
       }
 
       case 'git_commit': {
@@ -1393,42 +1356,7 @@ ${healingTail}`
       }
 
       case 'get_file_info': {
-        const targetPath = parameters.filePath
-        const pathCheck = validatePathSafety(targetPath, workspacePath)
-        if (!pathCheck.safePath) {
-          return {
-            outputForHistory: `Security Violation: ${pathCheck.error}`,
-            logMessage: `Get File Info Rejected: ${pathCheck.error}`,
-          }
-        }
-
-        try {
-          const info = agentToolFileRepository.getFileInfo(pathCheck.safePath)
-          if (!info) {
-            return {
-              outputForHistory: `[FILE INFO: ${targetPath}]\nStatus: Does Not Exist\n[END FILE INFO]`,
-              logMessage: `File Info: File not found: ${targetPath}`,
-            }
-          }
-
-          const infoStr = `[FILE INFO: ${targetPath}]\n` +
-            `Type: ${info.isDirectory ? 'Directory' : 'File'}\n` +
-            `Size: ${info.sizeBytes} bytes (${(info.sizeBytes / 1024).toFixed(2)} KB)\n` +
-            `Is Binary: ${info.isBinary}\n` +
-            `Line Count: ${info.lineCount}\n` +
-            `Last Modified: ${info.mtimeIso}\n` +
-            `[END FILE INFO]`
-
-          return {
-            outputForHistory: infoStr,
-            logMessage: `File Info retrieved for ${path.basename(pathCheck.safePath)}`,
-          }
-        } catch (err: any) {
-          return {
-            outputForHistory: `Get File Info Error: ${err.message}`,
-            logMessage: `File Info Error: ${err.message}`,
-          }
-        }
+        return executeFileInfoTool(parameters, workspacePath, agentToolFileRepository)
       }
 
       case 'open_in_browser': {

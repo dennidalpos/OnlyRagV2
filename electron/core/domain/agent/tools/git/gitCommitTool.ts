@@ -12,6 +12,48 @@ export interface GitCommandError {
 
 export type GitCommit = (cwd: string, message: string) => string
 
+export type GitRun = (cwd: string, command: string, timeoutMs: number) => string
+
+export type SafePathCheck = { safePath?: string | null; error?: string }
+
+export function executeGitStatus(cwd: string, run: GitRun): import('../toolExecutionContracts').ToolExecutionResult {
+  try {
+    const stdout = run(cwd, 'status --short', 10000)
+    const outStr = stdout.trim()
+      ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
+      : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
+    return { outputForHistory: outStr, logMessage: `Git Status checked in ${cwd.split(/[\\/]/).pop() || cwd}` }
+  } catch (error: unknown) {
+    const message = (error as { message?: string })?.message || 'Unknown git error'
+    return { outputForHistory: `Git Status Error: ${message}`, logMessage: `Git Status Error: ${message}` }
+  }
+}
+
+export function executeGitDiff(
+  cwd: string,
+  targetPath: string | undefined,
+  staged: boolean,
+  pathCheck: SafePathCheck | null,
+  run: GitRun,
+): import('../toolExecutionContracts').ToolExecutionResult {
+  if (targetPath && pathCheck && !pathCheck.safePath) {
+    return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Git Diff Rejected: ${pathCheck.error}` }
+  }
+  try {
+    const fileArg = pathCheck?.safePath ? ` -- "${pathCheck.safePath}"` : ''
+    const stagedFlag = staged ? ' --staged' : ''
+    const stdout = run(cwd, `diff${stagedFlag}${fileArg}`, 15000)
+    const truncated = stdout.trim().slice(0, 8000)
+    const outStr = stdout.trim()
+      ? `[GIT DIFF (${staged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`
+      : `[GIT DIFF: ${targetPath || cwd}]\nNo differences detected.\n[END GIT DIFF]`
+    return { outputForHistory: outStr, logMessage: `Git Diff completed for ${targetPath ? targetPath.split(/[\\/]/).pop() : 'workspace'}` }
+  } catch (error: unknown) {
+    const message = (error as { message?: string })?.message || 'Unknown git error'
+    return { outputForHistory: `Git Diff Error: ${message}`, logMessage: `Git Diff Error: ${message}` }
+  }
+}
+
 /** Validates and translates the git commit operation while delegating execution to infrastructure. */
 export function performGitCommit(cwd: string, commitMessage: string, commit: GitCommit): GitCommitResult {
   const trimmedMessage = (commitMessage || '').trim()

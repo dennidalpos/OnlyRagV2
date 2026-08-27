@@ -431,8 +431,8 @@ vuote, tipi errati o campi sconosciuti devono correggere il payload prima dell'u
 | `skills:list-hub-by-source` | `sourceId: string, workspaceRoot?: string, forceRefresh?: boolean` | `HubSkillItem[]` | Elenco delle skill da una sorgente specifica con supporto a caching TTL e refresh forzato. |
 | `skills:list-hub-all` | `workspaceRoot?: string, forceRefresh?: boolean` | `HubSkillItem[]` | Classifica globale deduplicata di tutte le sorgenti configurate; include `globalRank`, `qualityScore` e `compatibility` calcolati dal probe locale Ollama/checksum. |
 | `skills:toggle-active` | `skillId: string, isActive: boolean` | `boolean` | Attivazione/disattivazione manuale con salvataggio persistente su disco (`active_skills.json`). |
-| `skills:install-from-hub` | `hubSkillId: string, workspaceRoot?: string, hubSourceId?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Installazione di una skill da hub con calcolo SHA-256 e metadata provenance. |
-| `skills:install-from-url` | `url: string, workspaceRoot?: string, customName?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Importazione diretta di una skill tramite URL raw markdown. |
+| `skills:install-from-hub` | `hubSkillId: string, workspaceRoot?: string, hubSourceId?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Installazione di una skill da hub con calcolo SHA-256 e metadata provenance; `workspaceRoot` valorizzato impone lo scope workspace e fallisce se il percorso non esiste, senza fallback globale. |
+| `skills:install-from-url` | `url: string, workspaceRoot?: string, customName?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Importazione diretta di una skill tramite URL raw markdown; `workspaceRoot` valorizzato impone lo scope workspace, mentre omesso usa `userData/skills`. |
 | `skills:save-custom` | `input: SkillSaveInput, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Creazione o aggiornamento di una skill locale/personalizzata con rilevamento modifiche. |
 | `skills:reset-original` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, skill?: SkillDefinition, error?: string }` | Ripristino di una skill modificata al contenuto originale dell'hub. |
 | `skills:uninstall` | `skillId: string, workspaceRoot?: string` | `{ success: boolean, error?: string }` | Disinstallazione ed eliminazione sicura della cartella skill. |
@@ -451,3 +451,16 @@ vuote, tipi errati o campi sconosciuti devono correggere il payload prima dell'u
 | `ingest:delete` | `deleteIngestedDocument(docId)` | `docId: string` | `{ success: boolean }` | Eliminazione del documento e dei relativi vettori da LanceDB. |
 | `vector:search` | `searchVectorDb(...)` | `query, topK?, embeddingModel?, docIds?` | `VectorSearchResult[]` | Ricerca ibrida (vettoriale densa + BM25) su LanceDB. |
 | `export:document` | `exportDocument(...)` | `markdownContent, format, outputFolder?` | `{ success: boolean, message?: string, error?: string }` | Compilazione ed esportazione compressa in PDF, DOCX o Markdown. |
+
+### 2.7. Artefatti e Live Preview (`artifacts:*`)
+
+| Canale IPC | Input | Output | Descrizione |
+| :--- | :--- | :--- | :--- |
+| `artifacts:list` | `workspacePath: string` | `ArtifactRecord[]` | Elenca gli artefatti persistiti nello spazio `.onlyrag/artifacts` del workspace. |
+| `artifacts:get` | `workspacePath, artifactId` | `ArtifactRecord \| null` | Legge un artefatto per l'anteprima o la modifica. |
+| `artifacts:save` | `workspacePath, { id?, name, kind, content }` | `ArtifactRecord` | Salva o aggiorna un artefatto HTML, SVG o Markdown; il contenuto è limitato a 2 MB. |
+| `artifacts:delete` | `workspacePath, artifactId` | `boolean` | Elimina il solo record dell'artefatto dal workspace. |
+
+Il pannello Preview usa un `iframe` con `sandbox` vuoto: l'artefatto non riceve accesso al DOM, all'origine
+dell'app, ai form, ai popup o alla navigazione superiore. Gli artefatti sono dati applicativi e non vengono
+eseguiti dal main process.

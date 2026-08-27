@@ -47,4 +47,4 @@ verificati contro il codice e i manifest, non contro copie narrative.
 
 ## Archivio
 
-[`archive/`](./archive/) contiene materiale storico non normativo. Non usarlo per dedurre l’architettura, i tool o i comandi correnti: i contenuti sono conservati per riferimento e non fanno parte dell’indice canonico.
+I materiali storici non normativi sono esclusi dall’indice canonico: non usarli per dedurre l’architettura, i tool o i comandi correnti.

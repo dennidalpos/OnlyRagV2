@@ -49,6 +49,12 @@ try {
         throw "[FAIL] Workspace formatting check failed with exit code $LASTEXITCODE."
     }
 
+    # Documentation examples and local links must stay executable and navigable.
+    npm run docs:check
+    if ($LASTEXITCODE -ne 0) {
+        throw "[FAIL] Documentation validation failed with exit code $LASTEXITCODE."
+    }
+
     # 2. JSON Configuration Syntax Check
     if (-not $Fast -or $Full -or $Format) {
         Write-Host "`n[2/6] Validating JSON configurations..." -ForegroundColor Yellow

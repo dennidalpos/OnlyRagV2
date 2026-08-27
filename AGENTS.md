@@ -1,6 +1,6 @@
 # AGENTS.md — OnlyRag V2
 
-`rules v1.0 · 2026-08-25` · commands verified on `2026-08-26`
+`rules v1.0 · 2026-08-25` · commands verified on `2026-08-27`
 
 ## 1. Project
 Electron app: local RAG on LanceDB, plus a Coding Agent Studio driving **local Ollama models**
@@ -13,9 +13,11 @@ LLM, nor mark a milestone verified without a real command exiting 0 (blueprint �
 |---|---|
 | Full gate (agent default) | `npm run lint` |
 | Unit tests / one file | `npx vitest run [path]` |
+| Coverage gate | `npm run test:coverage` |
 | Type check | `npx tsc --noEmit` |
 | Python sidecar tests | `npm run test:sidecar` |
 | OpenAPI fixture | `npm run generate:openapi` |
+| Documentation links/examples | `npm run docs:check` |
 | Live agent probe | `npm run test:live` |
 | Repository cleanup | `npm run clean` |
 
@@ -31,7 +33,8 @@ not reach. `OLLAMA_*` vars come from the user env; none are needed for the unit 
 
 ## 4. Structure
 `sidecar/` is a Python FastAPI process started by Electron. `userdata_dev/` is a disposable dev
-profile.
+profile. Workspace-scoped artifact metadata is stored under `.onlyrag/artifacts/` and is exposed
+through `electron/core/{application,domain,infrastructure,presentation}/artifact*`.
 
 **Enforced:** `electron/core/domain/` never imports `infrastructure/`. Domain code needing disk or
 network takes an injected function — see `classifyModuleDiagnostic` and
@@ -43,7 +46,8 @@ Comments explain WHY, citing the evidence. Line endings are mixed: match the fil
 ## 6. Sensitive areas
 `electron/core/domain/agent/` is tuned against measured live runs, each rule stating its evidence
 in the comment above it. Read it before rewording a directive: several exist because the opposite
-was tried and failed.
+was tried and failed. Artifact preview content is untrusted and must remain inside a sandboxed
+renderer iframe; never execute it in the main process or grant it app-origin access.
 
 ## 7. Tracker
 `PROJECT_STATUS.json` — strict `{"todos": ["..."]}`, nothing else. Plain strings, prefixed by kind:

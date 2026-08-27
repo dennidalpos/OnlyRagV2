@@ -93,7 +93,9 @@ mindmap
 
 ### 1.4. Artefatti
 * **Presente**: Monaco DiffEditor, Git Diff Panel, log JSON in `.onlyrag/sessions/session_history.json`.
-* **Manca (gap critico)**: Modello formale First-Class Artifacts (UI Component, webapp interattiva, diagrammi Mermaid, walkthrough) con pannello Live Preview sandboxato ed export 1-click in archivio `.zip`.
+* **Presente (slice MVP)**: Modello formale workspace-scoped per artefatti HTML, SVG e Markdown, repository atomico,
+  canali IPC `artifacts:*` e pannello Live Preview sandboxato. Restano nella roadmap la validazione Offscreen e l'export
+  1-click in archivio `.zip`.
 
 ### 1.5. Planner Strutturato
 * **Presente**: [`planAndSolveGraph.ts`](../electron/core/domain/agent/planAndSolveGraph.ts) con normalizzazione falsificabilità; [`planMilestoneCapper.ts`](../electron/core/domain/agent/planMilestoneCapper.ts) (max 15); [`workspaceDeliverableProbe.ts`](../electron/core/infrastructure/filesystem/workspaceDeliverableProbe.ts) anti-placeholder; filtri di sicurezza comando in [`verificationCommandSafety.ts`](../electron/core/domain/agent/verificationCommandSafety.ts) (6 famiglie di rifiuto); [`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts) che subordina la promozione alla presenza effettiva dei deliverable.
@@ -648,7 +650,7 @@ fidato: la lettura è confinata alla radice del workspace, con cap per file e pe
 
 ### 5.7. Roadmap Funzionalità Future
 1. **Modulo Validazione Visiva**: `visualValidationTool.ts` su Electron Offscreen `WebContents` con cattura screenshot, DOM e `console.error`.
-2. **First-Class Artifacts Engine**: Canali IPC `artifacts:*`, repository artefatti e Live Preview sandboxata.
+2. **First-Class Artifacts Engine**: Validazione Offscreen, rendering avanzato e export 1-click per artefatti già persistiti.
 3. **Refactoring Modulare Tool**: Scomposizione di `agentToolExecutorService.ts` secondo la struttura SRP (§4).
 
 ---
@@ -672,7 +674,7 @@ fidato: la lettura è confinata alla radice del workspace, con cap per file e pe
 | [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts) | Estrazione diagnostiche compilatore e direttiva file+riga singola | ✅ Verificato Live |
 | [`npmRegistryClient.ts`](../electron/core/infrastructure/http/npmRegistryClient.ts) / [`dependencyVersionReality.ts`](../electron/core/domain/agent/dependencyVersionReality.ts) | Validazione real-time esistenza pacchetti e versioni su registro npm | ✅ Verificato Live |
 | [`installVersionDowngrade.ts`](../electron/core/domain/agent/installVersionDowngrade.ts) | Rifiuto pre-esecuzione di downgrade dichiarati, prime installazioni su major vecchie e range non pubblicate (§5.6i) | ⚠️ Unit test — nessuna corsa live |
-| `visualValidationTool` & `artifactsEngine` | Validazione visiva headless e motore anteprime artefatti | ⬜ Roadmap (§5.7) |
+| [`artifactRepository.ts`](../electron/core/infrastructure/filesystem/artifactRepository.ts) / `artifactIpc.ts` | Artefatti workspace-scoped e Live Preview sandboxata | ✅ Implementato — validazione Offscreen/export restano roadmap (§5.7) |
 
 ### 6.2. I Tre Principi Architetturali Fondamentali
 

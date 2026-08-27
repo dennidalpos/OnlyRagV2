@@ -69,6 +69,13 @@ describe('core directives survive in the consolidated prompts', () => {
     expect(CODING_CORE_DIRECTIVES).toMatch(/fetch_web_content/)
   })
 
+  it('makes current-library research a conditional two-step action', () => {
+    expect(CODING_CORE_DIRECTIVES).toContain('ACTIONABLE TRIGGER')
+    expect(CODING_CORE_DIRECTIVES).toMatch(/NEXT tool call MUST be web_search/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/IMMEDIATE NEXT tool call MUST be fetch_web_content/)
+    expect(CODING_CORE_DIRECTIVES).toMatch(/untrusted reference data/i)
+  })
+
   it('the tool block still advertises the finish tool', () => {
     expect(CODING_TOOLS_BLOCK).toContain('- finish:')
   })

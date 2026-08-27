@@ -280,8 +280,16 @@ export class SkillRepository {
       return { success: false, error: 'Skill name is empty' }
     }
 
+    // An explicit workspace scope must never silently fall back to the global userData scope:
+    // auto-install can otherwise report success while making the skill unavailable to its caller.
+    if (workspaceRoot !== undefined && workspaceRoot !== null) {
+      if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim() || !fs.existsSync(workspaceRoot) || !fs.statSync(workspaceRoot).isDirectory()) {
+        return { success: false, error: 'Workspace scope is invalid or does not exist' }
+      }
+    }
+
     const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
-    const baseDir = workspaceRoot && fs.existsSync(workspaceRoot)
+    const baseDir = workspaceRoot !== undefined && workspaceRoot !== null
       ? path.join(workspaceRoot, 'skills', cleanName)
       : path.join((app && typeof app.getPath === 'function') ? app.getPath('userData') : process.cwd(), 'skills', cleanName)
 

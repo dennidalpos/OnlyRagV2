@@ -17,6 +17,7 @@ describe('AgentInterviewAppService', () => {
 
   beforeEach(() => {
     service = new AgentInterviewAppService()
+    vi.mocked(ollamaAppService.generateStream).mockReset()
     vi.clearAllMocks()
   })
 

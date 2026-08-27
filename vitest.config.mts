@@ -32,10 +32,30 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
-    isolate: false,
-    include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}'],
+    // Test files declare different Electron/application mock factories. Per-file module
+    // isolation prevents those factories from leaking through the shared module cache.
+    isolate: true,
+    include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx,mts}'],
     testTimeout: 5000,
     hookTimeout: 5000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary'],
+      include: ['src/**/*.{ts,tsx}', 'electron/**/*.{ts,tsx}'],
+      exclude: [
+        '**/*.test.{ts,tsx}',
+        '**/*.d.ts',
+        'src/main.tsx',
+        'electron/main.ts',
+        'electron/preload.ts',
+      ],
+      thresholds: {
+        statements: 45,
+        branches: 40,
+        functions: 35,
+        lines: 45,
+      },
+    },
   },
   resolve: {
     alias: {

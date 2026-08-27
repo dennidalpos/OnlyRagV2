@@ -202,8 +202,12 @@ Gli script di automazione falliscono esplicitamente se mancano comandi, director
 il controllo CI verifica anche gli exit code di `npm ci`, dell'installazione esplicita del runtime Electron e dell'installazione Python. Il controllo
 Pytest esegue una sola prova e conserva stderr, senza retry diagnostici o passaggi silenziosi.
 `npm run format:check` verifica il whitespace del diff con `git diff --check HEAD`; non è un
-formatter AST. Non esiste ancora un gate coverage: prima di introdurlo servono un provider Vitest
-compatibile e una baseline misurata, per evitare soglie arbitrarie o test più lenti del gate rapido.
+formatter AST. La coverage CI usa il provider V8 di Vitest con il comando separato
+`npm run test:coverage`; la baseline misurata con isolamento per file è 46,96% statement, 42,86%
+branch, 38,03% function e 47,32% line, con soglie iniziali rispettivamente 45%, 40%, 35% e 45%.
+Il gate rapido resta separato.
+La suite Vitest usa l’isolamento per file per evitare che i mock Electron/applicativi si contaminino;
+la verifica completa richiede circa 110 secondi su Windows per il costo di importazione isolata.
 
 ### Build di Produzione e Creazione Installer NSIS
 ```powershell

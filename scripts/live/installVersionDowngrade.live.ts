@@ -66,4 +66,42 @@ describe('live: version downgrade guard', () => {
     expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
     expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')
   })
+
+  it('refuses an unpublished version before npm can return ETARGET', async () => {
+    const fixture = seedWorkspace()
+    await agentSessionStateRepository.seedPlanMilestones(
+      `${SESSION}-etarget`,
+      WORKSPACE,
+      [{ id: 'm-etarget', title: 'Preserve the Vite dependency', status: 'pending' }],
+      'Use the registry-backed version preflight before installing a dependency.'
+    )
+
+    const result = await runAgentOrchestratorLoop(
+      {
+        userTask:
+          'Run exactly `npm install vite@^999.0.0` first. The command must be refused before npm because no published Vite version matches it. ' +
+          'After the guard explains the conflict, stop without changing any file.',
+        workspacePath: WORKSPACE,
+        agentMode: 'agent',
+        sessionId: `${SESSION}-etarget`,
+        settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 6 } as never),
+      },
+      null
+    )
+
+    const metrics = readRunMetrics({
+      workspacePath: WORKSPACE,
+      sessionId: `${SESSION}-etarget`,
+      success: result.success,
+      summary: result.summary,
+    })
+    // The executor turns a preflight refusal into a successful tool result: the requested
+    // command was handled safely, and npm was never started. A real npm ETARGET would be a
+    // failure result and would be evidence of a broken preflight.
+    expect(metrics.commands).toContain('[step 1] SUCCESS npm install vite@^999.0.0')
+    expect(result.success).toBe(true)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
+    expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
+    expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')
+  })
 })

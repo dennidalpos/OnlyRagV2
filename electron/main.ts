@@ -33,6 +33,7 @@ import { registerSessionHistoryIpcHandlers } from './core/presentation/sessionHi
 import { registerProjectRegistryIpcHandlers } from './core/presentation/projectRegistryIpc'
 import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
 import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
+import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.VITE_PUBLIC = app.isPackaged
@@ -143,6 +144,7 @@ app.whenReady().then(() => {
   registerProjectRegistryIpcHandlers()
   registerDiagnosticsIpcHandlers()
   registerSettingsIpcHandlers()
+  registerArtifactIpcHandlers()
 
   if (process.env.ONLYRAG_SMOKE_TEST === '1' || process.argv.includes('--smoke-test')) {
     logger.log('INFO', 'MainProcess', '[SMOKE_TEST_PASS] Main process bundle and IPC handlers initialized successfully.')

@@ -40,6 +40,8 @@ I test live salvano automaticamente una copia per-run in `~/Desktop/onlyrag_live
 | `ts2305ExportRecovery.live.ts` | Prepara un pacchetto locale dichiarato che esporta nomi diversi da quelli importati | Deve eseguire `npm run build`, usare la lista reale degli export nella riscrittura di `src/TaskCard.tsx` e lasciare invariati manifest e `node_modules`. |
 | `ts2614ExportRecovery.live.ts` | Prepara un modulo locale con export default e un importer che usa un named import | Deve eseguire `npm run build`, applicare il suggerimento TS2614 a `src/TaskCard.ts` e lasciare invariati il modulo locale e il manifest. |
 | `installVersionDowngrade.live.ts` | Prepara Vite 5 dichiarato e installato, poi ordina un install Vite 4 | Deve comparire il blocco pre-esecuzione e restare invariato il manifest, lockfile e Vite 5 installato. |
+| `installVersionDowngrade.live.ts` | Ordina una versione Vite inesistente (`^999.0.0`) | Deve comparire il rifiuto ETARGET preflight e npm non deve partire. |
+| `budgetExhaustionVerification.live.ts` | Consuma il budget con deliverable ancora aperti e una milestone già consegnata | Deve eseguire `npm run build` nell’uscita terminale e promuovere la milestone consegnata. |
 
 Gli scenari scrivono in `~/Desktop/onlyrag_live_*`. Sono directory usa-e-getta, azzerate a ogni run.
 

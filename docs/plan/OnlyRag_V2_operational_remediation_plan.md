@@ -3,7 +3,7 @@
 **Destinatario:** agente AI incaricato di analizzare, correggere e verificare il progetto  
 **Versione:** 1.0  
 **Data:** 26 agosto 2026  
-**Input considerati:** audit critico precedente, [`PROJECT_STATUS.json`](../../PROJECT_STATUS.json), [`specifica_audit_prompt_onlyrag.txt`](../archive/specifica_audit_prompt_onlyrag.txt), [`README.md`](../README.md), [`architecture.md`](../architecture.md), [`api.md`](../api.md), [`modules.md`](../modules.md), [`libraries-and-domain-implementations.md`](../libraries-and-domain-implementations.md), [`agent-live-testing.md`](../agent-live-testing.md) e [`setup-and-env.md`](../setup-and-env.md).
+**Input considerati:** audit critico precedente, [`PROJECT_STATUS.json`](../../PROJECT_STATUS.json), [`specifica_audit_prompt_onlyrag.txt`](./specifica_audit_prompt_onlyrag.txt), [`README.md`](../README.md), [`architecture.md`](../architecture.md), [`api.md`](../api.md), [`modules.md`](../modules.md), [`libraries-and-domain-implementations.md`](../libraries-and-domain-implementations.md), [`agent-live-testing.md`](../agent-live-testing.md) e [`setup-and-env.md`](../setup-and-env.md).
 
 ## 1. Mandato operativo
 

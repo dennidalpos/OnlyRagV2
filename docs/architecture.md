@@ -202,6 +202,11 @@ flowchart TD
 
 - **Backend Planner Canonico (`GoalDecompositionPlanner`, `electron/core/domain/agent/planAndSolveGraph.ts`)**: Unica fonte di verità per lo stato di completamento del piano (`PlanMilestone[]`, stati `pending`/`in_progress`/`verified`/`failed`), persistito da `agentOrchestratorAppService.persistCurrentState()` e riletto ad ogni riavvio di sessione.
 - **Chiusura Milestone Solo su Evidenza Reale (`milestoneDeliverableResolver.ts` + `workspaceDeliverableProbe.ts`)**: Una milestone si chiude automaticamente solo se il file scritto è tra quelli dichiarati (`isDeliverableOfMilestone`) e tutti i file nominati sono presenti su disco con contenuto reale non-segnaposto (`isPlaceholderContent` scarta i corpi con solo commenti o marker TODO/FIXME).
+
+- **Artefatti First-Class (`artifactRepository.ts`, `artifactAppService.ts`, `artifactIpc.ts`)**: HTML, SVG e Markdown
+  sono record workspace-scoped persistiti in `.onlyrag/artifacts`, con id validato, scrittura atomica e limite di 2 MB.
+  Il renderer li mostra nel pannello Live Preview dentro un `iframe sandbox` senza privilegi; nessun contenuto artefatto
+  viene eseguito dal main process.
 - **Freschezza della Build (`agentOrchestratorCircuitBreakerAndVerification.ts`)**: Il flag `hasVerifiedBuild` viene invalidato ad ogni nuova mutazione di file e ripristinato solo da una compilazione/test passata con successo sullo stato attuale del codice.
 - **Un Prompt per Modulo, Adattato alle Capability (`promptPresets.ts`, `promptHierarchyRegistry.ts`, `promptCompiler.ts`)**: Architettura a template Mustache con sezioni condizionate sulle capability dichiarate da Ollama (`/api/tags`), eliminando matrici hardcoded di modelli o dizionari di brand e garantendo pieno rispetto dell'Anti-Hardcoding Rule.
 - **Override dei Prompt a Chiave Singola (`appSettingsDomain.ts` + `AppLayout.tsx`)**: Configurazione a chiave singola per nodo editabile in `AppSettings.customPromptOverrides` con reset granulare per singolo nodo.

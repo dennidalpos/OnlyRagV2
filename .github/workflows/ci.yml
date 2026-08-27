@@ -54,6 +54,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           ./scripts/lint_format.ps1 -Fast
 
+      - name: Run Coverage Gate (Fail-Fast)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm run test:coverage
+          if ($LASTEXITCODE -ne 0) { throw "Coverage gate failed with exit code $LASTEXITCODE." }
+
       - name: Run Sidecar & LanceDB Tests (Fail-Fast)
         shell: pwsh
         run: |

@@ -124,6 +124,15 @@ Use asyncio.to_thread for blocking operations.`
     expect(found?.originType).toBe('local_custom')
   })
 
+  it('should reject an invalid explicit workspace scope instead of falling back to global skills', async () => {
+    const invalidWorkspace = path.join(tempDir, 'missing-workspace')
+
+    const saveRes = await repo.saveSkill('scoped-skill', '# Scoped', invalidWorkspace)
+
+    expect(saveRes).toEqual({ success: false, error: 'Workspace scope is invalid or does not exist' })
+    expect(fs.existsSync(path.join(tempDir, 'skills', 'scoped-skill'))).toBe(false)
+  })
+
   it('should identify hub_original vs hub_modified based on checksum and flags', async () => {
     const originalBody = '# Fast API\nasync def endpoint(): pass'
     const originalChecksum = calculateSkillChecksum(originalBody)

@@ -21,6 +21,7 @@ import { GitDiffPanel } from './GitDiffPanel'
 import { PlanPanel } from './PlanPanel'
 import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
+import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
 import type { AgentMode } from '../../types'
 
 export type { AgentMode }
@@ -321,6 +322,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
 
             {activeRightTab === 'slm_diagnostics' && (
               <SlmDiagnosticsPanel />
+            )}
+
+            {activeRightTab === 'artifacts' && (
+              <ArtifactPreviewPanel workspacePath={c.workspacePath} />
             )}
           </div>
         </div>

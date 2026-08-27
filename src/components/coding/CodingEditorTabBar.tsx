@@ -1,9 +1,9 @@
 import React from 'react'
-import { FileCode2, X, Split, Save, Terminal, FileText, GitBranch, ScanLine } from 'lucide-react'
+import { FileCode2, X, Split, Save, Terminal, FileText, GitBranch, ScanLine, Eye } from 'lucide-react'
 import { WorkspaceFile } from '../../types'
 import { useTranslation } from '../../i18n'
 
-export type CodingRightTab = 'editor' | 'terminal' | 'git_diff' | 'plan' | 'slm_diagnostics'
+export type CodingRightTab = 'editor' | 'terminal' | 'git_diff' | 'plan' | 'slm_diagnostics' | 'artifacts'
 
 interface CodingEditorTabBarProps {
   openFiles: WorkspaceFile[]
@@ -58,6 +58,18 @@ export const CodingEditorTabBar: React.FC<CodingEditorTabBarProps> = ({
           >
             <Terminal className={`w-3.5 h-3.5 ${activeTab === 'terminal' ? 'text-cyan-400' : 'text-slate-400'}`} />
             <span>Terminale</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'artifacts'}
+            onClick={() => onSelectTab('artifacts')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-medium transition-all focus-ring cursor-pointer shadow-sm ${activeTab === 'artifacts' ? 'bg-slate-900 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'}`}
+            title="Live Preview artefatti"
+          >
+            <Eye className={`w-3.5 h-3.5 ${activeTab === 'artifacts' ? 'text-cyan-400' : 'text-slate-400'}`} />
+            <span>Preview</span>
           </button>
 
           <button

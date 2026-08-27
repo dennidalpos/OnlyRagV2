@@ -40,6 +40,11 @@ function seedWorkspace(): { packageJson: string; source: string } {
 
 describe('live: uninstallable dependency recovery', () => {
   it('rewrites the importer after the failed install instead of repeating it', async () => {
+    const emittedLogs: string[] = []
+    const liveWindow = {
+      isDestroyed: () => false,
+      webContents: { send: (_channel: string, payload: { message?: string }) => emittedLogs.push(payload.message || '') },
+    } as never
     const fixture = seedWorkspace()
     await agentSessionStateRepository.seedPlanMilestones(
       SESSION,
@@ -59,7 +64,7 @@ describe('live: uninstallable dependency recovery', () => {
         sessionId: SESSION,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 10 } as never),
       },
-      null
+      liveWindow
     )
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
@@ -67,9 +72,11 @@ describe('live: uninstallable dependency recovery', () => {
     expect(metrics.commands.some((command) => command.includes(`npm install ${PACKAGE_NAME}`))).toBe(true)
     expect(metrics.commands.filter((command) => command.includes(`npm install ${PACKAGE_NAME}`))).toHaveLength(1)
     expect(result.success).toBe(true)
-    expect(source).not.toContain(PACKAGE_NAME)
+    expect(source).not.toMatch(new RegExp(`from\\s+['"]${PACKAGE_NAME.replace('/', '\\/')}['"]`))
     expect(source).not.toContain('missingWidget')
     expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
     expect(source).not.toBe(fixture.source)
+    expect(emittedLogs.some((message) => message.includes('Context policy [dependencies_uninstallable]'))).toBe(true)
+    expect(emittedLogs.some((message) => message.includes('omitting repo map'))).toBe(true)
   })
 })

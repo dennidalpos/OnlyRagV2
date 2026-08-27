@@ -18,8 +18,8 @@ Il lockfile contiene 709 pacchetti: 562 MIT, 60 ISC, 24 MPL-2.0, 18 BSD-2-Clause
 13 BlueOak-1.0.0, 13 BSD-3-Clause, 12 Apache-2.0 e 7 con licenze singole o duali.
 Un pacchetto transitive (`callsite@1.0.0`) non espone un campo `license` nel lockfile e il
 tarball installato non include un file `LICENSE`; il README incluso e il repository upstream
-dichiarano però MIT. Per una policy SPDX rigida serve un controllo che accetti questa fonte
-upstream o una distinta notice di distribuzione.
+[`tj/callsite`](https://github.com/tj/callsite) dichiarano però MIT. La licenza del progetto è
+ora esplicita anche nel file [`LICENSE`](../LICENSE), incluso nell’artefatto npm.
 
 Il progetto non dichiara `postinstall`, `install` o `prepare` propri. Nel grafo installato
 eseguono lifecycle script nativi `@parcel/watcher`, `node-pty`, `fsevents` ed
@@ -36,7 +36,7 @@ Versioni correlate verificate: Electron `43.4.1`, Vite `8.2.2`, Vitest `4.1.11`,
 ## Rischi e follow-up
 
 - **Basso:** rieseguire `npm audit`, `npm outdated`, Knip e Depcheck a ogni release; il segnale `tailwindcss` resta un falso positivo documentato.
-- **Basso:** documentare MIT di `callsite` tramite fonte upstream o aggiungere una notice SPDX nella pipeline di release; il pacchetto npm resta privo di metadata/file license.
+- **Chiuso:** `callsite@1.0.0` è documentato con la fonte upstream MIT; il progetto distribuisce `LICENSE` e mantiene `"license": "MIT"` nel manifest.
 - **Medio:** pianificare una branch separata per Electron 44, con smoke test Windows e verifica del comportamento IPC/packaging.
 - **Medio:** valutare `js-yaml` 5 e TypeScript 7 solo dopo typecheck, test completi e controllo delle API usate; non sono aggiornamenti automatici.
 - **Ambiente:** `pytest` e `pyinstaller` restano dipendenze dev del virtualenv; `puremagic` è stato aggiunto al runtime perché importato da `sidecar/domain/router.py`.

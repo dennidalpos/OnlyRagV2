@@ -136,6 +136,25 @@ export interface WorkspaceFile {
   sizeBytes?: number
 }
 
+export type ArtifactKind = 'html' | 'svg' | 'markdown'
+
+export interface ArtifactRecord {
+  id: string
+  workspacePath: string
+  name: string
+  kind: ArtifactKind
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ArtifactSaveInput {
+  id?: string
+  name: string
+  kind: ArtifactKind
+  content: string
+}
+
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
 export type AgentLogCategory =
@@ -553,6 +572,10 @@ export interface IElectronAPI {
   initGitRepository?: (workspaceRoot?: string) => Promise<{ success: boolean; message: string }>
   inspectGuestOsEnvironment: () => Promise<GuestOsInfo>
   executePowerShellCommand: (command: string, cwd?: string, timeoutMs?: number) => Promise<{ success: boolean; output: string; error?: string }>
+  listArtifacts?: (workspacePath: string) => Promise<ArtifactRecord[]>
+  getArtifact?: (workspacePath: string, artifactId: string) => Promise<ArtifactRecord | null>
+  saveArtifact?: (workspacePath: string, input: ArtifactSaveInput) => Promise<ArtifactRecord>
+  deleteArtifact?: (workspacePath: string, artifactId: string) => Promise<boolean>
   parseAgentToolCall: (rawText: string) => Promise<AgentToolCall | null>
   checkDiskSpace: (models: string[]) => Promise<{ allowed: boolean; requiredGB: number; freeGB: number; missingGB: number; error?: string }>
   testOllamaConnection: (host?: string) => Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }>

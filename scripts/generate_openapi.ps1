@@ -1,6 +1,9 @@
 $ErrorActionPreference = "Stop"
 $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
-$pythonBin = Join-Path $rootDir ".venv\Scripts\python.exe"
+$isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
+$venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
+$pythonExeName = if ($isWindowsHost) { "python.exe" } else { "python" }
+$pythonBin = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pythonExeName)
 if (-not (Test-Path -LiteralPath $pythonBin)) {
     throw "Required Python virtualenv not found: $pythonBin"
 }

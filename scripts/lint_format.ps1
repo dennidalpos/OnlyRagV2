@@ -95,10 +95,17 @@ try {
         Write-Host "`n[4/6] Checking Python sidecar syntax..." -ForegroundColor Yellow
     }
     $sidecarDir = Join-Path -Path $rootDir -ChildPath "sidecar"
+    $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
+    $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
+    $venvPythonName = if ($isWindowsHost) { "python.exe" } else { "python" }
+    $venvPython = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $venvPythonName)
+    if (-not (Test-Path -LiteralPath $venvPython)) {
+        throw "[FAIL] Python virtualenv non trovato in $venvPython. Eseguire npm run setup:dev."
+    }
     if (Test-Path $sidecarDir) {
         $pyFiles = Get-ChildItem -Path $sidecarDir -Filter "*.py" -Recurse
         foreach ($py in $pyFiles) {
-            python -m py_compile $py.FullName
+            & $venvPython -m py_compile $py.FullName
             if ($LASTEXITCODE -ne 0) {
                 throw "[FAIL] Python syntax check failed on $($py.FullName) with exit code $LASTEXITCODE."
             }

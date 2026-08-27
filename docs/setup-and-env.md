@@ -7,8 +7,8 @@ Questo documento costituisce la guida operativa e tecnica di riferimento per l'i
 ## 1. Requisiti di Sistema e Prerequisiti
 
 * **Sistema Operativo:** Windows 10/11 x64 (PowerShell con codifica UTF-8 abilitata).
-* **Runtime Node.js:** Node.js 22 LTS o superiore compatibile con il range in `package.json` (npm $\ge 10$).
-* **Ambiente Python:** Python 3.12 con modulo standard `venv`.
+* **Runtime Node.js:** Node.js 24.19.x LTS compatibile con il range in `package.json` (npm 11.x).
+* **Ambiente Python:** Python 3.12.x con modulo standard `venv`.
 * **Runtime LLM Locale:** **Ollama** ($\ge 0.5.x$) installato e attivo su `http://127.0.0.1:11434`.
 * **Accelerazione Hardware (Opzionale ma Raccomandata):** GPU NVIDIA con supporto CUDA (Architettura Turing, Ampere, Ada Lovelace, Blackwell).
 

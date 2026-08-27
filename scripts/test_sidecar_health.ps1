@@ -104,26 +104,17 @@ try {
     }
     $isWindowsHost = $IsWindows -or $env:OS -eq 'Windows_NT'
     $venvBinDir = if ($isWindowsHost) { "Scripts" } else { "bin" }
-    $pythonExeName = if ($isWindowsHost) { "python.exe" } else { "python" }
     $pytestExeName = if ($isWindowsHost) { "pytest.exe" } else { "pytest" }
     $pytestBin = Join-Path (Join-Path $rootDir ".venv") (Join-Path $venvBinDir $pytestExeName)
 
-    if (Test-Path $pytestBin) {
-        & $pytestBin $testsDir -q
-        if ($LASTEXITCODE -ne 0) {
-            throw "[FAIL] Pytest test suite failed with exit code $LASTEXITCODE."
-        }
-        if (-not $Fast -or $Full) { Write-Host "[PASS] Pytest sidecar test suite clean." -ForegroundColor Green }
-    } else {
-        $appDataPy = if ($env:APPDATA) { Join-Path (Join-Path $env:APPDATA "onlyrag-v2\python_venv") (Join-Path $venvBinDir $pythonExeName) } else { $null }
-        $pyCmd = if (Test-Path $appDataPy) { $appDataPy } else { "python" }
-
-        & $pyCmd -m pytest $testsDir -q
-        if ($LASTEXITCODE -ne 0) {
-            throw "[FAIL] Sidecar test suite failed with exit code $LASTEXITCODE."
-        }
-        if (-not $Fast -or $Full) { Write-Host "[PASS] Sidecar test suite clean." -ForegroundColor Green }
+    if (-not (Test-Path -LiteralPath $pytestBin)) {
+        throw "[FAIL] Pytest non trovato in $pytestBin. Eseguire npm run setup:dev."
     }
+    & $pytestBin $testsDir -q
+    if ($LASTEXITCODE -ne 0) {
+        throw "[FAIL] Pytest test suite failed with exit code $LASTEXITCODE."
+    }
+    if (-not $Fast -or $Full) { Write-Host "[PASS] Pytest sidecar test suite clean." -ForegroundColor Green }
 
     Write-Host "`n=====================================================" -ForegroundColor Cyan
     Write-Host " ALL SIDECAR TESTS PASSED!" -ForegroundColor Green

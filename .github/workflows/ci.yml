@@ -20,13 +20,13 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24.19.0
           cache: 'npm'
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.12.10'
           cache: 'pip'
 
       - name: Install Node Dependencies
@@ -45,7 +45,7 @@ jobs:
           }
           python -m pip install --upgrade pip
           if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed with exit code $LASTEXITCODE." }
-          pip install -r sidecar/requirements-dev.txt
+          python -m pip install -r sidecar/requirements-dev.txt
           if ($LASTEXITCODE -ne 0) { throw "Python dependency installation failed with exit code $LASTEXITCODE." }
 
       - name: Run Serial Quality & Lint Script (Fail-Fast)

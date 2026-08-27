@@ -2,7 +2,7 @@
 .SYNOPSIS
     Prepara l'ambiente di sviluppo usando la root del repository dello script.
 .DESCRIPTION
-    Verifica Node.js 22+ e Python 3.12+, installa le dipendenze npm dal lockfile e
+    Verifica Node.js 24.19.x e Python 3.12.x, installa le dipendenze npm dal lockfile e
     crea/aggiorna il virtualenv Python locale senza dipendere dalla directory corrente.
 #>
 
@@ -21,9 +21,9 @@ try {
     Push-Location $rootDir
 
     $nodeVersion = (& node --version).Trim().TrimStart('v')
-    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Node.js non trovato nel PATH. Installare Node.js 22 LTS o superiore.' }
-    $nodeMajor = [int]($nodeVersion.Split('.')[0])
-    if ($nodeMajor -lt 22 -or $nodeMajor -ge 26) { Stop-WithMessage "Node.js $nodeVersion rilevato: richiesto >=22 e <26." }
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Node.js non trovato nel PATH. Installare Node.js 24.19.x.' }
+    $nodeParts = $nodeVersion.Split('.')
+    if ([int]$nodeParts[0] -ne 24 -or [int]$nodeParts[1] -lt 19) { Stop-WithMessage "Node.js $nodeVersion rilevato: richiesto >=24.19.0 e <25." }
 
     $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pythonLauncher) {

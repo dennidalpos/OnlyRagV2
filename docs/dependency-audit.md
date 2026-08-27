@@ -2,7 +2,7 @@
 
 Snapshot del manifest Node.js e del lockfile. Le versioni effettive sono quelle risolte in `package-lock.json`; questo registro non sostituisce i manifest.
 
-Runtime target: Node.js `22–25` (`.nvmrc` = `22`) e Python `3.12` (`.python-version` = `3.12`). Nel PC usato per questa verifica sono presenti Node.js `24.19.0`/npm `11.17.0` e Python `3.12.10`.
+Runtime target: Node.js `24.19.x` (`.nvmrc` = `24.19.0`) e Python `3.12.x` (`.python-version` = `3.12.10`).
 
 ## Esito
 

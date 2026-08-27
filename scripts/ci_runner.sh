@@ -7,7 +7,21 @@ set -euo pipefail
 
 trap 'echo "[ERROR] CI execution failed at line $LINENO" >&2; exit 1' ERR
 
-for required_command in node npm python; do
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
+    VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
+elif [ -x "$ROOT_DIR/.venv/Scripts/python.exe" ]; then
+    VENV_PYTHON="$ROOT_DIR/.venv/Scripts/python.exe"
+else
+    VENV_PYTHON=""
+fi
+if [ -z "$VENV_PYTHON" ]; then
+    echo "[ERROR] Python virtualenv not found: $VENV_PYTHON. Run npm run setup:dev first." >&2
+    exit 1
+fi
+
+for required_command in node npm; do
     command -v "$required_command" >/dev/null 2>&1 || {
         echo "[ERROR] Required command not found: $required_command" >&2
         exit 1
@@ -30,7 +44,7 @@ echo "[2/3] Running Vitest Unit Tests..."
 npm run test:fast
 
 echo "[3/3] Running Python Sidecar Syntax Check..."
-find sidecar -name "*.py" -exec python -m py_compile {} +
+find sidecar -name "*.py" -exec "$VENV_PYTHON" -m py_compile {} +
 echo "[PASS] Python sidecar syntax clean."
 
 echo "====================================================="

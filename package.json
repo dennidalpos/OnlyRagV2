@@ -37,8 +37,8 @@
   "author": "Danny Perondi <https://github.com/dennidalpos>",
   "license": "MIT",
   "engines": {
-    "node": ">=22 <26",
-    "npm": ">=10"
+    "node": ">=24.19.0 <25",
+    "npm": ">=11 <12"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

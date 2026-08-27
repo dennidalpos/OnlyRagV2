@@ -151,8 +151,8 @@ graph TD
 
 ### Prerequisites
 * **OS**: Windows 10 / 11 (64-bit)
-* **Node.js**: 22 LTS or later, within the range declared in `package.json`
-* **Python**: 3.12
+* **Node.js**: 24.19.x LTS, within the range declared in `package.json`
+* **Python**: 3.12.10
 * **Ollama**: Installed and running locally (`http://127.0.0.1:11434`)
 
 ### Installation & Run

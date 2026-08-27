@@ -1,7 +1,26 @@
 {
   "todos": [
-    "bug: Audit major rinviato: Electron 44, js-yaml 5 e TypeScript 7 richiedono una migrazione dedicata con smoke, typecheck e test; impatto medio, urgenza bassa, sforzo L.",
-    "Refactoring modulare tool (Blueprint 4): scorporare agentToolExecutorService.ts nei moduli SRP sotto electron/core/domain/agent/tools/; impatto medio, urgenza bassa, sforzo L.",
-    "Validazione visiva (Blueprint 5.7): visualValidationTool.ts su Electron Offscreen WebContents per screenshot, DOM e console.error; impatto medio, urgenza bassa, sforzo L."
+    "P1.01 | Refactoring tool: estrarre delete_file in un modulo FS dedicato, preservando path safety, broadcast workspace:file-deleted, journal, rollback e changeStats; aggiungere test mirati.",
+    "P1.02 | Refactoring tool: estrarre create_directory in un modulo FS dedicato, preservando path safety, allowFileModifications e gestione errori; aggiungere test mirati.",
+    "P1.03 | Refactoring tool: estrarre copy_file in un modulo FS dedicato, preservando containment di sorgente/destinazione, creazione directory, journal e gestione errori; aggiungere test mirati.",
+    "P1.04 | Refactoring tool: estrarre move_file in un modulo FS dedicato, preservando containment, creazione directory, snapshot journal di origine/destinazione e gestione errori; aggiungere test mirati.",
+    "P1.05 | Refactoring tool: estrarre run_command in un modulo execution dedicato, preservando security check, sanitizzazione PowerShell, timeout, shell persistente, output diagnostico e cancellazione; aggiungere test mirati.",
+    "P1.06 | Refactoring tool: estrarre download_file in un modulo web dedicato, preservando path safety, allowFileModifications, download sandboxato, timeout, MIME/limiti e output diagnostico; aggiungere test mirati.",
+    "P1.07 | Refactoring tool: estrarre grep_search in un modulo FS/search dedicato, preservando path safety, limiti dei risultati e gestione errori; aggiungere test mirati.",
+    "P1.08 | Refactoring tool: estrarre inspect_os_env in un modulo execution dedicato, preservando raccolta host facts e inventario toolchain; aggiungere test mirati.",
+    "P1.09 | Refactoring tool: estrarre ensure_tool in un modulo execution dedicato, preservando allow-list, probe, policy terminale, installazione winget, refresh PATH, timeout e verifica post-installazione; aggiungere test mirati.",
+    "P1.10 | Refactoring tool: estrarre rollback_workspace in un modulo diagnostics/recovery dedicato, preservando rollback journal completo, riepilogo e gestione errori; aggiungere test mirati.",
+    "P1.11 | Refactoring tool: estrarre rollback_last_step in un modulo diagnostics/recovery dedicato, preservando guard canRollbackLastStep, rollback isolato e riepilogo; aggiungere test mirati.",
+    "P1.12 | Refactoring tool: estrarre open_in_browser in un modulo browser dedicato, preservando validazione URL/file, path safety, shell.openExternal/openPath e gestione errori; aggiungere test mirati.",
+    "P1.13 | Refactoring tool: estrarre ask in un modulo diagnostics dedicato, preservando fallback question/query/explanation e contratto ToolExecutionResult; aggiungere test mirati.",
+    "P1.14 | Contract test finali del refactoring: verificare ogni tool estratto, policy, precondizioni, effetti, evidenza, rollback e compatibilità del dispatcher senza duplicazioni.",
+    "P1.15 | Verifica build invariata del refactoring: eseguire typecheck, lint, suite completa, build Electron e smoke test; registrare eventuali warning preesistenti senza indebolire i gate.",
+    "P2.01 | Validazione visiva: definire il contratto di visualValidationTool e il DTO di risultato per screenshot, DOM, console errors, HTTP 404/500 e stato UNAVAILABLE.",
+    "P2.02 | Validazione visiva: implementare il ciclo Electron Offscreen WebContents con caricamento dell’artifact locale, timeout, cleanup e cattura screenshot.",
+    "P2.03 | Validazione visiva: estrarre DOM e console.error/console warning dal WebContents, limitando output e redigendo dati sensibili.",
+    "P2.04 | Validazione visiva: applicare sandbox, path containment, porta locale isolata e fallback esplicito UNAVAILABLE quando il runtime visuale non è disponibile.",
+    "P2.05 | Validazione visiva: integrare il tool nel catalogo, policy gateway e orchestrator senza usarlo come sostituto di test, typecheck o build.",
+    "P2.06 | Validazione visiva: aggiungere test positivi e negativi per screenshot, DOM, console errors, timeout, artifact non valido, path fuori scope e fallback UNAVAILABLE.",
+    "P2.07 | Validazione visiva: eseguire typecheck, lint, suite completa, build Electron e smoke test; documentare evidenze e limiti residui."
   ]
 }

@@ -38,7 +38,7 @@ l'evento senza esporre dati locali.
   "ocr": { "provider": "CPUExecutionProvider", "host_has_gpu": true },
   "documents_count": 12,
   "chunks_count": 340,
-  "python_version": "3.11.x"
+  "python_version": "3.12.x"
 }
 ```
 
@@ -235,7 +235,10 @@ Scansiona i file di log di OnlyRag V2 e restituisce un report strutturato di ano
 
 ## 2. Electron IPC API (`window.electronAPI`)
 
-Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/types/index.ts`. L'interfaccia completa è definita in `IElectronAPI`.
+Tutte le chiamate IPC sono tipizzate tramite TypeScript in `src/types/index.ts` e gli input dei flussi
+workspace principali sono validati a runtime con schemi Zod strict (`workspaceContract.ts`) prima di
+raggiungere l'application layer. Un payload malformato viene rifiutato senza eseguire filesystem,
+rete o shell; i payload validi mantengono i nomi e le semantiche esistenti.
 
 ### 2.1. Canali Modelli Ollama (`ollama:*`)
 
@@ -245,6 +248,7 @@ Tutte le chiamate IPC sono rigorosamente tipizzate tramite TypeScript in `src/ty
 | `ollama:pull-model` | `{ modelName: string }` | `Stream Event (progress %)` | Download streaming del modello con percentuale e byte trasferiti. |
 | `ollama:check-model-updates` | `none` | `OllamaModelUpdateInfo[]` | Controllo asincrono dello stato di aggiornamento di tutti i modelli locali rispetto al registro ufficiale Ollama. |
 | `ollama:get-running-models`| `none` | `RunningModelInfo[]` | Modelli attualmente caricati nella VRAM/RAM (`/api/ps`). |
+| `diagnostics:get-http-metrics` | `none` | `HttpMetricSnapshot[]` | Contatori e durate HTTP aggregati per endpoint/status/tipo errore, senza URL completi, query o payload. |
 | `ollama:unload-model` | `{ modelName: string }` | `{ success: boolean }` | Evizione esplicita immediata (`keep_alive: 0`). |
 
 ---
@@ -382,10 +386,23 @@ const report = await analyzeLogs()
 
 | Canale IPC | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- |
-| `workspace:read-file` | `{ filePath: string, startLine?: number, endLine?: number }` | `{ content: string, totalLines: number }` | Lettura intera o slicing puntuale del file. |
-| `workspace:write-file` | `{ filePath: string, content: string }` | `{ success: boolean, path: string }` | Scrittura sicura con creazione automatica delle cartelle padre. |
-| `workspace:replace-file-content` | `{ filePath: string, chunks: ReplacementChunk[] }` | `{ success: boolean }` | Sostituzione mirata multi-chunk tollerante ai line ending CRLF. |
-| `workspace:run-command` | `{ command: string, cwd?: string, timeoutMs?: number }` | `{ stdout: string, stderr: string, exitCode: number }` | Esecuzione sequenziale di comandi PowerShell con cattura dello stack trace. |
+| `workspace:list-files` | `targetPath?: string` | `WorkspaceFile[]` | Elenco ricorsivo dei file; il parametro omesso conserva l'elenco vuoto legacy. |
+| `workspace:get-project-map` | `dirPath: string` | `ProjectMapItem[]` | Mappa semantica del progetto. |
+| `workspace:read-file` | `filePath: string, startLine?: number, endLine?: number` | `{ success: boolean, content?: string, totalLines?: number, error?: string }` | Lettura intera o slicing puntuale del file. Path non vuoto, righe intere positive. |
+| `workspace:write-file` | `filePath: string, content: string` | `{ success: boolean, error?: string }` | Scrittura sicura con creazione automatica delle cartelle padre; contenuto massimo 10 MB. |
+| `workspace:replace-chunk` | `filePath: string, targetContent: string, replacementContent: string` | `{ success: boolean, error?: string }` | Sostituzione mirata tollerante ai line ending CRLF. |
+| `workspace:multi-replace-chunks` | `filePath: string, replacements: ReplacementChunk[]` | `{ success: boolean, replacedCount?: number, error?: string }` | Sostituzione multi-chunk, massimo 100 chunk. |
+| `workspace:grep-search` | `dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean` | `GrepSearchResult[]` | Ricerca testuale/regex in una directory. |
+| `workspace:search-web` | `query: string, maxResults?: number` | `{ success: boolean, results: WebSearchResultItem[], error?: string }` | Ricerca web con query non vuota. |
+| `workspace:fetch-web` | `url: string, maxChars?: number` | `{ success: boolean, content?: string, title?: string, error?: string }` | Fetch web soggetto anche alla protezione SSRF. |
+| `workspace:download-file` | `url: string, targetFilePath: string, workspaceRoot?: string` | `{ success: boolean, downloadedBytes?: number, error?: string }` | Download con validazione SSRF e path safety. |
+| `workspace:git-commit` | `commitMessage: string, workspaceRoot?: string` | `{ success: boolean, output?: string, error?: string }` | Commit esplicito nel repository scelto. |
+| `workspace:execute-powershell` | `command: string, targetCwd?: string, timeoutMs?: number` | `{ success: boolean, output: string, error?: string }` | Esecuzione PowerShell con timeout massimo 900 s. |
+
+I limiti runtime degli input workspace sono retrocompatibili per i payload validi: il solo caso
+intenzionalmente preservato è `workspace:list-files` senza directory, che continua a restituire
+un array vuoto. Non esiste una breaking change di canale o di versione; client che inviano stringhe
+vuote, tipi errati o campi sconosciuti devono correggere il payload prima dell'upgrade.
 
 #### Eventi Broadcast Renderer per Cancellazione Riferimenti
 * **`workspace:file-deleted`**: Trasmesso al renderer su eliminazione file/cartella (`{ filePath: string }`). Attiva il purge deterministico di tab aperti, file in evidenza (`pinnedFiles`), file selezionati ed elementi correlati. L'unico percorso di eliminazione e' il tool `delete_file` dell'agente, che passa da `workspaceAppService.deleteFile` proprio per emettere questo evento: eliminando direttamente dal repository i riferimenti nel renderer restavano puntati a un file non piu' esistente.

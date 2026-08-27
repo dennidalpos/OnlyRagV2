@@ -24,6 +24,7 @@
  *     vitest.live.config.mts.
  */
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { AppSettings } from '../../src/types'
 import type { PlanMilestone } from '../../electron/core/domain/agent/planAndSolveGraph'
@@ -35,6 +36,42 @@ import {
   type UserInterviewAnswer,
 } from '../../electron/core/application/agentInterviewAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
+import { codingAgentLogger } from '../../electron/core/infrastructure/logging/codingAgentLogger'
+
+const LIVE_RUN_SNAPSHOT_ROOT = path.join(os.homedir(), 'Desktop', 'onlyrag_live_snapshots')
+
+/**
+ * Copies both audit-log generations before a later run or workspace cleanup can remove them.
+ * The destination is deliberately outside the repository and app log directories: clean_workspace.ps1
+ * may remove either source, but must not erase the evidence produced by an earlier live run.
+ */
+export function snapshotLiveAuditLogs(args: {
+  sessionId: string
+  label: string
+  sourceLogPath?: string
+  destinationRoot?: string
+}): string {
+  const sourceLogPath = args.sourceLogPath || codingAgentLogger.getLogFilePath()
+  const sourceDir = path.dirname(sourceLogPath)
+  const sourceFiles = [sourceLogPath, path.join(sourceDir, 'coding_agent_audit.1.log')].filter((filePath) =>
+    fs.existsSync(filePath)
+  )
+  if (sourceFiles.length === 0) {
+    throw new Error(`No coding agent audit log found for live run ${args.sessionId} at ${sourceDir}`)
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const safeLabel = args.label.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'run'
+  const runDir = path.join(args.destinationRoot || LIVE_RUN_SNAPSHOT_ROOT, `${timestamp}_${args.sessionId}_${safeLabel}`)
+  fs.mkdirSync(runDir, { recursive: true })
+  for (const sourceFile of sourceFiles) fs.copyFileSync(sourceFile, path.join(runDir, path.basename(sourceFile)))
+  fs.writeFileSync(
+    path.join(runDir, 'manifest.json'),
+    JSON.stringify({ sessionId: args.sessionId, label: args.label, capturedAt: new Date().toISOString() }, null, 2),
+    'utf-8'
+  )
+  return runDir
+}
 
 /** The settings file the packaged app writes, so a live run uses the model you actually use. */
 export function loadRealSettings(overrides: Partial<AppSettings> = {}): AppSettings {
@@ -305,6 +342,9 @@ export function reportRun(args: {
   console.log(`tool calls: ${metrics.toolCalls} (${metrics.failedToolCalls} failed or blocked)`)
   console.log(`commands executed: ${metrics.commands.length}`)
   for (const c of metrics.commands) console.log(`  ${c}`)
+
+  const snapshotDir = snapshotLiveAuditLogs({ sessionId: args.sessionId, label: args.label })
+  console.log(`audit snapshot: ${snapshotDir}`)
 
   console.log(
     '\nThe audit log for this run is logs/coding_agent_audit.log — grep it for the guard you are checking.'

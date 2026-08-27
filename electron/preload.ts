@@ -60,6 +60,7 @@ const api: IElectronAPI = {
   checkDiskSpace: (models: string[]) => ipcRenderer.invoke('system:check-disk-space', models),
   testOllamaConnection: (host?: string) => ipcRenderer.invoke('ollama:test-connection', host),
   getOllamaModelMetrics: (host?: string) => ipcRenderer.invoke('ollama:get-model-metrics', host),
+  getHttpMetrics: () => ipcRenderer.invoke('diagnostics:get-http-metrics'),
   checkOllamaModelUpdates: (host?: string) => ipcRenderer.invoke('ollama:check-model-updates', host),
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   openPath: (targetPath: string) => ipcRenderer.invoke('system:open-path', targetPath),

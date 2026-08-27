@@ -7,6 +7,7 @@ import TurndownService from 'turndown'
 import * as cheerio from 'cheerio'
 import { logger } from '../../../diagnostics'
 import { validatePathSafety } from '../../domain/agent/contextFilter'
+import { httpMetrics } from './httpMetrics'
 
 export interface WebSearchResultItem {
   title: string
@@ -241,6 +242,13 @@ export class WebClient {
     const targetUrl = urlCheck.safeUrl
     const isHttps = targetUrl.protocol === 'https:'
     const client = isHttps ? https : http
+    const startedAt = Date.now()
+    let recorded = false
+    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
+      if (recorded) return
+      recorded = true
+      httpMetrics.record('/web/fetch', status, errorType, Date.now() - startedAt)
+    }
 
     return new Promise((resolve) => {
       const req = client.get(
@@ -256,11 +264,13 @@ export class WebClient {
         (res) => {
           // Follow redirects up to 1 hop
           if (res.statusCode && (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
+            record(res.statusCode, 'none')
             const redirectUrl = new URL(res.headers.location, targetUrl).toString()
             return this.fetchWebContent(redirectUrl, maxChars).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
+            record(res.statusCode, 'http')
             resolve({ success: false, error: `HTTP ${res.statusCode} ${res.statusMessage || ''}` })
             return
           }
@@ -279,6 +289,7 @@ export class WebClient {
             const title = titleMatch ? htmlToCleanMarkdown(titleMatch[1]) : undefined
             const truncated = cleanText.length > maxChars ? `${cleanText.slice(0, maxChars)}\n... [Content truncated for context budget]` : cleanText
 
+            record(res.statusCode || 0, 'none')
             resolve({
               success: true,
               content: truncated,
@@ -290,12 +301,14 @@ export class WebClient {
       )
 
       req.on('error', (err: any) => {
+        record(0, 'network')
         logger.log('WARN', 'WebClient', `Network error fetching ${urlStr}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
 
       req.on('timeout', () => {
         req.destroy()
+        record(0, 'timeout')
         resolve({ success: false, error: `Request timed out (15s limit) for URL ${urlStr}` })
       })
     })
@@ -320,6 +333,13 @@ export class WebClient {
     const targetUrl = urlCheck.safeUrl
     const isHttps = targetUrl.protocol === 'https:'
     const client = isHttps ? https : http
+    const startedAt = Date.now()
+    let recorded = false
+    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
+      if (recorded) return
+      recorded = true
+      httpMetrics.record('/web/download', status, errorType, Date.now() - startedAt)
+    }
 
     return new Promise((resolve) => {
       try {
@@ -342,6 +362,7 @@ export class WebClient {
         },
         (res) => {
           if (res.statusCode && (res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+            record(res.statusCode, 'none')
             fileStream.close()
             try { fs.unlinkSync(safeDestPath) } catch {}
             const redirectUrl = new URL(res.headers.location, urlCheck.safeUrl!).toString()
@@ -349,6 +370,7 @@ export class WebClient {
           }
 
           if (res.statusCode && res.statusCode >= 400) {
+            record(res.statusCode, 'http')
             fileStream.close()
             try { fs.unlinkSync(safeDestPath) } catch {}
             return resolve({ success: false, error: `HTTP ${res.statusCode} ${res.statusMessage || ''}` })
@@ -360,6 +382,7 @@ export class WebClient {
               req.destroy()
               fileStream.close()
               try { fs.unlinkSync(safeDestPath) } catch {}
+              record(res.statusCode || 0, 'unknown')
               resolve({ success: false, error: `Download exceeded 100MB safety limit.` })
             }
           })
@@ -369,6 +392,7 @@ export class WebClient {
           fileStream.on('finish', () => {
             fileStream.close(() => {
               logger.log('INFO', 'WebClient', `Successfully downloaded ${downloadedBytes} bytes to ${safeDestPath}`)
+              record(res.statusCode || 0, 'none')
               resolve({ success: true, downloadedBytes })
             })
           })
@@ -376,6 +400,7 @@ export class WebClient {
       )
 
       req.on('error', (err) => {
+        record(0, 'network')
         fileStream.close()
         try { fs.unlinkSync(safeDestPath) } catch {}
         resolve({ success: false, error: err.message })
@@ -383,6 +408,7 @@ export class WebClient {
 
       req.on('timeout', () => {
         req.destroy()
+        record(0, 'timeout')
         fileStream.close()
         try { fs.unlinkSync(safeDestPath) } catch {}
         resolve({ success: false, error: 'Download request timed out (60s limit)' })

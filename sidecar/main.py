@@ -19,7 +19,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from sidecar.config import ALLOWED_ORIGINS, EXPORT_DIR, DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, logger
 from sidecar.schemas import (
-    IngestResponse, IngestPathRequest, SearchRequest, SearchResult,
+    IngestResponse, IngestPathRequest, SearchRequest, SearchResult, HealthResponse,
+    DocumentRecord, DeleteResponse, ExportResponse, SuccessResponse,
+    TaskCancelResponse, CleanupResponse, VocabStatusResponse,
     ExportRequest, UpdateDocumentRequest, PagePreviewResponse,
     LogDiagnosticQuery, LogDiagnosticReportSchema, AnomalyRecordSchema,
     IndexPromptHistoryRequest, PromptHistorySearchRequest, PromptHistorySearchResult,
@@ -79,7 +81,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal Server Error", "error_id": error_id}
     )
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health_check():
     doc_count, chunk_count = 0, 0
     try:
@@ -244,11 +246,11 @@ async def get_page_preview(doc_id: str, page_num: int):
         logger.error(f"Error rendering page preview: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/documents")
+@app.get("/documents", response_model=List[DocumentRecord])
 async def list_documents():
     return await asyncio.to_thread(list_stored_documents)
 
-@app.delete("/documents/{doc_id}")
+@app.delete("/documents/{doc_id}", response_model=DeleteResponse)
 async def delete_document(doc_id: str):
     try:
         return await asyncio.to_thread(delete_stored_document, doc_id)
@@ -263,7 +265,7 @@ async def search_vector_db(req: SearchRequest):
     logger.info(f"Performing LanceDB vector search for query: '{req.query}'")
     return await asyncio.to_thread(perform_vector_search, req)
 
-@app.post("/history/index")
+@app.post("/history/index", response_model=SuccessResponse)
 async def index_history(req: IndexPromptHistoryRequest):
     try:
         await asyncio.to_thread(index_prompt_history, req)
@@ -278,11 +280,11 @@ async def index_history(req: IndexPromptHistoryRequest):
 async def search_history(req: PromptHistorySearchRequest):
     return await asyncio.to_thread(search_prompt_history, req)
 
-@app.post("/history/remove")
+@app.post("/history/remove", response_model=SuccessResponse)
 async def remove_history(req: PromptHistoryRemoveRequest):
     return await asyncio.to_thread(remove_prompt_history, req)
 
-@app.post("/export")
+@app.post("/export", response_model=ExportResponse)
 async def export_document(req: ExportRequest):
     logger.info(f"Exporting markdown content to format: {req.export_format}")
     if not req.markdown_content.strip():
@@ -293,12 +295,12 @@ async def export_document(req: ExportRequest):
         logger.error(f"Export failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/tasks/cancel")
+@app.post("/tasks/cancel", response_model=TaskCancelResponse)
 async def cancel_sidecar_task(task_id: Optional[str] = Query(None)):
     logger.info(f"Received cancellation notice for task: {task_id or 'all'}")
     return {"status": "success", "message": f"Task {task_id or 'all'} marked cancelled"}
 
-@app.post("/cleanup/temp")
+@app.post("/cleanup/temp", response_model=CleanupResponse)
 async def cleanup_sidecar_temp():
     def _do_clean():
         cleaned = 0
@@ -359,7 +361,7 @@ async def sync_vocab(request: Request):
     return result
 
 
-@app.get("/vocab/status")
+@app.get("/vocab/status", response_model=VocabStatusResponse)
 def get_vocab_status():
     """Returns active vocabulary statuses and wordfreq availability."""
     from sidecar.domain.word_segmenter import _WORDFREQ_AVAILABLE, get_vocab_manager

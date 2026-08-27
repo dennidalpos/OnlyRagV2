@@ -15,7 +15,10 @@ export interface RunningModelInfo {
   details?: RunningModelDetails
   expires_at?: string
   size_vram?: number
+  /** Context currently allocated by Ollama for this loaded model, from `/api/ps`. */
+  context_length?: number
 }
+
 
 // NOTE: This file previously also carried a `resolveModelKeepAlive`/`isModelLoaded` policy
 // engine (scope-based keep_alive resolution + VRAM-residency lookup) and, before that,

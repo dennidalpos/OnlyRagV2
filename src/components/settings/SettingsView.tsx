@@ -34,6 +34,7 @@ import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { useTranslation, Language } from '../../i18n'
 import { apiService } from '../../services/api'
+import { compareContextAllocation } from '../../services/contextAllocation'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -443,6 +444,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   const vramGB = (vramBytes / 1024 ** 3).toFixed(1)
                   const ramBytes = Math.max(0, totalBytes - vramBytes)
                   const ramGB = (ramBytes / 1024 ** 3).toFixed(1)
+                  const requestedContext = settings.modelContextLengths?.[modelName]
+                  const contextStatus = compareContextAllocation(requestedContext, runningInfo?.context_length)
 
                   return (
                     <div
@@ -478,8 +481,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                         {/* Running VRAM / RAM detail if active */}
                         {isRunning && (
-                          <div className="text-[10px] font-mono text-emerald-400/90 bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-900/40">
-                            VRAM: {vramGB} GB {parseFloat(ramGB) > 0.1 ? `+ RAM: ${ramGB} GB (Hybrid)` : ''}
+                          <div className="space-y-1 text-[10px] font-mono text-emerald-400/90 bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-900/40">
+                            <div>VRAM: {vramGB} GB {parseFloat(ramGB) > 0.1 ? `+ RAM: ${ramGB} GB (Hybrid)` : ''}</div>
+                            {runningInfo?.context_length !== undefined && (
+                              <div className={contextStatus === 'underallocated' ? 'text-amber-300' : undefined}>
+                                Context allocato: {runningInfo.context_length} token
+                                {requestedContext !== undefined ? ` / richiesto: ${requestedContext}` : ''}
+                                {contextStatus === 'underallocated' ? ' (inferiore)' : ''}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

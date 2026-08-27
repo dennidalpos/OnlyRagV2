@@ -485,6 +485,17 @@ export interface OllamaModelUpdateInfo {
   error?: string
 }
 
+export type HttpMetricErrorType = 'none' | 'http' | 'timeout' | 'network' | 'parse' | 'unknown'
+
+export interface HttpMetricSnapshot {
+  endpoint: string
+  status: number
+  errorType: HttpMetricErrorType
+  count: number
+  totalDurationMs: number
+  maxDurationMs: number
+}
+
 /** Canonical camelCase payload crossing the renderer/main IPC boundary. */
 export interface PromptHistoryIndexPayload {
   id: string
@@ -551,6 +562,8 @@ export interface IElectronAPI {
   testOllamaConnection: (host?: string) => Promise<{ success: boolean; version?: string; modelsCount?: number; error?: string }>
   /** Per-model facts from Ollama's /api/tags: context length, capabilities, parameter size, quantization. */
   getOllamaModelMetrics: (host?: string) => Promise<Record<string, OllamaModelMetrics>>
+  /** Bounded in-process HTTP counters; contains no URL, query, path or payload data. */
+  getHttpMetrics?: () => Promise<HttpMetricSnapshot[]>
   /** Checks for model updates against official registry using SHA256 manifest digests. */
   checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
@@ -722,6 +735,8 @@ export interface RunningModelInfo {
   details?: RunningModelDetails
   expires_at?: string
   size_vram?: number
+  /** Context currently allocated by Ollama for this loaded model, from `/api/ps`. */
+  context_length?: number
 }
 
 declare global {

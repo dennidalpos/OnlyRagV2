@@ -26,6 +26,8 @@ npx vitest run --config vitest.live.config.mts -t "eresolve"
 
 Ogni run **appende** a `logs/coding_agent_audit.log`: `codingAgentLogger` usa `appendFileSync` e ruota su `coding_agent_audit.1.log` solo al superamento della soglia di dimensione — niente svuota il file all'avvio di un run. Cercando "l'ultimo run" si trova quindi per primo quello **vecchio**: segna la lunghezza del file prima di lanciare (`wc -c logs/coding_agent_audit.log`) e leggi solo la coda oltre quel punto, oppure copia via il file prima del run successivo.
 
+I test live salvano automaticamente una copia per-run in `~/Desktop/onlyrag_live_snapshots/<timestamp>_<session>_<label>/`, includendo `coding_agent_audit.log`, l'eventuale `coding_agent_audit.1.log` e un `manifest.json`. Questa directory è fuori dal repository e dalle directory cancellate da `scripts/clean_workspace.ps1`, quindi gli snapshot sopravvivono alla pulizia successiva. La sonda `preseededWorkspace.live.ts` ha confermato il 2026-08-27 che un workspace esistente conserva `npm run build` nel piano e non viene riscalato come greenfield.
+
 > La stesura precedente diceva "ogni run sovrascrive", e il blueprint diceva l'opposto. Ha ragione il blueprint: verificato il 2026-08-25 in `codingAgentLogger.ts` — l'unica scrittura per-entry è `appendFileSync` (riga 114), e le uniche troncature stanno in `clearAuditLog` e nella rotazione per dimensione, che nessun run invoca.
 
 ## 3. Scenari
@@ -33,7 +35,9 @@ Ogni run **appende** a `logs/coding_agent_audit.log`: `codingAgentLogger` usa `a
 | File | Cosa fa | Come si legge |
 | :--- | :--- | :--- |
 | `fullTaskRun.live.ts` | Riesegue il task originale dell'audit (dashboard responsive React+Tailwind) su workspace vuoto | **Asserisce la consegna**: rapporto di milestone `verified` ≥ 12/13 e `finish` che chiude la sessione, le due metriche di Run 9 (blueprint §5.6h). Rosso = l'agente non ha consegnato; il blocco `run metrics` dice di quanto. |
+| `preseededWorkspace.live.ts` | Genera il piano su un progetto già esistente con `package.json`, sorgente e script `build` | **Asserisce la riconciliazione**: `ensureRunnableMilestone` conserva il controllo dichiarato dal progetto nel piano live. |
 | `eresolveRecovery.live.ts` | Installa davvero `vite@4`, poi chiede un plugin che pretende una vite molto più recente | Deve comparire `[DEPENDENCY VERSION CONFLICT — ERESOLVE]`, il comando successivo deve essere l'upgrade indicato, e `vite installed` deve essersi mosso da 4.5.14 |
+| `ts2305ExportRecovery.live.ts` | Prepara un pacchetto locale dichiarato che esporta nomi diversi da quelli importati | Deve eseguire `npm run build`, usare la lista reale degli export nella riscrittura di `src/TaskCard.tsx` e lasciare invariati manifest e `node_modules`. |
 
 Gli scenari scrivono in `~/Desktop/onlyrag_live_*`. Sono directory usa-e-getta, azzerate a ogni run.
 

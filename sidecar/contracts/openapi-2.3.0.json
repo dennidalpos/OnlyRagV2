@@ -69,6 +69,115 @@
         "title": "Body_ingest_document_ingest_post",
         "type": "object"
       },
+      "CleanupResponse": {
+        "properties": {
+          "cleaned_files": {
+            "minimum": 0.0,
+            "title": "Cleaned Files",
+            "type": "integer"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "cleaned_files"
+        ],
+        "title": "CleanupResponse",
+        "type": "object"
+      },
+      "DeleteResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "DeleteResponse",
+        "type": "object"
+      },
+      "DocumentRecord": {
+        "properties": {
+          "extracted_markdown": {
+            "title": "Extracted Markdown",
+            "type": "string"
+          },
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "file_size": {
+            "minimum": 0.0,
+            "title": "File Size",
+            "type": "integer"
+          },
+          "file_type": {
+            "title": "File Type",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ingested_at": {
+            "title": "Ingested At",
+            "type": "string"
+          },
+          "num_chunks": {
+            "minimum": 0.0,
+            "title": "Num Chunks",
+            "type": "integer"
+          },
+          "num_pages": {
+            "minimum": 0.0,
+            "title": "Num Pages",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "indexed",
+              "indexed_fallback"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "used_fallback_embeddings": {
+            "title": "Used Fallback Embeddings",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "file_path",
+          "file_size",
+          "num_pages",
+          "num_chunks",
+          "extracted_markdown",
+          "status",
+          "ingested_at",
+          "file_type",
+          "used_fallback_embeddings"
+        ],
+        "title": "DocumentRecord",
+        "type": "object"
+      },
       "ExportRequest": {
         "additionalProperties": false,
         "properties": {
@@ -96,6 +205,50 @@
         "title": "ExportRequest",
         "type": "object"
       },
+      "ExportResponse": {
+        "properties": {
+          "base64_content": {
+            "title": "Base64 Content",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "pdf",
+              "docx",
+              "html"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "format",
+          "file_name",
+          "file_path",
+          "base64_content",
+          "message"
+        ],
+        "title": "ExportResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -107,6 +260,64 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "chunks_count": {
+            "minimum": 0.0,
+            "title": "Chunks Count",
+            "type": "integer"
+          },
+          "documents_count": {
+            "minimum": 0.0,
+            "title": "Documents Count",
+            "type": "integer"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "gpu": {
+            "additionalProperties": true,
+            "title": "Gpu",
+            "type": "object"
+          },
+          "ocr": {
+            "additionalProperties": true,
+            "title": "Ocr",
+            "type": "object"
+          },
+          "python_version": {
+            "title": "Python Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "online",
+            "title": "Status",
+            "type": "string"
+          },
+          "vector_db": {
+            "title": "Vector Db",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "engine",
+          "version",
+          "vector_db",
+          "gpu",
+          "ocr",
+          "documents_count",
+          "chunks_count",
+          "python_version"
+        ],
+        "title": "HealthResponse",
         "type": "object"
       },
       "IndexPromptHistoryRequest": {
@@ -748,6 +959,38 @@
         "title": "SearchResult",
         "type": "object"
       },
+      "SuccessResponse": {
+        "properties": {
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SuccessResponse",
+        "type": "object"
+      },
+      "TaskCancelResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "TaskCancelResponse",
+        "type": "object"
+      },
       "TranslateInplaceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -881,6 +1124,32 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VocabStatusResponse": {
+        "properties": {
+          "cache_dir": {
+            "title": "Cache Dir",
+            "type": "string"
+          },
+          "cached_languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cached Languages",
+            "type": "array"
+          },
+          "wordfreq_available": {
+            "title": "Wordfreq Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "wordfreq_available",
+          "cached_languages",
+          "cache_dir"
+        ],
+        "title": "VocabStatusResponse",
+        "type": "object"
       }
     }
   },
@@ -936,7 +1205,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -969,7 +1240,13 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentRecord"
+                  },
+                  "title": "Response List Documents Documents Get",
+                  "type": "array"
+                }
               }
             },
             "description": "Successful Response"
@@ -996,7 +1273,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -1223,7 +1502,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ExportResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -1249,7 +1530,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -1275,7 +1558,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -1311,7 +1596,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -1509,7 +1796,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TaskCancelResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -1578,7 +1867,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/VocabStatusResponse"
+                }
               }
             },
             "description": "Successful Response"

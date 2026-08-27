@@ -1,4 +1,4 @@
-from typing import Literal, Optional, List
+from typing import Any, Dict, Literal, Optional, List
 from pydantic import BaseModel, ConfigDict, Field
 
 NON_BLANK = r".*\S.*"
@@ -18,6 +18,66 @@ class IngestResponse(BaseModel):
     status: str
     ingested_at: str
     used_fallback_embeddings: Optional[bool] = False
+
+
+class HealthResponse(BaseModel):
+    status: Literal["online"]
+    engine: str
+    version: str
+    vector_db: str
+    gpu: Dict[str, Any]
+    ocr: Dict[str, Any]
+    documents_count: int = Field(..., ge=0)
+    chunks_count: int = Field(..., ge=0)
+    python_version: str
+
+
+class DocumentRecord(BaseModel):
+    id: str
+    filename: str
+    file_path: str
+    file_size: int = Field(..., ge=0)
+    num_pages: int = Field(..., ge=0)
+    num_chunks: int = Field(..., ge=0)
+    extracted_markdown: str
+    status: Literal["indexed", "indexed_fallback"]
+    ingested_at: str
+    file_type: str
+    used_fallback_embeddings: bool
+
+
+class DeleteResponse(BaseModel):
+    status: Literal["success"]
+    message: str
+
+
+class ExportResponse(BaseModel):
+    status: Literal["success"]
+    format: Literal["pdf", "docx", "html"]
+    file_name: str
+    file_path: str
+    base64_content: str
+    message: str
+
+
+class SuccessResponse(BaseModel):
+    success: bool
+
+
+class TaskCancelResponse(BaseModel):
+    status: Literal["success"]
+    message: str
+
+
+class CleanupResponse(BaseModel):
+    status: Literal["success"]
+    cleaned_files: int = Field(..., ge=0)
+
+
+class VocabStatusResponse(BaseModel):
+    wordfreq_available: bool
+    cached_languages: List[str]
+    cache_dir: str
 
 class IngestPathRequest(StrictRequest):
     file_path: str = Field(..., min_length=1, max_length=4096, pattern=NON_BLANK)

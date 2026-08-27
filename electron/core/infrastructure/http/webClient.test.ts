@@ -1,8 +1,20 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import http from 'node:http'
+import https from 'node:https'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import EventEmitter from 'node:events'
 import { htmlToCleanMarkdown, parseDuckDuckGoHtmlResults, WebClient } from './webClient'
+import { httpMetrics } from './httpMetrics'
 
 describe('WebClient Unit Tests & SSRF Protection', () => {
   const client = new WebClient()
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    httpMetrics.reset()
+  })
 
   it('should clean HTML tags and preserve markdown structure', () => {
     const sampleHtml = `
@@ -93,5 +105,62 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
 
     const resPrivateC = client.validateUrlSafety('http://192.168.1.1/router')
     expect(resPrivateC.safeUrl).toBeNull()
+  })
+
+  it('records fetch HTTP metrics without retaining the URL', async () => {
+    const response = Object.assign(new EventEmitter(), {
+      statusCode: 200,
+      headers: {},
+      setEncoding: vi.fn(),
+    })
+    const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+    vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+      args[2](response)
+      queueMicrotask(() => {
+        response.emit('data', '<html><body><h1>Fetched</h1></body></html>')
+        response.emit('end')
+      })
+      return request as any
+    })
+
+    const result = await client.fetchWebContent('https://example.com/private?token=secret')
+
+    expect(result.success).toBe(true)
+    expect(httpMetrics.snapshot()).toEqual([
+      expect.objectContaining({ endpoint: '/web/fetch', status: 200, errorType: 'none', count: 1 }),
+    ])
+    expect(JSON.stringify(httpMetrics.snapshot())).not.toContain('token')
+  })
+
+  it('records download HTTP metrics after writing the file', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-'))
+    try {
+      const response = Object.assign(new EventEmitter(), {
+        statusCode: 200,
+        headers: {},
+        pipe: (destination: fs.WriteStream) => {
+          const chunk = Buffer.from('downloaded')
+          response.emit('data', chunk)
+          destination.end(chunk)
+          return destination
+        },
+      })
+      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+      vi.spyOn(http, 'get')
+      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+        args[2](response)
+        return request as any
+      })
+
+      const result = await client.downloadFile('https://example.com/archive.zip?token=secret', path.join(tempRoot, 'archive.zip'), tempRoot)
+
+      expect(result).toEqual({ success: true, downloadedBytes: 10 })
+      expect(httpMetrics.snapshot()).toEqual([
+        expect.objectContaining({ endpoint: '/web/download', status: 200, errorType: 'none', count: 1 }),
+      ])
+      expect(fs.readFileSync(path.join(tempRoot, 'archive.zip'), 'utf8')).toBe('downloaded')
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
   })
 })

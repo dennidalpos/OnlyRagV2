@@ -33,7 +33,8 @@ eccezione non sanitizzati.
 ## Metriche e lacune note
 
 Sono già disponibili metriche di dominio (documenti/chunk indicizzati, conteggio modelli, file e
-linee cambiate). Non è ancora disponibile un contatore centralizzato per richieste HTTP, latenza,
-errori per endpoint o correlazione distribuita tra renderer, Electron e sidecar. Il follow-up deve
-aggiungere queste metriche con cardinalità limitata a endpoint, status e tipo di errore, senza URL
-completi, query, percorsi locali o identificativi utente.
+linee cambiate). `HttpMetricsRegistry` aggiunge contatori in-process bounded per endpoint/status/
+tipo di errore e durata aggregata; conserva solo path fissi, senza URL completi, query, percorsi
+locali o identificativi utente. È già collegato a `/api/ps`, alle letture `/api/tags`, ai manifest
+del registro Ollama, allo streaming agente `/api/generate`/`/api/chat` e alle richieste web di fetch/download; l’esposizione diagnostica
+è disponibile tramite `diagnostics:get-http-metrics`.

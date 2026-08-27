@@ -4,6 +4,7 @@ import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileRes
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
 import type { ObservedToolCallingProtocol } from '../../domain/agent/ollamaToolCallingCapability'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
+import { httpMetrics } from './httpMetrics'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -110,6 +111,13 @@ export class AgentStreamTransport {
           }, 45000)
 
           let tokenStallTimer: NodeJS.Timeout | null = null
+          const metricStartedAt = Date.now()
+          let metricRecorded = false
+          const recordMetric = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
+            if (metricRecorded) return
+            metricRecorded = true
+            httpMetrics.record('/api/generate', status, errorType, Date.now() - metricStartedAt)
+          }
 
           const resetTokenStallTimer = () => {
             if (tokenStallTimer) clearTimeout(tokenStallTimer)
@@ -154,6 +162,7 @@ export class AgentStreamTransport {
                   errBody += chunk.toString()
                 })
                 res.on('end', () => {
+                  recordMetric(res.statusCode || 0, 'http')
                   const msg =
                     res.statusCode === 404
                       ? `Model '${targetModel}' is not pulled in Ollama. Please run 'ollama pull ${targetModel}'.`
@@ -202,6 +211,7 @@ export class AgentStreamTransport {
 
               res.on('end', () => {
                 cleanupTimers()
+                recordMetric(200, 'none')
                 resolve(fullText)
               })
             }
@@ -209,6 +219,7 @@ export class AgentStreamTransport {
 
           req.on('error', (err: any) => {
             cleanupTimers()
+            recordMetric(0, /timeout|stalled/i.test(String(err?.message)) ? 'timeout' : 'network')
             if (err.code === 'ECONNREFUSED') {
               reject(new Error(`Ollama service is not reachable at ${hostStr}. Please ensure Ollama is running.`))
             } else {
@@ -291,6 +302,13 @@ export class AgentStreamTransport {
       }, 45000)
 
       let tokenStallTimer: NodeJS.Timeout | null = null
+      const metricStartedAt = Date.now()
+      let metricRecorded = false
+      const recordMetric = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
+        if (metricRecorded) return
+        metricRecorded = true
+        httpMetrics.record('/api/chat', status, errorType, Date.now() - metricStartedAt)
+      }
       const resetTokenStallTimer = () => {
         if (tokenStallTimer) clearTimeout(tokenStallTimer)
         tokenStallTimer = setTimeout(() => {
@@ -333,6 +351,7 @@ export class AgentStreamTransport {
               errBody += chunk.toString()
             })
             res.on('end', () => {
+              recordMetric(res.statusCode || 0, 'http')
               const msg =
                 res.statusCode === 404
                   ? `Model '${targetModel}' is not pulled in Ollama. Please run 'ollama pull ${targetModel}'.`
@@ -382,6 +401,7 @@ export class AgentStreamTransport {
 
           res.on('end', () => {
             cleanupTimers()
+            recordMetric(200, 'none')
             session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
             resolve(resolvedToolCall ?? fullText)
           })
@@ -390,6 +410,7 @@ export class AgentStreamTransport {
 
       req.on('error', (err: any) => {
         cleanupTimers()
+        recordMetric(0, /timeout|stalled/i.test(String(err?.message)) ? 'timeout' : 'network')
         if (err.code === 'ECONNREFUSED') {
           reject(new Error(`Ollama service is not reachable at ${hostStr}. Please ensure Ollama is running.`))
         } else {

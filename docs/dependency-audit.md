@@ -9,6 +9,8 @@ Runtime target: Node.js `24.19.x` (`.nvmrc` = `24.19.0`) e Python `3.12.x` (`.py
 | Controllo | Risultato | Interpretazione |
 | :--- | :--- | :--- |
 | `npm audit --omit=dev` | 0 vulnerabilità su 160 dipendenze prod (709 pacchetti lockati) | Nessuna CVE npm nota nel grafo runtime installato al momento dell’audit. |
+| `npm audit` | 0 vulnerabilità nel grafo completo | Nessuna CVE npm nota nelle dipendenze runtime o dev al momento dell’audit. |
+| `npm sbom --sbom-format cyclonedx` | 579 componenti CycloneDX | SBOM generato dalla risoluzione del lockfile; l’artefatto di lavoro è stato mantenuto fuori dal repository. |
 | `npm outdated` | 5 pacchetti fuori dall’ultima versione compatibile o major | Patch compatibili disponibili per `@types/node` e `happy-dom`; major rinviate per rischio compatibilità: `electron` 43.4.1 → 44.0.0, `js-yaml` 4.3.2 → 5.4.1, `typescript` 6.0.3 → 7.0.2. |
 | `knip` | Nessun output | Nessun modulo morto o export inutilizzato rilevato dal controllo configurato. |
 | `depcheck --json` | Nessuna dipendenza runtime; `tailwindcss` segnalato come devDependency | Falso positivo: è consumato da `vite.config.mts` e dalla sintassi CSS `@import "tailwindcss"`; il codice d’uso è presente. |
@@ -36,6 +38,7 @@ Versioni correlate verificate: Electron `43.4.1`, Vite `8.2.2`, Vitest `4.1.11`,
 ## Rischi e follow-up
 
 - **Basso:** rieseguire `npm audit`, `npm outdated`, Knip e Depcheck a ogni release; il segnale `tailwindcss` resta un falso positivo documentato.
+- **Basso:** l’installazione segnala transitivi deprecate (`inflight`, `rimraf@2`, `glob@7`, `whatwg-encoding`, `boolean`); non risultano CVE attive, ma vanno sostituite quando le dipendenze dirette lo consentiranno.
 - **Chiuso:** `callsite@1.0.0` è documentato con la fonte upstream MIT; il progetto distribuisce `LICENSE` e mantiene `"license": "MIT"` nel manifest.
 - **Medio:** pianificare una branch separata per Electron 44, con smoke test Windows e verifica del comportamento IPC/packaging.
 - **Medio:** valutare `js-yaml` 5 e TypeScript 7 solo dopo typecheck, test completi e controllo delle API usate; non sono aggiornamenti automatici.
@@ -45,8 +48,10 @@ Versioni correlate verificate: Electron `43.4.1`, Vite `8.2.2`, Vitest `4.1.11`,
 
 - `npm dedupe`: PASS; lockfile da 710 a 709 pacchetti, senza modificare `package.json`.
 - `npm audit --omit=dev`: PASS, 0 vulnerabilità runtime.
+- `npm audit`: PASS, 0 vulnerabilità nel grafo completo.
+- `npm sbom --sbom-format cyclonedx`: PASS, 579 componenti enumerati.
 - `npx depcheck --json`: PASS per le dipendenze runtime; `tailwindcss` resta un falso positivo documentato.
-- `npm ci --prefer-offline --no-audit --no-fund`: PASS, 611 pacchetti installati da lockfile dopo `npm cache verify`; warning non bloccanti sui transitivi deprecati `inflight`, `rimraf@2`, `glob@7`, `whatwg-encoding` e `boolean`.
+- `npm ci --offline --ignore-scripts --no-audit --no-fund`: PASS, 624 pacchetti installati da lockfile; warning non bloccanti sui transitivi deprecati `inflight`, `rimraf@2`, `glob@7`, `whatwg-encoding` e `boolean`.
 - `npm run build`: PASS; typecheck, bundle Vite/Electron e packaging NSIS completati dopo il ripristino della connettività a `github.com`.
 - `npm run dev -- --host 127.0.0.1`: PASS, Vite su `http://127.0.0.1:5173/`; Electron, Ollama e sidecar hanno inizializzato correttamente. Il sidecar ha avuto i consueti retry iniziali prima dell’health check positivo.
 - `npm ls --depth=0 --omit=optional`: PASS, nessun pacchetto invalid o extraneous.

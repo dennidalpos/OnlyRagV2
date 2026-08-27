@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isFailureOutput } from './agentOrchestratorToolResultProcessor'
+import { isFailureOutput, terminalOutcomeFor } from './agentOrchestratorToolResultProcessor'
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 
@@ -51,6 +51,23 @@ describe('isFailureOutput', () => {
     // handler is not a failed write, and widening this to a substring match would label every
     // such write a failure.
     expect(isFailureOutput('Successfully wrote file src/errorBoundary.tsx')).toBe(false)
+  })
+})
+
+describe('MODEL_UNSUITABLE terminal outcome', () => {
+  it('returns from processing instead of continuing the agent loop', () => {
+    const outcome = terminalOutcomeFor({
+      outputForHistory: 'The requested model capability is unavailable.',
+      logMessage: 'Model capability unavailable',
+      isTerminal: true,
+      terminalCode: 'MODEL_UNSUITABLE',
+    })
+
+    expect(outcome).toEqual({
+      outcome: 'return',
+      result: { success: false, summary: 'The requested model capability is unavailable.' },
+    })
+    expect(outcome?.outcome).not.toBe('continue')
   })
 })
 

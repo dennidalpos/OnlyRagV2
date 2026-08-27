@@ -50,6 +50,21 @@ describe('CodingAgentLogger Unit Tests', () => {
     expect(content).toContain('Counter component created and verified.')
   })
 
+  it('writes per-session run metrics without carrying counters into another session', () => {
+    loggerInstance.logToolCall('metrics-a', 1, 'write_file', { filePath: 'a.txt' })
+    loggerInstance.logToolResult('metrics-a', 1, 'write_file', 'Successfully wrote file a.txt')
+    loggerInstance.logToolResult('metrics-a', 2, 'unparsed_tool', '[TOOL PARSER REJECTION DIAGNOSTIC]')
+    loggerInstance.logSessionEnd('metrics-a', 2, false, 'stopped')
+    loggerInstance.logSessionEnd('metrics-b', 0, true, 'done')
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('"sessionId": "metrics-a"')
+    expect(content).toContain('"toolCalls": 1')
+    expect(content).toContain('"invalidToolCalls": 1')
+    expect(content).toContain('"sessionId": "metrics-b"')
+    expect(content).toContain('"toolCalls": 0')
+  })
+
   it('should remove session entries when removeSessionFromAuditLog is called', () => {
     loggerInstance.logSessionStart('session-to-delete', 'Task A', 'agent', 'llama3.2')
     loggerInstance.logSessionStart('session-to-keep', 'Task B', 'agent', 'llama3.2')

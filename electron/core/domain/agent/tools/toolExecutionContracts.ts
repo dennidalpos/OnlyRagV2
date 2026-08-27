@@ -61,6 +61,7 @@ export const toolExecutionResultSchema = z.object({
   logMessage: z.string(),
   logDetail: z.string().optional(),
   isTerminal: z.boolean().optional(),
+  terminalCode: z.enum(['MODEL_UNSUITABLE']).optional(),
   changeStats: z.object({
     filePath: nonBlank,
     additions: z.number().int().nonnegative(),
@@ -77,6 +78,7 @@ export interface ToolExecutionResult {
   logMessage: string
   logDetail?: string
   isTerminal?: boolean
+  terminalCode?: 'MODEL_UNSUITABLE'
   changeStats?: { filePath: string; additions: number; deletions: number }
   verification?: { ran: true; passed: boolean }
   noOpMutation?: boolean

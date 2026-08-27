@@ -45,7 +45,11 @@ export default defineConfig({
               // Left external it is required from node_modules, which electron-builder does package
               // (node_modules/depcheck/dist/parser/*.js are inside app.asar), and its own relative
               // requires resolve next to it.
-              external: ['depcheck'],
+              // Playwright resolves browser protocol helpers dynamically. Keeping it in the
+              // Electron main bundle makes Rolldown resolve an optional chromium-bidi import
+              // that is only needed by one runtime path; the package must remain external so
+              // its own Node resolution and browser installation contract stay intact.
+              external: ['depcheck', 'playwright', 'playwright-core', 'chromium-bidi'],
             },
           },
         },

@@ -63,6 +63,39 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('should route validate_visual_artifact through the runner and return structured evidence', async () => {
+    const artifactPath = path.join(tempDir, 'dist', 'index.html')
+    fs.mkdirSync(path.dirname(artifactPath), { recursive: true })
+    fs.writeFileSync(artifactPath, '<!doctype html><title>preview</title>')
+    const runner = {
+      captureEvidence: vi.fn().mockResolvedValue({
+        screenshot: { status: 'available', path: path.join(tempDir, '.onlyrag', 'visual-validation', 'preview.png') },
+        dom: { status: 'available', content: '<html><title>preview</title></html>' },
+        console: [],
+        http: [{ url: 'file:///missing.js', status: 404, method: 'GET' }],
+        redaction: { applied: false, fields: [] },
+      }),
+    }
+    const executor = new AgentToolExecutorService(undefined, runner as never)
+
+    const result = await executor.executeTool(
+      { tool: 'validate_visual_artifact', parameters: { artifactPath: 'dist/index.html' } },
+      tempDir,
+      settings,
+    )
+
+    expect(runner.captureEvidence).toHaveBeenCalledWith(
+      { artifactPath: 'dist/index.html' },
+      tempDir,
+      path.join(tempDir, '.onlyrag', 'visual-validation'),
+      undefined,
+    )
+    expect(JSON.parse(result.outputForHistory)).toMatchObject({
+      status: 'verified',
+      http: [{ status: 404 }],
+    })
+  })
+
   describe('web research directives', () => {
     it('blocks network tools before the web client in offline-strict mode', async () => {
       const search = vi.spyOn(webClient, 'searchWeb')

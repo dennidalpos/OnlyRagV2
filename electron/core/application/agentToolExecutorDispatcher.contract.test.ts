@@ -44,5 +44,6 @@ describe('AgentToolExecutorService dispatcher contract', () => {
 
     expect(toolExecutionResultSchema.safeParse(result).success).toBe(true)
     expect(result.outputForHistory).toContain('Unrecognized or unsupported tool')
+    expect(result.terminalCode).toBe('MODEL_UNSUITABLE')
   })
 })

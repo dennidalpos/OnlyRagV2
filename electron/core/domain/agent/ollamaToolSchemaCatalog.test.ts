@@ -8,6 +8,7 @@ import {
 describe('findToolSchema', () => {
   it('returns the entry for a known tool and nothing for an unknown one', () => {
     expect(findToolSchema('write_file')?.function.name).toBe('write_file')
+    expect(findToolSchema('validate_visual_artifact')?.function.name).toBe('validate_visual_artifact')
     expect(findToolSchema('teleport_file')).toBeUndefined()
   })
 })

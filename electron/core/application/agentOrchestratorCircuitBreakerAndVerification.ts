@@ -520,7 +520,8 @@ export function isActiveMilestoneDelivered(
 }
 
 /**
- * Milestone auto-verification is driven by run_tests, open_in_browser, and successful build/test commands.
+ * Milestone auto-verification is driven by run_tests and successful build/test commands.
+ * A browser preview is evidence for the user, but cannot establish build/typecheck/test health.
  */
 export function trackVerification(ctx: ToolResultProcessingContext, isToolFailure: boolean) {
   if (
@@ -561,11 +562,11 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
       return
     }
 
-    ctx.flags.hasVerifiedBuild = true
-    const activeM = ctx.goalPlanner.getActiveMilestone()
-    if (activeM && activeM.status !== 'verified') {
-      ctx.goalPlanner.updateMilestone(activeM.id, 'verified', 'Verified by launching browser preview.')
-    }
+    ctx.emitLog(
+      'info',
+      `👁️ Anteprima aperta su "${previewTarget}": evidenza raccolta, ma non promuove il milestone a verified.`,
+      'Esegui build, typecheck o test con esito positivo per ottenere la verifica del progetto.'
+    )
     return
   }
 

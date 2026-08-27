@@ -162,6 +162,20 @@ describe('build freshness — a verification command does not invalidate itself'
     expect(flags.hasVerifiedBuild).toBe(true)
   })
 
+  it('does not promote a milestone or set the verification flag after a positive browser preview', () => {
+    const flags: ToolResultMutableFlags = {
+      hasFileMutations: true,
+      hasVerifiedBuild: false,
+      currentOverriddenModel: null,
+    }
+    const ctx = makeContext('open_in_browser', flags)
+    ctx.parsedTool = { tool: 'open_in_browser', parameters: { filePath: 'dist/index.html' } }
+
+    trackVerification(ctx, false)
+
+    expect(flags.hasVerifiedBuild).toBe(false)
+  })
+
   it('invalidates stale verification after a failed dependency install', () => {
     const flags = freshFlags()
     const ctx = makeContext('npm install @onlyrag/not-published-probe', flags)

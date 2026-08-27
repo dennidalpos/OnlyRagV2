@@ -137,6 +137,12 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     filePath: { type: 'string', description: 'Path to local file (e.g. index.html) to open in browser.' },
     url: { type: 'string', description: 'Optional http/https URL to open.' },
   }),
+  tool('validate_visual_artifact', 'Render a local HTML/web artifact in a headless browser and capture screenshot, DOM, console errors, and failed HTTP responses as validation evidence.', {
+    artifactPath: { type: 'string', description: 'Path to the rendered local artifact to validate (for example dist/index.html).' },
+    timeoutMs: { type: 'integer', description: 'Optional validation timeout in milliseconds (100-120000, default 30000).' },
+    captureScreenshot: { type: 'boolean', description: 'Capture a PNG screenshot (default true).' },
+    captureDom: { type: 'boolean', description: 'Capture the rendered DOM (default true).' },
+  }, ['artifactPath']),
   tool('finish', 'Signal that the task is complete and provide a final summary.', {
     summary: { type: 'string', description: 'Final summary of what was accomplished.' },
   }, ['summary']),

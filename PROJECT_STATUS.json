@@ -1,25 +1,3 @@
 {
-  "todos": [
-    "W4.15 | Estrarre ask in DiagnosticsToolService, rimuovere l'handler originario e testare contratto e fallback.",
-    "W4.16 | Ridurre agentToolExecutorService al solo dispatcher ed eliminare deleghe/contratti obsoleti.",
-    "W4.17 | Implementare MODEL_UNSUITABLE come esito terminale per capability mancanti e testare l'assenza di loop forzati.",
-    "W4.18 | Eseguire contract test, typecheck, lint, suite completa, build Electron e smoke test della Wave 4.",
-    "W5.01 | Aggiungere playwright come unica dipendenza per validazione visuale headless.",
-    "W5.02 | Definire i contratti Zod del runner e del risultato: screenshot, DOM, console, HTTP, redazione e UNAVAILABLE.",
-    "W5.03 | Implementare avvio sandboxato Playwright per artifact locale con path containment.",
-    "W5.04 | Implementare screenshot e DOM snapshot con timeout, AbortSignal e cleanup garantito.",
-    "W5.05 | Implementare raccolta console error/warn e HTTP 4xx/5xx con output limitato e redatto.",
-    "W5.06 | Integrare il runner nel catalogo tool e CapabilityPolicyGateway come evidenza aggiuntiva.",
-    "W5.07 | Impedire la promozione a verified in assenza di build/test/typecheck anche dopo una preview positiva.",
-    "W5.08 | Aggiungere fixture/test per artifact valido/non valido, path fuori scope, timeout, console error, 404/500 e runtime indisponibile.",
-    "W5.09 | Eseguire test wave, typecheck, lint, suite completa, build Electron e smoke test della Wave 5.",
-    "W6.01 | Implementare fixture deterministiche per sicurezza, rollback, tool sconosciuti e output malformato.",
-    "W6.02 | Implementare fixture deterministiche per progetto senza test, monorepo e sessione interrotta.",
-    "W6.03 | Implementare metriche per-run task success, false verified, unsafe action, recovery e tool validity isolate tra sessioni.",
-    "W6.04 | Rendere bloccante la soglia zero false verified nelle fixture controllate.",
-    "W6.05 | Eseguire clean install riproducibile e verifica lockfile.",
-    "W6.06 | Generare SBOM ed eseguire audit supply chain, documentando rischi residui.",
-    "W6.07 | Eseguire verifica finale: typecheck, lint, suite completa, build Electron, smoke test, revisione diff e assenza di segreti/file temporanei.",
-    "W6.08 | Aggiornare la documentazione canonica, svuotare il tracker e cancellare docs/plan/OnlyRag_V2_evolution_plan.md dopo il completamento verificato di tutti gli step precedenti."
-  ]
+  "todos": []
 }

@@ -5,6 +5,7 @@ import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 import { webClient } from '../infrastructure/http/webClient'
+import { executeWebContentFetch, executeWebSearch } from '../domain/agent/tools/web/webResearchTools'
 
 interface WebToolDependencies {
   downloadFile?: (
@@ -20,6 +21,14 @@ interface WebToolDependencies {
 /** Application service for guarded download execution and artifact provenance. */
 export class WebToolService {
   constructor(private readonly dependencies: WebToolDependencies) {}
+
+  executeSearch(query: string, maxResults: number, signal: AbortSignal | undefined): Promise<ToolExecutionResult> {
+    return executeWebSearch(query, maxResults, (searchQuery, limit) => webClient.searchWeb(searchQuery, limit, signal))
+  }
+
+  executeFetch(url: string, signal: AbortSignal | undefined): Promise<ToolExecutionResult> {
+    return executeWebContentFetch(url, (targetUrl) => webClient.fetchWebContent(targetUrl, 16000, signal))
+  }
 
   async executeDownloadFile(
     parameters: AgentToolCall['parameters'],

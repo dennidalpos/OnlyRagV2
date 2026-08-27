@@ -4,7 +4,12 @@ import { ProcessToolService } from './processToolService'
 import { WebToolService } from './webToolService'
 import { RecoveryToolService } from './recoveryToolService'
 import { BrowserToolService } from './browserToolService'
+import { VisualValidationRunner } from './visualValidationRunner'
+import { visualValidationResultSchema } from '../domain/agent/visualValidationContracts'
+import { DiagnosticsToolService } from './diagnosticsToolService'
+import { GitToolService } from './gitToolService'
 import path from 'node:path'
+import fs from 'node:fs'
 import type { ChildProcess } from 'node:child_process'
 import { shell } from 'electron'
 import { logger } from '../../diagnostics'
@@ -13,33 +18,13 @@ import { validatePathSafety } from '../domain/agent/contextFilter'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
-import { webClient } from '../infrastructure/http/webClient'
 import { declaredDependencies, findVersionReality, buildVersionRealityDirective } from '../domain/agent/dependencyVersionReality'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { extractRequestedPackages } from '../domain/agent/installCommandParser'
 import { evaluateFileImportIntegrity } from '../domain/agent/importDeclarationGate'
-import { parseVersionNotFound, buildVersionNotFoundDirective } from '../domain/agent/npmVersionNotFound'
-import {
-  firstDowngradingInstallTarget,
-  firstInvalidRegistryInstallTarget,
-  firstNonexistentInstallTarget,
-} from '../domain/agent/tools/execution/installCommandGuards'
-import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../domain/agent/compilerDiagnosticDirective'
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
-import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
-import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
 import { computeLineDiff, countDiffLines } from '../domain/agent/diffEngine'
 import { reconcileApprovedHunks } from '../domain/agent/tools/fs/hunkApproval'
-import { executeFileInfoTool } from '../domain/agent/tools/fs/fileInfoTool'
-import { executeReadFileTool } from '../domain/agent/tools/fs/readFileTool'
-import { executeExtractCodeSymbolsTool } from '../domain/agent/tools/fs/extractCodeSymbolsTool'
-import { executeListDirectoryTool } from '../domain/agent/tools/fs/listDirectoryTool'
-import { executeListFilesRecursiveTool } from '../domain/agent/tools/fs/listFilesRecursiveTool'
-import { executeWriteFileTool } from '../domain/agent/tools/fs/writeFileTool'
-import { executeReplaceFileContentTool } from '../domain/agent/tools/fs/replaceFileContentTool'
-import { executeMultiReplaceFileContentTool } from '../domain/agent/tools/fs/multiReplaceFileContentTool'
-import { executeGitDiff, executeGitStatus, performGitCommit } from '../domain/agent/tools/git/gitCommitTool'
-import { executeWebContentFetch, executeWebSearch } from '../domain/agent/tools/web/webResearchTools'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
@@ -48,7 +33,6 @@ import { buildSkillAdherenceRefusal, validateSkillAdherence } from '../domain/sk
 import { workspaceIncrementalTypecheck } from '../infrastructure/process/workspaceIncrementalTypecheck'
 import { type DevToolStatus } from '../domain/agent/devToolchain'
 import { probeToolchain } from '../domain/agent/tools/execution/devToolchainTools'
-import { executeRunTestsTool } from './runTestsTool'
 import type { AppSettings } from '../../../src/types'
 import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
@@ -73,21 +57,65 @@ export class AgentToolExecutorService {
   private webToolService: WebToolService
   private recoveryToolService: RecoveryToolService
   private browserToolService: BrowserToolService
+  private visualValidationRunner: VisualValidationRunner
+  private diagnosticsToolService: DiagnosticsToolService
+  private gitToolService: GitToolService
   /** Packages whose registry facts have already been delivered; see versionRealityDirective. */
   private reportedVersionFacts = new Set<string>()
 
-  constructor(private readonly policyAuditRepository = new CapabilityPolicyAuditRepository()) {
+  constructor(
+    private readonly policyAuditRepository = new CapabilityPolicyAuditRepository(),
+    visualValidationRunner = new VisualValidationRunner(),
+  ) {
+    this.visualValidationRunner = visualValidationRunner
     this.fsToolService = new FsToolService({
       repository: workspaceAppService,
+      readRepository: this.repo,
+      symbolsRepository: this.repo,
       searchRepository: workspaceAppService,
       directoryRepository: agentToolFileRepository,
       journal: this.journal,
       readContent: (absolutePath) => this.readContentSafely(absolutePath),
       buildChangeStats: (filePath, before, after) => this.buildChangeStats(filePath, before, after),
+      recursiveRepository: {
+        exists: (absolutePath) => documentIoRepository.exists(absolutePath),
+        listRecursive: (rootPath, maxDepth, ignoreDirs) => agentToolFileRepository.listRecursive(rootPath, maxDepth, ignoreDirs),
+      },
+      writeFileDependencies: {
+        repository: this.repo,
+        supportRepository: agentToolFileRepository,
+        journal: this.journal,
+        buildChangeStats: (filePath, before, after) => this.buildChangeStats(filePath, before, after),
+        readContent: (absolutePath) => this.readContentSafely(absolutePath),
+        importIntegrityDirective: (filePath, content, currentWorkspace) => this.importIntegrityDirective(filePath, content, currentWorkspace),
+        versionRealityDirective: (filePath, content) => this.versionRealityDirective(filePath, content),
+        incrementalTypecheck: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
+      },
+      replaceFile: {
+        exists: (absolutePath) => documentIoRepository.exists(absolutePath),
+        readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
+        writeFile: (absolutePath, content) => this.repo.writeFile(absolutePath, content),
+      },
+      multiReplaceFile: {
+        readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
+        multiReplaceChunks: async (absolutePath, replacements) => {
+          const result = await this.repo.multiReplaceChunks(absolutePath, replacements)
+          return { ...result, replacedCount: result.replacedCount ?? 0 }
+        },
+      },
+      skillAdherence: (filePath, content, guidelines) => validateSkillAdherence(filePath, content, guidelines),
+      buildSkillRefusal: (filePath, violation) => buildSkillAdherenceRefusal(filePath, violation),
     })
     this.processToolService = new ProcessToolService({
       getShellSession: (workspace) => this.getOrCreateShellSession(workspace),
       probeToolchain: () => this.probeToolchain(),
+      readPackageJson: async (workspace) => {
+        const result = await this.repo.readFile(path.join(workspace, 'package.json'))
+        return result.success ? result.content || null : null
+      },
+      lookupPackages: (names) => npmRegistryClient.lookupAll(names),
+      lookupPackage: (name) => npmRegistryClient.lookup(name),
+      missingFromNodeModules: (workspace, packages) => agentToolFileRepository.missingFromNodeModules(workspace, packages),
     })
     this.webToolService = new WebToolService({ recordBeforeModification: (filePath) => this.journal.recordBeforeModification(filePath) })
     this.recoveryToolService = new RecoveryToolService(this.journal)
@@ -95,6 +123,11 @@ export class AgentToolExecutorService {
       openExternal: (url) => shell.openExternal(url),
       openPath: (filePath) => shell.openPath(filePath),
       exists: (filePath) => documentIoRepository.exists(filePath),
+    })
+    this.diagnosticsToolService = new DiagnosticsToolService()
+    this.gitToolService = new GitToolService({
+      run: (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs),
+      commit: (directory, message) => gitCliRepository.commit(directory, message),
     })
   }
 
@@ -112,6 +145,7 @@ export class AgentToolExecutorService {
       fetch_web_content: ['http-download', 'connect', parsedTool.parameters.url],
       download_file: ['http-download', 'download', parsedTool.parameters.url],
       open_in_browser: ['browser', 'open', parsedTool.parameters.url || parsedTool.parameters.filePath || parsedTool.parameters.path],
+      validate_visual_artifact: ['browser', 'open', parsedTool.parameters.artifactPath],
       run_command: ['shell', 'execute', parsedTool.parameters.command],
       ensure_tool: ['http-download', 'download', parsedTool.parameters.toolName || parsedTool.parameters.tool || parsedTool.parameters.name],
     } as Record<string, [Capability, CapabilityOperation, unknown]>)[parsedTool.tool]
@@ -168,7 +202,7 @@ export class AgentToolExecutorService {
    * agentOrchestratorAppService.ts.
    */
   public performGitCommit(cwd: string, commitMessage: string): { success: boolean; output: string; logMessage: string } {
-    return performGitCommit(cwd, commitMessage, (directory, message) => gitCliRepository.commit(directory, message))
+    return this.gitToolService.commit(cwd, commitMessage)
   }
 
   /**
@@ -349,15 +383,15 @@ export class AgentToolExecutorService {
 
     switch (tool) {
       case 'read_file': {
-        return executeReadFileTool(parameters, workspacePath, this.repo)
+        return this.fsToolService.executeReadFile(parameters, workspacePath)
       }
 
       case 'extract_code_symbols': {
-        return executeExtractCodeSymbolsTool(parameters, workspacePath, this.repo)
+        return this.fsToolService.executeExtractCodeSymbols(parameters, workspacePath)
       }
 
       case 'list_dir': {
-        return executeListDirectoryTool(parameters, workspacePath, agentToolFileRepository)
+        return this.fsToolService.executeListDirectory(parameters, workspacePath)
       }
 
       case 'inspect_os_env': {
@@ -380,36 +414,15 @@ export class AgentToolExecutorService {
       }
 
       case 'web_search': {
-        const query = parameters.query || ''
-        return executeWebSearch(query, parameters.maxResults || 8, (searchQuery, maxResults) => webClient.searchWeb(searchQuery, maxResults, signal))
+        return this.webToolService.executeSearch(parameters.query || '', parameters.maxResults || 8, signal)
       }
 
       case 'fetch_web_content': {
-        const targetUrl = parameters.url || ''
-        return executeWebContentFetch(targetUrl, (url) => webClient.fetchWebContent(url, 16000, signal))
+        return this.webToolService.executeFetch(parameters.url || '', signal)
       }
 
       case 'write_file': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'Direct file write disabled in Settings.', logMessage: 'File write disabled in settings' }
-        }
-        return executeWriteFileTool(
-          parameters,
-          workspacePath,
-          activeSkillGuidelines,
-          (filePath, content, guidelines) => validateSkillAdherence(filePath, content, guidelines),
-          (filePath, violation) => buildSkillAdherenceRefusal(filePath, violation),
-          {
-            repository: this.repo,
-            supportRepository: agentToolFileRepository,
-            journal: this.journal,
-            buildChangeStats: (filePath, before, after) => this.buildChangeStats(filePath, before, after),
-            readContent: (absolutePath) => this.readContentSafely(absolutePath),
-            importIntegrityDirective: (filePath, content, currentWorkspace) => this.importIntegrityDirective(filePath, content, currentWorkspace),
-            versionRealityDirective: (filePath, content) => this.versionRealityDirective(filePath, content),
-            incrementalTypecheck: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
-          },
-        )
+        return this.fsToolService.executeWriteFile(parameters, workspacePath, settings.allowFileModifications, activeSkillGuidelines)
       }
 
       case 'create_directory': {
@@ -425,52 +438,15 @@ export class AgentToolExecutorService {
       }
 
       case 'list_files_recursive': {
-        return executeListFilesRecursiveTool(parameters, workspacePath, {
-          exists: (absolutePath) => documentIoRepository.exists(absolutePath),
-          listRecursive: (rootPath, maxDepth, ignoreDirs) => agentToolFileRepository.listRecursive(rootPath, maxDepth, ignoreDirs),
-        })
+        return this.fsToolService.executeListFilesRecursive(parameters, workspacePath)
       }
 
       case 'replace_file_content': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'Direct file modification disabled in Settings.', logMessage: 'File modification disabled in settings' }
-        }
-        return executeReplaceFileContentTool(
-          parameters,
-          workspacePath,
-          activeSkillGuidelines,
-          (filePath, content, guidelines) => validateSkillAdherence(filePath, content, guidelines),
-          (filePath, violation) => buildSkillAdherenceRefusal(filePath, violation),
-          {
-            exists: (absolutePath) => documentIoRepository.exists(absolutePath),
-            readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
-            writeFile: (absolutePath, content) => this.repo.writeFile(absolutePath, content),
-          },
-          this.journal,
-          (filePath, before, after) => this.buildChangeStats(filePath, before, after),
-        )
+        return this.fsToolService.executeReplaceFileContent(parameters, workspacePath, settings.allowFileModifications, activeSkillGuidelines)
       }
 
       case 'multi_replace_file_content': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'Direct file modification disabled in Settings.', logMessage: 'File modification disabled in settings' }
-        }
-        return executeMultiReplaceFileContentTool(
-          parameters,
-          workspacePath,
-          activeSkillGuidelines,
-          (filePath, content, guidelines) => validateSkillAdherence(filePath, content, guidelines),
-          (filePath, violation) => buildSkillAdherenceRefusal(filePath, violation),
-          {
-            readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
-            multiReplaceChunks: async (absolutePath, replacements) => {
-              const result = await this.repo.multiReplaceChunks(absolutePath, replacements)
-              return { ...result, replacedCount: result.replacedCount ?? 0 }
-            },
-          },
-          this.journal,
-          (filePath, before, after) => this.buildChangeStats(filePath, before, after),
-        )
+        return this.fsToolService.executeMultiReplaceFileContent(parameters, workspacePath, settings.allowFileModifications, activeSkillGuidelines)
       }
 
       case 'delete_file': {
@@ -490,156 +466,14 @@ export class AgentToolExecutorService {
           return { outputForHistory: 'Missing command parameter', logMessage: 'Missing command parameter', isTerminal: true }
         }
 
-        // An install of a package the registry has never heard of cannot succeed, so it is
-        // refused before it spends a turn. Measured across 2026-08-25: `@tailwindcss/react` was
-        // ordered six times in run 16 alone and thirteen times across the series, each attempt
-        // costing a step and returning the same npm 404. The registry was already being asked
-        // about `package.json`; asking about the command closes the other half.
-        const unknownPackage = await firstNonexistentInstallTarget(cmd, (names) => npmRegistryClient.lookupAll(names))
-        if (unknownPackage) {
-          const refusal = [
-            `[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]`,
-            `The npm registry has no package named "${unknownPackage}". This command was not executed, because no flag makes an install of a non-existent package succeed.`,
-            `Directives:`,
-            `1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.`,
-            `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
-          ].join('\n')
-          return { outputForHistory: refusal, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
-        }
+        const installPreconditionFailure = await this.processToolService.validateInstallPreconditions(cmd, workspacePath)
+        if (installPreconditionFailure) return installPreconditionFailure
 
-        // A package name can exist while the explicit version still cannot produce a sound new
-        // dependency: either the range matches nothing (preflight ETARGET), or an undeclared
-        // package is being introduced at an obsolete major copied from model training data.
-        const packageJsonForRegistryGuard = workspacePath
-          ? await this.repo.readFile(path.join(workspacePath, 'package.json'))
-          : null
-        const invalidRegistryTarget = await firstInvalidRegistryInstallTarget(
-          cmd,
-          packageJsonForRegistryGuard?.success ? packageJsonForRegistryGuard.content || null : null,
-          (names) => npmRegistryClient.lookupAll(names),
-        )
-        if (invalidRegistryTarget) {
-          logger.log('WARN', 'AgentToolExecutor', `[INSTALL_VERSION_REFUSED] ${cmd}`)
-          return {
-            outputForHistory: invalidRegistryTarget.refusal,
-            logMessage: `Install refused: ${invalidRegistryTarget.name} has a ${invalidRegistryTarget.kind} requested version`,
-            isTerminal: true,
-          }
-        }
+        const preconditionFailure = this.processToolService.validateRunCommandPreconditions(cmd)
+        if (preconditionFailure) return preconditionFailure
 
-        // The same reality check, against the manifest instead of the registry: an install that
-        // moves a declared dependency backwards past a major is refused before it can rewrite
-        // package.json. `versionRealityDirective` below only sees `write_file`, so until this
-        // guard existed a version installed by command was compared against nothing at all --
-        // three successful `npm install react@^16.8.0` in the run of 2026-08-25T12:11, on a
-        // project declaring `^18.2.0`, and the ERESOLVE cascade that followed.
-        const packageJsonForDowngradeGuard = workspacePath
-          ? await this.repo.readFile(path.join(workspacePath, 'package.json'))
-          : null
-        const downgrade = await firstDowngradingInstallTarget(
-          cmd,
-          packageJsonForDowngradeGuard?.success ? packageJsonForDowngradeGuard.content || null : null,
-          (name) => npmRegistryClient.lookup(name),
-        )
-        if (downgrade) {
-          logger.log('WARN', 'AgentToolExecutor', `[VERSION_DOWNGRADE_REFUSED] ${cmd}`)
-          return {
-            outputForHistory: downgrade.refusal,
-            logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`,
-            isTerminal: true,
-          }
-        }
-
-        // Shell-Tool Confusion Guard: detect when the model passes a registered
-        // tool name as a shell command (e.g. write_file "path" "content").
-        // This causes guaranteed timeouts since tool names are not OS executables.
-        const TOOL_NAME_PREFIXES = [
-          'write_file', 'read_file', 'replace_file_content', 'multi_replace_file_content',
-          'delete_file', 'list_dir', 'list_files_recursive', 'grep_search',
-          'extract_code_symbols', 'create_directory', 'copy_file', 'move_file',
-          'web_search', 'fetch_web_content', 'download_file', 'inspect_os_env',
-          'ask', 'finish',
-        ]
-        const cmdTrimmed = cmd.trimStart()
-        const confusedToolName = TOOL_NAME_PREFIXES.find((t) => cmdTrimmed.startsWith(t))
-        if (confusedToolName) {
-          const guardFeedback = [
-            `[TOOL_AS_SHELL_BLOCK]`,
-            `Command: "${cmd}"`,
-            `EXECUTION BLOCKED: "${confusedToolName}" is a structured tool, not a shell executable.`,
-            `You MUST invoke it as a JSON tool call, not as a shell command.`,
-            `Correct format:`,
-            `\`\`\`json`,
-            `{ "tool": "${confusedToolName}", "parameters": { ... }, "explanation": "..." }`,
-            `\`\`\``,
-            `Do NOT pass tool names to run_command. Use the tool directly.`,
-          ].join('\n')
-          logger.log('WARN', 'AgentToolExecutor', `[TOOL_AS_SHELL_BLOCK] Model tried to run tool "${confusedToolName}" as shell command`)
-          return { outputForHistory: guardFeedback, logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`, isTerminal: true }
-        }
-
-        // Blocking Dev-Server Guard: run_command waits synchronously for the process to exit,
-        // but a dev/watch server never exits on its own -- executing one here always burns the
-        // full command timeout (up to 10 minutes) for no useful signal.
-        if (isBlockingDevServerCommand(cmd)) {
-          const guardFeedback = [
-            `[BLOCKING_DEV_SERVER_BLOCK]`,
-            `Command: "${cmd}"`,
-            `EXECUTION BLOCKED: this command starts a dev/watch server or otherwise never exits on its own.`,
-            `run_command waits synchronously for the process to exit, so this would hang until the timeout is reached, wasting several minutes with no useful result.`,
-            `Directives:`,
-            `1. To verify the project builds correctly, use a one-shot command instead (e.g. "npm run build" or "tsc --noEmit").`,
-            `2. Do NOT run dev servers, watch-mode test runners, or long-lived processes via run_command.`,
-            `3. If you need the running app visually verified, tell the user it is ready to start manually -- do not attempt to launch it yourself.`,
-          ].join('\n')
-          logger.log('WARN', 'AgentToolExecutor', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${cmd}"`)
-          return { outputForHistory: guardFeedback, logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${cmd}"`, isTerminal: true }
-        }
-
-        // Redundant Install Guard: skip an install command whose every named package is already
-        // declared in package.json AND present in node_modules -- only then is it a costly
-        // no-op. Any doubt (package.json missing/unreadable, only some packages declared, or
-        // anything absent from node_modules) lets the command through as before.
-        //
-        // Both halves are required. Declaration alone was the original test, and it inverted
-        // the guard's purpose the moment the agent authored package.json itself: everything
-        // reads as installed while node_modules does not exist, so the guard blocks the install
-        // that would make the project buildable instead of a pointless repeat of one.
-        if (workspacePath) {
-          const requested = extractRequestedPackages(cmd)
-          // A command naming an explicit version is a request to CHANGE the version, not to
-          // reinstall what is there. Skipping it silently defeats the one fix that resolves a
-          // peer conflict: `npm install vite@^8` would be answered "vite is already installed"
-          // by a guard that only ever compares names (observed in the ERESOLVE probe).
-          const requestsVersionChange = requested.some((pkg) => pkg.hasExplicitVersion)
-          const requestedPkgs = requestsVersionChange ? [] : requested.map((pkg) => pkg.name)
-          if (requestedPkgs.length > 0) {
-            const pkgJsonRes = await this.repo.readFile(path.join(workspacePath, 'package.json'))
-            const declared = pkgJsonRes.success && pkgJsonRes.content
-              ? findAlreadyInstalledPackages(requestedPkgs, pkgJsonRes.content)
-              : null
-            const notOnDisk = declared ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : []
-            if (declared && notOnDisk.length > 0) {
-              logger.log(
-                'INFO',
-                'AgentToolExecutor',
-                `[REDUNDANT_INSTALL_ALLOW] Declared but not in node_modules, install proceeds: ${notOnDisk.join(', ')}`
-              )
-            }
-            const alreadyInstalled = declared && notOnDisk.length === 0 ? declared : null
-            if (alreadyInstalled) {
-              const guardFeedback = [
-                `[REDUNDANT_INSTALL_SKIP]`,
-                `Command: "${cmd}"`,
-                `EXECUTION SKIPPED: every requested package (${alreadyInstalled.join(', ')}) is declared in package.json AND already present in node_modules.`,
-                `Re-running this install would do nothing but waste time.`,
-                `Directive: proceed with the next step of your plan -- this dependency is already installed.`,
-              ].join('\n')
-              logger.log('WARN', 'AgentToolExecutor', `[REDUNDANT_INSTALL_SKIP] Skipped already-installed packages: ${alreadyInstalled.join(', ')}`)
-              return { outputForHistory: guardFeedback, logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${alreadyInstalled.join(', ')}`, isTerminal: true }
-            }
-          }
-        }
+        const redundantInstall = await this.processToolService.validateRedundantInstall(cmd, workspacePath)
+        if (redundantInstall) return redundantInstall
 
         const execution = await this.processToolService.executeRunCommand(
           cmd,
@@ -652,7 +486,6 @@ export class AgentToolExecutorService {
         if (!('result' in execution)) return execution
 
         const { result: res, rawOutput, isCancelled, isFailure } = execution
-        const lowerOut = rawOutput.toLowerCase()
 
           // Failure is decided by the process's own exit status, not by scanning its output
           // for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and
@@ -661,42 +494,28 @@ export class AgentToolExecutorService {
           // failures are reported too.) Cancellation is kept: an interactive generator that
           // aborts can still exit 0.
           if (isFailure) {
-            const isEperm = lowerOut.includes('eperm') || lowerOut.includes('eacces') || lowerOut.includes('operation not permitted') || lowerOut.includes('permission denied')
-            const permsDirective = isEperm
-              ? `\n\n[PERMISSIONS WARNING: EPERM DETECTED]\nCommand failed due to Windows file permission restrictions (EPERM / Access Denied). DO NOT attempt to write files or run npm install inside system-protected folders (Program Files). Move the project or work inside a user workspace directory (e.g. Desktop or Documents).`
-              : ''
-            const isZeroModulesVite = lowerOut.includes('0 modules transformed') || (lowerOut.includes('vite') && res.code !== 0)
-            const viteMissingDirective = isZeroModulesVite && workspacePath && !documentIoRepository.exists(path.join(workspacePath, 'index.html'))
-              ? `\n\n[VITE ENTRY POINT MISSING DIAGNOSTIC]\nVite build failed or transformed 0 modules because 'index.html' is missing in project root ('${workspacePath}'). Create 'index.html' (referencing '<script type="module" src="/src/main.tsx"></script>') and 'src/main.tsx' before re-running build.`
-              : ''
-            const isCreateViteCancelled = (cmd.includes('create-vite') || cmd.includes('create vite') || cmd.includes('create-app')) && isCancelled
-            const createViteDirective = isCreateViteCancelled
-              ? `\n\n[VITE CLI NON-INTERACTIVE DIRECTIVE]\n'npm create vite' was cancelled because the target directory is not empty or requires interactive prompt selections. DO NOT re-run 'npm create vite' interactively.\nInstead, construct 'package.json', 'index.html', and 'src/main.tsx' directly using write_file, or run 'npx -y create-vite@latest . -- --template react-ts' after clearing conflicting files.`
-              : ''
+            const commonFailureDirectives = this.processToolService.buildCommonFailureDirectives(
+              cmd,
+              res,
+              rawOutput,
+              workspacePath,
+              isCancelled,
+              (workspace, fileName) => documentIoRepository.exists(path.join(workspace, fileName)),
+            )
             // A peer-version conflict, parsed from npm's own report. Placed before the
             // missing-dependency branch because ERESOLVE output also mentions unresolved
             // packages, and "install the missing dependency" is the advice that just failed.
-            const resolutionConflictDirective = npmResolutionDirectiveFor(rawOutput)
+            const failureDiagnostics = await this.processToolService.classifyFailureDiagnostics(rawOutput, workspacePath)
+            const { resolutionConflictDirective, versionNotFoundDirective, moduleResolutionDirective, missingDepDirective } = failureDiagnostics
             // ETARGET: a version that was never published. Its sibling ERESOLVE has been handled
             // since §5.3 and this case never was, so run 17 of 2026-08-25 repeated the same
             // refused install until the circuit breaker stopped the session. Placed after
             // ERESOLVE because that output can also mention versions, and a peer conflict is a
             // different fix.
-            const versionNotFound = resolutionConflictDirective ? null : parseVersionNotFound(rawOutput)
-            const versionNotFoundDirective = versionNotFound
-              ? buildVersionNotFoundDirective(versionNotFound, (await npmRegistryClient.lookup(versionNotFound.packageName)).latest)
-              : ''
             // "Cannot find module X" is two different failures wearing one message, and telling
             // them apart needs the disk, not the text: a package that is already in node_modules
             // cannot be installed into existence again. See moduleResolutionDiagnostic.ts for the
             // runs that spent their steps reinstalling packages that were already there.
-            const unresolved = resolutionConflictDirective ? [] : unresolvedPackages(rawOutput)
-            const moduleCause = workspacePath && unresolved.length > 0
-              ? classifyModuleDiagnostic(rawOutput, (pkg) => agentToolFileRepository.missingFromNodeModules(workspacePath, [pkg]).length === 0)
-              : 'none'
-            const moduleResolutionDirective = moduleCause === 'compiler_resolution'
-              ? buildModuleResolutionDirective(rawOutput, unresolved)
-              : ''
             // `Cannot find module './api'` is not a missing dependency. `packageOfSpecifier` in
             // moduleResolutionDiagnostic.ts already knows this — "Relative imports belong to no
             // package" — but this gate matched the raw text instead of asking it, so a project
@@ -715,31 +534,10 @@ export class AgentToolExecutorService {
             // The two non-tsc phrasings stay on the raw match: the `Cannot find module 'x'` regex
             // does not parse them, so requiring a resolved package name would silence genuine
             // bundler failures.
-            const cannotFindModulePhrasing = lowerOut.includes('cannot find module')
-            const bundlerMissingPhrasing =
-              lowerOut.includes('module_not_found') || lowerOut.includes('failed to resolve import')
-            const isMissingDependency =
-              !resolutionConflictDirective &&
-              moduleCause !== 'compiler_resolution' &&
-              ((cannotFindModulePhrasing && unresolved.length > 0) || bundlerMissingPhrasing)
             // Naming them is the whole difference between an instruction and a riddle: the old
             // text shipped the literal placeholder `<package-name>` and left the model to invent
             // one. `unresolved` already holds the answer (§6.2.1).
-            const missingDepList = unresolved.slice(0, 5).map((p) => `"${p}"`).join(', ')
-            const missingDepDirective = isMissingDependency
-              ? `\n\n[MISSING DEPENDENCY DIAGNOSTIC]\nCompilation failed because ${missingDepList ? `${missingDepList} ${unresolved.length === 1 ? 'is' : 'are'} imported but not installed` : 'an imported module/package is missing'}.\nDirectives:\n1. Your next tool call MUST be "run_command" with: npm install ${missingDepList ? unresolved.slice(0, 5).join(' ') : '<the package named in the error above>'}\n2. Do NOT re-run the project check until that install has completed.`
-              : ''
-            const isNpmNamingRestriction =
-              lowerOut.includes('npm naming restrictions') ||
-              lowerOut.includes('can no longer contain capital letters') ||
-              lowerOut.includes('name can only contain url-friendly') ||
-              lowerOut.includes('name is invalid')
-            const npmNamingDirective = isNpmNamingRestriction
-              ? `\n\n[NPM NAMING RESTRICTION DIRECTIVE]\nProject/package name is invalid because npm packages cannot contain uppercase letters or spaces. DO NOT repeat the command with capital letters. Either run with an all-lowercase name (e.g. 'project-dashboard-task') or construct the files directly using write_file (e.g. 'package.json', 'vite.config.ts', 'index.html', 'src/App.tsx').`
-              : ''
-            const interactivePromptDirective = res.interruptedByPrompt
-              ? `\n\n[INTERACTIVE PROMPT DIRECTIVE]\nThe command was aborted because it requested interactive user input (e.g. a [y/n] confirmation or password prompt), which run_command cannot answer. Re-run using the tool's non-interactive flag (e.g. -y, --yes, --force, --batch) so it completes without prompting.`
-              : ''
+            const { npmNamingDirective, interactivePromptDirective } = this.processToolService.buildInteractionFailureDirectives(rawOutput, res.interruptedByPrompt)
             // What the model is told to do about the failure, decided ONCE instead of stated
             // twice. The old tail said "apply the fix ... and re-run the command autonomously",
             // two imperatives in one sentence, and in the live run of 2026-08-24 the model did
@@ -751,39 +549,22 @@ export class AgentToolExecutorService {
             // fired (ERESOLVE, missing dependency, npm naming, interactive prompt), the tail
             // stops issuing an instruction of its own and defers to it.
             const specificDirectiveFired = Boolean(
-              permsDirective || resolutionConflictDirective || versionNotFoundDirective || viteMissingDirective ||
-              createViteDirective || missingDepDirective || moduleResolutionDirective || npmNamingDirective || interactivePromptDirective
+              commonFailureDirectives || resolutionConflictDirective || versionNotFoundDirective ||
+              missingDepDirective || moduleResolutionDirective || npmNamingDirective || interactivePromptDirective
             )
-            const diagnosticDirective = specificDirectiveFired
-              ? null
-              : buildDiagnosticFixDirective(
-                  rawOutput,
-                  (pkg) => (workspacePath ? readPackageExports(workspacePath, pkg) : []),
-                  (importingFile, specifier) =>
-                    workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : []
-                )
-            // The errors the winning directive does not fix, named so they stop being invisible,
-            // and explicitly deferred so this stays one instruction for now. See
-            // buildDeferredDiagnosticNote for the two runs that lost them.
-            const deferredDiagnosticNote = specificDirectiveFired ? buildDeferredDiagnosticNote(rawOutput) || '' : ''
-            const healingTail = specificDirectiveFired
-              ? 'DO NOT ask the user vague clarification questions: carry out the directive above.'
-              : diagnosticDirective ||
-                'AUTO-HEALING DIRECTIVE: The command above failed. DO NOT ask the user vague clarification questions, and do NOT re-run it unchanged — it will fail the same way. Read the output above, identify the one file or command parameter at fault, and fix that with write_file.'
-            const autoHealingFeedback = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]
-Command: "${cmd}" (Exit Code: ${res.code}${res.timedOut ? ' - TIMED OUT' : ''}${res.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})
-Captured Error Stack Trace & Failure Output:
-\`\`\`
-${rawOutput.slice(0, 4000)}
-\`\`\`${permsDirective}${resolutionConflictDirective}${versionNotFoundDirective}${viteMissingDirective}${createViteDirective}${missingDepDirective}${moduleResolutionDirective}${npmNamingDirective}${interactivePromptDirective}${deferredDiagnosticNote}
-
-${healingTail}`
-            return {
-              outputForHistory: autoHealingFeedback,
-              logMessage: `Terminal Command Failed (Auto-Healing Diagnostic Captured)`,
-              logDetail: rawOutput.slice(0, 1000),
-              isTerminal: true,
-            }
+            const { deferredDiagnosticNote, healingTail } = this.processToolService.chooseAutoHealingDirective(
+              rawOutput,
+              specificDirectiveFired,
+              (packageName) => workspacePath ? readPackageExports(workspacePath, packageName) : [],
+              (importingFile, specifier) => workspacePath ? readLocalModuleExports(workspacePath, importingFile, specifier) : [],
+            )
+            return this.processToolService.buildAutoHealingFailureResult(
+              cmd,
+              res,
+              rawOutput,
+              `${commonFailureDirectives}${resolutionConflictDirective}${versionNotFoundDirective}${missingDepDirective}${moduleResolutionDirective}${npmNamingDirective}${interactivePromptDirective}${deferredDiagnosticNote}`,
+              healingTail,
+            )
           }
 
           return {
@@ -795,33 +576,19 @@ ${healingTail}`
       }
 
       case 'run_tests': {
-        if (settings.allowTerminalExecution === false) {
-          return { outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true }
-        }
-        return executeRunTestsTool(parameters.command, workspacePath, (path) => this.getOrCreateShellSession(path), onTerminalOutput, onProcessSpawned)
+        return this.processToolService.executeRunTests(parameters.command, workspacePath, settings.allowTerminalExecution, onTerminalOutput, onProcessSpawned)
       }
 
       case 'git_status': {
-        const cwd = workspacePath || process.cwd()
-        return executeGitStatus(cwd, (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs))
+        return this.gitToolService.executeStatus(workspacePath)
       }
 
       case 'git_diff': {
-        const cwd = workspacePath || process.cwd()
-        const targetPath = parameters.filePath
-        const isStaged = Boolean(parameters.staged)
-        const pathCheck = targetPath ? validatePathSafety(targetPath, workspacePath) : null
-
-        return executeGitDiff(cwd, targetPath, isStaged, pathCheck, (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs))
+        return this.gitToolService.executeDiff(parameters, workspacePath)
       }
 
       case 'git_commit': {
-        const cwd = workspacePath || process.cwd()
-        const result = this.performGitCommit(cwd, parameters.commitMessage || '')
-        return {
-          outputForHistory: result.output,
-          logMessage: result.logMessage,
-        }
+        return this.gitToolService.executeCommit(parameters, workspacePath)
       }
 
       case 'rollback_workspace': {
@@ -833,26 +600,58 @@ ${healingTail}`
       }
 
       case 'get_file_info': {
-        return executeFileInfoTool(parameters, workspacePath, agentToolFileRepository)
+        return this.fsToolService.executeFileInfo(parameters, workspacePath)
       }
 
       case 'open_in_browser': {
         return this.browserToolService.executeOpenInBrowser(parameters, workspacePath)
       }
 
-      case 'ask': {
-        const question = parameters.question || parameters.query || parsedTool.explanation || 'Clarification requested from user.'
-        return {
-          outputForHistory: `Agent requested clarification: "${question}"`,
-          logMessage: `Agent Question: ${question}`,
-          logDetail: question,
+      case 'validate_visual_artifact': {
+        if (!workspacePath) {
+          const result = visualValidationResultSchema.parse({
+            status: 'UNAVAILABLE',
+            screenshot: { status: 'unavailable' },
+            dom: { status: 'unavailable' },
+            console: [],
+            http: [],
+            redaction: { applied: false, fields: [] },
+            error: 'Visual validation requires an active workspace.',
+          })
+          return { outputForHistory: JSON.stringify(result), logMessage: result.error || 'Visual validation unavailable', isTerminal: true }
         }
+        const outputDirectory = path.join(workspacePath, '.onlyrag', 'visual-validation')
+        fs.mkdirSync(outputDirectory, { recursive: true })
+        const evidence = await this.visualValidationRunner.captureEvidence(parameters, workspacePath, outputDirectory, signal)
+        const result = 'status' in evidence && evidence.status === 'UNAVAILABLE'
+          ? visualValidationResultSchema.parse({
+              status: 'UNAVAILABLE',
+              screenshot: { status: 'unavailable' },
+              dom: { status: 'unavailable' },
+              console: [],
+              http: [],
+              redaction: { applied: false, fields: [] },
+              error: evidence.error,
+            })
+          : visualValidationResultSchema.parse({ status: 'verified', ...evidence })
+        return {
+          outputForHistory: JSON.stringify(result),
+          logMessage: `Visual validation ${result.status}: ${parameters.artifactPath || 'artifact'}`,
+          logDetail: JSON.stringify(result).slice(0, 4000),
+          isTerminal: true,
+        }
+      }
+
+      case 'ask': {
+        return this.diagnosticsToolService.executeAsk(parameters, parsedTool.explanation)
       }
 
       default:
         return {
           outputForHistory: `Unrecognized or unsupported tool: ${tool}`,
           logMessage: `Unsupported tool ${tool}`,
+          isTerminal: true,
+          terminalCode: 'MODEL_UNSUITABLE',
         }
     }
   }

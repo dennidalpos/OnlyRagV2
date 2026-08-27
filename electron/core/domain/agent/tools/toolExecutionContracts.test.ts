@@ -50,4 +50,13 @@ describe('tool execution contracts', () => {
       verification: { ran: true, passed: true },
     }).success).toBe(true)
   })
+
+  it('accepts the terminal MODEL_UNSUITABLE outcome', () => {
+    expect(toolExecutionResultSchema.safeParse({
+      outputForHistory: 'The requested tool capability is unavailable.',
+      logMessage: 'Model capability unavailable',
+      isTerminal: true,
+      terminalCode: 'MODEL_UNSUITABLE',
+    }).success).toBe(true)
+  })
 })

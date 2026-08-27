@@ -90,6 +90,7 @@ export type SupportedToolName =
   | 'update_plan'
   | 'ask'
   | 'open_in_browser'
+  | 'validate_visual_artifact'
   | 'finish'
 
 export interface AgentToolCall {

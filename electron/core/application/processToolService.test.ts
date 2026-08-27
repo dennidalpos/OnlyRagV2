@@ -8,6 +8,20 @@ function createService(execute: (...args: any[]) => Promise<any>) {
 }
 
 describe('ProcessToolService run_command', () => {
+  it('rejects structured tool names and blocking servers during preflight', () => {
+    const service = createService(vi.fn())
+
+    expect(service.validateRunCommandPreconditions('write_file src/App.tsx')).toMatchObject({
+      isTerminal: true,
+      outputForHistory: expect.stringContaining('[TOOL_AS_SHELL_BLOCK]'),
+    })
+    expect(service.validateRunCommandPreconditions('npm run dev')).toMatchObject({
+      isTerminal: true,
+      outputForHistory: expect.stringContaining('[BLOCKING_DEV_SERVER_BLOCK]'),
+    })
+    expect(service.validateRunCommandPreconditions('npm test')).toBeNull()
+  })
+
   it('blocks unsafe commands before spawning the shell', async () => {
     const execute = vi.fn()
     const result = await createService(execute).executeRunCommand('Remove-Item -Recurse -Force C:\\', 'C:\\workspace', undefined, undefined, undefined, undefined)
@@ -31,6 +45,58 @@ describe('ProcessToolService run_command', () => {
     const result = await createService(execute).executeRunCommand('npm test', 'C:\\workspace', undefined, new AbortController().signal, undefined, undefined)
 
     expect(result).toMatchObject({ isFailure: true, isCancelled: true })
+  })
+
+  it('rejects an unknown npm package during install preflight', async () => {
+    const service = new ProcessToolService({
+      getShellSession: () => ({ execute: vi.fn() } as any),
+      lookupPackages: async (names) => names.map((name) => ({ name, exists: false })),
+    })
+
+    const result = await service.validateInstallPreconditions('npm install package-that-does-not-exist', 'C:\\workspace')
+
+    expect(result).toMatchObject({
+      isTerminal: true,
+      outputForHistory: expect.stringContaining('[PACKAGE DOES NOT EXIST'),
+    })
+  })
+
+  it('skips an install when every requested package is declared and present on disk', async () => {
+    const service = new ProcessToolService({
+      getShellSession: () => ({ execute: vi.fn() } as any),
+      readPackageJson: async () => JSON.stringify({ dependencies: { react: '^19.0.0' } }),
+      missingFromNodeModules: () => [],
+    })
+
+    const result = await service.validateRedundantInstall('npm install react', 'C:\\workspace')
+
+    expect(result).toMatchObject({
+      isTerminal: true,
+      outputForHistory: expect.stringContaining('[REDUNDANT_INSTALL_SKIP]'),
+    })
+  })
+
+  it('builds deterministic directives for invalid npm names and interactive prompts', () => {
+    const service = createService(vi.fn())
+    const directives = service.buildInteractionFailureDirectives('npm naming restrictions apply', true)
+
+    expect(directives.npmNamingDirective).toContain('[NPM NAMING RESTRICTION DIRECTIVE]')
+    expect(directives.interactivePromptDirective).toContain('[INTERACTIVE PROMPT DIRECTIVE]')
+  })
+
+  it('builds a bounded terminal auto-healing result', () => {
+    const service = createService(vi.fn())
+    const result = service.buildAutoHealingFailureResult(
+      'npm test',
+      { stdout: '', stderr: '', code: 1, timedOut: true } as any,
+      'failure details',
+      '\n\n[DIRECTIVE]',
+      'Fix the command.',
+    )
+
+    expect(result).toMatchObject({ isTerminal: true, logDetail: 'failure details' })
+    expect(result.outputForHistory).toContain('Exit Code: 1 - TIMED OUT')
+    expect(result.outputForHistory).toContain('[DIRECTIVE]')
   })
 })
 

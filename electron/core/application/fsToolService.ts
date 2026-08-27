@@ -2,6 +2,15 @@ import path from 'node:path'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
+import { executeExtractCodeSymbolsTool } from '../domain/agent/tools/fs/extractCodeSymbolsTool'
+import { executeFileInfoTool } from '../domain/agent/tools/fs/fileInfoTool'
+import { executeListDirectoryTool } from '../domain/agent/tools/fs/listDirectoryTool'
+import { executeListFilesRecursiveTool } from '../domain/agent/tools/fs/listFilesRecursiveTool'
+import { executeReadFileTool } from '../domain/agent/tools/fs/readFileTool'
+import { executeWriteFileTool, type WriteFileDependencies } from '../domain/agent/tools/fs/writeFileTool'
+import { executeReplaceFileContentTool } from '../domain/agent/tools/fs/replaceFileContentTool'
+import { executeMultiReplaceFileContentTool } from '../domain/agent/tools/fs/multiReplaceFileContentTool'
+import type { SkillAdherenceViolation } from '../domain/skills/skillAdherenceValidator'
 
 interface DeleteFileRepository {
   deleteFile(filePath: string): Promise<{ success: boolean; error?: string }>
@@ -11,6 +20,10 @@ interface CreateDirectoryRepository {
   mkdir(absolutePath: string): void
   copyFileRaw(sourcePath: string, targetPath: string): void
   renameRaw(sourcePath: string, targetPath: string): void
+  listDirEntries(absolutePath: string): { name: string; isDir: boolean }[] | null
+  getFileInfo(absolutePath: string): Parameters<typeof executeFileInfoTool>[2] extends infer R
+    ? R extends { getFileInfo: (...args: never[]) => infer T } ? T : never
+    : never
 }
 
 interface DeleteFileJournal {
@@ -19,6 +32,8 @@ interface DeleteFileJournal {
 
 interface DeleteFileDependencies {
   repository: DeleteFileRepository
+  readRepository?: Parameters<typeof executeReadFileTool>[2]
+  symbolsRepository?: Parameters<typeof executeExtractCodeSymbolsTool>[2]
   searchRepository: {
     grepSearch(
       dirPath: string,
@@ -31,11 +46,98 @@ interface DeleteFileDependencies {
   journal: DeleteFileJournal
   readContent: (filePath: string) => string
   buildChangeStats: (filePath: string, before: string, after: string) => { filePath: string; additions: number; deletions: number }
+  recursiveRepository?: Parameters<typeof executeListFilesRecursiveTool>[2]
+  writeFileDependencies?: WriteFileDependencies
+  replaceFile?: Parameters<typeof executeReplaceFileContentTool>[5]
+  multiReplaceFile?: Parameters<typeof executeMultiReplaceFileContentTool>[5]
+  skillAdherence?: (filePath: string, content: string, guidelines: string) => SkillAdherenceViolation | null
+  buildSkillRefusal?: (filePath: string, violation: SkillAdherenceViolation) => string
 }
 
 /** Application service for filesystem tools extracted from the legacy executor. */
 export class FsToolService {
   constructor(private readonly dependencies: DeleteFileDependencies) {}
+
+  executeReadFile(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
+    return executeReadFileTool(parameters, workspacePath, this.dependencies.readRepository!)
+  }
+
+  executeExtractCodeSymbols(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): Promise<ToolExecutionResult> {
+    return executeExtractCodeSymbolsTool(parameters, workspacePath, this.dependencies.symbolsRepository!)
+  }
+
+  executeListDirectory(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
+    return executeListDirectoryTool(parameters, workspacePath, this.dependencies.directoryRepository)
+  }
+
+  executeListFilesRecursive(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
+    return executeListFilesRecursiveTool(parameters, workspacePath, this.dependencies.recursiveRepository!)
+  }
+
+  executeFileInfo(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
+    return executeFileInfoTool(parameters, workspacePath, this.dependencies.directoryRepository)
+  }
+
+  async executeWriteFile(
+    parameters: AgentToolCall['parameters'],
+    workspacePath: string | null | undefined,
+    allowFileModifications: boolean | undefined,
+    activeSkillGuidelines: string,
+  ): Promise<ToolExecutionResult> {
+    if (allowFileModifications === false) {
+      return { outputForHistory: 'Direct file write disabled in Settings.', logMessage: 'File write disabled in settings' }
+    }
+    return executeWriteFileTool(
+      parameters,
+      workspacePath,
+      activeSkillGuidelines,
+      this.dependencies.skillAdherence!,
+      this.dependencies.buildSkillRefusal!,
+      this.dependencies.writeFileDependencies!,
+    )
+  }
+
+  async executeReplaceFileContent(
+    parameters: AgentToolCall['parameters'],
+    workspacePath: string | null | undefined,
+    allowFileModifications: boolean | undefined,
+    activeSkillGuidelines: string,
+  ): Promise<ToolExecutionResult> {
+    if (allowFileModifications === false) {
+      return { outputForHistory: 'Direct file modification disabled in Settings.', logMessage: 'File modification disabled in settings' }
+    }
+    return executeReplaceFileContentTool(
+      parameters,
+      workspacePath,
+      activeSkillGuidelines,
+      this.dependencies.skillAdherence!,
+      this.dependencies.buildSkillRefusal!,
+      this.dependencies.replaceFile!,
+      this.dependencies.journal,
+      this.dependencies.buildChangeStats,
+    )
+  }
+
+  async executeMultiReplaceFileContent(
+    parameters: AgentToolCall['parameters'],
+    workspacePath: string | null | undefined,
+    allowFileModifications: boolean | undefined,
+    activeSkillGuidelines: string,
+  ): Promise<ToolExecutionResult> {
+    if (allowFileModifications === false) {
+      return { outputForHistory: 'Direct file modification disabled in Settings.', logMessage: 'File modification disabled in settings' }
+    }
+    return executeMultiReplaceFileContentTool(
+      parameters,
+      workspacePath,
+      activeSkillGuidelines,
+      this.dependencies.skillAdherence!,
+      this.dependencies.buildSkillRefusal!,
+      this.dependencies.multiReplaceFile!,
+      this.dependencies.journal,
+      this.dependencies.buildChangeStats,
+    )
+  }
 
   async executeDeleteFile(
     parameters: AgentToolCall['parameters'],

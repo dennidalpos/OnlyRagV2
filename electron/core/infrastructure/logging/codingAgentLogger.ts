@@ -3,6 +3,7 @@ import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import { sanitizeLogMessage } from '../../../logRedactor'
+import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
 
 /** Below this, eliding a shared prefix costs more in explanation than it saves. */
 const MIN_ELIDABLE_PREFIX_CHARS = 400
@@ -25,6 +26,7 @@ export class CodingAgentLogger {
    * the log forward, which is how a session log is read anyway.
    */
   private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
+  private runMetricsBySession = new Map<string, AgentRunMetrics>()
 
   constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
     const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
@@ -113,6 +115,15 @@ export class CodingAgentLogger {
     } catch (err: any) {
       console.error('CodingAgentLogger rotation failed:', err)
     }
+  }
+
+  private metricsFor(sessionId: string): AgentRunMetrics {
+    let metrics = this.runMetricsBySession.get(sessionId)
+    if (!metrics) {
+      metrics = new AgentRunMetrics(sessionId)
+      this.runMetricsBySession.set(sessionId, metrics)
+    }
+    return metrics
   }
 
   private cleanupRetainedFiles(): void {
@@ -266,6 +277,7 @@ ${rawResponse}
     parameters: Record<string, any>,
     explanation?: string
   ): void {
+    this.metricsFor(sessionId).recordToolCall()
     const content = `Session ID: ${sessionId} | Step: ${step}
 Invoked Tool: ${tool}
 Explanation: ${explanation || 'None provided'}
@@ -282,6 +294,11 @@ ${JSON.stringify(parameters, null, 2)}`
     isTerminal?: boolean,
     terminalDetail?: string
   ): void {
+    if (tool === 'unparsed_tool' || tool === 'no_tool_detected' || result.includes('[TOOL PARSER REJECTION DIAGNOSTIC]')) {
+      this.metricsFor(sessionId).recordInvalidTool()
+    }
+    const succeeded = !/\[TERMINAL AUTO-HEALING DIAGNOSTICS LOG\]|Security Violation|\[POLICY BLOCK\]|^Error:/i.test(result || '')
+    this.metricsFor(sessionId).recordToolResult(succeeded, result, tool)
     const content = `Session ID: ${sessionId} | Step: ${step} | Tool: ${tool} | IsTerminal: ${Boolean(isTerminal)}
 Execution Result:
 \`\`\`
@@ -308,6 +325,9 @@ ${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` :
     toStatus: string,
     cause: string
   ): void {
+    if (toStatus.toLowerCase() === 'verified' && !/build|test|typecheck|lint|run_tests/i.test(cause)) {
+      this.metricsFor(sessionId).recordFalseVerified()
+    }
     const content = `Session ID: ${sessionId} | Step: ${step}
 Milestone: ${milestoneId} — ${milestoneTitle}
 Transition: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}
@@ -361,14 +381,19 @@ ${interventionMessage}
     // The anchor exists only to elide repeated prompt text within one live session; keeping
     // it after the session ends would leak a full prompt per session for the process lifetime.
     this.previousPromptBySession.delete(sessionId)
+    const metrics = this.metricsFor(sessionId)
+    metrics.recordTaskOutcome(success)
     const content = `Session ID: ${sessionId}
 Status: ${success ? 'COMPLETED' : 'STOPPED/FAILED'}
 Total Steps: ${totalSteps}
+Run Metrics:
+${JSON.stringify(metrics.snapshot(), null, 2)}
 Final Summary:
 """
 ${summary}
 """`
     this.writeEntry(`[AGENT SESSION END] Session: ${sessionId}`, content)
+    this.runMetricsBySession.delete(sessionId)
   }
 }
 

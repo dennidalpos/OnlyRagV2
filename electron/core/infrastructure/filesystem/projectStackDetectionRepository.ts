@@ -12,13 +12,18 @@ export class ProjectStackDetectionRepository {
       // 1. package.json inspection
       const pkgPath = path.join(workspacePath, 'package.json')
       if (fs.existsSync(pkgPath)) {
-        const raw = fs.readFileSync(pkgPath, 'utf-8')
-        const pkg = JSON.parse(raw)
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies }
-        for (const dep of Object.keys(deps)) {
-          const clean = dep.replace(/^@[\w-]+\//, '').toLowerCase()
-          stack.add(clean)
-          stack.add(dep.toLowerCase())
+        try {
+          const raw = fs.readFileSync(pkgPath, 'utf-8')
+          const pkg = JSON.parse(raw)
+          const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+          for (const dep of Object.keys(deps)) {
+            const clean = dep.replace(/^@[\w-]+\//, '').toLowerCase()
+            stack.add(clean)
+            stack.add(dep.toLowerCase())
+          }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err)
+          logger.log('WARN', 'ProjectStackDetectionRepo', `Failed extracting package.json stack: ${message}`)
         }
       }
 
@@ -49,8 +54,9 @@ export class ProjectStackDetectionRepository {
         stack.add('go')
         stack.add('golang')
       }
-    } catch (err: any) {
-      logger.log('WARN', 'ProjectStackDetectionRepo', `Failed extracting project stack: ${err.message}`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.log('WARN', 'ProjectStackDetectionRepo', `Failed extracting project stack: ${message}`)
     }
 
     return Array.from(stack)

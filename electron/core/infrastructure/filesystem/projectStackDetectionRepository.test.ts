@@ -54,7 +54,6 @@ describe('ProjectStackDetectionRepository Unit Tests', () => {
     fs.writeFileSync(path.join(tempDir, 'package.json'), '{ not valid json', 'utf-8')
     fs.writeFileSync(path.join(tempDir, 'go.mod'), 'module x\n', 'utf-8')
     expect(() => repo.detect(tempDir)).not.toThrow()
-    // A parse failure aborts the whole try block, so even the sibling go.mod check is skipped.
-    expect(repo.detect(tempDir)).toEqual([])
+    expect(repo.detect(tempDir)).toEqual(expect.arrayContaining(['go', 'golang']))
   })
 })

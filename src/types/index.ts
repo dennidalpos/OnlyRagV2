@@ -242,7 +242,7 @@ export interface AppSettings {
   hasCompletedInitialSetup?: boolean
   // Skill Hub Auto-Discovery & On-Demand Installation
   enableSkillRouter?: boolean // Default: true. Set false to completely disable skill injection.
-  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  autoInstallHubSkills?: 'disabled' | 'prompt'
   autoInstallMinScore?: number
   // Internationalization
   language?: 'it' | 'en'

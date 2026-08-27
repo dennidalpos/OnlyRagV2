@@ -19,7 +19,7 @@ import type { SkillInstallCandidate } from './skillInstallApprovalService'
 /** Options driving the contextual skill router and the hub auto-install policy. */
 export interface SkillMatchingOptions {
   enableSkillRouter?: boolean
-  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  autoInstallHubSkills?: 'disabled' | 'prompt'
   autoInstallMinScore?: number
   /** Asks the user to confirm an install; required by the 'prompt' policy. */
   onConfirmInstall?: (candidate: SkillInstallCandidate) => Promise<boolean>
@@ -334,7 +334,7 @@ export class SkillAppService {
    */
   private async confirmHubInstall(
     hubMatch: { item: HubSkillItem; score: number },
-    autoInstallMode: 'disabled' | 'prompt' | 'auto',
+    autoInstallMode: 'disabled' | 'prompt',
     onConfirmInstall?: SkillMatchingOptions['onConfirmInstall']
   ): Promise<boolean> {
     if (autoInstallMode !== 'prompt') return true

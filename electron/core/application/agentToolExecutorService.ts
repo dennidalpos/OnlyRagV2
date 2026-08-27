@@ -1,16 +1,18 @@
-import os from 'node:os'
 import { workspaceAppService } from './workspaceAppService'
+import { FsToolService } from './fsToolService'
+import { ProcessToolService } from './processToolService'
+import { WebToolService } from './webToolService'
+import { RecoveryToolService } from './recoveryToolService'
+import { BrowserToolService } from './browserToolService'
 import path from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { shell } from 'electron'
 import { logger } from '../../diagnostics'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
-import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
-import { sanitizePowerShellCommand } from '../domain/agent/shellStreamGuard'
 import { webClient } from '../infrastructure/http/webClient'
 import { declaredDependencies, findVersionReality, buildVersionRealityDirective } from '../domain/agent/dependencyVersionReality'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
@@ -26,7 +28,6 @@ import { buildDiagnosticFixDirective, buildDeferredDiagnosticNote } from '../dom
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { classifyModuleDiagnostic, unresolvedPackages, buildModuleResolutionDirective } from '../domain/agent/moduleResolutionDiagnostic'
 import { npmResolutionDirectiveFor } from '../domain/agent/npmResolutionConflict'
-import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer'
 import { computeLineDiff, countDiffLines } from '../domain/agent/diffEngine'
 import { reconcileApprovedHunks } from '../domain/agent/tools/fs/hunkApproval'
 import { executeFileInfoTool } from '../domain/agent/tools/fs/fileInfoTool'
@@ -45,22 +46,16 @@ import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
 import { buildSkillAdherenceRefusal, validateSkillAdherence } from '../domain/skills/skillAdherenceValidator'
 import { workspaceIncrementalTypecheck } from '../infrastructure/process/workspaceIncrementalTypecheck'
-import {
-  DEV_TOOL_ALLOWLIST,
-  buildInstallCommand,
-  findToolDefinition,
-  formatToolchainInventory,
-  resolveInstallTarget,
-  type DevToolStatus,
-} from '../domain/agent/devToolchain'
-import { probeDevTool, probeToolchain } from '../domain/agent/tools/execution/devToolchainTools'
+import { type DevToolStatus } from '../domain/agent/devToolchain'
+import { probeToolchain } from '../domain/agent/tools/execution/devToolchainTools'
 import { executeRunTestsTool } from './runTestsTool'
 import type { AppSettings } from '../../../src/types'
 import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
-import type { Capability, CapabilityOperation } from '../domain/agent/capabilityPolicyContract'
+import { authorizeAndPersistNetworkApproved } from '../domain/agent/networkApprovedPolicy'
+import type { Capability, CapabilityConsent, CapabilityOperation } from '../domain/agent/capabilityPolicyContract'
+import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
 import {
-  INSTALL_COMMAND_TIMEOUT_MS,
   findAlreadyInstalledPackages,
   isBlockingDevServerCommand,
   isLongRunningCommand,
@@ -73,11 +68,44 @@ export class AgentToolExecutorService {
   private repo = new FileSystemRepository()
   private journal = new AtomicWorkspaceJournal()
   private shellSessions = new Map<string, PersistentPowerShellSession>()
+  private fsToolService: FsToolService
+  private processToolService: ProcessToolService
+  private webToolService: WebToolService
+  private recoveryToolService: RecoveryToolService
+  private browserToolService: BrowserToolService
   /** Packages whose registry facts have already been delivered; see versionRealityDirective. */
   private reportedVersionFacts = new Set<string>()
 
-  private offlinePolicyBlock(parsedTool: AgentToolCall, workspacePath: string | null | undefined, settings: AppSettings): ToolExecutionResult | null {
-    if (!settings.capabilityPolicyMode || !['offline-strict', 'local-only'].includes(settings.capabilityPolicyMode)) return null
+  constructor(private readonly policyAuditRepository = new CapabilityPolicyAuditRepository()) {
+    this.fsToolService = new FsToolService({
+      repository: workspaceAppService,
+      searchRepository: workspaceAppService,
+      directoryRepository: agentToolFileRepository,
+      journal: this.journal,
+      readContent: (absolutePath) => this.readContentSafely(absolutePath),
+      buildChangeStats: (filePath, before, after) => this.buildChangeStats(filePath, before, after),
+    })
+    this.processToolService = new ProcessToolService({
+      getShellSession: (workspace) => this.getOrCreateShellSession(workspace),
+      probeToolchain: () => this.probeToolchain(),
+    })
+    this.webToolService = new WebToolService({ recordBeforeModification: (filePath) => this.journal.recordBeforeModification(filePath) })
+    this.recoveryToolService = new RecoveryToolService(this.journal)
+    this.browserToolService = new BrowserToolService({
+      openExternal: (url) => shell.openExternal(url),
+      openPath: (filePath) => shell.openPath(filePath),
+      exists: (filePath) => documentIoRepository.exists(filePath),
+    })
+  }
+
+  private async policyBlock(
+    parsedTool: AgentToolCall,
+    workspacePath: string | null | undefined,
+    settings: AppSettings,
+    consent: CapabilityConsent,
+    sessionId: string,
+  ): Promise<ToolExecutionResult | null> {
+    if (!settings.capabilityPolicyMode) return null
 
     const networkTool = ({
       web_search: ['http-download', 'connect', parsedTool.parameters.query],
@@ -91,18 +119,20 @@ export class AgentToolExecutorService {
     if (!networkTool) return null
     const [capability, operation, target] = networkTool
     const request = {
-      sessionId: 'agent-execution',
+      sessionId,
       toolName: parsedTool.tool,
       capability,
       operation,
       mode: settings.capabilityPolicyMode,
       workspaceRoot: workspacePath || 'standalone',
       target: target ? String(target) : undefined,
-      consent: { requested: false, granted: false },
+      consent,
     } as const
-    const policy = settings.capabilityPolicyMode === 'local-only'
-      ? authorizeLocalOnly(request)
-      : authorizeOfflineStrict(request)
+    const policy = settings.capabilityPolicyMode === 'network-approved'
+      ? await authorizeAndPersistNetworkApproved(request, this.policyAuditRepository)
+      : settings.capabilityPolicyMode === 'local-only'
+        ? authorizeLocalOnly(request)
+        : authorizeOfflineStrict(request)
     if (policy.allowed) return null
 
     return {
@@ -117,7 +147,7 @@ export class AgentToolExecutorService {
   }
 
   public rollbackJournal(): RollbackResult {
-    return this.journal.rollbackAll()
+    return this.recoveryToolService.rollbackWorkspace()
   }
 
   /** Marks the end of the current agent step so its file changes become undoable via the rollback_last_step tool. */
@@ -308,11 +338,13 @@ export class AgentToolExecutorService {
     onTerminalOutput?: (data: string) => void,
     onProcessSpawned?: (proc: ChildProcess) => void,
     activeSkillGuidelines: string = '',
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    policyConsent: CapabilityConsent = { requested: false, granted: false },
+    policySessionId: string = 'agent-execution',
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
 
-    const policyBlock = this.offlinePolicyBlock(parsedTool, workspacePath, settings)
+    const policyBlock = await this.policyBlock(parsedTool, workspacePath, settings, policyConsent, policySessionId)
     if (policyBlock) return policyBlock
 
     switch (tool) {
@@ -329,152 +361,22 @@ export class AgentToolExecutorService {
       }
 
       case 'inspect_os_env': {
-        // Host facts plus the development toolchain inventory: which of node/npm/pnpm/git/
-        // python are actually present and at what version. Without this the model had to
-        // guess, and typically discovered a missing toolchain only by watching a command fail.
-        const hostLine = `Guest OS Environment: ${os.platform()} ${os.arch()} | CPUs: ${os.cpus().length} (${os.cpus()[0]?.model || ''}) | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB`
-        const toolchain = formatToolchainInventory(this.probeToolchain())
-        const outStr = `${hostLine}
-
-${toolchain}`
-        return {
-          outputForHistory: outStr,
-          logMessage: 'Guest OS Environment & Toolchain Inventory',
-          logDetail: outStr,
-        }
+        return this.processToolService.inspectOsEnvironment()
       }
 
       case 'ensure_tool': {
-        const requested = String(parameters.toolName || parameters.tool || parameters.name || '').trim()
-        const definition = findToolDefinition(requested)
-        if (!definition) {
-          const allowed = DEV_TOOL_ALLOWLIST.map((t) => t.id).join(', ')
-          return {
-            outputForHistory: `[ENSURE_TOOL REJECTED] '${requested || '(empty)'}' is not an installable development tool. Allowed: ${allowed}. Installing anything else is not permitted — ask the user instead.`,
-            logMessage: `ensure_tool rejected: '${requested}' is not allow-listed`,
-            isTerminal: true,
-          }
-        }
-
-        const status = probeDevTool(definition.id, (binary, versionArgs) => devToolProbeRepository.probeVersion(binary, versionArgs))
-        if (status.installed) {
-          return {
-            outputForHistory: `${definition.displayName} is already installed (version ${status.version}). No installation performed.`,
-            logMessage: `${definition.displayName} already present (${status.version})`,
-            isTerminal: true,
-          }
-        }
-
-        if (settings.allowTerminalExecution === false) {
-          return {
-            outputForHistory: `${definition.displayName} is missing, but terminal execution is disabled in Settings so it cannot be installed. Ask the user to install it manually.`,
-            logMessage: 'ensure_tool blocked: terminal execution disabled',
-            isTerminal: true,
-          }
-        }
-
-        const installTarget = resolveInstallTarget(definition.id)
-        const installCmd = buildInstallCommand(definition.id)
-        if (!installTarget || !installCmd) {
-          return {
-            outputForHistory: `[ENSURE_TOOL ERROR] No installation package is registered for '${definition.id}'.`,
-            logMessage: `ensure_tool: no package for ${definition.id}`,
-            isTerminal: true,
-          }
-        }
-
-        if (process.platform !== 'win32') {
-          return {
-            outputForHistory: `[ENSURE_TOOL UNSUPPORTED] Automatic installation is only implemented for Windows (winget). Install ${definition.displayName} manually, then continue.`,
-            logMessage: 'ensure_tool: unsupported platform',
-            isTerminal: true,
-          }
-        }
-
-        logger.log('INFO', 'AgentToolExecutor', `[ENSURE_TOOL] Installing ${installTarget.displayName} via winget (${installTarget.wingetId})`)
-        try {
-          const shell = this.getOrCreateShellSession(workspacePath)
-          const res = await shell.execute(
-            installCmd,
-            (chunk) => {
-              if (onTerminalOutput) onTerminalOutput(chunk.trim())
-            },
-            onProcessSpawned,
-            INSTALL_COMMAND_TIMEOUT_MS,
-            signal
-          )
-
-          // A fresh install lands on PATH only for processes started afterwards: without
-          // this refresh the tool stays invisible to the very session that installed it.
-          shell.refreshEnvironmentPath()
-
-          const verified = probeDevTool(definition.id, (binary, versionArgs) => devToolProbeRepository.probeVersion(binary, versionArgs))
-          if (verified.installed) {
-            logger.log('INFO', 'AgentToolExecutor', `[ENSURE_TOOL] ${definition.displayName} installed: ${verified.version}`)
-            return {
-              outputForHistory: `Successfully installed ${installTarget.displayName}. ${definition.displayName} is now available (version ${verified.version}). PATH refreshed for this session.`,
-              logMessage: `Installed ${installTarget.displayName} (${definition.id} ${verified.version})`,
-              logDetail: installCmd,
-              isTerminal: true,
-            }
-          }
-
-          const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)
-          return {
-            outputForHistory: `[ENSURE_TOOL INSTALL FAILED]
-Command: "${installCmd}"
-${definition.displayName} is still not detectable after installation.
-Output:
-${rawOutput.slice(0, 2000)}
-
-Do not retry the same installation. Continue without this tool or ask the user to install it manually.`,
-            logMessage: `ensure_tool: ${definition.displayName} still missing after install`,
-            logDetail: rawOutput.slice(0, 1000),
-            isTerminal: true,
-          }
-        } catch (err: any) {
-          return {
-            outputForHistory: `[ENSURE_TOOL ERROR] Failed installing ${installTarget.displayName}: ${err.message}`,
-            logMessage: `ensure_tool exception: ${err.message}`,
-            isTerminal: true,
-          }
-        }
+        return this.processToolService.executeEnsureTool(
+          parameters,
+          workspacePath,
+          settings.allowTerminalExecution,
+          signal,
+          onTerminalOutput,
+          onProcessSpawned,
+        )
       }
 
       case 'grep_search': {
-        const query = parameters.query || ''
-        const targetDir = parameters.dirPath || workspacePath || '.'
-        const isRegex = Boolean(parameters.isRegex)
-        const caseInsensitive = parameters.caseInsensitive !== false
-        const pathCheck = validatePathSafety(targetDir, workspacePath)
-
-        if (!pathCheck.safePath) {
-          return {
-            outputForHistory: `Security Violation: ${pathCheck.error}`,
-            logMessage: `Grep Search Rejected: ${pathCheck.error}`,
-          }
-        }
-
-        try {
-          const matches = await this.repo.grepSearch(pathCheck.safePath, query, isRegex, caseInsensitive)
-          if (matches.length === 0) {
-            return {
-              outputForHistory: `Grep search for "${query}" in [${targetDir}] returned 0 matches.`,
-              logMessage: `Grep Search: 0 matches for "${query}"`,
-            }
-          }
-          const formattedMatches = matches.slice(0, 50).map((m) => `${m.relativePath}:${m.lineNumber}: ${m.lineContent}`).join('\n')
-          const summaryStr = `Grep search for "${query}" in [${targetDir}] returned ${matches.length} matches (showing first ${Math.min(matches.length, 50)}):\n${formattedMatches}`
-          return {
-            outputForHistory: summaryStr,
-            logMessage: `Grep Search: ${matches.length} matches for "${query}"`,
-          }
-        } catch (err: any) {
-          return {
-            outputForHistory: `Error executing grep search for "${query}": ${err.message}`,
-            logMessage: `Grep Search Error: ${err.message}`,
-          }
-        }
+        return this.fsToolService.executeGrepSearch(parameters, workspacePath)
       }
 
       case 'web_search': {
@@ -511,76 +413,15 @@ Do not retry the same installation. Continue without this tool or ask the user t
       }
 
       case 'create_directory': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'Directory creation disabled in Settings.', logMessage: 'Directory creation disabled in settings' }
-        }
-        const dirPath = parameters.dirPath || parameters.filePath
-        const pathCheck = validatePathSafety(dirPath, workspacePath)
-        if (!pathCheck.safePath) {
-          return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Create Directory Rejected: ${pathCheck.error}` }
-        }
-        try {
-          agentToolFileRepository.mkdir(pathCheck.safePath)
-          return {
-            outputForHistory: `Successfully created directory ${dirPath}`,
-            logMessage: `Successfully created directory ${path.basename(pathCheck.safePath)}`,
-          }
-        } catch (err: any) {
-          return { outputForHistory: `Error creating directory ${dirPath}: ${err.message}`, logMessage: `Create directory error: ${err.message}` }
-        }
+        return this.fsToolService.executeCreateDirectory(parameters, workspacePath, settings.allowFileModifications)
       }
 
       case 'copy_file': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'File copy disabled in Settings.', logMessage: 'File copy disabled in settings' }
-        }
-        const srcPath = parameters.sourcePath || parameters.filePath
-        const dstPath = parameters.targetPath || parameters.destination
-        const srcCheck = validatePathSafety(srcPath, workspacePath)
-        const dstCheck = validatePathSafety(dstPath, workspacePath)
-
-        if (!srcCheck.safePath || !dstCheck.safePath) {
-          return { outputForHistory: `Security Violation: ${srcCheck.error || dstCheck.error}`, logMessage: `Copy File Rejected: Security Violation` }
-        }
-
-        try {
-          agentToolFileRepository.mkdir(path.dirname(dstCheck.safePath))
-          this.journal.recordBeforeModification(dstCheck.safePath)
-          agentToolFileRepository.copyFileRaw(srcCheck.safePath, dstCheck.safePath)
-          return {
-            outputForHistory: `Successfully copied file from ${srcPath} to ${dstPath}`,
-            logMessage: `Successfully copied ${path.basename(srcCheck.safePath)} -> ${path.basename(dstCheck.safePath)}`,
-          }
-        } catch (err: any) {
-          return { outputForHistory: `Error copying file from ${srcPath} to ${dstPath}: ${err.message}`, logMessage: `Copy file error: ${err.message}` }
-        }
+        return this.fsToolService.executeCopyFile(parameters, workspacePath, settings.allowFileModifications)
       }
 
       case 'move_file': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'File move/rename disabled in Settings.', logMessage: 'File move disabled in settings' }
-        }
-        const srcPath = parameters.sourcePath || parameters.filePath
-        const dstPath = parameters.targetPath || parameters.destination
-        const srcCheck = validatePathSafety(srcPath, workspacePath)
-        const dstCheck = validatePathSafety(dstPath, workspacePath)
-
-        if (!srcCheck.safePath || !dstCheck.safePath) {
-          return { outputForHistory: `Security Violation: ${srcCheck.error || dstCheck.error}`, logMessage: `Move File Rejected: Security Violation` }
-        }
-
-        try {
-          agentToolFileRepository.mkdir(path.dirname(dstCheck.safePath))
-          this.journal.recordBeforeModification(srcCheck.safePath)
-          this.journal.recordBeforeModification(dstCheck.safePath)
-          agentToolFileRepository.renameRaw(srcCheck.safePath, dstCheck.safePath)
-          return {
-            outputForHistory: `Successfully moved file from ${srcPath} to ${dstPath}`,
-            logMessage: `Successfully moved ${path.basename(srcCheck.safePath)} -> ${path.basename(dstCheck.safePath)}`,
-          }
-        } catch (err: any) {
-          return { outputForHistory: `Error moving file from ${srcPath} to ${dstPath}: ${err.message}`, logMessage: `Move file error: ${err.message}` }
-        }
+        return this.fsToolService.executeMoveFile(parameters, workspacePath, settings.allowFileModifications)
       }
 
       case 'list_files_recursive': {
@@ -633,54 +474,11 @@ Do not retry the same installation. Continue without this tool or ask the user t
       }
 
       case 'delete_file': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'Direct file deletion disabled in Settings.', logMessage: 'File deletion disabled in settings' }
-        }
-        const filePath = parameters.filePath
-        const pathCheck = validatePathSafety(filePath, workspacePath)
-        if (!pathCheck.safePath) {
-          return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Delete File Rejected: ${pathCheck.error}` }
-        }
-        if (filePath) {
-          const beforeContent = this.readContentSafely(pathCheck.safePath)
-          this.journal.recordBeforeModification(pathCheck.safePath)
-          // Routed through workspaceAppService, not the repository directly: that is what
-          // broadcasts `workspace:file-deleted`, which the renderer uses to close the deleted
-          // file's editor tab and drop it from the pinned set (purgeFileReferences in
-          // useCodingAgent). Deleting straight through the repository left those references
-          // pointing at a file that no longer existed.
-          const res = await workspaceAppService.deleteFile(pathCheck.safePath)
-          if (res.success) {
-            return {
-              outputForHistory: `Successfully deleted file ${filePath}`,
-              logMessage: `Successfully deleted file ${path.basename(filePath)}`,
-              changeStats: this.buildChangeStats(pathCheck.safePath, beforeContent, ''),
-            }
-          }
-          return { outputForHistory: `Error deleting file ${filePath}: ${res.error}`, logMessage: `Error deleting file: ${res.error}` }
-        }
-        return { outputForHistory: 'Missing file path for deletion', logMessage: 'Missing delete parameter' }
+        return this.fsToolService.executeDeleteFile(parameters, workspacePath, settings.allowFileModifications)
       }
 
       case 'download_file': {
-        if (settings.allowFileModifications === false) {
-          return { outputForHistory: 'Direct file download disabled in Settings.', logMessage: 'File download disabled in settings' }
-        }
-        const url = parameters.url
-        const filePath = parameters.filePath
-        const pathCheck = validatePathSafety(filePath, workspacePath)
-        if (!pathCheck.safePath) {
-          return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Download File Rejected: ${pathCheck.error}` }
-        }
-        if (url && filePath) {
-          this.journal.recordBeforeModification(pathCheck.safePath)
-          const dlRes = await webClient.downloadFile(url, pathCheck.safePath, workspacePath, signal)
-          if (dlRes.success) {
-            return { outputForHistory: `Successfully downloaded ${dlRes.downloadedBytes} bytes from ${url} to ${filePath}`, logMessage: `Successfully downloaded ${dlRes.downloadedBytes} bytes to ${path.basename(filePath)}` }
-          }
-          return { outputForHistory: `Download failed from ${url}: ${dlRes.error}`, logMessage: `Download File Failed: ${dlRes.error}` }
-        }
-        return { outputForHistory: 'Missing URL or file path for download', logMessage: 'Missing download parameters' }
+        return this.webToolService.executeDownloadFile(parameters, workspacePath, settings.allowFileModifications, signal)
       }
 
       case 'run_command': {
@@ -843,38 +641,18 @@ Do not retry the same installation. Continue without this tool or ask the user t
           }
         }
 
-        const secCheck = checkCommandSecurity(cmd)
-        if (!secCheck.isAllowed) {
-          const blockFeedback = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${cmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason}\nDirective: Refrain from executing dangerous commands.`
-          return { outputForHistory: blockFeedback, logMessage: `[SECURITY BLOCK] Forbidden command: "${cmd}"`, isTerminal: true }
-        }
+        const execution = await this.processToolService.executeRunCommand(
+          cmd,
+          workspacePath,
+          parameters.timeoutSeconds,
+          signal,
+          onTerminalOutput,
+          onProcessSpawned,
+        )
+        if (!('result' in execution)) return execution
 
-        let execCmd = secCheck.sanitizedCommand
-        if (process.platform === 'win32') {
-          execCmd = sanitizePowerShellCommand(execCmd)
-        }
-        const COMMAND_TIMEOUT_MS = resolveCommandTimeoutMs(cmd, parameters.timeoutSeconds)
-
-        try {
-          const shell = this.getOrCreateShellSession(workspacePath)
-          const res = await shell.execute(
-            execCmd,
-            (chunk) => {
-              if (onTerminalOutput) onTerminalOutput(chunk.trim())
-            },
-            onProcessSpawned,
-            COMMAND_TIMEOUT_MS,
-            signal
-          )
-
-          const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)
-          const lowerOut = rawOutput.toLowerCase()
-          const isCancelled =
-            lowerOut.includes('operation cancelled') ||
-            lowerOut.includes('operation canceled') ||
-            lowerOut.includes('user cancelled') ||
-            lowerOut.includes('user canceled') ||
-            lowerOut.includes('aborted')
+        const { result: res, rawOutput, isCancelled, isFailure } = execution
+        const lowerOut = rawOutput.toLowerCase()
 
           // Failure is decided by the process's own exit status, not by scanning its output
           // for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and
@@ -882,8 +660,6 @@ Do not retry the same installation. Continue without this tool or ask the user t
           // (persistentPowerShellSession combines $LASTEXITCODE with $? so pure-PowerShell
           // failures are reported too.) Cancellation is kept: an interactive generator that
           // aborts can still exit 0.
-          const isFailure = res.code !== 0 || Boolean(res.timedOut) || isCancelled
-
           if (isFailure) {
             const isEperm = lowerOut.includes('eperm') || lowerOut.includes('eacces') || lowerOut.includes('operation not permitted') || lowerOut.includes('permission denied')
             const permsDirective = isEperm
@@ -1016,14 +792,6 @@ ${healingTail}`
             logDetail: rawOutput.slice(0, 1000),
             isTerminal: true,
           }
-        } catch (err: any) {
-          const errorFeedback = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nFailed executing command "${cmd}": ${err.message}`
-          return {
-            outputForHistory: errorFeedback,
-            logMessage: `Terminal Execution Exception: ${err.message}`,
-            isTerminal: true,
-          }
-        }
       }
 
       case 'run_tests': {
@@ -1057,29 +825,11 @@ ${healingTail}`
       }
 
       case 'rollback_workspace': {
-        const result = this.rollbackJournal()
-        const summary = `[ATOMIC WORKSPACE ROLLBACK EXECUTED]\nRestored: ${result.restoredCount} file(s).\n` +
-          (result.errors.length > 0 ? `Errors: ${result.errors.join('; ')}` : 'All journaled modifications successfully reverted to pre-session state.')
-        return {
-          outputForHistory: summary,
-          logMessage: `Workspace Rollback: ${result.restoredCount} files restored`,
-        }
+        return this.recoveryToolService.executeRollbackWorkspace()
       }
 
       case 'rollback_last_step': {
-        if (!this.journal.canRollbackLastStep) {
-          return {
-            outputForHistory: '[ROLLBACK LAST STEP] Nothing to undo: the previous step made no file changes, or there is no completed step yet.',
-            logMessage: 'Rollback Last Step: nothing to undo',
-          }
-        }
-        const result = this.journal.rollbackLastStep()
-        const summary = `[LAST STEP ROLLBACK EXECUTED]\nRestored: ${result.restoredCount} file(s) to their state before the previous step.\n` +
-          (result.errors.length > 0 ? `Errors: ${result.errors.join('; ')}` : 'Only the previous step\'s changes were reverted; earlier steps in this session are untouched.')
-        return {
-          outputForHistory: summary,
-          logMessage: `Rollback Last Step: ${result.restoredCount} files restored`,
-        }
+        return this.recoveryToolService.executeRollbackLastStep()
       }
 
       case 'get_file_info': {
@@ -1087,62 +837,7 @@ ${healingTail}`
       }
 
       case 'open_in_browser': {
-        const filePath = parameters.filePath || parameters.path
-        const url = parameters.url
-
-        if (!filePath && !url) {
-          return {
-            outputForHistory: 'Error: missing "filePath" or "url" parameter to open in browser.',
-            logMessage: 'Open in browser: missing parameter',
-          }
-        }
-
-        try {
-          if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-            await shell.openExternal(url)
-            return {
-              outputForHistory: `Successfully opened URL in default web browser: ${url}`,
-              logMessage: `Opened URL in browser: ${url}`,
-            }
-          }
-
-          if (filePath) {
-            const pathCheck = validatePathSafety(filePath, workspacePath)
-            if (!pathCheck.safePath) {
-              return {
-                outputForHistory: `Security Violation: ${pathCheck.error}`,
-                logMessage: `Open in Browser Rejected: ${pathCheck.error}`,
-              }
-            }
-            if (!documentIoRepository.exists(pathCheck.safePath)) {
-              return {
-                outputForHistory: `Error: File not found to open: ${filePath}`,
-                logMessage: `File not found: ${filePath}`,
-              }
-            }
-            const openError = await shell.openPath(pathCheck.safePath)
-            if (openError) {
-              return {
-                outputForHistory: `Error opening ${filePath} in default system application: ${openError}`,
-                logMessage: `Failed to open ${filePath}: ${openError}`,
-              }
-            }
-            return {
-              outputForHistory: `Successfully opened ${filePath} in default web browser / viewer.`,
-              logMessage: `Opened ${path.basename(filePath)} in browser`,
-            }
-          }
-
-          return {
-            outputForHistory: 'Error: invalid target for open_in_browser.',
-            logMessage: 'Invalid open_in_browser target',
-          }
-        } catch (err: any) {
-          return {
-            outputForHistory: `Error opening in browser: ${err.message}`,
-            logMessage: `Browser open error: ${err.message}`,
-          }
-        }
+        return this.browserToolService.executeOpenInBrowser(parameters, workspacePath)
       }
 
       case 'ask': {

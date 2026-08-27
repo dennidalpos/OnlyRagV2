@@ -15,7 +15,8 @@ import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
 import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
-import { resolvePrimaryVerificationCommand } from '../domain/agent/projectVerificationResolver'
+import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
 import { agentToolFileRepository } from '../infrastructure/filesystem/agentToolFileRepository'
 import { scanUndeclaredImports } from '../infrastructure/filesystem/undeclaredImportScanner'
@@ -442,7 +443,8 @@ export function resolvePlanDirectiveForTurn(
 
   const probe = createWorkspaceDeliverableProbe(workspacePath)
   const manifest = readWorkspaceManifest(workspacePath)
-  const verification = resolvePrimaryVerificationCommand(manifest)
+  const profile = discoverProjectProfile(workspacePath)
+  const verification = resolvePrimaryProfileVerificationTargets(profile)[0] ?? null
   const declared = Object.keys({
     ...(manifest.packageJson?.dependencies ?? {}),
     ...(manifest.packageJson?.devDependencies ?? {}),

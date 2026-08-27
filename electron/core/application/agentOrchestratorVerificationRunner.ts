@@ -12,10 +12,11 @@
 
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'
-import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { scanWorkspaceDependencies } from '../infrastructure/filesystem/dependencyScanner'
 import { evaluateDependencyIntegrity } from '../domain/agent/dependencyIntegrityGate'
-import { resolvePrimaryVerificationCommand } from '../domain/agent/projectVerificationResolver'
+import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import { classifyProjectVerification, type ProjectVerificationStatus } from '../domain/agent/projectVerificationStatus'
 
 /** Long enough for a cold `npm run build` on a small project, short enough to not hang a turn. */
 const VERIFICATION_TIMEOUT_MS = 180_000
@@ -24,6 +25,8 @@ const OUTPUT_TAIL_CHARS = 2000
 export interface VerificationRunResult {
   /** False when the project offers no command capable of proving it works. */
   hasVerificationCommand: boolean
+  /** Explicit evidence state; missing checks are never reported as verified. */
+  status: ProjectVerificationStatus
   /** Undefined when nothing could be run. */
   passed?: boolean
   command?: string
@@ -35,10 +38,11 @@ export async function runProjectVerification(
   workspacePath: string | null,
   onOutput?: (chunk: string) => void
 ): Promise<VerificationRunResult> {
-  if (!workspacePath) return { hasVerificationCommand: false }
+  if (!workspacePath) return { hasVerificationCommand: false, status: 'unverifiable' }
 
-  const manifest = readWorkspaceManifest(workspacePath)
-  const verification = resolvePrimaryVerificationCommand(manifest)
+  const profile = discoverProjectProfile(workspacePath)
+  const verifications = resolvePrimaryProfileVerificationTargets(profile)
+  const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
 
   // Checked first: an undeclared import is a build failure whose cause is already known, and
   // saying which package and which file beats making the model infer it from a compiler error.
@@ -46,44 +50,52 @@ export async function runProjectVerification(
   if (scan.scanned) {
     const integrity = evaluateDependencyIntegrity(scan.missing, workspacePath)
     if (!integrity.ok) {
-      return {
+      const result: VerificationRunResult = {
         hasVerificationCommand: true,
         passed: false,
-        command: verification?.command ?? 'dependency integrity scan',
+        status: 'failed',
+        command: verificationLabel || 'dependency integrity scan',
         failureDetail: integrity.directive,
       }
+      return { ...result, status: classifyProjectVerification(result) }
     }
   }
 
-  if (!verification) return { hasVerificationCommand: false }
+  if (verifications.length === 0) return { hasVerificationCommand: false, status: 'unverifiable' }
 
-  const security = checkCommandSecurity(verification.command)
-  if (!security.isAllowed) {
-    return {
-      hasVerificationCommand: true,
-      passed: false,
-      command: verification.command,
-      failureDetail: `Verification command blocked by security policy: ${security.blockedReason}`,
+  for (const verification of verifications) {
+    const security = checkCommandSecurity(verification.command)
+    if (!security.isAllowed) {
+      const result: VerificationRunResult = {
+        hasVerificationCommand: true,
+        passed: false,
+        status: 'failed',
+        command: verificationLabel,
+        failureDetail: `Verification command blocked for project ${verification.projectRelativePath}: ${security.blockedReason}`,
+      }
+      return { ...result, status: classifyProjectVerification(result) }
+    }
+
+    const shell = agentToolExecutorService.getOrCreateShellSession(verification.projectRootPath)
+    const res = await shell.execute(
+      security.sanitizedCommand,
+      (chunk) => onOutput?.(chunk.trim()),
+      undefined,
+      VERIFICATION_TIMEOUT_MS
+    )
+    if (res.code !== 0 || res.timedOut) {
+      const result: VerificationRunResult = {
+        hasVerificationCommand: true,
+        passed: false,
+        status: 'failed',
+        command: verificationLabel,
+        failureDetail: `Project: ${verification.projectRelativePath}\nCommand: ${verification.command} (from ${verification.source})\n` +
+          `Exit code: ${res.code}${res.timedOut ? ' (timed out)' : ''}\n` +
+          `${(res.stdout || res.stderr || '').trim().slice(-OUTPUT_TAIL_CHARS)}`,
+      }
+      return { ...result, status: classifyProjectVerification(result) }
     }
   }
 
-  const shell = agentToolExecutorService.getOrCreateShellSession(workspacePath)
-  const res = await shell.execute(
-    security.sanitizedCommand,
-    (chunk) => onOutput?.(chunk.trim()),
-    undefined,
-    VERIFICATION_TIMEOUT_MS
-  )
-  const passed = res.code === 0 && !res.timedOut
-
-  return {
-    hasVerificationCommand: true,
-    passed,
-    command: verification.command,
-    failureDetail: passed
-      ? undefined
-      : `Command: ${verification.command} (from ${verification.source})\n` +
-        `Exit code: ${res.code}${res.timedOut ? ' (timed out)' : ''}\n` +
-        `${(res.stdout || res.stderr || '').trim().slice(-OUTPUT_TAIL_CHARS)}`,
-  }
+  return { hasVerificationCommand: true, passed: true, status: 'verified', command: verificationLabel }
 }

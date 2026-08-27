@@ -19,7 +19,8 @@ import { resolveModelContextLength } from '../domain/settings/modelContextPrefer
 import { GoalDecompositionPlanner, type PlanMilestone } from '../domain/agent/planAndSolveGraph'
 import { MAX_PLAN_MILESTONES } from '../domain/agent/planMilestoneCapper'
 import { compilePlanFromText, type WorkspaceScaffoldFacts } from '../domain/agent/planCompilation'
-import { resolveVerificationCommands } from '../domain/agent/projectVerificationResolver'
+import { resolvePrimaryProfileVerificationTargets, resolveProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -133,7 +134,8 @@ export interface PlanGenerationResult {
  * declares in package.json may be cited later.
  */
 function buildVerificationCommandsBlock(workspacePath?: string | null): string {
-  const commands = resolveVerificationCommands(readWorkspaceManifest(workspacePath))
+  const profile = workspacePath ? discoverProjectProfile(workspacePath) : null
+  const commands = profile ? resolveProfileVerificationTargets(profile) : []
 
   if (commands.length === 0) {
     return (
@@ -145,7 +147,9 @@ function buildVerificationCommandsBlock(workspacePath?: string | null): string {
     )
   }
 
-  const list = commands.map((c) => `- \`${c.command}\` (${c.kind}, from ${c.source})`).join('\n')
+  const list = commands
+    .map((c) => `- \`${c.command}\` (${c.kind}, project: ${c.projectRelativePath}, from ${c.source})`)
+    .join('\n')
   return (
     '\n\nVERIFICATION COMMANDS AVAILABLE IN THIS PROJECT (resolved from its manifest — this is the COMPLETE list):\n' +
     `${list}\n` +
@@ -227,9 +231,11 @@ export class PlanGenerationAppService {
     const hasExistingProject = manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
     const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt, hasExistingProject)
     const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
+    const profile = req.workspacePath ? discoverProjectProfile(req.workspacePath) : null
+    const verification = profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined
     const milestones = compilePlanFromText(
       planText,
-      resolveVerificationCommands(manifest).find((c) => c.coverage === 'whole-project')?.command,
+      verification,
       resolveScaffoldFacts(req.workspacePath, manifest, hasExistingProject)
     )
     if (milestones.length < parsedMilestones.length) {
@@ -259,7 +265,8 @@ export class PlanGenerationAppService {
     const manifest = readWorkspaceManifest(workspacePath)
     const hasManifest =
       manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
-    const verification = resolveVerificationCommands(manifest).find((c) => c.coverage === 'whole-project')?.command
+    const profile = discoverProjectProfile(workspacePath)
+    const verification = resolvePrimaryProfileVerificationTargets(profile)[0]?.command
     return compilePlanFromText(planText, verification, resolveScaffoldFacts(workspacePath, manifest, hasManifest))
   }
 }

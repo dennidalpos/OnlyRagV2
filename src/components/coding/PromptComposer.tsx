@@ -53,7 +53,7 @@ interface PromptComposerProps {
   maxContextLimit?: number
   isContextHeavy?: boolean
   onCompactContext?: () => void
-  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  autoInstallHubSkills?: 'disabled' | 'prompt'
   onToggleAutoInstallSkills?: () => void
 }
 

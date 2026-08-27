@@ -307,6 +307,7 @@ export async function runAgentOrchestratorLoop(
       episodicCompactor,
       emitLog,
       requestApproval,
+      capabilityPolicyMode: settings.capabilityPolicyMode,
     })
     if (gateResult.outcome === 'denied') continue
     const toolCallForExecution = gateResult.toolCallForExecution
@@ -342,7 +343,10 @@ export async function runAgentOrchestratorLoop(
       (childProc) => {
         session.activeChildProcess = childProc
       },
-      skillsBlock
+      skillsBlock,
+      undefined,
+      gateResult.policyConsent,
+      sessionId,
     )
     agentToolExecutorService.endJournalStep()
 

@@ -15,7 +15,7 @@ interface PromptComposerToolsMenuProps {
   onOpenPromptModal?: () => void
   onOpenDiagnosticsModal?: () => void
   onOpenPromptHistorySearch?: () => void
-  autoInstallHubSkills?: 'disabled' | 'prompt' | 'auto'
+  autoInstallHubSkills?: 'disabled' | 'prompt'
   onToggleAutoInstallSkills?: () => void
 }
 
@@ -203,17 +203,17 @@ export const PromptComposerToolsMenu: React.FC<PromptComposerToolsMenuProps> = (
                     type="button"
                     onClick={onToggleAutoInstallSkills}
                     className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                      autoInstallHubSkills === 'auto'
+                      autoInstallHubSkills === 'prompt'
                         ? 'bg-cyan-500 text-slate-950 shadow-sm'
                         : 'bg-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    {autoInstallHubSkills === 'auto' ? 'ON' : 'OFF'}
+                    {autoInstallHubSkills === 'prompt' ? 'ON' : 'OFF'}
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-tight">
-                  {autoInstallHubSkills === 'auto'
-                    ? 'Installa e carica automaticamente le skill utili durante i task.'
+                  {autoInstallHubSkills === 'prompt'
+                    ? 'Propone le skill utili durante i task e richiede conferma prima di installarle.'
                     : 'Auto-discovery delle skill disattivato.'}
                 </p>
               </div>

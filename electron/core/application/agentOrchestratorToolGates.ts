@@ -4,6 +4,7 @@ import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
+import { shellCommandHasEgress } from '../domain/agent/offlineStrictPolicy'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
@@ -25,11 +26,12 @@ export interface ToolGateContext {
   episodicCompactor: EpisodicMemoryCompactor
   emitLog: EmitLog
   requestApproval: RequestApproval
+  capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
 }
 
 export type ToolGateResult =
   | { outcome: 'denied' }
-  | { outcome: 'allowed'; toolCallForExecution: AgentToolCall }
+  | { outcome: 'allowed'; toolCallForExecution: AgentToolCall; policyConsent?: { requested: boolean; granted: boolean; consentId: string } }
 
 const MUTATING_TOOLS_REQUIRING_ASK_APPROVAL = [
   'run_command',
@@ -72,6 +74,31 @@ function approvalTypeForTool(tool: string): string {
   if (tool === 'multi_replace_file_content') return 'multi_replace'
   if (tool === 'replace_file_content') return 'replace_chunk'
   return 'write_file'
+}
+
+function requiresNetworkConsent(tool: AgentToolCall): boolean {
+  if (['web_search', 'fetch_web_content', 'download_file', 'ensure_tool'].includes(tool.tool)) return true
+  if (tool.tool === 'open_in_browser') return /^https?:\/\//i.test(String(tool.parameters.url || ''))
+  return tool.tool === 'run_command' && shellCommandHasEgress(String(tool.parameters.command || ''))
+}
+
+async function gateNetworkApproved(ctx: ToolGateContext): Promise<{ requested: boolean; granted: boolean; consentId: string } | 'denied' | undefined> {
+  if (ctx.capabilityPolicyMode !== 'network-approved' || !requiresNetworkConsent(ctx.parsedTool)) return undefined
+
+  const target = ctx.parsedTool.parameters.url || ctx.parsedTool.parameters.command || ctx.parsedTool.parameters.query || ctx.parsedTool.parameters.toolName || 'Network operation'
+  const approval = await ctx.requestApproval({
+    type: approvalTypeForTool(ctx.parsedTool.tool),
+    target,
+    contentOrCmd: target,
+    parameters: ctx.parsedTool.parameters,
+  })
+  if (!approval.approved) {
+    const feedback = `[USER DENIED] L'utente ha rifiutato l'accesso di rete richiesto da ${ctx.parsedTool.tool}. Non ripetere la stessa operazione senza un nuovo consenso.`
+    ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: 'User denied network consent' }, feedback)
+    ctx.emitLog('info', `🚫 Accesso di rete rifiutato dall'utente: ${ctx.parsedTool.tool}`)
+    return 'denied'
+  }
+  return { requested: true, granted: true, consentId: `consent-${Date.now()}-${ctx.stepCount}` }
 }
 
 /**
@@ -130,6 +157,9 @@ function denyFsm(ctx: ToolGateContext) {
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
   let approvalGranted = false
   let toolCallForExecution: AgentToolCall = ctx.parsedTool
+  const policyConsent = await gateNetworkApproved(ctx)
+  if (policyConsent === 'denied') return { outcome: 'denied' }
+  if (policyConsent) approvalGranted = true
 
   if (ctx.parsedTool.tool === 'git_commit') {
     if (!(await gateGitCommit(ctx))) return { outcome: 'denied' }
@@ -150,5 +180,5 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     return { outcome: 'denied' }
   }
 
-  return { outcome: 'allowed', toolCallForExecution }
+  return { outcome: 'allowed', toolCallForExecution, policyConsent }
 }

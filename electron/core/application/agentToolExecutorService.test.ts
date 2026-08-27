@@ -3,9 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { execSync } from 'node:child_process'
-import { agentToolExecutorService } from './agentToolExecutorService'
+import { AgentToolExecutorService, agentToolExecutorService } from './agentToolExecutorService'
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { webClient } from '../infrastructure/http/webClient'
+import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
 import type { AppSettings } from '../../../src/types'
 
 describe('AgentToolExecutorService Unit Tests', () => {
@@ -113,6 +114,46 @@ describe('AgentToolExecutorService Unit Tests', () => {
       )
 
       expect(result.outputForHistory).toContain('[POLICY BLOCK]')
+    })
+
+    it('requires explicit network-approved consent, blocks the adapter without it, and persists the denial audit', async () => {
+      const auditRepository = new CapabilityPolicyAuditRepository(path.join(tempDir, 'policy-audit.json'))
+      const executor = new AgentToolExecutorService(auditRepository)
+      const search = vi.spyOn(webClient, 'searchWeb')
+
+      const result = await executor.executeTool(
+        { tool: 'web_search', parameters: { query: 'must not leave the process' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'network-approved' },
+      )
+
+      expect(result.outputForHistory).toContain('Explicit consent is required')
+      expect(search).not.toHaveBeenCalled()
+      await expect(auditRepository.load()).resolves.toMatchObject([
+        { mode: 'network-approved', allowed: false, toolName: 'web_search' },
+      ])
+    })
+
+    it('allows network-approved access only when the approval gate supplies a consent id and persists it', async () => {
+      const auditRepository = new CapabilityPolicyAuditRepository(path.join(tempDir, 'policy-audit.json'))
+      const executor = new AgentToolExecutorService(auditRepository)
+      vi.spyOn(webClient, 'searchWeb').mockResolvedValue({ success: true, results: [] })
+
+      await executor.executeTool(
+        { tool: 'web_search', parameters: { query: 'approved query' } },
+        tempDir,
+        { ...settings, capabilityPolicyMode: 'network-approved' },
+        undefined,
+        undefined,
+        '',
+        undefined,
+        { requested: true, granted: true, consentId: 'consent-accepted' },
+        'session-consent',
+      )
+
+      await expect(auditRepository.load()).resolves.toMatchObject([
+        { sessionId: 'session-consent', mode: 'network-approved', allowed: true, consentId: 'consent-accepted' },
+      ])
     })
 
     it('requires fetching primary documentation after a successful web search', async () => {

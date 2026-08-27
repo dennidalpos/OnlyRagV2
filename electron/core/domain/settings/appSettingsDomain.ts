@@ -34,7 +34,7 @@ export function getDefaultAppSettings(): AppSettings {
 }
 
 const VALID_OCR_ENGINES = new Set<string>(['native_cuda', 'vision_model'])
-const VALID_AUTO_INSTALL_POLICIES = new Set<string>(['disabled', 'prompt', 'auto'])
+const VALID_AUTO_INSTALL_POLICIES = new Set<string>(['disabled', 'prompt'])
 const VALID_LANGUAGES = new Set<string>(['it', 'en'])
 const VALID_OLLAMA_MODES = new Set<string>(['local', 'remote'])
 const VALID_CAPABILITY_POLICY_MODES = new Set<string>(['offline-strict', 'local-only', 'network-approved'])
@@ -54,7 +54,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
 
   const autoInstallHubSkills =
     typeof raw.autoInstallHubSkills === 'string' && VALID_AUTO_INSTALL_POLICIES.has(raw.autoInstallHubSkills)
-      ? (raw.autoInstallHubSkills as 'disabled' | 'prompt' | 'auto')
+      ? (raw.autoInstallHubSkills as 'disabled' | 'prompt')
       : defaults.autoInstallHubSkills
 
   const language =

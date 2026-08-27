@@ -168,6 +168,14 @@ describe('PlanGenerationAppService', () => {
       expect(prompt).toContain('DO NOT EXIST here until a microtask creates them')
     })
 
+    it('does not add greenfield scaffolding milestones to an existing project plan', async () => {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ name: 'existing-app' }))
+
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Fix the dashboard', settings, workspacePath })
+
+      expect(result.milestones.map((milestone) => milestone.title).join('\n')).not.toMatch(/package\.json|index\.html|src\/main\.tsx/)
+    })
+
     it('keeps the verification command the planner declares on a checklist line', async () => {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
       vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {

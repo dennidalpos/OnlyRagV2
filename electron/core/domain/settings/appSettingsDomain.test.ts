@@ -23,6 +23,10 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBeUndefined()
   })
 
+  it('retires the legacy automatic skill-install mode to disabled', () => {
+    expect(sanitizeAppSettings({ autoInstallHubSkills: 'auto' }).autoInstallHubSkills).toBe('disabled')
+  })
+
   it('should preserve valid custom settings and trim strings', () => {
     const custom = {
       defaultModel: '  qwen2.5-coder:7b  ',

@@ -3,7 +3,13 @@ import fs from 'node:fs'
 import * as ts from 'typescript'
 import { logger } from '../../../diagnostics'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
-import { MAX_FILE_READ_BYTES } from '../../domain/agent/ioLimits'
+import {
+  MAX_FILE_READ_BYTES,
+  MAX_PROJECT_MAP_DEPTH,
+  MAX_PROJECT_MAP_ITEMS,
+  MAX_SEARCH_FILE_BYTES,
+  MAX_SEARCH_MATCHES,
+} from '../../domain/agent/ioLimits'
 
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): string | null {
   const result = domainValidatePathSafety(filePath, workspaceRoot)
@@ -69,14 +75,12 @@ export class FileSystemRepository {
 
     const safeRootDir = rootDir
     const mapItems: { path: string; relativePath: string; isDir: boolean; sizeBytes: number }[] = []
-    const MAX_ITEMS = 10000
-
     async function scanAsync(currentDir: string, depth: number) {
-      if (depth > 12 || mapItems.length >= MAX_ITEMS) return
+      if (depth > MAX_PROJECT_MAP_DEPTH || mapItems.length >= MAX_PROJECT_MAP_ITEMS) return
       try {
         const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
         for (const entry of entries) {
-          if (mapItems.length >= MAX_ITEMS) break
+          if (mapItems.length >= MAX_PROJECT_MAP_ITEMS) break
           if (isIgnoredPath(entry.name, entry.isDirectory())) continue
 
           const fullPath = path.join(currentDir, entry.name)
@@ -264,8 +268,6 @@ export class FileSystemRepository {
       '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.mov', '.avi'
     ])
     const results: { filePath: string; relativePath: string; lineNumber: number; lineContent: string }[] = []
-    const MAX_MATCHES = 1000
-
     let matcher: (line: string) => boolean
     if (isRegex) {
       try {
@@ -282,11 +284,11 @@ export class FileSystemRepository {
     }
 
     async function searchDir(currentDir: string, depth: number) {
-      if (depth > 12 || results.length >= MAX_MATCHES) return
+      if (depth > MAX_PROJECT_MAP_DEPTH || results.length >= MAX_SEARCH_MATCHES) return
       try {
         const entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
         for (const entry of entries) {
-          if (results.length >= MAX_MATCHES) break
+          if (results.length >= MAX_SEARCH_MATCHES) break
           if (IGNORED_NAMES.has(entry.name)) continue
 
           const fullPath = path.join(currentDir, entry.name)
@@ -298,14 +300,14 @@ export class FileSystemRepository {
               if (BINARY_EXTENSIONS.has(ext)) continue
 
               const stat = await fs.promises.stat(fullPath)
-              if (stat.size > 10 * 1024 * 1024) continue
+              if (stat.size > MAX_SEARCH_FILE_BYTES) continue
 
               const content = await fs.promises.readFile(fullPath, 'utf-8')
               const lines = content.split('\n')
               const relPath = path.relative(safeRootDir, fullPath).replace(/\\/g, '/')
 
               for (let i = 0; i < lines.length; i++) {
-                if (results.length >= MAX_MATCHES) break
+                if (results.length >= MAX_SEARCH_MATCHES) break
                 if (matcher(lines[i])) {
                   results.push({
                     filePath: fullPath,

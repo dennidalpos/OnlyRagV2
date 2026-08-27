@@ -94,4 +94,36 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     expect(res.code).toBe(130)
     expect(res.stderr).toContain('cancelled before execution')
   })
+
+  it('cancels an in-flight command and recreates the shell without leaving a residue', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+    const controller = new AbortController()
+    const execution = session.execute('Start-Sleep -Seconds 30', undefined, undefined, 25000, controller.signal)
+
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    controller.abort()
+
+    const result = await execution
+    expect(result.code).toBe(130)
+    expect(result.stderr).toContain('cancelled by AbortSignal')
+    expect(session.isExecuting()).toBe(false)
+
+    const followUp = await session.execute('Write-Output "shell recreated after cancellation"')
+    expect(followUp.code).toBe(0)
+    expect(followUp.stdout).toContain('shell recreated after cancellation')
+  })
+
+  it('times out an in-flight command and recreates the shell without leaving a residue', async () => {
+    session = new PersistentPowerShellSession(process.cwd())
+
+    const result = await session.execute('Start-Sleep -Seconds 30', undefined, undefined, 1000)
+    expect(result.code).toBe(124)
+    expect(result.timedOut).toBe(true)
+    expect(result.stderr).toContain('timed out')
+    expect(session.isExecuting()).toBe(false)
+
+    const followUp = await session.execute('Write-Output "shell recreated after timeout"')
+    expect(followUp.code).toBe(0)
+    expect(followUp.stdout).toContain('shell recreated after timeout')
+  })
 })

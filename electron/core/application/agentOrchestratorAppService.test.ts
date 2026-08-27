@@ -27,7 +27,7 @@ vi.mock('./ollamaAppService', () => ({
 
 // The real runner shells out to `npm run build`; what is under test here is the gate's wiring.
 vi.mock('./agentOrchestratorVerificationRunner', () => ({
-  runProjectVerification: vi.fn().mockResolvedValue({ hasVerificationCommand: false }),
+  runProjectVerification: vi.fn().mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' }),
 }))
 
 vi.mock('./skillAppService', () => ({
@@ -50,7 +50,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     // moved whenever the loop's step count changed. mockReset drains the queue too.
     vi.mocked(AgentStreamTransport.streamCompletion).mockReset()
     vi.mocked(runProjectVerification).mockReset()
-    vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+    vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
   })
 
   afterEach(() => {
@@ -700,6 +700,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       vi.mocked(runProjectVerification).mockResolvedValue({
         hasVerificationCommand: true,
         passed: true,
+        status: 'verified',
         command: 'npm run build',
       })
       scriptTurns(verificationWriteJson, verificationFinishJson)
@@ -720,6 +721,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       vi.mocked(runProjectVerification).mockResolvedValue({
         hasVerificationCommand: true,
         passed: false,
+        status: 'failed',
         command: 'npm run build',
         failureDetail: "error TS2307: Cannot find module './main'",
       })
@@ -739,9 +741,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     it('gives the model its correction rounds before giving up', async () => {
       // Fails twice, then the model fixes it and the third verification passes.
       vi.mocked(runProjectVerification)
-        .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, failureDetail: 'boom 1' })
-        .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, failureDetail: 'boom 2' })
-        .mockResolvedValue({ hasVerificationCommand: true, passed: true, command: 'npm run build' })
+        .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, status: 'failed', failureDetail: 'boom 1' })
+        .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, status: 'failed', failureDetail: 'boom 2' })
+        .mockResolvedValue({ hasVerificationCommand: true, passed: true, status: 'verified', command: 'npm run build' })
       scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
@@ -754,7 +756,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     })
 
     it('proceeds when the project offers no verification command, instead of deadlocking', async () => {
-      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       // Three turns, because the missing-build reason is surfaced to the model once before
       // finish is let through: the second finish is the one that closes the session. The
       // earlier two-turn version of this test only passed because a session that ran out of
@@ -779,7 +781,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const prose = 'Everything looks complete to me, the application should work now.'
 
     it('closes the session as FAILED rather than COMPLETED', async () => {
-      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       scriptTurns(verificationWriteJson, prose, prose, prose)
 
       const res = await runAgentOrchestratorLoop(
@@ -792,7 +794,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     })
 
     it('never runs the finish verification, because finish was never reached', async () => {
-      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false })
+      vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       scriptTurns(verificationWriteJson, prose, prose, prose)
 
       await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir }, null)

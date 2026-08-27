@@ -179,4 +179,111 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     })
     expect(fs.existsSync(cancelledPath)).toBe(false)
   })
+
+  it('cancels an in-flight fetch and destroys the active request', async () => {
+    const response = Object.assign(new EventEmitter(), { statusCode: 200, headers: {}, setEncoding: vi.fn() })
+    const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+    vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+      args[2](response)
+      return request as any
+    })
+
+    const controller = new AbortController()
+    const pending = client.fetchWebContent('https://example.com/slow', 16000, controller.signal)
+    controller.abort()
+
+    await expect(pending).resolves.toMatchObject({
+      success: false,
+      error: 'Request cancelled by AbortSignal',
+    })
+    expect(request.destroy).toHaveBeenCalled()
+  })
+
+  it('cancels an in-flight download and removes the partial file', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-cancel-'))
+    const targetPath = path.join(tempRoot, 'partial.zip')
+    try {
+      const response = Object.assign(new EventEmitter(), {
+        statusCode: 200,
+        headers: {},
+        pipe: (destination: fs.WriteStream) => {
+          setTimeout(() => {
+            if (!destination.destroyed) destination.end(Buffer.from('partial'))
+          }, 50)
+          return destination
+        },
+      })
+      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+        queueMicrotask(() => args[2](response))
+        return request as any
+      })
+
+      const controller = new AbortController()
+      const pending = client.downloadFile('https://example.com/slow.zip', targetPath, tempRoot, controller.signal)
+      controller.abort()
+
+      await expect(pending).resolves.toMatchObject({
+        success: false,
+        error: 'Download cancelled by AbortSignal',
+      })
+      expect(request.destroy).toHaveBeenCalled()
+      expect(fs.existsSync(targetPath)).toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects executable MIME types before persisting a download', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-mime-'))
+    const targetPath = path.join(tempRoot, 'payload.bin')
+    try {
+      const response = Object.assign(new EventEmitter(), {
+        statusCode: 200,
+        headers: { 'content-type': 'application/x-msdownload' },
+      })
+      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+        queueMicrotask(() => args[2](response))
+        return request as any
+      })
+
+      await expect(client.downloadFile('https://example.com/payload.bin', targetPath, tempRoot)).resolves.toMatchObject({
+        success: false,
+        error: 'Download MIME type is not allowed: application/x-msdownload',
+      })
+      expect(request.destroy).toHaveBeenCalled()
+      expect(fs.existsSync(targetPath)).toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('stops following download redirects after the configured safety limit', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-'))
+    const targetPath = path.join(tempRoot, 'redirected.bin')
+    try {
+      const response = Object.assign(new EventEmitter(), {
+        statusCode: 302,
+        headers: { location: 'https://example.com/next' },
+      })
+      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+      const get = vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+        queueMicrotask(() => args[2](response))
+        return request as any
+      })
+
+      await expect(client.downloadFile('https://example.com/start', targetPath, tempRoot)).resolves.toMatchObject({
+        success: false,
+        error: 'Download exceeded 3 redirect hops.',
+      })
+      expect(get).toHaveBeenCalledTimes(4)
+      expect(fs.existsSync(targetPath)).toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
 })

@@ -10,6 +10,37 @@ import { validatePathSafety } from '../../domain/agent/contextFilter'
 import { MAX_DOWNLOAD_BYTES } from '../../domain/agent/ioLimits'
 import { httpMetrics } from './httpMetrics'
 
+const MAX_DOWNLOAD_REDIRECTS = 3
+const BLOCKED_DOWNLOAD_MIME_TYPES = new Set([
+  'application/x-msdownload',
+  'application/x-msdos-program',
+  'application/x-sh',
+  'application/x-bat',
+  'application/x-httpd-php',
+])
+
+function normalizedMime(contentType: string | undefined): string {
+  return (contentType || '').split(';', 1)[0].trim().toLowerCase()
+}
+
+function sniffDownloadMime(chunk: Buffer): string | null {
+  if (chunk.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) return 'application/zip'
+  if (chunk.subarray(0, 4).equals(Buffer.from('%PDF'))) return 'application/pdf'
+  if (chunk.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (chunk.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'image/jpeg'
+  if (chunk.subarray(0, 3).equals(Buffer.from('GIF'))) return 'image/gif'
+  if (chunk.subarray(0, 2).equals(Buffer.from([0x1f, 0x8b]))) return 'application/gzip'
+  return null
+}
+
+function downloadMimeAllowed(contentType: string | undefined, firstChunk?: Buffer): boolean {
+  const declared = normalizedMime(contentType)
+  if (BLOCKED_DOWNLOAD_MIME_TYPES.has(declared)) return false
+  const sniffed = firstChunk && sniffDownloadMime(firstChunk)
+  if (!declared || declared === 'application/octet-stream' || declared === 'binary/octet-stream') return true
+  return !sniffed || declared === sniffed || (sniffed === 'application/zip' && declared === 'application/x-zip-compressed')
+}
+
 export interface WebSearchResultItem {
   title: string
   url: string
@@ -326,7 +357,8 @@ export class WebClient {
     urlStr: string,
     targetFilePath: string,
     workspaceRoot?: string | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    redirectCount = 0,
   ): Promise<{ success: boolean; downloadedBytes?: number; error?: string }> {
     if (signal?.aborted) return { success: false, error: 'Download cancelled by AbortSignal' }
     const urlCheck = this.validateUrlSafety(urlStr)
@@ -369,12 +401,15 @@ export class WebClient {
           timeout: 60000,
         },
         (res) => {
-          if (res.statusCode && (res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+          if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
             record(res.statusCode, 'none')
             fileStream.close()
             try { fs.unlinkSync(safeDestPath) } catch {}
+            if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
+              return resolve({ success: false, error: `Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.` })
+            }
             const redirectUrl = new URL(res.headers.location, urlCheck.safeUrl!).toString()
-            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal).then(resolve)
+            return this.downloadFile(redirectUrl, targetFilePath, workspaceRoot, signal, redirectCount + 1).then(resolve)
           }
 
           if (res.statusCode && res.statusCode >= 400) {
@@ -384,8 +419,24 @@ export class WebClient {
             return resolve({ success: false, error: `HTTP ${res.statusCode} ${res.statusMessage || ''}` })
           }
 
+          if (!downloadMimeAllowed(res.headers['content-type'])) {
+            req.destroy()
+            fileStream.close()
+            try { fs.unlinkSync(safeDestPath) } catch {}
+            record(res.statusCode || 0, 'unknown')
+            return resolve({ success: false, error: `Download MIME type is not allowed: ${res.headers['content-type']}` })
+          }
+
           res.on('data', (chunk) => {
             downloadedBytes += chunk.length
+            if (downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
+              req.destroy()
+              fileStream.close()
+              try { fs.unlinkSync(safeDestPath) } catch {}
+              record(res.statusCode || 0, 'unknown')
+              resolve({ success: false, error: `Download content does not match declared MIME type.` })
+              return
+            }
             if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
               req.destroy()
               fileStream.close()

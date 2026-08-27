@@ -9,6 +9,11 @@ import { documentIoRepository } from '../infrastructure/filesystem/documentIoRep
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
 export class SidecarAppService {
+  async checkHealth() {
+    await sidecarProcessManager.checkSidecarHealth()
+    return sidecarProcessManager.getSidecarState()
+  }
+
   getStatus() {
     return new Promise((resolve) => {
       const req = http.get('http://127.0.0.1:8000/health', { agent: httpAgent, timeout: 3000 }, (res) => {

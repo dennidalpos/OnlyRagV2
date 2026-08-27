@@ -83,7 +83,7 @@ Ensure the application is fully runnable, usable and responsive before moving to
 
 describe('live: full task run', () => {
   it('plans and executes the original audit task against a real model', async () => {
-    const settings = loadRealSettings()
+    const settings = loadRealSettings({ codingModel: 'qwen2.5-coder:7b' })
     resetWorkspace(WORKSPACE)
 
     const seeded = await seedGeneratedPlan({

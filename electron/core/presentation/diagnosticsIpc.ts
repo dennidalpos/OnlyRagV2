@@ -2,15 +2,15 @@ import { ipcMain, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { runFullDiagnostics, logger, type LogLevel } from '../../diagnostics'
-import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessManager'
+import { sidecarAppService } from '../application/sidecarAppService'
 import { httpMetrics } from '../infrastructure/http/httpMetrics'
 
 export function registerDiagnosticsIpcHandlers() {
   ipcMain.handle('diagnostics:get-http-metrics', () => httpMetrics.snapshot())
 
   ipcMain.handle('diagnostics:run', async () => {
-    await sidecarProcessManager.checkSidecarHealth()
-    return await runFullDiagnostics(sidecarProcessManager.getSidecarState())
+    const sidecarState = await sidecarAppService.checkHealth()
+    return await runFullDiagnostics(sidecarState)
   })
 
   ipcMain.handle('diagnostics:get-logs', async () => {

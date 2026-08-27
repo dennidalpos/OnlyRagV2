@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { taskQueueAppService } from '../application/taskQueueAppService'
 import { respondToApproval } from '../application/agentOrchestratorAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
-import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
 import { sidecarSlmBridgeService } from '../application/sidecarSlmBridgeService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
@@ -88,7 +88,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    * guessing progress from step counts.
    */
   ipcMain.handle('agent:get-plan-state', async (_, sessionId: string, workspacePath?: string | null) => {
-    const state = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
+    const state = await agentSessionStateAppService.loadSessionState(sessionId, workspacePath)
     if (!state) return null
     return { planMilestones: state.planMilestones, status: state.status, stepCount: state.stepCount }
   })
@@ -101,7 +101,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     ipcMain.handle(
     'agent:plan-seed',
     async (_, sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string) => {
-      return agentSessionStateRepository.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask)
+      return agentSessionStateAppService.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask)
     }
   )
 

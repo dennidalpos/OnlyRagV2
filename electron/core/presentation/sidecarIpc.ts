@@ -8,6 +8,12 @@ import {
   sidecarSearchPayloadSchema,
   sidecarTranslatePayloadSchema,
   sidecarUpdateDocumentPayloadSchema,
+  type SidecarExportPayload,
+  type SidecarIngestFilePayload,
+  type SidecarPagePreviewPayload,
+  type SidecarSearchPayload,
+  type SidecarTranslatePayload,
+  type SidecarUpdateDocumentPayload,
 } from '../domain/sidecarContract'
 
 export function registerSidecarIpcHandlers() {
@@ -20,22 +26,22 @@ export function registerSidecarIpcHandlers() {
   })
 
   ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number) => {
-    const payload = sidecarIngestFilePayloadSchema.parse({ filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx })
+    const payload: SidecarIngestFilePayload = sidecarIngestFilePayloadSchema.parse({ filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx })
     return sidecarAppService.ingestFile(payload.filePath, payload.visionModel, payload.visionPrompt, payload.normalizeWithLlm, payload.normalizationModel, payload.numCtx)
   })
 
   ipcMain.handle('ingest:update', async (_, docId: string, markdownContent: string) => {
-    const payload = sidecarUpdateDocumentPayloadSchema.parse({ docId, markdownContent })
+    const payload: SidecarUpdateDocumentPayload = sidecarUpdateDocumentPayloadSchema.parse({ docId, markdownContent })
     return sidecarAppService.updateDocument(payload.docId, payload.markdownContent)
   })
 
   ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => {
-    const payload = sidecarTranslatePayloadSchema.parse({ docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx })
+    const payload: SidecarTranslatePayload = sidecarTranslatePayloadSchema.parse({ docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx })
     return sidecarAppService.translateDocumentInplace(payload.docId, payload.sourceLang, payload.targetLang, payload.model, payload.backupOriginal, payload.targetDir, payload.numCtx)
   })
 
   ipcMain.handle('ingest:page-preview', async (_, docId: string, pageNumber: number) => {
-    const payload = sidecarPagePreviewPayloadSchema.parse({ docId, pageNumber })
+    const payload: SidecarPagePreviewPayload = sidecarPagePreviewPayloadSchema.parse({ docId, pageNumber })
     return sidecarAppService.getDocumentPagePreview(payload.docId, payload.pageNumber)
   })
 
@@ -48,12 +54,12 @@ export function registerSidecarIpcHandlers() {
   })
 
   ipcMain.handle('ingest:search', async (_, query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => {
-    const payload = sidecarSearchPayloadSchema.parse({ query, topK, embeddingModel, docIds })
+    const payload: SidecarSearchPayload = sidecarSearchPayloadSchema.parse({ query, topK, embeddingModel, docIds })
     return sidecarAppService.searchVectorDb(payload.query, payload.topK, payload.embeddingModel, payload.docIds)
   })
 
   ipcMain.handle('ingest:export', async (_, markdownContent: string, format: string, outputFolder?: string) => {
-    const payload = sidecarExportPayloadSchema.parse({ markdownContent, format, outputFolder })
+    const payload: SidecarExportPayload = sidecarExportPayloadSchema.parse({ markdownContent, format, outputFolder })
     return sidecarAppService.exportDocument(payload.markdownContent, payload.format, payload.outputFolder)
   })
 

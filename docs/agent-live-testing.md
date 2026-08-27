@@ -38,6 +38,8 @@ I test live salvano automaticamente una copia per-run in `~/Desktop/onlyrag_live
 | `preseededWorkspace.live.ts` | Genera il piano su un progetto già esistente con `package.json`, sorgente e script `build` | **Asserisce la riconciliazione**: `ensureRunnableMilestone` conserva il controllo dichiarato dal progetto nel piano live. |
 | `eresolveRecovery.live.ts` | Installa davvero `vite@4`, poi chiede un plugin che pretende una vite molto più recente | Deve comparire `[DEPENDENCY VERSION CONFLICT — ERESOLVE]`, il comando successivo deve essere l'upgrade indicato, e `vite installed` deve essersi mosso da 4.5.14 |
 | `ts2305ExportRecovery.live.ts` | Prepara un pacchetto locale dichiarato che esporta nomi diversi da quelli importati | Deve eseguire `npm run build`, usare la lista reale degli export nella riscrittura di `src/TaskCard.tsx` e lasciare invariati manifest e `node_modules`. |
+| `ts2614ExportRecovery.live.ts` | Prepara un modulo locale con export default e un importer che usa un named import | Deve eseguire `npm run build`, applicare il suggerimento TS2614 a `src/TaskCard.ts` e lasciare invariati il modulo locale e il manifest. |
+| `installVersionDowngrade.live.ts` | Prepara Vite 5 dichiarato e installato, poi ordina un install Vite 4 | Deve comparire il blocco pre-esecuzione e restare invariato il manifest, lockfile e Vite 5 installato. |
 
 Gli scenari scrivono in `~/Desktop/onlyrag_live_*`. Sono directory usa-e-getta, azzerate a ogni run.
 

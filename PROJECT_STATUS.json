@@ -1,14 +1,15 @@
 {
   "todos": [
+    "Verifiche live mancanti, coperte solo da unit test: citazione verbatim TS2613/TS2614, nuova forma di buildUninstallablePackageDirective, guard installVersionDowngrade (downgrade, major vecchia ed ETARGET preflight), ramo terminale budgetExhaustionVerification, soppressione repo map di turnContextPolicy; la sonda TS2305 con lista export è verificata da ts2305ExportRecovery.live.ts il 2026-08-27; impatto medio, urgenza media, sforzo M.",
     "First-Class Artifacts Engine (Blueprint 5.7): canali IPC artifacts:* e pannello Live Preview sandboxato; impatto alto, urgenza bassa, sforzo XL.",
-    "Verifiche live mancanti, coperte solo da unit test: citazione verbatim TS2613/TS2614, nuova forma di buildUninstallablePackageDirective, guard installVersionDowngrade (downgrade, major vecchia ed ETARGET preflight), ramo terminale budgetExhaustionVerification, soppressione repo map di turnContextPolicy; TS2305 con lista export verificato da ts2305ExportRecovery.live.ts il 2026-08-27; impatto medio, urgenza media, sforzo M.",
-    "Boundary presentation residue: spostare sidecarProcessManager da diagnosticsIpc.ts e agentSessionStateRepository da agentIpc.ts dietro application facades, con test IPC; impatto medio, urgenza bassa, sforzo M.",
+    "Boundary presentation residue: completare i test IPC delle facciate per sidecarProcessManager e agentSessionStateRepository già spostati dietro application services; impatto medio, urgenza bassa, sforzo S.",
     "Ricerca web azionabile: trigger e direttive per usare davvero web_search e fetch_web_content sui pattern di librerie aggiornate; impatto medio, urgenza bassa, sforzo M.",
     "Pulizia e scope skill: arricchire le skill minimali e chiarire lo scope di auto-install dell’hub (workspace vs userData); impatto medio, urgenza bassa, sforzo M.",
     "Coverage CI: introdurre provider Vitest e soglie solo dopo una baseline misurata, mantenendo il gate rapido separato; impatto medio, urgenza bassa, sforzo M.",
     "bug: Audit major rinviato: Electron 44, js-yaml 5 e TypeScript 7 richiedono una migrazione dedicata con smoke, typecheck e test; impatto medio, urgenza bassa, sforzo L.",
     "Refactoring modulare tool (Blueprint 4): scorporare agentToolExecutorService.ts nei moduli SRP sotto electron/core/domain/agent/tools/; impatto medio, urgenza bassa, sforzo L.",
     "Validazione visiva (Blueprint 5.7): visualValidationTool.ts su Electron Offscreen WebContents per screenshot, DOM e console.error; impatto medio, urgenza bassa, sforzo L.",
+    "Debito licenze: callsite 1.0.0 è MIT secondo README e repository upstream, ma l’artefatto npm non include campo license né file LICENSE; valutare un controllo SPDX che legga la fonte upstream prima della release; impatto basso, urgenza bassa, sforzo S.",
     "Automatizzare nel gate di qualità il controllo dei link Markdown locali e degli esempi npm documentati; impatto basso, urgenza bassa, sforzo S."
   ]
 }

@@ -1,7 +1,6 @@
 {
   "todos": [
-    "W2.01 | P0 bug | impatto alto | sforzo S | README.md linka docs/README.md cancellato preesistente; decidere con il proprietario se ripristinare l'indice o aggiornare i link, senza sovrascrivere la cancellazione automatica",
-    "W2.03 | P2 debito | impatto medio | sforzo M | consolidare le due implementazioni /api/tags di ollamaHttpClient in un percorso dati condiviso e testato",
-    "W2.04 | P3 manutenzione | impatto basso | sforzo S | isolare o documentare i warning di rete e il fatal git attesi nelle fixture dei test, senza nascondere errori reali"
+    "W2.03 | P2 debito | impatto medio | urgenza media | sforzo M | consolidare le tre letture duplicate di /api/tags in ollamaHttpClient (metriche, digest e capabilities) in un percorso dati condiviso e testato",
+    "W2.04 | P3 manutenzione | impatto basso | urgenza bassa | sforzo S | isolare o documentare i warning di rete e i messaggi fatal git attesi nelle fixture dei test, senza nascondere errori reali"
   ]
 }

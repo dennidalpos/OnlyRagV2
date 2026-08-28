@@ -11,7 +11,7 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4-0f172a?style=for-the-badge&logo=tailwindcss&logoColor=67e8f9)](https://tailwindcss.com)
 [![LanceDB](https://img.shields.io/badge/LanceDB-Embedded_Vector_DB-0f172a?style=for-the-badge&logo=databricks&logoColor=67e8f9)](https://lancedb.com)
 [![Ollama](https://img.shields.io/badge/Ollama-100%25_Local_LLM-0f172a?style=for-the-badge&logo=ollama&logoColor=67e8f9)](https://ollama.com)
-[![Tests](https://img.shields.io/badge/Tests-Passing_684/684-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
+[![Tests](https://img.shields.io/badge/Tests-Passing-0f172a?style=for-the-badge&logo=vitest&logoColor=10b981)](https://vitest.dev)
 [![License](https://img.shields.io/badge/License-MIT-0f172a?style=for-the-badge&logo=open-source-initiative&logoColor=67e8f9)](LICENSE)
 
 <br />
@@ -28,16 +28,9 @@
 
 ## 📚 Official Documentation (Single Source of Truth)
 
-All architectural, operational, API and setup specifications reside strictly in the **[`/docs/`](./docs/README.md)** directory:
+All architectural, operational, API and setup specifications reside in the canonical **[`documentation index`](./docs/README.md)**, which maps each topic to one authoritative page:
 
-- 🏛️ [**Architecture & System Topology**](./docs/architecture.md): Multi-process topology, 4-tier Clean Architecture, Mermaid diagrams, 2-level router, hybrid RAG pipeline, and resilient agent studio.
-- 🧩 [**Modules & Responsibilities**](./docs/modules.md): Complete mapping of Frontend, Electron Main Core, Python Sidecar, and Skill Hub components with input/output contracts.
-- 🔌 [**API Reference & Contracts**](./docs/api.md): REST endpoints (`/health`, `/ingest`, `/search`, `/documents`, `/export`), Electron IPC channels (`window.electronAPI`), TypeScript schemas and error codes.
-- ⚙️ [**Setup, Hardware & Environment**](./docs/setup-and-env.md): Installation guide, system requirements, hardware tiers (**legacy / entry / midrange / highend / extreme**), memory dimensioning formulas, Ollama OS environment settings, and 1-click PowerShell scripts.
-- 🧪 [**Live Agent Testing**](./docs/agent-live-testing.md): Prerequisites, live scenarios, isolation rules and audit-log interpretation.
-- 📚 [**Libraries & Domain Implementations**](./docs/libraries-and-domain-implementations.md): External libraries inventory and technical rationale for custom domain implementations.
-- 🛡️ [**Dependency Audit**](./docs/dependency-audit.md): CVE snapshot, outdated packages, false positives, risks and follow-up.
-- 📖 [**Documentation Master Index**](./docs/README.md): Navigable master index.
+- 🏛️ **Architecture, modules, APIs, setup, live QA, observability and dependency references:** see [`docs/README.md`](./docs/README.md).
 
 ---
 

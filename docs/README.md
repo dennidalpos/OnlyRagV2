@@ -15,6 +15,7 @@ canonical page; cross-links should point to that page instead of duplicating the
 | Live agent quality assurance | [`agent-live-testing.md`](./agent-live-testing.md) | Live prerequisites, scenarios, isolation and log interpretation |
 | External libraries and custom domain implementations | [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) | Dependency rationale and domain-level substitutions |
 | Dependency and vulnerability snapshot | [`dependency-audit.md`](./dependency-audit.md) | Point-in-time audit results, false positives and follow-up |
+| Quality gates and CI verification | [`quality-gates.md`](./quality-gates.md) | Lint/format limitations, type-check, coverage and reproducible CI policy |
 
 ## Contract and maintenance rules
 
@@ -30,4 +31,4 @@ canonical page; cross-links should point to that page instead of duplicating the
 - API integrator: [`api.md`](./api.md) → [`../sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json).
 - Coding-agent maintainer: [`architecture.md`](./architecture.md) → [`agent-live-testing.md`](./agent-live-testing.md) → [`observability.md`](./observability.md).
 - Dependency review: [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) → [`dependency-audit.md`](./dependency-audit.md).
-
+- Quality review: [`quality-gates.md`](./quality-gates.md) → [`setup-and-env.md`](./setup-and-env.md).

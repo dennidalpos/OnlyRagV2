@@ -189,8 +189,10 @@ npm run audit:deadcode
 npm run audit:graph
 
 # Pulizia selettiva e factory reset
-npm run clean        # Pulisce gli artifact temporanei di build nel repository
-npm run clean:logs   # Termina i processi attivi e pulisce tutti i file di log
+npm run clean        # Pulisce solo artifact e cache rigenerabili del repository
+npm run clean:logs   # Pulisce i log senza terminare processi generici
+# Solo se i log sono bloccati dall'app locale:
+powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Logs -StopAppProcesses
 npm run clean:user   # Pulisce i dati locali in AppData (LanceDB e impostazioni)
 npm run clean:full   # Factory reset completo (Repo + Logs + UserData)
 
@@ -198,7 +200,11 @@ npm run clean:full   # Factory reset completo (Repo + Logs + UserData)
 .\scripts\test_sidecar_health.ps1 -Fast
 ```
 
-Gli script di automazione falliscono esplicitamente se mancano comandi, directory o file richiesti;
+`npm run clean` usa `scripts/clean_repo.ps1`: rimuove esclusivamente output/cache rigenerabili
+(inclusi bundle Electron, installer nella cartella `dist` e cache dei test), non tocca
+`node_modules`, `.venv`, `.onlyrag`, `userdata_dev`, `data`, `export`, i log o file tracciati da Git.
+La pulizia dei log e dei dati utente resta esplicita tramite `clean:logs`, `clean:user` e
+`clean:full`. Gli script di automazione falliscono esplicitamente se mancano comandi, directory o file richiesti;
 il controllo CI verifica anche gli exit code di `npm ci`, dell'installazione esplicita del runtime Electron e dell'installazione Python. Il controllo
 Pytest esegue una sola prova e conserva stderr, senza retry diagnostici o passaggi silenziosi.
 `npm run format:check` verifica il whitespace del diff con `git diff --check HEAD`; non è un

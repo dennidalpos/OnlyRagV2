@@ -14,6 +14,9 @@
     Switch opzionale per forzare la pulizia dei log applicativi anche in modalità Repo.
 .PARAMETER Fast
     Modalità sintetica per l'Agente AI (output conciso PASS/FAIL).
+.PARAMETER StopAppProcesses
+    Arresta solo i processi identificabili di OnlyRag V2 prima della pulizia dei log.
+    Per sicurezza non termina più processi generici Python o Electron.
 #>
 
 [CmdletBinding()]
@@ -22,7 +25,8 @@ param(
     [string]$Mode = "Repo",
 
     [switch]$CleanLogs = $false,
-    [switch]$Fast = $false
+    [switch]$Fast = $false,
+    [switch]$StopAppProcesses = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,21 +46,25 @@ try {
 
     $rootDir = (Resolve-Path (Join-Path -Path $PSScriptRoot -ChildPath "..")).Path
 
-    # 1. Arresto processi Sidecar, Python ed Electron pendenti per sbloccare i file di log
+    # 1. Arresto opzionale dei soli processi OnlyRag V2 identificabili
     if (-not $Fast) {
-        Write-Host "`n[1/4] Verifica e arresto dei processi OnlyRag V2, Sidecar e Python in corso..." -ForegroundColor Yellow
+        Write-Host "`n[1/4] Verifica processi applicativi in corso..." -ForegroundColor Yellow
     }
-    try {
-        $runningProcesses = Get-Process -Name "sidecar", "python", "electron", "OnlyRag V2" -ErrorAction SilentlyContinue
-        if ($runningProcesses) {
-            if (-not $Fast) {
-                Write-Host "Arresto di $($runningProcesses.Count) processi in corso..." -ForegroundColor Gray
+    if ($StopAppProcesses) {
+        try {
+            $runningProcesses = Get-Process -Name "OnlyRag V2", "sidecar" -ErrorAction SilentlyContinue
+            if ($runningProcesses) {
+                if (-not $Fast) {
+                    Write-Host "Arresto di $($runningProcesses.Count) processo/i OnlyRag V2..." -ForegroundColor Gray
+                }
+                $runningProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
             }
-            $runningProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+            if (-not $Fast) { Write-Host "[OK] Processi OnlyRag V2 verificati." -ForegroundColor Green }
+        } catch {
+            if (-not $Fast) { Write-Host "[WARN] Impossibile arrestare un processo OnlyRag V2: $($_.Exception.Message)" -ForegroundColor Yellow }
         }
-        if (-not $Fast) { Write-Host "[OK] Processi verificati e arrestati." -ForegroundColor Green }
-    } catch {
-        if (-not $Fast) { Write-Host "[WARN] Nessun processo da arrestare." -ForegroundColor Gray }
+    } elseif (-not $Fast) {
+        Write-Host "[OK] Nessun processo arrestato (usa -StopAppProcesses se necessario)." -ForegroundColor Gray
     }
 
     # 2. Pulizia Log Applicativi (App installata, AppData e dev)

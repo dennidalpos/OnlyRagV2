@@ -182,7 +182,8 @@ npm run dev
 | `npm run test:fast` | Runs Vitest in summarized fast mode with dot reporter |
 | `npm run test:sidecar` | Runs Python Pytest suite against FastAPI sidecar endpoints |
 | `npm run lint` | Runs the serial repository gate: JSON, TypeScript, Python syntax, Vitest, and bundle smoke test |
-| `npm run clean` | Cleans build artifacts and repository cache (`scripts/clean_workspace.ps1`) |
+| `npm run clean` | Removes only regenerable build artifacts and repository caches (`scripts/clean_repo.ps1`); tracked files, dependencies, logs and user data are preserved |
+| `npm run clean:logs` | Removes application logs; use `-StopAppProcesses` only when the local app must be stopped first |
 | `npm run clean:full` | Full reset: cleans repo cache and user LanceDB storage in AppData |
 | `npm run package:win` | Packages Windows NSIS installer setup binary (`scripts/build_package.ps1`) |
 

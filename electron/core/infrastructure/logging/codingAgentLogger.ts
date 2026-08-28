@@ -48,6 +48,29 @@ export class CodingAgentLogger {
     return this.logFilePath
   }
 
+  /** Returns every persisted audit entry for one session, including rotated files. */
+  public readSessionAuditLog(sessionId: string): string {
+    if (!sessionId) return ''
+    try {
+      const logDir = path.dirname(this.logFilePath)
+      const files = [
+        ...Array.from({ length: this.maxRetainedFiles - 1 }, (_, index) =>
+          path.join(logDir, `coding_agent_audit.${this.maxRetainedFiles - 1 - index}.log`)),
+        this.logFilePath,
+      ]
+      const entries = files.flatMap((filePath) => {
+        if (!fs.existsSync(filePath)) return []
+        return fs.readFileSync(filePath, 'utf-8')
+          .split(/\n={80}\n/)
+          .filter((entry) => entry.includes(`Session: ${sessionId}`) || entry.includes(`Session ID: ${sessionId}`))
+      })
+      return entries.join('\n================================================================================\n').trim()
+    } catch (err: any) {
+      logger.log('WARN', 'CodingAgentLogger', `Failed reading audit log for session ${sessionId}: ${err?.message}`)
+      return ''
+    }
+  }
+
   public clearAuditLog(): boolean {
     try {
       if (fs.existsSync(this.logFilePath)) {

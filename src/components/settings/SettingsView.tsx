@@ -70,6 +70,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   } = useOllamaModelUpdates(settings.ollamaHost, onRefreshDiagnostics)
   const [runningModels, setRunningModels] = useState<RunningModelInfo[]>([])
 
+  const modelUsage = React.useMemo(() => {
+    const usage = new Map<string, string[]>()
+    const labels: Record<string, string> = {
+      codingModel: 'Coding', codingFallbackModel: 'Coding fallback',
+      chatModel: 'Chat/RAG', chatFallbackModel: 'Chat fallback',
+      translationModel: 'Traduzione', translationFallbackModel: 'Traduzione fallback',
+      visionModel: 'Vision/OCR', embeddingModel: 'Embedding',
+      medicalModel: 'Medical', medicalFallbackModel: 'Medical fallback',
+      legalModel: 'Legal', legalFallbackModel: 'Legal fallback',
+    }
+    for (const [key, label] of Object.entries(labels)) {
+      const value = settings[key as keyof AppSettings]
+      if (typeof value !== 'string' || !value) continue
+      usage.set(value, [...(usage.get(value) || []), label])
+    }
+    return usage
+  }, [settings])
+
   useEffect(() => {
     let cancelled = false
     const fetchRunning = async () => {
@@ -440,6 +458,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   const vramGB = (vramBytes / 1024 ** 3).toFixed(1)
                   const requestedContext = settings.modelContextLengths?.[modelName]
                   const contextStatus = compareContextAllocation(requestedContext, runningInfo?.context_length)
+                  const usedByModules = modelUsage.get(modelName) || []
 
                   return (
                     <div
@@ -449,6 +468,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           ? 'bg-amber-950/20 border-amber-500/50 shadow-md shadow-amber-950/30 ring-1 ring-amber-500/40'
                           : isRunning
                           ? 'bg-cyan-950/30 border-cyan-500/50 shadow-md shadow-cyan-950/30 ring-1 ring-cyan-500/30'
+                          : usedByModules.length > 0
+                          ? 'bg-emerald-950/20 border-emerald-500/50 shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/20'
                           : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
                       }`}
                     >
@@ -466,6 +487,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shrink-0 flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> In Memoria
                             </span>
+                          ) : usedByModules.length > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shrink-0">
+                              In uso
+                            </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full text-[9px] font-mono text-slate-400 bg-slate-950 border border-slate-800 shrink-0">
                               Su Disco
@@ -480,6 +505,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         hardwareDefault={hardwareDefault}
                         onUpdateSettings={onUpdateSettings}
                       />
+
+                      {usedByModules.length > 0 && (
+                        <div className="text-[10px] text-emerald-300/90 bg-emerald-950/30 border border-emerald-900/50 rounded-lg px-2 py-1">
+                          Moduli: {usedByModules.join(' · ')}
+                        </div>
+                      )}
 
                       {/* Running VRAM / RAM detail if active */}
                         {isRunning && (

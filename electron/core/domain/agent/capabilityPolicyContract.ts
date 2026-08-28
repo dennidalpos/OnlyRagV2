@@ -73,11 +73,9 @@ export const capabilityPolicyAuditEventSchema = z.object({
   consentId: z.string().trim().min(1).max(200).optional(),
 }).strict()
 
-export type CapabilityPolicyMode = z.infer<typeof capabilityPolicyModeSchema>
 export type Capability = z.infer<typeof capabilitySchema>
 export type CapabilityOperation = z.infer<typeof capabilityOperationSchema>
 export type CapabilityConsent = z.infer<typeof capabilityConsentSchema>
-export type CapabilityLimits = z.infer<typeof capabilityLimitsSchema>
 export type CapabilityPolicyRequest = z.infer<typeof capabilityPolicyRequestSchema>
 export type CapabilityPolicyDecision = z.infer<typeof capabilityPolicyDecisionSchema>
 export type CapabilityPolicyAuditEvent = z.infer<typeof capabilityPolicyAuditEventSchema>

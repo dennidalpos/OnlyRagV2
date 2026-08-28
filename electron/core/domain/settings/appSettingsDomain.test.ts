@@ -9,7 +9,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.language).toBe('it')
     expect(defaults.autoInstallHubSkills).toBe('disabled')
     expect(defaults.enableSkillRouter).toBe(true)
-    expect(defaults.maxToolCallSteps).toBe(50)
+    expect(defaults.maxToolCallSteps).toBe(0)
   })
 
   it('should sanitize empty or corrupted input to defaults', () => {
@@ -55,10 +55,10 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(customSteps.maxToolCallSteps).toBe(120)
 
     const invalidNegative = sanitizeAppSettings({ maxToolCallSteps: -5 })
-    expect(invalidNegative.maxToolCallSteps).toBe(50)
+    expect(invalidNegative.maxToolCallSteps).toBe(0)
 
     const invalidTooHigh = sanitizeAppSettings({ maxToolCallSteps: 9999 })
-    expect(invalidTooHigh.maxToolCallSteps).toBe(50)
+    expect(invalidTooHigh.maxToolCallSteps).toBe(0)
   })
 
   it('drops prompt override keys that do not name a prompt node', () => {

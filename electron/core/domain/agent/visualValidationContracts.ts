@@ -66,6 +66,3 @@ export const visualValidationResultSchema = z.object({
     context.addIssue({ code: 'custom', path: ['error'], message: 'UNAVAILABLE requires an explanation' })
   }
 })
-
-export type VisualValidationRequest = z.infer<typeof visualValidationRequestSchema>
-export type VisualValidationResult = z.infer<typeof visualValidationResultSchema>

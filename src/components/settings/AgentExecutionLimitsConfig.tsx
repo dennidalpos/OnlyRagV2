@@ -83,7 +83,7 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
             min={10}
             max={200}
             step={5}
-            value={settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200) ? 200 : (settings.maxToolCallSteps || 50)}
+            value={settings.maxToolCallSteps === 0 || settings.maxToolCallSteps === undefined || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200) ? 200 : settings.maxToolCallSteps}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10)
               onUpdateSettings({ maxToolCallSteps: val >= 200 ? 0 : val })
@@ -92,7 +92,7 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
             aria-label={t('settings.toolCallStepsTitle')}
           />
           <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[70px] text-center shadow-inner">
-            {settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200)
+            {settings.maxToolCallSteps === 0 || settings.maxToolCallSteps === undefined || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200)
               ? t('settings.toolCallStepsUnlimited')
               : t('settings.toolCallStepsValue', { steps: settings.maxToolCallSteps || 50 })}
           </span>

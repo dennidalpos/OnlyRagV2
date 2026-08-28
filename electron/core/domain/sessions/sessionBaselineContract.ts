@@ -48,8 +48,5 @@ export const baselineSnapshotSchema = z.object({
   entries: z.array(baselineEntrySchema).max(100_000),
 }).strict()
 
-export type WorkspaceClassification = z.infer<typeof workspaceClassificationSchema>
-export type InitialGitState = z.infer<typeof initialGitStateSchema>
 export type SessionManifest = z.infer<typeof sessionManifestSchema>
-export type BaselineEntry = z.infer<typeof baselineEntrySchema>
 export type BaselineSnapshot = z.infer<typeof baselineSnapshotSchema>

@@ -54,8 +54,6 @@ export const toolContractSchema = z.object({
   }
 })
 
-export type ToolContract = z.infer<typeof toolContractSchema>
-
 export const toolExecutionResultSchema = z.object({
   outputForHistory: z.string(),
   logMessage: z.string(),
@@ -70,8 +68,6 @@ export const toolExecutionResultSchema = z.object({
   verification: z.object({ ran: z.literal(true), passed: z.boolean() }).strict().optional(),
   noOpMutation: z.boolean().optional(),
 }).strict()
-
-export type ToolExecutionResultContract = z.infer<typeof toolExecutionResultSchema>
 
 export interface ToolExecutionResult {
   outputForHistory: string

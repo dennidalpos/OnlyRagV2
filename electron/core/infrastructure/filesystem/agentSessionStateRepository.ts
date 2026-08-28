@@ -187,7 +187,7 @@ export class AgentSessionStateRepository {
           workspacePath,
           agentMode: 'agent',
           stepCount: 0,
-          maxSteps: 50,
+          maxSteps: 0,
           episodes: [],
           recentFullLogs: [],
           planMilestones,

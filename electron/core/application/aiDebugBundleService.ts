@@ -11,6 +11,7 @@ import os from 'node:os'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRepository'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { DEV_TOOL_ALLOWLIST, extractVersion } from '../domain/agent/devToolchain'
 import stripAnsi from 'strip-ansi'
 import type { AppSettings } from '../../../src/types'
@@ -104,6 +105,19 @@ export class AiDebugBundleService {
         .join('\n\n')
     }
 
+    // Keep the complete chronological payload available to a log analyst. The
+    // trajectory above is intentionally compact, but it is not sufficient to
+    // diagnose prompt assembly, model output, or a tool's exact response.
+    const persistedAuditLog = codingAgentLogger.readSessionAuditLog(sessionId)
+    const detailedLogSection = persistedAuditLog || (rawLogs.length > 0
+      ? rawLogs.map((entry: any) => [
+          `### Step ${entry.step} — Tool: \`${entry.tool}\``,
+          '```text',
+          stripAnsi(String(entry.output || '')),
+          '```',
+        ].join('\n')).join('\n\n')
+      : 'Nessun dettaglio cronologico persistito per questa sessione.')
+
     // 6. Plan Milestones State
     const milestones = sessionState?.planMilestones || []
     let planSummary = 'Nessun piano formalizzato per questa sessione.'
@@ -159,14 +173,19 @@ ${failureSection}
 
 ---
 
-## 5. File Modifications & Working Tree Diff
+## 5. Complete Chronological Tool Flow
+${detailedLogSection}
+
+---
+
+## 6. File Modifications & Working Tree Diff
 - **Status Git Files:** ${gitStatusLines.length > 0 ? gitStatusLines.join(', ') : 'None'}
 - **Diff Unificato:**
 ${gitDiffBlock}
 
 ---
 
-## 6. Execution Plan & Milestones State
+## 7. Execution Plan & Milestones State
 ${planSummary}
 
 ---

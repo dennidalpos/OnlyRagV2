@@ -231,7 +231,7 @@ export interface AppSettings {
    */
   customPromptOverrides?: Record<string, string>
   // Concurrency & Task Queue Settings
-  maxToolCallSteps?: number // Range: 10-200, default 50
+  maxToolCallSteps?: number // Range: 10-200, 0 = unlimited, default unlimited
   // Coding Agent Audit & Debug Logging
   enableCodingAgentDebugLog?: boolean
   // Plan Approval Settings

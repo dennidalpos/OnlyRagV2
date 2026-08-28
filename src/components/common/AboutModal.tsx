@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState } from 'react'
 import { Modal } from './Modal'
 import {
   X,
@@ -10,8 +10,6 @@ import {
   Heart,
   ShieldCheck,
   Package,
-  Search,
-  RotateCcw,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import type { TranslationKey } from '../../i18n'
@@ -370,9 +368,6 @@ export const CATEGORY_TABS: { id: string; labelKey: TranslationKey }[] = [
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation()
   const [copiedUrl, setCopiedUrl] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [searchQuery, setSearchQuery] = useState<string>('')
-
 
   const repoUrl = APP_REPOSITORY_URL
 
@@ -393,21 +388,6 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       window.open(url, '_blank', 'noopener,noreferrer')
     }
   }
-
-  const filteredModules = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    return UPSTREAM_MODULES.filter((m) => {
-      const matchCategory = selectedCategory === 'all' || m.category === selectedCategory
-      if (!matchCategory) return false
-      if (!query) return true
-      return (
-        m.name.toLowerCase().includes(query) ||
-        m.description.toLowerCase().includes(query) ||
-        m.license.toLowerCase().includes(query) ||
-        m.version.toLowerCase().includes(query)
-      )
-    })
-  }, [selectedCategory, searchQuery])
 
   if (!isOpen) return null
 
@@ -543,7 +523,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                   <Package className="w-5 h-5 text-cyan-400" /> {t('about.creditsTitle')}
                   <span className="text-[11px] font-normal text-cyan-400/80 bg-cyan-950/40 px-2 py-0.5 rounded-full border border-cyan-800/40 font-mono">
-                    {t('about.technologiesCount', { count: filteredModules.length })}
+                    {t('about.technologiesCount', { count: UPSTREAM_MODULES.length })}
                   </span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -551,61 +531,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 </p>
               </div>
 
-              {/* Search & Category Filter Controls */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Search input */}
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t('about.searchPlaceholder')}
-                    className="w-full pl-8 pr-7 py-1 bg-slate-950 border border-slate-800 focus:border-cyan-500/50 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition-colors"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                      title={t('about.clearSearch')}
-                      aria-label={t('about.clearSearch')}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Category Filter Tabs */}
-                <div
-                  className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]"
-                  role="tablist"
-                  aria-label={t('about.categoryFilterLabel')}
-                >
-                  {CATEGORY_TABS.map((tab) => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selectedCategory === tab.id}
-                      onClick={() => setSelectedCategory(tab.id)}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition-colors focus-ring cursor-pointer ${
-                        selectedCategory === tab.id
-                          ? 'bg-slate-800 text-cyan-300 font-semibold shadow-sm'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {t(tab.labelKey)}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Modules Grid */}
-            {filteredModules.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filteredModules.map((item) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {UPSTREAM_MODULES.map((item) => (
                   <div
                     key={item.name}
                     className="p-3.5 rounded-xl bg-slate-950/60 hover:bg-slate-950 border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between gap-2 group"
@@ -645,35 +575,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="py-12 px-4 rounded-xl bg-slate-950/40 border border-dashed border-slate-800 flex flex-col items-center justify-center text-center space-y-3">
-                <div className="p-3 rounded-full bg-slate-900 text-slate-500">
-                  <Search className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-300">
-                    {t('about.noResults')}
-                  </p>
-                  {searchQuery && (
-                    <p className="text-[11px] text-slate-500 mt-0.5 font-mono">
-                      "{searchQuery}"
-                    </p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('')
-                    setSelectedCategory('all')
-                  }}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 focus-ring cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  {t('about.clearSearch')}
-                </button>
-              </div>
-            )}
+            </div>
           </div>
 
           {/* Special Acknowledgments & Open Standards */}

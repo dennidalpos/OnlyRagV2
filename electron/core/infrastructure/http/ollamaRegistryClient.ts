@@ -92,11 +92,18 @@ export class OllamaRegistryClient {
 
             try {
               const bodyBuffer = Buffer.concat(chunks)
-              const digest = crypto.createHash('sha256').update(bodyBuffer).digest('hex')
+              // Ollama's /api/tags digest is the OCI manifest digest. Prefer the
+              // registry's authoritative Docker-Content-Digest header; hashing the
+              // response body is only a compatibility fallback for older/mock registries.
+              const headerDigest = res.headers?.['docker-content-digest']
+              const digest = Array.isArray(headerDigest) ? headerDigest[0] : headerDigest
+              const resolvedDigest = typeof digest === 'string' && digest.trim()
+                ? digest.trim()
+                : crypto.createHash('sha256').update(bodyBuffer).digest('hex')
               resolve({
                 success: true,
                 statusCode: 200,
-                digest,
+                digest: resolvedDigest,
               })
               record(200, 'none')
             } catch (err: any) {

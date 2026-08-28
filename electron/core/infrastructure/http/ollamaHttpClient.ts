@@ -171,7 +171,13 @@ export class OllamaHttpClient {
                 }
               }
               record(200, 'none')
-              resolve(map)
+              // `details.context_length` is not present in every Ollama version.
+              // `/api/show` exposes the model's trained context in model_info, so
+              // enrich the tag facts before returning them to the renderer.
+              Promise.all(Object.keys(map).map(async (name) => {
+                const contextLength = await this.getModelContextLength(name)
+                if (contextLength !== undefined) map[name].contextLength = contextLength
+              })).finally(() => resolve(map))
             } catch (err: any) {
               record(200, 'parse')
               logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags metrics: ${err.message}`)
@@ -190,6 +196,45 @@ export class OllamaHttpClient {
         record(0, 'timeout')
         resolve({})
       })
+      req.end()
+    })
+  }
+
+  private getModelContextLength(modelName: string): Promise<number | undefined> {
+    const urlOpts = this.resolveUrl('/api/show')
+    const postData = JSON.stringify({ model: modelName })
+    return new Promise((resolve) => {
+      const req = http.request({
+        hostname: urlOpts.hostname,
+        port: urlOpts.port,
+        path: urlOpts.path,
+        method: 'POST',
+        agent: httpAgent,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+      }, (res) => {
+        let data = ''
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) return resolve(undefined)
+            const parsed = JSON.parse(data)
+            const candidates = [
+              parsed?.details?.context_length,
+              parsed?.model_info?.context_length,
+              ...Object.entries(parsed?.model_info || {})
+                .filter(([key]) => key.endsWith('.context_length'))
+                .map(([, value]) => value),
+            ]
+            const value = candidates.find((candidate) => typeof candidate === 'number' && candidate > 0)
+            resolve(typeof value === 'number' ? value : undefined)
+          } catch {
+            resolve(undefined)
+          }
+        })
+      })
+      req.on('error', () => resolve(undefined))
+      req.setTimeout(5000, () => { req.destroy(); resolve(undefined) })
+      req.write(postData)
       req.end()
     })
   }

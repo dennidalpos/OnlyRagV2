@@ -81,8 +81,6 @@ export class NetworkApprovedPolicyGateway implements CapabilityPolicyGateway {
   }
 }
 
-export const networkApprovedPolicyGateway = new NetworkApprovedPolicyGateway()
-
 /** Application boundary for the durable audit path; authorization remains pure and testable. */
 export async function authorizeAndPersistNetworkApproved(
   input: CapabilityPolicyRequest,

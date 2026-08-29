@@ -24,7 +24,7 @@ import { discoverProjectProfile } from '../infrastructure/filesystem/projectProf
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 // The exact line format below is mandatory, not stylistic: GoalDecompositionPlanner.parsePlanFromText
 // (planAndSolveGraph.ts) recognizes "- [ ] text" / "N. text" lines and nested sub-bullets.

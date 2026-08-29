@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { WorkspaceProject } from '../../../../src/types'
+import type { WorkspaceProject } from '../../../../shared/types'
 
 /** Basename of a filesystem path, used as the display name for a newly registered project. */
 export function deriveNameFromPath(projectPath: string): string {

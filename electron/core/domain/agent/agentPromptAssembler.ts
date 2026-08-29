@@ -1,6 +1,6 @@
 import { PromptCompiler } from './promptCompiler'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 import type { AgentMode } from './agentTypes'
 
 export interface PromptAssemblerInput {

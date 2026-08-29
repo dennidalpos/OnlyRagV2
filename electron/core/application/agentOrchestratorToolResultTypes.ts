@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'

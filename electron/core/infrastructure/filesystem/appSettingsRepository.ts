@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { logger } from '../../../diagnostics'
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 import { sanitizeAppSettings } from '../../domain/settings/appSettingsDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 

@@ -1,5 +1,5 @@
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../src/types'
+import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'

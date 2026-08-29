@@ -1,5 +1,5 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../src/types'
+import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'

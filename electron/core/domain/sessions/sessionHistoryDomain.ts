@@ -1,4 +1,4 @@
-import type { AgentActionLog, AgentPlan, CodingSession, ExecutedPrompt } from '../../../../src/types'
+import type { AgentActionLog, AgentPlan, CodingSession, ExecutedPrompt } from '../../../../shared/types'
 
 /** Prefix used by the agent action log for the entry that records the user prompt. */
 export const USER_PROMPT_LOG_PREFIX = 'User Prompt: '

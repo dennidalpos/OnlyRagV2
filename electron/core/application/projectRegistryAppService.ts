@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { WorkspaceProject } from '../../../src/types'
+import type { WorkspaceProject } from '../../../shared/types'
 import { logger } from '../../diagnostics'
 import { projectRegistryRepository } from '../infrastructure/filesystem/projectRegistryRepository'
 import { sessionHistoryAppService } from './sessionHistoryAppService'

@@ -1,4 +1,4 @@
-import type { ArtifactRecord, ArtifactSaveInput } from '../../../src/types'
+import type { ArtifactRecord, ArtifactSaveInput } from '../../../shared/types'
 import { artifactRepository } from '../infrastructure/filesystem/artifactRepository'
 
 export class ArtifactAppService {

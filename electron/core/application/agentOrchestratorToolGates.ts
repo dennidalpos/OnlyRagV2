@@ -1,5 +1,5 @@
 import type { AgentToolCall } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode } from '../../../src/types'
+import type { AgentExecutionMode } from '../../../shared/types'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'

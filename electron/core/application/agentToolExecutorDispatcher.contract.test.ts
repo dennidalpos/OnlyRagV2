@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { AgentToolExecutorService } from './agentToolExecutorService'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import { toolExecutionResultSchema } from '../domain/agent/tools/toolExecutionContracts'
 
 describe('AgentToolExecutorService dispatcher contract', () => {

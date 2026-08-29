@@ -10,7 +10,7 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { PlanMilestone } from '../domain/agent/planAndSolveGraph'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',

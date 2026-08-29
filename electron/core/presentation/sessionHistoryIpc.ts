@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { sessionHistoryAppService } from '../application/sessionHistoryAppService'
-import type { CodingSession } from '../../../src/types'
+import type { CodingSession } from '../../../shared/types'
 
 export function registerSessionHistoryIpcHandlers() {
   ipcMain.handle('sessions:list', async (_event: unknown, workspacePath?: string | null) => {

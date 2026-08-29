@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { WorkspaceProject } from '../../../../src/types'
+import type { WorkspaceProject } from '../../../../shared/types'
 import { deriveNameFromPath, upsertProject, touchProject, sortProjectsByRecency, mergeProjects, renameProjectInList } from './projectRegistryDomain'
 
 function buildProject(path: string, overrides: Partial<WorkspaceProject> = {}): WorkspaceProject {

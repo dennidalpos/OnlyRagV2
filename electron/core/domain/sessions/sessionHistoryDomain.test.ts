@@ -6,7 +6,7 @@ import {
   toIsoTimestamp,
   upsertSession,
 } from './sessionHistoryDomain'
-import type { CodingSession } from '../../../../src/types'
+import type { CodingSession } from '../../../../shared/types'
 
 describe('SessionHistoryDomain Unit Tests', () => {
   it('should keep ISO timestamps and replace unparsable legacy clock times with the fallback', () => {

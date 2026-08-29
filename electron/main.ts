@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import { isAllowedAppNavigation } from './navigationPolicy'
 
 // Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/onlyrag-v2)
 app.name = 'onlyrag-v2'
@@ -68,7 +69,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
     },
     autoHideMenuBar: true,
   })
@@ -78,6 +79,13 @@ function createWindow() {
       shell.openExternal(url)
     }
     return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isAllowedAppNavigation(url, VITE_DEV_SERVER_URL)) {
+      event.preventDefault()
+      logger.log('WARN', 'MainProcess', `Blocked renderer navigation outside the application origin: ${url}`)
+    }
   })
 
   win.webContents.on('render-process-gone', (_, details) => {

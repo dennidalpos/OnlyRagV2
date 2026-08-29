@@ -33,7 +33,7 @@ import { buildSkillAdherenceRefusal, validateSkillAdherence } from '../domain/sk
 import { workspaceIncrementalTypecheck } from '../infrastructure/process/workspaceIncrementalTypecheck'
 import { type DevToolStatus } from '../domain/agent/devToolchain'
 import { probeToolchain } from '../domain/agent/tools/execution/devToolchainTools'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
 import { authorizeAndPersistNetworkApproved } from '../domain/agent/networkApprovedPolicy'

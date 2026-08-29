@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { agentToolExecutorService } from './agentToolExecutorService'

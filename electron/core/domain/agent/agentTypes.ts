@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 

@@ -7,7 +7,7 @@ import { ollamaAppService } from './ollamaAppService'
 import { extractDeliverablePaths } from '../domain/agent/milestoneDeliverableResolver'
 import { isFalsifiableMilestone } from '../domain/agent/planFalsifiabilityNormalizer'
 import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {

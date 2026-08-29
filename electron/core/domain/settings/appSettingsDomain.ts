@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 import { PROMPT_NODE_IDS, type PromptNodeId } from '../agent/promptHierarchyRegistry'
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { assembleTurnPrompt } from './agentPromptAssembler'
 import { HardwareProfileResolver } from './hardwareProfileResolver'
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 
 describe('AgentPromptAssembler Domain Unit Tests', () => {
   const defaultSettings: AppSettings = {

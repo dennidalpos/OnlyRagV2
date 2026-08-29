@@ -7,7 +7,7 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
   AgentStreamTransport: {

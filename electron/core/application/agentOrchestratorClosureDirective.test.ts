@@ -9,7 +9,7 @@ import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import type { ResponseInterpreterContext } from './agentOrchestratorResponseInterpreterTypes'
 
 /**

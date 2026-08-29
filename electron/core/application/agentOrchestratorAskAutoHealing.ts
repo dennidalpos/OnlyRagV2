@@ -1,5 +1,5 @@
 import type { AgentToolCall, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../src/types'
+import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 

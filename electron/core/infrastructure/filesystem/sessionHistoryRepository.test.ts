@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { sessionHistoryRepository } from './sessionHistoryRepository'
-import type { CodingSession } from '../../../../src/types'
+import type { CodingSession } from '../../../../shared/types'
 
 function buildSession(id: string, workspacePath: string | null, overrides: Partial<CodingSession> = {}): CodingSession {
   const nowIso = new Date().toISOString()

@@ -14,7 +14,7 @@ import { devToolProbeRepository } from '../infrastructure/process/devToolProbeRe
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { DEV_TOOL_ALLOWLIST, extractVersion } from '../domain/agent/devToolchain'
 import stripAnsi from 'strip-ansi'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 export interface AiDebugBundleOptions {
   sessionId: string

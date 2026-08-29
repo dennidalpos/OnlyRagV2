@@ -6,7 +6,7 @@ import {
   resolveNodeTemplate,
 } from './promptCompiler'
 import { CODING_TOOLS_BLOCK, CODING_CORE_DIRECTIVES } from './promptPresets'
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 
 const baseSettings = { customPromptOverrides: {} } as AppSettings
 

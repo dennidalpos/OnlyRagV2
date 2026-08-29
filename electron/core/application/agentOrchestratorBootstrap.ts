@@ -1,5 +1,5 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../src/types'
+import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'

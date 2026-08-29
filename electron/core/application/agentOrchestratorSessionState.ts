@@ -1,5 +1,5 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../src/types'
+import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 import { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'

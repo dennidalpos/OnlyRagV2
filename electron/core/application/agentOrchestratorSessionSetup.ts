@@ -4,7 +4,7 @@ import path from 'node:path'
 import { logger } from '../../diagnostics'
 import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 /**
  * Resolves the effective workspace directory for a run:

@@ -7,7 +7,7 @@ import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { toolExecutionResultSchema } from '../domain/agent/tools/toolExecutionContracts'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { TaskRunner } from '../infrastructure/process/taskRunner'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 describe('Wave 6 deterministic safety fixtures', () => {
   let workspacePath: string

@@ -8,7 +8,7 @@ import { planGenerationAppService } from '../application/planGenerationAppServic
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle('agent:start-task', async (_, payload: AgentTaskPayload) => {

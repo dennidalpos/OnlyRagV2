@@ -9,7 +9,7 @@ vi.mock('../../diagnostics', () => ({
 import { selectModelForTurn, freezeOrGrowContextWindow } from './agentOrchestratorPromptAssembly'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 
 /**

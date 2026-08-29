@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AgentInterviewAppService } from './agentInterviewAppService'
 import { ollamaAppService } from './ollamaAppService'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {

@@ -7,7 +7,7 @@ import { AgentToolExecutorService, agentToolExecutorService } from './agentToolE
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { webClient } from '../infrastructure/http/webClient'
 import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 describe('AgentToolExecutorService Unit Tests', () => {
   let tempDir: string

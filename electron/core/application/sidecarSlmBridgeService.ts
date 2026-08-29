@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { logger } from '../../diagnostics'
-import type { SlmLogDiagnosticReport } from '../../../src/types'
+import type { SlmLogDiagnosticReport } from '../../../shared/types'
 
 const SIDECAR_BASE = 'http://127.0.0.1:8000'
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 4 })

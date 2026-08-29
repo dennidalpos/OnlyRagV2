@@ -1,4 +1,4 @@
-import type { CodingSession } from '../../../src/types'
+import type { CodingSession } from '../../../shared/types'
 import { logger } from '../../diagnostics'
 import { normalizeSession } from '../domain/sessions/sessionHistoryDomain'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'

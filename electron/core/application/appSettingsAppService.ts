@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 import { AppSettingsRepository, appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { sanitizeAppSettings } from '../domain/settings/appSettingsDomain'
 

@@ -14,7 +14,7 @@ import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../domain/settings/modelContextPreference'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
-import type { AppSettings } from '../../../src/types'
+import type { AppSettings } from '../../../shared/types'
 
 export interface InterviewQuestion {
   id: string

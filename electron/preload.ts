@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IElectronAPI, AppSettings, CodingSession, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload } from '../src/types'
+import type { IElectronAPI, AppSettings, CodingSession, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload } from '../shared/types'
 
 const api: IElectronAPI = {
   runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),

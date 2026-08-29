@@ -91,6 +91,21 @@ Per massimizzare il throughput (token/s) ed eliminare i freeze su Windows, confi
 > [!WARNING]
 > `OLLAMA_KV_CACHE_TYPE` viene onorato da Ollama **solo** con `OLLAMA_FLASH_ATTENTION=1`. Sui profili senza GPU la variabile non viene piu' generata, perche' sarebbe inerte.
 
+### Configurazione del sidecar
+
+Il repository include [`.env.example`](../.env.example) come inventario senza segreti. L'app non carica automaticamente file `.env`: impostare le variabili nell'ambiente del processo prima di avviare Electron o il sidecar.
+
+| Variabile | Default | Effetto |
+| --- | --- | --- |
+| `ONLYRAG_DATA_DIR` | `%LOCALAPPDATA%\\OnlyRagV2` su Windows | Root dei dati LanceDB ed export del sidecar. |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Endpoint Ollama usato dal sidecar. |
+| `ONLYRAG_TABULAR_MAX_ROWS` | `300` | Massimo numero di righe per file tabulare. |
+| `ONLYRAG_EXCEL_MAX_ROWS_PER_SHEET` | `150` | Massimo numero di righe indicizzate per foglio Excel. |
+| `ONLYRAG_EXCEL_MAX_SHEETS` | `10` | Massimo numero di fogli Excel elaborati. |
+| `OLLAMA_MODELS` | non impostata | Override opzionale usato dalla diagnostica Electron per individuare i modelli locali. |
+
+Le dipendenze Python sono vincolate per le dipendenze dirette in [`sidecar/constraints.txt`](../sidecar/constraints.txt), basato sul runtime Python 3.12.10 verificato. `sidecar/requirements.txt` applica i vincoli in ogni installazione; aggiornare il file solo insieme alla suite sidecar e alla build PyInstaller.
+
 ### Script di Configurazione Rapida 1-Click (PowerShell)
 
 Eseguire in **PowerShell come Utente** per rendere le impostazioni permanenti:

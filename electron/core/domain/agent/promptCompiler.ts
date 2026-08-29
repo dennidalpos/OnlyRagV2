@@ -1,5 +1,5 @@
 import type { FeatureModule } from './promptPresets'
-import type { AppSettings } from '../../../../src/types'
+import type { AppSettings } from '../../../../shared/types'
 import {
   PROMPT_HIERARCHY,
   findPromptNode,

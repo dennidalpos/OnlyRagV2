@@ -6,7 +6,7 @@ import {
   calculateRealUsableVram,
   calculateUsableSystemRamGB,
   resolveMaxContextTokens,
-} from './hardwareProfileTiers'
+} from '../../shared/domain/hardware/hardwareProfileTiers'
 
 describe('hardwareProfileTiers', () => {
   describe('classifyHardwareProfileTier', () => {

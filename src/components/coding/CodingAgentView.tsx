@@ -30,9 +30,10 @@ interface CodingAgentViewProps {
   settings?: AppSettings
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
   diagnostics?: DiagnosticsData | null
+  isActive?: boolean
 }
 
-export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUpdateSettings, diagnostics }) => {
+export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ settings, onUpdateSettings, diagnostics, isActive = true }) => {
   const { t } = useTranslation()
   const c = useCodingAgent(settings)
 
@@ -392,4 +393,12 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = ({ settings, onUp
       />
     </div>
   )
-}
+}, (prev, next) => {
+  if (prev.isActive === false && next.isActive === false) return true
+  if (prev.isActive !== next.isActive) return false
+  return (
+    prev.settings === next.settings &&
+    prev.diagnostics === next.diagnostics &&
+    prev.onUpdateSettings === next.onUpdateSettings
+  )
+})

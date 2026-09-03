@@ -7,7 +7,7 @@ import {
   promoteMilestonesProvenBy,
   selectMilestonesAwaitingVerification,
 } from './agentOrchestratorCircuitBreakerAndVerification'
-import type { PlanMilestone } from '../domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
 
 /**

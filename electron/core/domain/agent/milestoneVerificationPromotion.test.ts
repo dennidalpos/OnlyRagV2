@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { partialDeliveryDirective, redeliveredMilestoneDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
-import type { PlanMilestone } from './planAndSolveGraph'
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 function milestone(id: string, title: string, status: PlanMilestone['status'] = 'pending'): PlanMilestone {
   return { id, title, status }

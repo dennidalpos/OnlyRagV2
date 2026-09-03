@@ -23,9 +23,9 @@
  * Pure domain: the caller supplies every fact from disk.
  */
 
-import { isCompletionMilestoneTitle } from './planAndSolveGraph'
-import type { PlanMilestone } from './planAndSolveGraph'
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
+import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import { assessPostVerificationClosure, buildClosureDirective } from './postVerificationClosure'
 import { shouldDirectUnprovableClosure, buildUnprovableMilestoneDirective } from './unprovableMilestoneDirective'
 import { buildVerificationFailingDirective } from './verificationAttemptTracker'

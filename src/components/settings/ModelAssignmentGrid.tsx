@@ -18,10 +18,10 @@ import {
   filterModelsByIntent,
 } from '../../services/modelIntentClassifier'
 import { resolveVerificationStatus } from '../../services/codingModelMatrix'
-import { CODING_CATALOG_MODEL_NAMES } from '../../services/hardwareModelCatalog'
+import { CODING_CATALOG_MODEL_NAMES } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { useOllamaModelMetrics } from '../../hooks/useOllamaModelMetrics'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
-import { resolveMaxContextTokens } from '../../services/hardwareProfileTiers'
+import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { ModelBadgeStrip } from './ModelBadgeStrip'
 import { ModelContextControl } from './ModelContextControl'
 

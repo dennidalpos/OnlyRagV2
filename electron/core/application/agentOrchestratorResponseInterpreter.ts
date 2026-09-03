@@ -1,5 +1,5 @@
-import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
-import { compilePlanMilestones } from '../domain/agent/planCompilation'
+import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
+import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
 import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
 import {

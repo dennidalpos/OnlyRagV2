@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { assessPostVerificationClosure, buildClosureDirective } from './postVerificationClosure'
-import type { PlanMilestone } from './planAndSolveGraph'
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 function milestone(id: string, title: string, status: PlanMilestone['status'] = 'in_progress'): PlanMilestone {
   return { id, title, status }

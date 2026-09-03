@@ -118,7 +118,8 @@ export function validateAST(filePath: string, content: string): ASTValidationRes
       scriptKind
     )
 
-    const diagnostics = (sourceFile as any).parseDiagnostics || []
+    const sourceWithDiags = sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }
+    const diagnostics = sourceWithDiags.parseDiagnostics || []
     if (diagnostics.length > 0) {
       const firstErr = diagnostics[0]
       const { line, character } = ts.getLineAndCharacterOfPosition(sourceFile, firstErr.start || 0)

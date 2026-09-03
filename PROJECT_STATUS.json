@@ -1,9 +1,6 @@
 {
   "todos": [
-    "W2.08 | P2 architettura | impatto medio | urgenza media | sforzo L | residuo: eliminare i 16 import renderer → electron/core per prompt, planner, diff, NLP, preferenze contesto modello, matching tag Ollama, capability tool-calling e pending-change; contratti TypeScript completati in shared/types",
-    "W2.09 | P2 architettura | impatto medio | urgenza media | sforzo M | consolidare i client HTTP del sidecar in infrastructure e rimuovere la duplicazione SidecarAppService/SidecarSlmBridgeService",
-    "W2.03 | P2 debito | impatto medio | urgenza media | sforzo M | consolidare le tre letture duplicate di /api/tags in ollamaHttpClient (metriche, digest e capabilities) in un percorso dati condiviso e testato",
-    "W2.04 | P3 manutenzione | impatto basso | urgenza bassa | sforzo S | isolare o documentare i warning di rete e i messaggi fatal git attesi nelle fixture dei test, senza nascondere errori reali",
-    "W2.05 | P2 qualità | impatto medio | urgenza media | sforzo M | introdurre un linter/formatter statico pin-nato con configurazione legacy esplicita e gate CI separato; oggi lint è un composito e format:check copre solo il diff Git"
+    "W2.05 | P2 qualità | impatto medio | urgenza media | sforzo M | introdurre un linter/formatter statico pin-nato con configurazione legacy esplicita e gate CI separato; oggi lint è un composito e format:check copre solo il diff Git",
+    "W2.06 | P3 manutenzione | impatto basso | urgenza bassa | sforzo S | valutare l'introduzione di factory fortemente tipizzate per i mock di BrowserWindow e EventEmitter nelle suite di test (agentOrchestrator, webClient, ollamaRegistryClient) per eliminare 'as any' residuo nei file .test.ts"
   ]
 }

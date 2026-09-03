@@ -26,6 +26,8 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['electron/**', 'node'],
       ['electron/**/*', 'node'],
+      ['shared/**', 'node'],
+      ['shared/**/*', 'node'],
       ['src/services/**', 'node'],
       ['src/constants/**', 'node'],
     ],
@@ -35,7 +37,7 @@ export default defineConfig({
     // Test files declare different Electron/application mock factories. Per-file module
     // isolation prevents those factories from leaking through the shared module cache.
     isolate: true,
-    include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx,mts}'],
+    include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.{ts,tsx}', 'shared/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx,mts}'],
     testTimeout: 5000,
     hookTimeout: 5000,
     coverage: {

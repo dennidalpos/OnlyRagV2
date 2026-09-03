@@ -54,7 +54,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     deregisterSession()
   }
 
-  const SESSION_TIMEOUT_MS = Math.max(5, (settings as any).agentSessionTimeoutMinutes || 45) * 60 * 1000
+  const SESSION_TIMEOUT_MS = Math.max(5, settings.agentSessionTimeoutMinutes || 45) * 60 * 1000
   session.timeoutHandle = setTimeout(async () => {
     // isSessionActive() already covers both guards a bare identity check would add: it is
     // false the instant this session is no longer the one registered under sessionId (e.g. a

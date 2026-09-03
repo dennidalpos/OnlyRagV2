@@ -4,7 +4,7 @@ import {
   collectTemplateTokens,
   collapseBlankRuns,
   TemplateSyntaxError,
-} from './promptTemplateEngine'
+} from '../../../../shared/domain/agent/promptTemplateEngine'
 
 describe('renderPromptTemplate', () => {
   it('substitutes variables without HTML-escaping them', () => {

@@ -6,9 +6,10 @@ import {
   type CapabilityPolicyDecision,
   type CapabilityPolicyRequest,
   type CapabilityPolicyGateway,
+  type CapabilityPolicyAuditStore,
 } from './capabilityPolicyContract'
 import { shellCommandHasEgress } from './offlineStrictPolicy'
-import type { CapabilityPolicyAuditRepository } from '../../infrastructure/logging/capabilityPolicyAuditRepository'
+
 
 function auditIdFor(request: CapabilityPolicyRequest): string {
   return `policy-${request.sessionId}-${request.toolName}-${request.operation}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200)
@@ -84,7 +85,7 @@ export class NetworkApprovedPolicyGateway implements CapabilityPolicyGateway {
 /** Application boundary for the durable audit path; authorization remains pure and testable. */
 export async function authorizeAndPersistNetworkApproved(
   input: CapabilityPolicyRequest,
-  repository: Pick<CapabilityPolicyAuditRepository, 'append'>,
+  repository: CapabilityPolicyAuditStore,
   timestamp: string = new Date().toISOString(),
 ): Promise<CapabilityPolicyDecision> {
   const decision = authorizeNetworkApproved(input)

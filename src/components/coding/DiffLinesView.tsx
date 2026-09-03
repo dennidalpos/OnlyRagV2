@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { collapseContext, type DiffLine } from '../../../electron/core/domain/agent/diffEngine'
+import { collapseContext, type DiffLine } from '../../../shared/domain/agent/diffEngine'
 
 const LINE_STYLE: Record<DiffLine['type'], { row: string; marker: string; sign: string }> = {
   add: { row: 'bg-emerald-950/40 text-emerald-200', marker: 'text-emerald-400', sign: '+' },

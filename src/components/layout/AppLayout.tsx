@@ -24,10 +24,10 @@ const IngestionView = lazy(() => import('../ingestion/IngestionView').then((m) =
 const ChatView = lazy(() => import('../chat/ChatView').then((m) => ({ default: m.ChatView })))
 const TranslationView = lazy(() => import('../translation/TranslationView').then((m) => ({ default: m.TranslationView })))
 const CodingAgentView = lazy(() => import('../coding/CodingAgentView').then((m) => ({ default: m.CodingAgentView })))
-import { DiagnosticsDrawer } from '../diagnostics/DiagnosticsDrawer'
-import { AboutModal } from '../common/AboutModal'
+const DiagnosticsDrawer = lazy(() => import('../diagnostics/DiagnosticsDrawer').then((m) => ({ default: m.DiagnosticsDrawer })))
+const AboutModal = lazy(() => import('../common/AboutModal').then((m) => ({ default: m.AboutModal })))
+const HardwareSetupWizardModal = lazy(() => import('../common/HardwareSetupWizardModal').then((m) => ({ default: m.HardwareSetupWizardModal })))
 import { OnlyRagLogo } from '../common/OnlyRagLogo'
-import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
@@ -202,6 +202,12 @@ export const AppLayout: React.FC = () => {
     } catch {}
     handleUpdateSettings({ hasCompletedInitialSetup: true })
   }, [handleUpdateSettings])
+
+  const handleOpenWizard = useCallback(() => setIsWizardOpen(true), [])
+  const handleOpenDiagnostics = useCallback(() => setIsDiagnosticsDrawerOpen(true), [])
+  const handleCloseDiagnostics = useCallback(() => setIsDiagnosticsDrawerOpen(false), [])
+  const handleOpenAboutModal = useCallback(() => setIsAboutModalOpen(true), [])
+  const handleCloseAboutModal = useCallback(() => setIsAboutModalOpen(false), [])
 
   const handleSelectTab = (tab: NavTab) => {
     setActiveTab(tab)
@@ -429,7 +435,7 @@ export const AppLayout: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setIsWizardOpen(true)}
+              onClick={handleOpenWizard}
               aria-label={t('settings.hardwareWizard')}
               title={t('settings.hardwareWizard')}
               className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 font-medium rounded-xl transition-all focus-ring active:scale-95"
@@ -439,7 +445,7 @@ export const AppLayout: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setIsDiagnosticsDrawerOpen(true)}
+              onClick={handleOpenDiagnostics}
               aria-label={t('sidebar.logsConsole')}
               className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium rounded-xl transition-all focus-ring active:scale-95 flex items-center justify-center gap-1.5"
             >
@@ -449,7 +455,7 @@ export const AppLayout: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setIsAboutModalOpen(true)}
+              onClick={handleOpenAboutModal}
               aria-label={t('sidebar.contributionsAndInfo')}
               title={t('sidebar.contributionsAndInfo')}
               className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 font-medium rounded-xl transition-all focus-ring active:scale-95"
@@ -465,28 +471,28 @@ export const AppLayout: React.FC = () => {
         <div id="panel-ingestion" role="tabpanel" aria-labelledby="tab-ingestion" className={`h-full w-full flex flex-col ${activeTab === 'ingestion' ? '' : 'hidden'}`}>
           {visitedTabs.has('ingestion') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <IngestionView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
+              <IngestionView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'ingestion'} />
             </Suspense>
           )}
         </div>
         <div id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" className={`h-full w-full flex flex-col ${activeTab === 'chat' ? '' : 'hidden'}`}>
           {visitedTabs.has('chat') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
+              <ChatView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'chat'} />
             </Suspense>
           )}
         </div>
         <div id="panel-translation" role="tabpanel" aria-labelledby="tab-translation" className={`h-full w-full flex flex-col ${activeTab === 'translation' ? '' : 'hidden'}`}>
           {visitedTabs.has('translation') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <TranslationView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} />
+              <TranslationView settings={settings} diagnostics={diagnostics} onUpdateSettings={handleUpdateSettings} isActive={activeTab === 'translation'} />
             </Suspense>
           )}
         </div>
         <div id="panel-coding" role="tabpanel" aria-labelledby="tab-coding" className={`h-full w-full flex flex-col ${activeTab === 'coding' ? '' : 'hidden'}`}>
           {visitedTabs.has('coding') && (
             <Suspense fallback={<ViewChunkFallback />}>
-              <CodingAgentView settings={settings} onUpdateSettings={handleUpdateSettings} diagnostics={diagnostics} />
+              <CodingAgentView settings={settings} onUpdateSettings={handleUpdateSettings} diagnostics={diagnostics} isActive={activeTab === 'coding'} />
             </Suspense>
           )}
         </div>
@@ -498,8 +504,9 @@ export const AppLayout: React.FC = () => {
                 settings={settings}
                 onUpdateSettings={handleUpdateSettings}
                 onRefreshDiagnostics={runDiagnosticsScan}
-                onOpenAboutModal={() => setIsAboutModalOpen(true)}
-                onOpenWizard={() => setIsWizardOpen(true)}
+                onOpenAboutModal={handleOpenAboutModal}
+                onOpenWizard={handleOpenWizard}
+                isActive={activeTab === 'settings'}
               />
             </Suspense>
           )}
@@ -507,29 +514,41 @@ export const AppLayout: React.FC = () => {
       </main>
 
       {/* Diagnostics Drawer Modal */}
-      <DiagnosticsDrawer
-        isOpen={isDiagnosticsDrawerOpen}
-        onClose={() => setIsDiagnosticsDrawerOpen(false)}
-        diagnostics={diagnostics}
-        onRefreshDiagnostics={runDiagnosticsScan}
-      />
+      {isDiagnosticsDrawerOpen && (
+        <Suspense fallback={null}>
+          <DiagnosticsDrawer
+            isOpen={isDiagnosticsDrawerOpen}
+            onClose={handleCloseDiagnostics}
+            diagnostics={diagnostics}
+            onRefreshDiagnostics={runDiagnosticsScan}
+          />
+        </Suspense>
+      )}
 
       {/* About & Contributions Modal */}
-      <AboutModal
-        isOpen={isAboutModalOpen}
-        onClose={() => setIsAboutModalOpen(false)}
-      />
+      {isAboutModalOpen && (
+        <Suspense fallback={null}>
+          <AboutModal
+            isOpen={isAboutModalOpen}
+            onClose={handleCloseAboutModal}
+          />
+        </Suspense>
+      )}
 
       {/* Complete Hardware & Model Setup Wizard Modal */}
-      <HardwareSetupWizardModal
-        isOpen={isWizardOpen}
-        onClose={handleCloseWizard}
-        diagnostics={diagnostics}
-        settings={settings}
-        onUpdateSettings={handleUpdateSettings}
-        onRefreshDiagnostics={runDiagnosticsScan}
-        isInitialSetup={!settings.hasCompletedInitialSetup}
-      />
+      {isWizardOpen && (
+        <Suspense fallback={null}>
+          <HardwareSetupWizardModal
+            isOpen={isWizardOpen}
+            onClose={handleCloseWizard}
+            diagnostics={diagnostics}
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            onRefreshDiagnostics={runDiagnosticsScan}
+            isInitialSetup={!settings.hasCompletedInitialSetup}
+          />
+        </Suspense>
+      )}
 
       {/* Persistent Background Download Progress Banner / Pill */}
       {(isModelDownloading || lastCompletedModel) && (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
+import { checkVerificationCommandSafety, unsafeVerificationNote } from '../../../../shared/domain/agent/verificationCommandSafety'
 
 describe('checkVerificationCommandSafety', () => {
   it('accepts the build, test and typecheck commands a plan legitimately cites', () => {

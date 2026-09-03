@@ -1,4 +1,4 @@
-import type { PlanMilestone } from '../domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { agentSessionStateRepository, type SavedAgentSessionState } from '../infrastructure/filesystem/agentSessionStateRepository'
 
 /** Application boundary for renderer-facing session runtime state operations. */

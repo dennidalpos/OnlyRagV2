@@ -1,8 +1,6 @@
-import { ipcMain, BrowserWindow, shell } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { systemAppService } from '../application/systemAppService'
 import { taskAppService } from '../application/taskAppService'
-import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
-import { isLoopbackTarget } from '../domain/agent/localOnlyPolicy'
 
 export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle(
@@ -23,22 +21,11 @@ export function registerSystemIpcHandlers(winGetter: () => BrowserWindow | null)
   })
 
   ipcMain.handle('system:open-external', async (_, url: string) => {
-    if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
-      const settings = await appSettingsRepository.loadSettings()
-      if (settings?.capabilityPolicyMode === 'offline-strict') return false
-      if (settings?.capabilityPolicyMode === 'local-only' && !isLoopbackTarget(url)) return false
-      await shell.openExternal(url)
-      return true
-    }
-    return false
+    return systemAppService.openExternal(url)
   })
 
   ipcMain.handle('system:open-path', async (_, targetPath: string) => {
-    if (targetPath && typeof targetPath === 'string' && targetPath.trim()) {
-      await shell.openPath(targetPath.trim())
-      return true
-    }
-    return false
+    return systemAppService.openPath(targetPath)
   })
 
   ipcMain.handle('task:cancel', async (_, taskId?: string) => {

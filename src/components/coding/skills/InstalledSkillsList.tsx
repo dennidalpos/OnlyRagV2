@@ -96,16 +96,16 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            {[
+            {([
               { id: 'all', label: t('common.all') },
               { id: 'hub_original', label: 'Hub' },
               { id: 'hub_modified', label: 'Mod' },
               { id: 'local_custom', label: 'Local' },
-            ].map((f) => (
+            ] as const).map((f) => (
               <button
                 type="button"
                 key={f.id}
-                onClick={() => setOriginFilter(f.id as any)}
+                onClick={() => setOriginFilter(f.id)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                   originFilter === f.id
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'

@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../domain/agent/milestoneDeliverableResolver'
+import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
   awaitingVerificationNote,
@@ -10,10 +10,10 @@ import {
   selectMilestonesProvenByVerification,
 } from '../domain/agent/milestoneVerificationPromotion'
 import { scanCommandTouchedFiles } from '../infrastructure/filesystem/commandTouchedFilesScanner'
-import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import { compileSessionStopSummary } from '../domain/agent/sessionDebtTracker'
 import { isBrowserRenderableTarget } from '../domain/agent/browserPreviewVerification'
-import { checkVerificationCommandSafety } from '../domain/agent/verificationCommandSafety'
+import { checkVerificationCommandSafety } from '../../../shared/domain/agent/verificationCommandSafety'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
@@ -26,7 +26,7 @@ import { buildDiagnosticFixDirective, diagnosticFixTargetFile } from '../domain/
 import { readLocalModuleExports, readPackageExports } from '../infrastructure/filesystem/packageExportScanner'
 import { checkHtmlEntrypoint, CONVENTIONAL_ENTRY_PATHS } from '../domain/agent/entrypointIntegrity'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
-import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
 /** Returns a `return` outcome if the stagnation circuit breaker trips into a hard stop. */

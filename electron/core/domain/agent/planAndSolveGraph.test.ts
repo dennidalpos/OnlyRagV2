@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { GoalDecompositionPlanner, PlanMilestone, isCompletionMilestoneTitle } from './planAndSolveGraph'
+import { GoalDecompositionPlanner, PlanMilestone, isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 describe('isCompletionMilestoneTitle', () => {
   it('recognises the closing milestone in both languages', () => {

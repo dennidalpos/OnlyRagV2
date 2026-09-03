@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { AppSettings, AgentActionLog } from '../../types'
 import { formatClockTime } from '../../lib/timeFormat'
+import { logger } from '../../lib/logger'
 import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 
 interface SystemDiagnosticsModalProps {
@@ -76,7 +77,8 @@ export const SystemDiagnosticsModal: React.FC<SystemDiagnosticsModalProps> = ({
         }
       }
     } catch (err) {
-      console.error('Failed copying AI debug bundle:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('SystemDiagnosticsModal', `Failed copying AI debug bundle: ${msg}`)
     } finally {
       setIsCopyingDebugBundle(false)
     }

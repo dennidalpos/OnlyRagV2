@@ -1,34 +1,28 @@
 import http from 'node:http'
 import { logger } from '../../../diagnostics'
-import type { RunningModelInfo } from '../../domain/ollama/lifecycleCoordinator'
+import type { RunningModelInfo, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
 
+export type { OllamaModelMetrics }
+
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
-/**
- * The per-model facts Ollama already reports on `/api/tags`.
- *
- * Every field is optional because Ollama's payload varies by version and by how a model was
- * imported: a hand-built Modelfile can omit `details` entirely. A settings badge renders what
- * is there and stays silent about the rest, which is why nothing here is defaulted to a
- * plausible-looking number.
- */
-export interface OllamaModelMetrics {
-  /** e.g. ["completion", "tools", "insert"]. Empty when Ollama reports none. */
-  capabilities: string[]
-  /** Trained context length in tokens. Ollama clamps any larger `num_ctx` down to this. */
-  contextLength?: number
-  /** e.g. "7.6B". */
-  parameterSize?: string
-  /** e.g. "Q4_K_M". */
-  quantizationLevel?: string
-  /** e.g. "qwen2". */
-  family?: string
-  /** On-disk weight in bytes. */
-  sizeBytes?: number
-  /** SHA256 manifest digest reported by /api/tags */
+export interface RawOllamaTagModel {
+  name?: string
+  model?: string
   digest?: string
+  modified_at?: string
+  size?: number
+  details?: {
+    context_length?: number
+    parameter_size?: string
+    quantization_level?: string
+    family?: string
+    [key: string]: unknown
+  }
+  capabilities?: string[]
+  [key: string]: unknown
 }
 
 export class OllamaHttpClient {
@@ -78,7 +72,7 @@ export class OllamaHttpClient {
             try {
               const parsed = JSON.parse(data)
               const models: RunningModelInfo[] = Array.isArray(parsed.models)
-                ? parsed.models.map((model: any) => ({
+                ? parsed.models.map((model: RawOllamaTagModel) => ({
                     ...model,
                     context_length: typeof model?.context_length === 'number' ? model.context_length : undefined,
                   }))
@@ -122,7 +116,12 @@ export class OllamaHttpClient {
    * Returns an empty map (never a rejection) on any failure: metrics are for display and must
    * not be able to break a settings screen.
    */
-  getModelMetrics(customHost?: string): Promise<Record<string, OllamaModelMetrics>> {
+  /**
+   * Internal shared HTTP data path for /api/tags.
+   * Emits a single GET /api/tags request, records metrics, and parses the models array.
+   * Returns an empty array (never throws/rejects) on any network, timeout, HTTP or JSON error.
+   */
+  private fetchRawModelTags(customHost?: string): Promise<RawOllamaTagModel[]> {
     if (customHost) this.setBaseHost(customHost)
     const urlOpts = this.resolveUrl('/api/tags')
     const startedAt = Date.now()
@@ -148,40 +147,21 @@ export class OllamaHttpClient {
           res.on('end', () => {
             if (res.statusCode !== 200) {
               record(res.statusCode || 0, 'http')
-              resolve({})
+              resolve([])
               return
             }
             try {
               const parsed = JSON.parse(data)
-              const map: Record<string, OllamaModelMetrics> = {}
-              if (Array.isArray(parsed.models)) {
-                for (const m of parsed.models) {
-                  const name = m?.name || m?.model
-                  if (!name) continue
-                  const details = m?.details || {}
-                  map[name] = {
-                    capabilities: Array.isArray(m?.capabilities) ? m.capabilities : [],
-                    contextLength: typeof details.context_length === 'number' ? details.context_length : undefined,
-                    parameterSize: typeof details.parameter_size === 'string' ? details.parameter_size : undefined,
-                    quantizationLevel: typeof details.quantization_level === 'string' ? details.quantization_level : undefined,
-                    family: typeof details.family === 'string' ? details.family : undefined,
-                    sizeBytes: typeof m?.size === 'number' ? m.size : undefined,
-                    digest: typeof m?.digest === 'string' ? m.digest : undefined,
-                  }
-                }
-              }
               record(200, 'none')
-              // `details.context_length` is not present in every Ollama version.
-              // `/api/show` exposes the model's trained context in model_info, so
-              // enrich the tag facts before returning them to the renderer.
-              Promise.all(Object.keys(map).map(async (name) => {
-                const contextLength = await this.getModelContextLength(name)
-                if (contextLength !== undefined) map[name].contextLength = contextLength
-              })).finally(() => resolve(map))
+              if (Array.isArray(parsed?.models)) {
+                resolve(parsed.models)
+              } else {
+                resolve([])
+              }
             } catch (err: any) {
               record(200, 'parse')
-              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags metrics: ${err.message}`)
-              resolve({})
+              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags JSON: ${err.message}`)
+              resolve([])
             }
           })
         }
@@ -189,15 +169,61 @@ export class OllamaHttpClient {
 
       req.on('error', () => {
         record(0, 'network')
-        resolve({})
+        resolve([])
       })
       req.setTimeout(5000, () => {
         req.destroy()
         record(0, 'timeout')
-        resolve({})
+        resolve([])
       })
       req.end()
     })
+  }
+
+  /**
+   * Fetches /api/tags and keeps everything Ollama reports per installed model, not just the
+   * capabilities array.
+   *
+   * `getModelCapabilities` below reads the same endpoint and throws the rest away, which is why
+   * the settings panel could only ever show a model's name: `details.context_length`,
+   * `details.parameter_size` and `details.quantization_level` were fetched on every call and
+   * discarded. `context_length` in particular is the number the app most needs and least has —
+   * measured on 2026-08-24, Ollama silently clamps a requested `num_ctx` down to it and
+   * silently truncates the HEAD of any prompt that exceeds it.
+   *
+   * Returns an empty map (never a rejection) on any failure: metrics are for display and must
+   * not be able to break a settings screen.
+   */
+  async getModelMetrics(customHost?: string): Promise<Record<string, OllamaModelMetrics>> {
+    const rawModels = await this.fetchRawModelTags(customHost)
+    const map: Record<string, OllamaModelMetrics> = {}
+
+    for (const m of rawModels) {
+      const name = m?.name || m?.model
+      if (!name) continue
+      const details = m?.details || {}
+      map[name] = {
+        capabilities: Array.isArray(m?.capabilities) ? m.capabilities : [],
+        contextLength: typeof details.context_length === 'number' ? details.context_length : undefined,
+        parameterSize: typeof details.parameter_size === 'string' ? details.parameter_size : undefined,
+        quantizationLevel: typeof details.quantization_level === 'string' ? details.quantization_level : undefined,
+        family: typeof details.family === 'string' ? details.family : undefined,
+        sizeBytes: typeof m?.size === 'number' ? m.size : undefined,
+        digest: typeof m?.digest === 'string' ? m.digest : undefined,
+      }
+    }
+
+    // `details.context_length` is not present in every Ollama version.
+    // `/api/show` exposes the model's trained context in model_info, so
+    // enrich the tag facts before returning them to the renderer.
+    await Promise.all(
+      Object.keys(map).map(async (name) => {
+        const contextLength = await this.getModelContextLength(name)
+        if (contextLength !== undefined) map[name].contextLength = contextLength
+      })
+    )
+
+    return map
   }
 
   private getModelContextLength(modelName: string): Promise<number | undefined> {
@@ -242,71 +268,19 @@ export class OllamaHttpClient {
   /**
    * Fetches /api/tags and returns installed models with their tag names and manifest digests.
    */
-  getModelTagsWithDigests(customHost?: string): Promise<Array<{ name: string; digest: string; modifiedAt?: string }>> {
-    if (customHost) this.setBaseHost(customHost)
-    const urlOpts = this.resolveUrl('/api/tags')
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/api/tags', status, errorType, Date.now() - startedAt)
+  async getModelTagsWithDigests(customHost?: string): Promise<Array<{ name: string; digest: string; modifiedAt?: string }>> {
+    const rawModels = await this.fetchRawModelTags(customHost)
+    const list: Array<{ name: string; digest: string; modifiedAt?: string }> = []
+    for (const m of rawModels) {
+      const name = m?.name || m?.model
+      if (!name) continue
+      list.push({
+        name,
+        digest: typeof m?.digest === 'string' ? m.digest : '',
+        modifiedAt: typeof m?.modified_at === 'string' ? m.modified_at : undefined,
+      })
     }
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'GET',
-          agent: httpAgent,
-        },
-        (res) => {
-          let data = ''
-          res.on('data', (chunk) => { data += chunk })
-          res.on('end', () => {
-            if (res.statusCode !== 200) {
-              record(res.statusCode || 0, 'http')
-              resolve([])
-              return
-            }
-            try {
-              const parsed = JSON.parse(data)
-              const list: Array<{ name: string; digest: string; modifiedAt?: string }> = []
-              if (Array.isArray(parsed.models)) {
-                for (const m of parsed.models) {
-                  const name = m?.name || m?.model
-                  if (!name) continue
-                  list.push({
-                    name,
-                    digest: typeof m?.digest === 'string' ? m.digest : '',
-                    modifiedAt: typeof m?.modified_at === 'string' ? m.modified_at : undefined,
-                  })
-                }
-              }
-              record(200, 'none')
-              resolve(list)
-            } catch (err: any) {
-              record(200, 'parse')
-              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags for digests: ${err.message}`)
-              resolve([])
-            }
-          })
-        }
-      )
-
-      req.on('error', () => {
-        record(0, 'network')
-        resolve([])
-      })
-      req.setTimeout(5000, () => {
-        req.destroy()
-        record(0, 'timeout')
-        resolve([])
-      })
-      req.end()
-    })
+    return list
   }
 
   /**
@@ -316,68 +290,16 @@ export class OllamaHttpClient {
    * Returns an empty map (not a rejection) on any failure, so callers fall
    * back to the family allow-list heuristic transparently.
    */
-  getModelCapabilities(customHost?: string): Promise<Record<string, string[]>> {
-    if (customHost) this.setBaseHost(customHost)
-    const urlOpts = this.resolveUrl('/api/tags')
-    const startedAt = Date.now()
-    let recorded = false
-    const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
-      if (recorded) return
-      recorded = true
-      httpMetrics.record('/api/tags', status, errorType, Date.now() - startedAt)
+  async getModelCapabilities(customHost?: string): Promise<Record<string, string[]>> {
+    const rawModels = await this.fetchRawModelTags(customHost)
+    const map: Record<string, string[]> = {}
+    for (const m of rawModels) {
+      const name = m?.name || m?.model
+      if (name && Array.isArray(m?.capabilities)) {
+        map[name] = m.capabilities
+      }
     }
-
-    return new Promise((resolve) => {
-      const req = http.request(
-        {
-          hostname: urlOpts.hostname,
-          port: urlOpts.port,
-          path: urlOpts.path,
-          method: 'GET',
-          agent: httpAgent,
-        },
-        (res) => {
-          let data = ''
-          res.on('data', (chunk) => { data += chunk })
-          res.on('end', () => {
-            if (res.statusCode !== 200) {
-              record(res.statusCode || 0, 'http')
-              resolve({})
-              return
-            }
-            try {
-              const parsed = JSON.parse(data)
-              const map: Record<string, string[]> = {}
-              if (Array.isArray(parsed.models)) {
-                for (const m of parsed.models) {
-                  const name = m?.name || m?.model
-                  if (name && Array.isArray(m?.capabilities)) {
-                    map[name] = m.capabilities
-                  }
-                }
-              }
-              record(200, 'none')
-              resolve(map)
-            } catch (err: any) {
-              record(200, 'parse')
-              logger.log('WARN', 'OllamaClient', `Failed parsing /api/tags capabilities: ${err.message}`)
-              resolve({})
-            }
-          })
-        }
-      )
-
-      req.on('error', () => {
-        record(0, 'network')
-        resolve({})
-      })
-      req.setTimeout(5000, () => {
-        req.destroy()
-        record(0, 'timeout')
-        resolve({})
-      })
-      req.end()
-    })
+    return map
   }
 
   unloadModel(modelName: string, customHost?: string): Promise<{ success: boolean; error?: string }> {

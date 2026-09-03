@@ -27,7 +27,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { AppSettings } from '../../src/types'
-import type { PlanMilestone } from '../../electron/core/domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../shared/domain/agent/planAndSolveGraph'
 import type { SavedAgentSessionState } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
 import {

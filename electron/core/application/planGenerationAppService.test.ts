@@ -4,9 +4,9 @@ import path from 'node:path'
 import os from 'node:os'
 import { planGenerationAppService } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
-import { extractDeliverablePaths } from '../domain/agent/milestoneDeliverableResolver'
-import { isFalsifiableMilestone } from '../domain/agent/planFalsifiabilityNormalizer'
-import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
+import { extractDeliverablePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
+import { isFalsifiableMilestone } from '../../../shared/domain/agent/planFalsifiabilityNormalizer'
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AppSettings } from '../../../shared/types'
 
 vi.mock('./ollamaAppService', () => ({

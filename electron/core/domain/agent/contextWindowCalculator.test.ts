@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateDynamicContextWindow } from './contextWindowCalculator'
+import { calculateDynamicContextWindow } from '../../../../shared/domain/agent/contextWindowCalculator'
 
 describe('Context Window Calculator Domain Unit Tests', () => {
   it('should return minimum context (2048) for short prompts', () => {

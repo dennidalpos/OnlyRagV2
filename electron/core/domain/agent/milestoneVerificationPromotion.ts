@@ -16,10 +16,10 @@
  * Pure domain: the caller supplies the deliverable status of each milestone.
  */
 
-import { isCompletionMilestoneTitle } from './planAndSolveGraph'
-import type { PlanMilestone } from './planAndSolveGraph'
-import { AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
+import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import { AWAITING_VERIFICATION_MARKER } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 export interface PromotionCandidate {
   id: string

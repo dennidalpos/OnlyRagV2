@@ -1,6 +1,6 @@
 import type { AgentToolCall } from '../../agentTypes'
-import { computeLineDiff, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../../diffEngine'
-import { projectPendingChange } from '../../pendingChangeProjection'
+import { computeLineDiff, groupDiffIntoHunks, reconstructWithApprovedHunks } from '../../../../../../shared/domain/agent/diffEngine'
+import { projectPendingChange } from '../../../../../../shared/domain/agent/pendingChangeProjection'
 import { FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE } from '../toolExecutionContracts'
 
 /** Rewrites a mutation to the subset of hunks explicitly approved by the user. */

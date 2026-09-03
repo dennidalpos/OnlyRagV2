@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { AgentToolCall } from '../agentTypes'
-import type { PendingMutationType } from '../pendingChangeProjection'
+import type { PendingMutationType } from '../../../../../shared/domain/agent/pendingChangeProjection'
 
 const nonBlank = z.string().trim().min(1).max(4096)
 

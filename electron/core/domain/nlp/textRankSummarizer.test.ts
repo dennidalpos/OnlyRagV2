@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { TextRankSummarizer } from './textRankSummarizer'
+import { TextRankSummarizer } from '../../../../shared/domain/nlp/textRankSummarizer'
 
 describe('TextRankSummarizer NLP Unit Tests', () => {
   const sampleItalianText = `

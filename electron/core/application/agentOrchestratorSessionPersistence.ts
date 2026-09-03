@@ -1,6 +1,6 @@
 import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
-import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { agentSessionStateRepository, type AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'

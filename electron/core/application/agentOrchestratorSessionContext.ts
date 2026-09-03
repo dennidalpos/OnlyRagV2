@@ -4,7 +4,7 @@ import { compileSkillsContextBlock, type SkillMatchContext } from '../domain/ski
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
-import { generateCompactRepoMap } from '../domain/agent/compactSemanticRepoMapper'
+import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
 import {
   resolveWorkspacePath,
   buildDefaultAgentSettings,

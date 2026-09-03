@@ -15,7 +15,7 @@ vi.mock('electron', async (importOriginal) => ({
 
 vi.mock('../application/taskQueueAppService', () => ({ taskQueueAppService: {} }))
 vi.mock('../domain/agent/toolParser', () => ({ parseAgentToolCall: vi.fn() }))
-vi.mock('../application/sidecarSlmBridgeService', () => ({ sidecarSlmBridgeService: {} }))
+vi.mock('../application/sidecarAppService', () => ({ sidecarAppService: {} }))
 vi.mock('../application/planGenerationAppService', () => ({ planGenerationAppService: {} }))
 vi.mock('../application/aiDebugBundleService', () => ({ aiDebugBundleService: {} }))
 vi.mock('../application/agentSessionStateAppService', () => ({

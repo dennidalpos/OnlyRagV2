@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveToolCallingRoute, supportsNativeToolCalling, supportsNativeToolCallingByFamily } from './ollamaToolCallingCapability'
+import { resolveToolCallingRoute, supportsNativeToolCalling, supportsNativeToolCallingByFamily } from '../../../../shared/domain/agent/ollamaToolCallingCapability'
 
 describe('ollamaToolCallingCapability', () => {
   describe('resolveToolCallingRoute (session handshake)', () => {

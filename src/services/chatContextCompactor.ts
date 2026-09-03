@@ -1,6 +1,6 @@
 import type { ChatMessage } from '../types'
 import type { ChatContextBudget } from './chatContextBudget'
-import { TextRankSummarizer } from '../../electron/core/domain/nlp/textRankSummarizer'
+import { TextRankSummarizer } from '../../shared/domain/nlp/textRankSummarizer'
 
 export interface ChatCompactionResult {
   historyBlock: string

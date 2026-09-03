@@ -1,7 +1,7 @@
 /**
- * electron/core/application/sidecarSlmBridgeService.test.ts
+ * electron/core/application/sidecarAppService.test.ts
  *
- * Integration tests for SidecarSlmBridgeService — the Application Layer
+ * Integration tests for SidecarAppService — the Application Layer
  * HTTP bridge between Electron main process and the Python sidecar SLM endpoint.
  *
  * Tests verify the full roundtrip behaviour of:
@@ -21,7 +21,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { AddressInfo } from 'node:net'
-import { sidecarSlmBridgeService } from './sidecarSlmBridgeService'
+import { sidecarAppService } from './sidecarAppService'
 
 // ---------------------------------------------------------------------------
 // Minimal mock sidecar HTTP server
@@ -261,7 +261,7 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
     })
 
     it('scans candidate log files and detects CUDA_OOM, TOOL_LOOP, TRUNCATED_JSON with actionable remediation', () => {
-      const report = sidecarSlmBridgeService.analyzeLogsNativeFallback([testDir])
+      const report = sidecarAppService.analyzeLogsNativeFallback([testDir])
       expect(report).toBeDefined()
       expect(report.scanned_files.length).toBeGreaterThanOrEqual(1)
       expect(report.anomalies.length).toBeGreaterThanOrEqual(3)

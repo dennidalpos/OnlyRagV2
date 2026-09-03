@@ -45,9 +45,10 @@ interface IngestionViewProps {
   settings?: AppSettings
   diagnostics?: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
+  isActive?: boolean
 }
 
-export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
+export const IngestionView: React.FC<IngestionViewProps> = React.memo(({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
   const { t } = useTranslation()
   const ing = useIngestion(settings, diagnostics)
   const toast = useToast()
@@ -920,4 +921,12 @@ export const IngestionView: React.FC<IngestionViewProps> = ({ settings, diagnost
       )}
     </div>
   )
-}
+}, (prev, next) => {
+  if (prev.isActive === false && next.isActive === false) return true
+  if (prev.isActive !== next.isActive) return false
+  return (
+    prev.settings === next.settings &&
+    prev.diagnostics === next.diagnostics &&
+    prev.onUpdateSettings === next.onUpdateSettings
+  )
+})

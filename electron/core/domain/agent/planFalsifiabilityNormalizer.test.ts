@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isFalsifiableMilestone, normalizePlanFalsifiability } from './planFalsifiabilityNormalizer'
-import type { PlanMilestone } from './planAndSolveGraph'
+import { isFalsifiableMilestone, normalizePlanFalsifiability } from '../../../../shared/domain/agent/planFalsifiabilityNormalizer'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 function plan(...titles: string[]): PlanMilestone[] {
   return titles.map((title, idx) => ({ id: `m-${idx + 1}`, title, status: 'pending' as const }))

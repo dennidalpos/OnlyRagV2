@@ -7,7 +7,7 @@ import { recordCommandTouchedFiles, trackVerification } from './agentOrchestrato
 import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
-import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
+import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 

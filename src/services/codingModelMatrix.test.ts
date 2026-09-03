@@ -6,7 +6,7 @@ import {
   resolveVerificationStatus,
   selectWizardCodingSet,
 } from './codingModelMatrix'
-import type { HardwareProfileTier } from './hardwareProfileTiers'
+import type { HardwareProfileTier } from '../../shared/domain/hardware/hardwareProfileTiers'
 
 function entry(modelName: string, profiles: HardwareProfileTier[]) {
   return { modelName, recommendedForProfiles: profiles }

@@ -103,6 +103,8 @@ export function usePlanApproval({
     setActivePlanIndex(list.length > 0 ? list.length - 1 : 0)
   }, [activeSessionId])
 
+  const handleApprovePlanRef = useRef<(() => Promise<void>) | null>(null)
+
   const clearPlanTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -112,28 +114,26 @@ export function usePlanApproval({
 
   // Auto-proceed countdown effect
   useEffect(() => {
-    if (
-      currentPlan &&
-      currentPlan.status === 'ready' &&
-      autoProceed &&
-      !isAutoProceedPaused &&
-      countdownSeconds > 0
-    ) {
+    const isReady = currentPlan && currentPlan.status === 'ready' && autoProceed && !isAutoProceedPaused
+    if (!isReady) {
       clearPlanTimer()
-      timerRef.current = setInterval(() => {
-        setCountdownSeconds((prev) => {
-          if (prev <= 1) {
-            clearPlanTimer()
-            handleApprovePlan()
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
+      return
     }
 
+    clearPlanTimer()
+    timerRef.current = setInterval(() => {
+      setCountdownSeconds((prev) => {
+        if (prev <= 1) {
+          clearPlanTimer()
+          handleApprovePlanRef.current?.()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
     return () => clearPlanTimer()
-  }, [currentPlan?.status, currentPlan?.id, autoProceed, isAutoProceedPaused, countdownSeconds])
+  }, [currentPlan?.status, currentPlan?.id, autoProceed, isAutoProceedPaused, clearPlanTimer])
 
   const generatePlan = useCallback(
     async (prompt: string, targetModel?: string, currentStep: number = 0): Promise<AgentPlan> => {
@@ -264,6 +264,7 @@ export function usePlanApproval({
 
     onPlanApproved(approved)
   }, [currentPlan, clearPlanTimer, onPlanApproved, updateCurrentSessionPlans, activeSessionId, workspacePath])
+  handleApprovePlanRef.current = handleApprovePlan
 
   const handleRejectPlan = useCallback(() => {
     clearPlanTimer()
@@ -321,7 +322,7 @@ export function usePlanApproval({
       pendingFlowRef.current = { prompt, targetModel, currentStep }
 
       // Check if pre-flight interview is supported and enabled
-      if (window.electronAPI?.agentPlanInterview && settings && (settings as any).enablePrePlanInterview !== false) {
+      if (window.electronAPI?.agentPlanInterview && settings && settings.enablePrePlanInterview !== false) {
         setIsAnalyzingInterview(true)
         try {
           const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'

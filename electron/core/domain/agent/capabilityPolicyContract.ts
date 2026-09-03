@@ -84,3 +84,8 @@ export interface CapabilityPolicyGateway {
   authorize(request: CapabilityPolicyRequest): CapabilityPolicyDecision
   record(event: CapabilityPolicyAuditEvent): void
 }
+
+/** Domain port for persisting policy audit events. */
+export interface CapabilityPolicyAuditStore {
+  append(event: CapabilityPolicyAuditEvent): Promise<boolean>
+}

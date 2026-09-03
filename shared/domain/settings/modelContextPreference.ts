@@ -1,4 +1,4 @@
-import { MIN_MODEL_CONTEXT_LENGTH } from './appSettingsDomain'
+export const MIN_MODEL_CONTEXT_LENGTH = 4096
 
 export function resolveModelContextLength(
   model: string,

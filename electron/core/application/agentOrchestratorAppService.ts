@@ -399,7 +399,7 @@ export async function runAgentOrchestratorLoop(
       budgetExhausted,
       sessionActive: isSessionActive(),
       hasWorkspace: Boolean(workspacePath),
-      verifyBeforeFinish: (settings as any).verifyBeforeFinish !== false,
+      verifyBeforeFinish: settings.verifyBeforeFinish !== false,
       hasFileMutations: mutableFlags.hasFileMutations,
       hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
       promotableMilestoneCount: selectMilestonesAwaitingVerification({ workspacePath, goalPlanner }).length,

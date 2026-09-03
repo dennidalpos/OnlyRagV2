@@ -3,7 +3,7 @@ import { taskQueueAppService } from '../application/taskQueueAppService'
 import { respondToApproval } from '../application/agentOrchestratorAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
-import { sidecarSlmBridgeService } from '../application/sidecarSlmBridgeService'
+import { sidecarAppService } from '../application/sidecarAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
@@ -37,7 +37,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    * (truncated JSON, VRAM thrashing, tool-calling loops).
    */
   ipcMain.handle('agent:logs-analyze', async (_, extraPaths?: string[]) => {
-    return sidecarSlmBridgeService.analyzeLogs(extraPaths)
+    return sidecarAppService.analyzeLogs(extraPaths)
   })
 
   /**

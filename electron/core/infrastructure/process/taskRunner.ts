@@ -198,12 +198,13 @@ export class TaskRunner {
         if (st.isDirectory()) {
           executionCwd = targetCwd
         }
-      } catch (cwdErr: any) {
-        logger.log('WARN', 'TaskRunner', `Failed checking CWD '${targetCwd}': ${cwdErr.message}`)
+      } catch (cwdErr: unknown) {
+        const msg = cwdErr instanceof Error ? cwdErr.message : String(cwdErr)
+        logger.log('WARN', 'TaskRunner', `Failed checking CWD '${targetCwd}': ${msg}`)
       }
     }
 
-    let ptyModule: any = null
+    let ptyModule: typeof import('node-pty') | null = null
     try {
       ptyModule = require('node-pty')
     } catch {
@@ -299,7 +300,7 @@ export class TaskRunner {
               cols: 120,
               rows: 30,
               cwd: executionCwd,
-              env: execEnv as any,
+              env: execEnv as Record<string, string>,
             })
 
             const timeoutTimer = setTimeout(() => {

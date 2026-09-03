@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getModelContextChoices, resolveModelContextLength } from './modelContextPreference'
+import { getModelContextChoices, resolveModelContextLength } from '../../../../shared/domain/settings/modelContextPreference'
 
 describe('resolveModelContextLength', () => {
   it('uses the model preference without exceeding hardware or trained ceilings', () => {

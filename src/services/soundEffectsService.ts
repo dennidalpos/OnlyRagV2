@@ -8,13 +8,17 @@
 
 export type SoundEffectType = 'error' | 'interactive' | 'completion' | 'step'
 
+interface WindowWithWebkitAudio extends Window {
+  webkitAudioContext?: typeof AudioContext
+}
+
 export class SoundEffectsService {
   private audioCtx: AudioContext | null = null
 
   private getAudioContext(): AudioContext | null {
     if (typeof window === 'undefined') return null
     if (!this.audioCtx) {
-      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
+      const AudioCtxClass = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext
       if (AudioCtxClass) {
         this.audioCtx = new AudioCtxClass()
       }

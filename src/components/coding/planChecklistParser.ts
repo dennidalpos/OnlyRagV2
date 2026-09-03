@@ -1,5 +1,5 @@
 import type { AgentPlan } from '../../hooks/usePlanApproval'
-import { compilePlanFromText } from '../../../electron/core/domain/agent/planCompilation'
+import { compilePlanFromText } from '../../../shared/domain/agent/planCompilation'
 
 export interface PlanChecklistItem {
   id: string

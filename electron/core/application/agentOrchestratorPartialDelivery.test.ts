@@ -4,8 +4,8 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { recordMutationSideEffects } from './agentOrchestratorCircuitBreakerAndVerification'
-import { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
-import { TransactionalExecutionGuard } from '../domain/agent/transactionalExecutionGuard'
+import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
+import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
 
 /**

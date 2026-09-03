@@ -37,9 +37,10 @@ interface ChatViewProps {
   settings: AppSettings
   diagnostics: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
+  isActive?: boolean
 }
 
-export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
+export const ChatView: React.FC<ChatViewProps> = React.memo(({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
   const { t } = useTranslation()
   const c = useChatEngine(settings, diagnostics)
   const toast = useToast()
@@ -894,4 +895,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ settings, diagnostics, onUpd
       )}
     </div>
   )
-}
+}, (prev, next) => {
+  if (prev.isActive === false && next.isActive === false) return true
+  if (prev.isActive !== next.isActive) return false
+  return (
+    prev.settings === next.settings &&
+    prev.diagnostics === next.diagnostics &&
+    prev.onUpdateSettings === next.onUpdateSettings
+  )
+})

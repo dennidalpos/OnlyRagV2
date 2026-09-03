@@ -57,4 +57,14 @@ describe('AgentRuntimeModeFsm', () => {
     expect(planFsm.isToolAllowed('open_in_browser')).toBe(true)
     expect(planFsm.isToolAllowed('validate_visual_artifact')).toBe(true)
   })
+
+  it('safely handles arbitrary or unknown tool names without throwing or requiring casts', () => {
+    const fsm = new AgentRuntimeModeFsm('agent')
+    expect(fsm.isToolAllowed('unknown_custom_tool')).toBe(false)
+    expect(fsm.isToolAllowed('')).toBe(false)
+    expect(fsm.isToolAllowed('eval')).toBe(false)
+
+    const filtered = fsm.filterAllowedTools(['write_file', 'unknown_tool', 'run_command', 'another_random_string'])
+    expect(filtered).toEqual(['write_file', 'run_command'])
+  })
 })

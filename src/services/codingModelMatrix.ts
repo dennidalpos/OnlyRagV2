@@ -29,7 +29,7 @@
  * - `unknown`     — any tag the user pulled that this catalog has never heard of.
  */
 
-import type { HardwareProfileTier } from './hardwareProfileTiers'
+import type { HardwareProfileTier } from '../../shared/domain/hardware/hardwareProfileTiers'
 
 export type ModelVerificationStatus = 'verified' | 'compatible' | 'unsupported' | 'unknown'
 

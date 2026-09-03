@@ -106,14 +106,14 @@ export class AgentRuntimeModeFsm {
     return this.currentMode
   }
 
-  public isToolAllowed(toolName: SupportedToolName): boolean {
+  public isToolAllowed(toolName: string): boolean {
     const config = MODE_PERMISSIONS[this.currentMode]
-    return config.allowedTools.has(toolName)
+    return config.allowedTools.has(toolName as SupportedToolName)
   }
 
-  public filterAllowedTools(tools: SupportedToolName[]): SupportedToolName[] {
+  public filterAllowedTools(tools: (SupportedToolName | string)[]): SupportedToolName[] {
     const config = MODE_PERMISSIONS[this.currentMode]
-    return tools.filter((t) => config.allowedTools.has(t))
+    return tools.filter((t): t is SupportedToolName => config.allowedTools.has(t as SupportedToolName))
   }
 
   private normalizeMode(mode: string): RuntimeFsmState {

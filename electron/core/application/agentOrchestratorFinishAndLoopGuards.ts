@@ -2,7 +2,7 @@ import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { isCompletionMilestoneTitle } from '../domain/agent/planAndSolveGraph'
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domain/agent/loopEscapePolicy'
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
@@ -50,7 +50,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     // Blocking verification gate. The build requirement is no longer surfaced once and then
     // waived: the project's own verification is RUN here, and a failure is handed back for the
     // model to correct. See verificationGatePolicy.ts for why, and for the round limit.
-    const requireVerifiedBuild = (ctx.settings as any).verifyBeforeFinish !== false
+    const requireVerifiedBuild = ctx.settings.verifyBeforeFinish !== false
     if (requireVerifiedBuild && ctx.flags.hasFileMutations && !ctx.flags.hasVerifiedBuild) {
       ctx.emitLog('info', '🔎 Verifica del progetto prima della chiusura...')
       const run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk))
@@ -105,7 +105,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     ).length
 
     const dodCheck = ctx.executionGuard.validateTaskCompletion({
-      requireVerifiedBuild: (ctx.settings as any).verifyBeforeFinish !== false,
+      requireVerifiedBuild: ctx.settings.verifyBeforeFinish !== false,
       hasVerifiedBuild: ctx.flags.hasVerifiedBuild,
       pendingMilestonesCount: pendingAfterVerification,
       hasFileMutations: ctx.flags.hasFileMutations,

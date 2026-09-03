@@ -9,7 +9,7 @@ import {
   TRANSLATION_TIER_CATALOG,
   MEDICAL_TIER_CATALOG,
   LEGAL_TIER_CATALOG,
-} from './hardwareModelCatalog'
+} from '../../shared/domain/hardware/hardwareModelCatalog'
 
 export type ModelIntent =
   | 'vision'

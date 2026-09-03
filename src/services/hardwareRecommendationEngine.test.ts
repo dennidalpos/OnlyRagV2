@@ -12,7 +12,7 @@ import {
   getRecommendedOllamaEnvVars,
   buildModelFitLookup,
 } from './hardwareRecommendationEngine'
-import { findMatchingInstalledModel } from '../../electron/core/domain/agent/modelTagMatcher'
+import { findMatchingInstalledModel } from '../../shared/domain/agent/modelTagMatcher'
 import {
   COMPACT_CODING_CATALOG,
   WORKHORSE_CODING_CATALOG,
@@ -25,7 +25,7 @@ import {
   VISION_TIER_CATALOG,
   EMBEDDING_TIER_CATALOG,
   type RawModelCatalogEntry,
-} from './hardwareModelCatalog'
+} from '../../shared/domain/hardware/hardwareModelCatalog'
 import { DiagnosticsData, RunningModelDetails } from '../types'
 
 describe('hardwareRecommendationEngine Unit Tests', () => {

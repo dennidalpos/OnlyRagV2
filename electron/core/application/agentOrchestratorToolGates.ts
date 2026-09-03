@@ -143,7 +143,8 @@ async function gateAskModeMutation(ctx: ToolGateContext): Promise<{ toolCallForE
 
 function denyFsm(ctx: ToolGateContext) {
   const { parsedTool, fsmMode, episodicCompactor, emitLog, stepCount } = ctx
-  const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${[...Array.from(Object.values(fsmMode.filterAllowedTools([parsedTool.tool as any])))].join(', ') || 'read-only tools only'}. Switch to AGENT mode to execute mutating operations.`
+  const allowedToolsList = fsmMode.filterAllowedTools([parsedTool.tool]).join(', ') || 'read-only tools only'
+  const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${allowedToolsList}. Switch to AGENT mode to execute mutating operations.`
   episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
   emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
 }
@@ -175,7 +176,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     }
   }
 
-  if (!approvalGranted && !ctx.fsmMode.isToolAllowed(ctx.parsedTool.tool as any)) {
+  if (!approvalGranted && !ctx.fsmMode.isToolAllowed(ctx.parsedTool.tool)) {
     denyFsm(ctx)
     return { outcome: 'denied' }
   }

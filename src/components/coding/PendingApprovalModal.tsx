@@ -2,8 +2,8 @@ import React from 'react'
 import { Modal } from '../common/Modal'
 import { AlertTriangle, Check, X, FileCode } from 'lucide-react'
 import { useTranslation } from '../../i18n'
-import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../electron/core/domain/agent/diffEngine'
-import { projectPendingChange, type PendingMutationType } from '../../../electron/core/domain/agent/pendingChangeProjection'
+import { computeLineDiff, countDiffLines, groupDiffIntoHunks, type DiffLine, type DiffHunkGroup } from '../../../shared/domain/agent/diffEngine'
+import { projectPendingChange, type PendingMutationType } from '../../../shared/domain/agent/pendingChangeProjection'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
 interface PendingApproval {

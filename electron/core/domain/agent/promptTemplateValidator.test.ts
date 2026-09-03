@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { validateNodeTemplate, hasBlockingIssues } from './promptTemplateValidator'
-import { ALL_PROMPT_NODES } from './promptHierarchyRegistry'
+import { validateNodeTemplate, hasBlockingIssues } from '../../../../shared/domain/agent/promptTemplateValidator'
+import { ALL_PROMPT_NODES } from '../../../../shared/domain/agent/promptHierarchyRegistry'
 
 describe('validateNodeTemplate', () => {
   it('passes every factory default', () => {

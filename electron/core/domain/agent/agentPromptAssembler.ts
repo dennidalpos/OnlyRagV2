@@ -1,4 +1,4 @@
-import { PromptCompiler } from './promptCompiler'
+import { PromptCompiler } from '../../../../shared/domain/agent/promptCompiler'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
 import type { AppSettings } from '../../../../shared/types'
 import type { AgentMode } from './agentTypes'

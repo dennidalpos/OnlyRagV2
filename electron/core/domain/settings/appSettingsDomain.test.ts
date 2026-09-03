@@ -111,4 +111,30 @@ describe('AppSettingsDomain Unit Tests', () => {
     })
     expect(sanitized.modelContextLengths).toEqual({ 'qwen2.5-coder:7b': 8192 })
   })
+
+  it('preserves verifyBeforeFinish, enablePrePlanInterview and bounds-checks agentSessionTimeoutMinutes', () => {
+    const valid = sanitizeAppSettings({
+      verifyBeforeFinish: false,
+      enablePrePlanInterview: false,
+      agentSessionTimeoutMinutes: 60,
+    })
+    expect(valid.verifyBeforeFinish).toBe(false)
+    expect(valid.enablePrePlanInterview).toBe(false)
+    expect(valid.agentSessionTimeoutMinutes).toBe(60)
+
+    const invalidTimeout = sanitizeAppSettings({
+      agentSessionTimeoutMinutes: 2, // below min 5
+    })
+    expect(invalidTimeout.agentSessionTimeoutMinutes).toBeUndefined()
+
+    const tooHighTimeout = sanitizeAppSettings({
+      agentSessionTimeoutMinutes: 300, // above max 240
+    })
+    expect(tooHighTimeout.agentSessionTimeoutMinutes).toBeUndefined()
+
+    const floatTimeout = sanitizeAppSettings({
+      agentSessionTimeoutMinutes: 45.8,
+    })
+    expect(floatTimeout.agentSessionTimeoutMinutes).toBe(45)
+  })
 })

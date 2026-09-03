@@ -1,16 +1,15 @@
-import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
+import type { AgentTaskPayload, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
+import type { AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
-import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
-import type { GoalDecompositionPlanner } from '../domain/agent/planAndSolveGraph'
+import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
 
-import type { AgentLogEntry } from '../domain/agent/agentTypes'
-import type { HardwareFacts } from '../../../src/services/hardwareProfileTiers'
+import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProfileTiers'
+
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',

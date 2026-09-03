@@ -42,4 +42,70 @@ describe('SystemAppService Unit Tests', () => {
     expect(typeof storagePath).toBe('string')
     expect(storagePath.length).toBeGreaterThan(0)
   })
+
+  describe('openExternal and openPath', () => {
+    it('should reject invalid or non-http/mailto schemes', async () => {
+      const openedUrls: string[] = []
+      const customService = new SystemAppService(
+        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' } as any) },
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+      )
+
+      expect(await customService.openExternal('')).toBe(false)
+      expect(await customService.openExternal('ftp://example.com')).toBe(false)
+      expect(await customService.openExternal('file:///etc/passwd')).toBe(false)
+      expect(openedUrls).toHaveLength(0)
+    })
+
+    it('should block external URLs when policy is offline-strict', async () => {
+      const openedUrls: string[] = []
+      const customService = new SystemAppService(
+        { loadSettings: async () => ({ capabilityPolicyMode: 'offline-strict' } as any) },
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+      )
+
+      const result = await customService.openExternal('https://github.com')
+      expect(result).toBe(false)
+      expect(openedUrls).toHaveLength(0)
+    })
+
+    it('should block non-loopback URLs when policy is local-only', async () => {
+      const openedUrls: string[] = []
+      const customService = new SystemAppService(
+        { loadSettings: async () => ({ capabilityPolicyMode: 'local-only' } as any) },
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+      )
+
+      expect(await customService.openExternal('https://github.com')).toBe(false)
+      expect(openedUrls).toHaveLength(0)
+
+      expect(await customService.openExternal('http://127.0.0.1:8000/health')).toBe(true)
+      expect(openedUrls).toContain('http://127.0.0.1:8000/health')
+    })
+
+    it('should allow external URLs when policy is permissive or default', async () => {
+      const openedUrls: string[] = []
+      const customService = new SystemAppService(
+        { loadSettings: async () => ({ capabilityPolicyMode: 'network-approved' } as any) },
+        { openExternal: async (u) => { openedUrls.push(u) }, openPath: async () => '' }
+      )
+
+      const result = await customService.openExternal('https://github.com/dennidalpos/OnlyRagV2')
+      expect(result).toBe(true)
+      expect(openedUrls).toContain('https://github.com/dennidalpos/OnlyRagV2')
+    })
+
+    it('should validate targetPath and invoke shell.openPath', async () => {
+      const openedPaths: string[] = []
+      const customService = new SystemAppService(
+        { loadSettings: async () => null },
+        { openExternal: async () => {}, openPath: async (p) => { openedPaths.push(p); return '' } }
+      )
+
+      expect(await customService.openPath('')).toBe(false)
+      expect(await customService.openPath('   ')).toBe(false)
+      expect(await customService.openPath('/my/workspace/folder')).toBe(true)
+      expect(openedPaths).toEqual(['/my/workspace/folder'])
+    })
+  })
 })

@@ -5,7 +5,7 @@ import {
   parseUnifiedDiff,
   summarizeDiff,
   type DiffFileChange,
-} from '../../../electron/core/domain/agent/diffEngine'
+} from '../../../shared/domain/agent/diffEngine'
 import { DiffLinesView, ChangeCounts } from './DiffLinesView'
 
 interface GitDiffPanelProps {

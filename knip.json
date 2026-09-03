@@ -11,7 +11,8 @@
   ],
   "project": [
     "src/**/*.{ts,tsx,css}",
-    "electron/**/*.{ts,tsx}"
+    "electron/**/*.{ts,tsx}",
+    "shared/**/*.{ts,tsx}"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreBinaries": [

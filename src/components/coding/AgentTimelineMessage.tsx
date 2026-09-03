@@ -173,7 +173,7 @@ interface AgentTimelineMessageProps {
   onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
 }
 
-export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
+export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.memo(({
   log,
   isExpanded,
   onToggleExpand,
@@ -610,4 +610,4 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = ({
       )}
     </div>
   )
-}
+})

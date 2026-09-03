@@ -2,7 +2,7 @@ import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { OllamaRuntimeOptions } from '../../domain/agent/hardwareProfileResolver'
 import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalog'
-import type { ObservedToolCallingProtocol } from '../../domain/agent/ollamaToolCallingCapability'
+import type { ObservedToolCallingProtocol } from '../../../../shared/domain/agent/ollamaToolCallingCapability'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
 

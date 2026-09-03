@@ -189,6 +189,7 @@ export interface AgentActionLog {
     passedCount?: number
     failedCount?: number
   }
+  meta?: Record<string, any>
 }
 
 import type { ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
@@ -238,6 +239,10 @@ export interface AppSettings {
   requirePlanApproval?: boolean
   autoProceedPlan?: boolean
   autoProceedDelaySeconds?: number
+  enablePrePlanInterview?: boolean
+  // Verification and execution guards
+  verifyBeforeFinish?: boolean
+  agentSessionTimeoutMinutes?: number
   // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
   // Skill Hub Auto-Discovery & On-Demand Installation

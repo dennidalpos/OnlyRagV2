@@ -8,8 +8,8 @@ import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { resolveNodeTemplate } from '../constants/promptConfig'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
-import { resolveMaxContextTokens } from '../services/hardwareProfileTiers'
-import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
+import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
+import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
 
 /**
  * The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR.
@@ -184,6 +184,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<any>(null)
   const isSyncingScrollRef = useRef<boolean>(false)
+  const scrollRafRef = useRef<number | null>(null)
 
   const scrollToPage = useCallback((targetPage: number) => {
     setCurrentPage(targetPage)
@@ -210,53 +211,61 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
   const handleLeftPaneScroll = () => {
     if (!syncScroll || isSyncingScrollRef.current || !leftPaneRef.current || !editorRef.current) return
-    isSyncingScrollRef.current = true
+    if (scrollRafRef.current !== null) return
 
-    const { scrollTop, scrollHeight, clientHeight } = leftPaneRef.current
-    const maxScroll = scrollHeight - clientHeight
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      if (!syncScroll || !leftPaneRef.current || !editorRef.current) return
+      isSyncingScrollRef.current = true
 
-    if (viewMode === 'all') {
-      // Scroll spy: identify visible page card
-      const pageElements = leftPaneRef.current.querySelectorAll('[data-page-number]')
-      pageElements.forEach((el) => {
-        const rect = el.getBoundingClientRect()
-        const parentRect = leftPaneRef.current!.getBoundingClientRect()
-        if (rect.top <= parentRect.top + 100 && rect.bottom >= parentRect.top + 100) {
-          const pageNum = Number(el.getAttribute('data-page-number'))
-          if (pageNum && pageNum !== currentPage) {
-            setCurrentPage(pageNum)
+      const { scrollTop, scrollHeight, clientHeight } = leftPaneRef.current
+      const maxScroll = scrollHeight - clientHeight
+
+      if (viewMode === 'all') {
+        // Scroll spy: identify visible page card with single parentRect query and early exit
+        const pageElements = leftPaneRef.current.querySelectorAll('[data-page-number]')
+        const parentRect = leftPaneRef.current.getBoundingClientRect()
+        for (let i = 0; i < pageElements.length; i++) {
+          const el = pageElements[i]
+          const rect = el.getBoundingClientRect()
+          if (rect.top <= parentRect.top + 100 && rect.bottom >= parentRect.top + 100) {
+            const pageNum = Number(el.getAttribute('data-page-number'))
+            if (pageNum && pageNum !== currentPage) {
+              setCurrentPage(pageNum)
+            }
+            break
           }
         }
-      })
 
-      if (maxScroll > 0) {
-        const scrollPercent = scrollTop / maxScroll
-        const editorScrollHeight = editorRef.current.getScrollHeight()
-        const editorLayout = editorRef.current.getLayoutInfo()
-        const editorClientHeight = editorLayout ? editorLayout.height : 0
-        const maxEditorScroll = editorScrollHeight - editorClientHeight
-        if (maxEditorScroll > 0) {
-          editorRef.current.setScrollTop(scrollPercent * maxEditorScroll)
+        if (maxScroll > 0) {
+          const scrollPercent = scrollTop / maxScroll
+          const editorScrollHeight = editorRef.current.getScrollHeight()
+          const editorLayout = editorRef.current.getLayoutInfo()
+          const editorClientHeight = editorLayout ? editorLayout.height : 0
+          const maxEditorScroll = editorScrollHeight - editorClientHeight
+          if (maxEditorScroll > 0) {
+            editorRef.current.setScrollTop(scrollPercent * maxEditorScroll)
+          }
+        }
+      } else {
+        // Single Page Mode: scroll proportionally within current page line span
+        if (maxScroll > 0) {
+          const scrollPercent = scrollTop / maxScroll
+          const startLine = getPageLineNumber(markdownContent, currentPage)
+          const nextLine = getPageLineNumber(markdownContent, currentPage + 1)
+          const endLine = nextLine > startLine ? nextLine : getTotalLines(markdownContent)
+
+          const startTop = editorRef.current.getTopForLineNumber(startLine) || 0
+          const endTop = editorRef.current.getTopForLineNumber(endLine) || startTop
+          const span = Math.max(0, endTop - startTop)
+
+          editorRef.current.setScrollTop(startTop + scrollPercent * span)
         }
       }
-    } else {
-      // Single Page Mode: scroll proportionally within current page line span
-      if (maxScroll > 0) {
-        const scrollPercent = scrollTop / maxScroll
-        const startLine = getPageLineNumber(markdownContent, currentPage)
-        const nextLine = getPageLineNumber(markdownContent, currentPage + 1)
-        const endLine = nextLine > startLine ? nextLine : getTotalLines(markdownContent)
 
-        const startTop = editorRef.current.getTopForLineNumber(startLine) || 0
-        const endTop = editorRef.current.getTopForLineNumber(endLine) || startTop
-        const span = Math.max(0, endTop - startTop)
-
-        editorRef.current.setScrollTop(startTop + scrollPercent * span)
-      }
-    }
-
-    requestAnimationFrame(() => {
-      isSyncingScrollRef.current = false
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false
+      })
     })
   }
 
@@ -472,14 +481,14 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
           await handleIngestPath(filePath)
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const normalized = normalizeError(err, 'Native Dialog')
       logger.error('IngestionView', `Native file dialog error: ${normalized.message}`)
     }
   }
 
   const handleFileUpload = async (file: File) => {
-    const filePath = (file as any).path || file.name
+    const filePath = (file as File & { path?: string }).path || file.name
     await handleIngestPath(filePath, file.name)
   }
 

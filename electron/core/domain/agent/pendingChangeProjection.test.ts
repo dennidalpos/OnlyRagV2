@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { projectPendingChange, isProposalApplicable } from './pendingChangeProjection'
-import { computeLineDiff, countDiffLines } from './diffEngine'
+import { projectPendingChange, isProposalApplicable } from '../../../../shared/domain/agent/pendingChangeProjection'
+import { computeLineDiff, countDiffLines } from '../../../../shared/domain/agent/diffEngine'
 
 describe('pendingChangeProjection', () => {
   it('should project write_file as the full replacement content', () => {

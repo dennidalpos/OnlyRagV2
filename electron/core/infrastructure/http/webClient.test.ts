@@ -286,4 +286,29 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
       fs.rmSync(tempRoot, { recursive: true, force: true })
     }
   })
+
+  it('cleans up partial download file and reports error on HTTP 500 failure', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-err500-'))
+    const targetPath = path.join(tempRoot, 'failed.bin')
+    try {
+      const response = Object.assign(new EventEmitter(), {
+        statusCode: 500,
+        statusMessage: 'Internal Server Error',
+        headers: {},
+      })
+      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
+        queueMicrotask(() => args[2](response))
+        return request as any
+      })
+
+      const res = await client.downloadFile('https://example.com/failed.bin', targetPath, tempRoot)
+      expect(res.success).toBe(false)
+      expect(res.error).toContain('HTTP 500')
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(fs.existsSync(targetPath)).toBe(false)
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
 })

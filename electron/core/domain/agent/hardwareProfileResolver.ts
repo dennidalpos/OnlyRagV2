@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../src/services/hardwareProfileTiers'
+import { resolveMaxContextTokens, type DeclaredHardwareProfile } from '../../../../shared/domain/hardware/hardwareProfileTiers'
 
 export interface OllamaRuntimeOptions {
   num_ctx: number

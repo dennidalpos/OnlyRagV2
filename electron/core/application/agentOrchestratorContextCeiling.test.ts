@@ -9,8 +9,7 @@ vi.mock('../../diagnostics', () => ({
 import { selectModelForTurn, freezeOrGrowContextWindow } from './agentOrchestratorPromptAssembly'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
-import type { AppSettings } from '../../../shared/types'
-import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
+import type { AppSettings, OllamaModelMetrics } from '../../../shared/types'
 
 /**
  * Ollama clamps any requested `num_ctx` down to the model's trained `context_length`, then

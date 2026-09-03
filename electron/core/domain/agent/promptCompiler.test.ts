@@ -4,8 +4,8 @@ import {
   getEffectivePrompt,
   compilePromptWithSampleVars,
   resolveNodeTemplate,
-} from './promptCompiler'
-import { CODING_TOOLS_BLOCK, CODING_CORE_DIRECTIVES } from './promptPresets'
+} from '../../../../shared/domain/agent/promptCompiler'
+import { CODING_TOOLS_BLOCK, CODING_CORE_DIRECTIVES } from '../../../../shared/domain/agent/promptPresets'
 import type { AppSettings } from '../../../../shared/types'
 
 const baseSettings = { customPromptOverrides: {} } as AppSettings

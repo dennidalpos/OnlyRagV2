@@ -4,7 +4,7 @@ import type { AgentPlan } from '../../hooks/usePlanApproval'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
 import { estimateTokenCount } from '../../lib/tokenEstimate'
-import { resolveMaxContextTokens } from '../../services/hardwareProfileTiers'
+import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'
 import { AgentTimeline } from './AgentTimeline'
 import { PromptComposer } from './PromptComposer'
@@ -166,7 +166,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
     const recentLogs = actionLogs.slice(-8)
     return recentLogs.reduce((acc, log) => acc + estimateTokenCount(log.message) + estimateTokenCount((log.detail || '').slice(0, 1200)), 0)
   }, [actionLogs])
-  const promptTokens = React.useMemo(() => estimateTokenCount(agentPrompt), [agentPrompt])
+  const deferredPrompt = React.useDeferredValue(agentPrompt)
+  const promptTokens = React.useMemo(() => estimateTokenCount(deferredPrompt), [deferredPrompt])
   const estimatedTurnTokens = Math.min(maxContextLimit, BASE_PROMPT_OVERHEAD_TOKENS + promptTokens + recentLogsTokens)
   const contextPercent = Math.min(100, Math.round((estimatedTurnTokens / maxContextLimit) * 100))
   const isContextHeavy = contextPercent >= 70 || (contextPercent >= 50 && actionLogs.length > 25)

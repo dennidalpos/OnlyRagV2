@@ -1,7 +1,10 @@
-import { dialog, BrowserWindow } from 'electron'
+import { dialog, BrowserWindow, shell } from 'electron'
 import { logger } from '../../diagnostics'
 import { systemStorageRepository } from '../infrastructure/filesystem/systemStorageRepository'
-import { estimateModelWeightGB } from '../../../src/services/hardwareRecommendationEngine'
+import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
+import { isLoopbackTarget } from '../domain/agent/localOnlyPolicy'
+import { estimateModelWeightGB } from '../../../shared/domain/hardware/modelWeightEstimator'
+import type { AppSettings } from '../../../shared/types'
 
 export interface DiskSpaceCheckResult {
   allowed: boolean
@@ -11,7 +14,21 @@ export interface DiskSpaceCheckResult {
   error?: string
 }
 
+export interface ShellAdapter {
+  openExternal: (url: string) => Promise<void>
+  openPath: (path: string) => Promise<string>
+}
+
+export interface SettingsLoader {
+  loadSettings: () => Promise<AppSettings | null> | AppSettings | null
+}
+
 export class SystemAppService {
+  constructor(
+    private readonly settingsRepo: SettingsLoader = appSettingsRepository,
+    private readonly shellAdapter: ShellAdapter = shell
+  ) {}
+
   getOllamaStoragePath(): string {
     return systemStorageRepository.getOllamaStoragePath()
   }
@@ -94,6 +111,25 @@ export class SystemAppService {
       properties: ['openDirectory'],
     })
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+  }
+
+  async openExternal(url: string): Promise<boolean> {
+    if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
+      const settings = await this.settingsRepo.loadSettings()
+      if (settings?.capabilityPolicyMode === 'offline-strict') return false
+      if (settings?.capabilityPolicyMode === 'local-only' && !isLoopbackTarget(url)) return false
+      await this.shellAdapter.openExternal(url)
+      return true
+    }
+    return false
+  }
+
+  async openPath(targetPath: string): Promise<boolean> {
+    if (targetPath && typeof targetPath === 'string' && targetPath.trim()) {
+      await this.shellAdapter.openPath(targetPath.trim())
+      return true
+    }
+    return false
   }
 }
 

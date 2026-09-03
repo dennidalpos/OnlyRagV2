@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Code2, Loader2, ArrowDown, FolderOpen } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { AgentActionLog, WorkspaceFile, CodingSession } from '../../types'
@@ -57,14 +57,14 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     [workspacePath, files]
   )
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = useCallback((id: string) => {
     setExpandedLogIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
   // Only the messages actually near the viewport are mounted: a long-running session can
   // accumulate hundreds of entries, and every one of them was previously kept in the DOM for

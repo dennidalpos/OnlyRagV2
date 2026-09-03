@@ -22,7 +22,7 @@ import { WizardStepRecommendedModels } from '../wizard/WizardStepRecommendedMode
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
 import { logger } from '../../lib/logger'
 import { selectWizardCodingSet } from '../../services/codingModelMatrix'
-import { buildCodingCatalogForWizard } from '../../services/hardwareModelCatalog'
+import { buildCodingCatalogForWizard } from '../../../shared/domain/hardware/hardwareModelCatalog'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -310,7 +310,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       await window.electronAPI.installOrLaunchOllama()
       onRefreshDiagnostics()
     } catch (err) {
-      logger.error('HardwareWizard', `Failed launching/installing Ollama: ${(err as any)?.message || err}`)
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('HardwareWizard', `Failed launching/installing Ollama: ${msg}`)
     } finally {
       setIsInstallingOllama(false)
     }
@@ -324,7 +325,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       try {
         await window.electronAPI.cancelPullOllamaModel()
       } catch (err) {
-        logger.error('HardwareWizard', `Error cancelling Ollama pull: ${(err as any)?.message || err}`)
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error('HardwareWizard', `Error cancelling Ollama pull: ${msg}`)
       }
     }
   }

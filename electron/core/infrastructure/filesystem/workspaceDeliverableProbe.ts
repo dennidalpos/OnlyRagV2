@@ -11,7 +11,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_IGNORED_DIRS } from '../../domain/agent/contextFilter'
-import type { DeliverableProbe, DeliverableProbeResult } from '../../domain/agent/milestoneDeliverableResolver'
+import type { DeliverableProbe, DeliverableProbeResult } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 const MISSING: DeliverableProbeResult = { exists: false, contentLength: 0 }
 

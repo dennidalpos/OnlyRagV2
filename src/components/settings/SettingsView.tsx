@@ -36,7 +36,7 @@ import { apiService } from '../../services/api'
 import { compareContextAllocation } from '../../services/contextAllocation'
 import { ModelContextControl } from './ModelContextControl'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
-import { resolveMaxContextTokens } from '../../services/hardwareProfileTiers'
+import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -45,15 +45,17 @@ interface SettingsViewProps {
   onRefreshDiagnostics: () => void
   onOpenAboutModal?: () => void
   onOpenWizard?: () => void
+  isActive?: boolean
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({
+export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   diagnostics,
   settings,
   onUpdateSettings,
   onRefreshDiagnostics,
   onOpenAboutModal,
   onOpenWizard,
+  isActive = true,
 }) => {
   const { t, language, setLanguage } = useTranslation()
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
@@ -724,4 +726,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
     </div>
   )
-}
+}, (prev, next) => {
+  if (prev.isActive === false && next.isActive === false) return true
+  if (prev.isActive !== next.isActive) return false
+  return (
+    prev.settings === next.settings &&
+    prev.diagnostics === next.diagnostics &&
+    prev.onUpdateSettings === next.onUpdateSettings &&
+    prev.onRefreshDiagnostics === next.onRefreshDiagnostics &&
+    prev.onOpenAboutModal === next.onOpenAboutModal &&
+    prev.onOpenWizard === next.onOpenWizard
+  )
+})

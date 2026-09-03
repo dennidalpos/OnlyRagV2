@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ensureRunnableMilestone, ensureEntrypointMilestones } from './planCompilation'
+import { ensureRunnableMilestone, ensureEntrypointMilestones } from '../../../../shared/domain/agent/planCompilation'
 
 describe('ensureEntrypointMilestones', () => {
   const greenfield = { hasManifest: false, hasHtmlEntrypoint: false }

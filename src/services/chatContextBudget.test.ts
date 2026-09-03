@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudget } from './chatContextBudget'
-import { calculateDynamicContextWindow } from '../../electron/core/domain/agent/contextWindowCalculator'
+import { calculateDynamicContextWindow } from '../../shared/domain/agent/contextWindowCalculator'
 
 describe('chatContextBudget', () => {
   const MINIMAL_HOST = { hasGpu: false, vramTotalMB: 0, systemRamGB: 8, cpuCount: 4 }

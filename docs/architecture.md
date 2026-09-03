@@ -72,11 +72,11 @@ Infrastructure Layer (File System, PTY, HTTP Clients, Database)
 | Livello | Directory | Responsabilità Principale | Dipendenze Consentite |
 | :--- | :--- | :--- | :--- |
 | **Presentation** | `electron/core/presentation/` | Registrazione dei canali `ipcMain.handle`, validazione input IPC e serializzazione risposte. | Application Layer |
-| **Application** | `electron/core/application/` | Orchestrazione dei casi d'uso (Agent Tool Loop, Lifecycle dei modelli, gestione skill e workspace). | Domain, Infrastructure |
-| **Domain** | `electron/core/domain/` | Logica pura di business: `lifecycleCoordinator`, `toolParser`, `contextWindowCalculator`, `agentPromptAssembler`, `hardwareProfileResolver`. Zero dipendenze da I/O o framework. | Nessuna (Puro TS) |
-| **Infrastructure** | `electron/core/infrastructure/` | Interazione con I/O: `ollamaHttpClient`, `agentStreamTransport`, `fileSystemRepository`, `skillRepository`, `ptySessionManager`. | Standard APIs, Node.js libs |
+| **Application** | `electron/core/application/` | Orchestrazione dei casi d'uso (Agent Tool Loop, Lifecycle dei modelli, gestione skill, sidecar e workspace). | Domain, Infrastructure |
+| **Domain** | `electron/core/domain/` e `shared/domain/` | Logica pura di business: `modelUpdateChecker`, `toolParser`, `diffEngine`, `promptCompiler`, `modelContextPreference`, `planCompilation`. Zero dipendenze da I/O o framework. I domini condivisi risiedono in `shared/domain/` per isolamento dal Renderer. | Nessuna (Puro TS) |
+| **Infrastructure** | `electron/core/infrastructure/` | Interazione con I/O: `ollamaHttpClient`, `sidecarHttpClient`, `agentStreamTransport`, `fileSystemRepository`, `compactSemanticRepoMapper`, `ptySessionManager`. | Standard APIs, Node.js libs |
 
-Stato audit: `systemIpc.ts` delega cancellazione task e pulizia temporanei a `taskAppService.ts`; `agentIpc.ts` usa già facciate Application e dominio. `diagnosticsIpc.ts` delega metriche HTTP e gestione dei log a `diagnosticsAppService.ts`; resta solo il collegamento al motore diagnostico legacy `../../diagnostics` per il report completo.
+Stato audit: Isolamento totale dei confini di processo (0 import Renderer $\rightarrow$ Main). La logica pura condivisa risiede in `shared/domain/`. `sidecarAppService.ts` delega tutto l'I/O di rete a `sidecarHttpClient.ts` in Infrastructure e incorpora la diagnostica log. `ollamaHttpClient.ts` unifica le letture di `/api/tags` in un unico percorso dati condiviso. `systemIpc.ts` delega a `systemAppService.ts` e `taskAppService.ts`; `diagnosticsIpc.ts` delega a `diagnosticsAppService.ts`.
 
 ---
 
@@ -230,8 +230,8 @@ flowchart TD
 OnlyRag V2 include un motore diagnostico avanzato di analisi anomalie nei log di sistema per identificare in tempo reale criticità di esecuzione (CUDA OOM, VRAM budget exceeded, JSON troncati, timeout Ollama, loop ricorsivi di tool, circuit breaker di stagnazione e permessi filesystem).
 
 - **Architettura a Doppio Motore Resiliente**:
-  1. **Primary Engine (Python FastAPI Sidecar — `/agent/logs/analyze`)**: Scansiona i log applicativi con finestre scorrevoli di rilevamento pattern e calcolo metriche.
-  2. **Native Electron Node.js Fallback Engine (`SidecarSlmBridgeService.analyzeLogsNativeFallback`)**: Se il sidecar Python è offline o non raggiungibile, il processo Electron Main esegue una scansione diretta su disco dei log (`.onlyrag/logs`, `%APPDATA%/onlyrag-v2/logs`, `%LOCALAPPDATA%/OnlyRagV2/logs`, `temp`), garantendo **zero downtime e disponibilità al 100% della diagnostica**.
+  1. **Primary Engine (Python FastAPI Sidecar — `/agent/logs/analyze`)**: Invocato da `SidecarAppService` via `SidecarHttpClient.analyzeLogs`. Scansiona i log applicativi con finestre scorrevoli di rilevamento pattern e calcolo metriche.
+  2. **Native Electron Node.js Fallback Engine (`SidecarAppService.analyzeLogsNativeFallback`)**: Se il sidecar Python è offline o non raggiungibile, il processo Electron Main esegue una scansione diretta su disco dei log (`.onlyrag/logs`, `%APPDATA%/onlyrag-v2/logs`, `%LOCALAPPDATA%/OnlyRagV2/logs`, `temp`), garantendo **zero downtime e disponibilità al 100% della diagnostica**. La facciata retrocompatibile `SidecarSlmBridgeService` delega a `SidecarAppService`.
 - **Dipendenze Escluse dal Bundle del Main Process (`vite.config.mts`, `rolldownOptions.external`)**: Le dipendenze che risolvono require dinamici a runtime (es. `depcheck`) sono marcate come esterne in `build.rolldownOptions` per essere impacchettate da electron-builder in `app.asar` e risolte correttamente.
 - **Smoke Test Automatico del Bundle Electron (`scripts/test_bundle_smoke.ps1`, `ONLYRAG_SMOKE_TEST=1`)**: Verifica headless controllata post-build del processo Main (`dist-electron/main.js`) per prevenire a monte crash di avvio o problemi di bundling prima dell'impacchettamento finale.
 - **Store Unificato delle Impostazioni su Filesystem (`appSettingsRepository.ts`, `settings.json`)**: Preferenze applicative gestite dal Main Process tramite `%APPDATA%/onlyrag-v2/settings.json` con scrittura atomica `tmp+rename` e canali IPC `settings:get` e `settings:save`, garantendo parità al 100% tra sviluppo e produzione.

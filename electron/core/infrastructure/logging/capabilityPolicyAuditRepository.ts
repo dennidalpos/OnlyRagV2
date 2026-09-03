@@ -2,7 +2,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { sanitizeLogMessage } from '../../../logRedactor'
-import { capabilityPolicyAuditEventSchema, type CapabilityPolicyAuditEvent } from '../../domain/agent/capabilityPolicyContract'
+import {
+  capabilityPolicyAuditEventSchema,
+  type CapabilityPolicyAuditEvent,
+  type CapabilityPolicyAuditStore,
+} from '../../domain/agent/capabilityPolicyContract'
 import { safeAtomicWrite } from '../filesystem/safeAtomicFileWriter'
 
 const FILE_NAME = 'capability_policy_audit.json'
@@ -20,7 +24,7 @@ function redactEvent(event: CapabilityPolicyAuditEvent): CapabilityPolicyAuditEv
   }
 }
 
-export class CapabilityPolicyAuditRepository {
+export class CapabilityPolicyAuditRepository implements CapabilityPolicyAuditStore {
   private writeQueue: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly filePath: string = defaultPath()) {}

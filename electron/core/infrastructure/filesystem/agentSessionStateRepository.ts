@@ -4,7 +4,7 @@ import os from 'node:os'
 import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
-import type { PlanMilestone } from '../../domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 

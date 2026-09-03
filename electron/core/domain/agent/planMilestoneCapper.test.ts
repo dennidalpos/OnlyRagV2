@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { capPlanMilestones, MAX_PLAN_MILESTONES } from './planMilestoneCapper'
-import type { PlanMilestone } from './planAndSolveGraph'
+import { capPlanMilestones, MAX_PLAN_MILESTONES } from '../../../../shared/domain/agent/planMilestoneCapper'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 function makePlan(titles: string[], statuses: PlanMilestone['status'][] = []): PlanMilestone[] {
   return titles.map((title, idx) => ({

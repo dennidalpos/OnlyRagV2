@@ -15,10 +15,16 @@ export class GitCliRepository {
 
   init(cwd: string): { success: boolean; message: string } {
     try {
-      const out = execFileSync('git', ['init'], { cwd, encoding: 'utf-8', timeout: 15000 })
+      const out = execFileSync('git', ['init'], {
+        cwd,
+        encoding: 'utf-8',
+        timeout: 15000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
       return { success: true, message: out.trim() }
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Failed to initialize Git repository' }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to initialize Git repository'
+      return { success: false, message }
     }
   }
 
@@ -44,6 +50,7 @@ export class GitCliRepository {
         cwd,
         encoding: 'utf-8',
         timeout: 10000,
+        stdio: ['pipe', 'pipe', 'pipe'],
       })
       const statusLines = statusOut
         .split(/\r?\n/)
@@ -57,6 +64,7 @@ export class GitCliRepository {
           cwd,
           encoding: 'utf-8',
           timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
         })
         untrackedFiles = untrackedOut
           .split(/\r?\n/)
@@ -73,6 +81,7 @@ export class GitCliRepository {
             cwd,
             encoding: 'utf-8',
             timeout: 15000,
+            stdio: ['pipe', 'pipe', 'pipe'],
           })
         }
 
@@ -80,6 +89,7 @@ export class GitCliRepository {
           cwd,
           encoding: 'utf-8',
           timeout: 15000,
+          stdio: ['pipe', 'pipe', 'pipe'],
         })
       } finally {
         if (untrackedFiles.length > 0) {
@@ -101,11 +111,12 @@ export class GitCliRepository {
         statusLines,
         diffText: diffText.trim(),
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
       return {
         isGitRepo: false,
         statusLines: [],
-        diffText: `Git error: ${err.message || String(err)}`,
+        diffText: `Git error: ${errorMsg}`,
       }
     }
   }

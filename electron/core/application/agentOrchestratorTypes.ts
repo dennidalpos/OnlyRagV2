@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { ObservedToolCallingProtocol } from '../domain/agent/ollamaToolCallingCapability'
+import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 
 export interface ApprovalResponse {
   approved: boolean

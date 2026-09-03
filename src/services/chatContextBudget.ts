@@ -5,7 +5,7 @@ import {
   type DeclaredHardwareProfile,
   type HardwareFacts,
   type HardwareProfileTier,
-} from './hardwareProfileTiers'
+} from '../../shared/domain/hardware/hardwareProfileTiers'
 
 /**
  * Hardware-aware context budgeting for the RAG chat turn.

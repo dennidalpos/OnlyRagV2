@@ -34,9 +34,9 @@
  * Pure domain: the caller supplies each milestone's deliverable status.
  */
 
-import { isCompletionMilestoneTitle } from './planAndSolveGraph'
-import type { PlanMilestone } from './planAndSolveGraph'
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
+import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 export type ClosureState =
   /** Work genuinely remains, or nothing has been verified yet. */

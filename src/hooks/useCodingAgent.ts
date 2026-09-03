@@ -19,13 +19,15 @@ export type { QueuedPrompt }
 
 const EMPTY_PLANS: AgentPlan[] = []
 
+export type CodingAgentTab = 'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan' | 'slm_diagnostics'
+
 /**
  * Composition root of the Coding Agent Studio: coordinates the agent loop, workspace, editor,
  * terminal, git, grep, approvals, queue and session-history hooks.
  */
 export function useCodingAgent(settings?: AppSettings) {
   const [agentMode, setAgentModeState] = useState<AgentMode>('plan')
-  const [activeTab, setActiveTab] = useState<'editor' | 'terminal' | 'git_diff' | 'grep_search' | 'activities' | 'plan' | 'slm_diagnostics'>('editor')
+  const [activeTab, setActiveTab] = useState<CodingAgentTab>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 
   // Agent Execution State
@@ -248,7 +250,7 @@ export function useCodingAgent(settings?: AppSettings) {
   const changeMetricsRef = useRef<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
 
   const shellCommandTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const previousTabRef = useRef<string | null>(null)
+  const previousTabRef = useRef<CodingAgentTab | null>(null)
   const autoOpenedTerminalRef = useRef<boolean>(false)
   const activeTabRef = useRef(activeTab)
 
@@ -280,16 +282,48 @@ export function useCodingAgent(settings?: AppSettings) {
   useEffect(() => {
     if (!window.electronAPI) return
 
+    let streamBuffer = ''
+    let streamFlushTimer: NodeJS.Timeout | null = null
+
+    const flushStreamBuffer = () => {
+      if (streamBuffer) {
+        const chunkToAdd = streamBuffer
+        streamBuffer = ''
+        setStreamingText((prev) => prev + chunkToAdd)
+      }
+      if (streamFlushTimer) {
+        clearTimeout(streamFlushTimer)
+        streamFlushTimer = null
+      }
+    }
+
+    const clearStreamBuffer = () => {
+      streamBuffer = ''
+      if (streamFlushTimer) {
+        clearTimeout(streamFlushTimer)
+        streamFlushTimer = null
+      }
+    }
+
+    const appendToStreamBuffer = (chunk: string) => {
+      if (!chunk) return
+      streamBuffer += chunk
+      if (!streamFlushTimer) {
+        streamFlushTimer = setTimeout(flushStreamBuffer, 40)
+      }
+    }
+
     const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog) => {
       setActionLogs((prev) => [...prev, log])
 
       if (log.modelName) {
         setCurrentLiveModel(log.modelName)
-      } else if ((log as any).meta?.modelName) {
-        setCurrentLiveModel((log as any).meta.modelName)
+      } else if (typeof log.meta?.modelName === 'string') {
+        setCurrentLiveModel(log.meta.modelName)
       }
 
       if (log.type === 'tool_call') {
+        clearStreamBuffer()
         setStreamingText('')
         setCurrentStatusText(log.message)
       }
@@ -310,7 +344,7 @@ export function useCodingAgent(settings?: AppSettings) {
         log.type === 'info' &&
         (log.detail?.includes('Circuit Breaker Triggered') ||
           log.message.includes('LLM Stream error') ||
-          (log as any).category === 'system_alert')
+          log.category === 'system_alert')
       ) {
         soundEffectsService.play('error', settings?.enableSoundEffects !== false)
       }
@@ -334,7 +368,7 @@ export function useCodingAgent(settings?: AppSettings) {
           shellCommandTimerRef.current = null
         }
         if (autoOpenedTerminalRef.current) {
-          const prevTab = (previousTabRef.current || 'editor') as any
+          const prevTab: CodingAgentTab = previousTabRef.current || 'editor'
           setActiveTab(prevTab)
           autoOpenedTerminalRef.current = false
           previousTabRef.current = null
@@ -348,19 +382,20 @@ export function useCodingAgent(settings?: AppSettings) {
 
     const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data: { step: number; chunk: string }) => {
       if (data.chunk) {
-        setStreamingText((prev) => prev + data.chunk)
+        appendToStreamBuffer(data.chunk)
       }
     })
 
     const unsubStreamThought = window.electronAPI.onAgentStreamThought?.((data: { step: number; chunk: string }) => {
       if (data.chunk) {
-        setStreamingText((prev) => prev + data.chunk)
+        appendToStreamBuffer(data.chunk)
       }
     })
 
     const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string; statusText?: string; milestones?: PlanMilestone[] }) => {
       currentStepRef.current = data.step
       setCurrentStep(data.step)
+      clearStreamBuffer()
       setStreamingText('')
       if (data?.statusText) {
         setCurrentStatusText(data.statusText)
@@ -404,6 +439,7 @@ export function useCodingAgent(settings?: AppSettings) {
       setCurrentLiveModel(null)
       closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
       setIsExecuting(false)
+      clearStreamBuffer()
       setStreamingText('')
       setCurrentStatusText('')
 
@@ -412,7 +448,7 @@ export function useCodingAgent(settings?: AppSettings) {
         shellCommandTimerRef.current = null
       }
       if (autoOpenedTerminalRef.current) {
-        const prevTab = (previousTabRef.current || 'editor') as any
+        const prevTab: CodingAgentTab = previousTabRef.current || 'editor'
         setActiveTab(prevTab)
         autoOpenedTerminalRef.current = false
         previousTabRef.current = null
@@ -427,6 +463,7 @@ export function useCodingAgent(settings?: AppSettings) {
     })
 
     return () => {
+      clearStreamBuffer()
       unsubLog?.()
       unsubFileDeleted?.()
       unsubStreamToken?.()

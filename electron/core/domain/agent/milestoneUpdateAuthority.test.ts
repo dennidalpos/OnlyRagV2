@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { abandonedMilestoneNote, isSystemAbandoned, resolveMilestoneUpdate } from './milestoneUpdateAuthority'
-import type { PlanMilestone } from './planAndSolveGraph'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 function milestone(status: PlanMilestone['status'], notes?: string): PlanMilestone {
   return { id: 'm-5', title: 'Create src/pages/Tasks.tsx', status, notes }

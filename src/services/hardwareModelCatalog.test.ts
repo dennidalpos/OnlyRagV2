@@ -5,7 +5,7 @@ import {
   COMPACT_CODING_CATALOG,
   WORKHORSE_CODING_CATALOG,
   LARGE_CODING_CATALOG,
-} from './hardwareModelCatalog'
+} from '../../shared/domain/hardware/hardwareModelCatalog'
 
 describe('hardwareModelCatalog', () => {
   it('should parse both GB and MB size labels', () => {

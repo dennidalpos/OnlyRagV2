@@ -1,6 +1,6 @@
 import React from 'react'
 import type { OllamaModelMetrics, AppSettings } from '../../types'
-import { getModelContextChoices, resolveModelContextLength } from '../../../electron/core/domain/settings/modelContextPreference'
+import { getModelContextChoices, resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 
 interface ModelContextControlProps {
   model: string

@@ -7,7 +7,7 @@ import {
   collapseContext,
   groupDiffIntoHunks,
   reconstructWithApprovedHunks,
-} from './diffEngine'
+} from '../../../../shared/domain/agent/diffEngine'
 
 describe('diffEngine — unified diff parsing', () => {
   it('should parse a multi-file git diff into per-file hunks with add/delete counts', () => {

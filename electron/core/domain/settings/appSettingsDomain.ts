@@ -1,5 +1,5 @@
 import type { AppSettings } from '../../../../shared/types'
-import { PROMPT_NODE_IDS, type PromptNodeId } from '../agent/promptHierarchyRegistry'
+import { PROMPT_NODE_IDS, type PromptNodeId } from '../../../../shared/domain/agent/promptHierarchyRegistry'
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultModel: '',
@@ -107,11 +107,13 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     'translationOutputFolder',
   ]
 
+  const sanitizedRecord = sanitized as unknown as Record<string, unknown>
+
   for (const key of optionalStringKeys) {
     if (typeof raw[key] === 'string') {
       const val = (raw[key] as string).trim()
       if (val) {
-        ;(sanitized as any)[key] = val
+        sanitizedRecord[key] = val
       }
     }
   }
@@ -126,17 +128,28 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     'autoProceedPlan',
     'enableSoundEffects',
     'editorWordWrap',
+    'verifyBeforeFinish',
+    'enablePrePlanInterview',
   ]
 
   for (const key of optionalBoolKeys) {
     if (typeof raw[key] === 'boolean') {
-      ;(sanitized as any)[key] = raw[key]
+      sanitizedRecord[key] = raw[key]
     }
   }
 
   // Optional numbers
   if (typeof raw.autoProceedDelaySeconds === 'number' && !isNaN(raw.autoProceedDelaySeconds)) {
     sanitized.autoProceedDelaySeconds = raw.autoProceedDelaySeconds
+  }
+
+  if (
+    typeof raw.agentSessionTimeoutMinutes === 'number' &&
+    !isNaN(raw.agentSessionTimeoutMinutes) &&
+    raw.agentSessionTimeoutMinutes >= 5 &&
+    raw.agentSessionTimeoutMinutes <= 240
+  ) {
+    sanitized.agentSessionTimeoutMinutes = Math.floor(raw.agentSessionTimeoutMinutes)
   }
 
   // Prompt overrides are keyed by prompt node id. Anything else is a leftover from the retired

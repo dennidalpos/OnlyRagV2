@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { WorkspaceFile } from '../types'
 import { logger } from '../lib/logger'
 
@@ -26,9 +26,11 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
   const [originalContent, setOriginalContent] = useState<string>('')
   const [isSaved, setIsSaved] = useState<boolean>(true)
   const [pinnedFiles, setPinnedFiles] = useState<Map<string, WorkspaceFile>>(new Map())
+  const latestRequestedPathRef = useRef<string | null>(null)
 
   /** Drops file tree, tabs, editor buffer and pins; used when no workspace is attached. */
   const resetWorkspaceFiles = useCallback(() => {
+    latestRequestedPathRef.current = null
     setFiles([])
     setOpenFiles([])
     setSelectedFile(null)
@@ -56,12 +58,16 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
   const handleOpenFile = useCallback(async (file: WorkspaceFile) => {
     if (file.isDir) return
+    const requestedPath = file.path
+    latestRequestedPathRef.current = requestedPath
     setSelectedFile(file)
     setOpenFiles((prev) => (prev.some((f) => f.path === file.path) ? prev : [...prev, file]))
     if (!window.electronAPI) return
 
     try {
       const res = await window.electronAPI.readWorkspaceFile(file.path)
+      if (latestRequestedPathRef.current !== requestedPath) return
+
       if (res.success && res.content !== undefined) {
         setEditorContent(res.content)
         setOriginalContent(res.content)
@@ -71,6 +77,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         setOriginalContent('')
       }
     } catch (err: any) {
+      if (latestRequestedPathRef.current !== requestedPath) return
       setEditorContent(`// Errore lettura file: ${err.message}`)
       setOriginalContent('')
     }

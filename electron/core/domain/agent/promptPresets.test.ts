@@ -6,8 +6,8 @@ import {
   DEFAULT_CODING_PROMPT,
   CODING_CORE_DIRECTIVES,
   CODING_TOOLS_BLOCK,
-} from './promptPresets'
-import { ALL_PROMPT_NODES } from './promptHierarchyRegistry'
+} from '../../../../shared/domain/agent/promptPresets'
+import { ALL_PROMPT_NODES } from '../../../../shared/domain/agent/promptHierarchyRegistry'
 
 /**
  * The chat prompt is static: it is assembled into every chat turn regardless of whether a document

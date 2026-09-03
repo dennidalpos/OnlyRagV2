@@ -392,6 +392,33 @@ export class WebClient {
 
       const fileStream = fs.createWriteStream(safeDestPath)
       let downloadedBytes = 0
+
+      const removePartialFile = () => {
+        try {
+          if (fs.existsSync(safeDestPath)) {
+            fs.unlinkSync(safeDestPath)
+          }
+        } catch (unlinkErr) {
+          logger.log('WARN', 'WebClient', `Failed unlinking partial download at ${safeDestPath}: ${unlinkErr}`)
+        }
+      }
+
+      const cleanupAndFail = (
+        statusCode: number,
+        errorType: Parameters<typeof httpMetrics.record>[2],
+        errorMessage: string,
+        destroyRequest = false
+      ) => {
+        if (destroyRequest) {
+          req.destroy()
+        }
+        fileStream.close(() => {
+          removePartialFile()
+        })
+        record(statusCode, errorType)
+        resolve({ success: false, error: errorMessage })
+      }
+
       const req = client.get(
         targetUrl,
         {
@@ -403,8 +430,9 @@ export class WebClient {
         (res) => {
           if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
             record(res.statusCode, 'none')
-            fileStream.close()
-            try { fs.unlinkSync(safeDestPath) } catch {}
+            fileStream.close(() => {
+              removePartialFile()
+            })
             if (redirectCount >= MAX_DOWNLOAD_REDIRECTS) {
               return resolve({ success: false, error: `Download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirect hops.` })
             }
@@ -413,36 +441,21 @@ export class WebClient {
           }
 
           if (res.statusCode && res.statusCode >= 400) {
-            record(res.statusCode, 'http')
-            fileStream.close()
-            try { fs.unlinkSync(safeDestPath) } catch {}
-            return resolve({ success: false, error: `HTTP ${res.statusCode} ${res.statusMessage || ''}` })
+            return cleanupAndFail(res.statusCode, 'http', `HTTP ${res.statusCode} ${res.statusMessage || ''}`, false)
           }
 
           if (!downloadMimeAllowed(res.headers['content-type'])) {
-            req.destroy()
-            fileStream.close()
-            try { fs.unlinkSync(safeDestPath) } catch {}
-            record(res.statusCode || 0, 'unknown')
-            return resolve({ success: false, error: `Download MIME type is not allowed: ${res.headers['content-type']}` })
+            return cleanupAndFail(res.statusCode || 0, 'unknown', `Download MIME type is not allowed: ${res.headers['content-type']}`, true)
           }
 
           res.on('data', (chunk) => {
             downloadedBytes += chunk.length
             if (downloadedBytes === chunk.length && !downloadMimeAllowed(res.headers['content-type'], Buffer.from(chunk))) {
-              req.destroy()
-              fileStream.close()
-              try { fs.unlinkSync(safeDestPath) } catch {}
-              record(res.statusCode || 0, 'unknown')
-              resolve({ success: false, error: `Download content does not match declared MIME type.` })
+              cleanupAndFail(res.statusCode || 0, 'unknown', 'Download content does not match declared MIME type.', true)
               return
             }
             if (downloadedBytes > MAX_DOWNLOAD_BYTES) {
-              req.destroy()
-              fileStream.close()
-              try { fs.unlinkSync(safeDestPath) } catch {}
-              record(res.statusCode || 0, 'unknown')
-              resolve({ success: false, error: `Download exceeded 100MB safety limit.` })
+              cleanupAndFail(res.statusCode || 0, 'unknown', 'Download exceeded 100MB safety limit.', true)
             }
           })
 
@@ -459,26 +472,15 @@ export class WebClient {
       )
 
       req.on('error', (err) => {
-        record(0, 'network')
-        fileStream.close()
-        try { fs.unlinkSync(safeDestPath) } catch {}
-        resolve({ success: false, error: err.message })
+        cleanupAndFail(0, 'network', err.message, false)
       })
 
       req.on('timeout', () => {
-        req.destroy()
-        record(0, 'timeout')
-        fileStream.close()
-        try { fs.unlinkSync(safeDestPath) } catch {}
-        resolve({ success: false, error: 'Download request timed out (60s limit)' })
+        cleanupAndFail(0, 'timeout', 'Download request timed out (60s limit)', true)
       })
 
       signal?.addEventListener('abort', () => {
-        req.destroy()
-        fileStream.close()
-        try { fs.unlinkSync(safeDestPath) } catch {}
-        record(0, 'timeout')
-        resolve({ success: false, error: 'Download cancelled by AbortSignal' })
+        cleanupAndFail(0, 'timeout', 'Download cancelled by AbortSignal', true)
       }, { once: true })
     })
   }

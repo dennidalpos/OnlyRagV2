@@ -12,8 +12,8 @@
  * allowed to land; it stays pure, so the caller supplies the deliverable evidence.
  */
 
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
-import type { PlanMilestone } from './planAndSolveGraph'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 /**
  * Marker opening the note of a milestone the loop guard took away from the model.

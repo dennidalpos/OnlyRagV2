@@ -34,7 +34,7 @@
  * Pure domain: the caller supplies the milestone and its deliverable status.
  */
 
-import type { PlanMilestone } from './planAndSolveGraph'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 /**
  * Replaces focus directive 2 when the active milestone names no artefact.

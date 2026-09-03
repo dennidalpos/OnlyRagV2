@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildExplicitFirstCommandDirective, resolvePlanDirective, type PlanDirectiveInput } from './planDirectiveArbiter'
-import type { PlanMilestone } from './planAndSolveGraph'
-import type { MilestoneDeliverableStatus } from './milestoneDeliverableResolver'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 /**
  * The arbiter exists because fifteen guards wrote into one prompt and none of them decided

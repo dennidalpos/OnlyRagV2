@@ -4,7 +4,7 @@ import {
   isOllamaModelInstalled,
   parseModelTagComponents,
   isTagCompatible,
-} from './modelTagMatcher'
+} from '../../../../shared/domain/agent/modelTagMatcher'
 
 describe('ModelTagMatcher Domain Unit Tests', () => {
   describe('parseModelTagComponents', () => {

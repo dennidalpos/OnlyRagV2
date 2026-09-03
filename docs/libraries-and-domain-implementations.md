@@ -87,7 +87,7 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 ---
 
 ### 3.2. Calcolo Dinamico della VRAM Netta e Profilazione Hardware Host
-* **Moduli:** [`hardwareProfileTiers.ts`](../src/services/hardwareProfileTiers.ts), [`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts), [`hardwareProfileResolver.ts`](../electron/core/domain/agent/hardwareProfileResolver.ts)
+* **Moduli:** [`hardwareProfileTiers.ts`](../shared/domain/hardware/hardwareProfileTiers.ts), [`hardwareRecommendationEngine.ts`](../src/services/hardwareRecommendationEngine.ts), [`hardwareProfileResolver.ts`](../electron/core/domain/agent/hardwareProfileResolver.ts)
 * **Motivazione Tecnica:** Nessuna libreria NPM o PyPI è in grado di calcolare con precisione il margine di sicurezza della VRAM su macchine Windows per prevenire i crash CUDA OOM di Ollama, considerando congiuntamente:
   1. La VRAM fisica dedicata rilevata da NVML / WMI.
   2. L'overhead del Windows Desktop Window Manager (DWM) e delle applicazioni GPU in esecuzione.
@@ -115,7 +115,7 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 ---
 
 ### 3.5. Graph TextRank Extractive Summarizer
-* **Moduli:** [`textRankSummarizer.ts`](../electron/core/domain/nlp/textRankSummarizer.ts), [`chatContextCompactor.ts`](../src/services/chatContextCompactor.ts)
+* **Moduli:** [`textRankSummarizer.ts`](../shared/domain/nlp/textRankSummarizer.ts), [`chatContextCompactor.ts`](../src/services/chatContextCompactor.ts)
 * **Motivazione Tecnica:** Per compattare le cronologie di chat lunghe senza troncare a freddo i messaggi storici, l'invocazione di un modello di riassunto neurale saturerebbe la VRAM dell'host durante lo streaming della chat.
 * **Soluzione Implementata:** Implementazione nativa in TypeScript dell'algoritmo TextRank di Mihalcea & Tarau (2004) con iterazione di PageRank (power iteration) su grafi di similarità di Jaccard e matrici di adiacenza tra frasi, garantendo riassunti estrattivi immediati a costo computazionale nullo.
 
@@ -134,7 +134,7 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 * **Soluzione Implementata:** Tool deterministico `open_in_browser` validato da `validatePathSafety`, integrato con le API native sicure di Electron (`electron.shell.openPath` per file HTML locali e `electron.shell.openExternal` per URL HTTP/HTTPS).
 
 ### 3.8. Resilient SLM Log Diagnostics & Native Node.js Fallback Scanner
-* **Moduli:** [`sidecarSlmBridgeService.ts`](../electron/core/application/sidecarSlmBridgeService.ts), [`log_analyzer.py`](../sidecar/domain/log_analyzer.py), [`SlmDiagnosticsPanel.tsx`](../src/components/coding/SlmDiagnosticsPanel.tsx)
+* **Moduli:** [`sidecarAppService.ts`](../electron/core/application/sidecarAppService.ts), [`log_analyzer.py`](../sidecar/domain/log_analyzer.py), [`SlmDiagnosticsPanel.tsx`](../src/components/coding/SlmDiagnosticsPanel.tsx)
 * **Motivazione Tecnica:** Durante l'esecuzione di carichi pesanti su hardware locale o in caso di crash/riavvio del runtime Python, la diagnostica di sistema non deve mai andare offline o bloccare l'interfaccia utente.
 * **Soluzione Implementata:** Architettura a doppio scanner con fallback nativo: se l'endpoint REST del sidecar (`/agent/logs/analyze`) non risponde, il servizio Electron Main esegue una scansione in Node.js ad alte prestazioni con buffering di 500 righe per file su tutti i percorsi standard di log (`.onlyrag/logs`, `%APPDATA%/onlyrag-v2/logs`, `%LOCALAPPDATA%/OnlyRagV2/logs`, directory temporanee di sistema), correlando anomalie e fornendo suggerimenti correttivi immediati (`remediation`).
 
@@ -149,5 +149,5 @@ Le seguenti architetture e logiche sono state implementate direttamente nel code
 | **Prompt di Traduzione** | Esempi hardcoded di singoli termini e contratti | Direttive semantiche universali sul registro formale/amministrativo | Riduzione del consumo di token e qualità di traduzione scalabile su ogni tipologia di testo. |
 | **Riconoscimento Saluto Chat** | Substring check hardcoded (`'local AI RAG Assistant'`) | Identificazione strutturale univoca (`m.id === '1' && m.sender === 'bot'`) | Indipendente dalla lingua o dal testo personalizzato del saluto iniziale. |
 | **Stima Token del Contesto** | Divisione euristica basata sul conteggio dei caratteri | **`gpt-tokenizer`** (`o200k_base` BPE) | Stima reale dei token coerente con l'architettura dei moderni LLM. |
-| **Stima Dimensioni Modelli** | Regex e branching euristico manuale in `systemAppService.ts` | **`estimateModelWeightGB`** (`hardwareRecommendationEngine.ts` + catalogo GGUF) | Calcolo unificato e accurato dei pesi e spazio su disco per download ed esecuzione. |
+| **Stima Dimensioni Modelli** | Regex e branching euristico manuale in `systemAppService.ts` | **`estimateModelWeightGB`** (`modelWeightEstimator.ts` in `shared/domain/hardware/` + catalogo GGUF) | Calcolo unificato e accurato dei pesi e spazio su disco per download ed esecuzione. |
 | **Streaming CoT / Reasoning** | Regex post-hoc fragili su testo mescolato | **Protocollo Nativo Ollama** (`thinking` / `message.thinking`) + **`jsonrepair`** + sanitizzazione fail-safe unclosed tags | Flusso di reasoning separato in tempo reale via NDJSON, isolamento automatico dei blocchi `<think>`/`<thought>` senza inquinamento dei tool calls. |

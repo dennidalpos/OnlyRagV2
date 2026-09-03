@@ -5,7 +5,7 @@ import {
   isPlaceholderContent,
   resolveMilestoneDeliverableStatus,
   type DeliverableProbe,
-} from './milestoneDeliverableResolver'
+} from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
 /** Builds a probe backed by an in-memory {path: content} map. */
 function probeFrom(files: Record<string, string>): DeliverableProbe {

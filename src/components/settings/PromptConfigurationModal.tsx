@@ -35,7 +35,7 @@ import {
 // Offline capability signal. The authoritative check runs in the main process against Ollama's
 // reported /api/tags capabilities; here it only drives an advisory notice, which is exactly the
 // fallback role this helper documents.
-import { supportsNativeToolCallingByFamily } from '../../../electron/core/domain/agent/ollamaToolCallingCapability'
+import { supportsNativeToolCallingByFamily } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import {
   ONLYRAG_MONACO_THEME_NAME,
   defineOnlyRagMonacoTheme,

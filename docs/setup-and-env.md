@@ -16,7 +16,7 @@ Questo documento costituisce la guida operativa e tecnica di riferimento per l'i
 
 ## 2. Matrice dei Profili Hardware Host
 
-OnlyRag V2 classifica l'host su 5 tier deterministici definiti in [`hardwareProfileTiers.ts`](../src/services/hardwareProfileTiers.ts) — **unica fonte di verità** condivisa da matrice modelli (`hardwareModelCatalog.ts`), motore di raccomandazione (`hardwareRecommendationEngine.ts`), Routing di Complessità, opzioni di runtime dell'agente, budget di contesto della chat e parametri OS di Ollama. Prima di questo modulo la stessa domanda "quanto è potente questa macchina" veniva risposta da quattro scale di soglie indipendenti che avevano già divergito tra loro; i nomi dei tier (non numeri) sono l'unica nomenclatura valida nel codice — non esiste una numerazione "P1–P5" nell'app.
+OnlyRag V2 classifica l'host su 5 tier deterministici definiti in [`hardwareProfileTiers.ts`](../shared/domain/hardware/hardwareProfileTiers.ts) — **unica fonte di verità** condivisa da matrice modelli (`hardwareModelCatalog.ts`), motore di raccomandazione (`hardwareRecommendationEngine.ts`), Routing di Complessità, opzioni di runtime dell'agente, budget di contesto della chat e parametri OS di Ollama. Prima di questo modulo la stessa domanda "quanto è potente questa macchina" veniva risposta da quattro scale di soglie indipendenti che avevano già divergito tra loro; i nomi dei tier (non numeri) sono l'unica nomenclatura valida nel codice — non esiste una numerazione "P1–P5" nell'app.
 
 Un modello puo' comparire come consigliato per un tier solo se `assessModelHardwareCompatibility` non lo classifica `exceeds_vram` su quel tier (invariante verificata dai test).
 

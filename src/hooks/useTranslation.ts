@@ -7,7 +7,7 @@ import { useIngestedDocuments } from './useIngestedDocuments'
 import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
-import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
+import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
 
 export const LANGUAGES = [
   'English',

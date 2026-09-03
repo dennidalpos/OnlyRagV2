@@ -1,7 +1,15 @@
+/**
+ * electron/core/infrastructure/filesystem/compactSemanticRepoMapper.ts
+ *
+ * Infrastructure Layer — AST-aware repository scanner and compact repo map generator.
+ * Walks workspace filesystem, extracts exported AST declarations using the TypeScript Compiler API,
+ * and builds a compact repo map for agent context budgeting.
+ */
+
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as ts from 'typescript'
-import { DEFAULT_IGNORED_DIRS, isSecretFile } from './contextFilter'
+import { DEFAULT_IGNORED_DIRS, isSecretFile } from '../../domain/agent/contextFilter'
 
 export interface SymbolSummary {
   name: string

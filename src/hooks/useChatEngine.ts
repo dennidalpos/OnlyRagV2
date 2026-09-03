@@ -9,8 +9,8 @@ import { resolveChatContextBudget, resolveChatThreadCount, resolvePromptCharBudg
 import { compactChatHistory } from '../services/chatContextCompactor'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { normalizeError } from '../lib/errors/errorNormalizer'
-import { resolveModelContextLength } from '../../electron/core/domain/settings/modelContextPreference'
-import { resolveMaxContextTokens } from '../services/hardwareProfileTiers'
+import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -43,6 +43,14 @@ function loadInitialConversations(): ChatConversation[] {
     updatedAt: new Date().toISOString(),
   }
   return [defaultConv]
+}
+
+function safeSetLocalStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch (err) {
+    logger.warn('ChatEngine', `Failed writing ${key} to localStorage: ${err}`)
+  }
 }
 
 export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsData | null) {
@@ -121,8 +129,32 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   const isScrolledUpRef = useRef<boolean>(false)
 
   const prevActiveIdRef = useRef<string>(activeConversationId)
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Persist conversation changes to localStorage safely without race condition on conversation switch
+  const persistConversationState = useCallback(
+    (msgs: ChatMessage[], docIds: Set<string>, convId: string) => {
+      if (!convId) return
+      setConversations((prev) => {
+        const next = prev.map((conv) => {
+          if (conv.id === convId) {
+            return {
+              ...conv,
+              messages: msgs,
+              selectedDocIds: Array.from(docIds),
+              updatedAt: new Date().toISOString(),
+            }
+          }
+          return conv
+        })
+        safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(next))
+        safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, convId)
+        return next
+      })
+    },
+    []
+  )
+
+  // Persist conversation changes to localStorage debounced and safely without race conditions or streaming I/O freezes
   useEffect(() => {
     // If the conversation ID just changed, do not persist yet — we are loading the target conversation
     if (prevActiveIdRef.current !== activeConversationId) {
@@ -131,27 +163,26 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }
 
     if (!activeConversationId) return
-    setConversations((prev) => {
-      const next = prev.map((conv) => {
-        if (conv.id === activeConversationId) {
-          return {
-            ...conv,
-            messages,
-            selectedDocIds: Array.from(selectedDocIds),
-            updatedAt: new Date().toISOString(),
-          }
-        }
-        return conv
-      })
-      try {
-        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(next))
-        localStorage.setItem(STORAGE_KEY_ACTIVE_ID, activeConversationId)
-      } catch (err) {
-        logger.warn('ChatEngine', `Failed to persist conversations to localStorage: ${err}`)
+
+    // CRITICAL: Skip synchronous disk I/O and conversations array rebuild 25 times/sec during active token streaming!
+    if (isGeneratingRef.current) return
+
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current)
+    }
+
+    persistTimerRef.current = setTimeout(() => {
+      persistConversationState(messages, selectedDocIds, activeConversationId)
+      persistTimerRef.current = null
+    }, 400)
+
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
       }
-      return next
-    })
-  }, [messages, selectedDocIds, activeConversationId])
+    }
+  }, [messages, selectedDocIds, activeConversationId, persistConversationState])
 
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return
@@ -251,7 +282,11 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     }
     setIsGenerating(false)
     isGeneratingRef.current = false
-  }, [])
+    setMessages((curr) => {
+      persistConversationState(curr, selectedDocIds, activeConversationId)
+      return curr
+    })
+  }, [selectedDocIds, activeConversationId, persistConversationState])
 
   useEffect(() => {
     return () => {
@@ -529,6 +564,10 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         clearInterval(streamThrottleTimer.current)
         streamThrottleTimer.current = null
       }
+      setMessages((curr) => {
+        persistConversationState(curr, selectedDocIds, activeConversationId)
+        return curr
+      })
       setTimeout(() => scrollToBottom(false), 50)
     }
   }
@@ -558,9 +597,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
     setInput('')
     setShowMentions(false)
-    try {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, id)
-    } catch {}
+    safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, id)
   }, [conversations, documents, isGenerating])
 
   const handleNewChat = useCallback(() => {
@@ -589,16 +626,12 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     prevActiveIdRef.current = newConv.id
     setConversations((prev) => {
       const nextList = [newConv, ...prev]
-      try {
-        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
-      } catch {}
+      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
       return nextList
     })
     setActiveConversationId(newConv.id)
     setMessages(newConv.messages)
-    try {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, newConv.id)
-    } catch {}
+    safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, newConv.id)
   }, [isGenerating])
 
   const deleteConversation = useCallback((id: string) => {
@@ -633,25 +666,17 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         setMessages(fresh.messages)
         setSelectedDocIds(new Set())
         nextList = [fresh]
-        try {
-          localStorage.setItem(STORAGE_KEY_ACTIVE_ID, fresh.id)
-        } catch {}
+        safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, fresh.id)
       } else if (activeConversationId === id) {
         const nextActive = remaining[0]
         prevActiveIdRef.current = nextActive.id
         setActiveConversationId(nextActive.id)
         setMessages(nextActive.messages && nextActive.messages.length > 0 ? nextActive.messages : [createDefaultGreetingMessage()])
         setSelectedDocIds(new Set(nextActive.selectedDocIds || []))
-        try {
-          localStorage.setItem(STORAGE_KEY_ACTIVE_ID, nextActive.id)
-        } catch {}
+        safeSetLocalStorage(STORAGE_KEY_ACTIVE_ID, nextActive.id)
       }
 
-      try {
-        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
-      } catch (err) {
-        logger.warn('ChatEngine', `Failed writing updated conversations to localStorage: ${err}`)
-      }
+      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(nextList))
       return nextList
     })
   }, [activeConversationId, isGenerating])
@@ -660,11 +685,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
     if (!newTitle.trim()) return
     setConversations((prev) => {
       const updated = prev.map((c) => (c.id === id ? { ...c, title: newTitle.trim(), updatedAt: new Date().toISOString() } : c))
-      try {
-        localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(updated))
-      } catch (err) {
-        logger.warn('ChatEngine', `Failed writing updated conversations to localStorage: ${err}`)
-      }
+      safeSetLocalStorage(STORAGE_KEY_CONVERSATIONS, JSON.stringify(updated))
       return updated
     })
   }, [])

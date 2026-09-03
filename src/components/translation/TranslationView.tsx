@@ -38,9 +38,10 @@ interface TranslationViewProps {
   settings?: AppSettings
   diagnostics?: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
+  isActive?: boolean
 }
 
-export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diagnostics, onUpdateSettings }) => {
+export const TranslationView: React.FC<TranslationViewProps> = React.memo(({ settings, diagnostics, onUpdateSettings, isActive = true }) => {
   const { t } = useTranslation()
   const [activeTool, setActiveTool] = useState<'markdown' | 'inplace'>('markdown')
   const tr = useDocumentTranslation(settings, diagnostics)
@@ -604,4 +605,12 @@ export const TranslationView: React.FC<TranslationViewProps> = ({ settings, diag
       )}
     </div>
   )
-}
+}, (prev, next) => {
+  if (prev.isActive === false && next.isActive === false) return true
+  if (prev.isActive !== next.isActive) return false
+  return (
+    prev.settings === next.settings &&
+    prev.diagnostics === next.diagnostics &&
+    prev.onUpdateSettings === next.onUpdateSettings
+  )
+})

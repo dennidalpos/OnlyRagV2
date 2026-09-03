@@ -373,6 +373,16 @@ export const apiService = {
     }
   },
 
+  async getHubSkillContent(item: HubSkillItem): Promise<{ success: boolean; content?: string; error?: string }> {
+    if (!window.electronAPI?.getHubSkillContent) return { success: false, error: 'IPC unavailable' }
+    try {
+      return await window.electronAPI.getHubSkillContent(item)
+    } catch (err: any) {
+      logger.error('ApiService:Skills', `Failed fetching skill content for ${item.name}: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  },
+
   async toggleSkillActive(skillId: string, isActive: boolean): Promise<boolean> {
     if (!window.electronAPI?.toggleSkillActive) return false
     try {

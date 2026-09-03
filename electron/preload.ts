@@ -179,6 +179,7 @@ const api: IElectronAPI = {
   removeCustomHubSource: (sourceId: string) => ipcRenderer.invoke('skills:remove-custom-source', sourceId),
   listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) => ipcRenderer.invoke('skills:list-hub-by-source', sourceId, workspaceRoot, forceRefresh),
   listHubSkillsAcrossSources: (workspaceRoot?: string, forceRefresh?: boolean) => ipcRenderer.invoke('skills:list-hub-all', workspaceRoot, forceRefresh),
+  getHubSkillContent: (item: any) => ipcRenderer.invoke('skills:get-hub-skill-content', item),
   toggleSkillActive: (skillId: string, isActive: boolean) => ipcRenderer.invoke('skills:toggle-active', skillId, isActive),
   installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => ipcRenderer.invoke('skills:install-from-hub', hubSkillId, workspaceRoot, hubSourceId),
   installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => ipcRenderer.invoke('skills:install-from-url', url, workspaceRoot, customName),

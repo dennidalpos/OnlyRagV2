@@ -9,7 +9,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   language: 'it',
   autoInstallHubSkills: 'disabled',
   autoInstallMinScore: 8.0,
-  enableSkillRouter: true,
+  enableSkillRouter: false,
   maxToolCallSteps: 0,
   enableCodingAgentDebugLog: true,
   hasCompletedInitialSetup: false,

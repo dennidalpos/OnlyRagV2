@@ -161,10 +161,15 @@ export class SkillAppService {
     return true
   }
 
+  async getHubSkillContent(item: HubSkillItem | string): Promise<{ success: boolean; content?: string; error?: string }> {
+    return skillHubClient.fetchSkillContent(item)
+  }
+
   async installFromHub(
     hubSkillId: string,
     workspaceRoot?: string | null,
-    hubSourceId?: string
+    hubSourceId?: string,
+    activateByDefault = true
   ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     const sources = await customHubRepository.listSources()
     const source = sources.find((s) => s.id === hubSourceId) || sources[0]
@@ -204,7 +209,7 @@ export class SkillAppService {
       return { success: false, error: saveRes.error }
     }
 
-    skillRepository.setSkillActive(hubItem.name, true)
+    skillRepository.setSkillActive(hubItem.name, activateByDefault)
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
     const newSkill = installed.find((s) => s.name.toLowerCase() === hubItem.name.toLowerCase())
 
@@ -214,7 +219,8 @@ export class SkillAppService {
   async installFromUrl(
     url: string,
     workspaceRoot?: string | null,
-    customName?: string
+    customName?: string,
+    activateByDefault = true
   ): Promise<{ success: boolean; skill?: SkillDefinition; error?: string }> {
     const fetchRes = await skillHubClient.fetchSkillContent(url)
     if (!fetchRes.success || !fetchRes.content) {
@@ -247,7 +253,7 @@ export class SkillAppService {
       return { success: false, error: saveRes.error }
     }
 
-    skillRepository.setSkillActive(skillName, true)
+    skillRepository.setSkillActive(skillName, activateByDefault)
     const installed = await skillRepository.listInstalledSkills(workspaceRoot)
     const newSkill = installed.find((s) => s.name.toLowerCase() === skillName.toLowerCase())
 
@@ -394,7 +400,7 @@ export class SkillAppService {
               )
               const isInstallAllowed = await this.confirmHubInstall(topHubMatch, autoInstallMode, options?.onConfirmInstall)
               if (isInstallAllowed) {
-                const installRes = await this.installFromHub(topHubMatch.item.id, workspaceRoot, topHubMatch.item.hubId)
+                const installRes = await this.installFromHub(topHubMatch.item.id, workspaceRoot, topHubMatch.item.hubId, true)
                 if (installRes.success) {
                   availableSkills = await skillRepository.listInstalledSkills(workspaceRoot)
                   matched = matchSkillsForTask(ctx, availableSkills, maxSkills)

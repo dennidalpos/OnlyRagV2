@@ -140,7 +140,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         const nextVal = autoInstallHubSkills === 'prompt' ? 'disabled' : 'prompt'
         onUpdateSettings({
           autoInstallHubSkills: nextVal,
-          enableSkillRouter: true,
+          enableSkillRouter: nextVal === 'prompt',
         })
       }
     : undefined

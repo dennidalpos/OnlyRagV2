@@ -9,6 +9,7 @@ import {
   Globe,
   User,
   Search,
+  PowerOff,
 } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../../common/InlineDestructiveConfirm'
 import { SkillDefinition } from '../../../types'
@@ -171,16 +172,20 @@ export const InstalledSkillsList: React.FC<InstalledSkillsListProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleActive(skill.id, skill.isActive)}
-                  aria-label={skill.isActive ? `${t('common.active')}: ${skill.name}` : `Auto: ${skill.name}`}
+                  aria-label={skill.isActive ? `${t('common.active')}: ${skill.name}` : `${t('common.inactive')}: ${skill.name}`}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 focus-ring ${
                     skill.isActive
                       ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                   }`}
-                  title={skill.isActive ? t('common.active') : 'Auto'}
+                  title={skill.isActive ? t('common.active') : t('common.inactive')}
                 >
-                  <CheckCircle className="w-3 h-3" />
-                  {skill.isActive ? t('common.active') : 'Auto'}
+                  {skill.isActive ? (
+                    <CheckCircle className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <PowerOff className="w-3 h-3 text-slate-500" />
+                  )}
+                  {skill.isActive ? t('common.active') : t('common.inactive')}
                 </button>
 
                 <button

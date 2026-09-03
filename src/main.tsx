@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import './lib/monacoTheme'
 import { App } from './App'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import './index.css'

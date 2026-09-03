@@ -44,6 +44,7 @@ export interface TranslationSchema {
     noFileOpen: string
     reset: string
     active: string
+    inactive: string
     original: string
     modified: string
     custom: string
@@ -236,6 +237,10 @@ export interface TranslationSchema {
     skillDescription: string
     skillContent: string
     skillTriggers: string
+    viewInstructions: string
+    hideInstructions: string
+    copyInstructions: string
+    noInstructionsAvailable: string
     importSkillUrlTitle: string
     importUrlBtn: string
     author: string

@@ -201,4 +201,13 @@ describe('SkillAppService Unit Tests', () => {
     expect(acrossSources.every((s, index) => s.globalRank === index + 1)).toBe(true)
     expect(acrossSources.every((s) => s.qualityScore !== undefined)).toBe(true)
   })
+
+  it('should fetch raw skill content for a hub skill', async () => {
+    const skills = await skillAppService.listHubSkillsBySource('official-core', tempDir)
+    expect(skills.length).toBeGreaterThan(0)
+    const contentRes = await skillAppService.getHubSkillContent(skills[0])
+    expect(contentRes.success).toBe(true)
+    expect(contentRes.content).toBeDefined()
+    expect(contentRes.content?.length).toBeGreaterThan(20)
+  })
 })

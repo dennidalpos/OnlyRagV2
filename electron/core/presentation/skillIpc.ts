@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { skillAppService } from '../application/skillAppService'
-import { CustomHubInput, SkillSaveInput } from '../domain/skills/skillTypes'
+import { CustomHubInput, SkillSaveInput, HubSkillItem } from '../domain/skills/skillTypes'
 
 export function registerSkillIpcHandlers() {
   ipcMain.handle('skills:list-installed', async (_event, workspaceRoot?: string) => {
@@ -25,6 +25,10 @@ export function registerSkillIpcHandlers() {
 
   ipcMain.handle('skills:list-hub-all', async (_event, workspaceRoot?: string, forceRefresh?: boolean) => {
     return skillAppService.listHubSkillsAcrossSources(workspaceRoot, forceRefresh)
+  })
+
+  ipcMain.handle('skills:get-hub-skill-content', async (_event, item: HubSkillItem) => {
+    return skillAppService.getHubSkillContent(item)
   })
 
   ipcMain.handle('skills:toggle-active', async (_event, skillId: string, isActive: boolean) => {

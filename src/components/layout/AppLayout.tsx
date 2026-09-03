@@ -90,7 +90,7 @@ export const AppLayout: React.FC = () => {
       language: 'it',
       autoInstallHubSkills: 'disabled',
       autoInstallMinScore: 8.0,
-      enableSkillRouter: true,
+      enableSkillRouter: false,
       maxToolCallSteps: 0,
       enableCodingAgentDebugLog: true,
       hasCompletedInitialSetup: false,

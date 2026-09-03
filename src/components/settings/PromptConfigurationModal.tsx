@@ -16,6 +16,7 @@ import {
   Plus,
   X,
   Sliders,
+  Loader2,
   type LucideIcon,
 } from 'lucide-react'
 import { Modal } from '../common/Modal'
@@ -110,6 +111,8 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [savedFlash, setSavedFlash] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [editorTimedOut, setEditorTimedOut] = useState(false)
+  const [isEditorMounted, setIsEditorMounted] = useState(false)
   const editorRef = useRef<any>(null)
   const prevNodeIdRef = useRef<PromptNodeId>(initialNodeId)
 
@@ -122,8 +125,18 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
       prevNodeIdRef.current = initialNodeId
       setDraft(resolveNodeTemplate(initialNodeId, settings).template)
       setTab('edit')
+      setEditorTimedOut(false)
     }
   }, [isOpen, initialNodeId])
+
+  // Failsafe timeout in case editor environment cannot mount
+  useEffect(() => {
+    if (!isOpen || isEditorMounted) return
+    const timer = setTimeout(() => {
+      setEditorTimedOut(true)
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, [isOpen, isEditorMounted])
 
   // Sync draft when the user switches selected node in the sidebar
   useEffect(() => {
@@ -388,9 +401,17 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
               )}
 
               <div className="flex-1 min-h-0 m-5 rounded-xl border border-slate-800 overflow-hidden bg-[#080c14]">
-                {tab === 'edit' ? (
+                {editorTimedOut && !isEditorMounted ? (
+                  <textarea
+                    value={tab === 'edit' ? draft : preview}
+                    onChange={tab === 'edit' ? (e) => setDraft(e.target.value) : undefined}
+                    readOnly={tab === 'preview'}
+                    className="w-full h-full p-4 bg-[#080c14] text-slate-200 font-mono text-xs resize-none outline-none border-0 focus:ring-0"
+                    spellCheck={false}
+                  />
+                ) : tab === 'edit' ? (
                   <Editor
-                    key={`edit-${selectedNodeId}`}
+                    key="prompt-editor-edit"
                     height="100%"
                     theme={ONLYRAG_MONACO_THEME_NAME}
                     beforeMount={defineOnlyRagMonacoTheme}
@@ -399,7 +420,14 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
                     onChange={(value) => setDraft(value || '')}
                     onMount={(editor) => {
                       editorRef.current = editor
+                      setIsEditorMounted(true)
                     }}
+                    loading={
+                      <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400 bg-[#080c14]">
+                        <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                        <span className="text-xs font-mono">{t('common.loading')}</span>
+                      </div>
+                    }
                     options={getStandardMonacoOptions({
                       readOnly: false,
                       wordWrap: true,
@@ -408,12 +436,19 @@ export const PromptConfigurationModal: React.FC<PromptConfigurationModalProps> =
                   />
                 ) : (
                   <Editor
-                    key={`preview-${selectedNodeId}`}
+                    key="prompt-editor-preview"
                     height="100%"
                     theme={ONLYRAG_MONACO_THEME_NAME}
                     beforeMount={defineOnlyRagMonacoTheme}
                     language="markdown"
                     value={preview}
+                    onMount={() => setIsEditorMounted(true)}
+                    loading={
+                      <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400 bg-[#080c14]">
+                        <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                        <span className="text-xs font-mono">{t('common.loading')}</span>
+                      </div>
+                    }
                     options={getStandardMonacoOptions({
                       readOnly: true,
                       wordWrap: true,

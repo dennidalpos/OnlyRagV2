@@ -130,7 +130,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   }
 
   const skillMatchingOptions = {
-    enableSkillRouter: settings.enableSkillRouter !== false,
+    enableSkillRouter: settings.enableSkillRouter === true,
     autoInstallHubSkills: settings.autoInstallHubSkills,
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {

@@ -246,7 +246,7 @@ export interface AppSettings {
   // Initial Setup Wizard Flag
   hasCompletedInitialSetup?: boolean
   // Skill Hub Auto-Discovery & On-Demand Installation
-  enableSkillRouter?: boolean // Default: true. Set false to completely disable skill injection.
+  enableSkillRouter?: boolean // Default: false. Set true to enable automatic skill injection.
   autoInstallHubSkills?: 'disabled' | 'prompt'
   autoInstallMinScore?: number
   // Internationalization
@@ -646,6 +646,7 @@ export interface IElectronAPI {
   removeCustomHubSource: (sourceId: string) => Promise<{ success: boolean; error?: string }>
   listHubSkillsBySource: (sourceId: string, workspaceRoot?: string, forceRefresh?: boolean) => Promise<HubSkillItem[]>
   listHubSkillsAcrossSources: (workspaceRoot?: string, forceRefresh?: boolean) => Promise<HubSkillItem[]>
+  getHubSkillContent: (item: HubSkillItem) => Promise<{ success: boolean; content?: string; error?: string }>
   toggleSkillActive: (skillId: string, isActive: boolean) => Promise<boolean>
   installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>

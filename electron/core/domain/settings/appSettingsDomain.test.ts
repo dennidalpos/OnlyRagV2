@@ -8,7 +8,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.ocrEngine).toBe('native_cuda')
     expect(defaults.language).toBe('it')
     expect(defaults.autoInstallHubSkills).toBe('disabled')
-    expect(defaults.enableSkillRouter).toBe(true)
+    expect(defaults.enableSkillRouter).toBe(false)
     expect(defaults.maxToolCallSteps).toBe(0)
   })
 

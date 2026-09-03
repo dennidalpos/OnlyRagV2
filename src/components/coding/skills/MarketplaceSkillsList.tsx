@@ -12,8 +12,13 @@ import {
   ExternalLink,
   Plus,
   Loader2,
+  FileText,
+  FileCode,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { HubSkillItem } from '../../../types'
+import { apiService } from '../../../services/api'
 import { useTranslation, TranslationKey } from '../../../i18n'
 
 const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
@@ -45,6 +50,37 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [urlInput, setUrlInput] = useState('')
   const [customNameInput, setCustomNameInput] = useState('')
+  const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null)
+  const [fetchedContents, setFetchedContents] = useState<Record<string, string>>({})
+  const [loadingContentId, setLoadingContentId] = useState<string | null>(null)
+  const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null)
+
+  const handleToggleExpand = async (hubItem: HubSkillItem) => {
+    if (expandedSkillId === hubItem.id) {
+      setExpandedSkillId(null)
+      return
+    }
+    setExpandedSkillId(hubItem.id)
+    if (!hubItem.rawContent && !fetchedContents[hubItem.id]) {
+      setLoadingContentId(hubItem.id)
+      try {
+        const res = await apiService.getHubSkillContent(hubItem)
+        if (res.success && res.content) {
+          setFetchedContents((prev) => ({ ...prev, [hubItem.id]: res.content! }))
+        }
+      } catch {
+        // Fallback handled in UI
+      } finally {
+        setLoadingContentId(null)
+      }
+    }
+  }
+
+  const handleCopyContent = (content: string, id: string) => {
+    navigator.clipboard.writeText(content)
+    setCopiedSkillId(id)
+    setTimeout(() => setCopiedSkillId(null), 2000)
+  }
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -160,6 +196,10 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredSkills.map((hubItem) => {
             const isInstallingThis = installingSkillId === hubItem.id
+            const isExpanded = expandedSkillId === hubItem.id
+            const isLoadingContent = loadingContentId === hubItem.id
+            const rawInstructions = hubItem.rawContent || fetchedContents[hubItem.id]
+
             return (
               <div
                 key={hubItem.id}
@@ -192,8 +232,65 @@ export const MarketplaceSkillsList: React.FC<MarketplaceSkillsListProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400 font-medium">{hubItem.author}</span>
+                {/* Instructions Expandable Section */}
+                {isExpanded && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800/80 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                        <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+                        {t('skills.skillContent')}
+                      </span>
+                      {rawInstructions && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyContent(rawInstructions, hubItem.id)}
+                          className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 transition-colors focus-ring"
+                          title={t('skills.copyInstructions')}
+                        >
+                          {copiedSkillId === hubItem.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400 font-medium">{t('common.copied')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>{t('skills.copyInstructions')}</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {isLoadingContent ? (
+                      <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 text-center space-y-2">
+                        <Loader2 className="w-4 h-4 animate-spin mx-auto text-cyan-400" />
+                        <p className="text-[11px] text-slate-400">{t('common.loading')}...</p>
+                      </div>
+                    ) : rawInstructions ? (
+                      <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-lg text-[11px] text-slate-300 font-mono overflow-x-auto max-h-52 whitespace-pre-wrap leading-relaxed select-text shadow-inner">
+                        {rawInstructions}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-lg text-xs text-slate-500 italic text-center">
+                        {t('skills.noInstructionsAvailable')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 truncate">
+                    <span className="text-[11px] text-slate-400 font-medium truncate">{hubItem.author}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExpand(hubItem)}
+                      className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1 font-medium shrink-0 focus-ring rounded cursor-pointer"
+                    >
+                      <FileText className="w-3 h-3" />
+                      {isExpanded ? t('skills.hideInstructions') : t('skills.viewInstructions')}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => onInstallSkill(hubItem.id)}

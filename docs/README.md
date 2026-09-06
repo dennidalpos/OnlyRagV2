@@ -13,6 +13,7 @@ canonical page; cross-links should point to that page instead of duplicating the
 | REST and Electron IPC contracts | [`api.md`](./api.md) | Endpoint/channel behavior, payloads and error contracts |
 | Operational observability and diagnostics | [`observability.md`](./observability.md) | Logging, metrics, retention and known diagnostic gaps |
 | Live agent quality assurance | [`agent-live-testing.md`](./agent-live-testing.md) | Live prerequisites, scenarios, isolation and log interpretation |
+| Development backlog | [`../PROJECT_STATUS.json`](../PROJECT_STATUS.json) | Prioritized activities, dependencies and completion criteria, including Coding Agent Studio, Plan and interview improvements |
 | External libraries and custom domain implementations | [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) | Dependency rationale and domain-level substitutions |
 | Dependency and vulnerability snapshot | [`dependency-audit.md`](./dependency-audit.md) | Point-in-time audit results, false positives and follow-up |
 | Quality gates and CI verification | [`quality-gates.md`](./quality-gates.md) | Lint/format limitations, type-check, coverage and reproducible CI policy |

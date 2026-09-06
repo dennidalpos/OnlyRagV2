@@ -1,10 +1,9 @@
 # AGENTS.md
 
-`v1.3 · 2026-09-03` — Non-derivable repository facts only. Cap ~2500 characters.
+`v1.4 · 2026-09-05` — Non-derivable repository facts only. Cap ~2500 characters.
 
 ## 1. Identity & Scope
 - **Purpose**: Local desktop AI assistant and agentic coding studio with RAG, Ollama runtime, and Python sidecar.
-- **Runtime / Toolchain**: Node.js 22 (npm) | Electron 35 | TypeScript 5.8 | Vite 6 | Python 3.12 (sidecar). Windows pwsh.
 - **Out of Scope**: Cloud LLM API forwarding; non-local proprietary services.
 - **Hard Constraints**: Zero VRAM thrashing (pinned workhorse model); strict process isolation (Renderer/Main share only via `shared/`).
 
@@ -31,3 +30,4 @@ Executed and verified in session. Date: 2026-09-03.
 ## 4. Sensitive Areas & Gotchas
 - **Sidecar Port :8000**: Process lifecycle owned by `sidecarProcessManager` via orphan port reclaim.
 - **Line Endings**: Windows CRLF/LF conversions must not pollute git diffs. Keep UTF-8 without BOM.
+- **Development Tracker**: `PROJECT_STATUS.json` is the canonical backlog; keep its `todos` string-array format and preserve existing entries.

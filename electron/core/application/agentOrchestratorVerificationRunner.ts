@@ -32,6 +32,8 @@ export interface VerificationRunResult {
   command?: string
   /** Failure detail for the model: the dependency directive, or the command's output tail. */
   failureDetail?: string
+  /** A passing build/typecheck/lint is structural evidence, not end-to-end behaviour. */
+  evidenceLevel?: 'structural' | 'behavioral'
 }
 
 export async function runProjectVerification(
@@ -43,6 +45,9 @@ export async function runProjectVerification(
   const profile = discoverProjectProfile(workspacePath)
   const verifications = resolvePrimaryProfileVerificationTargets(profile)
   const verificationLabel = verifications.map((target) => `${target.projectRelativePath}: ${target.command}`).join(' && ')
+  const evidenceLevel = verifications.length > 0 && verifications.every((target) => target.kind === 'test')
+    ? 'behavioral' as const
+    : 'structural' as const
 
   // Checked first: an undeclared import is a build failure whose cause is already known, and
   // saying which package and which file beats making the model infer it from a compiler error.
@@ -56,6 +61,7 @@ export async function runProjectVerification(
         status: 'failed',
         command: verificationLabel || 'dependency integrity scan',
         failureDetail: integrity.directive,
+        evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }
     }
@@ -72,6 +78,7 @@ export async function runProjectVerification(
         status: 'failed',
         command: verificationLabel,
         failureDetail: `Verification command blocked for project ${verification.projectRelativePath}: ${security.blockedReason}`,
+        evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }
     }
@@ -92,10 +99,11 @@ export async function runProjectVerification(
         failureDetail: `Project: ${verification.projectRelativePath}\nCommand: ${verification.command} (from ${verification.source})\n` +
           `Exit code: ${res.code}${res.timedOut ? ' (timed out)' : ''}\n` +
           `${(res.stdout || res.stderr || '').trim().slice(-OUTPUT_TAIL_CHARS)}`,
+        evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }
     }
   }
 
-  return { hasVerificationCommand: true, passed: true, status: 'verified', command: verificationLabel }
+  return { hasVerificationCommand: true, passed: true, status: 'verified', command: verificationLabel, evidenceLevel }
 }

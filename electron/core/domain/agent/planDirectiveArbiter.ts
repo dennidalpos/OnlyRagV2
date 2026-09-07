@@ -13,9 +13,10 @@
  * somewhere to be discovered.
  *
  * It also supplies the state that was missing entirely. `hasVerifiedBuild` is raised only by
- * `run_command` / `run_tests`, or by the finish gate running the verification itself — and the
- * finish gate is unreachable while focus directive 4 forbids `finish` until every milestone is
- * verified, which only a passing verification can achieve. In three live runs of fifty steps
+ * `run_command` / `run_tests`, or by application-owned closure running the verification itself.
+ * Historically, that check was trapped behind a finish gate while focus directive 4 forbade
+ * `finish` until every milestone was verified, which only a passing verification could achieve.
+ * In three live runs of fifty steps
  * the model therefore never ran a single command: `write_file` was the only legal move it had.
  * `verification_due` names the project's own command as the next action, in the channel that
  * repeats every turn, before the model is looping rather than after.

@@ -74,7 +74,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(res.error).toBe('Task prompt is required')
   })
 
-  it('should execute finish tool call and complete session successfully, marking milestones verified', async () => {
+  it('should route finish through the application evidence gate and persist the model report', async () => {
     vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(
       '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "All tasks done perfectly." }\n}\n```'
     )
@@ -88,8 +88,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(res.success).toBe(true)
-    expect(res.summary).toBe('All tasks done perfectly.')
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.summary).toContain('All tasks done perfectly.')
     const tracker = fs.readFileSync(path.join(tempDir, '.onlyrag', 'assistant', 'SESSION_TRACKER.md'), 'utf-8')
     expect(tracker).toContain('## 5. Raw Agent Summary')
     expect(tracker).toContain('All tasks done perfectly.')
@@ -115,8 +116,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(res.success).toBe(true)
-    expect(res.summary).toBe('Pivoted and completed.')
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.summary).toContain('Pivoted and completed.')
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(4)
   })
 
@@ -276,8 +278,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       },
       null
     )
-    expect(turn2Res.success).toBe(true)
-    expect(turn2Res.summary).toBe('Code executed and verified.')
+    expect(turn2Res.success).toBe(false)
+    expect(turn2Res.completionStatus).toBe('unverifiable')
+    expect(turn2Res.summary).toContain('Code executed and verified.')
   })
 
   it('should pause for human approval in ASK mode, then resume and execute the tool once approved', async () => {
@@ -416,8 +419,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(respondToApproval(sessionId, true)).toBe(true)
 
     const res = await resultPromise
-    expect(res.success).toBe(true)
-    expect(res.summary).toBe('Commit step handled.')
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.summary).toContain('Commit step handled.')
     expect(res.summary).not.toContain('FSM PERMISSION DENIED')
   })
 
@@ -465,7 +469,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(res.success).toBe(true)
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('blocked')
     const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-tool-session.json')
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const verified = saved.planMilestones.filter((m: any) => m.status === 'verified')
@@ -491,7 +496,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(res.success).toBe(true)
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
     const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-verify-pass-session.json')
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
@@ -555,7 +561,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(res.success).toBe(true)
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('blocked')
     const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-verify-fail-session.json')
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
@@ -605,7 +612,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         { userTask: 'Do nothing', agentMode: 'agent', workspacePath: tempDir, sessionId: 'reused-session-id' },
         fakeWin
       )
-      expect(res.success).toBe(true)
+      expect(res.success).toBe(false)
+      expect(res.completionStatus).toBe('unverifiable')
 
       const doneCountAfterRun = sent.filter((m) => m.channel === 'agent:done').length
       await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
@@ -617,7 +625,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     }
   })
 
-  it('should intercept finish with the DoD guard after unverified file mutations, then allow it on the next attempt', async () => {
+  it('should close once as unverifiable when modified work has no project check', async () => {
     const writeJson =
       '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "app.js", "content": "console.log(1)" }\n}\n```'
     const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
@@ -636,12 +644,13 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)
-    expect(res.success).toBe(true)
-    expect(res.summary).toBe('Done.')
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.summary).toContain('Done.')
   })
 
-  it('should not intercept finish a second time for the same DoD reason', async () => {
+  it('should not ask the model to repeat finish when evidence is unavailable', async () => {
     const writeJson =
       '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "b.js", "content": "console.log(2)" }\n}\n```'
     const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Second attempt." }\n}\n```'
@@ -661,9 +670,10 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(res.success).toBe(true)
-    expect(res.summary).toBe('Second attempt.')
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)
+    expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
+    expect(res.summary).toContain('Second attempt.')
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
 
   it('should immediately fail-fast and inform user if workspace is not specified and not in standalone mode', async () => {
@@ -701,7 +711,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         hasVerificationCommand: true,
         passed: true,
         status: 'verified',
-        command: 'npm run build',
+        command: 'npm test',
+        evidenceLevel: 'behavioral',
       })
       scriptTurns(verificationWriteJson, verificationFinishJson)
 
@@ -712,7 +723,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
       expect(runProjectVerification).toHaveBeenCalled()
       expect(res.success).toBe(true)
-      expect(res.summary).toBe('All done.')
+      expect(res.completionStatus).toBe('verified')
+      expect(res.summary).toContain('All done.')
     })
 
     it('blocks finish and closes the session as FAILED after the allowed rounds', async () => {
@@ -733,7 +745,8 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       )
 
       expect(res.success).toBe(false)
-      expect(res.summary).toContain('FAILED')
+      expect(res.completionStatus).toBe('blocked')
+      expect(res.summary).toContain('BLOCCATO')
       expect(res.summary).toContain('TS2307')
       expect(vi.mocked(runProjectVerification).mock.calls.length).toBe(MAX_VERIFICATION_FIX_CYCLES)
     })
@@ -743,7 +756,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       vi.mocked(runProjectVerification)
         .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, status: 'failed', failureDetail: 'boom 1' })
         .mockResolvedValueOnce({ hasVerificationCommand: true, passed: false, status: 'failed', failureDetail: 'boom 2' })
-        .mockResolvedValue({ hasVerificationCommand: true, passed: true, status: 'verified', command: 'npm run build' })
+        .mockResolvedValue({ hasVerificationCommand: true, passed: true, status: 'verified', command: 'npm test', evidenceLevel: 'behavioral' })
       scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
@@ -752,10 +765,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       )
 
       expect(res.success).toBe(true)
-      expect(res.summary).toBe('All done.')
+      expect(res.completionStatus).toBe('verified')
+      expect(res.summary).toContain('All done.')
     })
 
-    it('proceeds when the project offers no verification command, instead of deadlocking', async () => {
+    it('closes as unverifiable when the project offers no verification command', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       // Three turns, because the missing-build reason is surfaced to the model once before
       // finish is let through: the second finish is the one that closes the session. The
@@ -768,8 +782,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
         null
       )
 
-      expect(res.success).toBe(true)
-      expect(res.summary).toBe('All done.')
+      expect(res.success).toBe(false)
+      expect(res.completionStatus).toBe('unverifiable')
+      expect(res.summary).toContain('All done.')
     })
   })
 
@@ -790,16 +805,17 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       )
 
       expect(res.success).toBe(false)
-      expect(res.summary).toContain('finish')
+      expect(res.completionStatus).toBe('unverifiable')
+      expect(res.summary).toContain('NON VERIFICABILE')
     })
 
-    it('never runs the finish verification, because finish was never reached', async () => {
+    it('runs application verification even when finish was never reached', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
       scriptTurns(verificationWriteJson, prose, prose, prose)
 
       await runAgentOrchestratorLoop({ userTask: 'Create app.js', agentMode: 'agent', workspacePath: tempDir }, null)
 
-      expect(runProjectVerification).not.toHaveBeenCalled()
+      expect(runProjectVerification).toHaveBeenCalledTimes(1)
     })
 
     it('still completes an ASK-mode turn, where a prose answer is the deliverable', async () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentActionLog, AgentPlan, PlanMilestone, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode } from '../types'
+import { AgentActionLog, AgentPlan, PlanMilestone, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode, AgentDoneResult } from '../types'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useSessionHistory } from './useSessionHistory'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
@@ -225,6 +225,7 @@ export function useCodingAgent(settings?: AppSettings) {
     purgeWorkspace,
     renameSession,
     updateSessionPlans,
+    persistSessionPlan,
     beginExecutedPrompt,
     completeExecutedPrompt,
   } = useSessionHistory(workspacePath)
@@ -434,7 +435,7 @@ export function useCodingAgent(settings?: AppSettings) {
       }
     })
 
-    const unsubDone = window.electronAPI.onAgentDone?.((res: { success: boolean; summary: string }) => {
+    const unsubDone = window.electronAPI.onAgentDone?.((res: AgentDoneResult) => {
       soundEffectsService.play(res?.success === false ? 'error' : 'completion', settings?.enableSoundEffects !== false)
       setCurrentLiveModel(null)
       closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
@@ -584,6 +585,11 @@ export function useCodingAgent(settings?: AppSettings) {
       updateSessionPlans(activeSessionId, updater)
     },
     [activeSessionId, updateSessionPlans]
+  )
+
+  const persistActiveSessionPlan = useCallback(
+    (plan: AgentPlan) => activeSessionId ? persistSessionPlan(activeSessionId, plan) : Promise.resolve(false),
+    [activeSessionId, persistSessionPlan]
   )
 
   const closeRunningExecutedPrompt = (outcome: ExecutedPromptOutcome, summary?: string) => {
@@ -827,6 +833,7 @@ export function useCodingAgent(settings?: AppSettings) {
     activeSession,
     activeSessionPlans,
     updateActiveSessionPlans,
+    persistActiveSessionPlan,
     handleCreateSession,
     handleSwitchSession,
     jumpToProjectAndSession,

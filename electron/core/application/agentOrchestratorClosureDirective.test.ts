@@ -205,6 +205,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
       persistCurrentState: async () => {},
       finalizeSession: () => {},
       buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
+      closeApplicationRun: async () => ({ outcome: 'closed', result: { success: false, summary: 'closed' } }),
     }
   }
 
@@ -325,6 +326,7 @@ describe('a repeated command must not abandon a milestone that is already delive
       persistCurrentState: async () => {},
       finalizeSession: () => {},
       buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
+      closeApplicationRun: async () => ({ outcome: 'closed', result: { success: false, summary: 'closed' } }),
     }
   }
 

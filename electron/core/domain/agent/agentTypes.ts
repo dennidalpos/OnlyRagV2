@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../../../shared/types'
+import type { AgentCompletionStatus, AppSettings } from '../../../../shared/types'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
@@ -54,6 +54,7 @@ export interface AgentTaskResult {
   success: boolean
   summary: string
   error?: string
+  completionStatus?: AgentCompletionStatus
 }
 
 export interface AgentToolReplacementChunk {

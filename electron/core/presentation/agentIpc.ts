@@ -77,8 +77,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    * Re-parses (e.g. user-edited) plan text into canonical milestones, using
    * the same parser as agent:plan-generate and the orchestrator loop itself.
    */
-  ipcMain.handle('agent:plan-parse-text', async (_, planText: string) => {
-    return planGenerationAppService.parsePlanText(planText)
+  ipcMain.handle('agent:plan-parse-text', async (_, planText: string, workspacePath?: string | null) => {
+    return planGenerationAppService.parsePlanText(planText, workspacePath)
   })
 
   /**

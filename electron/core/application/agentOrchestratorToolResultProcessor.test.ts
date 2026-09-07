@@ -65,7 +65,7 @@ describe('MODEL_UNSUITABLE terminal outcome', () => {
 
     expect(outcome).toEqual({
       outcome: 'return',
-      result: { success: false, summary: 'The requested model capability is unavailable.' },
+      result: { success: false, summary: 'The requested model capability is unavailable.', completionStatus: 'blocked' },
     })
     expect(outcome?.outcome).not.toBe('continue')
   })

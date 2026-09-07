@@ -219,6 +219,36 @@ describe('PlanGenerationAppService', () => {
       expect(result.milestones[1].title).toBe('Build pulita')
       expect(result.milestones[1].verificationCommand).toBe('npm run build')
     })
+
+    it('round-trips the displayed canonical revision in an existing project', async () => {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
+      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+        onChunk('- [ ] m-1: La pagina mostra il profilo — `src/Profile.tsx`\n')
+        return { success: true }
+      })
+
+      const generated = await planGenerationAppService.generatePlanText({ prompt: 'Aggiungi profilo', settings, workspacePath })
+      const reparsed = planGenerationAppService.parsePlanText(generated.planText, workspacePath)
+
+      expect(reparsed.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
+        .toEqual(generated.milestones.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
+      expect(generated.planText).toContain('verify: `npm run build`')
+    })
+
+    it('round-trips compiler-added entry requirements in an empty workspace', async () => {
+      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+        onChunk('- [ ] m-1: La pagina principale funziona — `src/App.tsx`\n')
+        return { success: true }
+      })
+
+      const generated = await planGenerationAppService.generatePlanText({ prompt: 'Crea una app', settings, workspacePath })
+      const reparsed = planGenerationAppService.parsePlanText(generated.planText, workspacePath)
+
+      expect(reparsed.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
+        .toEqual(generated.milestones.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
+      expect(generated.milestones.map((milestone) => milestone.title).join('\n')).toMatch(/package\.json/)
+      expect(generated.milestones.map((milestone) => milestone.title).join('\n')).toMatch(/src\/main\.tsx/)
+    })
   })
 
   /**

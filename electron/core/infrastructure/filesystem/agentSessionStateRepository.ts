@@ -5,6 +5,7 @@ import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
+import type { AgentCompletionStatus } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 
@@ -15,6 +16,9 @@ export type AgentSessionTerminationReason =
   | 'timeout'
   | 'circuit_breaker'
   | 'verification_failed'
+  | 'model_silence'
+  | 'transport_error'
+  | 'protocol_error'
   | 'plan_proposal'
 
 export interface SavedAgentSessionState {
@@ -32,6 +36,8 @@ export interface SavedAgentSessionState {
   status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   /** Present only after a terminal path persists its final checkpoint. */
   terminationReason?: AgentSessionTerminationReason
+  /** Evidence-based outcome of an application-owned terminal path. */
+  completionStatus?: AgentCompletionStatus
 }
 
 export class AgentSessionStateRepository {
@@ -186,6 +192,9 @@ export class AgentSessionStateRepository {
           planMilestones,
           ...(userTask !== undefined ? { userTask } : {}),
           updatedAt: new Date().toISOString(),
+          status: 'IN_PROGRESS',
+          terminationReason: undefined,
+          completionStatus: undefined,
         }
       : {
           sessionId,
@@ -198,6 +207,7 @@ export class AgentSessionStateRepository {
           planMilestones,
           userTask: userTask || '',
           updatedAt: new Date().toISOString(),
+          status: 'IN_PROGRESS',
         }
     return this.saveSessionState(state)
   }

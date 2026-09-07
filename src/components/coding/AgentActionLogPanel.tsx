@@ -1,6 +1,5 @@
 import React from 'react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, InterviewQuestion, UserInterviewAnswer, AgentMode, DiagnosticsData } from '../../types'
-import type { AgentPlan } from '../../hooks/usePlanApproval'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, AgentMode, DiagnosticsData } from '../../types'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
 import { estimateTokenCount } from '../../lib/tokenEstimate'
@@ -58,20 +57,6 @@ interface AgentActionLogPanelProps {
   filesCount?: number
   files?: WorkspaceFile[]
   onOpenRightTab?: (tab: 'editor' | 'terminal' | 'git_diff' | 'plan') => void
-  // Plan Flow Props
-  plan?: AgentPlan | null
-  isGeneratingPlan?: boolean
-  countdownSeconds?: number
-  isAutoProceedPaused?: boolean
-  autoProceedEnabled?: boolean
-  interviewQuestions?: InterviewQuestion[]
-  isInterviewActive?: boolean
-  isAnalyzingInterview?: boolean
-  onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
-  onSkipInterview?: () => void
-  onApprovePlan?: () => void
-  onRejectPlan?: () => void
-  onTogglePauseAutoProceed?: () => void
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
@@ -119,19 +104,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   filesCount,
   files = [],
   onOpenRightTab,
-  plan,
-  isGeneratingPlan,
-  countdownSeconds,
-  isAutoProceedPaused,
-  autoProceedEnabled,
-  interviewQuestions,
-  isInterviewActive,
-  isAnalyzingInterview,
-  onConfirmInterview,
-  onSkipInterview,
-  onApprovePlan,
-  onRejectPlan,
-  onTogglePauseAutoProceed,
   onUpdateSettings,
 }) => {
   const autoInstallHubSkills = settings?.autoInstallHubSkills || 'disabled'

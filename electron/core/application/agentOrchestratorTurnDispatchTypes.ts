@@ -1,5 +1,5 @@
 import type { AgentTaskPayload, AgentTaskResult, AgentLogEntry } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
 import type { OllamaRuntimeOptions } from '../domain/agent/hardwareProfileResolver'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
@@ -7,6 +7,7 @@ import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { SkillMatchContext } from '../domain/skills/skillMatcher'
 import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
 import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProfileTiers'
 
@@ -57,9 +58,10 @@ export interface TurnDispatchContext {
   sessionNumCtxBox: { value: number | null }
   isSessionActive: () => boolean
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
   persistCurrentState: () => Promise<void>
   finalizeSession: () => void
+  closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
 export interface TurnDispatchData {

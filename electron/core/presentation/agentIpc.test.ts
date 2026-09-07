@@ -16,7 +16,12 @@ vi.mock('electron', async (importOriginal) => ({
 vi.mock('../application/taskQueueAppService', () => ({ taskQueueAppService: {} }))
 vi.mock('../domain/agent/toolParser', () => ({ parseAgentToolCall: vi.fn() }))
 vi.mock('../application/sidecarAppService', () => ({ sidecarAppService: {} }))
-vi.mock('../application/planGenerationAppService', () => ({ planGenerationAppService: {} }))
+vi.mock('../application/planGenerationAppService', () => ({
+  planGenerationAppService: {
+    generatePlanText: vi.fn(),
+    parsePlanText: vi.fn(),
+  },
+}))
 vi.mock('../application/aiDebugBundleService', () => ({ aiDebugBundleService: {} }))
 vi.mock('../application/agentSessionStateAppService', () => ({
   agentSessionStateAppService: {
@@ -26,6 +31,7 @@ vi.mock('../application/agentSessionStateAppService', () => ({
 }))
 
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
+import { planGenerationAppService } from '../application/planGenerationAppService'
 import { registerAgentIpcHandlers } from './agentIpc'
 
 describe('agent IPC session-state facade', () => {
@@ -59,5 +65,13 @@ describe('agent IPC session-state facade', () => {
     await expect(handlers.get('agent:get-plan-state')?.({}, 'missing', null)).resolves.toBeNull()
     await expect(handlers.get('agent:plan-seed')?.({}, 'session-1', '/repo', milestones, 'Build app')).resolves.toBe(true)
     expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Build app')
+  })
+
+  it('forwards workspace context when compiling a manually edited plan', async () => {
+    vi.mocked(planGenerationAppService.parsePlanText).mockReturnValue([])
+
+    await expect(handlers.get('agent:plan-parse-text')?.({}, '- [ ] Edit', '/repo')).resolves.toEqual([])
+
+    expect(planGenerationAppService.parsePlanText).toHaveBeenCalledWith('- [ ] Edit', '/repo')
   })
 })

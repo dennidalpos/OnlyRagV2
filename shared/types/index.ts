@@ -236,9 +236,6 @@ export interface AppSettings {
   // Coding Agent Audit & Debug Logging
   enableCodingAgentDebugLog?: boolean
   // Plan Approval Settings
-  requirePlanApproval?: boolean
-  autoProceedPlan?: boolean
-  autoProceedDelaySeconds?: number
   enablePrePlanInterview?: boolean
   // Verification and execution guards
   verifyBeforeFinish?: boolean
@@ -594,7 +591,7 @@ export interface IElectronAPI {
   checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
   openPath?: (targetPath: string) => Promise<boolean>
-  startAgentTask: (payload: any) => Promise<{ success: boolean; summary: string; error?: string }>
+  startAgentTask: (payload: any) => Promise<AgentDoneResult & { error?: string }>
   cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
   respondToAgentApproval?: (sessionId: string, approved: boolean, approvedHunkIndices?: number[]) => Promise<boolean>
@@ -627,7 +624,7 @@ export interface IElectronAPI {
   onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => () => void
   onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
   onAgentStreamThought?: (callback: (data: { step: number; chunk: string }) => void) => () => void
-  onAgentDone: (callback: (res: { success: boolean; summary: string }) => void) => () => void
+  onAgentDone: (callback: (res: AgentDoneResult) => void) => () => void
   onAgentApprovalRequest: (callback: (req: any) => void) => () => void
   onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void
   /** Skill Hub 'prompt' policy: subscribe to the auto-install confirmation requests. */
@@ -665,7 +662,7 @@ export interface IElectronAPI {
   /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
   agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null) => Promise<PlanGenerationResult>
   /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
-  agentPlanParseText?: (planText: string) => Promise<PlanMilestone[]>
+  agentPlanParseText?: (planText: string, workspacePath?: string | null) => Promise<PlanMilestone[]>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
@@ -708,6 +705,15 @@ export interface UserInterviewAnswer {
   provenance?: 'explicit' | 'accepted_recommendation' | 'unconfirmed_assumption'
 }
 
+/** Evidence-based terminal state emitted by the application-owned agent closure. */
+export type AgentCompletionStatus = 'verified' | 'unverifiable' | 'blocked' | 'cancelled'
+
+export interface AgentDoneResult {
+  success: boolean
+  summary: string
+  completionStatus?: AgentCompletionStatus
+}
+
 // ---------------------------------------------------------------------------
 // Agent Plan — Canonical Milestone Types
 // ---------------------------------------------------------------------------
@@ -733,6 +739,8 @@ export interface AgentPlan {
   baseStepOffset?: number
   /** Canonical milestones parsed by the backend's GoalDecompositionPlanner parser (single source of truth — see PlanPanel). */
   milestones?: PlanMilestone[]
+  /** Recoverable reason why this exact revision could not be persisted or seeded for execution. */
+  approvalError?: string
 }
 
 export interface PlanMilestone {

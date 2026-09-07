@@ -298,7 +298,7 @@ export class GoalDecompositionPlanner {
 
     if (progress.completed === progress.total && progress.total > 0) {
       lines.push(
-        '\n[ALL CHECKLIST MILESTONES COMPLETED - ACTION REQUIRED]\nAll operational checklist tasks are 100% completed and verified. DO NOT execute any more file edits or commands.\nIMMEDIATELY invoke the "finish" tool and provide a comprehensive final summary report (resoconto finale in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion'
+        '\n[ALL CHECKLIST MILESTONES COMPLETED - FINAL REPORT REQUIRED]\nAll operational checklist tasks are complete. DO NOT execute any more file edits or commands.\nReply with a comprehensive final report (in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.'
       )
     } else if (!activeM || isCompletionMilestoneTitle(activeM.title)) {
       // Every milestone that could still be worked on is done or abandoned, and only the
@@ -312,7 +312,7 @@ export class GoalDecompositionPlanner {
         ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((m) => `- ${m.id}: ${m.title}`).join('\n')}`
         : ''
       lines.push(
-        `\n[NO OPERATIONAL MILESTONES REMAIN - ACTION REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nIMMEDIATELY invoke the "finish" tool with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion${failedList}`
+        `\n[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.${failedList}`
       )
     } else if (blockDirective) {
       lines.push(`\n${blockDirective}`)

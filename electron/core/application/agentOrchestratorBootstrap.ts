@@ -1,5 +1,5 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
@@ -77,9 +77,9 @@ export interface AgentSessionBootstrap {
   maxStepsLabel: string
   isUnlimitedSteps: boolean
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
   emitStepUpdate: (statusText?: string) => void
-  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
   requestApproval: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
   finalizeSession: () => void
@@ -109,9 +109,9 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     }
   }
 
-  const emitDone = (success: boolean, summary: string) => {
+  const emitDone = (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:done', { success, summary })
+      session.targetWindow.webContents.send('agent:done', { success, summary, completionStatus })
     }
   }
 
@@ -143,7 +143,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     session,
     isSessionActive,
   })
-  session.persistCancellation = () => persistence.persistCurrentState('cancelled')
+  session.persistCancellation = () => persistence.persistCurrentState('cancelled', 'cancelled')
 
   const watchdog = armSessionWatchdog({
     session,

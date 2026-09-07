@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { AgentPlan, AppSettings, PlanMilestone, InterviewQuestion, UserInterviewAnswer } from '../types'
 import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
@@ -6,35 +6,9 @@ import {
   composeInterviewDecisionPrompt,
   createAcceptedRecommendationAnswers,
 } from '../../shared/domain/agent/interviewDecisionContext'
+import { renderPlanMilestones } from '../../shared/domain/agent/planCompilation'
 
 export type { AgentPlan } from '../types'
-
-export const MANDATORY_PLAN_STOP_ITEM = '🛑 Completamento dell\'ultimo task, riepilogo finale e arresto dell\'agente (invoke "finish")'
-
-export function ensureMandatoryStopDirective(planText: string): string {
-  if (!planText || typeof planText !== 'string') return planText
-  if (
-    planText.includes('Completamento dell\'ultimo task') ||
-    planText.includes('arresto dell\'agente') ||
-    planText.includes('invoke "finish"')
-  ) {
-    return planText
-  }
-
-  const lines = planText.split(/\r?\n/)
-  const matches = planText.match(/^(\d+)[\.\)]/gm)
-  let nextNum = 1
-  if (matches && matches.length > 0) {
-    const lastNumStr = matches[matches.length - 1].replace(/[^\d]/g, '')
-    const parsed = parseInt(lastNumStr, 10)
-    if (!isNaN(parsed)) nextNum = parsed + 1
-  } else {
-    nextNum = lines.filter((l) => l.trim().length > 0).length + 1
-  }
-
-  const stopDirective = `${nextNum}. ${MANDATORY_PLAN_STOP_ITEM}`
-  return `${planText.trim()}\n${stopDirective}`
-}
 
 export async function resolveInterviewPrompt(
   originalPrompt: string,
@@ -66,10 +40,13 @@ export async function resolveInterviewPrompt(
  * callers can distinguish "no canonical data" from "parsed to zero items"
  * and fall back to local heuristics accordingly.
  */
-async function parsePlanTextToMilestones(planText: string): Promise<PlanMilestone[] | undefined> {
+async function parsePlanTextToMilestones(
+  planText: string,
+  workspacePath?: string | null
+): Promise<PlanMilestone[] | undefined> {
   if (!window.electronAPI?.agentPlanParseText) return undefined
   try {
-    return await window.electronAPI.agentPlanParseText(planText)
+    return await window.electronAPI.agentPlanParseText(planText, workspacePath)
   } catch (err: any) {
     logger.warn('usePlanApproval', `agentPlanParseText IPC failed: ${err?.message}`)
     return undefined
@@ -84,7 +61,15 @@ interface UsePlanApprovalOptions {
   sessionPlans: AgentPlan[]
   /** Applies an update to the active session's plan history (persisted with the session). */
   onSessionPlansChange: (updater: (prev: AgentPlan[]) => AgentPlan[]) => void
+  /** Immediately persists the exact revision before any runtime state is seeded. */
+  onPersistPlan: (plan: AgentPlan) => Promise<boolean>
   onPlanApproved: (plan: AgentPlan) => void
+}
+
+interface PlanFlowScope {
+  token: number
+  sessionId?: string
+  workspacePath?: string | null
 }
 
 export function usePlanApproval({
@@ -93,12 +78,13 @@ export function usePlanApproval({
   workspacePath,
   sessionPlans,
   onSessionPlansChange,
+  onPersistPlan,
   onPlanApproved,
 }: UsePlanApprovalOptions) {
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
-  const [countdownSeconds, setCountdownSeconds] = useState<number>(15)
-  const [isAutoProceedPaused, setIsAutoProceedPaused] = useState<boolean>(false)
+  const [isSavingPlanRevision, setIsSavingPlanRevision] = useState<boolean>(false)
+  const [isApprovingPlan, setIsApprovingPlan] = useState<boolean>(false)
 
   // Pre-flight Clarification Interview state
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
@@ -109,12 +95,13 @@ export function usePlanApproval({
     targetModel?: string
     currentStep: number
     questions: InterviewQuestion[]
+    scope: PlanFlowScope
   } | null>(null)
-
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const requireApproval = settings?.requirePlanApproval ?? true
-  const autoProceed = settings?.autoProceedPlan ?? true
-  const autoProceedDelay = settings?.autoProceedDelaySeconds ?? 15
+  const flowTokenRef = useRef(0)
+  const mountedRef = useRef(true)
+  const activeContextRef = useRef({ activeSessionId, workspacePath })
+  activeContextRef.current = { activeSessionId, workspacePath }
+  const approvalInFlightRef = useRef<Set<string>>(new Set())
 
   const planHistory = sessionPlans
   const currentPlan = planHistory[activePlanIndex] || (planHistory.length > 0 ? planHistory[planHistory.length - 1] : null)
@@ -134,51 +121,50 @@ export function usePlanApproval({
     setActivePlanIndex(list.length > 0 ? list.length - 1 : 0)
   }, [activeSessionId])
 
-  const handleApprovePlanRef = useRef<(() => Promise<void>) | null>(null)
+  const beginFlowScope = useCallback((): PlanFlowScope => ({
+    token: ++flowTokenRef.current,
+    sessionId: activeContextRef.current.activeSessionId,
+    workspacePath: activeContextRef.current.workspacePath,
+  }), [])
 
-  const clearPlanTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
+  const isFlowCurrent = useCallback((scope: PlanFlowScope): boolean => {
+    const context = activeContextRef.current
+    return mountedRef.current
+      && flowTokenRef.current === scope.token
+      && context.activeSessionId === scope.sessionId
+      && context.workspacePath === scope.workspacePath
   }, [])
 
-  // Auto-proceed countdown effect
   useEffect(() => {
-    const isReady = currentPlan && currentPlan.status === 'ready' && autoProceed && !isAutoProceedPaused
-    if (!isReady) {
-      clearPlanTimer()
-      return
-    }
+    flowTokenRef.current += 1
+    pendingFlowRef.current = null
+    approvalInFlightRef.current.clear()
+    setIsGeneratingPlan(false)
+    setIsSavingPlanRevision(false)
+    setIsApprovingPlan(false)
+    setIsAnalyzingInterview(false)
+    setIsInterviewActive(false)
+    setInterviewQuestions([])
+  }, [activeSessionId, workspacePath])
 
-    clearPlanTimer()
-    timerRef.current = setInterval(() => {
-      setCountdownSeconds((prev) => {
-        if (prev <= 1) {
-          clearPlanTimer()
-          handleApprovePlanRef.current?.()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearPlanTimer()
-  }, [currentPlan?.status, currentPlan?.id, autoProceed, isAutoProceedPaused, clearPlanTimer])
+  useEffect(() => () => {
+    mountedRef.current = false
+    flowTokenRef.current += 1
+  }, [])
 
   const generatePlan = useCallback(
     async (
       prompt: string,
       targetModel?: string,
       currentStep: number = 0,
-      interviewContext?: { originalPrompt: string; answers: UserInterviewAnswer[] }
-    ): Promise<AgentPlan> => {
-      clearPlanTimer()
-      setIsAutoProceedPaused(false)
-      setCountdownSeconds(autoProceedDelay)
+      interviewContext?: { originalPrompt: string; answers: UserInterviewAnswer[] },
+      inheritedScope?: PlanFlowScope
+    ): Promise<AgentPlan | null> => {
+      const scope = inheritedScope || beginFlowScope()
+      if (!isFlowCurrent(scope)) return null
       setIsGeneratingPlan(true)
 
-      const planId = `plan_${Date.now()}`
+      const planId = `plan_${Date.now()}_${scope.token}`
       const existingHistory = planHistoryRef.current
       const newVersion = existingHistory.length + 1
 
@@ -206,17 +192,25 @@ export function usePlanApproval({
 
       try {
         const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-        let accumulatedPlan = ''
+        let returnedPlanText = ''
         let generationError: string | undefined
         let generatedMilestones: PlanMilestone[] | undefined
 
         if (window.electronAPI?.agentPlanGenerate && settings) {
           try {
-            const genRes = await window.electronAPI.agentPlanGenerate(prompt, modelToUse, settings, pendingResidueMilestones, workspacePath)
-            accumulatedPlan = genRes?.planText?.trim() || ''
+            const genRes = await window.electronAPI.agentPlanGenerate(
+              prompt,
+              modelToUse,
+              settings,
+              pendingResidueMilestones,
+              scope.workspacePath
+            )
+            if (!isFlowCurrent(scope)) return null
+            returnedPlanText = genRes?.planText?.trim() || ''
             generatedMilestones = genRes?.milestones
             if (genRes?.status === 'error') generationError = genRes.error || 'Pianificazione non completata'
           } catch (ipcErr: any) {
+            if (!isFlowCurrent(scope)) return null
             logger.warn('usePlanApproval', `agentPlanGenerate IPC failed: ${ipcErr?.message}`)
             generationError = ipcErr?.message || 'IPC di pianificazione non disponibile'
           }
@@ -225,14 +219,14 @@ export function usePlanApproval({
           generationError = 'Servizio di pianificazione non disponibile'
         }
 
-        if (!generationError && !accumulatedPlan) {
-          generationError = 'Il pianificatore ha restituito una risposta vuota'
+        if (!generationError && (!returnedPlanText || !generatedMilestones?.length)) {
+          generationError = 'Il pianificatore non ha restituito un piano eseguibile'
         }
 
         if (generationError) {
           const failedPlan: AgentPlan = {
             ...initialPlan,
-            planText: accumulatedPlan,
+            planText: returnedPlanText,
             status: 'error',
             milestones: generatedMilestones,
             errorPhase: 'planning',
@@ -247,12 +241,10 @@ export function usePlanApproval({
           return failedPlan
         }
 
-        // Ensure mandatory final stop directive
-        accumulatedPlan = ensureMandatoryStopDirective(accumulatedPlan)
-
-        // Re-parse the FINAL text (including the appended stop directive) through the
-        // same canonical backend parser, so milestones match exactly what is displayed.
-        const milestones = await parsePlanTextToMilestones(accumulatedPlan)
+        // The generator already compiled these milestones with workspace facts and real checks.
+        // Never re-parse its text without that context: this array is the canonical revision.
+        const milestones = generatedMilestones!
+        const canonicalPlanText = renderPlanMilestones(milestones)
 
         const finalPlan: AgentPlan = {
           id: planId,
@@ -260,7 +252,7 @@ export function usePlanApproval({
           prompt,
           originalPrompt: interviewContext?.originalPrompt || prompt,
           interviewAnswers: interviewContext?.answers || [],
-          planText: accumulatedPlan,
+          planText: canonicalPlanText,
           status: 'ready',
           createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
@@ -276,6 +268,7 @@ export function usePlanApproval({
         soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
         return finalPlan
       } catch (err: any) {
+        if (!isFlowCurrent(scope)) return null
         logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
         const failedPlan: AgentPlan = {
           id: planId,
@@ -299,40 +292,83 @@ export function usePlanApproval({
         return failedPlan
       }
     },
-    [settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans, workspacePath]
+    [beginFlowScope, isFlowCurrent, settings, updateCurrentSessionPlans]
   )
 
-  const handleApprovePlan = useCallback(async () => {
-    clearPlanTimer()
-    if (!currentPlan || currentPlan.status !== 'ready') return
-    const approved: AgentPlan = { ...currentPlan, status: 'approved' }
+  const replacePlanRevision = useCallback((revision: AgentPlan) => {
     updateCurrentSessionPlans((prev) => {
+      const idx = prev.findIndex((plan) => plan.id === revision.id)
+      if (idx < 0) return prev
       const copy = [...prev]
-      const idx = copy.findIndex((p) => p.id === currentPlan.id)
-      if (idx >= 0) {
-        copy[idx] = approved
-      }
+      copy[idx] = revision
       return copy
     })
+  }, [updateCurrentSessionPlans])
 
-    // Seed the approved milestones into backend session state BEFORE execution
-    // starts, so GoalDecompositionPlanner restores them as its starting state
-    // instead of only auto-detecting a (possibly different) plan from the
-    // model's first turn (see agentSessionStateRepository.seedPlanMilestones).
-    if (activeSessionId && approved.milestones && approved.milestones.length > 0 && window.electronAPI?.agentPlanSeed) {
+  const handleApprovePlan = useCallback(async () => {
+    const target = currentPlan
+    if (!target || (target.status !== 'ready' && target.status !== 'approved')) return
+    if (!activeSessionId || !target.milestones?.length || !window.electronAPI?.agentPlanSeed) return
+
+    const approvalKey = `${activeSessionId}:${target.id}`
+    if (approvalInFlightRef.current.has(approvalKey)) return
+    approvalInFlightRef.current.add(approvalKey)
+    const scope = beginFlowScope()
+    setIsApprovingPlan(true)
+
+    const approved: AgentPlan = { ...target, status: 'approved', approvalError: undefined }
+    const recover = async (message: string) => {
+      const recoverable: AgentPlan = { ...target, status: 'ready', approvalError: message }
+      replacePlanRevision(recoverable)
       try {
-        await window.electronAPI.agentPlanSeed(activeSessionId, workspacePath ?? null, approved.milestones, approved.prompt)
+        await onPersistPlan(recoverable)
       } catch (err: any) {
-        logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${err?.message}`)
+        logger.warn('usePlanApproval', `Could not persist approval recovery for ${target.id}: ${err?.message}`)
       }
     }
 
-    onPlanApproved(approved)
-  }, [currentPlan, clearPlanTimer, onPlanApproved, updateCurrentSessionPlans, activeSessionId, workspacePath])
-  handleApprovePlanRef.current = handleApprovePlan
+    try {
+      let persisted = false
+      try {
+        persisted = await onPersistPlan(approved)
+      } catch (err: any) {
+        logger.warn('usePlanApproval', `Could not persist approved revision ${target.id}: ${err?.message}`)
+      }
+      if (!persisted) {
+        replacePlanRevision({ ...target, status: 'ready', approvalError: 'Salvataggio della revisione non riuscito. Riprova.' })
+        return
+      }
+      if (!isFlowCurrent(scope)) return
+
+      let seeded = false
+      try {
+        seeded = await window.electronAPI.agentPlanSeed(
+          activeSessionId,
+          workspacePath ?? null,
+          approved.milestones!,
+          approved.prompt
+        )
+      } catch (err: any) {
+        logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${err?.message}`)
+        await recover(err?.message || 'Preparazione del piano per l\'agente non riuscita. Riprova.')
+        return
+      }
+
+      if (!isFlowCurrent(scope)) return
+      if (!seeded) {
+        await recover('Preparazione del piano per l\'agente non riuscita. Riprova.')
+        return
+      }
+
+      replacePlanRevision(approved)
+      onPlanApproved(approved)
+    } finally {
+      approvalInFlightRef.current.delete(approvalKey)
+      if (isFlowCurrent(scope)) setIsApprovingPlan(false)
+    }
+  }, [activeSessionId, beginFlowScope, currentPlan, isFlowCurrent, onPersistPlan, onPlanApproved, replacePlanRevision, workspacePath])
 
   const handleRejectPlan = useCallback(() => {
-    clearPlanTimer()
     if (!currentPlan) return
     updateCurrentSessionPlans((prev) => {
       const copy = [...prev]
@@ -342,23 +378,46 @@ export function usePlanApproval({
       }
       return copy
     })
-  }, [currentPlan, clearPlanTimer, updateCurrentSessionPlans])
+  }, [currentPlan, updateCurrentSessionPlans])
 
   const handleUpdatePlanText = useCallback(async (newText: string) => {
-    if (!currentPlan) return
-    const formatted = ensureMandatoryStopDirective(newText)
-    // Re-derive canonical milestones so a manual edit doesn't leave stale
-    // milestones behind (see parsePlanTextToMilestones / C4 unified parser).
-    const milestones = await parsePlanTextToMilestones(formatted)
-    updateCurrentSessionPlans((prev) => {
-      const copy = [...prev]
-      const idx = copy.findIndex((p) => p.id === currentPlan.id)
-      if (idx >= 0) {
-        copy[idx] = { ...copy[idx], planText: formatted, milestones }
-      }
-      return copy
-    })
-  }, [currentPlan, updateCurrentSessionPlans])
+    const sourcePlan = currentPlan
+    if (!sourcePlan) return
+    const scope = beginFlowScope()
+    setIsSavingPlanRevision(true)
+    const milestones = await parsePlanTextToMilestones(newText, scope.workspacePath)
+    if (!isFlowCurrent(scope)) return
+
+    const nextVersion = planHistoryRef.current.length + 1
+    const revisionBase: AgentPlan = {
+      ...sourcePlan,
+      id: `plan_${Date.now()}_${scope.token}`,
+      version: nextVersion,
+      createdAt: new Date().toISOString(),
+      approvalError: undefined,
+    }
+    const revision: AgentPlan = milestones?.length
+      ? {
+          ...revisionBase,
+          planText: renderPlanMilestones(milestones),
+          milestones,
+          status: 'ready',
+          errorPhase: undefined,
+          errorMessage: undefined,
+        }
+      : {
+          ...revisionBase,
+          planText: newText,
+          milestones: [],
+          status: 'error',
+          errorPhase: 'planning',
+          errorMessage: 'La revisione non contiene milestone eseguibili.',
+        }
+
+    updateCurrentSessionPlans((prev) => [...prev, revision])
+    setActivePlanIndex(planHistoryRef.current.length)
+    setIsSavingPlanRevision(false)
+  }, [beginFlowScope, currentPlan, isFlowCurrent, updateCurrentSessionPlans])
 
   const selectPlanVersion = useCallback((idx: number) => {
     if (idx >= 0 && idx < planHistory.length) {
@@ -367,24 +426,23 @@ export function usePlanApproval({
   }, [planHistory.length])
 
   const resetPlanHistory = useCallback(() => {
-    clearPlanTimer()
+    flowTokenRef.current += 1
     updateCurrentSessionPlans(() => [])
     setActivePlanIndex(0)
-  }, [clearPlanTimer, updateCurrentSessionPlans])
-
-  const latestActivePlan = useMemo(() => {
-    if (planHistory.length === 0) return null
-    const approved = [...planHistory].reverse().find((p) => p.status === 'approved')
-    return approved || planHistory[planHistory.length - 1] || null
-  }, [planHistory])
-
-  const hasApprovedPlan = planHistory.some((p) => p.status === 'approved')
+  }, [updateCurrentSessionPlans])
 
   const startPlanFlow = useCallback(
     async (prompt: string, targetModel?: string, currentStep: number = 0): Promise<AgentPlan | null> => {
-      clearPlanTimer()
-      setIsAutoProceedPaused(false)
-      pendingFlowRef.current = { prompt, targetModel, currentStep, questions: [] }
+      const scope = beginFlowScope()
+      updateCurrentSessionPlans((prev) => prev.map((plan) =>
+        plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan
+      ))
+      setIsGeneratingPlan(false)
+      setIsSavingPlanRevision(false)
+      setIsAnalyzingInterview(false)
+      setIsInterviewActive(false)
+      setInterviewQuestions([])
+      pendingFlowRef.current = { prompt, targetModel, currentStep, questions: [], scope }
 
       // Check if pre-flight interview is supported and enabled
       if (window.electronAPI?.agentPlanInterview && settings && settings.enablePrePlanInterview !== false) {
@@ -392,11 +450,12 @@ export function usePlanApproval({
         try {
           const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
           const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings)
+          if (!isFlowCurrent(scope)) return null
           setIsAnalyzingInterview(false)
 
           if (interviewRes?.status === 'error') {
             const failedPlan: AgentPlan = {
-              id: `plan_${Date.now()}`,
+              id: `plan_${Date.now()}_${scope.token}`,
               version: planHistoryRef.current.length + 1,
               prompt,
               originalPrompt: prompt,
@@ -415,7 +474,7 @@ export function usePlanApproval({
 
           if (interviewRes?.status === 'cancelled') {
             const cancelledPlan: AgentPlan = {
-              id: `plan_${Date.now()}`,
+              id: `plan_${Date.now()}_${scope.token}`,
               version: planHistoryRef.current.length + 1,
               prompt,
               originalPrompt: prompt,
@@ -431,17 +490,18 @@ export function usePlanApproval({
           }
 
           if (interviewRes?.hasQuestions && interviewRes.questions && interviewRes.questions.length > 0) {
-            pendingFlowRef.current = { prompt, targetModel, currentStep, questions: interviewRes.questions }
+            pendingFlowRef.current = { prompt, targetModel, currentStep, questions: interviewRes.questions, scope }
             setInterviewQuestions(interviewRes.questions)
             setIsInterviewActive(true)
             soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
             return null
           }
         } catch (err: any) {
+          if (!isFlowCurrent(scope)) return null
           logger.warn('usePlanApproval', `agentPlanInterview failed: ${err?.message}`)
           setIsAnalyzingInterview(false)
           const failedPlan: AgentPlan = {
-            id: `plan_${Date.now()}`,
+            id: `plan_${Date.now()}_${scope.token}`,
             version: planHistoryRef.current.length + 1,
             prompt,
             originalPrompt: prompt,
@@ -461,17 +521,19 @@ export function usePlanApproval({
 
       setIsInterviewActive(false)
       setInterviewQuestions([])
-      return generatePlan(prompt, targetModel, currentStep, { originalPrompt: prompt, answers: [] })
+      return generatePlan(prompt, targetModel, currentStep, { originalPrompt: prompt, answers: [] }, scope)
     },
-    [clearPlanTimer, generatePlan, settings]
+    [beginFlowScope, generatePlan, isFlowCurrent, settings, updateCurrentSessionPlans]
   )
 
   const confirmInterviewAnswers = useCallback(
     async (answers: UserInterviewAnswer[]) => {
-      setIsInterviewActive(false)
-      setInterviewQuestions([])
       const pending = pendingFlowRef.current
       if (!pending) return
+      pendingFlowRef.current = null
+      setIsInterviewActive(false)
+      setInterviewQuestions([])
+      setIsAnalyzingInterview(true)
 
       const effectivePrompt = await resolveInterviewPrompt(
         pending.prompt,
@@ -479,13 +541,15 @@ export function usePlanApproval({
         window.electronAPI?.agentPlanEnrichPrompt,
         (err: any) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message || String(err)}`)
       )
+      if (!isFlowCurrent(pending.scope)) return null
+      setIsAnalyzingInterview(false)
 
       return generatePlan(effectivePrompt, pending.targetModel, pending.currentStep, {
         originalPrompt: pending.prompt,
         answers,
-      })
+      }, pending.scope)
     },
-    [generatePlan]
+    [generatePlan, isFlowCurrent]
   )
 
   const skipInterviewWithRecommended = useCallback(() => {
@@ -508,14 +572,11 @@ export function usePlanApproval({
 
   return {
     currentPlan,
-    latestActivePlan,
     planHistory,
     activePlanIndex,
-    hasApprovedPlan,
     isGeneratingPlan,
-    countdownSeconds,
-    isAutoProceedPaused,
-    setIsAutoProceedPaused,
+    isSavingPlanRevision,
+    isApprovingPlan,
     generatePlan,
     startPlanFlow,
     interviewQuestions,
@@ -529,7 +590,5 @@ export function usePlanApproval({
     handleUpdatePlanText,
     selectPlanVersion,
     resetPlanHistory,
-    requireApproval,
-    autoProceed,
   }
 }

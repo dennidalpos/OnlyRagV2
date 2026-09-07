@@ -1,4 +1,4 @@
-import type { AppSettings } from '../../../shared/types'
+import type { AgentCompletionStatus, AppSettings } from '../../../shared/types'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -19,8 +19,8 @@ export interface SessionWatchdogParams {
   sessionId: string
   settings: AppSettings
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string) => void
-  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   stepCountBox: { value: number }
   isSessionActive: () => boolean
   /** Removes this run's session from the module-level registry (the Map lives in agentOrchestratorAppService.ts). */
@@ -64,14 +64,16 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
     emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
     session.isCancelled = true
+    session.completionStatus = 'blocked'
+    session.terminalSummary = timeoutSummary
     if (session.pendingApprovalResolve) {
       session.pendingApprovalResolve({ approved: false })
       session.pendingApprovalResolve = undefined
     }
     codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, false, timeoutSummary)
-    emitDone(false, timeoutSummary)
+    emitDone(false, timeoutSummary, 'blocked')
     agentToolExecutorService.rollbackJournal()
-    await persistCurrentState('timeout')
+    await persistCurrentState('timeout', 'blocked')
     finalizeSession()
   }, SESSION_TIMEOUT_MS)
 

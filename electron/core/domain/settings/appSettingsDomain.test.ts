@@ -27,6 +27,18 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(sanitizeAppSettings({ autoInstallHubSkills: 'auto' }).autoInstallHubSkills).toBe('disabled')
   })
 
+  it('drops the retired Plan auto-proceed preferences during settings migration', () => {
+    const sanitized = sanitizeAppSettings({
+      requirePlanApproval: false,
+      autoProceedPlan: true,
+      autoProceedDelaySeconds: 3,
+    }) as unknown as Record<string, unknown>
+
+    expect(sanitized.requirePlanApproval).toBeUndefined()
+    expect(sanitized.autoProceedPlan).toBeUndefined()
+    expect(sanitized.autoProceedDelaySeconds).toBeUndefined()
+  })
+
   it('should preserve valid custom settings and trim strings', () => {
     const custom = {
       defaultModel: '  qwen2.5-coder:7b  ',

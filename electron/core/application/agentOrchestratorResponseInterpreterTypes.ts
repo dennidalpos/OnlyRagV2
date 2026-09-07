@@ -1,5 +1,5 @@
 import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
@@ -9,6 +9,7 @@ import type { ToolResultMutableFlags } from './agentOrchestratorToolResultProces
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -68,10 +69,11 @@ export interface ResponseInterpreterContext {
   executionGuard: TransactionalExecutionGuard
   loopDetector: AgentActionLoopDetector
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string) => void
-  persistCurrentState: (terminationReason?: AgentSessionTerminationReason) => Promise<void>
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   finalizeSession: () => void
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
+  closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
 export type ResponseInterpretationOutcome =

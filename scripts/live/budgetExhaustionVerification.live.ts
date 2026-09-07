@@ -57,9 +57,11 @@ describe('live: budget exhaustion verification', () => {
     )
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.completionStatus).toBe('blocked')
     expect(metrics.hitStepCeiling).toBe(true)
-    expect(result.summary).toContain('Verifica finale "npm run build" superata')
+    expect(result.summary).toContain('Raggiunto il limite massimo di passaggi')
+    expect(result.summary).toContain('Residuo')
     expect(metrics.verified).toBeGreaterThan(0)
   })
 })

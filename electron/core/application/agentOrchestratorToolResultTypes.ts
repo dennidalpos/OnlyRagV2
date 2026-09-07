@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { AppSettings } from '../../../shared/types'
+import type { AgentCompletionStatus, AppSettings } from '../../../shared/types'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
@@ -7,6 +7,8 @@ import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/t
 import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
+import type { AgentTaskResult } from '../domain/agent/agentTypes'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -50,11 +52,12 @@ export interface ToolResultProcessingContext {
   isSessionActive: () => boolean
   targetWindow: BrowserWindow | null
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
   persistCurrentState: () => Promise<void>
   finalizeSession: () => void
+  closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
 export type ToolResultProcessingOutcome =
   | { outcome: 'continue' }
-  | { outcome: 'return'; result: { success: boolean; summary: string } }
+  | { outcome: 'return'; result: AgentTaskResult }

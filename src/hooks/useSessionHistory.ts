@@ -109,6 +109,7 @@ function migrateLegacyPlans(sessions: CodingSession[]): CodingSession[] {
  */
 export function useSessionHistory(workspacePath: string | null) {
   const [sessions, setSessions] = useState<CodingSession[]>([])
+  const sessionsRef = useRef<CodingSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string>('')
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true)
 
@@ -120,6 +121,10 @@ export function useSessionHistory(workspacePath: string | null) {
    * debounced write lands) reuses the same record instead of creating a duplicate.
    */
   const bootstrapSessionsRef = useRef<Map<string, CodingSession>>(new Map())
+
+  useEffect(() => {
+    sessionsRef.current = sessions
+  }, [sessions])
 
   const flushPendingWrites = useCallback(async () => {
     if (persistTimerRef.current) {
@@ -362,6 +367,45 @@ export function useSessionHistory(workspacePath: string | null) {
     [mutateSession]
   )
 
+  /**
+   * Persists one exact plan revision synchronously with the approval flow. Debounced session
+   * writes are appropriate for timeline updates, but execution must not start while the approved
+   * request, interview decisions and milestones exist only in renderer memory.
+   */
+  const persistSessionPlan = useCallback(async (sessionId: string, plan: AgentPlan): Promise<boolean> => {
+    const session = sessionsRef.current.find((candidate) => candidate.id === sessionId)
+    if (!session || !window.electronAPI?.saveCodingSession) return false
+
+    const currentPlans = session.plans || []
+    const existingIndex = currentPlans.findIndex((candidate) => candidate.id === plan.id)
+    const plans = [...currentPlans]
+    if (existingIndex >= 0) plans[existingIndex] = plan
+    else plans.push(plan)
+
+    const next: CodingSession = {
+      ...session,
+      plans,
+      updatedAt: new Date().toISOString(),
+    }
+    sessionsRef.current = sessionsRef.current.map((candidate) => candidate.id === sessionId ? next : candidate)
+    setSessions(sessionsRef.current)
+
+    // An older debounced snapshot must never overwrite this approval after the immediate save.
+    pendingWritesRef.current.delete(sessionId)
+    if (pendingWritesRef.current.size === 0 && persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current)
+      persistTimerRef.current = null
+    }
+
+    try {
+      const saved = await window.electronAPI.saveCodingSession(next)
+      return saved !== null
+    } catch (err: any) {
+      logger.warn('useSessionHistory', `Could not persist approved plan ${plan.id}: ${err?.message}`)
+      return false
+    }
+  }, [])
+
   /** Records a prompt run as started; the returned id identifies it on completion. */
   const beginExecutedPrompt = useCallback(
     (sessionId: string, prompt: string, agentMode: AgentExecutionMode): string => {
@@ -445,6 +489,7 @@ export function useSessionHistory(workspacePath: string | null) {
     renameSession,
     updateSessionContent,
     updateSessionPlans,
+    persistSessionPlan,
     beginExecutedPrompt,
     completeExecutedPrompt,
   }

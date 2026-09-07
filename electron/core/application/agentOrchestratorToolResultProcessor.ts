@@ -11,9 +11,11 @@ import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from '.
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
-export function terminalOutcomeFor(toolRes: ToolExecutionResult): ToolResultProcessingOutcome | null {
+export function terminalOutcomeFor(
+  toolRes: ToolExecutionResult
+): Extract<ToolResultProcessingOutcome, { outcome: 'return' }> | null {
   if (toolRes.terminalCode !== 'MODEL_UNSUITABLE') return null
-  return { outcome: 'return', result: { success: false, summary: toolRes.outputForHistory } }
+  return { outcome: 'return', result: { success: false, summary: toolRes.outputForHistory, completionStatus: 'blocked' } }
 }
 
 function extractTargetParam(parsedTool: AgentToolCall): string | undefined {
@@ -211,7 +213,15 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   }
 
   const terminalOutcome = terminalOutcomeFor(toolRes)
-  if (terminalOutcome) return terminalOutcome
+  if (terminalOutcome) {
+    const closure = await ctx.closeApplicationRun({
+      trigger: 'protocol_error',
+      reason: terminalOutcome.result.summary,
+    })
+    return closure.outcome === 'closed'
+      ? { outcome: 'return', result: closure.result }
+      : { outcome: 'continue' }
+  }
 
   return { outcome: 'continue' }
 }

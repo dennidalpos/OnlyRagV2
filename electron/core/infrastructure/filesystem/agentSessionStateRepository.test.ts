@@ -58,7 +58,16 @@ describe('AgentSessionStateRepository Unit Tests', () => {
   })
 
   it('persists the terminal reason as structured state rather than requiring summary parsing', async () => {
-    const reasons = ['finish', 'step_budget', 'cancelled', 'timeout', 'circuit_breaker'] as const
+    const reasons = [
+      'finish',
+      'step_budget',
+      'cancelled',
+      'timeout',
+      'circuit_breaker',
+      'model_silence',
+      'transport_error',
+      'protocol_error',
+    ] as const
 
     for (const terminationReason of reasons) {
       const sessionId = `terminal-${terminationReason}`
@@ -80,6 +89,30 @@ describe('AgentSessionStateRepository Unit Tests', () => {
 
       await expect(agentSessionStateRepository.loadSessionState(sessionId, tempDir)).resolves.toMatchObject({ terminationReason })
     }
+  })
+
+  it('persists the explicit evidence-based completion status', async () => {
+    await agentSessionStateRepository.saveSessionState({
+      sessionId: 'completion-status',
+      workspacePath: tempDir,
+      agentMode: 'agent',
+      stepCount: 3,
+      maxSteps: 50,
+      episodes: [],
+      recentFullLogs: [],
+      planMilestones: [],
+      userTask: 'Completion status test',
+      updatedAt: new Date().toISOString(),
+      terminationReason: 'model_silence',
+      completionStatus: 'unverifiable',
+      status: 'FAILED',
+    })
+
+    await expect(agentSessionStateRepository.loadSessionState('completion-status', tempDir)).resolves.toMatchObject({
+      terminationReason: 'model_silence',
+      completionStatus: 'unverifiable',
+      status: 'FAILED',
+    })
   })
 
   it('should clear all session states in workspace and fallback directories', async () => {
@@ -216,6 +249,9 @@ describe('AgentSessionStateRepository Unit Tests', () => {
       planMilestones: [{ id: 'old-m1', title: 'Stale milestone', status: 'verified' }],
       userTask: 'Original task',
       updatedAt: new Date().toISOString(),
+      status: 'FAILED',
+      terminationReason: 'model_silence',
+      completionStatus: 'unverifiable',
     }
     await agentSessionStateRepository.saveSessionState(existing)
 
@@ -234,5 +270,8 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loaded?.stepCount).toBe(7)
     expect(loaded?.episodes).toHaveLength(1)
     expect(loaded?.userTask).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
+    expect(loaded?.status).toBe('IN_PROGRESS')
+    expect(loaded?.terminationReason).toBeUndefined()
+    expect(loaded?.completionStatus).toBeUndefined()
   })
 })

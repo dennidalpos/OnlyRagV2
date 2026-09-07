@@ -34,18 +34,18 @@ I test live salvano automaticamente una copia per-run in `~/Desktop/onlyrag_live
 
 | File | Cosa fa | Come si legge |
 | :--- | :--- | :--- |
-| `fullTaskRun.live.ts` | Riesegue il task originale dell'audit (dashboard responsive React+Tailwind) su workspace vuoto | **Asserisce la consegna**: rapporto di milestone `verified` ≥ 12/13 e `finish` che chiude la sessione, le due metriche di Run 9 (blueprint §5.6h). Rosso = l'agente non ha consegnato; il blocco `run metrics` dice di quanto. |
+| `fullTaskRun.live.ts` | Riesegue il task originale dell'audit (dashboard responsive React+Tailwind) su workspace vuoto | **Asserisce la consegna**: rapporto di milestone `verified` ≥ 12/13 e chiusura applicativa basata sulle evidenze, senza richiedere `finish`. Rosso = l'agente non ha consegnato; il blocco `run metrics` dice di quanto. |
 | `preseededWorkspace.live.ts` | Genera il piano su un progetto già esistente con `package.json`, sorgente e script `build` | **Asserisce la riconciliazione**: `ensureRunnableMilestone` conserva il controllo dichiarato dal progetto nel piano live. |
 | `eresolveRecovery.live.ts` | Installa davvero `vite@4`, poi chiede un plugin che pretende una vite molto più recente | Deve comparire `[DEPENDENCY VERSION CONFLICT — ERESOLVE]`, il comando successivo deve essere l'upgrade indicato, e `vite installed` deve essersi mosso da 4.5.14 |
 | `ts2305ExportRecovery.live.ts` | Prepara un pacchetto locale dichiarato che esporta nomi diversi da quelli importati | Deve eseguire `npm run build`, usare la lista reale degli export nella riscrittura di `src/TaskCard.tsx` e lasciare invariati manifest e `node_modules`. |
 | `ts2614ExportRecovery.live.ts` | Prepara un modulo locale con export default e un importer che usa un named import | Deve eseguire `npm run build`, applicare il suggerimento TS2614 a `src/TaskCard.ts` e lasciare invariati il modulo locale e il manifest. |
 | `installVersionDowngrade.live.ts` | Prepara Vite 5 dichiarato e installato, poi ordina un install Vite 4 | Deve comparire il blocco pre-esecuzione e restare invariato il manifest, lockfile e Vite 5 installato. |
 | `installVersionDowngrade.live.ts` | Ordina una versione Vite inesistente (`^999.0.0`) | Deve comparire il rifiuto ETARGET preflight e npm non deve partire. |
-| `budgetExhaustionVerification.live.ts` | Consuma il budget con deliverable ancora aperti e una milestone già consegnata | Deve eseguire `npm run build` nell’uscita terminale e promuovere la milestone consegnata. |
+| `budgetExhaustionVerification.live.ts` | Consuma il budget con deliverable ancora aperti e una milestone già consegnata | Deve attraversare la chiusura applicativa, conservare motivo e consegna parziale e classificare la sola build come prova strutturale, non come comportamento end-to-end verificato. |
 
 Gli scenari scrivono in `~/Desktop/onlyrag_live_*`. Sono directory usa-e-getta, azzerate a ogni run.
 
-Fino al 2026-08-25 `fullTaskRun.live.ts` asseriva solo `expect(result).toBeTruthy()`: due corse che hanno bruciato tutti i 50 step con 0 milestone verificate e senza mai chiamare `finish` sono uscite comunque con codice 0. Una sonda che non può diventare rossa non è evidenza dei numeri che il blueprint pubblica a partire da essa. `reportRun()` restituisce ora un oggetto `LiveRunMetrics` (step usati e tetto, milestone verified/failed/pending, `finish` invocato/accettato, comandi eseguiti, tool call fallite) letto dallo stato di sessione che l'orchestratore già persiste in `.onlyrag/sessions/.agent_state_<id>.json`: è quello, non il log condiviso, il canale di osservazione su cui si asserisce.
+Fino al 2026-08-25 `fullTaskRun.live.ts` asseriva solo `expect(result).toBeTruthy()`: due corse che hanno bruciato tutti i 50 step con 0 milestone verificate sono uscite comunque con codice 0. Una sonda che non può diventare rossa non è evidenza dei numeri che il blueprint pubblica a partire da essa. `reportRun()` restituisce ora un oggetto `LiveRunMetrics` (step usati e tetto, milestone verified/failed/pending, `completionStatus`, comandi eseguiti, tool call fallite) letto dallo stato di sessione che l'orchestratore già persiste in `.onlyrag/sessions/.agent_state_<id>.json`: è quello, non il log condiviso, il canale di osservazione su cui si asserisce.
 
 ## 4. Le tre trappole
 

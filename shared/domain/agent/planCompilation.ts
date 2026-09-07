@@ -22,10 +22,13 @@
  * start.
  */
 
-import { GoalDecompositionPlanner, type PlanMilestone } from './planAndSolveGraph'
+import {
+  GoalDecompositionPlanner,
+  isCompletionMilestoneTitle,
+  type PlanMilestone,
+} from './planAndSolveGraph'
 import { normalizePlanFalsifiability } from './planFalsifiabilityNormalizer'
 import { capPlanMilestones } from './planMilestoneCapper'
-import { isCompletionMilestoneTitle } from './planAndSolveGraph'
 import { extractDeliverablePaths } from './milestoneDeliverableResolver'
 
 /**
@@ -162,7 +165,14 @@ export function compilePlanMilestones(
   verificationCommand?: string | null,
   workspace?: WorkspaceScaffoldFacts | null
 ): PlanMilestone[] {
-  const compiled = ensureRunnableMilestone(capPlanMilestones(normalizePlanFalsifiability(milestones)), verificationCommand)
+  // Closing the session is application control flow, never executable user work. Old persisted
+  // plans are still recognised by isCompletionMilestoneTitle, but new canonical revisions drop
+  // the synthetic “invoke finish” entry before normalisation, capping and display.
+  const operationalMilestones = milestones.filter((milestone) => !isCompletionMilestoneTitle(milestone.title))
+  const compiled = ensureRunnableMilestone(
+    capPlanMilestones(normalizePlanFalsifiability(operationalMilestones)),
+    verificationCommand
+  )
   return ensureEntrypointMilestones(compiled, workspace)
 }
 
@@ -173,4 +183,29 @@ export function compilePlanFromText(
   workspace?: WorkspaceScaffoldFacts | null
 ): PlanMilestone[] {
   return compilePlanMilestones(GoalDecompositionPlanner.parsePlanFromText(planText), verificationCommand, workspace)
+}
+
+/**
+ * Renders the canonical executable milestones shown in Plan review.
+ *
+ * The model response is only source material. Compilation can add project entry requirements,
+ * attach the real verification command and consolidate criteria, so displaying the raw response
+ * would let the user approve a different plan from the one the agent receives.
+ */
+export function renderPlanMilestones(milestones: readonly PlanMilestone[]): string {
+  return milestones
+    .map((milestone) => {
+      const marker = milestone.status === 'verified'
+        ? 'x'
+        : milestone.status === 'in_progress'
+          ? '>'
+          : milestone.status === 'failed'
+            ? '!'
+            : ' '
+      const verification = milestone.verificationCommand
+        ? ` — verify: \`${milestone.verificationCommand}\``
+        : ''
+      return `- [${marker}] ${milestone.id}: ${milestone.title}${verification}`
+    })
+    .join('\n')
 }

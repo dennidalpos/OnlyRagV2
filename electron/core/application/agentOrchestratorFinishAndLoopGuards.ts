@@ -1,29 +1,18 @@
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { agentToolExecutorService } from './agentToolExecutorService'
-import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import { resolveLoopEscapeAction, resolveRedundantSuccessAction } from '../domain/agent/loopEscapePolicy'
-import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
 import { abandonedMilestoneNote } from '../domain/agent/milestoneUpdateAuthority'
-import { runProjectVerification } from './agentOrchestratorVerificationRunner'
-import { isActiveMilestoneDelivered, promoteMilestonesProvenBy, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
+import { isActiveMilestoneDelivered, resolvePlanDirectiveForTurn } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { PlanDirectiveKind } from '../domain/agent/planDirectiveArbiter'
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
-/**
- * Definition of Done (DoD) Execution Guard Gate. Each distinct violation reason intercepts
- * finish AT MOST ONCE (tracked in surfacedDodReasons): the guard's job is to make the model
- * aware of the missing verification, not to deadlock the session when milestone statuses
- * can't advance (milestone progression is still heuristic).
- */
+/** Handles the optional finish signal; the application-owned closure decides the real outcome. */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
   if (ctx.agentMode === 'agent') {
-    // `failed` milestones are abandoned work, not outstanding work: the loop guard gave up on
-    // them deliberately and the plan block already orders the model to report them as
-    // incomplete. Counting them as pending made this gate demand "update milestone statuses to
-    // verified" for milestones that can never reach verified, contradicting that same order.
-    // The build requirement below is untouched — that is the gate that actually protects quality.
+    // Reject only the obviously premature step-1/2 signal. Every other finish reaches the
+    // evidence gate, which can return verified, unverifiable or blocked without trusting it.
     const nonFinishPendingMilestones = ctx.goalPlanner.getMilestones().filter(
       (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
     )
@@ -46,92 +35,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
       }
       return { outcome: 'continue' }
     }
-
-    // Blocking verification gate. The build requirement is no longer surfaced once and then
-    // waived: the project's own verification is RUN here, and a failure is handed back for the
-    // model to correct. See verificationGatePolicy.ts for why, and for the round limit.
-    const requireVerifiedBuild = ctx.settings.verifyBeforeFinish !== false
-    if (requireVerifiedBuild && ctx.flags.hasFileMutations && !ctx.flags.hasVerifiedBuild) {
-      ctx.emitLog('info', '🔎 Verifica del progetto prima della chiusura...')
-      const run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk))
-      const decision = decideVerificationGate({
-        hasVerificationCommand: run.hasVerificationCommand,
-        passed: run.passed,
-        failureDetail: run.failureDetail,
-        cyclesSpent: ctx.state.verificationFixCycles,
-      })
-
-      if (decision.action === 'block_and_retry') {
-        ctx.state.verificationFixCycles = decision.cyclesSpent
-        ctx.episodicCompactor.recordStep(
-          { step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: `Verification failed (round ${decision.cyclesSpent})` },
-          decision.directive
-        )
-        ctx.emitLog('info', `🔒 Verifica fallita (giro ${decision.cyclesSpent}): chiusura rifiutata.`, decision.directive, {
-          category: 'system_alert',
-        })
-        if (ctx.settings.enableCodingAgentDebugLog) {
-          codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', decision.directive)
-        }
-        return { outcome: 'continue' }
-      }
-
-      if (decision.action === 'fail_session') {
-        ctx.emitLog('info', '⛔ Verifica ancora fallita: sessione chiusa come FALLITA.', decision.summary, {
-          category: 'system_alert',
-        })
-        ctx.emitDone(false, decision.summary)
-        if (ctx.settings.enableCodingAgentDebugLog) {
-          codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, decision.summary)
-        }
-        await ctx.persistCurrentState('verification_failed')
-        ctx.finalizeSession()
-        return { outcome: 'return', result: { success: false, summary: decision.summary } }
-      }
-
-      if (decision.action === 'allow_finish') {
-        ctx.flags.hasVerifiedBuild = true
-        promoteMilestonesProvenBy(ctx, run.command || 'verification command')
-      } else {
-        ctx.emitLog('info', '⚠️ Nessun comando di verifica ricavabile dal progetto.', decision.warning, {
-          category: 'system_alert',
-        })
-      }
-    }
-
-    // Recomputed: a passing verification above may just have promoted milestones.
-    const pendingAfterVerification = ctx.goalPlanner.getMilestones().filter(
-      (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
-    ).length
-
-    const dodCheck = ctx.executionGuard.validateTaskCompletion({
-      requireVerifiedBuild: ctx.settings.verifyBeforeFinish !== false,
-      hasVerifiedBuild: ctx.flags.hasVerifiedBuild,
-      pendingMilestonesCount: pendingAfterVerification,
-      hasFileMutations: ctx.flags.hasFileMutations,
-    })
-
-    const dodReason = dodCheck.reason || 'Definition of Done Violation'
-    const dodCategory = dodReason.includes('Unverified Milestones')
-      ? 'unverified_milestones'
-      : dodReason.includes('Verified Build')
-      ? 'missing_build_verification'
-      : dodReason
-
-    if (!dodCheck.allowed && dodCheck.suggestedAction && !ctx.surfacedDodReasons.has(dodCategory)) {
-      ctx.surfacedDodReasons.add(dodCategory)
-      ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: dodReason }, dodCheck.suggestedAction)
-      ctx.emitLog('info', `🔒 DoD Guard Interception: ${dodReason}`, dodCheck.suggestedAction, {
-        category: 'system_alert',
-      })
-      if (ctx.settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'finish', dodCheck.suggestedAction)
-      }
-      return { outcome: 'continue' }
-    }
   }
-
-  agentToolExecutorService.commitJournal()
   const paramSummary = parsedTool.parameters?.summary || parsedTool.parameters?.report || parsedTool.parameters?.finalReport || parsedTool.parameters?.content
   const explanation = parsedTool.explanation
   const summary = (paramSummary && paramSummary.trim().length > 0)
@@ -140,32 +44,31 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     ? explanation.trim()
     : 'Task completed successfully.'
 
-  // Mark completion / finish milestones as verified when finish tool is executed successfully
-  for (const m of ctx.goalPlanner.getMilestones()) {
-    if (isCompletionMilestoneTitle(m.title) && m.status !== 'failed') {
-      ctx.goalPlanner.updateMilestone(m.id, 'verified')
+  if (ctx.agentMode !== 'agent') {
+    agentToolExecutorService.commitJournal()
+    ctx.emitLog('info', `Task Finished: ${summary}`, summary, { category: 'final_report' })
+    ctx.emitDone(true, summary)
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
+      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
     }
+    await ctx.persistCurrentState('finish')
+    ctx.finalizeSession()
+    return { outcome: 'return', result: { success: true, summary } }
   }
 
-  ctx.emitLog('info', `Task Finished: ${summary}`, summary, {
-    category: 'final_report',
-  })
-  ctx.emitDone(true, summary)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'finish', parsedTool.parameters, parsedTool.explanation)
-    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, true, summary)
   }
-  await ctx.persistCurrentState('finish')
-  if (ctx.workspacePath) {
-    // The ordinary checkpoint above projects the live plan without a closing summary. Write
-    // the final projection last, or that checkpoint immediately erases section 5 again.
-    const saved = await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
-    if (saved) {
-      ctx.emitLog('info', '📝 Session Debt Tracker salvato in .onlyrag/assistant/SESSION_TRACKER.md')
-    }
-  }
-  ctx.finalizeSession()
-  return { outcome: 'return', result: { success: true, summary } }
+  const closure = await ctx.closeApplicationRun({
+    trigger: 'finish',
+    reason: 'Il modello ha segnalato la fine del lavoro; l’applicazione decide l’esito dalle evidenze correnti.',
+    modelSummary: summary,
+    allowCorrection: true,
+  })
+  return closure.outcome === 'continue'
+    ? { outcome: 'continue' }
+    : { outcome: 'return', result: closure.result }
 }
 
 /**
@@ -432,16 +335,13 @@ ${planDirective.blockDirective}`
     // giving up, not completing the task, so it must never be recorded as a success.
     const stagSummary = `Pausa per stagnazione: raggiunti ${ctx.state.stagnationStreak} step consecutivi senza progresso.`
     ctx.emitLog('info', `⚠️ Circuit Breaker: ${stagSummary}`)
-    // Without this the audit log simply stopped mid-session with no outcome recorded, which
-    // is exactly how session-1787476734227-nkn0 ended -- 38 steps and no way to tell from the
-    // log whether it finished, crashed or gave up.
-    if (ctx.settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, stagSummary)
-    }
-    ctx.emitDone(false, stagSummary)
-    await ctx.persistCurrentState('circuit_breaker')
-    ctx.finalizeSession()
-    return { outcome: 'return', result: { success: false, summary: stagSummary } }
+    const closure = await ctx.closeApplicationRun({
+      trigger: 'guard_stop',
+      reason: stagSummary,
+    })
+    return closure.outcome === 'closed'
+      ? { outcome: 'return', result: closure.result }
+      : { outcome: 'continue' }
   }
 
   return { outcome: 'continue' }

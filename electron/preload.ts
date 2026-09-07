@@ -198,7 +198,8 @@ const api: IElectronAPI = {
   agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null) =>
     ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, pendingResidueMilestones, workspacePath),
   /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
-  agentPlanParseText: (planText: string) => ipcRenderer.invoke('agent:plan-parse-text', planText),
+  agentPlanParseText: (planText: string, workspacePath?: string | null) =>
+    ipcRenderer.invoke('agent:plan-parse-text', planText, workspacePath),
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState: (sessionId: string, workspacePath?: string | null) =>
     ipcRenderer.invoke('agent:get-plan-state', sessionId, workspacePath),

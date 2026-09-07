@@ -1,5 +1,4 @@
 import path from 'node:path'
-import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
@@ -56,15 +55,14 @@ export async function runCircuitBreaker(
     modifiedFiles: Array.from(ctx.sessionChangedFiles.keys()),
   })
 
-  // Every session-ending path must leave an outcome in the audit log; this one and the
-  // stagnation abort in handleLoopDetection were the two that did not.
-  if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, userSummary)
-  }
-  ctx.emitDone(false, userSummary)
-  await ctx.persistCurrentState()
-  ctx.finalizeSession()
-  return { outcome: 'return', result: { success: false, summary: userSummary } }
+  const closure = await ctx.closeApplicationRun({
+    trigger: 'guard_stop',
+    reason: cbRes.reason || cbMsg,
+    modelSummary: userSummary,
+  })
+  return closure.outcome === 'closed'
+    ? { outcome: 'return', result: closure.result }
+    : { outcome: 'continue' }
 }
 
 /**
@@ -372,10 +370,8 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
 /**
  * The milestones a passing verification WOULD promote, without promoting them.
  *
- * Split out so a caller can ask the question before paying for the answer. The terminal check
- * at budget exhaustion (budgetExhaustionVerification.ts) is worth minutes of `npm run build`
- * only when the plan actually holds milestones in the state that check would close; asking
- * here is the difference between spending that on a run it helps and on every run.
+ * Split out so callers can preview which plan items a passing project check would prove before
+ * they promote anything. Terminal policy now lives in agentOrchestratorApplicationClosure.ts.
  */
 export function selectMilestonesAwaitingVerification(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner'>
@@ -460,7 +456,7 @@ export function resolvePlanDirectiveForTurn(
     missingDependencies: declared.length > 0 ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : [],
     // A bounded synchronous AST walk, the same order of cost as the repo map this turn already
     // builds. depcheck answers the same question far better and stays where it is — inside the
-    // finish gate — because it is asynchronous and carries a 60-second timeout.
+    // terminal application gate — because it is asynchronous and carries a 60-second timeout.
     undeclaredDependencies: scanUndeclaredImports(workspacePath),
     // Read back from the session's own trajectory rather than kept as a second piece of state:
     // the episodes are already recorded, already persisted, and already say which installs

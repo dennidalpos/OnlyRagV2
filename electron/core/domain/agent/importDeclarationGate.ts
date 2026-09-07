@@ -5,7 +5,7 @@
  * file imports actually exist in the project?"
  *
  * The project already has a dependency check — see dependencyIntegrityGate.ts — but it scans
- * the whole workspace with depcheck and runs inside the finish gate, so it only speaks when
+ * the whole workspace with depcheck and runs inside the terminal application gate, so it only speaks when
  * the model calls `finish`. A session that never gets there never hears it. In
  * coding_agent_audit.log session-1787562597025-q8a5 the model wrote three components importing
  * `@tailwindcss/react`, `tailwind-react-components` and `@tailwindcss/components` — none of

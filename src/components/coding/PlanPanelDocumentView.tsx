@@ -5,6 +5,7 @@ import { AgentPlan } from '../../hooks/usePlanApproval'
 interface PlanPanelDocumentViewProps {
   plan: AgentPlan
   isEditing: boolean
+  isSaving: boolean
   editedText: string
   onStartEdit: () => void
   onCancelEdit: () => void
@@ -15,6 +16,7 @@ interface PlanPanelDocumentViewProps {
 export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
   plan,
   isEditing,
+  isSaving,
   editedText,
   onStartEdit,
   onCancelEdit,
@@ -28,7 +30,7 @@ export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
           <FileText className="w-4 h-4 text-cyan-400" /> Artefatto Piano v{plan.version}
         </span>
 
-        {!isEditing && plan.status === 'ready' && (
+        {!isEditing && (plan.status === 'ready' || plan.status === 'approved') && (
           <button
             type="button"
             onClick={onStartEdit}
@@ -52,6 +54,7 @@ export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
             <button
               type="button"
               onClick={onCancelEdit}
+              disabled={isSaving}
               className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold rounded-lg"
             >
               Annulla
@@ -59,9 +62,10 @@ export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
             <button
               type="button"
               onClick={onSaveEdit}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-950/40"
+              disabled={isSaving}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-950/40"
             >
-              Salva
+              {isSaving ? 'Validazione...' : 'Salva nuova revisione'}
             </button>
           </div>
         </div>

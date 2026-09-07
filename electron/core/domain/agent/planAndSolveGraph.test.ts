@@ -49,7 +49,7 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
     expect(prompt).toContain('Implement feature in main.ts')
   })
 
-  it('orders an unambiguous finish when only the closing milestone remains, never a contradiction', () => {
+  it('requests a final report without requiring finish when only the legacy closing milestone remains', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan([
       { id: 'm-1', title: 'Create src/App.tsx', status: 'verified' },
@@ -59,9 +59,8 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
 
     const prompt = planner.compileProgressPrompt()
 
-    expect(prompt).toContain('[NO OPERATIONAL MILESTONES REMAIN - ACTION REQUIRED]')
-    // The contradiction that killed session-1787471833056-o5fk: ordering finish and
-    // forbidding it in the same prompt left the model with no legal move.
+    expect(prompt).toContain('[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]')
+    expect(prompt).toContain('no finish tool is required')
     expect(prompt).not.toContain('Do NOT invoke \"finish\"')
     expect(prompt).not.toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
   })

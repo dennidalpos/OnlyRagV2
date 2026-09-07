@@ -7,16 +7,7 @@ import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
 import { runTurnDispatch } from './agentOrchestratorTurnDispatch'
 import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
-import { runProjectVerification } from './agentOrchestratorVerificationRunner'
-import {
-  promoteMilestonesProvenBy,
-  selectMilestonesAwaitingVerification,
-} from './agentOrchestratorCircuitBreakerAndVerification'
-import {
-  budgetExhaustionSummary,
-  shouldVerifyOnBudgetExhaustion,
-} from '../domain/agent/budgetExhaustionVerification'
-import type { BudgetExhaustionOutcome } from '../domain/agent/budgetExhaustionVerification'
+import { closeAgentRunFromEvidence } from './agentOrchestratorApplicationClosure'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -28,6 +19,8 @@ const activeAgentSessions = new Map<string, AgentSession>()
 
 function cleanupSession(session: AgentSession) {
   session.isCancelled = true
+  session.completionStatus = 'cancelled'
+  session.terminalSummary = "Task interrotto dall'utente."
   void session.persistCancellation?.()
   // A step paused inside requestApproval() must not block forever just because the task was
   // cancelled instead of answered: resolving false lets the awaited Promise settle, the
@@ -72,7 +65,11 @@ function cleanupSession(session: AgentSession) {
       type: 'info',
       message: "Task interrotto dall'utente.",
     })
-    session.targetWindow.webContents.send('agent:done', { success: false, summary: "Task interrotto dall'utente." })
+    session.targetWindow.webContents.send('agent:done', {
+      success: false,
+      summary: "Task interrotto dall'utente.",
+      completionStatus: 'cancelled',
+    })
   }
 }
 
@@ -191,6 +188,24 @@ export async function runAgentOrchestratorLoop(
     return { success: false, summary: errorMsg }
   }
 
+  const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
+    closeAgentRunFromEvidence({
+      workspacePath,
+      settings,
+      sessionId,
+      stepCount: stepCountBox.value,
+      flags: mutableFlags,
+      state: responseInterpreterState,
+      goalPlanner,
+      episodicCompactor,
+      isSessionActive,
+      emitLog,
+      emitDone,
+      persistCurrentState,
+      buildSessionTracker,
+      finalizeSession,
+    }, request)
+
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
 
@@ -241,6 +256,7 @@ export async function runAgentOrchestratorLoop(
       emitDone,
       persistCurrentState,
       finalizeSession,
+      closeApplicationRun,
     })
     if (dispatchOutcome.outcome === 'return') return dispatchOutcome.result
     const {
@@ -279,6 +295,7 @@ export async function runAgentOrchestratorLoop(
       persistCurrentState,
       finalizeSession,
       buildSessionTracker,
+      closeApplicationRun,
     })
     if (interpretation.outcome === 'continue') continue
     if (interpretation.outcome === 'return') return interpretation.result
@@ -374,6 +391,7 @@ export async function runAgentOrchestratorLoop(
       emitDone,
       persistCurrentState,
       finalizeSession,
+      closeApplicationRun,
     })
     if (processingOutcome.outcome === 'return') return processingOutcome.result
   }
@@ -381,58 +399,21 @@ export async function runAgentOrchestratorLoop(
   // Cancellation and timeout persist their own terminal checkpoint. Do not fall through to
   // the ordinary epilogue, which would overwrite that reason with a successful completion.
   if (session.isCancelled) {
-    return { success: false, summary: "Task interrotto dall'utente." }
-  }
-
-  // The step budget was the one session exit that verified nothing. `finish` runs the
-  // project's own check and promotes whatever it proves; falling out of the loop went straight
-  // to emitDone, so a run that delivered every file its plan named and never spent a step on
-  // `finish` closed with 0/14 verified and no check ever attempted. See
-  // domain/agent/budgetExhaustionVerification.ts for the measurement (live-full-task,
-  // 2026-08-25T12:11). The promotion criterion is untouched: only a real passing command over
-  // deliverables really on disk promotes anything.
-  const budgetExhausted = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
-  let exhaustionOutcome: BudgetExhaustionOutcome = { kind: 'not_attempted' }
-
-  if (
-    shouldVerifyOnBudgetExhaustion({
-      budgetExhausted,
-      sessionActive: isSessionActive(),
-      hasWorkspace: Boolean(workspacePath),
-      verifyBeforeFinish: settings.verifyBeforeFinish !== false,
-      hasFileMutations: mutableFlags.hasFileMutations,
-      hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
-      promotableMilestoneCount: selectMilestonesAwaitingVerification({ workspacePath, goalPlanner }).length,
-    })
-  ) {
-    emitLog('info', '🔎 Budget di step esaurito: verifica finale del progetto...')
-    const run = await runProjectVerification(workspacePath, (chunk) => emitLog('terminal', chunk))
-    if (!run.hasVerificationCommand) {
-      exhaustionOutcome = { kind: 'no_command' }
-    } else if (run.passed) {
-      mutableFlags.hasVerifiedBuild = true
-      const command = run.command || 'verification command'
-      const promoted = promoteMilestonesProvenBy({ workspacePath, goalPlanner, emitLog }, command)
-      exhaustionOutcome = { kind: 'passed', command, promoted }
-    } else {
-      exhaustionOutcome = { kind: 'failed', command: run.command || 'verification command' }
-      // Printed, not swallowed: the failure is the reason the plan stays unverified, and it is
-      // the only place a user reading the transcript can find out why.
-      emitLog('info', '⛔ Verifica finale fallita: nessuna milestone promossa.', run.failureDetail, {
-        category: 'system_alert',
-      })
+    return {
+      success: false,
+      summary: session.terminalSummary || "Task interrotto dall'utente.",
+      completionStatus: session.completionStatus || 'cancelled',
     }
   }
 
-  const endSummary = budgetExhausted
-    ? budgetExhaustionSummary(MAX_STEPS, exhaustionOutcome)
-    : `Completed ${stepCountBox.value} agent steps.`
-  clearSessionTimeout()
-  emitDone(true, endSummary)
-  if (settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, true, endSummary)
-  }
-  await persistCurrentState(budgetExhausted ? 'step_budget' : undefined)
-  finalizeSession()
-  return { success: true, summary: endSummary }
+  const budgetExhausted = stepCountBox.value >= MAX_STEPS && MAX_STEPS !== Infinity
+  const closure = await closeApplicationRun({
+    trigger: budgetExhausted ? 'step_budget' : 'model_silence',
+    reason: budgetExhausted
+      ? `Raggiunto il limite massimo di passaggi configurato (${MAX_STEPS} step).`
+      : `Il ciclo dell'agente si è concluso dopo ${stepCountBox.value} passaggi.`,
+  })
+  return closure.outcome === 'closed'
+    ? closure.result
+    : { success: false, summary: 'La chiusura applicativa non ha prodotto un esito terminale.', completionStatus: 'blocked' }
 }

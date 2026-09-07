@@ -1,4 +1,4 @@
-/** What a session that stopped without finishing has to be able to tell the user. */
+/** What a session that stopped with residual work has to be able to tell the user. */
 export interface SessionStopReport {
   /** Why the run ended, in plain words. Never an internal directive aimed at the model. */
   reason: string

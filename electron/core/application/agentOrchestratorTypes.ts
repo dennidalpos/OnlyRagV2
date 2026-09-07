@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
+import type { AgentCompletionStatus } from '../../../shared/types'
 
 export interface ApprovalResponse {
   approved: boolean
@@ -37,4 +38,7 @@ export interface AgentSession {
   pendingApprovalResolve?: (response: ApprovalResponse) => void
   /** Registered after bootstrap so user cancellation can persist its terminal cause. */
   persistCancellation?: () => Promise<void>
+  /** Terminal state set by cancellation/timeout before an in-flight operation unwinds. */
+  completionStatus?: AgentCompletionStatus
+  terminalSummary?: string
 }

@@ -5,7 +5,6 @@ import type { InterviewQuestion, UserInterviewAnswer } from '../../types'
 import { parsePlanChecklist } from './planChecklistParser'
 import { formatPromptForDisplay } from './promptFormatter'
 import { PlanPanelHeader } from './PlanPanelHeader'
-import { PlanPanelCountdownBanner } from './PlanPanelCountdownBanner'
 import { PlanPanelChecklistView } from './PlanPanelChecklistView'
 import { PlanPanelDocumentView } from './PlanPanelDocumentView'
 import { PlanInterviewCard } from './PlanInterviewCard'
@@ -17,9 +16,8 @@ interface PlanPanelProps {
   onSelectPlanVersion?: (index: number) => void
   isGenerating: boolean
   isExecuting?: boolean
-  countdownSeconds: number
-  isAutoProceedPaused: boolean
-  autoProceedEnabled: boolean
+  isSavingPlanRevision?: boolean
+  isApprovingPlan?: boolean
   interviewQuestions?: InterviewQuestion[]
   isInterviewActive?: boolean
   isAnalyzingInterview?: boolean
@@ -28,8 +26,7 @@ interface PlanPanelProps {
   onRetry?: () => void
   onApprove: () => void
   onReject: () => void
-  onTogglePauseAutoProceed: () => void
-  onUpdatePlanText: (newText: string) => void
+  onUpdatePlanText: (newText: string) => Promise<void>
   completedStepCount?: number
 }
 
@@ -40,9 +37,8 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   onSelectPlanVersion,
   isGenerating,
   isExecuting = false,
-  countdownSeconds,
-  isAutoProceedPaused,
-  autoProceedEnabled,
+  isSavingPlanRevision = false,
+  isApprovingPlan = false,
   interviewQuestions = [],
   isInterviewActive = false,
   isAnalyzingInterview = false,
@@ -51,7 +47,6 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   onRetry,
   onApprove,
   onReject,
-  onTogglePauseAutoProceed,
   onUpdatePlanText,
   completedStepCount = 0,
 }) => {
@@ -95,8 +90,8 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
 
   const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
 
-  const handleSaveEdit = () => {
-    onUpdatePlanText(editedText)
+  const handleSaveEdit = async () => {
+    await onUpdatePlanText(editedText)
     setIsEditing(false)
   }
 
@@ -111,15 +106,6 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
         viewMode={viewMode}
         onToggleViewMode={() => setViewMode(viewMode === 'checklist' ? 'document' : 'checklist')}
       />
-
-      {plan?.status === 'ready' && autoProceedEnabled && (
-        <PlanPanelCountdownBanner
-          countdownSeconds={countdownSeconds}
-          isAutoProceedPaused={isAutoProceedPaused}
-          onTogglePauseAutoProceed={onTogglePauseAutoProceed}
-          onApprove={onApprove}
-        />
-      )}
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -228,6 +214,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               <PlanPanelDocumentView
                 plan={plan}
                 isEditing={isEditing}
+                isSaving={isSavingPlanRevision}
                 editedText={editedText}
                 onStartEdit={() => setIsEditing(true)}
                 onCancelEdit={() => setIsEditing(false)}
@@ -236,12 +223,19 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               />
             )}
 
+            {plan.approvalError && (
+              <div role="alert" className="p-3 rounded-xl border border-rose-800/70 bg-rose-950/30 text-rose-200 text-xs">
+                {plan.approvalError}
+              </div>
+            )}
+
             {/* Action Bar (Approve / Reject) */}
-            {plan.status === 'ready' && (
+            {(plan.status === 'ready' || (plan.status === 'approved' && !isExecuting && parsedChecklist.some((item) => !item.completed))) && (
               <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-2 shadow-2xl">
                 <button
                   type="button"
                   onClick={onReject}
+                  disabled={isEditing || isSavingPlanRevision || isApprovingPlan}
                   className="px-3.5 py-2 bg-slate-950 hover:bg-rose-950/50 border border-slate-800 hover:border-rose-800/80 text-rose-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
                 >
                   <XCircle className="w-3.5 h-3.5 text-rose-400" /> Rifiuta
@@ -250,9 +244,15 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                 <button
                   type="button"
                   onClick={onApprove}
-                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50 focus-ring active:scale-95"
+                  disabled={isEditing || isSavingPlanRevision || isApprovingPlan}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50 focus-ring active:scale-95"
                 >
-                  <CheckCircle2 className="w-4 h-4 fill-current" /> Approva &amp; Esegui Task
+                  {isApprovingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 fill-current" />}
+                  {isApprovingPlan
+                    ? 'Salvataggio e preparazione...'
+                    : plan.status === 'approved'
+                      ? 'Esegui piano approvato'
+                      : 'Approva & Esegui Task'}
                 </button>
               </div>
             )}

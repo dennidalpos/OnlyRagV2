@@ -50,9 +50,10 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
     workspacePath: c.workspacePath,
     sessionPlans: c.activeSessionPlans,
     onSessionPlansChange: c.updateActiveSessionPlans,
+    onPersistPlan: c.persistActiveSessionPlan,
     onPlanApproved: (approvedPlan) => {
       c.setAgentMode('agent')
-      c.handleAgentExecute(approvedPlan.prompt, 'agent')
+      void c.handleAgentExecute(approvedPlan.prompt, 'agent')
     },
   })
 
@@ -305,9 +306,8 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
                 onSelectPlanVersion={planApproval.selectPlanVersion}
                 isGenerating={planApproval.isGeneratingPlan}
                 isExecuting={c.isExecuting}
-                countdownSeconds={planApproval.countdownSeconds}
-                isAutoProceedPaused={planApproval.isAutoProceedPaused}
-                autoProceedEnabled={settings?.autoProceedPlan !== false}
+                isSavingPlanRevision={planApproval.isSavingPlanRevision}
+                isApprovingPlan={planApproval.isApprovingPlan}
                 interviewQuestions={planApproval.interviewQuestions}
                 isInterviewActive={planApproval.isInterviewActive}
                 isAnalyzingInterview={planApproval.isAnalyzingInterview}
@@ -316,7 +316,6 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
                 onRetry={planApproval.retryCurrentPlan}
                 onApprove={planApproval.handleApprovePlan}
                 onReject={planApproval.handleRejectPlan}
-                onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused(!planApproval.isAutoProceedPaused)}
                 onUpdatePlanText={planApproval.handleUpdatePlanText}
                 completedStepCount={c.currentStep}
               />

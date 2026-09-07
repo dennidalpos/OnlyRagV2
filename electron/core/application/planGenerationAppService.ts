@@ -18,7 +18,7 @@ import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { MAX_PLAN_MILESTONES } from '../../../shared/domain/agent/planMilestoneCapper'
-import { compilePlanFromText, type WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
+import { compilePlanFromText, renderPlanMilestones, type WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
 import { resolvePrimaryProfileVerificationTargets, resolveProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
@@ -197,16 +197,16 @@ export class PlanGenerationAppService {
 
     const manifest = readWorkspaceManifest(req.workspacePath)
     const hasExistingProject = manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
-    const planText = accumulated.trim()
-    if (!generationError && !planText) {
+    const rawPlanText = accumulated.trim()
+    if (!generationError && !rawPlanText) {
       generationError = 'Plan generation returned an empty response'
       logger.log('WARN', 'PlanGenerationAppService', generationError)
     }
-    const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
+    const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(rawPlanText)
     const profile = req.workspacePath ? discoverProjectProfile(req.workspacePath) : null
     const verification = profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined
     const milestones = compilePlanFromText(
-      planText,
+      rawPlanText,
       verification,
       resolveScaffoldFacts(req.workspacePath, manifest, hasExistingProject)
     )
@@ -225,8 +225,8 @@ export class PlanGenerationAppService {
       codingAgentLogger.logPlanGeneration('plan-flow', req.prompt, milestones.length, 'plan')
     }
     return generationError
-      ? { status: 'error', planText, milestones, error: generationError }
-      : { status: 'success', planText, milestones }
+      ? { status: 'error', planText: rawPlanText, milestones, error: generationError }
+      : { status: 'success', planText: renderPlanMilestones(milestones), milestones }
   }
 
   /**

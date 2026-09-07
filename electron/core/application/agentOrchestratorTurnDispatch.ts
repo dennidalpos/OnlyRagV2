@@ -99,26 +99,29 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
 
   if ('error' in dispatchResult) {
     ctx.emitLog('info', `LLM Stream error on step ${ctx.stepCount}: ${dispatchResult.error}`)
-    ctx.emitDone(false, `LLM Stream Error: ${dispatchResult.error}`)
-    if (ctx.settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, `LLM Error: ${dispatchResult.error}`)
+    const closure = await ctx.closeApplicationRun({
+      trigger: 'transport_error',
+      reason: `Errore di trasporto LLM al passo ${ctx.stepCount}: ${dispatchResult.error}`,
+    })
+    return {
+      outcome: 'return',
+      result: closure.outcome === 'closed'
+        ? closure.result
+        : { success: false, summary: `LLM Error: ${dispatchResult.error}`, completionStatus: 'blocked' },
     }
-    agentToolExecutorService.rollbackJournal()
-    await ctx.persistCurrentState()
-    ctx.finalizeSession()
-    return { outcome: 'return', result: { success: false, summary: `LLM Error: ${dispatchResult.error}` } }
   }
 
   if (!ctx.isSessionActive()) {
-    ctx.emitLog('info', 'Agent execution cancelled by user.')
-    ctx.emitDone(false, 'Task cancelled by user.')
+    const completionStatus = ctx.session.completionStatus || 'cancelled'
+    const terminalSummary = ctx.session.terminalSummary || 'Task cancelled by user.'
+    ctx.emitLog('info', terminalSummary)
+    ctx.emitDone(false, terminalSummary, completionStatus)
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, 'Task cancelled by user.')
     }
     agentToolExecutorService.rollbackJournal()
-    await ctx.persistCurrentState()
     ctx.finalizeSession()
-    return { outcome: 'return', result: { success: false, summary: 'Task cancelled' } }
+    return { outcome: 'return', result: { success: false, summary: terminalSummary, completionStatus } }
   }
 
   const effectiveUsedModel = dispatchResult.usedModel || selection.targetModel

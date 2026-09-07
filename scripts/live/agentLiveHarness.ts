@@ -26,7 +26,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { AppSettings } from '../../src/types'
+import type { AgentCompletionStatus, AppSettings } from '../../src/types'
 import type { PlanMilestone } from '../../shared/domain/agent/planAndSolveGraph'
 import type { SavedAgentSessionState } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
@@ -228,12 +228,9 @@ export function readFinalMilestones(workspacePath: string, sessionId: string): P
  * when the call carried none — so these two literals separate "the loop ran out" from
  * "the agent said it was done".
  */
-const STEP_CEILING_SUMMARY = /^Raggiunto il limite massimo di passaggi configurato/
-const LOOP_STOPPED_SUMMARY = /^Completed \d+ agent steps\.$/
-
 /**
- * What a run actually delivered, in the two dimensions the blueprint's §5.6h numbers are
- * stated in — verified milestones and `finish` — plus the context needed to read a red run.
+ * What a run actually delivered: milestone evidence and the application-owned completion
+ * status, plus the context needed to read a red run.
  *
  * Everything here comes from the persisted session state above and from the summary the loop
  * returned. Nothing parses logs/coding_agent_audit.log: that file is append-only and shared
@@ -251,19 +248,14 @@ export interface LiveRunMetrics {
   pending: number
   /** 0 when the run has no plan at all, so an empty plan can never read as 100%. */
   verifiedRatio: number
-  /** True if `finish` was emitted at all, including attempts the DoD gate intercepted. */
-  finishInvoked: boolean
-  /** Interceptions by the DoD / verification gates in agentOrchestratorFinishAndLoopGuards.ts. */
-  finishBlockedAttempts: number
-  /** True only when `finish` was ACCEPTED and it was the call that ended the session. */
-  finishClosedSession: boolean
+  completionStatus?: AgentCompletionStatus
   /** `run_command` calls, in order, as `[step N] STATUS command`. */
   commands: string[]
   toolCalls: number
   failedToolCalls: number
 }
 
-/** Reads the two delivery metrics — verified milestones and `finish` — plus their context. */
+/** Reads milestone delivery and the application-owned terminal status plus their context. */
 export function readRunMetrics(args: {
   workspacePath: string
   sessionId: string
@@ -275,19 +267,10 @@ export function readRunMetrics(args: {
   // Capped at 100 entries by EpisodicMemoryCompactor.recordStep; the step ceiling these
   // scenarios run under is 50, so nothing observed here has been evicted yet.
   const episodes = state.episodes || []
-  const summary = String(args.summary || '')
-
   const verified = milestones.filter((m) => m.status === 'verified').length
   const failed = milestones.filter((m) => m.status === 'failed').length
-  const finishEpisodes = episodes.filter((e) => e.tool === 'finish')
   const stepsUsed = state.stepCount || 0
   const maxSteps = state.maxSteps || 0
-
-  // An ACCEPTED finish leaves no episode behind: recordStep is called only on the gate's
-  // BLOCKED branches (agentOrchestratorFinishAndLoopGuards.ts), and the accepting branch
-  // returns straight out of the loop. The returned summary is the trace it does leave.
-  const finishClosedSession =
-    args.success && !STEP_CEILING_SUMMARY.test(summary) && !LOOP_STOPPED_SUMMARY.test(summary)
 
   return {
     stepsUsed,
@@ -298,9 +281,7 @@ export function readRunMetrics(args: {
     failed,
     pending: milestones.length - verified - failed,
     verifiedRatio: milestones.length > 0 ? verified / milestones.length : 0,
-    finishInvoked: finishClosedSession || finishEpisodes.length > 0,
-    finishBlockedAttempts: finishEpisodes.filter((e) => e.status === 'BLOCKED').length,
-    finishClosedSession,
+    completionStatus: state.completionStatus,
     commands: episodes
       .filter((e) => e.tool === 'run_command')
       .map((e) => `[step ${e.step}] ${e.status} ${e.target || '(no command recorded)'}`),
@@ -342,10 +323,7 @@ export function reportRun(args: {
     `milestones: ${metrics.verified} verified / ${metrics.failed} failed / ${metrics.pending} pending ` +
       `of ${metrics.milestones.length} (${Math.round(metrics.verifiedRatio * 100)}%)`
   )
-  console.log(
-    `finish: ${metrics.finishClosedSession ? 'REACHED (closed the session)' : metrics.finishInvoked ? 'attempted but never accepted' : 'NEVER INVOKED'}` +
-      ` — blocked attempts: ${metrics.finishBlockedAttempts}`
-  )
+  console.log(`application closure: ${metrics.completionStatus || 'not persisted'}`)
   console.log(`tool calls: ${metrics.toolCalls} (${metrics.failedToolCalls} failed or blocked)`)
   console.log(`commands executed: ${metrics.commands.length}`)
   for (const c of metrics.commands) console.log(`  ${c}`)

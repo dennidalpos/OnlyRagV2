@@ -47,6 +47,9 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
   const raw = input as Record<string, any>
   const defaults = getDefaultAppSettings()
 
+  // Legacy Plan countdown preferences are intentionally not migrated. Plan review now always
+  // starts execution through an explicit action bound to one persisted revision.
+
   const ocrEngine =
     typeof raw.ocrEngine === 'string' && VALID_OCR_ENGINES.has(raw.ocrEngine)
       ? (raw.ocrEngine as 'native_cuda' | 'vision_model')
@@ -124,8 +127,6 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     'allowFileModifications',
     'normalizeWithLlm',
     'noWorkspaceMode',
-    'requirePlanApproval',
-    'autoProceedPlan',
     'enableSoundEffects',
     'editorWordWrap',
     'verifyBeforeFinish',
@@ -136,11 +137,6 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     if (typeof raw[key] === 'boolean') {
       sanitizedRecord[key] = raw[key]
     }
-  }
-
-  // Optional numbers
-  if (typeof raw.autoProceedDelaySeconds === 'number' && !isNaN(raw.autoProceedDelaySeconds)) {
-    sanitized.autoProceedDelaySeconds = raw.autoProceedDelaySeconds
   }
 
   if (

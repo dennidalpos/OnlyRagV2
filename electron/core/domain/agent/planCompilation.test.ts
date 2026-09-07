@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { ensureRunnableMilestone, ensureEntrypointMilestones } from '../../../../shared/domain/agent/planCompilation'
+import {
+  compilePlanMilestones,
+  ensureEntrypointMilestones,
+  ensureRunnableMilestone,
+} from '../../../../shared/domain/agent/planCompilation'
 
 describe('ensureEntrypointMilestones', () => {
   const greenfield = { hasManifest: false, hasHtmlEntrypoint: false }
@@ -141,5 +145,17 @@ describe('ensureRunnableMilestone', () => {
     expect(plan[2].verificationCommand).toBe('npm run build')
     expect(plan[3].title).toContain('final report')
     expect(plan.map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3', 'm-4'])
+  })
+})
+
+describe('application-owned closure compilation', () => {
+  it('drops a synthetic finish milestone from new canonical plans', () => {
+    const plan = compilePlanMilestones([
+      { id: 'm-1', title: 'Create `src/app.ts`', status: 'pending' },
+      { id: 'm-2', title: 'Write the final report and invoke finish', status: 'pending' },
+    ])
+
+    expect(plan).toHaveLength(1)
+    expect(plan[0].title).toContain('src/app.ts')
   })
 })

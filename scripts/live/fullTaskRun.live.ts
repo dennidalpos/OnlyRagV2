@@ -7,10 +7,10 @@
  *
  * It asserts delivery, and it did not always. Until 2026-08-25 the only assertion here was
  * `expect(result).toBeTruthy()`, which the loop satisfies by returning at all: two runs that
- * burned the whole 50-step budget with 0 milestones verified and no `finish` (08:37 and 11:03,
+ * burned the whole 50-step budget with 0 milestones verified (08:37 and 11:03,
  * both in logs/coding_agent_audit.log) still exited `npm run test:live` with code 0. A probe
  * that cannot go red is not evidence for the numbers the blueprint publishes from it, so the
- * two metrics those numbers are stated in — verified milestones and `finish` — are asserted
+ * the milestone ratio and application-owned completion status are asserted
  * below against the thresholds that document itself claims.
  *
  * A 7B model does vary run to run, and that variance is now visible instead of absorbed: read
@@ -30,7 +30,7 @@ const SESSION = 'live-full-task'
 
 /**
  * The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone
- * verificate (92%), `finish` raggiunto autonomamente, `npm run build` con exit code 0.
+ * verificate (92%), chiusura raggiunta autonomamente, `npm run build` con exit code 0.
  *
  * These are deliberately not a "plausible" number picked so the probe would pass. The probe
  * asserts the encoded baseline: if it holds, the run is green; otherwise the agent regressed.
@@ -39,7 +39,6 @@ const SESSION = 'live-full-task'
 const RUN9_VERIFIED_MILESTONES = 12
 const RUN9_TOTAL_MILESTONES = 13
 const MIN_VERIFIED_MILESTONE_RATIO = RUN9_VERIFIED_MILESTONES / RUN9_TOTAL_MILESTONES // 0.923
-const RUN9_REACHED_FINISH = true
 
 /**
  * A plan is generated per run, so its size is not fixed and the bar above is a ratio. This
@@ -115,8 +114,8 @@ describe('live: full task run', () => {
     )
 
     // Printed BEFORE the assertions on purpose: the first failing expect aborts the test, and
-    // the metrics block is what turns "red" into "50/50 steps, 0/13 verified, finish never
-    // invoked, 4 commands run".
+    // the metrics block is what turns "red" into "50/50 steps, 0/13 verified, blocked,
+    // 4 commands run".
     const metrics = reportRun({
       label: 'full task run',
       workspacePath: WORKSPACE,
@@ -137,11 +136,9 @@ describe('live: full task run', () => {
       `verified milestones ${metrics.verified}/${metrics.milestones.length} — blueprint §5.6h claims ${RUN9_VERIFIED_MILESTONES}/${RUN9_TOTAL_MILESTONES}`
     ).toBeGreaterThanOrEqual(MIN_VERIFIED_MILESTONE_RATIO)
 
-    // `finish` is the agent declaring the task done and passing the DoD gate, so it is the one
-    // signal that separates a delivered task from a session that merely ran out of steps.
     expect(
-      metrics.finishClosedSession,
-      `finish never closed the session (invoked: ${metrics.finishInvoked}, blocked attempts: ${metrics.finishBlockedAttempts}, steps ${metrics.stepsUsed}/${metrics.maxSteps})`
-    ).toBe(RUN9_REACHED_FINISH)
+      metrics.completionStatus,
+      `application closure status was ${metrics.completionStatus || 'missing'} after ${metrics.stepsUsed}/${metrics.maxSteps} steps`
+    ).toBe('verified')
   })
 })

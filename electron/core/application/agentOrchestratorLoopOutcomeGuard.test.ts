@@ -56,6 +56,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
       persistCurrentState: async () => {},
       finalizeSession: () => {},
       buildSessionTracker: (() => ({})) as unknown as ResponseInterpreterContext['buildSessionTracker'],
+      closeApplicationRun: async () => ({ outcome: 'closed', result: { success: false, summary: 'closed' } }),
     }
   })
 

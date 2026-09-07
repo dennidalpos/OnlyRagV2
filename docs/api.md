@@ -380,7 +380,7 @@ const report = await analyzeLogs()
 | `get_file_info` | `file_info`, `stat_file`, `file_stats`, `file_metadata` | `filePath` | Stat del file: dimensione, tipo, flag binario, conteggio righe, data ultima modifica. |
 | `ensure_tool` | *(nessuno — solo nome canonico)* | `toolName` | Installa un tool di sviluppo mancante via winget, limitatamente all'allow-list chiusa di `devToolchain.ts`. |
 | `ask` | `ask_question`, `clarify`, `question` | `question` | Richiesta di chiarimento all'utente (intercettata in modalità AGENT). |
-| `finish` | `done`, `complete`, `finish_task` | `result` | Conclusione del turno previo superamento del Pre-Finish Gate. `result` è obbligatorio. |
+| `finish` | `done`, `complete`, `finish_task` | `result` | Segnale opzionale di fine lavoro. L'applicazione esegue comunque il gate terminale e classifica l'esito come `verified`, `unverifiable`, `blocked` o `cancelled`; `result` è obbligatorio. |
 
 ---
 

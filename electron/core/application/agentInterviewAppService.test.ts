@@ -30,6 +30,7 @@ describe('AgentInterviewAppService', () => {
     )
 
     const result = await service.conductInterview('Crea una funzione somma', 'qwen2.5-coder:7b', mockSettings)
+    expect(result.status).toBe('completed')
     expect(result.hasQuestions).toBe(false)
     expect(result.questions).toHaveLength(0)
   })
@@ -60,6 +61,7 @@ describe('AgentInterviewAppService', () => {
 
     const result = await service.conductInterview('Crea una landing page con animazioni', 'qwen2.5-coder:7b', mockSettings)
     expect(result.hasQuestions).toBe(true)
+    expect(result.status).toBe('clarification_required')
     expect(result.questions).toHaveLength(1)
     expect(result.questions[0].question).toBe('Quale stile di animazione preferisci?')
     expect(result.questions[0].options).toEqual(['CSS Keyframes', 'Web Animations API', 'Tailwind CSS'])
@@ -82,6 +84,43 @@ describe('AgentInterviewAppService', () => {
     expect(result.questions[0].options).toEqual(['Vanilla JS', 'React'])
   })
 
+  it('reports transport failure as an error rather than as a successful no-question analysis', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'connection refused' })
+
+    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
+
+    expect(result).toMatchObject({
+      status: 'error',
+      hasQuestions: false,
+      questions: [],
+      error: 'connection refused',
+    })
+  })
+
+  it('reports invalid JSON as an error rather than continuing to generic planning', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+      onChunk('not a structured interview response')
+      return { success: true }
+    })
+
+    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Interview response is not an object')
+  })
+
+  it('rejects an invalid result shape instead of interpreting it as no questions', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+      onChunk('{"hasQuestions": true, "questions": []}')
+      return { success: true }
+    })
+
+    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Interview response does not match the required result shape')
+  })
+
   it('enriches prompt correctly with user confirmed answers', () => {
     const original = 'Crea una calcolatrice moderna'
     const answers = [
@@ -101,8 +140,21 @@ describe('AgentInterviewAppService', () => {
 
     const enriched = service.enrichPromptWithAnswers(original, answers)
     expect(enriched).toContain('Crea una calcolatrice moderna')
-    expect(enriched).toContain('[CONFIRMED USER ARCHITECTURAL DECISIONS]')
-    expect(enriched).toContain('- Layout UI: Grid moderna con CSS Grid')
-    expect(enriched).toContain('- Gestione Cronologia: Salva in localStorage (Custom)')
+    expect(enriched).toContain('[ORIGINAL USER REQUEST]\nCrea una calcolatrice moderna')
+    expect(enriched).toContain('[INTERVIEW DECISIONS]')
+    expect(enriched).toContain('- [EXPLICIT USER ANSWER] Layout UI: Grid moderna con CSS Grid')
+    expect(enriched).toContain('- [EXPLICIT USER ANSWER] Gestione Cronologia: Salva in localStorage (Custom)')
+  })
+
+  it('keeps accepted recommendations and unconfirmed assumptions distinct from explicit answers', () => {
+    const enriched = service.enrichPromptWithAnswers('Build a dashboard', [
+      { questionId: 'q1', questionText: 'Router', selectedOption: 'React Router', provenance: 'accepted_recommendation' },
+      { questionId: 'q2', questionText: 'Theme', selectedOption: 'Dark', provenance: 'explicit' },
+      { questionId: 'q3', questionText: 'Storage', selectedOption: 'Local only', provenance: 'unconfirmed_assumption' },
+    ])
+
+    expect(enriched).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
+    expect(enriched).toContain('[EXPLICIT USER ANSWER] Theme: Dark')
+    expect(enriched).toContain('[UNCONFIRMED ASSUMPTION] Storage: Local only')
   })
 })

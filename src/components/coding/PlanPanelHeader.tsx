@@ -80,10 +80,14 @@ export const PlanPanelHeader: React.FC<PlanPanelHeaderProps> = ({
                 ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 animate-pulse'
                 : plan.status === 'rejected'
                 ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                : plan.status === 'error'
+                ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                : plan.status === 'cancelled'
+                ? 'bg-slate-900 text-slate-400 border border-slate-700'
                 : 'bg-amber-950 text-amber-300 border border-amber-800'
             }`}
           >
-            {plan.status === 'ready' ? 'In attesa di Approvazione' : plan.status}
+            {plan.status === 'ready' ? 'In attesa di Approvazione' : plan.status === 'error' ? 'Errore' : plan.status === 'cancelled' ? 'Annullato' : plan.status}
           </span>
         </div>
       )}

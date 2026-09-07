@@ -223,7 +223,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
       'plan-seed-existing-session',
       tempDir,
       [{ id: 'm-1', title: 'New approved milestone', status: 'pending' }],
-      'Original task'
+      'Original task\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: React Router'
     )
     expect(seeded).toBe(true)
 
@@ -233,5 +233,6 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     // Other fields (step count, episodes) must survive the seed merge.
     expect(loaded?.stepCount).toBe(7)
     expect(loaded?.episodes).toHaveLength(1)
+    expect(loaded?.userTask).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
   })
 })

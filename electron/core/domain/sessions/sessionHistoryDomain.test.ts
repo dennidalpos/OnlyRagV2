@@ -100,11 +100,23 @@ describe('SessionHistoryDomain Unit Tests', () => {
           milestones: [{ id: 'm1', title: 'Add cache layer', status: 'verified' }],
         },
         { id: 'plan_2', version: 2, prompt: 'x', planText: 'text', status: 'bogus', createdAt: '2026-04-02T09:20:00.000Z' },
+        {
+          id: 'plan_3',
+          version: 3,
+          prompt: 'Effective task',
+          originalPrompt: 'Original task',
+          interviewAnswers: [{ questionId: 'q1', questionText: 'Router', selectedOption: 'React Router', provenance: 'accepted_recommendation' }],
+          planText: '- [ ] Partial plan',
+          status: 'error',
+          errorPhase: 'planning',
+          errorMessage: 'stream interrupted',
+          createdAt: '2026-04-02T09:25:00.000Z',
+        },
         { id: 'plan_broken', version: 3 },
       ],
     })
 
-    expect(normalized!.plans).toHaveLength(2)
+    expect(normalized!.plans).toHaveLength(3)
     // Legacy clock time is unparsable and falls back to the session's creation date.
     expect(normalized!.plans![0].createdAt).toBe('2026-04-02T09:00:00.000Z')
     expect(normalized!.plans![0].status).toBe('approved')
@@ -112,6 +124,13 @@ describe('SessionHistoryDomain Unit Tests', () => {
     expect(normalized!.plans![0].milestones).toHaveLength(1)
     // An unknown status degrades to 'ready' instead of poisoning the plan panel.
     expect(normalized!.plans![1].status).toBe('ready')
+    expect(normalized!.plans![2]).toMatchObject({
+      status: 'error',
+      originalPrompt: 'Original task',
+      errorPhase: 'planning',
+      errorMessage: 'stream interrupted',
+    })
+    expect(normalized!.plans![2].interviewAnswers?.[0].provenance).toBe('accepted_recommendation')
   })
 
   it('should reject records without an id', () => {

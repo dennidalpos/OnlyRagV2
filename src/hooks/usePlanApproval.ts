@@ -2,6 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AgentPlan, AppSettings, PlanMilestone, InterviewQuestion, UserInterviewAnswer } from '../types'
 import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
+import {
+  composeInterviewDecisionPrompt,
+  createAcceptedRecommendationAnswers,
+} from '../../shared/domain/agent/interviewDecisionContext'
 
 export type { AgentPlan } from '../types'
 
@@ -30,6 +34,28 @@ export function ensureMandatoryStopDirective(planText: string): string {
 
   const stopDirective = `${nextNum}. ${MANDATORY_PLAN_STOP_ITEM}`
   return `${planText.trim()}\n${stopDirective}`
+}
+
+export async function resolveInterviewPrompt(
+  originalPrompt: string,
+  answers: UserInterviewAnswer[],
+  enrichPrompt: ((prompt: string, interviewAnswers: UserInterviewAnswer[]) => Promise<string>) | undefined,
+  onEnrichmentFailure: (reason: unknown) => void
+): Promise<string> {
+  const losslessPrompt = composeInterviewDecisionPrompt(originalPrompt, answers)
+  if (!enrichPrompt || answers.length === 0) return losslessPrompt
+
+  try {
+    const enriched = await enrichPrompt(originalPrompt, answers)
+    const preservesInputs = typeof enriched === 'string'
+      && enriched.includes(originalPrompt)
+      && answers.every((answer) => enriched.includes(answer.selectedOption))
+    if (preservesInputs) return enriched
+    onEnrichmentFailure(new Error('Enrichment result omitted the original request or an interview decision'))
+  } catch (error) {
+    onEnrichmentFailure(error)
+  }
+  return losslessPrompt
 }
 
 /**
@@ -78,7 +104,12 @@ export function usePlanApproval({
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
   const [isInterviewActive, setIsInterviewActive] = useState<boolean>(false)
   const [isAnalyzingInterview, setIsAnalyzingInterview] = useState<boolean>(false)
-  const pendingFlowRef = useRef<{ prompt: string; targetModel?: string; currentStep: number } | null>(null)
+  const pendingFlowRef = useRef<{
+    prompt: string
+    targetModel?: string
+    currentStep: number
+    questions: InterviewQuestion[]
+  } | null>(null)
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const requireApproval = settings?.requirePlanApproval ?? true
@@ -136,7 +167,12 @@ export function usePlanApproval({
   }, [currentPlan?.status, currentPlan?.id, autoProceed, isAutoProceedPaused, clearPlanTimer])
 
   const generatePlan = useCallback(
-    async (prompt: string, targetModel?: string, currentStep: number = 0): Promise<AgentPlan> => {
+    async (
+      prompt: string,
+      targetModel?: string,
+      currentStep: number = 0,
+      interviewContext?: { originalPrompt: string; answers: UserInterviewAnswer[] }
+    ): Promise<AgentPlan> => {
       clearPlanTimer()
       setIsAutoProceedPaused(false)
       setCountdownSeconds(autoProceedDelay)
@@ -156,6 +192,8 @@ export function usePlanApproval({
         id: planId,
         version: newVersion,
         prompt,
+        originalPrompt: interviewContext?.originalPrompt || prompt,
+        interviewAnswers: interviewContext?.answers || [],
         planText: 'Generazione piano in corso...',
         status: 'generating',
         createdAt: new Date().toISOString(),
@@ -169,20 +207,44 @@ export function usePlanApproval({
       try {
         const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
         let accumulatedPlan = ''
+        let generationError: string | undefined
+        let generatedMilestones: PlanMilestone[] | undefined
 
         if (window.electronAPI?.agentPlanGenerate && settings) {
           try {
             const genRes = await window.electronAPI.agentPlanGenerate(prompt, modelToUse, settings, pendingResidueMilestones, workspacePath)
             accumulatedPlan = genRes?.planText?.trim() || ''
+            generatedMilestones = genRes?.milestones
+            if (genRes?.status === 'error') generationError = genRes.error || 'Pianificazione non completata'
           } catch (ipcErr: any) {
             logger.warn('usePlanApproval', `agentPlanGenerate IPC failed: ${ipcErr?.message}`)
+            generationError = ipcErr?.message || 'IPC di pianificazione non disponibile'
           }
         } else {
           logger.warn('usePlanApproval', 'agentPlanGenerate not available: ensure Electron preload is loaded and settings are set.')
+          generationError = 'Servizio di pianificazione non disponibile'
         }
 
-        if (!accumulatedPlan) {
-          accumulatedPlan = `🎯 Piano di Esecuzione (v${newVersion}) per: ${prompt}\n\n1. 🔍 Analisi del contesto del progetto e identificazione dei file rilevanti\n2. ✏️ Implementazione delle modifiche richieste e refactoring atomico\n3. 🧪 Verifica di correttezza tramite build e controlli di tipo`
+        if (!generationError && !accumulatedPlan) {
+          generationError = 'Il pianificatore ha restituito una risposta vuota'
+        }
+
+        if (generationError) {
+          const failedPlan: AgentPlan = {
+            ...initialPlan,
+            planText: accumulatedPlan,
+            status: 'error',
+            milestones: generatedMilestones,
+            errorPhase: 'planning',
+            errorMessage: generationError,
+          }
+          updateCurrentSessionPlans((prev) => {
+            const copy = [...prev]
+            copy[newIdx] = failedPlan
+            return copy
+          })
+          setIsGeneratingPlan(false)
+          return failedPlan
         }
 
         // Ensure mandatory final stop directive
@@ -196,6 +258,8 @@ export function usePlanApproval({
           id: planId,
           version: newVersion,
           prompt,
+          originalPrompt: interviewContext?.originalPrompt || prompt,
+          interviewAnswers: interviewContext?.answers || [],
           planText: accumulatedPlan,
           status: 'ready',
           createdAt: new Date().toISOString(),
@@ -213,25 +277,26 @@ export function usePlanApproval({
         return finalPlan
       } catch (err: any) {
         logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
-        const fallbackRaw = `🎯 Piano di Esecuzione (v${newVersion}) per: ${prompt}\n1. 🔍 Analisi del contesto e dei file del workspace\n2. ✏️ Esecuzione delle modifiche richieste\n3. 🧪 Verifica dei risultati`
-        const fallbackText = ensureMandatoryStopDirective(fallbackRaw)
-        const fallbackPlan: AgentPlan = {
+        const failedPlan: AgentPlan = {
           id: planId,
           version: newVersion,
           prompt,
-          planText: fallbackText,
-          status: 'ready',
+          originalPrompt: interviewContext?.originalPrompt || prompt,
+          interviewAnswers: interviewContext?.answers || [],
+          planText: '',
+          status: 'error',
           createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
-          milestones: await parsePlanTextToMilestones(fallbackText),
+          errorPhase: 'planning',
+          errorMessage: err?.message || 'Errore inatteso durante la pianificazione',
         }
         updateCurrentSessionPlans((prev) => {
           const copy = [...prev]
-          copy[newIdx] = fallbackPlan
+          copy[newIdx] = failedPlan
           return copy
         })
         setIsGeneratingPlan(false)
-        return fallbackPlan
+        return failedPlan
       }
     },
     [settings?.codingModel, settings?.defaultModel, autoProceedDelay, clearPlanTimer, updateCurrentSessionPlans, workspacePath]
@@ -239,7 +304,7 @@ export function usePlanApproval({
 
   const handleApprovePlan = useCallback(async () => {
     clearPlanTimer()
-    if (!currentPlan) return
+    if (!currentPlan || currentPlan.status !== 'ready') return
     const approved: AgentPlan = { ...currentPlan, status: 'approved' }
     updateCurrentSessionPlans((prev) => {
       const copy = [...prev]
@@ -273,7 +338,7 @@ export function usePlanApproval({
       const copy = [...prev]
       const idx = copy.findIndex((p) => p.id === currentPlan.id)
       if (idx >= 0) {
-        copy[idx] = { ...copy[idx], status: 'rejected' }
+        copy[idx] = { ...copy[idx], status: 'cancelled' }
       }
       return copy
     })
@@ -319,7 +384,7 @@ export function usePlanApproval({
     async (prompt: string, targetModel?: string, currentStep: number = 0): Promise<AgentPlan | null> => {
       clearPlanTimer()
       setIsAutoProceedPaused(false)
-      pendingFlowRef.current = { prompt, targetModel, currentStep }
+      pendingFlowRef.current = { prompt, targetModel, currentStep, questions: [] }
 
       // Check if pre-flight interview is supported and enabled
       if (window.electronAPI?.agentPlanInterview && settings && settings.enablePrePlanInterview !== false) {
@@ -329,7 +394,44 @@ export function usePlanApproval({
           const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings)
           setIsAnalyzingInterview(false)
 
+          if (interviewRes?.status === 'error') {
+            const failedPlan: AgentPlan = {
+              id: `plan_${Date.now()}`,
+              version: planHistoryRef.current.length + 1,
+              prompt,
+              originalPrompt: prompt,
+              interviewAnswers: [],
+              planText: interviewRes.rawResponse?.trim() || '',
+              status: 'error',
+              createdAt: new Date().toISOString(),
+              baseStepOffset: currentStep,
+              errorPhase: 'interview',
+              errorMessage: interviewRes.error || 'Intervista preliminare non completata',
+            }
+            updateCurrentSessionPlans((prev) => [...prev, failedPlan])
+            setActivePlanIndex(planHistoryRef.current.length)
+            return failedPlan
+          }
+
+          if (interviewRes?.status === 'cancelled') {
+            const cancelledPlan: AgentPlan = {
+              id: `plan_${Date.now()}`,
+              version: planHistoryRef.current.length + 1,
+              prompt,
+              originalPrompt: prompt,
+              interviewAnswers: [],
+              planText: interviewRes.rawResponse?.trim() || '',
+              status: 'cancelled',
+              createdAt: new Date().toISOString(),
+              baseStepOffset: currentStep,
+            }
+            updateCurrentSessionPlans((prev) => [...prev, cancelledPlan])
+            setActivePlanIndex(planHistoryRef.current.length)
+            return cancelledPlan
+          }
+
           if (interviewRes?.hasQuestions && interviewRes.questions && interviewRes.questions.length > 0) {
+            pendingFlowRef.current = { prompt, targetModel, currentStep, questions: interviewRes.questions }
             setInterviewQuestions(interviewRes.questions)
             setIsInterviewActive(true)
             soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
@@ -338,12 +440,28 @@ export function usePlanApproval({
         } catch (err: any) {
           logger.warn('usePlanApproval', `agentPlanInterview failed: ${err?.message}`)
           setIsAnalyzingInterview(false)
+          const failedPlan: AgentPlan = {
+            id: `plan_${Date.now()}`,
+            version: planHistoryRef.current.length + 1,
+            prompt,
+            originalPrompt: prompt,
+            interviewAnswers: [],
+            planText: '',
+            status: 'error',
+            createdAt: new Date().toISOString(),
+            baseStepOffset: currentStep,
+            errorPhase: 'interview',
+            errorMessage: err?.message || 'Intervista preliminare non disponibile',
+          }
+          updateCurrentSessionPlans((prev) => [...prev, failedPlan])
+          setActivePlanIndex(planHistoryRef.current.length)
+          return failedPlan
         }
       }
 
       setIsInterviewActive(false)
       setInterviewQuestions([])
-      return generatePlan(prompt, targetModel, currentStep)
+      return generatePlan(prompt, targetModel, currentStep, { originalPrompt: prompt, answers: [] })
     },
     [clearPlanTimer, generatePlan, settings]
   )
@@ -355,27 +473,38 @@ export function usePlanApproval({
       const pending = pendingFlowRef.current
       if (!pending) return
 
-      let effectivePrompt = pending.prompt
-      if (window.electronAPI?.agentPlanEnrichPrompt && answers.length > 0) {
-        try {
-          effectivePrompt = await window.electronAPI.agentPlanEnrichPrompt(pending.prompt, answers)
-        } catch (err: any) {
-          logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message}`)
-        }
-      }
+      const effectivePrompt = await resolveInterviewPrompt(
+        pending.prompt,
+        answers,
+        window.electronAPI?.agentPlanEnrichPrompt,
+        (err: any) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message || String(err)}`)
+      )
 
-      return generatePlan(effectivePrompt, pending.targetModel, pending.currentStep)
+      return generatePlan(effectivePrompt, pending.targetModel, pending.currentStep, {
+        originalPrompt: pending.prompt,
+        answers,
+      })
     },
     [generatePlan]
   )
 
   const skipInterviewWithRecommended = useCallback(() => {
-    setIsInterviewActive(false)
-    setInterviewQuestions([])
     const pending = pendingFlowRef.current
     if (!pending) return
-    return generatePlan(pending.prompt, pending.targetModel, pending.currentStep)
-  }, [generatePlan])
+    return confirmInterviewAnswers(createAcceptedRecommendationAnswers(pending.questions))
+  }, [confirmInterviewAnswers])
+
+  const retryCurrentPlan = useCallback(() => {
+    if (!currentPlan || currentPlan.status !== 'error') return
+    const originalPrompt = currentPlan.originalPrompt || currentPlan.prompt
+    if (currentPlan.errorPhase === 'interview') {
+      return startPlanFlow(originalPrompt, undefined, currentPlan.baseStepOffset || 0)
+    }
+    return generatePlan(currentPlan.prompt, undefined, currentPlan.baseStepOffset || 0, {
+      originalPrompt,
+      answers: currentPlan.interviewAnswers || [],
+    })
+  }, [currentPlan, generatePlan, startPlanFlow])
 
   return {
     currentPlan,
@@ -394,6 +523,7 @@ export function usePlanApproval({
     isAnalyzingInterview,
     confirmInterviewAnswers,
     skipInterviewWithRecommended,
+    retryCurrentPlan,
     handleApprovePlan,
     handleRejectPlan,
     handleUpdatePlanText,

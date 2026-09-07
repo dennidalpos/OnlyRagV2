@@ -181,7 +181,12 @@ export class AgentSessionStateRepository {
   ): Promise<boolean> {
     const existing = await this.loadSessionState(sessionId, workspacePath)
     const state: SavedAgentSessionState = existing
-      ? { ...existing, planMilestones, updatedAt: new Date().toISOString() }
+      ? {
+          ...existing,
+          planMilestones,
+          ...(userTask !== undefined ? { userTask } : {}),
+          updatedAt: new Date().toISOString(),
+        }
       : {
           sessionId,
           workspacePath,

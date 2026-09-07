@@ -27,10 +27,12 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
   // State maps question.id -> custom text input
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({})
   const [activeCustomIds, setActiveCustomIds] = useState<Record<string, boolean>>({})
+  const [explicitSelectionIds, setExplicitSelectionIds] = useState<Record<string, boolean>>({})
 
   const handleSelectOption = (questionId: string, option: string) => {
     setSelectedOptions((prev) => ({ ...prev, [questionId]: option }))
     setActiveCustomIds((prev) => ({ ...prev, [questionId]: false }))
+    setExplicitSelectionIds((prev) => ({ ...prev, [questionId]: true }))
   }
 
   const handleCustomChange = (questionId: string, value: string) => {
@@ -49,6 +51,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
         questionText: q.question,
         selectedOption: chosen,
         isCustom,
+        provenance: isCustom || explicitSelectionIds[q.id] ? 'explicit' : 'accepted_recommendation',
       }
     })
     onConfirm(answers)

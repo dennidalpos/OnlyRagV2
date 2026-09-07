@@ -52,7 +52,7 @@ export function extractExecutedPromptsFromLogs(
     }))
 }
 
-const PLAN_STATUSES: AgentPlan['status'][] = ['idle', 'generating', 'ready', 'approved', 'rejected']
+const PLAN_STATUSES: AgentPlan['status'][] = ['idle', 'generating', 'ready', 'approved', 'rejected', 'error', 'cancelled']
 
 function normalizePlan(raw: any, fallbackTimestamp: string): AgentPlan | null {
   if (!raw || typeof raw.id !== 'string' || typeof raw.planText !== 'string') return null
@@ -60,8 +60,12 @@ function normalizePlan(raw: any, fallbackTimestamp: string): AgentPlan | null {
     id: raw.id,
     version: Number.isFinite(raw.version) ? Number(raw.version) : 1,
     prompt: typeof raw.prompt === 'string' ? raw.prompt : '',
+    originalPrompt: typeof raw.originalPrompt === 'string' ? raw.originalPrompt : undefined,
+    interviewAnswers: Array.isArray(raw.interviewAnswers) ? raw.interviewAnswers : undefined,
     planText: raw.planText,
     status: PLAN_STATUSES.includes(raw.status) ? raw.status : 'ready',
+    errorPhase: raw.errorPhase === 'interview' || raw.errorPhase === 'planning' ? raw.errorPhase : undefined,
+    errorMessage: typeof raw.errorMessage === 'string' ? raw.errorMessage : undefined,
     createdAt: toIsoTimestamp(raw.createdAt, fallbackTimestamp),
     baseStepOffset: Number.isFinite(raw.baseStepOffset) ? Number(raw.baseStepOffset) : undefined,
     milestones: Array.isArray(raw.milestones) ? raw.milestones : undefined,

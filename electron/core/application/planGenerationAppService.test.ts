@@ -87,13 +87,44 @@ describe('PlanGenerationAppService', () => {
     expect(promptArg).not.toContain('CONTESTO DI RICONCILIAZIONE')
   })
 
-  it('should fall back to a generic plan when the sidecar/Ollama call fails or returns nothing', async () => {
+  it('returns an explicit non-executable error instead of a generic plan when generation fails', async () => {
     vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'connection refused' })
 
     const result = await planGenerationAppService.generatePlanText({ prompt: 'Refactor the auth module', settings })
 
-    expect(result.planText).toContain('Refactor the auth module')
-    expect(result.milestones.length).toBeGreaterThanOrEqual(2)
+    expect(result).toEqual({
+      status: 'error',
+      planText: '',
+      milestones: [],
+      error: 'connection refused',
+    })
+  })
+
+  it('retains a partial draft as diagnostic evidence while marking it non-executable', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+      onChunk('- [ ] Partial auth change — `src/auth.ts`')
+      return { success: false, error: 'stream interrupted' }
+    })
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Refactor auth', settings })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('stream interrupted')
+    expect(result.planText).toContain('Partial auth change')
+    expect(result.milestones).toHaveLength(1)
+  })
+
+  it('rejects a successful transport response that contains no executable milestones', async () => {
+    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
+      onChunk('I would first think about the architecture.')
+      return { success: true }
+    })
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Refactor auth', settings })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Plan response contained no executable milestones')
+    expect(result.planText).toContain('think about the architecture')
   })
 
   it('should use the explicit model override when provided instead of settings.codingModel', async () => {
@@ -252,23 +283,14 @@ describe('PlanGenerationAppService', () => {
       expect(isCompletionMilestoneTitle(result.milestones[1].title)).toBe(false)
     })
 
-    it('ships a fallback plan in the shape it asks the planner for', async () => {
+    it('does not turn a failed generation into executable fallback milestones', async () => {
       vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'offline' })
 
       const result = await planGenerationAppService.generatePlanText({ prompt: 'Crea una todo app', settings })
 
-      const operational = result.milestones.filter((m) => !isCompletionMilestoneTitle(m.title))
-      expect(operational.length).toBeGreaterThan(0)
-      for (const milestone of operational) {
-        // Every operational entry names a real file, so none of them is unprovable, and none
-        // names a bare directory — the shape that cost seven steps in the run of §5.4.
-        const deliverables = extractDeliverablePaths(milestone.title)
-        expect(deliverables.length).toBeGreaterThan(0)
-        expect(deliverables.some((d) => d.endsWith('/'))).toBe(false)
-      }
-      // No workspace was given, so no command could be resolved: the fallback must not invent one.
-      expect(result.milestones.every((m) => !m.verificationCommand)).toBe(true)
-      expect(result.planText).not.toContain('npm run build')
+      expect(result.status).toBe('error')
+      expect(result.milestones).toEqual([])
+      expect(result.planText).toBe('')
     })
   })
 })

@@ -692,9 +692,11 @@ export interface InterviewQuestion {
 }
 
 export interface InterviewAnalysisResult {
+  status: 'completed' | 'clarification_required' | 'error' | 'cancelled'
   hasQuestions: boolean
   questions: InterviewQuestion[]
   rawResponse?: string
+  error?: string
 }
 
 export interface UserInterviewAnswer {
@@ -702,6 +704,8 @@ export interface UserInterviewAnswer {
   questionText: string
   selectedOption: string
   isCustom?: boolean
+  /** How this decision entered the plan; omitted legacy values are explicit answers. */
+  provenance?: 'explicit' | 'accepted_recommendation' | 'unconfirmed_assumption'
 }
 
 // ---------------------------------------------------------------------------
@@ -716,8 +720,14 @@ export interface AgentPlan {
   id: string
   version: number
   prompt: string
+  /** Exact request entered before the interview; `prompt` is the effective execution prompt. */
+  originalPrompt?: string
+  /** Structured decisions retained independently from the rendered prompt. */
+  interviewAnswers?: UserInterviewAnswer[]
   planText: string
-  status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected'
+  status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected' | 'error' | 'cancelled'
+  errorPhase?: 'interview' | 'planning'
+  errorMessage?: string
   /** ISO 8601 timestamp. */
   createdAt: string
   baseStepOffset?: number
@@ -735,8 +745,10 @@ export interface PlanMilestone {
 }
 
 export interface PlanGenerationResult {
+  status: 'success' | 'error'
   planText: string
   milestones: PlanMilestone[]
+  error?: string
 }
 
 export interface AgentPlanState {

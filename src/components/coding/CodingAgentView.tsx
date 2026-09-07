@@ -50,9 +50,9 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
     workspacePath: c.workspacePath,
     sessionPlans: c.activeSessionPlans,
     onSessionPlansChange: c.updateActiveSessionPlans,
-    onPlanApproved: (_approvedPlan) => {
+    onPlanApproved: (approvedPlan) => {
       c.setAgentMode('agent')
-      c.handleAgentExecute(undefined, 'agent')
+      c.handleAgentExecute(approvedPlan.prompt, 'agent')
     },
   })
 
@@ -313,6 +313,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
                 isAnalyzingInterview={planApproval.isAnalyzingInterview}
                 onConfirmInterview={planApproval.confirmInterviewAnswers}
                 onSkipInterview={planApproval.skipInterviewWithRecommended}
+                onRetry={planApproval.retryCurrentPlan}
                 onApprove={planApproval.handleApprovePlan}
                 onReject={planApproval.handleRejectPlan}
                 onTogglePauseAutoProceed={() => planApproval.setIsAutoProceedPaused(!planApproval.isAutoProceedPaused)}

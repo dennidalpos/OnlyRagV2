@@ -343,10 +343,12 @@ const report = await analyzeLogs()
 
 | Canale IPC | `electronAPI` Method | Input | Output | Descrizione |
 | :--- | :--- | :--- | :--- | :--- |
-| `agent:plan-generate` | `agentPlanGenerate(prompt, model, settings, pendingResidueMilestones?)` | prompt/model/settings + milestone residui opzionali | `{ planText: string; milestones: PlanMilestone[] }` | Genera un piano applicando la preferenza `modelContextLengths` entro il tetto hardware, parsato dal parser canonico `GoalDecompositionPlanner`. I milestone residui non verificati del piano precedente vengono inclusi come contesto di riconciliazione. |
+| `agent:plan-interview` | `agentPlanInterview(prompt, model, settings)` | prompt/model/settings | `{ status; hasQuestions; questions; rawResponse?; error? }` | Distingue analisi completata, chiarimenti richiesti, errore e annullamento; un errore di trasporto o formato non equivale a “nessuna domanda”. |
+| `agent:plan-enrich-prompt` | `agentPlanEnrichPrompt(prompt, answers)` | richiesta originale + decisioni con provenienza | `string` | Compone deterministicamente richiesta e decisioni esplicite, raccomandazioni accettate o assunzioni non confermate. |
+| `agent:plan-generate` | `agentPlanGenerate(prompt, model, settings, pendingResidueMilestones?, workspacePath?)` | prompt/model/settings + milestone residui e workspace opzionali | `{ status: 'success' \| 'error'; planText; milestones; error? }` | Genera un piano applicando la preferenza `modelContextLengths` entro il tetto hardware, parsato dal parser canonico `GoalDecompositionPlanner`. Errori e bozze parziali sono espliciti e non eseguibili. |
 | `agent:plan-parse-text` | `agentPlanParseText(planText)` | `planText: string` | `PlanMilestone[]` | Ri-parsa testo di piano (es. modificato manualmente) con lo stesso parser canonico usato in generazione. |
 | `agent:get-plan-state` | `agentGetPlanState(sessionId, workspacePath?)` | `sessionId`, `workspacePath?` | `{ planMilestones: PlanMilestone[]; status?; stepCount } \| null` | Legge lo stato dei milestone persistito dal backend (`GoalDecompositionPlanner`, unica fonte di verità) per una sessione. |
-| `agent:plan-seed` | `agentPlanSeed(sessionId, workspacePath, planMilestones, userTask?)` | `sessionId`, `workspacePath`, milestone approvati, `userTask?` | `boolean` | Inietta i milestone di un piano approvato nello stato di sessione persistito prima dell'avvio dell'esecuzione, cosicché il loop agentico li carichi come stato iniziale. |
+| `agent:plan-seed` | `agentPlanSeed(sessionId, workspacePath, planMilestones, userTask?)` | `sessionId`, `workspacePath`, milestone approvati, task effettivo opzionale | `boolean` | Inietta milestone e task effettivo approvati nello stato di sessione persistito prima dell'avvio, aggiornandoli anche per una sessione esistente. |
 
 #### Matrice Completa dei 27 Strumenti Agentici Supportati
 

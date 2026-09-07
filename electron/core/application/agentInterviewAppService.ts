@@ -14,27 +14,15 @@ import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
-import type { AppSettings } from '../../../shared/types'
+import type {
+  AppSettings,
+  InterviewAnalysisResult,
+  InterviewQuestion,
+  UserInterviewAnswer,
+} from '../../../shared/types'
+import { composeInterviewDecisionPrompt } from '../../../shared/domain/agent/interviewDecisionContext'
 
-export interface InterviewQuestion {
-  id: string
-  question: string
-  options: string[]
-  recommendedIndex: number
-}
-
-export interface InterviewAnalysisResult {
-  hasQuestions: boolean
-  questions: InterviewQuestion[]
-  rawResponse?: string
-}
-
-export interface UserInterviewAnswer {
-  questionId: string
-  questionText: string
-  selectedOption: string
-  isCustom?: boolean
-}
+export type { InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
 const INTERVIEW_SYSTEM_PROMPT = `You are an expert AI Software Architect. Your job is to analyze the user's coding request before formulating an implementation plan.
 
@@ -102,22 +90,32 @@ export class AgentInterviewAppService {
 
       if (!res.success) {
         logger.log('WARN', 'AgentInterviewAppService', `Interview generation failed: ${res.error}`)
-        return { hasQuestions: false, questions: [] }
+        return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: res.error || 'Interview generation failed' }
       }
 
       const repaired = this.extractAndRepairJson(accumulated)
       if (!repaired) {
         logger.log('WARN', 'AgentInterviewAppService', `Could not extract or repair valid JSON from model output: ${accumulated}`)
-        return { hasQuestions: false, questions: [] }
+        return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: 'Invalid interview response' }
       }
 
       const parsed = JSON.parse(repaired)
       if (typeof parsed !== 'object' || parsed === null) {
-        return { hasQuestions: false, questions: [] }
+        return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: 'Interview response is not an object' }
       }
 
-      if (!parsed.hasQuestions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
-        return { hasQuestions: false, questions: [] }
+      if (parsed.hasQuestions === false && Array.isArray(parsed.questions) && parsed.questions.length === 0) {
+        return { status: 'completed', hasQuestions: false, questions: [], rawResponse: accumulated }
+      }
+
+      if (parsed.hasQuestions !== true || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+        return {
+          status: 'error',
+          hasQuestions: false,
+          questions: [],
+          rawResponse: accumulated,
+          error: 'Interview response does not match the required result shape',
+        }
       }
 
       const validatedQuestions: InterviewQuestion[] = []
@@ -141,13 +139,15 @@ export class AgentInterviewAppService {
       }
 
       return {
+        status: validatedQuestions.length > 0 ? 'clarification_required' : 'error',
         hasQuestions: validatedQuestions.length > 0,
         questions: validatedQuestions,
         rawResponse: accumulated,
+        ...(validatedQuestions.length === 0 ? { error: 'Interview response contained no valid questions' } : {}),
       }
     } catch (parseErr: any) {
       logger.log('WARN', 'AgentInterviewAppService', `Failed to parse interview response: ${parseErr.message}`)
-      return { hasQuestions: false, questions: [] }
+      return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: parseErr.message }
     }
   }
 
@@ -181,17 +181,7 @@ export class AgentInterviewAppService {
    * Enriches the original user prompt with the confirmed interview answers.
    */
   enrichPromptWithAnswers(originalPrompt: string, answers: UserInterviewAnswer[]): string {
-    if (!answers || answers.length === 0) return originalPrompt
-
-    const formattedChoices = answers
-      .map((a) => `- ${a.questionText}: ${a.selectedOption}${a.isCustom ? ' (Custom)' : ''}`)
-      .join('\n')
-
-    return (
-      `${originalPrompt.trim()}\n\n` +
-      `[CONFIRMED USER ARCHITECTURAL DECISIONS]\n` +
-      `${formattedChoices}`
-    )
+    return composeInterviewDecisionPrompt(originalPrompt, answers || [])
   }
 }
 

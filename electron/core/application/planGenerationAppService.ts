@@ -24,7 +24,7 @@ import { discoverProjectProfile } from '../infrastructure/filesystem/projectProf
 import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type { AppSettings } from '../../../shared/types'
+import type { AppSettings, PlanGenerationResult } from '../../../shared/types'
 
 // The exact line format below is mandatory, not stylistic: GoalDecompositionPlanner.parsePlanFromText
 // (planAndSolveGraph.ts) recognizes "- [ ] text" / "N. text" lines and nested sub-bullets.
@@ -67,36 +67,6 @@ const PLAN_SYSTEM_PROMPT =
   '7. CRITICAL LANGUAGE DIRECTIVE: Write the step titles and descriptions in the EXACT same language used by the user in their prompt (e.g. Italian if the user prompt is in Italian, English if English, French if French, etc.).\n' +
   'Output ONLY the markdown checklist lines. No conversational preambles, notes or explanations outside the checklist.'
 
-/**
- * The plan used when the model returns nothing at all. It is also a template: the user reads it
- * in the approval dialog, so it has to demonstrate the shape rule 1 asks for.
- *
- * Three traps from the measured runs are avoided here on purpose. It names no bare directory
- * (`src/` carries no extension, so `extractDeliverablePaths` finds nothing and the milestone
- * becomes unprovable — seven wasted steps in the run of blueprint §5.4). It invents no
- * verification command: `ensureRunnableMilestone` appends the project's own check when the
- * project declares one, and inventing `npm run build` for a workspace that does not declare it
- * is the fabricated proof this codebase keeps removing. And it carries no "analyse the
- * workspace" step: nothing on disk can show that it happened.
- */
-const FALLBACK_PLAN_TEXT = (prompt: string, hasExistingProject: boolean = false) => {
-  if (hasExistingProject) {
-    return (
-      `🎯 Piano di Esecuzione per: ${prompt}\n\n` +
-      '- [ ] ✏️ m-1: Le modifiche richieste dal task sono implementate nei file del progetto\n' +
-      '- [ ] 🛑 m-2: Riepilogo finale dei requisiti e arresto dell agente (invoke "finish")'
-    )
-  }
-  return (
-    `🎯 Piano di Esecuzione a Microtask per: ${prompt}\n\n` +
-    '- [ ] 📦 m-1: Il progetto dichiara le proprie dipendenze e i propri script — `package.json`\n' +
-    '- [ ] 🧩 m-2: La pagina carica lo script di ingresso dell applicazione — `index.html`\n' +
-    '- [ ] 🔌 m-3: Lo script di ingresso monta il componente radice nella pagina — `src/main.tsx`\n' +
-    '- [ ] 🖼️ m-4: L applicazione mostra il proprio layout e i contenuti richiesti — `src/App.tsx`\n' +
-    '- [ ] 🛑 m-5: Riepilogo finale dei requisiti e arresto dell agente (invoke "finish")'
-  )
-}
-
 export interface PlanGenerationRequest {
   prompt: string
   model?: string
@@ -113,11 +83,6 @@ export interface PlanGenerationRequest {
    * commands, so the plan declares proofs the Definition of Done gate can actually execute.
    */
   workspacePath?: string | null
-}
-
-export interface PlanGenerationResult {
-  planText: string
-  milestones: PlanMilestone[]
 }
 
 /**
@@ -212,6 +177,7 @@ export class PlanGenerationAppService {
       `${PLAN_SYSTEM_PROMPT}${verificationBlock}\n\nGenera un piano d'azione sintetico per il seguente task:\n\n${req.prompt}${residueBlock}`
 
     let accumulated = ''
+    let generationError: string | undefined
     try {
       const res = await ollamaAppService.generateStream(
         model,
@@ -221,15 +187,21 @@ export class PlanGenerationAppService {
         { num_ctx: runtimeOpts.num_ctx, temperature: runtimeOpts.temperature }
       )
       if (!res.success) {
-        logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${res.error}`)
+        generationError = res.error || 'Plan generation failed'
+        logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
       }
     } catch (err: any) {
+      generationError = err.message || 'Plan generation threw'
       logger.log('WARN', 'PlanGenerationAppService', `Plan generation threw: ${err.message}`)
     }
 
     const manifest = readWorkspaceManifest(req.workspacePath)
     const hasExistingProject = manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
-    const planText = accumulated.trim() || FALLBACK_PLAN_TEXT(req.prompt, hasExistingProject)
+    const planText = accumulated.trim()
+    if (!generationError && !planText) {
+      generationError = 'Plan generation returned an empty response'
+      logger.log('WARN', 'PlanGenerationAppService', generationError)
+    }
     const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(planText)
     const profile = req.workspacePath ? discoverProjectProfile(req.workspacePath) : null
     const verification = profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined
@@ -238,6 +210,10 @@ export class PlanGenerationAppService {
       verification,
       resolveScaffoldFacts(req.workspacePath, manifest, hasExistingProject)
     )
+    if (!generationError && milestones.length === 0) {
+      generationError = 'Plan response contained no executable milestones'
+      logger.log('WARN', 'PlanGenerationAppService', generationError)
+    }
     if (milestones.length < parsedMilestones.length) {
       logger.log(
         'INFO',
@@ -248,7 +224,9 @@ export class PlanGenerationAppService {
     if (req.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logPlanGeneration('plan-flow', req.prompt, milestones.length, 'plan')
     }
-    return { planText, milestones }
+    return generationError
+      ? { status: 'error', planText, milestones, error: generationError }
+      : { status: 'success', planText, milestones }
   }
 
   /**

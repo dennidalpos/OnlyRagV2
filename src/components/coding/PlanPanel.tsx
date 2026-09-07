@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { CheckCircle2, XCircle, Loader2, Sparkles, Copy, Check } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Sparkles, Copy, Check, RotateCcw, TriangleAlert } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
 import type { InterviewQuestion, UserInterviewAnswer } from '../../types'
 import { parsePlanChecklist } from './planChecklistParser'
@@ -25,6 +25,7 @@ interface PlanPanelProps {
   isAnalyzingInterview?: boolean
   onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
   onSkipInterview?: () => void
+  onRetry?: () => void
   onApprove: () => void
   onReject: () => void
   onTogglePauseAutoProceed: () => void
@@ -47,6 +48,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   isAnalyzingInterview = false,
   onConfirmInterview,
   onSkipInterview,
+  onRetry,
   onApprove,
   onReject,
   onTogglePauseAutoProceed,
@@ -151,6 +153,31 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
             <p className="text-[11px] text-slate-400 max-w-xs">
               Invia un prompt dall'editor per generare un piano d'azione e approvarlo prima dell'esecuzione.
             </p>
+          </div>
+        ) : plan.status === 'error' ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+            <TriangleAlert className="w-8 h-8 text-rose-400" />
+            <div className="font-bold text-rose-200 text-xs">
+              {plan.errorPhase === 'interview' ? 'Intervista non completata' : 'Pianificazione non completata'}
+            </div>
+            <p className="text-[11px] text-slate-400 max-w-md">{plan.errorMessage}</p>
+            <pre className="w-full max-w-2xl max-h-40 overflow-auto text-left whitespace-pre-wrap p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-300">
+              {formattedPrompt || plan.prompt}
+            </pre>
+            {plan.planText && (
+              <pre className="w-full max-w-2xl max-h-48 overflow-auto text-left whitespace-pre-wrap p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
+                {plan.planText}
+              </pre>
+            )}
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-semibold rounded-xl flex items-center gap-2"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Riprova conservando richiesta e decisioni
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

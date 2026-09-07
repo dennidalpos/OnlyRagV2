@@ -143,11 +143,15 @@ export async function seedGeneratedPlan(args: {
 
   if (policy !== 'skip') {
     const interview = await agentInterviewAppService.conductInterview(args.userTask, model, args.settings)
+    if (interview.status === 'error') {
+      throw new Error(`Pre-plan interview failed: ${interview.error || 'unknown error'}`)
+    }
     questions = interview.questions
     answers = questions.map((q) => ({
       questionId: q.id,
       questionText: q.question,
       selectedOption: q.options[q.recommendedIndex],
+      provenance: 'accepted_recommendation',
     }))
     effectivePrompt = agentInterviewAppService.enrichPromptWithAnswers(args.userTask, answers)
   }
@@ -158,6 +162,9 @@ export async function seedGeneratedPlan(args: {
     settings: args.settings,
     workspacePath: args.workspacePath,
   })
+  if (plan.status === 'error') {
+    throw new Error(`Plan generation failed: ${plan.error || 'unknown error'}`)
+  }
 
   // The ENRICHED prompt is seeded as the session's task, not the original: the orchestrator
   // replays it every turn, and a plan drafted against decisions the agent never sees would

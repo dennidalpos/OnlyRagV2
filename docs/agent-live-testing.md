@@ -57,6 +57,8 @@ Ognuna produce un run che sembra funzionare e non prova nulla.
 
 Saltare invece i **primi due** passi è più insidioso, perché il run sembra funzionare: il piano c'è, i guard operano, e nessuno si accorge che il planner ha ricevuto il prompt grezzo. È quello che l'harness ha fatto fino al 2026-08-24, e nei run osservati il modello si è inventato router, setup postcss e struttura delle cartelle — esattamente le scelte che l'intervista esiste per fissare prima che venga redatta una milestone. `seedGeneratedPlan()` ora replica tutti e quattro i passi, rispondendo a ogni domanda con l'opzione che il modello stesso ha marcato come consigliata (`interviewPolicy: 'recommended'`, il default). `interviewPolicy: 'skip'` riproduce il vecchio comportamento, e serve solo a isolare la differenza fra i due.
 
+Un errore di trasporto, parsing o forma nell'intervista o nella generazione interrompe ora l'harness con un esito esplicito. Non viene più trasformato in “nessuna domanda” o in un piano fallback generico: una bozza parziale resta evidenza diagnostica, ma non è eseguibile.
+
 **Un file live sotto `electron/**` viene raccolto dalla suite normale.** Il pattern `include` di `vitest.config.mts` è `electron/**/*.test.{ts,tsx}`. Un harness lasciato lì gira dentro `npm run lint`, dura minuti, e con `isolate: false` smonta le directory temporanee che altri test stanno ancora usando: 29 fallimenti fantasma, tutti attribuiti — sul momento — alla modifica in esame. Per questo gli scenari stanno in `scripts/live/`, si chiamano `*.live.ts` e hanno una config dedicata.
 
 ## 5. Progettare uno scenario che prova qualcosa

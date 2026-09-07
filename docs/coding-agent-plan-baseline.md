@@ -33,8 +33,8 @@ Observed on 2026-09-07:
 
 | Evidence | Result | Meaning |
 | :--- | :--- | :--- |
-| Fast repository suite | 213 files, 1,824 tests passed | Deterministic repository baseline. |
-| Focused Plan/interview suite | 4 files, 25 tests passed | Current reproducible successor to the historical 4/24 observation. |
+| Fast repository suite | 213 files, 1,833 tests passed | Deterministic repository baseline after CAS-02 and CAS-03. |
+| Focused Plan/interview suite | 4 files, 37 tests passed | Current reproducible suite, including recommendation, enrichment-failure, explicit-error, partial-draft and retry regressions. |
 | Live pre-seeded workspace | 1 passed, 9 skipped; 7.75 s test time | Real `qwen2.5-coder:7b` planning preserved the existing `npm run build` verification and did not add a `package.json` milestone. |
 
 The live probe used `interviewPolicy: 'skip'`; it does not prove recommendation acceptance or end-to-end agent execution.

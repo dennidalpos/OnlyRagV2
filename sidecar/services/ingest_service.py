@@ -11,7 +11,7 @@ import pymupdf
 from sidecar.config import DOCS_TABLE_NAME, CHUNKS_TABLE_NAME, EXPORT_DIR, logger
 from sidecar.schemas import IngestResponse, PagePreviewResponse
 from sidecar.infrastructure.db import lance_db, get_existing_tables, validate_doc_id, append_records
-from sidecar.infrastructure.embeddings import generate_embedding, generate_embedding_with_status
+from sidecar.infrastructure.embeddings import generate_embeddings_with_status
 from sidecar.domain.sanitizer import sanitize_extracted_text
 from sidecar.domain.vision_prompt import is_vision_ocr_requested
 from sidecar.domain.ingestion import (
@@ -74,12 +74,9 @@ def process_and_index_document(
 
     # Parallel embedding computation with fallback tracking
     chunk_records: List[Dict[str, Any]] = []
-    used_fallback_embeddings = False
-
-    def embed_chunk(item):
-        idx, text, sec_header = item
-        vec, is_fallback = generate_embedding_with_status(text)
-        return {
+    vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
+    for (idx, text, sec_header), vec in zip(raw_chunks, vectors):
+        chunk_records.append({
             "vector": vec,
             "chunk_id": f"{doc_id}_chunk_{idx}",
             "doc_id": doc_id,
@@ -89,16 +86,7 @@ def process_and_index_document(
             "section_header": sec_header,
             "file_type": ext,
             "ingested_at": ingested_at,
-            "is_fallback": is_fallback,
-        }
-
-    with ThreadPoolExecutor(max_workers=min(4, max(1, len(raw_chunks)))) as executor:
-        raw_embedded = list(executor.map(embed_chunk, raw_chunks))
-
-    for rec in raw_embedded:
-        if rec.pop("is_fallback", False):
-            used_fallback_embeddings = True
-        chunk_records.append(rec)
+        })
 
     doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
@@ -314,13 +302,10 @@ def process_and_index_document_generator(
         ext = os.path.splitext(filename)[1].lower().replace(".", "") or "text"
 
         chunk_records: List[Dict[str, Any]] = []
-        used_fallback_embeddings = False
+        vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
 
-        for c_idx, item in enumerate(raw_chunks):
+        for c_idx, (item, vec) in enumerate(zip(raw_chunks, vectors)):
             idx, text, sec_header = item
-            vec, is_fallback = generate_embedding_with_status(text)
-            if is_fallback:
-                used_fallback_embeddings = True
             chunk_records.append({
                 "vector": vec,
                 "chunk_id": f"{doc_id}_chunk_{idx}",
@@ -455,12 +440,9 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
     updated_at = datetime.datetime.now().isoformat()
 
     chunk_records: List[Dict[str, Any]] = []
-    used_fallback_embeddings = False
-
-    def embed_chunk(item):
-        idx, text, sec_header = item
-        vec, is_fallback = generate_embedding_with_status(text)
-        return {
+    vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
+    for (idx, text, sec_header), vec in zip(raw_chunks, vectors):
+        chunk_records.append({
             "vector": vec,
             "chunk_id": f"{doc_id}_chunk_{idx}",
             "doc_id": doc_id,
@@ -470,16 +452,7 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
             "section_header": sec_header,
             "file_type": file_type,
             "ingested_at": updated_at,
-            "is_fallback": is_fallback,
-        }
-
-    with ThreadPoolExecutor(max_workers=min(4, max(1, len(raw_chunks)))) as executor:
-        raw_embedded = list(executor.map(embed_chunk, raw_chunks))
-
-    for rec in raw_embedded:
-        if rec.pop("is_fallback", False):
-            used_fallback_embeddings = True
-        chunk_records.append(rec)
+        })
 
     doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 

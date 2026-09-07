@@ -89,7 +89,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                       {(doc.status === 'indexed_fallback' || doc.usedFallbackEmbeddings) && (
                         <span
                           className="px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-[9px] text-amber-300 font-semibold flex items-center gap-1 shrink-0"
-                          title="Vettori BM25 Fallback (Ollama offline durante l'ingestione)"
+                          title="Vettori di fallback (modello di embedding non disponibile o richiesta non riuscita)"
                         >
                           <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
                           Fallback

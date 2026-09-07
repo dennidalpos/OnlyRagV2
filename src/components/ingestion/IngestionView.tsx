@@ -774,7 +774,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(({ setting
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>
-                  <strong>Vettorizzazione in modalità Fallback:</strong> Questo documento è indicizzato con vettori base perché Ollama non era attivo durante l'ingestione.
+                  <strong>Vettorizzazione in modalità fallback:</strong> Questo documento è stato indicizzato con vettori di emergenza perché il modello di embedding non era disponibile o la richiesta non è riuscita durante l'ingestione.
                 </span>
               </div>
               <button

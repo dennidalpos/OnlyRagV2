@@ -29,14 +29,24 @@ import sidecar.infrastructure.embeddings as embeddings_module  # noqa: E402
 @pytest.fixture(autouse=True)
 def fast_fallback_embeddings(monkeypatch):
     """Ensure unit and regression tests run instantly using deterministic embeddings without external network timeouts."""
+    from sidecar.services import ingest_service as ingest_service_module
+
     def fake_generate_embedding_with_status(text, model="nomic-embed-text", ollama_url="http://127.0.0.1:11434"):
         return embeddings_module.get_fallback_embedding(text, dim=embeddings_module.EMBEDDING_DIM), False
 
     def fake_generate_embedding(text, model="nomic-embed-text", ollama_url="http://127.0.0.1:11434"):
         return embeddings_module.get_fallback_embedding(text, dim=embeddings_module.EMBEDDING_DIM)
 
+    def fake_generate_embeddings_with_status(texts, model="nomic-embed-text", ollama_url="http://127.0.0.1:11434"):
+        return [
+            embeddings_module.get_fallback_embedding(text, dim=embeddings_module.EMBEDDING_DIM)
+            for text in texts
+        ], False
+
     monkeypatch.setattr(embeddings_module, "generate_embedding_with_status", fake_generate_embedding_with_status)
     monkeypatch.setattr(embeddings_module, "generate_embedding", fake_generate_embedding)
+    monkeypatch.setattr(embeddings_module, "generate_embeddings_with_status", fake_generate_embeddings_with_status)
+    monkeypatch.setattr(ingest_service_module, "generate_embeddings_with_status", fake_generate_embeddings_with_status)
 
 
 @pytest.fixture(autouse=True)

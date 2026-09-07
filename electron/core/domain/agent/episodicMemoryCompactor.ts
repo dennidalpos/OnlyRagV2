@@ -89,20 +89,8 @@ export class EpisodicMemoryCompactor {
     }
 
     if (logEntry.isFailure) {
-      // Keep failure logs in a dedicated buffer (deduplicated) so they are never lost to FIFO shifting.
-      // Dedup is on tool+target, NOT on exact output: loop interventions embed an escalating
-      // "Attempt N" counter, so byte-comparison never matched and near-identical intervention
-      // blobs crowded the real tool diagnostics out of the history budget.
-      //
-      // Matched across the WHOLE buffer, not just its last entry. Comparing only the tail
-      // collapses A,A,A but not A,B,A,B — and alternating is what a blocked model actually
-      // does: in session-1787562597025-q8a5 it swapped between read_file on src/App.tsx and on
-      // src/pages/Dashboard.tsx, so the buffer filled with eight near-identical "you are
-      // repeating yourself" blocks. From step 35 the prompt sat at a flat 22.237 chars made
-      // mostly of them, and the model received an essentially unchanging input for eleven
-      // turns. Note that 22.237 was never a CEILING — measured on 2026-08-24, a numCtx of
-      // 16.384 gives a budget near 44.000 chars and the compactor never fires at this size.
-      // The harm is the repetition crowding out real content, not the total length.
+      // Deduplicate failure logs by tool+target across the whole buffer to prevent escalating intervention
+      // counters from crowding out real diagnostics. Re-append to keep newest failure at the end.
       const keyOf = (log: EpisodicFullLog) => `${log.tool}\u0000${log.target || ''}`
       const existingIndex = this.failureLogs.findIndex((l) => keyOf(l) === keyOf(logEntry))
       if (existingIndex !== -1) {
@@ -116,23 +104,7 @@ export class EpisodicMemoryCompactor {
       }
     }
 
-    // The same rule the failure buffer above already applies, and the window that never got it.
-    //
-    // `recentFullLogs` is the model's view of WHAT JUST HAPPENED, and it was a plain FIFO: a
-    // blocked model spent every slot on the same intervention text. Measured on the
-    // live-full-task run of 2026-08-24, step 48: of the 4.780 characters this section
-    // contributed, 3.988 — 83% — were four copies of
-    // `[CRITICAL FILE EDIT LOOP: N EDITS ON src/pages/TasksPage.tsx]`, differing only in N.
-    // 792 characters were left for anything the model had actually done. Re-measured after
-    // this change, same step of a fresh run: 1.293 characters of real content, up 63%, and
-    // the window reaches back to step 40 instead of 42.
-    //
-    // The render path below does deduplicate, but only consecutive read_file/list_dir calls
-    // with BYTE-IDENTICAL output — and an escalating counter is never byte-identical, which is
-    // the exact reason the failure buffer keys on tool+target instead.
-    //
-    // Repeated failures collapse here. Successful mutations on the same file are handled by
-    // expireWorkspaceStateOutputs above: only the newest file revision remains actionable.
+    // Deduplicate repeated failures on the same tool+target in recentFullLogs to prevent FIFO intervention crowding.
     if (logEntry.isFailure) {
       const recentIndex = this.recentFullLogs.findIndex(
         (l) => l.isFailure && l.tool === logEntry.tool && (l.target || '') === (logEntry.target || '')

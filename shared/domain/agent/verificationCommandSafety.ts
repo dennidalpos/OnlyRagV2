@@ -225,11 +225,7 @@ function isNonExitingVerificationSegment(segment: string): boolean {
   )
 }
 
-/**
- * Replaces the contents of quoted spans so the operator scan cannot trip over punctuation
- * that belongs to a string literal — `echo "<div className=...>"` carries a `>` that is not
- * a redirection, and JSX in an `echo` payload is exactly the case that produced the bug.
- */
+/** Replaces contents of quoted spans to prevent false positives from string literals (e.g. JSX tag `>`). */
 function stripQuotedSpans(command: string): string {
   return command.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''")
 }

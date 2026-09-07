@@ -117,16 +117,8 @@ function reportPartialDelivery(
 }
 
 /**
- * Reports a write that re-delivered a milestone which was already complete.
- *
- * The twin of `reportPartialDelivery` for the branch that only ever spoke to the user. Same
- * plumbing and same reason: BLOCKED is the only status that routes a directive into the
- * durable failure buffer, and the summary leads with what actually happened, because the
- * trajectory table prints it next to that word and the write was not blocked.
- *
- * Fires only on a RE-delivery — the milestone already carried its awaiting-verification note
- * before this write — so a first, legitimate completion stays silent. A byte-identical rewrite
- * never reaches here at all: redundantWriteDetector answers that one earlier.
+ * Reports a write that re-delivered an already complete milestone.
+ * Routes a directive into episodicCompactor as BLOCKED to steer model to unsatisfied milestones.
  */
 function reportRedelivery(
   ctx: ToolResultProcessingContext,
@@ -204,10 +196,7 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
 
     const status = resolveMilestoneDeliverableStatus(milestone.title, probe)
     if (status === 'satisfied') {
-      // Already carrying the note means this milestone was complete BEFORE this write, so the
-      // write re-delivered it. The branch used to record the note again and speak only to the
-      // user; the model read `Successfully wrote file` and nothing else, which is
-      // indistinguishable from progress. See redeliveredMilestoneDirective.
+      // Awaiting verification note indicates milestone was complete before this write (re-delivery).
       const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
       ctx.goalPlanner.updateMilestone(milestone.id, 'in_progress', awaitingVerificationNote(evidencePath))
       ctx.emitLog(
@@ -224,10 +213,7 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
       advancedAny = true
     }
 
-    // The branch that used to say nothing. The write landed on one of this milestone's files
-    // and the others are still missing — a fact this exact line already computed and kept to
-    // itself, which is how a model came to rewrite `postcss.config.js` eight times while
-    // `tailwind.config.js` was never written at all. See partialDeliveryDirective.
+    // Emits partial delivery directive when other required milestone deliverables are still missing.
     if (status === 'unsatisfied') {
       reportPartialDelivery(ctx, milestone, evidencePath, probe)
     }

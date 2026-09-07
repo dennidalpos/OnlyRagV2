@@ -57,17 +57,7 @@ export class AgentActionLoopDetector {
   private actionSequence: string[] = []
   /** Execution outcomes keyed by fingerprint, fed back by the orchestrator after each tool runs. */
   private outcomeBySignature = new Map<string, SignatureOutcomeRecord>()
-  /**
-   * The same outcomes keyed by target instead of by fingerprint.
-   *
-   * Not every loop rule here is a fingerprint rule. The file-edit thrashing check (section 2)
-   * fires on the TARGET PATH, so it catches a model rewriting one file with slightly different
-   * content each time — and every one of those calls has a fresh fingerprint, which left
-   * classifyRepeatOutcome answering `unknown` and the redundant-success exemption unable to
-   * apply. In session-1787497654743-4enx that is what abandoned m-3 and m-4: every write to
-   * src/styles/globals.css had SUCCEEDED, the guard told the model "this is NOT counted against
-   * you", and the milestone was marked FAILED two steps later anyway.
-   */
+  /** Tracks execution outcomes keyed by target path to support redundant-success exemptions across varied edits. */
   private outcomeByTarget = new Map<string, SignatureOutcomeRecord>()
   private readonly maxRepeatsAllowed: number
   private readonly maxHistoryLength = 20

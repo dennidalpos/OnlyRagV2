@@ -32,14 +32,7 @@ export type DeliverableProbe = (relativePath: string) => DeliverableProbeResult
 
 export type MilestoneDeliverableStatus = 'satisfied' | 'unsatisfied' | 'not_applicable'
 
-/**
- * The sentence that marks a milestone whose files are all on disk but which no verification
- * has proven yet.
- *
- * Declared here because three modules read it — the note builder, the active-milestone
- * selector, and the re-delivery check — and it lived as a copied string literal in each. This
- * module is the one they can all import without closing a cycle.
- */
+/** Marker for milestones whose deliverables are on disk but awaiting verification command pass. */
 export const AWAITING_VERIFICATION_MARKER = 'Awaiting a passing verification command'
 
 /**
@@ -157,8 +150,7 @@ export function findUnsatisfiedDeliverables(title: string, probe: DeliverablePro
   return extractDeliverablePaths(title).filter((deliverable) => {
     const result = probe(deliverable)
     if (!result.exists || result.contentLength <= 0) return true
-    // Presence and a non-zero size were the whole bar, so a file holding "// TODO: implement"
-    // closed its milestone. Content the probe deemed small enough to inspect is now checked.
+    // Inspect small files to reject empty stubs or comment-only placeholders.
     return result.content !== undefined && isPlaceholderContent(result.content)
   })
 }

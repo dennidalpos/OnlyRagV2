@@ -1,29 +1,15 @@
 /**
  * Milestone Update Authority.
- *
- * `update_plan` is the model's handle on plan progression, and it used to be absolute: any
- * status the model named was written straight through. A 7B model misreading its own history
- * therefore wrecked its own plan — in session-1787471833056-o5fk it marked m-4 `failed` with a
- * note copied verbatim out of an old loop-intervention message, and pushed m-5 back from
- * `verified` to `in_progress` while keeping the now-false "Auto-verified" note. Four of the
- * five milestones the run reported as failed had their deliverables sitting on disk.
- *
- * Evidence on disk outranks the model's self-report. This module decides which updates are
- * allowed to land; it stays pure, so the caller supplies the deliverable evidence.
+ * Evidence on disk outranks model self-report: prevents models from marking milestones
+ * failed or demoting verified ones when deliverables exist on disk (see docs/code-rationales.md).
  */
 
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 /**
- * Marker opening the note of a milestone the loop guard took away from the model.
- *
- * `failed` has two very different origins and they must not be treated alike. A milestone that
- * failed its own verification command SHOULD be recoverable — the model fixes the code, runs
- * the check again, and it passes. A milestone the system ABANDONED must not be: the guard
- * told the model "stop working on it entirely" and moved the focus elsewhere precisely to
- * break a loop, and letting the model write `verified` back over it undoes the escape. In
- * session-1787497654743-4enx m-6 was abandoned at step 41 and reported verified at step 47.
+ * Marker opening the note of a milestone abandoned by the loop guard to break an infinite loop.
+ * Abandoned milestones cannot be reopened or marked verified by the model.
  */
 const ABANDONED_NOTE_PREFIX = 'Abandoned by the system'
 
@@ -55,28 +41,12 @@ export interface MilestoneUpdateRequest {
 }
 
 /**
- * Rules the model cannot talk its way past:
- *
- *  - A no-op update is refused. Repeating the status a milestone already holds costs a full
- *    LLM round-trip and moves nothing; 13 of 45 steps in the observed session went this way.
- *  - A `verified` milestone is never demoted. Reverting it buys the model nothing — plan
- *    status gates no tool, so a milestone needing rework can simply be reworked — while
- *    letting it revert is precisely how the plan lost progress it had genuinely earned.
- *  - `failed` is refused while the milestone's deliverables exist with content. "I could not
- *    do it" is not credible about a file the run already wrote.
- *  - `verified` is refused while any deliverable the title names is absent, empty or a
- *    placeholder. The mirror of the rule above, and the one that was missing: evidence on disk
- *    outranked the model only in the direction that denied progress, never in the direction
- *    that granted it. In session-1787562597025-q8a5 m-2 ("Create `vite.config.ts`; Create
- *    `tsconfig.json`") went to `verified` on a passing check while `tsconfig.json` had never
- *    been written — and the project's own `tsc && vite build` could not run for the rest of
- *    the session. It was the single milestone that run reported as done.
- *
- * A milestone whose title names no file at all is `not_applicable` and stays closeable by its
- * verification command: there is no artefact to contradict it either way.
- *
- * Everything else applies. Notes are replaced rather than merged: a status change invalidates
- * whatever the previous status said about itself.
+ * Rules for milestone progression:
+ * - Refuses no-op updates to save round-trips.
+ * - Prevents demoting verified milestones.
+ * - Rejects `failed` if deliverables exist with real content on disk.
+ * - Rejects `verified` if deliverables are missing, empty, or placeholders.
+ * - Replaces notes entirely on valid status change.
  */
 export function resolveMilestoneUpdate(req: MilestoneUpdateRequest): MilestoneUpdateVerdict {
   const { current, requestedStatus, requestedNotes, deliverableStatus, unsatisfiedDeliverables } = req

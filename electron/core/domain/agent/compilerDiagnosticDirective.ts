@@ -178,23 +178,8 @@ export function extractExportMismatch(output: string): ExportMismatch | null {
 }
 
 /**
- * What is left to fix once the directive currently in force has done its job — named, not ordered.
- *
- * A build output routinely carries both kinds at once, and the directive that wins suppresses the
- * other entirely. Measured twice, with two different winners: run 6 of 2026-08-25 lost a `TS1192`
- * behind the missing-dependency branch, and run 8 lost `TS7031`, `TS1192` and `TS2741` behind the
- * module-resolution directive — `THE COMPILER NAMED THE FILE AND THE LINE` did not appear once in
- * fifty steps, and the session closed at 0/14. The code errors were in the prompt the whole time
- * with nothing pointing at them.
- *
- * This is a NOTE, deliberately, and the distinction is the one §5.6 was built on: a message
- * carries one instruction for **now**. Ordering the config fix and the file edit in the same turn
- * is how a correct directive gets overwritten by another correct directive. So this states what
- * the compiler also reported and says it comes after — no imperative, no tool name, no "next tool
- * call MUST".
- *
- * Returns null when every diagnostic is about module resolution, because then the directive in
- * force already covers all of them and there is nothing further to name.
+ * Formats secondary compiler diagnostics as a deferred advisory note rather than an immediate imperative.
+ * Ensures the model addresses the primary blocking directive first without cognitive conflict.
  */
 export function buildDeferredDiagnosticNote(output: string): string | null {
   const codeErrors = parseCompilerDiagnostics(output).filter(
@@ -224,21 +209,8 @@ export function buildDeferredDiagnosticNote(output: string): string | null {
  * Returns null when nothing parsed, so the caller keeps its ordinary text.
  */
 /**
- * A relative import that resolves to nothing.
- *
- * `TS2307: Cannot find module './api'` is reported ON the importing file, and the generic branch
- * below would therefore order that file rewritten. Rewriting it cannot create the module: the
- * file that is missing is the one being IMPORTED. This is the same wrong assumption
- * verificationAttemptTracker.ts records being made three times in one day — that every compiler
- * error is fixed by editing the file it points at.
- *
- * Measured 2026-08-25T19:44, session live-full-task, step 21: `src/services/index.ts` imported
- * './api' and './auth', neither of which existed. The directive ordered `write_file` on
- * `src/services/index.ts`. The run ended 0/14 with a workspace holding a .js twin of every .tsx
- * file, which is what a model does when told to rewrite a file that is not the problem.
- *
- * Package imports are excluded here on purpose: a bare specifier that does not resolve is a
- * missing dependency, and the install branch above already owns that case.
+ * Relative import that resolves to nothing.
+ * Orders creation of the imported target rather than rewriting the importing file.
  */
 export interface MissingRelativeModule {
   diagnostic: CompilerDiagnostic

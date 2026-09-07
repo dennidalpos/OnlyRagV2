@@ -1,19 +1,7 @@
 /**
  * Milestone Verification Promotion.
- *
- * Decides which milestones a passing verification run has actually proven.
- *
- * Writing a file used to be enough to mark its milestone `verified`. In
- * session-1787485700613-o3tx that closed eleven of fourteen milestones in 48 seconds and drove
- * the progress bar to 73% for a project with no entrypoint, three undeclared dependencies and
- * a UI built with a framework the task had not asked for. Presence of a file is evidence that
- * something was written, never that it works.
- *
- * A green build is different: it compiled the files that are on disk right now, so it attests
- * to all of them at once. That is the promotion this module selects — and only for milestones
- * that name an artefact the build could have compiled.
- *
- * Pure domain: the caller supplies the deliverable status of each milestone.
+ * Decides which milestones a passing verification command has actually proven based on disk deliverables.
+ * Prevents false verification on mere file presence without passing verification (see docs/code-rationales.md).
  */
 
 import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
@@ -28,17 +16,7 @@ export interface PromotionCandidate {
 
 /**
  * Milestones a passing verification promotes to `verified`.
- *
- * Excluded, each for its own reason:
- *  - already `verified`  — nothing to do.
- *  - `failed`            — abandoned deliberately by the loop guard; a later green build does
- *                          not retroactively mean the work happened.
- *  - the completion one  — owned by the finish tool, or the plan reads 100% before the agent
- *                          has written its report.
- *  - `not_applicable`    — names no artefact ("ensure buttons are 44x44 px"). Nothing the build
- *                          compiled can speak for it either way, which is exactly why closing
- *                          these on a pass would be fabricating verification again.
- *  - `unsatisfied`       — its files are missing or hold placeholder content.
+ * Excludes already verified, failed/abandoned, completion milestone, and unsatisfied deliverables.
  */
 export function selectMilestonesProvenByVerification(
   milestones: readonly PlanMilestone[],
@@ -62,45 +40,9 @@ export function awaitingVerificationNote(evidencePath: string): string {
 }
 
 /**
- * What the model is told when it delivers PART of a milestone.
- *
- * The sibling of `awaitingVerificationNote`, for the branch that had no message at all. When a
- * write lands and every file the milestone names is present, the run says so. When one is
- * still missing, the same code path knew exactly which — `findUnsatisfiedDeliverables` returns
- * them itemised — and said nothing.
- *
- * live-full-task, 2026-08-24: milestone m-6 was "Configure Tailwind CSS in `postcss.config.js`
- * and `tailwind.config.js`". The model wrote `postcss.config.js` at step 19, was told
- * "Successfully wrote file", and then rewrote that same file at steps 20, 21, 22, 23, 25, 27,
- * 28 and 29 — byte-identical every time, each one blocked. `tailwind.config.js` was never
- * written, in the whole fifty-step run. The model was not confused about what it had done; it
- * was never told what it still owed, so it kept re-delivering the half it remembered.
- *
- * The wording puts the missing file first and the completed one second, because the missing
- * one is the next action. It names the files rather than saying "deliverables are missing":
- * a model told something is missing will guess, and the guess it made here was to rewrite the
- * file it already had.
- *
- * ## What this directive may NOT claim
- *
- * It said "it is already correct and re-writing it will be blocked as a loop". Neither half was
- * supported. The probe behind it (workspaceDeliverableProbe.ts) establishes that a file exists
- * and is not placeholder content — never that its content is CORRECT — and whether a rewrite is
- * blocked depends on the loop detector's window, not on this milestone.
- *
- * Both halves outlive their turn. This text is a tool result, so it is replayed inside the
- * history block for as long as it survives trimming, while the plan block above it is rebuilt
- * from live state every turn. In session live-full-task of 2026-08-25T12:11 the two ended up in
- * the same prompt saying opposite things: this directive (emitted at step 8) forbade rewriting
- * "src/pages/DashboardPage.tsx" and threatened a block, while the active plan block ordered
- * exactly that rewrite because the file imports a package that does not exist. The forbidding
- * text sat in the prompt for steps 9-20 and 24-28; the model did not touch that file once in
- * that window, and first rewrote it at step 43 — fifteen steps after the text aged out.
- *
- * So the rule this docstring exists to record: a directive states what was MEASURED and what to
- * do next. It does not certify content it never read, and it does not threaten a consequence
- * another subsystem owns. A stale certificate outranks a live instruction, because the model
- * cannot tell which of the two is older. See blueprint §6.2.3.
+ * Directive emitted when only part of a milestone's deliverables are present on disk.
+ * Explicitly names missing files to direct the model to the next action rather than re-writing existing files.
+ * Detailed live-run failure mode analysis preserved in docs/code-rationales.md.
  */
 export function partialDeliveryDirective(
   milestoneId: string,
@@ -121,25 +63,8 @@ export function partialDeliveryDirective(
 }
 
 /**
- * What the model is told when it rewrites a milestone that was ALREADY complete.
- *
- * The third branch of the same fork, and the last one that said nothing. When a write lands
- * and the milestone's files are all present, `advanceActiveMilestoneOnMutation` records the
- * awaiting-verification note and logs a line — for the USER. Nothing reaches the model beyond
- * `Successfully wrote file`, which is indistinguishable from progress.
- *
- * Measured, live run of 2026-08-24: `src/main.tsx` was written at step 25 (m-5 complete), then
- * rewritten at steps 27, 28, 34 and 37 with DIFFERENT content every time — 617, 379, 368, 262
- * and 529 characters, and the 262-character one was a literal
- * `// TODO: Implement main application logic` written over working code. Not identical, so the
- * no-op detector correctly stayed silent; not partial, so the partial-delivery directive had
- * nothing to say. Meanwhile the focus block named m-7 (`tailwind.config.js`,
- * `postcss.config.js`), and neither of those files was ever written in the whole run.
- *
- * The message therefore does two things and no more: it says this milestone was already
- * complete BEFORE this write, so the rewrite moved nothing, and it names the file the active
- * milestone is actually waiting for. One concrete action, which is the property every
- * directive that got obeyed quickly has had.
+ * Directive emitted when a write re-delivers an already complete milestone.
+ * Directs model to the active milestone waiting for deliverables rather than rewriting completed files.
  */
 export function redeliveredMilestoneDirective(
   milestoneId: string,

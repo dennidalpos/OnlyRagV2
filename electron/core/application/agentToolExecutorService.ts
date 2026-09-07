@@ -277,18 +277,8 @@ export class AgentToolExecutorService {
    */
   /** Registry-backed preflight for stale first installs and ranges that publish no version. */
   /**
-   * Checks a freshly written `package.json` against the npm registry, and says so.
-   *
-   * The one thing a model with a knowledge cutoff structurally cannot get right on its own.
-   * Across the live runs of 2026-08-25 it wrote `typescript@^4.7.3` (which could not parse the
-   * `@types/node` npm installed alongside it, and took a run to 0/12), `vite@^4.0.0`,
-   * `react@^18.2.0`, and two packages that do not exist on npm at all. The registry answers both
-   * questions in one GET, so the fact arrives at the step that wrote the file rather than as an
-   * unexplained `Cannot find module` twenty steps later.
-   *
-   * Only on `package.json`, and only when something is actually wrong: silence otherwise, so
-   * the ordinary write result is untouched. A registry that cannot be reached says nothing —
-   * "this package does not exist" must never be the way a dropped connection presents.
+   * Validates freshly written package.json against npm registry to detect nonexistent or invalid package versions.
+   * Emitted only on package.json writes when errors exist. Connection drops remain silent to prevent false positives.
    */
   private async versionRealityDirective(filePath: string | undefined, content: string): Promise<string> {
     if (!/(^|[\\/])package\.json$/i.test(String(filePath || ''))) return ''
@@ -304,12 +294,7 @@ export class AgentToolExecutorService {
     const facts = await npmRegistryClient.lookupAll(declared.map((d) => d.name))
     const findings = findVersionReality(declared, facts)
 
-    // Each package is reported once and then never again. Runs 14 and 15 of 2026-08-25 both
-    // aborted early with `package.json` rewritten over and over: the check runs on every write,
-    // so a range the model chose not to change produced the same directive at every turn. That
-    // is the scale lesson already written in loopEscapePolicy.ts and toolRejectionEscalation.ts
-    // — a directive that did not land the first time does not land on the ninth, it just costs
-    // the steps. The fact has been delivered; what the model does with it is the plan's problem.
+    // Report each package fact at most once per session to prevent infinite rewrite loops.
     findings.nonexistent = findings.nonexistent.filter((name) => !this.reportedVersionFacts.has(name))
     findings.outdated = findings.outdated.filter((o) => !this.reportedVersionFacts.has(o.name))
 

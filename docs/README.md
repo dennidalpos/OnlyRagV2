@@ -1,36 +1,39 @@
-# OnlyRag V2 — Documentation Index
+# OnlyRag V2 — Indice della Documentazione
 
-This directory is the documentation source of truth for the repository. Each topic has one
-canonical page; cross-links should point to that page instead of duplicating the same guidance.
+Questa directory costituisce l'unica fonte di verità (*source of truth*) tecnica e architetturale del repository OnlyRag V2. La documentazione è strutturata in modo modulare per ambiti di competenza verticali, sintetici e pratici.
 
-## Canonical sources
+---
 
-| Topic | Authoritative source | Scope |
-| --- | --- | --- |
-| Installation, environment, hardware, commands and packaging | [`setup-and-env.md`](./setup-and-env.md) | Prerequisites, Ollama configuration, development/test/quality commands and Windows packaging |
-| System architecture and data flows | [`architecture.md`](./architecture.md) | Electron, React, Python sidecar, RAG, agent loop and persistence topology |
-| Module ownership and layer boundaries | [`modules.md`](./modules.md) | Presentation, application, domain and infrastructure responsibilities |
-| REST and Electron IPC contracts | [`api.md`](./api.md) | Endpoint/channel behavior, payloads and error contracts |
-| Operational observability and diagnostics | [`observability.md`](./observability.md) | Logging, metrics, retention and known diagnostic gaps |
-| Live agent quality assurance | [`agent-live-testing.md`](./agent-live-testing.md) | Live prerequisites, scenarios, isolation and log interpretation |
-| Studio/Plan reliability baseline | [`coding-agent-plan-baseline.md`](./coding-agent-plan-baseline.md) | Deterministic and live baselines plus the required regression matrix for CAS work |
-| Development backlog | [`../PROJECT_STATUS.json`](../PROJECT_STATUS.json) | Prioritized activities, dependencies and completion criteria, including Coding Agent Studio, Plan and interview improvements |
-| External libraries and custom domain implementations | [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) | Dependency rationale and domain-level substitutions |
-| Dependency and vulnerability snapshot | [`dependency-audit.md`](./dependency-audit.md) | Point-in-time audit results, false positives and follow-up |
-| Quality gates and CI verification | [`quality-gates.md`](./quality-gates.md) | Lint/format limitations, type-check, coverage and reproducible CI policy |
+## 1. Mappa dei Documenti per Ambito
 
-## Contract and maintenance rules
+| Ambito | Documento Canonico | Descrizione |
+| :--- | :--- | :--- |
+| **Architettura Generale** | [`architecture.md`](./architecture.md) | Topologia multi-processo, Clean Architecture a 4 layer, Resource Coordinator e RAG flow. |
+| **Autonomous Coding Agent** | [`agent.md`](./agent.md) | Tool calling loop, circuit breakers, loop detector, authority milestone e compattazione memoria. |
+| **Razionali ed Evidenze** | [`code-rationales.md`](./code-rationales.md) | Diario delle evidenze empiriche, lezioni storiche delle live session e psicologia degli SLM compatti. |
+| **Pipeline RAG & Sidecar** | [`rag-sidecar.md`](./rag-sidecar.md) | Python FastAPI Sidecar, LanceDB embedded, OCR/Vision (RapidOCR vs LLM) e traduzione in-place. |
+| **Electron Main Process** | [`electron-main.md`](./electron-main.md) | Struttura dei 4 layer Main, isolamento con `shared/`, gestione processi (PowerShell, sidecar :8000). |
+| **Frontend React 19** | [`frontend.md`](./frontend.md) | Architettura Renderer, Zustand stores, core hooks, Monaco Editor e virtualizzazione timeline. |
+| **Contratti IPC** | [`api-ipc.md`](./api-ipc.md) | Riferimento verificato e completo di tutti i 96 canali IPC Main-Renderer. |
+| **REST API Sidecar** | [`api-rest.md`](./api-rest.md) | Riferimento degli endpoint REST del FastAPI Sidecar (`http://127.0.0.1:8000`). |
+| **Operazioni & Quality Gates** | [`operations.md`](./operations.md) | Prerequisiti ambiente, setup, catalogo comandi verificati, script PowerShell e packaging NSIS. |
+| **Dipendenze & Librerie** | [`libraries.md`](./libraries.md) | Dipendenze esterne vs implementazioni di dominio pure, audit licenze e sicurezza. |
+| **Backlog di Sviluppo** | [`../PROJECT_STATUS.json`](../PROJECT_STATUS.json) | Backlog canonico delle attività completate e pianificate. |
 
-- The machine-readable sidecar contract is [`../sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json); regenerate it with `npm run generate:openapi` rather than editing it manually.
-- Commands in documentation must exist in [`../package.json`](../package.json). `npm run docs:check` validates local Markdown links and `npm run` references.
-- `setup-and-env.md` owns the command catalog. Other pages should link there when they need to refer to a build, test, cleanup or audit command.
-- `api.md` owns public REST/IPC behavior. `architecture.md` may explain why a contract exists, but must not define a competing payload or channel list.
-- `dependency-audit.md` is a dated snapshot, not a replacement for the current dependency manifest or a claim that an audit remains current indefinitely.
+---
 
-## Suggested reading paths
+## 2. Regole di Manutenzione e Vincoli Contrattuali
 
-- New contributor: [`setup-and-env.md`](./setup-and-env.md) → [`architecture.md`](./architecture.md) → [`modules.md`](./modules.md).
-- API integrator: [`api.md`](./api.md) → [`../sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json).
-- Coding-agent maintainer: [`architecture.md`](./architecture.md) → [`agent-live-testing.md`](./agent-live-testing.md) → [`observability.md`](./observability.md).
-- Dependency review: [`libraries-and-domain-implementations.md`](./libraries-and-domain-implementations.md) → [`dependency-audit.md`](./dependency-audit.md).
-- Quality review: [`quality-gates.md`](./quality-gates.md) → [`setup-and-env.md`](./setup-and-env.md).
+- **Specifiche OpenAPI Sidecar**: Il contratto OpenAPI machine-readable è versionato in [`../sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json). Si rigenera con `npm run generate:openapi` e si audita con `npm run test:sidecar`.
+- **Integrità dei Comandi e Link**: Ogni comando documentato deve esistere in [`../package.json`](../package.json). Il comando `npm run docs:check` valida automaticamente l'assenza di broken link e la validità dei comandi `npm run`.
+- **Riferimento Contratti**: [`api-ipc.md`](./api-ipc.md) e [`api-rest.md`](./api-rest.md) governano i contratti di interfaccia. Gli altri documenti descrivono il comportamento senza definire payload concorrenti.
+
+---
+
+## 3. Percorsi di Lettura Consigliati
+
+- **Nuovo Contributore**: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md) → [`agent.md`](./agent.md).
+- **Integrazione API & IPC**: [`api-ipc.md`](./api-ipc.md) → [`api-rest.md`](./api-rest.md).
+- **Coding Agent Maintainer**: [`agent.md`](./agent.md) → [`code-rationales.md`](./code-rationales.md) → [`electron-main.md`](./electron-main.md).
+- **RAG & Search Specialist**: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).
+- **Quality & Release Engineer**: [`operations.md`](./operations.md) → [`libraries.md`](./libraries.md).

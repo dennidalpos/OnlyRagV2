@@ -147,15 +147,8 @@ function selectOpenMilestones(milestones: readonly PlanMilestone[]): PlanMilesto
 }
 
 /**
- * What the model is told when the project's dependencies are not on disk.
- *
- * Ordered ahead of the build deliberately. `npm run build` against a workspace with no
- * `node_modules` fails on "vite: not found" — an error that says nothing about the code and
- * that a small model routinely answers by rewriting `package.json`. Sending it at a command
- * that is guaranteed to fail is how a directive loses the model's trust in one step.
- *
- * One imperative, one command, no alternatives to weigh (see the ERESOLVE note in the
- * blueprint: a directive that offers a decision invites the model to delegate it).
+ * Directive emitted when declared dependencies are missing from node_modules.
+ * Ordered ahead of build to prevent misleading "vite: not found" errors.
  */
 export function buildDependencyInstallDirective(missing: readonly string[]): string {
   const shown = missing.slice(0, 12)
@@ -187,18 +180,8 @@ export function buildExplicitFirstCommandDirective(userTask: string, isFirstTurn
 }
 
 /**
- * What the model is told when the code imports a package nobody declared.
- *
- * The failure this pre-empts, verbatim from the live run of 2026-08-24: `vite.config.ts`
- * imported `@vitejs/plugin-react`, `package.json` never declared it, and every `npm run build`
- * of the session died on `Cannot find module '@vitejs/plugin-react'`. The per-write gate
- * reported it 44 times, always as a note attached to something else; nothing ever made it the
- * next action.
- *
- * It names the importing file, because a small model told "a package is missing" will guess
- * which one — and the guess observed in this project was to rewrite a file that was fine.
- * `npm install <pkg>` is the single instruction: it both declares and installs, which is why
- * this state is ordered ahead of `dependencies_missing`.
+ * Directive emitted when code imports packages not declared in package.json.
+ * Mandates `npm install <pkg>` and names the importing file to prevent unguided edits.
  */
 export function buildUndeclaredDependencyDirective(undeclared: readonly UndeclaredDependency[]): string {
   const shown = undeclared.slice(0, 8)
@@ -218,53 +201,12 @@ export function buildUndeclaredDependencyDirective(undeclared: readonly Undeclar
 }
 
 /**
- * What the model is told when the package it was sent to install cannot be installed.
- *
- * The escape of `buildUndeclaredDependencyDirective`, promoted from its second line to the
- * whole instruction. Live run of 2026-08-24: the model imported `@tailwindcss/react`, which
- * does not exist on npm; the install directive was correct, the install failed, and because the
- * directive is recomputed from disk each turn it ordered the identical command again — thirteen
- * steps. The way out was already written in it, as directive 2 under an imperative directive 1,
- * and a model follows the first one. Once the install has demonstrably failed there is only one
- * instruction left, so it is the only one printed.
- *
- * That promotion fixed which fact was delivered and not what was asked for, and the live run of
- * 2026-08-25T12:11 (`qwen2.5-coder:7b`, session `live-full-task`) measured the difference.
- * The directive fired 24 times, naming `@tailwindcss/react` and `src/pages/DashboardPage.tsx`
- * correctly, and the model did not write that file once while it was being told to — it wrote
- * TaskCard, TasksPage, Button, HamburgerMenu, App instead. On the alternating turns of the same
- * run the sibling install directive was obeyed six times out of six (steps 9, 16, 19, 30, 45,
- * 46). The two are computed from the same facts, so the difference is textual, and it is this:
- *
- *  * **No tool was named.** The obeyed sibling opens `Your next tool call MUST be "run_command"
- *    with the command: ...`; this one opened with `"pkg" — remove it from file`, which names a
- *    goal and leaves the model to pick the move. The same shape as `write_file` is what
- *    `dependencyVersionReality.ts` already uses for the manifest, so it is what is used here.
- *  * **The action was the LAST line.** "Rewrite that file" trailed a numbered list whose first
- *    entry read as the instruction — §6.2.2 exactly: two imperatives, and the model takes the
- *    cheaper. Cheaper here meant writing a file that did not exist yet over rewriting one whose
- *    content it did not have.
- *  * **It addressed more files than the tool can write.** With two uninstallable imports the
- *    list ended in "Rewrite those files" (steps 33, 42, 43, 47). `write_file` writes one file;
- *    the run answered that order by rewriting neither.
- *
- * So: one package, one file, `write_file` named first, and the rest reported as a count. The
- * remaining imports are still on disk and this directive is recomputed every turn, so they are
- * reached in order rather than dropped — the note says so, as a fact and not as a second order.
- *
- * The claim that the name "was invented rather than looked up" is gone, and not for tone.
- * `@mui/material` is real; on steps 45-46 of that run it failed with ERESOLVE because three
- * `npm install react@^16.8.0` calls had pinned the tree to react@16.14.0. The directive asserted
- * the name was invented and ordered its removal, and step 49 obeyed — deleting a legitimate
- * dependency to satisfy a guard that was reading a version conflict as a missing package. This
- * function is handed failure counts, never registry answers (see `packagesWithFailedInstall` in
- * installCommandParser.ts), so that sentence was never a fact it was in a position to state.
+ * Directive emitted when a package install repeatedly fails (e.g. invalid name or unresolvable conflict).
+ * Instructs model to rewrite the importing file using `write_file` on a single deterministic target.
+ * Detailed live-run failure mode analysis preserved in docs/code-rationales.md.
  */
 export function buildUninstallablePackageDirective(undeclared: readonly UndeclaredDependency[]): string {
-  // Deterministic target. The caller's array follows the workspace scan, so its head moved
-  // whenever a different file was written last, and the tracker entry for the 12:11 run reads
-  // "il bersaglio si sposta a ogni turno". Sorting pins one name until it is actually fixed:
-  // a directive the model is meant to obey over several turns has to say the same thing twice.
+  // Pin one deterministic target until resolved to prevent target oscillation across turns.
   const ordered = [...undeclared].sort((a, b) => a.packageName.localeCompare(b.packageName))
   const target = ordered[0]
   const file = [...target.importedBy].sort()[0]

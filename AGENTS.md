@@ -13,12 +13,12 @@ Executed and verified in session. Date: 2026-09-08.
 | Workflow | Command | Shell / Cwd | Notes / Examples |
 | :--- | :--- | :--- | :--- |
 | **Fast Verification** | `npm run test:fast` | pwsh / root | 226 files, 1872 tests |
-| **Full Verification** | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` | pwsh / root | Types, tests, cycles, deadcode |
+| **Full Verification** | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` | pwsh / root | Exit 0 but reports known findings; see W2.11/W2.07 |
 | **Single Target** | `npx vitest run <path>` | pwsh / root | Vitest target |
 | **Format Check** | `npm run format:check` | pwsh / root | Git diff whitespace & conflict marker check |
 | **Type Check** | `npm run typecheck` | pwsh / root | TypeScript `tsc --noEmit` across main, preload, renderer |
 | **Deadcode Audit** | `npm run audit:deadcode` | pwsh / root | Knip unused dependencies and exports audit |
-| **Cycles Audit** | `npm run audit:cycles` | pwsh / root | Skott & dpdm cycle detection (0 cycles) |
+| **Cycles Audit** | `npm run audit:cycles` | pwsh / root | 2 known cycles; tracked in W2.11 |
 
 
 ## 3. Architecture & Boundaries

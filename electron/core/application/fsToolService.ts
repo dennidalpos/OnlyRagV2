@@ -52,6 +52,7 @@ interface DeleteFileDependencies {
   multiReplaceFile?: Parameters<typeof executeMultiReplaceFileContentTool>[5]
   skillAdherence?: (filePath: string, content: string, guidelines: string) => SkillAdherenceViolation | null
   buildSkillRefusal?: (filePath: string, violation: SkillAdherenceViolation) => string
+  contentVersion?: (content: string) => string
 }
 
 /** Application service for filesystem tools extracted from the legacy executor. */
@@ -115,6 +116,7 @@ export class FsToolService {
       this.dependencies.replaceFile!,
       this.dependencies.journal,
       this.dependencies.buildChangeStats,
+      this.dependencies.contentVersion || ((content) => content),
     )
   }
 
@@ -136,6 +138,7 @@ export class FsToolService {
       this.dependencies.multiReplaceFile!,
       this.dependencies.journal,
       this.dependencies.buildChangeStats,
+      this.dependencies.contentVersion || ((content) => content),
     )
   }
 

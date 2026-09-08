@@ -1,30 +1,22 @@
 /**
  * Plan Compilation.
  *
- * Turning a model's checklist text into the plan the agent actually executes takes four
- * ordered passes, and every call site needs all four in the same order. They used to be
- * applied ad hoc — parsing and normalisation differed by caller — which
- * is how the renderer, the plan-approval flow and the agent loop ended up able to disagree
- * about what the plan even was.
+ * Structured interventions pass through the same ordered compilation before execution.
  *
  * The order is load-bearing:
- *  1. parse        — recognise the checklist structure (the canonical parser).
- *  2. normalise    — fold acceptance criteria into the deliverables they qualify, so every
+ *  1. normalise    — fold acceptance criteria into the deliverables they qualify, so every
  *                    surviving entry is something that can be shown done or not done.
- *  3. ensure runnable  — append the project's own check as a milestone no write can close.
- *  4. ensure entrypoint — prepend the entry files a greenfield web plan never asks for.
+ *  2. ensure runnable  — append the project's own check as a milestone no write can close.
+ *  3. ensure scaffold — prepend only files required by the accepted greenfield stack.
  *
  * The canonical plan is never capped or merged. Turn prompts select a bounded view while
  * persistence and verification retain every intervention identity and command.
  */
 
-import {
-  GoalDecompositionPlanner,
-  isCompletionMilestoneTitle,
-  type PlanMilestone,
-} from './planAndSolveGraph'
+import { isCompletionMilestoneTitle, type PlanMilestone } from './planAndSolveGraph'
 import { normalizePlanFalsifiability } from './planFalsifiabilityNormalizer'
 import { extractDeliverablePaths } from './milestoneDeliverableResolver'
+import type { AgentPlan } from '../../types'
 
 /**
  * Appends the milestone a file-shaped plan can never contain: the project's own check passing.
@@ -51,13 +43,15 @@ export function ensureRunnableMilestone(
   const alreadyProven = milestones.some((m) => m.verificationCommand === verificationCommand)
   if (alreadyProven) return milestones
 
-  const operational = milestones.filter((m) => !isCompletionMilestoneTitle(m.title))
+  const operational = milestones.filter((m) => !isCompletionMilestoneTitle(m))
   const insertAt = operational.length
   const entry: PlanMilestone = {
     id: `m-${insertAt + 1}`,
     title: `Verify the application builds and runs end to end`,
     status: 'pending',
     verificationCommand,
+    acceptanceCriteria: [`${verificationCommand} exits with code 0.`],
+    verificationReferences: [verificationCommand],
     falsifiableHypothesis: `\`${verificationCommand}\` exits 0 over the project as it stands.`,
   }
 
@@ -67,88 +61,36 @@ export function ensureRunnableMilestone(
 }
 
 /** What the workspace already provides, so this module never guesses at disk state. */
-export interface WorkspaceScaffoldFacts {
-  /** The workspace declares a manifest (package.json and friends). */
-  hasManifest: boolean
-  /** The workspace already carries an HTML entry page. */
-  hasHtmlEntrypoint: boolean
+export interface ScaffoldRequirement {
+  path: string
+  title: string
+  proposedVerificationCommand?: string
 }
 
-/** A source file the bundler would have to reach: what makes a plan a web-app plan. */
-const WEB_SOURCE_FILE = /\.(tsx|jsx|ts|js|mjs|css)$/i
+export interface WorkspaceScaffoldFacts {
+  isGreenfield: boolean
+  requirements: ScaffoldRequirement[]
+}
 
-/**
- * Prepends the entry files a greenfield web plan needs and never asks for.
- *
- * Measured twice on 2026-08-25, on the same probe, before and after strengthening the planner
- * prompt: the generated plan went straight to pages and components and named no `index.html`
- * and no `src/main.tsx`. Both runs spent fifty steps and twenty-four writes, ran zero builds,
- * and delivered a workspace with no entry page at all — so nothing could compile, and
- * `entrypointIntegrity` could not even fire, because it needs an HTML page to inspect.
- *
- * The prompt lever was tried twice and failed twice, and the reason is visible in the plans:
- * the user's own task text prescribes a folder layout, and the nearest most concrete
- * instruction wins. The knowledge that the workspace is empty is the app's, not the model's,
- * so the app supplies the step instead of asking for it — the same move `ensureRunnableMilestone`
- * makes for the project's own check.
- *
- * The rule for what belongs in the list, arrived at by getting it wrong twice: **exactly the
- * files without which the project's own declared check cannot pass.** Not "a scaffold", and not
- * "what Vite minimally needs" — that reasoning is what produced both mistakes.
- *
- * * `package.json` was left out first, on the reasoning that `npm install` would create it. Run
- *   three of 2026-08-25 then emitted **zero commands in fifty steps**, and a manifest-less
- *   workspace has no path to any command at all: `dependencies_missing` has nothing to compare,
- *   `verification_due` names a declared command and none is declared, and
- *   `ensureRunnableMilestone` appends nothing for the same reason.
- * * `tsconfig.json` was left out next, on the reasoning that a Vite build does not need one.
- *   True of Vite and false of the project: run four wrote `"build": "tsc && vite build"` into its
- *   own manifest, and `tsc` with no config and no inputs exits by printing its usage. `npx vite
- *   build` succeeded by hand on that same workspace — 38 modules, 180 kB of JavaScript — while
- *   the command the project declares could never pass.
- *
- * Deliberately narrow otherwise. It adds nothing when the workspace already has an entry page or
- * a manifest, and nothing at all when the plan names no web source file — a Python or Rust plan
- * must never be handed a `vite` skeleton. `vite.config.ts` stays out because nothing measured has
- * needed it: a default Vite build resolves the entry from a root `index.html`.
- *
- * Each entry is judged on its own, which run five had to teach. That plan named
- * `public/index.html`, and a single blanket "the plan mentions some HTML" check switched the
- * whole pass off — no `tsconfig.json`, no `src/main.tsx`, and a page in `public/` that a default
- * Vite build never treats as the entry. One misplaced file must not be able to cancel the other
- * three, so only a root-level `index.html` counts as the plan having covered the entry page.
- */
-export function ensureEntrypointMilestones(
+/** Prepends only missing requirements supplied by project discovery. */
+export function ensureScaffoldMilestones(
   milestones: PlanMilestone[],
   workspace?: WorkspaceScaffoldFacts | null
 ): PlanMilestone[] {
-  if (!workspace || workspace.hasHtmlEntrypoint || workspace.hasManifest) return milestones
+  if (!workspace?.isGreenfield || workspace.requirements.length === 0) return milestones
 
-  const named = milestones.flatMap((m) => extractDeliverablePaths(m.title))
-  if (!named.some((p) => WEB_SOURCE_FILE.test(p))) return milestones
-
-  const missing: Array<{ title: string; path: string; falsifiableHypothesis?: string }> = [
-    { title: 'The project declares its dependencies and its build script', path: 'package.json' },
-    {
-      title: 'TypeScript checks source without emitting JavaScript into src (`noEmit: true`)',
-      path: 'tsconfig.json',
-      // A generated `tsconfig` without noEmit made `tsc && vite build` scatter .js and .js.map
-      // beside every source file. Vite owns production emission; this compiler pass is a check.
-      falsifiableHypothesis: '`tsconfig.json` sets `compilerOptions.noEmit` to true.',
-    },
-    { title: 'The page loads the application entry script', path: 'index.html' },
-    { title: 'The entry script mounts the root component into the page', path: 'src/main.tsx' },
-  ].filter((entry) => !named.includes(entry.path))
+  const named = milestones.flatMap((m) => m.filePaths?.length ? m.filePaths : extractDeliverablePaths(m.title))
+  const missing = workspace.requirements.filter((entry) => !named.includes(entry.path))
   if (missing.length === 0) return milestones
 
-  // Prepended, not appended: everything else in the plan is unreachable until these exist, and
-  // the plan is executed in order. Like the runnable milestone, these are added after the cap —
-  // they are the entries a merge must never be able to take away.
   const prepended: PlanMilestone[] = missing.map((entry) => ({
     id: '',
     title: `${entry.title} — \`${entry.path}\``,
     status: 'pending',
-    falsifiableHypothesis: entry.falsifiableHypothesis,
+    filePaths: [entry.path],
+    acceptanceCriteria: [`${entry.path} provides the accepted stack capability.`],
+    proposedVerificationCommand: entry.proposedVerificationCommand,
+    falsifiableHypothesis: `${entry.path} provides the accepted stack capability.`,
   }))
 
   return [...prepended, ...milestones].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
@@ -163,18 +105,9 @@ export function compilePlanMilestones(
   // Closing the session is application control flow, never executable user work. Old persisted
   // plans are still recognised by isCompletionMilestoneTitle, but new canonical revisions drop
   // the synthetic “invoke finish” entry before normalisation and display.
-  const operationalMilestones = milestones.filter((milestone) => !isCompletionMilestoneTitle(milestone.title))
+  const operationalMilestones = milestones.filter((milestone) => !isCompletionMilestoneTitle(milestone))
   const compiled = ensureRunnableMilestone(normalizePlanFalsifiability(operationalMilestones), verificationCommand)
-  return ensureEntrypointMilestones(compiled, workspace)
-}
-
-/** Parses raw model output into the canonical executable plan. */
-export function compilePlanFromText(
-  planText: string,
-  verificationCommand?: string | null,
-  workspace?: WorkspaceScaffoldFacts | null
-): PlanMilestone[] {
-  return compilePlanMilestones(GoalDecompositionPlanner.parsePlanFromText(planText), verificationCommand, workspace)
+  return ensureScaffoldMilestones(compiled, workspace)
 }
 
 /**
@@ -194,10 +127,31 @@ export function renderPlanMilestones(milestones: readonly PlanMilestone[]): stri
           : milestone.status === 'failed'
             ? '!'
             : ' '
+      const files = milestone.filePaths?.length ? ` — files: ${milestone.filePaths.map((filePath) => `\`${filePath}\``).join(', ')}` : ''
+      const criteria = milestone.acceptanceCriteria?.length ? `\n  - Criteria: ${milestone.acceptanceCriteria.join('; ')}` : ''
       const verification = milestone.verificationCommand
         ? ` — verify: \`${milestone.verificationCommand}\``
         : ''
-      return `- [${marker}] ${milestone.id}: ${milestone.title}${verification}`
+      const proposed = milestone.proposedVerificationCommand
+        ? ` — future check: \`${milestone.proposedVerificationCommand}\``
+        : ''
+      return `- [${marker}] ${milestone.id}: ${milestone.title}${files}${verification}${proposed}${criteria}`
     })
     .join('\n')
+}
+
+/** Renders the immutable structured plan as a review document. */
+export function renderAgentPlanMarkdown(plan: Pick<AgentPlan, 'version' | 'objective' | 'decisions' | 'retainedEvidence' | 'milestones' | 'supersededWork'>): string {
+  const sections = [`# Plan v${plan.version}`, `## Objective\n${plan.objective}`]
+  if (plan.decisions.length > 0) {
+    sections.push(`## Decisions and assumptions\n${plan.decisions.map((decision) => `- [${decision.source}] ${decision.statement}${decision.rationale ? ` — ${decision.rationale}` : ''}`).join('\n')}`)
+  }
+  sections.push(`## Interventions\n${renderPlanMilestones(plan.milestones)}`)
+  if (plan.retainedEvidence.length > 0) {
+    sections.push(`## Retained evidence\n${plan.retainedEvidence.map((item) => `- ${item.interventionId}: ${item.summary}${item.verificationReferences.length ? ` — ${item.verificationReferences.join('; ')}` : ''}`).join('\n')}`)
+  }
+  if (plan.supersededWork.length > 0) {
+    sections.push(`## Superseded work\n${plan.supersededWork.map((item) => `- ${item.interventionId}: ${item.reason}`).join('\n')}`)
+  }
+  return sections.join('\n\n')
 }

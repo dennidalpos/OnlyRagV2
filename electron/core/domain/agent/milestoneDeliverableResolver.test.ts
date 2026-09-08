@@ -56,6 +56,14 @@ describe('extractDeliverablePaths', () => {
 })
 
 describe('resolveMilestoneDeliverableStatus', () => {
+  it('uses structured file declarations without parsing the title', () => {
+    const milestone = { title: 'Finish the pending work', filePaths: ['src/task.ts'] }
+    const probe = probeFrom({ 'src/task.ts': 'export const done = true' })
+
+    expect(resolveMilestoneDeliverableStatus(milestone, probe)).toBe('satisfied')
+    expect(isDeliverableOfMilestone(milestone, 'src/task.ts')).toBe(true)
+  })
+
   it('reports satisfied when every referenced file exists with content', () => {
     const probe = probeFrom({ 'src/App.tsx': 'export function App() {}' })
     expect(resolveMilestoneDeliverableStatus('Assemble `src/App.tsx`', probe)).toBe('satisfied')

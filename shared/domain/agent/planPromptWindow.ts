@@ -1,6 +1,6 @@
 import type { PlanMilestone } from './planAndSolveGraph'
 
-export const MAX_PROMPT_MILESTONES = 15
+export const MAX_PROMPT_MILESTONES = 1
 
 export interface PromptMilestoneWindow {
   entries: Array<{ milestone: PlanMilestone; planIndex: number }>
@@ -29,7 +29,9 @@ export function selectPromptMilestoneWindow(
 
   const activeIndex = milestones.findIndex((milestone) => milestone.id === activeMilestoneId)
   const anchor = activeIndex >= 0 ? activeIndex : milestones.length - 1
-  const start = Math.max(0, Math.min(anchor - 1, milestones.length - windowSize))
+  const start = windowSize === 1
+    ? anchor
+    : Math.max(0, Math.min(anchor - 1, milestones.length - windowSize))
   const end = start + windowSize
 
   return {

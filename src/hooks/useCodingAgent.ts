@@ -410,7 +410,7 @@ export function useCodingAgent(settings?: AppSettings) {
           const lastIdx = copy.length - 1
           copy[lastIdx] = {
             ...copy[lastIdx],
-            milestones: data.milestones,
+            milestones: data.milestones!,
           }
           return copy
         })

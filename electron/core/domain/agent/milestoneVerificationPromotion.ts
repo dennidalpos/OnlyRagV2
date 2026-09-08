@@ -26,7 +26,7 @@ export function selectMilestonesProvenByVerification(
   const executed = verificationCommand.trim().toLowerCase()
   return milestones
     .filter((m) => m.status !== 'verified' && m.status !== 'failed')
-    .filter((m) => !isCompletionMilestoneTitle(m.title))
+    .filter((m) => !isCompletionMilestoneTitle(m))
     .filter((m) => !m.verificationCommand || m.verificationCommand.trim().toLowerCase() === executed)
     .filter((m) => deliverableStatusOf(m) === 'satisfied')
     .map((m) => ({ id: m.id, title: m.title }))

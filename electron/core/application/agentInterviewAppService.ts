@@ -45,11 +45,11 @@ function questionResolvedByFacts(question: InterviewQuestion, facts: ProjectPlan
   const text = question.question.toLowerCase()
   const categories = [
     { pattern: /\b(workspace|progetto|project|greenfield|esistente|existing)\b/, known: facts.workspace !== 'unknown' },
-    { pattern: /\b(linguaggio|language|stack|framework)\b/, known: facts.stack.languages.length > 0 },
+    { pattern: /\b(linguaggio|language|stack|framework)\b/, known: facts.stack.languages.length > 0 || Boolean(facts.acceptedGreenfieldStack) },
     { pattern: /\b(package manager|gestore pacchetti|npm|pnpm|yarn|cargo)\b/, known: facts.stack.packageManagers.length > 0 },
     { pattern: /\b(test framework|framework di test|vitest|jest|pytest)\b/, known: facts.stack.testFrameworks.length > 0 },
     { pattern: /\b(build tool|strumento di build|vite|webpack)\b/, known: facts.stack.buildTools.length > 0 },
-    { pattern: /\b(verifica|verification|build command|comando di build|test command)\b/, known: facts.verificationCommands.length > 0 },
+    { pattern: /\b(verifica|verification|build command|comando di build|test command)\b/, known: facts.verification.executableCommands.length > 0 },
   ]
   if (categories.some(({ pattern, known }) => known && pattern.test(text))) return true
   return facts.previousDecisions.some((decision) => decision.question.trim().toLowerCase() === text.trim())

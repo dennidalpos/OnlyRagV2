@@ -19,7 +19,6 @@ vi.mock('../application/sidecarAppService', () => ({ sidecarAppService: {} }))
 vi.mock('../application/planGenerationAppService', () => ({
   planGenerationAppService: {
     generatePlanText: vi.fn(),
-    parsePlanText: vi.fn(),
   },
 }))
 vi.mock('../application/aiDebugBundleService', () => ({ aiDebugBundleService: {} }))
@@ -71,25 +70,19 @@ describe('agent IPC session-state facade', () => {
     expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Build app')
   })
 
-  it('forwards workspace context when compiling a manually edited plan', async () => {
-    vi.mocked(planGenerationAppService.parsePlanText).mockReturnValue([])
-
-    await expect(handlers.get('agent:plan-parse-text')?.({}, '- [ ] Edit', '/repo')).resolves.toEqual([])
-
-    expect(planGenerationAppService.parsePlanText).toHaveBeenCalledWith('- [ ] Edit', '/repo')
-  })
-
   it('forwards workspace context and prior decisions to interview and planning', async () => {
     const settings = {} as any
     const decisions = [{ questionId: 'q1', questionText: 'Storage', selectedOption: 'Local' }]
 
     await handlers.get('agent:plan-interview')?.({}, 'Build app', 'model', settings, '/repo', decisions)
-    await handlers.get('agent:plan-generate')?.({}, 'Build app', 'model', settings, [], '/repo', decisions)
+    const previousPlan = { id: 'plan-1' }
+    await handlers.get('agent:plan-generate')?.({}, 'Build app', 'model', settings, previousPlan, '/repo', decisions)
 
     expect(agentInterviewAppService.conductInterview).toHaveBeenCalledWith('Build app', 'model', settings, '/repo', decisions)
     expect(planGenerationAppService.generatePlanText).toHaveBeenCalledWith(expect.objectContaining({
       workspacePath: '/repo',
       previousDecisions: decisions,
+      previousPlan,
     }))
   })
 

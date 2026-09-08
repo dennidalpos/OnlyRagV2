@@ -42,9 +42,10 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
 
     const prompt = planner.compileProgressPrompt()
     expect(prompt).toContain('1/3 verified - 33%')
-    expect(prompt).toContain('[x] **m-1: Inspect workspace files**')
+    expect(prompt).not.toContain('[x] **m-1: Inspect workspace files**')
     expect(prompt).toContain('[>] **m-2: Implement feature in main.ts**')
-    expect(prompt).toContain('[ ] **m-3: Run verification tests**')
+    expect(prompt).not.toContain('[ ] **m-3: Run verification tests**')
+    expect(prompt).toContain('Action 1:')
     expect(prompt).toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
     expect(prompt).toContain('Implement feature in main.ts')
   })
@@ -283,6 +284,10 @@ Here is the microtask execution plan:
     expect(compact.pendingMicroTasks[1]).toBe('m-2: Initialize Tailwind CSS in the project.')
   })
 
+  it('uses structured files to distinguish work from a closing step', () => {
+    expect(isCompletionMilestoneTitle({ title: 'Finish the pending work', filePaths: ['src/task.ts'] })).toBe(false)
+  })
+
   it('limits the turn prompt without deleting canonical milestones', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan(Array.from({ length: 20 }, (_, index) => ({
@@ -295,9 +300,9 @@ Here is the microtask execution plan:
 
     expect(planner.getMilestones()).toHaveLength(20)
     expect(prompt).toContain('**m-1:')
-    expect(prompt).toContain('**m-15:')
+    expect(prompt).not.toContain('**m-2:')
     expect(prompt).not.toContain('**m-16:')
-    expect(prompt).toContain('5 later milestones omitted from this turn; retained in canonical state')
+    expect(prompt).toContain('19 later milestones omitted from this turn; retained in canonical state')
   })
   describe('closure directive', () => {
     const activePlan = [

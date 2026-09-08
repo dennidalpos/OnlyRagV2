@@ -2,10 +2,13 @@ import { discoverProjectProfile } from '../infrastructure/filesystem/projectProf
 import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
 import { resolveProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import type { ProjectProfile } from '../domain/agent/projectProfileContract'
+import { resolveGreenfieldScaffold } from '../domain/agent/greenfieldScaffoldResolver'
+import type { WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
 import type { UserInterviewAnswer } from '../../../shared/types'
 
 export interface ProjectPlanningFacts {
   workspace: 'unknown' | 'empty' | 'existing' | 'monorepo' | 'multi-project'
+  hasFiles: boolean
   stack: {
     languages: string[]
     packageManagers: string[]
@@ -13,13 +16,18 @@ export interface ProjectPlanningFacts {
     buildTools: string[]
   }
   relevantFiles: string[]
-  verificationCommands: string[]
+  acceptedGreenfieldStack: string | null
+  verification: {
+    executableCommands: string[]
+    proposedCommands: string[]
+  }
   previousDecisions: Array<{ question: string; answer: string; provenance: string }>
 }
 
 export interface ProjectPlanningDiscovery {
   facts: ProjectPlanningFacts
   profile: ProjectProfile | null
+  scaffold: WorkspaceScaffoldFacts
 }
 
 function relevantRepoFiles(repoMap: string, prompt: string, limit = 8): string[] {
@@ -52,16 +60,26 @@ export function collectProjectPlanningFacts(
     testFrameworks: unique(projects.flatMap((project) => project.toolchain.testFrameworks)),
     buildTools: unique(projects.flatMap((project) => project.toolchain.buildTools)),
   }
-  const relevantFiles = workspacePath ? relevantRepoFiles(generateCompactRepoMap(workspacePath, 150), prompt) : []
+  const repoMap = workspacePath ? generateCompactRepoMap(workspacePath, 150) : ''
+  const relevantFiles = relevantRepoFiles(repoMap, prompt)
   const workspace = profile?.classification || 'unknown'
+  const hasFiles = repoMap.trim().length > 0
+  const greenfield = resolveGreenfieldScaffold(workspace === 'empty' && !hasFiles, prompt, previousDecisions)
+  const executableCommands = profile ? resolveProfileVerificationTargets(profile).map((target) => target.command) : []
 
   return {
     profile,
+    scaffold: greenfield.scaffold,
     facts: {
       workspace,
+      hasFiles,
       stack,
       relevantFiles,
-      verificationCommands: profile ? resolveProfileVerificationTargets(profile).map((target) => target.command) : [],
+      acceptedGreenfieldStack: greenfield.acceptedStack,
+      verification: {
+        executableCommands,
+        proposedCommands: greenfield.proposedVerificationCommands,
+      },
       previousDecisions: previousDecisions.map((decision) => ({
         question: decision.questionText,
         answer: decision.selectedOption,

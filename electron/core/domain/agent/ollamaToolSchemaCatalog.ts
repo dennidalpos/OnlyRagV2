@@ -67,9 +67,10 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
   tool('fetch_web_content', 'Fetch and extract readable content from a web page URL.', {
     url: { type: 'string', description: 'URL of the page to fetch.' },
   }, ['url']),
-  tool('write_file', 'Create a file or overwrite it entirely with new content.', {
+  tool('write_file', 'Create a new file, or replace a file previously read at a specific version.', {
     filePath: { type: 'string', description: 'Path of the file to write.' },
     content: { type: 'string', description: 'Full file content to write.' },
+    expectedContentHash: { type: 'string', description: 'FILE VERSION returned by read_file. Required when the target already exists; omit only for a new file.' },
   }, ['filePath', 'content']),
   tool('create_directory', 'Create a directory, including any missing parent directories.', {
     dirPath: { type: 'string', description: 'Directory path to create.' },
@@ -86,6 +87,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
     filePath: { type: 'string', description: 'Path of the file to edit.' },
     targetContent: { type: 'string', description: 'Exact existing text chunk to find and replace.' },
     replacementContent: { type: 'string', description: 'New text to replace the target chunk with.' },
+    expectedContentHash: { type: 'string', description: 'Optional FILE VERSION returned by read_file; rejects the edit if any content changed since that read.' },
   }, ['filePath', 'targetContent', 'replacementContent']),
   tool('multi_replace_file_content', 'Apply multiple exact-chunk text replacements to a single file in one call.', {
     filePath: { type: 'string', description: 'Path of the file to edit.' },
@@ -93,6 +95,7 @@ export const OLLAMA_TOOL_SCHEMA_CATALOG: OllamaToolSchema[] = [
       type: 'array',
       description: 'List of {targetContent, replacementContent} chunk replacements to apply.',
     },
+    expectedContentHash: { type: 'string', description: 'Optional FILE VERSION returned by read_file; rejects the edit if any content changed since that read.' },
   }, ['filePath', 'replacements']),
   tool('delete_file', 'Delete a file from disk.', {
     filePath: { type: 'string', description: 'Path of the file to delete.' },

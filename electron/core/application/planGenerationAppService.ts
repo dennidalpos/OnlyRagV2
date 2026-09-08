@@ -1,86 +1,113 @@
-/**
- * electron/core/application/planGenerationAppService.ts
- *
- * Application Layer — Plan Generation Service
- *
- * Drafts a short implementation plan for the SLM Coding Agent's PLAN approval
- * flow. The model returns schema-constrained JSON; Markdown is derived only
- * after validation for the existing UI and persistence contracts.
- */
-
 import os from 'node:os'
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
-import { GoalDecompositionPlanner, type PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
-import { compilePlanFromText, renderPlanMilestones, type WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
+import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
+import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
 import { resolvePrimaryProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
-import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
-import { readWorkspaceManifest } from '../infrastructure/filesystem/workspaceManifestReader'
+import { collectProjectPlanningFacts } from './projectPlanningFacts'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import type { AppSettings, PlanGenerationResult, UserInterviewAnswer } from '../../../shared/types'
+import type {
+  AgentPlan,
+  AppSettings,
+  PlanDecision,
+  PlanEvidence,
+  PlanGenerationResult,
+  UserInterviewAnswer,
+} from '../../../shared/types'
 import {
   planningPhaseResponseSchema,
-  renderPlanningResponse,
   toOllamaJsonSchema,
   validateStructuredContent,
+  type PlanningPhaseResponse,
 } from '../domain/agent/ollamaStructuredResponse'
-import { collectProjectPlanningFacts } from './projectPlanningFacts'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
-Use one milestone for a small fix and normally three to five for medium work; never exceed fifteen.
-Each objective states observable behavior, not merely file creation. Use one file per producing milestone.
-Every milestone must have a filePath or an allowed verificationCommand.
+Use one intervention for a small fix and normally three to five for medium work; never exceed fifteen.
+Return one explicit objective, assumptions, interventions, and superseded prior work.
+Each intervention states observable behavior, one file at most, acceptance criteria, and an allowed verification command when available.
+Every intervention must have a file path or an allowed verification command.
 For an existing workspace, change only relevant files and do not re-scaffold.
-For an empty web workspace, establish build files and entrypoints before features.
-Never add analysis or inspection as milestones. Never invent verification commands.
-Preserve pending work unless the request supersedes it. Use the request language.`
+For an empty workspace, use only the acceptedGreenfieldStack and scaffold requirements supplied in projectFacts.
+Executable verification commands already exist and may be used in verificationCommand. Proposed commands are future checks only and must never be returned as verificationCommand.
+Never add analysis or inspection as interventions. Never invent verification commands or project infrastructure.
+Carry each pending prior intervention through sourceInterventionId or list it in supersededWork with a reason.
+Use the request language.`
 
 export interface PlanGenerationRequest {
   prompt: string
   model?: string
   settings: AppSettings
-  /**
-   * Non-verified milestones left over from a previous approved plan (residue
-   * from an interrupted/finished run). When present, they're folded into the
-   * request as reconciliation context so the new plan absorbs prior progress
-   * instead of restarting from zero (see C7 / hasPendingUnconsolidatedMilestones).
-   */
-  pendingResidueMilestones?: PlanMilestone[]
-  /**
-   * The workspace the plan will run in. Used to resolve the project's real verification
-   * commands, so the plan declares proofs the Definition of Done gate can actually execute.
-   */
+  previousPlan?: AgentPlan
   workspacePath?: string | null
   previousDecisions?: UserInterviewAnswer[]
 }
 
-/**
- * The disk facts the plan compiler needs, read here because the domain never touches `fs`.
- *
- * Only the conventional entry pages are looked for. A workspace that keeps its HTML somewhere
- * this does not know about will simply be treated as having none, and the compiler's own guards
- * (the plan already naming an HTML file, the plan naming no web source at all) keep that from
- * producing a wrong step.
- */
-function resolveScaffoldFacts(
-  workspacePath: string | null | undefined,
-  manifest: ReturnType<typeof readWorkspaceManifest>,
-  hasManifest: boolean
-): WorkspaceScaffoldFacts | null {
-  if (!workspacePath) return null
-  return {
-    hasManifest,
-    hasHtmlEntrypoint: ['index.html', 'public/index.html', 'src/index.html'].some((p) => manifest.hasFile(p)),
-  }
+function decisionsFromAnswers(answers: readonly UserInterviewAnswer[]): PlanDecision[] {
+  return answers.map((answer) => ({
+    id: answer.questionId,
+    statement: `${answer.questionText}: ${answer.selectedOption}`,
+    source: answer.provenance === 'accepted_recommendation'
+      ? 'accepted_recommendation'
+      : answer.provenance === 'unconfirmed_assumption'
+        ? 'assumption'
+        : 'explicit_user',
+  }))
+}
+
+function mergeDecisions(previous: readonly PlanDecision[], current: readonly PlanDecision[]): PlanDecision[] {
+  const merged = new Map(previous.map((decision) => [decision.id, decision]))
+  current.forEach((decision) => merged.set(decision.id, decision))
+  return [...merged.values()]
+}
+
+function retainEvidence(previousPlan?: AgentPlan): PlanEvidence[] {
+  if (!previousPlan) return []
+  const retained = new Map(previousPlan.retainedEvidence.map((item) => [item.interventionId, item]))
+  previousPlan.milestones
+    .filter((item) => item.status === 'verified')
+    .forEach((item) => retained.set(item.id, {
+      interventionId: item.id,
+      summary: item.title,
+      verificationReferences: item.verificationReferences
+        || [item.verificationCommand, item.notes].filter((value): value is string => Boolean(value)),
+    }))
+  return [...retained.values()]
+}
+
+function reconcilePreviousWork(
+  plan: PlanningPhaseResponse,
+  previousInterventions: readonly PlanMilestone[]
+): string | undefined {
+  const openIds = new Set(previousInterventions.filter((item) => item.status !== 'verified').map((item) => item.id))
+  const carriedIds = plan.interventions
+    .map((item) => item.sourceInterventionId)
+    .filter((id): id is string => Boolean(id))
+  const supersededIds = plan.supersededWork.map((item) => item.interventionId)
+  const accountedIds = new Set([...carriedIds, ...supersededIds])
+  const unknownIds = [...accountedIds].filter((id) => !openIds.has(id))
+  if (unknownIds.length > 0) return `Plan response referenced unknown prior interventions: ${unknownIds.join(', ')}`
+  const missingIds = [...openIds].filter((id) => !accountedIds.has(id))
+  if (missingIds.length > 0) return `Plan response dropped pending interventions without superseding them: ${missingIds.join(', ')}`
+  return undefined
+}
+
+function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
+  return plan.interventions.map((intervention) => ({
+    id: intervention.id,
+    title: intervention.objective,
+    status: 'pending',
+    filePaths: intervention.filePaths,
+    acceptanceCriteria: intervention.acceptanceCriteria,
+    verificationCommand: intervention.verificationCommand,
+    verificationReferences: intervention.verificationCommand ? [intervention.verificationCommand] : [],
+    sourceInterventionId: intervention.sourceInterventionId,
+    falsifiableHypothesis: intervention.acceptanceCriteria.join('; '),
+  }))
 }
 
 export class PlanGenerationAppService {
-  /**
-   * Generates a draft plan for the given prompt, routed through the hardware
-   * profile's Ollama runtime options, and parses it into canonical milestones.
-   */
   async generatePlanText(req: PlanGenerationRequest): Promise<PlanGenerationResult> {
     const model = req.model || req.settings.codingModel || req.settings.defaultModel || 'qwen2.5-coder:7b'
     const cachedGpu = getCachedGpuInfo()
@@ -93,21 +120,24 @@ export class PlanGenerationAppService {
     })
     runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx)
     runtimeOpts.num_predict = Math.min(HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx), 2048)
-    const manifest = readWorkspaceManifest(req.workspacePath)
+
     const discovery = collectProjectPlanningFacts(req.workspacePath, req.prompt, req.previousDecisions)
     const profile = discovery.profile
-    const hasExistingProject = Boolean(profile && profile.classification !== 'empty')
-    const allowedVerificationCommands = discovery.facts.verificationCommands
+    const hasExistingProject = Boolean(profile && profile.classification !== 'empty') || discovery.facts.hasFiles
+    const executableVerificationCommands = discovery.facts.verification.executableCommands
+    const previousInterventions = req.previousPlan?.milestones || []
     const userContent = JSON.stringify({
       request: req.prompt,
       workspace: req.workspacePath ? (hasExistingProject ? 'existing' : 'empty') : 'unknown',
       projectFacts: discovery.facts,
-      allowedVerificationCommands,
-      pendingMilestones: req.pendingResidueMilestones?.map(({ id, title, status, notes }) => ({ id, title, status, notes })) || [],
+      executableVerificationCommands,
+      previousPlan: req.previousPlan ? {
+        objective: req.previousPlan.objective,
+        interventions: previousInterventions,
+      } : null,
     })
 
-    let responseContent = ''
-    let structuredPlanText = ''
+    let structuredPlan: PlanningPhaseResponse | null = null
     let generationError: string | undefined
     try {
       const response = await ollamaAppService.generateStructured({
@@ -118,78 +148,58 @@ export class PlanGenerationAppService {
         host: req.settings.ollamaHost,
         options: runtimeOpts,
       })
-      responseContent = response.content
       if (response.status !== 'complete') {
         generationError = response.error
-        logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
       } else {
         const validated = validateStructuredContent(response.content, planningPhaseResponseSchema)
         if (validated.status === 'invalid') {
           generationError = `Invalid plan response: ${validated.error}`
         } else {
-          const inventedCommand = validated.data.milestones
-            .map((milestone) => milestone.verificationCommand)
-            .find((command) => command && !allowedVerificationCommands.includes(command))
-          if (inventedCommand) {
-            generationError = `Plan response used an unavailable verification command: ${inventedCommand}`
-          } else {
-            structuredPlanText = renderPlanningResponse(validated.data)
-          }
+          const inventedCommand = validated.data.interventions
+            .map((item) => item.verificationCommand)
+            .find((command) => command && !executableVerificationCommands.includes(command))
+          generationError = inventedCommand
+            ? `Plan response used an unavailable verification command: ${inventedCommand}`
+            : reconcilePreviousWork(validated.data, previousInterventions)
+          if (!generationError) structuredPlan = validated.data
         }
       }
-    } catch (err: any) {
-      generationError = err.message || 'Plan generation threw'
-      logger.log('WARN', 'PlanGenerationAppService', `Plan generation threw: ${err.message}`)
+    } catch (error: any) {
+      generationError = error.message || 'Plan generation failed'
     }
 
-    const rawPlanText = structuredPlanText.trim()
-    if (!generationError && !rawPlanText) {
-      generationError = 'Plan generation returned an empty response'
-      logger.log('WARN', 'PlanGenerationAppService', generationError)
-    }
-    const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(rawPlanText)
+    if (generationError) logger.log('WARN', 'PlanGenerationAppService', `Plan generation failed: ${generationError}`)
     const verification = profile ? resolvePrimaryProfileVerificationTargets(profile)[0]?.command : undefined
-    const milestones = generationError ? [] : compilePlanFromText(
-      rawPlanText,
-      verification,
-      resolveScaffoldFacts(req.workspacePath, manifest, hasExistingProject)
-    )
-    if (!generationError && milestones.length === 0) {
-      generationError = 'Plan response contained no executable milestones'
-      logger.log('WARN', 'PlanGenerationAppService', generationError)
-    }
-    if (milestones.length < parsedMilestones.length) {
-      logger.log(
-        'INFO',
-        'PlanGenerationAppService',
-        `Plan compiled: ${parsedMilestones.length} raw milestones normalized to ${milestones.length} falsifiable ones; acceptance criteria folded into the deliverables they qualify.`
-      )
+    const milestones = structuredPlan
+      ? compilePlanMilestones(
+          toMilestones(structuredPlan),
+          verification,
+          discovery.scaffold
+        )
+      : []
+    if (!generationError && milestones.length === 0) generationError = 'Plan response contained no executable interventions'
+
+    const previousDecisions = req.previousPlan?.decisions || []
+    const answerDecisions = decisionsFromAnswers(req.previousDecisions || [])
+    const assumptionDecisions: PlanDecision[] = structuredPlan?.assumptions.map((assumption) => ({
+      id: assumption.id,
+      statement: assumption.statement,
+      source: 'assumption',
+      rationale: assumption.rationale,
+    })) || []
+    const result = {
+      objective: structuredPlan?.objective || '',
+      decisions: mergeDecisions(previousDecisions, [...answerDecisions, ...assumptionDecisions]),
+      retainedEvidence: retainEvidence(req.previousPlan),
+      milestones,
+      supersededWork: [...(req.previousPlan?.supersededWork || []), ...(structuredPlan?.supersededWork || [])],
     }
     if (req.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logPlanGeneration('plan-flow', req.prompt, milestones.length, 'plan')
     }
     return generationError
-      ? { status: 'error', planText: responseContent.trim(), milestones, error: generationError }
-      : { status: 'success', planText: renderPlanMilestones(milestones), milestones }
-  }
-
-  /**
-   * Re-parses arbitrary (e.g. user-edited) plan text through the same
-   * canonical parser used for generation, so milestones stay in sync
-   * after manual edits in the frontend.
-   */
-  parsePlanText(planText: string, workspacePath?: string | null): PlanMilestone[] {
-    // Re-parsing user-edited text must produce the same plan the generator would, including the
-    // appended runnable milestone — but only when the caller can say which workspace this is.
-    // Without one, no command can be cited and none is invented.
-    if (!workspacePath) return compilePlanFromText(planText)
-
-    const manifest = readWorkspaceManifest(workspacePath)
-    const hasManifest =
-      manifest.packageJson !== null || manifest.hasFile('package.json') || manifest.hasFile('pyproject.toml') || manifest.hasFile('Cargo.toml')
-    const profile = discoverProjectProfile(workspacePath)
-    const verification = resolvePrimaryProfileVerificationTargets(profile)[0]?.command
-    return compilePlanFromText(planText, verification, resolveScaffoldFacts(workspacePath, manifest, hasManifest))
+      ? { status: 'error', ...result, error: generationError }
+      : { status: 'success', ...result }
   }
 }
 

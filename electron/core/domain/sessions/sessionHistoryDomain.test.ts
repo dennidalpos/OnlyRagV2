@@ -79,7 +79,7 @@ describe('SessionHistoryDomain Unit Tests', () => {
     expect(normalized!.executedPrompts[0].additions).toBe(40)
   })
 
-  it('should normalize plan records: ISO timestamps, valid status, milestones preserved', () => {
+  it('keeps only structured v2 plans and does not migrate legacy plan text', () => {
     const normalized = normalizeSession({
       id: 'session-plans',
       workspacePath: null,
@@ -90,23 +90,32 @@ describe('SessionHistoryDomain Unit Tests', () => {
       executedPrompts: [],
       plans: [
         {
+          formatVersion: 2,
           id: 'plan_1',
           version: 1,
           prompt: 'Add caching',
-          planText: '1. Add cache layer',
+          objective: 'Add caching',
+          decisions: [],
+          retainedEvidence: [],
+          supersededWork: [],
           status: 'approved',
           createdAt: '09:15',
           baseStepOffset: 3,
           milestones: [{ id: 'm1', title: 'Add cache layer', status: 'verified' }],
         },
-        { id: 'plan_2', version: 2, prompt: 'x', planText: 'text', status: 'bogus', createdAt: '2026-04-02T09:20:00.000Z' },
+        { id: 'legacy-plan', version: 2, prompt: 'x', planText: 'text', status: 'ready', createdAt: '2026-04-02T09:20:00.000Z' },
         {
+          formatVersion: 2,
           id: 'plan_3',
           version: 3,
           prompt: 'Effective task',
           originalPrompt: 'Original task',
           interviewAnswers: [{ questionId: 'q1', questionText: 'Router', selectedOption: 'React Router', provenance: 'accepted_recommendation' }],
-          planText: '- [ ] Partial plan',
+          objective: 'Effective task',
+          decisions: [],
+          retainedEvidence: [],
+          milestones: [],
+          supersededWork: [],
           status: 'error',
           errorPhase: 'planning',
           errorMessage: 'stream interrupted',
@@ -116,21 +125,19 @@ describe('SessionHistoryDomain Unit Tests', () => {
       ],
     })
 
-    expect(normalized!.plans).toHaveLength(3)
+    expect(normalized!.plans).toHaveLength(2)
     // Legacy clock time is unparsable and falls back to the session's creation date.
     expect(normalized!.plans![0].createdAt).toBe('2026-04-02T09:00:00.000Z')
     expect(normalized!.plans![0].status).toBe('approved')
     expect(normalized!.plans![0].baseStepOffset).toBe(3)
     expect(normalized!.plans![0].milestones).toHaveLength(1)
-    // An unknown status degrades to 'ready' instead of poisoning the plan panel.
-    expect(normalized!.plans![1].status).toBe('ready')
-    expect(normalized!.plans![2]).toMatchObject({
+    expect(normalized!.plans![1]).toMatchObject({
       status: 'error',
       originalPrompt: 'Original task',
       errorPhase: 'planning',
       errorMessage: 'stream interrupted',
     })
-    expect(normalized!.plans![2].interviewAnswers?.[0].provenance).toBe('accepted_recommendation')
+    expect(normalized!.plans![1].interviewAnswers?.[0].provenance).toBe('accepted_recommendation')
   })
 
   it('should reject records without an id', () => {

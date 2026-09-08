@@ -6,9 +6,15 @@ import { detectRedundantWrite, buildRedundantWriteNotice } from '../../redundant
 import { validateAST } from '../../fuzzyPatchEngine'
 import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceValidator'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
+import { compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
 
 export interface WriteFileRepository {
-  writeFile(absolutePath: string, content: string): Promise<{ success: boolean; error?: string }>
+  writeFileVersioned(
+    absolutePath: string,
+    content: string,
+    expectedContentHash: string | undefined,
+    beforeWrite: () => void,
+  ): { success: boolean; error?: string; currentContentHash?: string }
 }
 
 export interface WriteFileSupportRepository {
@@ -29,6 +35,7 @@ export interface WriteFileDependencies {
   importIntegrityDirective: (filePath: string | undefined, content: string, workspacePath: string | null | undefined) => string
   versionRealityDirective: (filePath: string | undefined, content: string) => Promise<string>
   incrementalTypecheck: (workspacePath: string, filePath: string) => string
+  contentVersion: (content: string) => string
 }
 
 export async function executeWriteFileTool(
@@ -72,8 +79,9 @@ export async function executeWriteFileTool(
   if (!pathCheck.safePath) {
     return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
   }
+  const safePath = pathCheck.safePath
 
-  const workspaceRelativePath = workspacePath ? path.relative(workspacePath, pathCheck.safePath) : String(filePath)
+  const workspaceRelativePath = workspacePath ? path.relative(workspacePath, safePath) : String(filePath)
   const rootConfigPath = rootConfigPathForMisplacedSourceFile(workspaceRelativePath)
   if (rootConfigPath) {
     return {
@@ -90,7 +98,7 @@ export async function executeWriteFileTool(
     }
   }
 
-  const astCheck = validateAST(pathCheck.safePath, content)
+  const astCheck = validateAST(safePath, content)
   if (!astCheck.isValid) {
     return {
       outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nFile write blocked before disk persistence to prevent workspace corruption. Please fix syntax error.`,
@@ -98,26 +106,49 @@ export async function executeWriteFileTool(
     }
   }
 
-  const beforeContent = dependencies.readContent(pathCheck.safePath)
-  const redundant = detectRedundantWrite(dependencies.supportRepository.getFileInfo(pathCheck.safePath) !== null, beforeContent, content)
+  const beforeContent = dependencies.readContent(safePath)
+  const exists = dependencies.supportRepository.getFileInfo(safePath) !== null
+  const actualHash = dependencies.contentVersion(beforeContent)
+  const redundant = detectRedundantWrite(exists, beforeContent, content)
   if (redundant.isRedundant && redundant.kind) {
     return {
       outputForHistory: buildRedundantWriteNotice(String(filePath), redundant.kind, redundant.isEmpty),
-      logMessage: `No-op write: ${path.basename(pathCheck.safePath)} was already up to date`,
+      logMessage: `No-op write: ${path.basename(safePath)} was already up to date`,
       noOpMutation: true,
     }
   }
+  if (exists && parameters.expectedContentHash !== actualHash) {
+    return {
+      outputForHistory: versionConflictFeedback(
+        String(filePath),
+        parameters.expectedContentHash,
+        actualHash,
+        compactMutationDiff(beforeContent, content),
+      ),
+      logMessage: `Write File Rejected: stale or missing version for ${path.basename(safePath)}`,
+    }
+  }
 
-  dependencies.journal.recordBeforeModification(pathCheck.safePath)
-  const result = await dependencies.repository.writeFile(pathCheck.safePath, content)
+  const result = dependencies.repository.writeFileVersioned(
+    safePath,
+    content,
+    parameters.expectedContentHash,
+    () => dependencies.journal.recordBeforeModification(safePath),
+  )
   if (!result.success) {
+    if (result.currentContentHash) {
+      return {
+        outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, result.currentContentHash),
+        logMessage: `Write File Rejected: concurrent change in ${path.basename(safePath)}`,
+      }
+    }
     return { outputForHistory: `Error writing file ${filePath}: ${result.error}`, logMessage: `Write file error: ${result.error}` }
   }
 
-  const typecheckDiagnostic = workspacePath ? dependencies.incrementalTypecheck(workspacePath, pathCheck.safePath) || '' : ''
+  const typecheckDiagnostic = workspacePath ? dependencies.incrementalTypecheck(workspacePath, safePath) || '' : ''
   return {
-    outputForHistory: `Successfully wrote file ${filePath}${dependencies.importIntegrityDirective(filePath, content, workspacePath)}${await dependencies.versionRealityDirective(filePath, content)}${typecheckDiagnostic}`,
-    logMessage: `Successfully wrote file ${path.basename(pathCheck.safePath)}`,
-    changeStats: dependencies.buildChangeStats(pathCheck.safePath, beforeContent, content),
+    outputForHistory: `Successfully wrote file ${filePath} (${exists ? 'updated existing file' : 'created new file'})${dependencies.importIntegrityDirective(filePath, content, workspacePath)}${await dependencies.versionRealityDirective(filePath, content)}${typecheckDiagnostic}`,
+    logMessage: `${exists ? 'Updated existing file' : 'Created new file'} ${path.basename(safePath)}`,
+    changeStats: dependencies.buildChangeStats(safePath, beforeContent, content),
   }
 }

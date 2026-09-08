@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentPlan, AppSettings, PlanMilestone, InterviewQuestion, UserInterviewAnswer } from '../types'
+import { AgentPlan, AppSettings, InterviewQuestion, PlanGenerationResult, UserInterviewAnswer } from '../types'
 import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
 import {
@@ -8,7 +8,6 @@ import {
 } from '../../shared/domain/agent/interviewDecisionContext'
 import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import { validateInterviewAnswers } from '../../shared/domain/agent/interviewValidation'
-import { renderPlanMilestones } from '../../shared/domain/agent/planCompilation'
 
 export type { AgentPlan } from '../types'
 
@@ -33,27 +32,6 @@ export async function resolveInterviewPrompt(
     onEnrichmentFailure(error)
   }
   return losslessPrompt
-}
-
-/**
- * Parses plan text into canonical milestones via the backend's
- * GoalDecompositionPlanner parser (the same one the orchestrator loop uses),
- * instead of re-implementing checklist/numbered-list regex parsing here.
- * Returns undefined (not an empty array) when the IPC is unavailable, so
- * callers can distinguish "no canonical data" from "parsed to zero items"
- * and fall back to local heuristics accordingly.
- */
-async function parsePlanTextToMilestones(
-  planText: string,
-  workspacePath?: string | null
-): Promise<PlanMilestone[] | undefined> {
-  if (!window.electronAPI?.agentPlanParseText) return undefined
-  try {
-    return await window.electronAPI.agentPlanParseText(planText, workspacePath)
-  } catch (err: any) {
-    logger.warn('usePlanApproval', `agentPlanParseText IPC failed: ${err?.message}`)
-    return undefined
-  }
 }
 
 interface UsePlanApprovalOptions {
@@ -86,7 +64,6 @@ export function usePlanApproval({
 }: UsePlanApprovalOptions) {
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
-  const [isSavingPlanRevision, setIsSavingPlanRevision] = useState<boolean>(false)
   const [isApprovingPlan, setIsApprovingPlan] = useState<boolean>(false)
 
   // Pre-flight Clarification Interview state
@@ -143,7 +120,6 @@ export function usePlanApproval({
     pendingFlowRef.current = null
     approvalInFlightRef.current.clear()
     setIsGeneratingPlan(false)
-    setIsSavingPlanRevision(false)
     setIsApprovingPlan(false)
     setIsAnalyzingInterview(false)
     setIsInterviewActive(false)
@@ -171,22 +147,23 @@ export function usePlanApproval({
       const existingHistory = planHistoryRef.current
       const newVersion = existingHistory.length + 1
 
-      // C7: fold non-verified milestones from the most recent approved plan into
-      // the generation request as reconciliation context, so the new plan absorbs
-      // prior residual work instead of restarting from zero.
-      const lastApprovedPlan = [...existingHistory].reverse().find((p) => p.status === 'approved' && p.milestones && p.milestones.length > 0)
-      const pendingResidueMilestones = lastApprovedPlan?.milestones?.filter((m) => m.status !== 'verified')
+      const lastApprovedPlan = [...existingHistory].reverse().find((plan) => plan.status === 'approved')
       const previousDecisions = interviewContext?.answers?.length
         ? interviewContext.answers
         : [...existingHistory].reverse().find((plan) => plan.interviewAnswers?.length)?.interviewAnswers || []
 
       const initialPlan: AgentPlan = {
+        formatVersion: 2,
         id: planId,
         version: newVersion,
         prompt,
         originalPrompt: interviewContext?.originalPrompt || prompt,
         interviewAnswers: interviewContext?.answers || [],
-        planText: 'Generazione piano in corso...',
+        objective: prompt,
+        decisions: [],
+        retainedEvidence: [],
+        milestones: [],
+        supersededWork: [],
         status: 'generating',
         createdAt: new Date().toISOString(),
         baseStepOffset: currentStep,
@@ -198,9 +175,8 @@ export function usePlanApproval({
 
       try {
         const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-        let returnedPlanText = ''
         let generationError: string | undefined
-        let generatedMilestones: PlanMilestone[] | undefined
+        let generatedPlan: PlanGenerationResult | undefined
 
         if (window.electronAPI?.agentPlanGenerate && settings) {
           try {
@@ -208,13 +184,12 @@ export function usePlanApproval({
               prompt,
               modelToUse,
               settings,
-              pendingResidueMilestones,
+              lastApprovedPlan,
               scope.workspacePath,
               previousDecisions
             )
             if (!isFlowCurrent(scope)) return null
-            returnedPlanText = genRes?.planText?.trim() || ''
-            generatedMilestones = genRes?.milestones
+            generatedPlan = genRes
             if (genRes?.status === 'error') generationError = genRes.error || 'Pianificazione non completata'
           } catch (ipcErr: any) {
             if (!isFlowCurrent(scope)) return null
@@ -226,16 +201,19 @@ export function usePlanApproval({
           generationError = 'Servizio di pianificazione non disponibile'
         }
 
-        if (!generationError && (!returnedPlanText || !generatedMilestones?.length)) {
+        if (!generationError && !generatedPlan?.milestones.length) {
           generationError = 'Il pianificatore non ha restituito un piano eseguibile'
         }
 
         if (generationError) {
           const failedPlan: AgentPlan = {
             ...initialPlan,
-            planText: returnedPlanText,
+            objective: generatedPlan?.objective || prompt,
+            decisions: generatedPlan?.decisions || [],
+            retainedEvidence: generatedPlan?.retainedEvidence || [],
+            milestones: generatedPlan?.milestones || [],
+            supersededWork: generatedPlan?.supersededWork || [],
             status: 'error',
-            milestones: generatedMilestones,
             errorPhase: 'planning',
             errorMessage: generationError,
           }
@@ -248,22 +226,21 @@ export function usePlanApproval({
           return failedPlan
         }
 
-        // The generator already compiled these milestones with workspace facts and real checks.
-        // Never re-parse its text without that context: this array is the canonical revision.
-        const milestones = generatedMilestones!
-        const canonicalPlanText = renderPlanMilestones(milestones)
-
         const finalPlan: AgentPlan = {
+          formatVersion: 2,
           id: planId,
           version: newVersion,
           prompt,
           originalPrompt: interviewContext?.originalPrompt || prompt,
           interviewAnswers: interviewContext?.answers || [],
-          planText: canonicalPlanText,
+          objective: generatedPlan!.objective,
+          decisions: generatedPlan!.decisions,
+          retainedEvidence: generatedPlan!.retainedEvidence,
+          supersededWork: generatedPlan!.supersededWork,
           status: 'ready',
           createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
-          milestones,
+          milestones: generatedPlan!.milestones,
         }
 
         updateCurrentSessionPlans((prev) => {
@@ -278,12 +255,17 @@ export function usePlanApproval({
         if (!isFlowCurrent(scope)) return null
         logger.error('usePlanApproval', `Error generating plan: ${err?.message}`)
         const failedPlan: AgentPlan = {
+          formatVersion: 2,
           id: planId,
           version: newVersion,
           prompt,
           originalPrompt: interviewContext?.originalPrompt || prompt,
           interviewAnswers: interviewContext?.answers || [],
-          planText: '',
+          objective: prompt,
+          decisions: [],
+          retainedEvidence: [],
+          milestones: [],
+          supersededWork: [],
           status: 'error',
           createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
@@ -387,45 +369,6 @@ export function usePlanApproval({
     })
   }, [currentPlan, updateCurrentSessionPlans])
 
-  const handleUpdatePlanText = useCallback(async (newText: string) => {
-    const sourcePlan = currentPlan
-    if (!sourcePlan) return
-    const scope = beginFlowScope()
-    setIsSavingPlanRevision(true)
-    const milestones = await parsePlanTextToMilestones(newText, scope.workspacePath)
-    if (!isFlowCurrent(scope)) return
-
-    const nextVersion = planHistoryRef.current.length + 1
-    const revisionBase: AgentPlan = {
-      ...sourcePlan,
-      id: `plan_${Date.now()}_${scope.token}`,
-      version: nextVersion,
-      createdAt: new Date().toISOString(),
-      approvalError: undefined,
-    }
-    const revision: AgentPlan = milestones?.length
-      ? {
-          ...revisionBase,
-          planText: renderPlanMilestones(milestones),
-          milestones,
-          status: 'ready',
-          errorPhase: undefined,
-          errorMessage: undefined,
-        }
-      : {
-          ...revisionBase,
-          planText: newText,
-          milestones: [],
-          status: 'error',
-          errorPhase: 'planning',
-          errorMessage: 'La revisione non contiene milestone eseguibili.',
-        }
-
-    updateCurrentSessionPlans((prev) => [...prev, revision])
-    setActivePlanIndex(planHistoryRef.current.length)
-    setIsSavingPlanRevision(false)
-  }, [beginFlowScope, currentPlan, isFlowCurrent, updateCurrentSessionPlans])
-
   const selectPlanVersion = useCallback((idx: number) => {
     if (idx >= 0 && idx < planHistory.length) {
       setActivePlanIndex(idx)
@@ -445,7 +388,6 @@ export function usePlanApproval({
         plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan
       ))
       setIsGeneratingPlan(false)
-      setIsSavingPlanRevision(false)
       setIsAnalyzingInterview(false)
       setIsInterviewActive(false)
       setInterviewQuestions([])
@@ -472,12 +414,17 @@ export function usePlanApproval({
 
           if (interviewRes?.status === 'error') {
             const failedPlan: AgentPlan = {
+              formatVersion: 2,
               id: `plan_${Date.now()}_${scope.token}`,
               version: planHistoryRef.current.length + 1,
               prompt,
               originalPrompt: prompt,
               interviewAnswers: [],
-              planText: interviewRes.rawResponse?.trim() || '',
+              objective: prompt,
+              decisions: [],
+              retainedEvidence: [],
+              milestones: [],
+              supersededWork: [],
               status: 'error',
               createdAt: new Date().toISOString(),
               baseStepOffset: currentStep,
@@ -491,12 +438,17 @@ export function usePlanApproval({
 
           if (interviewRes?.status === 'cancelled') {
             const cancelledPlan: AgentPlan = {
+              formatVersion: 2,
               id: `plan_${Date.now()}_${scope.token}`,
               version: planHistoryRef.current.length + 1,
               prompt,
               originalPrompt: prompt,
               interviewAnswers: [],
-              planText: interviewRes.rawResponse?.trim() || '',
+              objective: prompt,
+              decisions: [],
+              retainedEvidence: [],
+              milestones: [],
+              supersededWork: [],
               status: 'cancelled',
               createdAt: new Date().toISOString(),
               baseStepOffset: currentStep,
@@ -518,12 +470,17 @@ export function usePlanApproval({
           logger.warn('usePlanApproval', `agentPlanInterview failed: ${err?.message}`)
           setIsAnalyzingInterview(false)
           const failedPlan: AgentPlan = {
+            formatVersion: 2,
             id: `plan_${Date.now()}_${scope.token}`,
             version: planHistoryRef.current.length + 1,
             prompt,
             originalPrompt: prompt,
             interviewAnswers: [],
-            planText: '',
+            objective: prompt,
+            decisions: [],
+            retainedEvidence: [],
+            milestones: [],
+            supersededWork: [],
             status: 'error',
             createdAt: new Date().toISOString(),
             baseStepOffset: currentStep,
@@ -598,7 +555,6 @@ export function usePlanApproval({
     planHistory,
     activePlanIndex,
     isGeneratingPlan,
-    isSavingPlanRevision,
     isApprovingPlan,
     generatePlan,
     startPlanFlow,
@@ -610,7 +566,6 @@ export function usePlanApproval({
     retryCurrentPlan,
     handleApprovePlan,
     handleRejectPlan,
-    handleUpdatePlanText,
     selectPlanVersion,
     resetPlanHistory,
   }

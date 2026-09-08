@@ -16,6 +16,7 @@ import { logger } from '../../diagnostics'
 import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
 import { declaredDependencies, findVersionReality, buildVersionRealityDirective } from '../domain/agent/dependencyVersionReality'
@@ -90,21 +91,22 @@ export class AgentToolExecutorService {
         importIntegrityDirective: (filePath, content, currentWorkspace) => this.importIntegrityDirective(filePath, content, currentWorkspace),
         versionRealityDirective: (filePath, content) => this.versionRealityDirective(filePath, content),
         incrementalTypecheck: (currentWorkspace, filePath) => workspaceIncrementalTypecheck.checkWrittenFile(currentWorkspace, filePath) || '',
+        contentVersion,
       },
       replaceFile: {
         exists: (absolutePath) => documentIoRepository.exists(absolutePath),
         readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
-        writeFile: (absolutePath, content) => this.repo.writeFile(absolutePath, content),
+        writeFileVersioned: (absolutePath, content, expectedHash, beforeWrite) =>
+          this.repo.writeFileVersioned(absolutePath, content, expectedHash, beforeWrite),
       },
       multiReplaceFile: {
         readIfExists: (absolutePath) => agentToolFileRepository.readIfExists(absolutePath),
-        multiReplaceChunks: async (absolutePath, replacements) => {
-          const result = await this.repo.multiReplaceChunks(absolutePath, replacements)
-          return { ...result, replacedCount: result.replacedCount ?? 0 }
-        },
+        writeFileVersioned: (absolutePath, content, expectedHash, beforeWrite) =>
+          this.repo.writeFileVersioned(absolutePath, content, expectedHash, beforeWrite),
       },
       skillAdherence: (filePath, content, guidelines) => validateSkillAdherence(filePath, content, guidelines),
       buildSkillRefusal: (filePath, violation) => buildSkillAdherenceRefusal(filePath, violation),
+      contentVersion,
     })
     this.processToolService = new ProcessToolService({
       getShellSession: (workspace) => this.getOrCreateShellSession(workspace),
@@ -330,7 +332,12 @@ export class AgentToolExecutorService {
     if (!pathCheck.safePath) return parsedTool // let the tool's own case surface the security error
 
     const beforeContent = this.readContentSafely(pathCheck.safePath)
-    return reconcileApprovedHunks(parsedTool, approvedHunkIndices, beforeContent)
+    const reconciled = reconcileApprovedHunks(parsedTool, approvedHunkIndices, beforeContent)
+    if (reconciled.tool !== 'write_file' || !agentToolFileRepository.getFileInfo(pathCheck.safePath)) return reconciled
+    return {
+      ...reconciled,
+      parameters: { ...reconciled.parameters, expectedContentHash: contentVersion(beforeContent) },
+    }
   }
 
   public getOrCreateShellSession(workspacePath?: string | null): PersistentPowerShellSession {

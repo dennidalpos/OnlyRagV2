@@ -36,7 +36,9 @@ Le transizioni sono validate da [`agentExecutionPhase.ts`](../electron/core/doma
 
 ### 1.3 Fatti del progetto prima del piano
 
-[`projectPlanningFacts.ts`](../electron/core/application/projectPlanningFacts.ts) riusa discovery e repo-map per fornire a intervista e planner classificazione del workspace, stack, file pertinenti, verifiche disponibili e decisioni precedenti. I fatti sono riletti a ogni richiesta; domande già risolte dal repository o da una decisione confermata vengono filtrate dall'app. Una richiesta esplicita può comunque cambiare tali scelte.
+[`projectPlanningFacts.ts`](../electron/core/application/projectPlanningFacts.ts) riusa discovery e repo-map per fornire a intervista e planner classificazione del workspace, stack, file pertinenti e decisioni precedenti. I fatti sono riletti a ogni richiesta; domande già risolte dal repository o da una decisione confermata vengono filtrate dall'app.
+
+Le verifiche sono divise tra comandi **eseguibili**, osservati nei manifest correnti e ammessi dal gate, e check **proposti**, validi solo dopo la creazione dello scaffold. Su greenfield [`greenfieldScaffoldResolver.ts`](../electron/core/domain/agent/greenfieldScaffoldResolver.ts) deriva lo scheletro minimo esclusivamente dallo stack esplicito o confermato: Python, Rust e JavaScript non web non ricevono entrypoint HTML/React. Una directory con file esistenti non viene riclassificata come greenfield solo perché manca un manifest.
 
 ### 1.4 Intervista selettiva
 
@@ -81,8 +83,20 @@ Le prove restano separate: la presenza dell'artefatto è un prerequisito, build/
 
 1. **Calcolo Dinamico `num_ctx`** ([`contextWindowCalculator.ts`](../shared/domain/agent/contextWindowCalculator.ts)): Calcola i token BPE effettivi con tokenizer OpenAI `o200k_base`, allocando il contesto ottimale su Ollama in funzione della VRAM disponibile (da 4096 a 32768).
 2. **Compattazione Memoria Episodica** ([`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts)): Distilla i turni intermedi mantenendo un tetto fisso per il contesto (~18% per la struttura dei file) e preservando intatti gli ultimi scambi e gli errori bloccanti correnti.
-3. **Finestra del piano** ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts)): Il piano canonico conserva tutte le identità, i criteri e i comandi. Ogni turno mostra al modello al massimo 15 milestone attorno a quella attiva, segnalando quante restano fuori dalla finestra senza fonderle o rinumerarle.
+3. **Intervento attivo** ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts), [`activeInterventionActions.ts`](../shared/domain/agent/activeInterventionActions.ts)): il piano canonico conserva tutto il lavoro, ma ogni turno espone soltanto l'intervento corrente e fino a quattro azioni sequenziali. Edit collegati restano circoscritti al contratto modificato e la verifica avviene dopo il gruppo coerente.
 4. **Contesto operativo corrente**: obiettivo attivo, vincoli accettati, tool ammessi, percorsi pertinenti e ultimo errore utile sono raccolti in un blocco breve. Il codice iniettato contiene un file primario e al massimo due frammenti di supporto; ogni omissione è marcata con la dimensione esclusa e l'indicazione di usare `read_file`. La traiettoria completa resta nel checkpoint della sessione, fuori dal payload corrente.
+
+### 3.1. Piano strutturato
+
+Il piano persistito usa esclusivamente `formatVersion: 2`: obiettivo, decisioni/assunzioni, evidenze conservate, lavoro superato e interventi sono campi strutturati. Ogni intervento dichiara file, criteri di accettazione e riferimenti di verifica; checklist e Markdown sono viste derivate. Il backend rifiuta una ripianificazione che omette lavoro residuo senza conservarlo tramite `sourceInterventionId` o dichiararlo in `supersededWork`.
+
+Non è prevista migrazione dei vecchi piani testuali: il caricamento mantiene la sessione ma ignora revisioni prive di `formatVersion: 2`. L'esecuzione usa `filePaths` e gli altri campi canonici, non il testo renderizzato.
+
+Alla ripresa, deliverable persistiti vengono riletti dal disco. Una prova file ancora valida resta verificata; file mancanti riaprono l'intervento e i comandi precedentemente riusciti devono essere rieseguiti, perché potrebbero precedere modifiche esterne.
+
+### 3.2. Edit vincolati alla versione letta
+
+`read_file` restituisce una `FILE VERSION` SHA-256. `write_file` la richiede per sovrascrivere un file esistente, mentre la creazione usa scrittura esclusiva; `replace_file_content` e `multi_replace_file_content` applicano solo blocchi esatti e univoci. Subito prima della persistenza [`fileSystemRepository.ts`](../electron/core/infrastructure/filesystem/fileSystemRepository.ts) ricontrolla la versione e registra il journal soltanto per una scrittura accettata. In conflitto nessun contenuto viene scritto: l'agente riceve hash correnti, diff sintetico quando disponibile e l'ordine di rileggere e rigenerare l'edit.
 
 ---
 

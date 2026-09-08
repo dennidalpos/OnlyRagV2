@@ -142,7 +142,7 @@ const FOCUS: PlanDirectiveDecision = { kind: 'focus', blockDirective: null, clos
 /** Open milestones: the completion one belongs to `finish`, and `failed` was abandoned on purpose. */
 function selectOpenMilestones(milestones: readonly PlanMilestone[]): PlanMilestone[] {
   return milestones.filter(
-    (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
+    (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
   )
 }
 
@@ -365,7 +365,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
 
   if (
     input.activeMilestone &&
-    !isCompletionMilestoneTitle(input.activeMilestone.title) &&
+    !isCompletionMilestoneTitle(input.activeMilestone) &&
     shouldDirectUnprovableClosure(input.activeMilestone, input.deliverableStatusOf(input.activeMilestone))
   ) {
     return {

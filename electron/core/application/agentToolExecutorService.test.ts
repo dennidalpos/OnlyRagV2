@@ -7,6 +7,7 @@ import { AgentToolExecutorService, agentToolExecutorService } from './agentToolE
 import { npmRegistryClient } from '../infrastructure/http/npmRegistryClient'
 import { webClient } from '../infrastructure/http/webClient'
 import { CapabilityPolicyAuditRepository } from '../infrastructure/logging/capabilityPolicyAuditRepository'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import type { AppSettings } from '../../../shared/types'
 
 describe('AgentToolExecutorService Unit Tests', () => {
@@ -60,7 +61,33 @@ describe('AgentToolExecutorService Unit Tests', () => {
       settings
     )
 
+    expect(readRes.outputForHistory).toContain(`[FILE VERSION: ${contentVersion('Hello AI Agent')}]`)
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
+  })
+
+  it('rejects stale or unversioned whole-file rewrites and returns a useful diff', async () => {
+    const filePath = path.join(tempDir, 'concurrent.ts')
+    fs.writeFileSync(filePath, 'export const value = 2\n', 'utf-8')
+
+    const rejected = await agentToolExecutorService.executeTool({
+      tool: 'write_file',
+      parameters: {
+        filePath,
+        content: 'export const value = 3\n',
+        expectedContentHash: contentVersion('export const value = 1\n'),
+      },
+    }, tempDir, settings)
+
+    expect(rejected.outputForHistory).toContain('[FILE VERSION CONFLICT')
+    expect(rejected.outputForHistory).toContain('- export const value = 2')
+    expect(rejected.outputForHistory).toContain('+ export const value = 3')
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const value = 2\n')
+
+    const missingVersion = await agentToolExecutorService.executeTool({
+      tool: 'write_file', parameters: { filePath, content: 'export const value = 4\n' },
+    }, tempDir, settings)
+    expect(missingVersion.outputForHistory).toContain('Expected: a version from read_file')
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const value = 2\n')
   })
 
   it('enforces the current-turn tool policy at the executor boundary', async () => {
@@ -260,7 +287,10 @@ describe('AgentToolExecutorService Unit Tests', () => {
       fs.writeFileSync(filePath, 'a\nb\nc', 'utf-8')
       const tool = { tool: 'write_file' as const, parameters: { filePath, content: 'a\nB\nC' } }
       // Both changed lines land in one contiguous hunk (id 0) since there's no context between them.
-      expect(agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)).toBe(tool)
+      expect(agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)).toMatchObject({
+        ...tool,
+        parameters: { ...tool.parameters, expectedContentHash: contentVersion('a\nb\nc') },
+      })
     })
 
     it('should rewrite the tool call into a write_file carrying only the approved hunk when hunks are independent', () => {
@@ -268,12 +298,17 @@ describe('AgentToolExecutorService Unit Tests', () => {
       fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
       const tool = {
         tool: 'write_file' as const,
-        parameters: { filePath, content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5' },
+        parameters: {
+          filePath,
+          content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5',
+          expectedContentHash: contentVersion('line1\nline2\nline3\nline4\nline5'),
+        },
       }
 
       const reconciled = agentToolExecutorService.reconcileHunkApproval(tool, [0], tempDir)
       expect(reconciled.tool).toBe('write_file')
       expect(reconciled.parameters.content).toBe('line1\nCHANGED2\nline3\nline4\nline5')
+      expect(reconciled.parameters.expectedContentHash).toBe(contentVersion('line1\nline2\nline3\nline4\nline5'))
     })
 
     it('should end-to-end write only the approved hunk\'s content to disk when the reconciled call is executed', async () => {
@@ -281,7 +316,11 @@ describe('AgentToolExecutorService Unit Tests', () => {
       fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')
       const tool = {
         tool: 'write_file' as const,
-        parameters: { filePath, content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5' },
+        parameters: {
+          filePath,
+          content: 'line1\nCHANGED2\nline3\nline4\nCHANGED5',
+          expectedContentHash: contentVersion('line1\nline2\nline3\nline4\nline5'),
+        },
       }
 
       const reconciled = agentToolExecutorService.reconcileHunkApproval(tool, [1], tempDir) // approve only the SECOND hunk this time
@@ -611,7 +650,7 @@ async def async_handler():
         settings
       )
 
-      expect(res.outputForHistory).toBe('Successfully wrote file src/App.tsx')
+      expect(res.outputForHistory).toBe('Successfully wrote file src/App.tsx (created new file)')
     })
   })
 
@@ -995,7 +1034,7 @@ async def async_handler():
     await agentToolExecutorService.executeTool(
       {
         tool: 'write_file',
-        parameters: { filePath, content: 'Modified State' },
+        parameters: { filePath, content: 'Modified State', expectedContentHash: contentVersion('Original State') },
       },
       tempDir,
       settings
@@ -1022,11 +1061,11 @@ async def async_handler():
     fs.writeFileSync(filePath, 'V1', 'utf-8')
 
     // Step 1 (as the orchestrator loop would drive it: tool call, then endJournalStep()): V1 -> V2
-    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V2' } }, tempDir, settings)
+    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V2', expectedContentHash: contentVersion('V1') } }, tempDir, settings)
     agentToolExecutorService.endJournalStep()
 
     // Step 2: V2 -> V3
-    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V3' } }, tempDir, settings)
+    await agentToolExecutorService.executeTool({ tool: 'write_file', parameters: { filePath, content: 'V3', expectedContentHash: contentVersion('V2') } }, tempDir, settings)
     agentToolExecutorService.endJournalStep()
 
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('V3')
@@ -1213,7 +1252,7 @@ async def async_handler():
     expect(created.changeStats).toEqual({ filePath, additions: 3, deletions: 0 })
 
     const edited = await agentToolExecutorService.executeTool(
-      { tool: 'write_file', parameters: { filePath, content: 'a\nB\nc' } },
+      { tool: 'write_file', parameters: { filePath, content: 'a\nB\nc', expectedContentHash: contentVersion('a\nb\nc') } },
       tempDir,
       settings
     )
@@ -1253,7 +1292,7 @@ async def async_handler():
       )
 
       const edited = await agentToolExecutorService.executeTool(
-        { tool: 'write_file', parameters: { filePath, content: 'export const a = 2\n' } },
+        { tool: 'write_file', parameters: { filePath, content: 'export const a = 2\n', expectedContentHash: contentVersion('export const a = 1\n') } },
         tempDir,
         settings
       )

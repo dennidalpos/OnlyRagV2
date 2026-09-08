@@ -71,8 +71,9 @@ function hasRunnableBacktickedCommand(title: string): boolean {
  * be checked. Creating a directory was never a step anyway — writing a file inside it creates it.
  */
 export function isFalsifiableMilestone(milestone: PlanMilestone): boolean {
-  if (isCompletionMilestoneTitle(milestone.title)) return true
+  if (isCompletionMilestoneTitle(milestone)) return true
   if (milestone.verificationCommand) return true
+  if (milestone.filePaths?.length) return true
   if (extractDeliverablePaths(milestone.title).length > 0) return true
   return hasRunnableBacktickedCommand(milestone.title)
 }
@@ -88,6 +89,12 @@ function asOwnMilestone(title: string): PlanMilestone {
 
 function appendCriteria(milestone: PlanMilestone, criteria: string[]): PlanMilestone {
   if (criteria.length === 0) return milestone
+  if (milestone.filePaths || milestone.acceptanceCriteria) {
+    return {
+      ...milestone,
+      acceptanceCriteria: [...(milestone.acceptanceCriteria || []), ...criteria.map((criterion) => criterion.trim())],
+    }
+  }
   return {
     ...milestone,
     title: [milestone.title.trim(), ...criteria.map((c) => c.trim())].filter(Boolean).join('; '),
@@ -118,7 +125,7 @@ export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMi
       // it. With nothing else to attach them to, they stay steps of their own — the same
       // choice this module already makes below, and the one its own rule prescribes: in doubt,
       // keep the entry, because a noisier plan costs less than work that disappears.
-      if (leadingCriteria.length > 0 && isCompletionMilestoneTitle(milestone.title)) {
+      if (leadingCriteria.length > 0 && isCompletionMilestoneTitle(milestone)) {
         normalized.push(...leadingCriteria.map(asOwnMilestone))
         leadingCriteria = []
       }
@@ -130,7 +137,7 @@ export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMi
     const previous = normalized[normalized.length - 1]
     // The closing milestone must not absorb implementation criteria: it would stop reading
     // as "write the final report and stop", which is how the finish tool identifies it.
-    if (previous && !isCompletionMilestoneTitle(previous.title)) {
+    if (previous && !isCompletionMilestoneTitle(previous)) {
       normalized[normalized.length - 1] = appendCriteria(previous, [milestone.title])
     } else {
       leadingCriteria.push(milestone.title)
@@ -146,7 +153,7 @@ export function normalizePlanFalsifiability(milestones: PlanMilestone[]): PlanMi
   // refuses. This module's rule applies here too: doubt resolves in favour of keeping the entry,
   // because a slightly noisier plan costs less than work that silently disappears.
   if (leadingCriteria.length > 0) {
-    const closingIndex = normalized.findIndex((m) => isCompletionMilestoneTitle(m.title))
+    const closingIndex = normalized.findIndex((m) => isCompletionMilestoneTitle(m))
     const target = closingIndex > 0 ? closingIndex - 1 : closingIndex === -1 ? normalized.length - 1 : -1
     if (target >= 0) {
       normalized[target] = appendCriteria(normalized[target], leadingCriteria)

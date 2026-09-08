@@ -31,10 +31,10 @@ afterEach(() => {
   fs.rmSync(tempDir, { recursive: true, force: true })
 })
 
-function ctxWith(activeTitle?: string): TurnDispatchContext {
+function ctxWith(active?: string | { title: string; filePaths: string[] }): TurnDispatchContext {
   return {
     workspacePath: tempDir,
-    goalPlanner: { getActiveMilestone: () => (activeTitle ? { title: activeTitle } : undefined) },
+    goalPlanner: { getActiveMilestone: () => (typeof active === 'string' ? { title: active } : active) },
   } as unknown as TurnDispatchContext
 }
 
@@ -132,6 +132,11 @@ describe('resolveTurnFileTargets', () => {
   it('falls back to the active milestone deliverables on an ordinary progress turn', () => {
     const resolved = resolveTurnFileTargets(ctxWith('m-4: Dashboard page — src/pages/DashboardPage.tsx'), focus)
     expect(resolved.targets).toContain('src/pages/DashboardPage.tsx')
+  })
+
+  it('prefers structured file paths over title parsing', () => {
+    const resolved = resolveTurnFileTargets(ctxWith({ title: 'Update the dashboard', filePaths: ['src/pages/DashboardPage.tsx'] }), focus)
+    expect(resolved.targets).toEqual(['src/pages/DashboardPage.tsx'])
   })
 
   it('yields nothing on a command turn, where no file is being written', () => {

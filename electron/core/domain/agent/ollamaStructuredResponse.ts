@@ -38,16 +38,28 @@ export const interviewPhaseResponseSchema = z.object({
 })
 
 export const planningPhaseResponseSchema = z.object({
-  milestones: z.array(z.object({
+  objective: nonEmptyText,
+  assumptions: z.array(z.object({
+    id: z.string().trim().regex(/^a-\d+$/),
+    statement: nonEmptyText,
+    rationale: nonEmptyText.max(240),
+  }).strict()).max(5),
+  interventions: z.array(z.object({
     id: z.string().trim().regex(/^m-\d+$/),
     objective: nonEmptyText,
-    filePath: nonEmptyText.optional(),
+    filePaths: z.array(nonEmptyText).max(1),
+    acceptanceCriteria: z.array(nonEmptyText).min(1).max(3),
     verificationCommand: nonEmptyText.optional(),
-  }).strict().superRefine((milestone, ctx) => {
-    if (!milestone.filePath && !milestone.verificationCommand) {
-      ctx.addIssue({ code: 'custom', message: 'A milestone needs a filePath or verificationCommand' })
+    sourceInterventionId: nonEmptyText.optional(),
+  }).strict().superRefine((intervention, ctx) => {
+    if (intervention.filePaths.length === 0 && !intervention.verificationCommand) {
+      ctx.addIssue({ code: 'custom', message: 'An intervention needs a filePath or verificationCommand' })
     }
   })).min(1).max(15),
+  supersededWork: z.array(z.object({
+    interventionId: nonEmptyText,
+    reason: nonEmptyText.max(240),
+  }).strict()).max(15),
 }).strict()
 
 export type InterviewPhaseResponse = z.infer<typeof interviewPhaseResponseSchema>
@@ -78,12 +90,4 @@ export function validateStructuredContent<T>(content: string, schema: z.ZodType<
     return { status: 'invalid', error }
   }
   return { status: 'valid', data: result.data }
-}
-
-export function renderPlanningResponse(response: PlanningPhaseResponse): string {
-  return response.milestones.map((milestone) => {
-    const file = milestone.filePath ? ` — \`${milestone.filePath}\`` : ''
-    const verification = milestone.verificationCommand ? ` — verify: \`${milestone.verificationCommand}\`` : ''
-    return `- [ ] ${milestone.id}: ${milestone.objective}${file}${verification}`
-  }).join('\n')
 }

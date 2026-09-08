@@ -659,10 +659,8 @@ export interface IElectronAPI {
   agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<InterviewAnalysisResult>
   /** Enriches prompt with user's confirmed interview answers. */
   agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>
-  /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
-  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<PlanGenerationResult>
-  /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
-  agentPlanParseText?: (planText: string, workspacePath?: string | null) => Promise<PlanMilestone[]>
+  /** Plan Approval: draft a canonical structured plan via the backend. */
+  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<PlanGenerationResult>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
@@ -724,6 +722,7 @@ export interface AgentDoneResult {
  * Persisted inside its CodingSession by the session history store.
  */
 export interface AgentPlan {
+  formatVersion: 2
   id: string
   version: number
   prompt: string
@@ -731,15 +730,18 @@ export interface AgentPlan {
   originalPrompt?: string
   /** Structured decisions retained independently from the rendered prompt. */
   interviewAnswers?: UserInterviewAnswer[]
-  planText: string
+  objective: string
+  decisions: PlanDecision[]
+  retainedEvidence: PlanEvidence[]
+  supersededWork: PlanSupersededWork[]
   status: 'idle' | 'generating' | 'ready' | 'approved' | 'rejected' | 'error' | 'cancelled'
   errorPhase?: 'interview' | 'planning'
   errorMessage?: string
   /** ISO 8601 timestamp. */
   createdAt: string
   baseStepOffset?: number
-  /** Canonical milestones parsed by the backend's GoalDecompositionPlanner parser (single source of truth — see PlanPanel). */
-  milestones?: PlanMilestone[]
+  /** Canonical interventions used directly by review, persistence and execution. */
+  milestones: PlanMilestone[]
   /** Recoverable reason why this exact revision could not be persisted or seeded for execution. */
   approvalError?: string
 }
@@ -748,15 +750,42 @@ export interface PlanMilestone {
   id: string
   title: string
   status: 'pending' | 'in_progress' | 'verified' | 'failed'
+  filePaths?: string[]
+  acceptanceCriteria?: string[]
+  verificationReferences?: string[]
+  sourceInterventionId?: string
   falsifiableHypothesis?: string
   verificationCommand?: string
+  /** Suggested after scaffolding; never executable until rediscovered from project capabilities. */
+  proposedVerificationCommand?: string
   notes?: string
+}
+
+export interface PlanDecision {
+  id: string
+  statement: string
+  source: 'explicit_user' | 'accepted_recommendation' | 'assumption'
+  rationale?: string
+}
+
+export interface PlanSupersededWork {
+  interventionId: string
+  reason: string
+}
+
+export interface PlanEvidence {
+  interventionId: string
+  summary: string
+  verificationReferences: string[]
 }
 
 export interface PlanGenerationResult {
   status: 'success' | 'error'
-  planText: string
+  objective: string
+  decisions: PlanDecision[]
+  retainedEvidence: PlanEvidence[]
   milestones: PlanMilestone[]
+  supersededWork: PlanSupersededWork[]
   error?: string
 }
 

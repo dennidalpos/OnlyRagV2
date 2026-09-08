@@ -170,7 +170,7 @@ export async function closeAgentRunFromEvidence(
     }
   }
 
-  const operational = ctx.goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone.title))
+  const operational = ctx.goalPlanner.getMilestones().filter((milestone) => !isCompletionMilestoneTitle(milestone))
   const outstanding = operational.filter((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
   const abandoned = operational.filter((milestone) => milestone.status === 'failed')
 
@@ -199,7 +199,7 @@ export async function closeAgentRunFromEvidence(
   // Legacy plans may still contain a synthetic “invoke finish” milestone. It is control flow,
   // not user work: close it here so it cannot survive as artificial debt in the next session.
   for (const milestone of ctx.goalPlanner.getMilestones()) {
-    if (isCompletionMilestoneTitle(milestone.title) && milestone.status !== 'verified') {
+    if (isCompletionMilestoneTitle(milestone) && milestone.status !== 'verified') {
       ctx.goalPlanner.updateMilestone(milestone.id, 'verified', `Closed by application (${status}).`)
     }
   }

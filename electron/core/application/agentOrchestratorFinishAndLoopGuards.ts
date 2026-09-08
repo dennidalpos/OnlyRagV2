@@ -14,7 +14,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     // Reject only the obviously premature step-1/2 signal. Every other finish reaches the
     // evidence gate, which can return verified, unverifiable or blocked without trusting it.
     const nonFinishPendingMilestones = ctx.goalPlanner.getMilestones().filter(
-      (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
+      (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
     )
     const pendingMilestonesCount = nonFinishPendingMilestones.length
 
@@ -83,7 +83,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
  */
 function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: string | undefined): string | null {
   const stuckMilestone = ctx.goalPlanner.getActiveMilestone()
-  if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone.title)) return null
+  if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone)) return null
 
   ctx.goalPlanner.updateMilestone(
     stuckMilestone.id,
@@ -294,7 +294,7 @@ ${planDirective.blockDirective}`
       !loopIsUnrelatedToActiveMilestone &&
       ctx.goalPlanner
         .getMilestones()
-        .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)),
+        .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)),
     isUnlimitedSteps: ctx.isUnlimitedSteps,
   })
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null

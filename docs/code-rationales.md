@@ -44,6 +44,17 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 * **Problema**: Il precedente tetto a 15 fondeva interventi distinti. Nel gruppo risultante sopravviveva solo il primo `verificationCommand`, quindi un suo esito positivo poteva sostituire le prove successive. Anche due interventi adiacenti sullo stesso file venivano accorpati perdendo identità e metadati.
 * **Soluzione**: La compilazione conserva ogni intervento e limita solo la finestra ripetuta nel prompt ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts)). Il controllo globale copre le milestone senza prova dedicata; quando una milestone dichiara un comando, la promozione richiede la corrispondenza con quello eseguito, oltre alla presenza degli artefatti. Le note distinguono presenza, compilazione e comportamento.
 
+### Piani canonici strutturati (CAS-17)
+
+* **Problema**: persistenza, revisione ed esecuzione potevano dipendere dal reparsing del Markdown, con perdita di decisioni, requisiti residui o prove.
+* **Soluzione**: `AgentPlan` v2 conserva obiettivo, decisioni/assunzioni, interventi con file e criteri, evidenze mantenute e lavoro esplicitamente superato. Il Markdown è solo una vista derivata; ripianificazioni che perdono interventi aperti vengono rifiutate.
+* **Compatibilità**: per decisione di progetto non viene eseguita una migrazione dei vecchi piani testuali; le sessioni restano leggibili, ma quelle revisioni vengono ignorate.
+
+### Espansione dell'intervento attivo (CAS-18)
+
+* **Problema**: ripetere più milestone complete nel prompt mescolava lavoro corrente e futuro; una verifica persistita poteva inoltre restare valida dopo modifiche esterne.
+* **Soluzione**: il prompt espande soltanto l'intervento attivo in massimo quattro azioni e mantiene il resto nello stato canonico. Gli edit collegati sono ammessi solo quando richiesti dal contratto modificato; la verifica segue il gruppo coerente. Alla ripresa, file e comandi vengono rivalidati prima di conservare lo stato `verified`.
+
 ### 2.5. Schema, correttezza e autorizzazione
 * **Evidenza (Ollama 0.33.3, 2026-09-08)**: `/api/chat` con `format` ha prodotto JSON conforme ma una domanda inutile per una richiesta già determinata. Con `tools` e `format` simultanei il modello ha restituito contenuto conforme allo schema senza `tool_calls`.
 * **Soluzione**: Intervista e piano usano schema Zod tramite `format`; il loop usa `tools` senza `format`. `done`, schema, correttezza del piano e autorizzazione dell'executor restano controlli separati. Nessun contenuto incompleto viene eseguito.
@@ -67,6 +78,14 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 ### 2.10. Conferma delle decisioni
 * **Problema**: Una preselezione UI o un ID di una vecchia intervista potevano essere interpretati come risposta confermata.
 * **Soluzione**: Schema e validatore controllano cardinalità, unicità, lingua, opzioni e raccomandazione. L'arricchimento richiede il set corrente di domande e provenienza esplicita; il pulsante di conferma resta inattivo finché ogni scelta non viene effettuata, mentre l'azione separata sui consigli ne registra l'accettazione.
+
+### 2.11. Scaffold e verifiche derivati dal progetto
+* **Problema**: Il compilatore interpretava qualsiasi file JS/TS come applicazione web e anteponeva sempre `package.json`, `tsconfig.json`, `index.html` e `src/main.tsx`; un check futuro poteva inoltre sembrare già disponibile.
+* **Soluzione**: Lo scaffold greenfield è una blueprint deterministica ricavata solo dalla richiesta o da decisioni confermate. I file esistenti disattivano il re-scaffolding anche senza manifest. I comandi osservati restano eseguibili e soggetti al gate; quelli richiesti dallo scaffold sono etichettati come futuri e non possono entrare nel runner finché il discovery non li rileva realmente.
+
+### 2.12. Edit ottimistici e conflitti (CAS-20)
+* **Problema**: Una riscrittura completa poteva sovrascrivere modifiche dell'utente avvenute dopo la lettura; il fuzzy matching poteva scegliere un blocco simile o uno tra più blocchi uguali.
+* **Soluzione**: Le letture espongono un hash SHA-256. Riscritture esistenti e scritture finali dei replace vengono confrontate di nuovo prima della persistenza; i nuovi file usano creazione esclusiva. I replace richiedono corrispondenza esatta e univoca e i batch vengono preparati integralmente prima del journal, quindi un errore non lascia applicazioni parziali. Il conflitto restituisce una diagnostica utile senza toccare il disco.
 
 ---
 

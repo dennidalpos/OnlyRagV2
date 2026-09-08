@@ -6,6 +6,7 @@ import { AgentToolExecutorService } from './agentToolExecutorService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'
 import { toolExecutionResultSchema } from '../domain/agent/tools/toolExecutionContracts'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { TaskRunner } from '../infrastructure/process/taskRunner'
 import type { AppSettings } from '../../../shared/types'
 
@@ -40,7 +41,10 @@ describe('Wave 6 deterministic safety fixtures', () => {
     fs.writeFileSync(filePath, 'before')
 
     const writeResult = await executor.executeTool(
-      { tool: 'write_file', parameters: { filePath: 'tracked.txt', content: 'after' } },
+      {
+        tool: 'write_file',
+        parameters: { filePath: 'tracked.txt', content: 'after', expectedContentHash: contentVersion('before') },
+      },
       workspacePath,
       settings,
     )

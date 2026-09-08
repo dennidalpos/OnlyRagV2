@@ -26,9 +26,9 @@ export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strict
 - read_file: { "filePath": "path/to/file", "startLine"?: 1, "endLine"?: 50 }
 - get_file_info: { "filePath": "path/to/file" }
 - extract_code_symbols: { "filePath": "path/to/file", "symbolType"?: "all" | "function" | "class" | "interface" }
-- replace_file_content: { "filePath": "path", "targetContent": "exact text to replace", "replacementContent": "new code" }
-- multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "old1", "replacementContent": "new1" }] }
-- write_file: { "filePath": "path", "content": "full text" }
+- replace_file_content: { "filePath": "path", "targetContent": "exact unique text", "replacementContent": "new code", "expectedContentHash": "FILE VERSION from read_file" }
+- multi_replace_file_content: { "filePath": "path", "replacements": [{ "targetContent": "exact unique text", "replacementContent": "new text" }], "expectedContentHash": "FILE VERSION from read_file" }
+- write_file: { "filePath": "path", "content": "full text", "expectedContentHash": "required FILE VERSION when overwriting; omit for a new file" }
 - delete_file: { "filePath": "path" }
 - grep_search: { "query": "pattern", "isRegex": false }
 - list_dir: { "dirPath": "path" }

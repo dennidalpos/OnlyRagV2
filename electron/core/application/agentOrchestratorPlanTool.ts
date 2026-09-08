@@ -129,9 +129,9 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
             requestedStatus: effectiveStatus,
             requestedNotes: effectiveNotes,
             deliverableStatus: probe
-              ? resolveMilestoneDeliverableStatus(targetMilestone.title, probe)
+              ? resolveMilestoneDeliverableStatus(targetMilestone, probe)
               : 'not_applicable',
-            unsatisfiedDeliverables: probe ? findUnsatisfiedDeliverables(targetMilestone.title, probe) : undefined,
+            unsatisfiedDeliverables: probe ? findUnsatisfiedDeliverables(targetMilestone, probe) : undefined,
           })
         : null
 

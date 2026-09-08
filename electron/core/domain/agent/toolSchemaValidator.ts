@@ -240,6 +240,9 @@ export function normalizeToolParams(raw: Record<string, any>): Record<string, an
     const rawContent = p.code || p.text || p.file_content || p.data || p.CodeContent
     if (rawContent !== undefined) p.content = rawContent
   }
+  if (p.expectedContentHash === undefined) {
+    p.expectedContentHash = p.expected_content_hash || p.contentHash || p.content_hash || p.fileVersion
+  }
 
   // 3. Query, Command & Question
   if (!p.query) {
@@ -317,6 +320,7 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       } else {
         rawParams.content = String(rawParams.content)
       }
+      if (rawParams.expectedContentHash !== undefined) rawParams.expectedContentHash = String(rawParams.expectedContentHash)
       break
     }
 
@@ -336,6 +340,7 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       } else {
         rawParams.replacementContent = String(rawParams.replacementContent)
       }
+      if (rawParams.expectedContentHash !== undefined) rawParams.expectedContentHash = String(rawParams.expectedContentHash)
       break
     }
 
@@ -348,6 +353,7 @@ export function validateAndSanitize(toolCall: AgentToolCall): SchemaValidationRe
       if (!Array.isArray(rawParams.replacements) || rawParams.replacements.length === 0) {
         errors.push("Missing or non-array parameter 'replacements' for multi_replace_file_content")
       }
+      if (rawParams.expectedContentHash !== undefined) rawParams.expectedContentHash = String(rawParams.expectedContentHash)
       break
     }
 

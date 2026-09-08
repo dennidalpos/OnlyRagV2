@@ -50,7 +50,7 @@ export async function runCircuitBreaker(
     stepCount: ctx.stepCount,
     completed: milestones.filter((m) => m.status === 'verified').map((m) => `${m.id}: ${m.title}`),
     outstanding: milestones
-      .filter((m) => m.status !== 'verified' && !isCompletionMilestoneTitle(m.title))
+      .filter((m) => m.status !== 'verified' && !isCompletionMilestoneTitle(m))
       .map((m) => `${m.id}: ${m.title}${m.status === 'failed' ? ' (fallita)' : ''}`),
     modifiedFiles: Array.from(ctx.sessionChangedFiles.keys()),
   })
@@ -85,7 +85,7 @@ function reportPartialDelivery(
   // title in relative form. Compared verbatim, an absolute evidence path would never match and
   // the file just written would be listed back as still missing.
   const normalisedEvidence = evidencePath.replace(/\\/g, '/')
-  const missing = findUnsatisfiedDeliverables(milestone.title, probe).filter(
+  const missing = findUnsatisfiedDeliverables(milestone, probe).filter(
     (candidate) => normalisedEvidence !== candidate && !normalisedEvidence.endsWith(`/${candidate}`)
   )
   // Empty when the file just written is itself the unsatisfied one — a placeholder body, say.
@@ -128,9 +128,9 @@ function reportRedelivery(
 ) {
   const active = ctx.goalPlanner.getActiveMilestone()
   const nextNeed =
-    active && active.id !== milestone.id && !isCompletionMilestoneTitle(active.title)
+    active && active.id !== milestone.id && !isCompletionMilestoneTitle(active)
       ? (() => {
-          const missing = findUnsatisfiedDeliverables(active.title, probe)
+          const missing = findUnsatisfiedDeliverables(active, probe)
           return missing.length > 0 ? { milestoneId: active.id, missingPaths: missing } : null
         })()
       : null
@@ -177,7 +177,7 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
   const workspacePath = ctx.workspacePath
   if (!workspacePath) {
     const activeM = ctx.goalPlanner.getActiveMilestone()
-    if (activeM && activeM.status === 'pending' && !isCompletionMilestoneTitle(activeM.title)) {
+    if (activeM && activeM.status === 'pending' && !isCompletionMilestoneTitle(activeM)) {
       ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
     }
     return
@@ -187,14 +187,14 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
   let advancedAny = false
 
   for (const milestone of ctx.goalPlanner.getMilestones()) {
-    if (milestone.status === 'verified' || milestone.status === 'failed' || isCompletionMilestoneTitle(milestone.title)) {
+    if (milestone.status === 'verified' || milestone.status === 'failed' || isCompletionMilestoneTitle(milestone)) {
       continue
     }
 
-    const evidencePath = mutatedPaths.find((candidate) => isDeliverableOfMilestone(milestone.title, candidate))
+    const evidencePath = mutatedPaths.find((candidate) => isDeliverableOfMilestone(milestone, candidate))
     if (!evidencePath) continue
 
-    const status = resolveMilestoneDeliverableStatus(milestone.title, probe)
+    const status = resolveMilestoneDeliverableStatus(milestone, probe)
     if (status === 'satisfied') {
       // Awaiting verification note indicates milestone was complete before this write (re-delivery).
       const wasAlreadySatisfied = Boolean(milestone.notes && milestone.notes.includes(AWAITING_VERIFICATION_MARKER))
@@ -221,7 +221,7 @@ function advanceActiveMilestoneOnMutation(ctx: ToolResultProcessingContext, muta
 
   if (!advancedAny) {
     const activeM = ctx.goalPlanner.getActiveMilestone()
-    if (activeM && activeM.status === 'pending' && !isCompletionMilestoneTitle(activeM.title)) {
+    if (activeM && activeM.status === 'pending' && !isCompletionMilestoneTitle(activeM)) {
       ctx.goalPlanner.updateMilestone(activeM.id, 'in_progress')
     }
   }
@@ -363,7 +363,7 @@ export function selectMilestonesAwaitingVerification(
   if (!deps.workspacePath) return []
   const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
   return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) =>
-    resolveMilestoneDeliverableStatus(m.title, probe)
+    resolveMilestoneDeliverableStatus(m, probe)
   )
 }
 
@@ -427,7 +427,7 @@ export function resolvePlanDirectiveForTurn(
     hasVerifiedBuild,
     milestones: goalPlanner.getMilestones(),
     activeMilestone: goalPlanner.getActiveMilestone(),
-    deliverableStatusOf: (m) => resolveMilestoneDeliverableStatus(m.title, probe),
+    deliverableStatusOf: (m) => resolveMilestoneDeliverableStatus(m, probe),
     // Only ever non-empty for a project that declares dependencies: a workspace with no
     // manifest offers nothing to install, and reporting "0 missing" would be noise.
     missingDependencies: declared.length > 0 ? agentToolFileRepository.missingFromNodeModules(workspacePath, declared) : [],
@@ -476,7 +476,7 @@ export function isActiveMilestoneDelivered(
 ): boolean {
   if (!workspacePath) return false
   const active = goalPlanner.getActiveMilestone()
-  if (!active || isCompletionMilestoneTitle(active.title)) return false
+  if (!active || isCompletionMilestoneTitle(active)) return false
 
   // A loop on a file the milestone itself names IS about this milestone, and the escape must
   // keep its power there. Compared on normalised paths because tool targets arrive absolute
@@ -484,12 +484,12 @@ export function isActiveMilestoneDelivered(
   // loop unrelated and disarm the escape completely.
   if (loopTarget) {
     const normalisedTarget = loopTarget.replace(/\\/g, '/').toLowerCase()
-    const ownFiles = extractDeliverablePaths(active.title).map((p) => p.replace(/\\/g, '/').toLowerCase())
+    const ownFiles = (active.filePaths?.length ? active.filePaths : extractDeliverablePaths(active.title)).map((p) => p.replace(/\\/g, '/').toLowerCase())
     if (ownFiles.some((file) => normalisedTarget === file || normalisedTarget.endsWith(`/${file}`))) return false
   }
 
   const probe = createWorkspaceDeliverableProbe(workspacePath)
-  return resolveMilestoneDeliverableStatus(active.title, probe) === 'satisfied'
+  return resolveMilestoneDeliverableStatus(active, probe) === 'satisfied'
 }
 
 /**

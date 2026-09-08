@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IElectronAPI, AppSettings, CodingSession, InterviewQuestion, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
+import type { AgentPlan, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
 
 const api: IElectronAPI = {
   runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),
@@ -194,12 +194,9 @@ const api: IElectronAPI = {
   /** Enriches prompt with user's confirmed interview answers. */
   agentPlanEnrichPrompt: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) =>
     ipcRenderer.invoke('agent:plan-enrich-prompt', prompt, answers, questions),
-  /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
-  agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) =>
-    ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, pendingResidueMilestones, workspacePath, previousDecisions),
-  /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
-  agentPlanParseText: (planText: string, workspacePath?: string | null) =>
-    ipcRenderer.invoke('agent:plan-parse-text', planText, workspacePath),
+  /** Plan Approval: draft a canonical structured plan. */
+  agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) =>
+    ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, previousPlan, workspacePath, previousDecisions),
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState: (sessionId: string, workspacePath?: string | null) =>
     ipcRenderer.invoke('agent:get-plan-state', sessionId, workspacePath),

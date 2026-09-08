@@ -8,7 +8,7 @@ import { planGenerationAppService } from '../application/planGenerationAppServic
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
+import type { AgentPlan, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle('agent:start-task', async (_, payload: AgentTaskPayload) => {
@@ -68,18 +68,10 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-generate',
-    async (_, prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: any[], workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
-      return planGenerationAppService.generatePlanText({ prompt, model, settings, pendingResidueMilestones, workspacePath, previousDecisions })
+    async (_, prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+      return planGenerationAppService.generatePlanText({ prompt, model, settings, previousPlan, workspacePath, previousDecisions })
     }
   )
-
-  /**
-   * Re-parses (e.g. user-edited) plan text into canonical milestones, using
-   * the same parser as agent:plan-generate and the orchestrator loop itself.
-   */
-  ipcMain.handle('agent:plan-parse-text', async (_, planText: string, workspacePath?: string | null) => {
-    return planGenerationAppService.parsePlanText(planText, workspacePath)
-  })
 
   /**
    * Exposes the backend's persisted plan milestone state (GoalDecompositionPlanner's

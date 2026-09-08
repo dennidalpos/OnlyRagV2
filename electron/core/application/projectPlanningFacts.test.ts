@@ -31,7 +31,8 @@ describe('collectProjectPlanningFacts', () => {
     expect(result.facts.workspace).toBe('existing')
     expect(result.facts.stack).toMatchObject({ languages: ['typescript'], testFrameworks: ['vitest'] })
     expect(result.facts.relevantFiles[0]).toBe('src/Dashboard.ts')
-    expect(result.facts.verificationCommands).toContain('npm run test')
+    expect(result.facts.verification.executableCommands).toContain('npm run test')
+    expect(result.facts.verification.proposedCommands).toEqual([])
     expect(result.facts.previousDecisions[0]).toMatchObject({ question: 'Storage', answer: 'Local' })
   })
 
@@ -43,5 +44,22 @@ describe('collectProjectPlanningFacts', () => {
       workspace: 'existing',
       stack: { languages: ['python'] },
     })
+  })
+
+  it('separates proposed greenfield checks from executable commands', () => {
+    const result = collectProjectPlanningFacts(workspace(), 'Create a Rust CLI')
+
+    expect(result.facts.acceptedGreenfieldStack).toBe('rust')
+    expect(result.facts.verification).toEqual({ executableCommands: [], proposedCommands: ['cargo check'] })
+  })
+
+  it('does not scaffold a manifest-less workspace that already contains files', () => {
+    const root = workspace()
+    fs.writeFileSync(path.join(root, 'app.py'), 'print("ready")')
+
+    const result = collectProjectPlanningFacts(root, 'Create a React app')
+
+    expect(result.facts).toMatchObject({ workspace: 'empty', hasFiles: true })
+    expect(result.scaffold.requirements).toEqual([])
   })
 })

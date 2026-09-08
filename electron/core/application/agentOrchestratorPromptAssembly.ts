@@ -156,9 +156,9 @@ export function resolveTurnFileTargets(
   }
   if (directive.kind !== 'focus') return { targets: [], reason: '' }
 
-  const activeTitle = ctx.goalPlanner.getActiveMilestone()?.title || ctx.userTask
+  const active = ctx.goalPlanner.getActiveMilestone()
   return {
-    targets: extractDeliverablePaths(activeTitle),
+    targets: active?.filePaths?.length ? active.filePaths : extractDeliverablePaths(active?.title || ctx.userTask),
     reason: 'already on disk for the active milestone — edit it rather than overwrite it',
   }
 }

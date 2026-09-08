@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   interviewPhaseResponseSchema,
   planningPhaseResponseSchema,
-  renderPlanningResponse,
   toOllamaJsonSchema,
   validateStructuredContent,
 } from './ollamaStructuredResponse'
@@ -53,21 +52,17 @@ describe('Ollama structured phase responses', () => {
     expect(duplicateIds.status).toBe('invalid')
   })
 
-  it('rejects plan milestones without evidence', () => {
+  it('rejects plan interventions without evidence', () => {
     const result = validateStructuredContent(
-      '{"milestones":[{"id":"m-1","objective":"Inspect code"}]}',
+      JSON.stringify({ objective: 'Inspect code', assumptions: [], interventions: [{ id: 'm-1', objective: 'Inspect code', filePaths: [], acceptanceCriteria: ['Known result'] }], supersededWork: [] }),
       planningPhaseResponseSchema
     )
     expect(result.status).toBe('invalid')
   })
 
-  it('derives the Ollama format and canonical checklist from the planning schema', () => {
+  it('derives an Ollama JSON schema for the structured plan', () => {
     const format = toOllamaJsonSchema(planningPhaseResponseSchema)
     expect(format.type).toBe('object')
-
-    const planText = renderPlanningResponse({
-      milestones: [{ id: 'm-1', objective: 'Login works', filePath: 'src/auth.ts', verificationCommand: 'npm test' }],
-    })
-    expect(planText).toBe('- [ ] m-1: Login works — `src/auth.ts` — verify: `npm test`')
+    expect(format.properties).toEqual(expect.objectContaining({ objective: expect.any(Object), interventions: expect.any(Object) }))
   })
 })

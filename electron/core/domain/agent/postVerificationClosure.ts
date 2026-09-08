@@ -69,7 +69,7 @@ export interface ClosureInput {
  */
 function selectOpenMilestones(milestones: readonly PlanMilestone[]) {
   return milestones.filter(
-    (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m.title)
+    (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
   )
 }
 

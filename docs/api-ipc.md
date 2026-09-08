@@ -11,12 +11,11 @@ Registrati in [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts).
 | :--- | :--- | :--- | :--- |
 | `agent:start-task` | `{ prompt, workspacePath, model?, contextFiles?, approvedPlan? }` | `{ success: boolean, sessionId: string }` | Avvia il ciclo agentico autonomo (Tool Calling Loop). |
 | `agent:cancel-task` | `{ sessionId: string }` | `{ success: boolean }` | Interrompe immediatamente il task agentico in corso. |
-| `agent:plan-seed` | `{ prompt, workspacePath }` | `AgentPlan` | Genera una bozza deterministica iniziale del piano. |
+| `agent:plan-seed` | `(sessionId, workspacePath, interventions, userTask?)` | `boolean` | Salva gli interventi approvati nello stato runtime prima dell'esecuzione. |
 | `agent:plan-interview` | `(prompt, model?, settings, workspacePath?, previousDecisions?)` | `InterviewAnalysisResult` | Esegue l'intervista con fatti freschi del workspace e risposta Ollama vincolata da schema; errori di trasporto, incompletezza e schema restano distinti internamente. |
-| `agent:plan-generate` | `(prompt, model?, settings, pendingResidueMilestones?, workspacePath?, previousDecisions?)` | `PlanGenerationResult` | Valida il piano JSON, include fatti e decisioni del progetto e deriva il Markdown canonico senza esporre il protocollo Ollama al Renderer. |
+| `agent:plan-generate` | `(prompt, model?, settings, previousPlan?, workspacePath?, previousDecisions?)` | `PlanGenerationResult` | Restituisce obiettivo, decisioni/assunzioni, interventi, evidenze conservate e lavoro superato come dati strutturati. |
 | `agent:plan-enrich-prompt`| `(prompt, answers, questions)` | `string` | Valida risposte, ID correnti e provenienza prima di arricchire il prompt. |
-| `agent:plan-parse-text` | `{ rawPlanText }` | `AgentPlan` | Parser di salvataggio/riparazione piani in formato testo. |
-| `agent:get-plan-state` | `{ sessionId, workspacePath }` | `AgentPlan \| null` | Recupera lo stato attuale del piano per la sessione. |
+| `agent:get-plan-state` | `(sessionId, workspacePath?)` | `AgentPlanState \| null` | Recupera stato e avanzamento runtime degli interventi. |
 | `agent:get-queue-status` | `{}` | `{ pendingCount: number, running: boolean }` | Monitora lo stato della coda di prompt multi-step. |
 | `agent:approval-response`| `{ approvalId, decision: 'approved' \| 'rejected', reason? }` | `{ success: boolean }` | Invia la decisione dell'utente su un'azione con richiesta di conferma. |
 | `agent:parse-tool-call` | `{ rawText: string }` | `ParsedToolCall \| null` | Esegue il parsing formale di un blocco di invocazione tool. |

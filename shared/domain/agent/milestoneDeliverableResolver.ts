@@ -32,6 +32,11 @@ export type DeliverableProbe = (relativePath: string) => DeliverableProbeResult
 
 export type MilestoneDeliverableStatus = 'satisfied' | 'unsatisfied' | 'not_applicable'
 
+export interface MilestoneDeliverableDeclaration {
+  title: string
+  filePaths?: string[]
+}
+
 /** Marker for milestones whose deliverables are on disk but awaiting verification command pass. */
 export const AWAITING_VERIFICATION_MARKER = 'Awaiting a passing verification command'
 
@@ -73,6 +78,14 @@ export function extractDeliverablePaths(title: string): string[] {
   }
 
   return found
+}
+
+export function resolveDeclaredFilePaths(input: string | MilestoneDeliverableDeclaration): string[] {
+  if (typeof input === 'string') return extractDeliverablePaths(input)
+  if (input.filePaths) {
+    return [...new Set(input.filePaths.map((filePath) => filePath.replace(/\\/g, '/').replace(/^\.\//, '')).filter(Boolean))]
+  }
+  return extractDeliverablePaths(input.title)
 }
 
 /** Line prefixes that mark a comment across the languages a generated project can use. */
@@ -129,13 +142,13 @@ export function isPlaceholderContent(content: string): boolean {
  * `isPlaceholderContent`. Existence with a non-zero size used to be the entire bar.
  */
 export function resolveMilestoneDeliverableStatus(
-  title: string,
+  milestone: string | MilestoneDeliverableDeclaration,
   probe: DeliverableProbe
 ): MilestoneDeliverableStatus {
-  const deliverables = extractDeliverablePaths(title)
+  const deliverables = resolveDeclaredFilePaths(milestone)
   if (deliverables.length === 0) return 'not_applicable'
 
-  return findUnsatisfiedDeliverables(title, probe).length === 0 ? 'satisfied' : 'unsatisfied'
+  return findUnsatisfiedDeliverables(milestone, probe).length === 0 ? 'satisfied' : 'unsatisfied'
 }
 
 /**
@@ -146,8 +159,8 @@ export function resolveMilestoneDeliverableStatus(
  * titled "Create `vite.config.ts`; Create `tsconfig.json`" that reports only `tsconfig.json`
  * tells the model exactly what to write next; "deliverables missing" tells it to guess.
  */
-export function findUnsatisfiedDeliverables(title: string, probe: DeliverableProbe): string[] {
-  return extractDeliverablePaths(title).filter((deliverable) => {
+export function findUnsatisfiedDeliverables(milestone: string | MilestoneDeliverableDeclaration, probe: DeliverableProbe): string[] {
+  return resolveDeclaredFilePaths(milestone).filter((deliverable) => {
     const result = probe(deliverable)
     if (!result.exists || result.contentLength <= 0) return true
     // Inspect small files to reject empty stubs or comment-only placeholders.
@@ -166,13 +179,13 @@ export function findUnsatisfiedDeliverables(title: string, probe: DeliverablePro
  * Comparison is on normalised workspace-relative paths, and also accepts an absolute
  * path that ends with the deliverable, since tool results report absolute paths.
  */
-export function isDeliverableOfMilestone(title: string, mutatedPath: string | undefined): boolean {
+export function isDeliverableOfMilestone(milestone: string | MilestoneDeliverableDeclaration, mutatedPath: string | undefined): boolean {
   if (!mutatedPath) return false
 
   const normalisedMutation = mutatedPath.replace(/\\/g, '/').replace(/^\.\//, '')
   if (!normalisedMutation) return false
 
-  return extractDeliverablePaths(title).some(
+  return resolveDeclaredFilePaths(milestone).some(
     (deliverable) =>
       normalisedMutation === deliverable ||
       normalisedMutation.endsWith(`/${deliverable}`)

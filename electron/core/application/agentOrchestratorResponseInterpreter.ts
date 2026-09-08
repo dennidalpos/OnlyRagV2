@@ -137,7 +137,7 @@ async function handleMissingToolCall(
 
   const hasOperationalWork = !ctx.goalPlanner.hasPlan() || ctx.goalPlanner.getMilestones().some(
     (milestone) =>
-      !isCompletionMilestoneTitle(milestone.title) &&
+      !isCompletionMilestoneTitle(milestone) &&
       (milestone.status === 'pending' || milestone.status === 'in_progress')
   )
 

@@ -5,11 +5,13 @@ import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 import { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
-import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
+import { GoalDecompositionPlanner, type PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
+import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -53,6 +55,24 @@ export interface SessionState {
   sessionNumCtxBox: { value: number | null }
   /** Per-file line deltas applied during this session, for the UI's change metrics. */
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>
+}
+
+/** Rechecks persisted evidence before a resumed intervention can remain verified. */
+export function revalidateRestoredMilestones(
+  milestones: readonly PlanMilestone[],
+  workspacePath: string | null
+): PlanMilestone[] {
+  const probe = workspacePath ? createWorkspaceDeliverableProbe(workspacePath) : null
+  return milestones.map((milestone) => {
+    if (milestone.status !== 'verified') return milestone
+    if (probe && resolveMilestoneDeliverableStatus(milestone, probe) === 'unsatisfied') {
+      return { ...milestone, status: 'pending', notes: 'Persisted file evidence is stale; deliverables must be restored.' }
+    }
+    if (milestone.verificationCommand) {
+      return { ...milestone, status: 'in_progress', notes: 'Persisted command evidence is stale; rerun verification.' }
+    }
+    return milestone
+  })
 }
 
 /**
@@ -101,7 +121,10 @@ export async function initializeSessionState(params: SessionStateParams): Promis
       episodicCompactor.fromState(savedState.episodes, savedState.recentFullLogs)
     }
     if (savedState.planMilestones && savedState.planMilestones.length > 0) {
-      goalPlanner.loadMilestones(savedState.planMilestones)
+      const restoredMilestones = revalidateRestoredMilestones(savedState.planMilestones, workspacePath)
+      goalPlanner.loadMilestones(restoredMilestones)
+      const staleCount = restoredMilestones.filter((milestone, index) => milestone.status !== savedState.planMilestones[index].status).length
+      if (staleCount > 0) emitLog('info', `♻️ ${staleCount} persisted milestone evidence marked for revalidation.`)
     }
     emitLog('info', `🔄 Restored Session State [${sessionId}]: Continuing from Step ${stepCountBox.value} with ${episodicCompactor.episodeCount} prior steps in memory.`)
   }

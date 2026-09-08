@@ -1,13 +1,19 @@
 import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
 import { extractDeliverablePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
 import { selectPromptMilestoneWindow } from './planPromptWindow'
+import { buildActiveInterventionActions } from './activeInterventionActions'
 
 export interface PlanMilestone {
   id: string
   title: string
   status: 'pending' | 'in_progress' | 'verified' | 'failed'
+  filePaths?: string[]
+  acceptanceCriteria?: string[]
+  verificationReferences?: string[]
+  sourceInterventionId?: string
   falsifiableHypothesis?: string
   verificationCommand?: string
+  proposedVerificationCommand?: string
   notes?: string
 }
 
@@ -38,7 +44,9 @@ export interface CompactPlanState {
  * misreading work as the closing entry hides it from the agent entirely, while misreading
  * the closing entry as work merely leaves it on the checklist for the finish tool to own.
  */
-export function isCompletionMilestoneTitle(title: string): boolean {
+export function isCompletionMilestoneTitle(input: string | Pick<PlanMilestone, 'title' | 'filePaths'>): boolean {
+  const title = typeof input === 'string' ? input : input.title
+  if (typeof input !== 'string' && input.filePaths?.length) return false
   if (!/finish|completamento|arresto|riepilogo|final report/i.test(title || '')) return false
   return extractDeliverablePaths(title || '').length === 0
 }
@@ -95,7 +103,7 @@ export class GoalDecompositionPlanner {
 
     for (const m of this.milestones) {
       previousByTitle.set(m.title.trim().toLowerCase(), m)
-      const deliverables = extractDeliverablePaths(m.title)
+      const deliverables = m.filePaths?.length ? m.filePaths : extractDeliverablePaths(m.title)
       if (deliverables.length > 0) {
         previousByDeliverable.set(deliverables.sort().join('|'), m)
       }
@@ -104,7 +112,7 @@ export class GoalDecompositionPlanner {
     this.milestones = milestones.map((m, idx) => {
       let previous = previousByTitle.get((m.title || '').trim().toLowerCase())
       if (!previous) {
-        const deliverables = extractDeliverablePaths(m.title || '')
+        const deliverables = m.filePaths?.length ? m.filePaths : extractDeliverablePaths(m.title || '')
         if (deliverables.length > 0) {
           previous = previousByDeliverable.get(deliverables.sort().join('|'))
         }
@@ -140,7 +148,7 @@ export class GoalDecompositionPlanner {
     // 1. Is there an in_progress milestone that actually needs work?
     const inProgressUnsatisfied = this.milestones.find((m) => {
       if (m.status !== 'in_progress') return false
-      if (isCompletionMilestoneTitle(m.title)) return false
+      if (isCompletionMilestoneTitle(m)) return false
       if (isDeliverableSatisfied) {
         return !isDeliverableSatisfied(m)
       }
@@ -152,11 +160,11 @@ export class GoalDecompositionPlanner {
     if (inProgressUnsatisfied) return inProgressUnsatisfied
 
     // 2. Is there a pending operational milestone?
-    const nextPending = this.milestones.find((m) => m.status === 'pending' && !isCompletionMilestoneTitle(m.title))
+    const nextPending = this.milestones.find((m) => m.status === 'pending' && !isCompletionMilestoneTitle(m))
     if (nextPending) return nextPending
 
     // 3. If all operational implementation milestones are satisfied, return the first in_progress (e.g. for build verification)
-    const anyInProgress = this.milestones.find((m) => m.status === 'in_progress' && !isCompletionMilestoneTitle(m.title))
+    const anyInProgress = this.milestones.find((m) => m.status === 'in_progress' && !isCompletionMilestoneTitle(m))
     if (anyInProgress) return anyInProgress
 
     // 4. Finally, any non-verified milestone (including completion milestone)
@@ -288,6 +296,12 @@ export class GoalDecompositionPlanner {
       // Render the id explicitly: titles no longer carry a self-label (see stripRedundantIdPrefix),
       // and the model needs the canonical id here to address a milestone via "update_plan".
       let line = `${planIndex + 1}. ${icon} **${m.id}: ${m.title}**`
+      if (m.filePaths?.length) {
+        line += ` — *Files:* ${m.filePaths.map((filePath) => `\`${filePath}\``).join(', ')}`
+      }
+      if (m.acceptanceCriteria?.length) {
+        line += ` — *Criteria:* ${m.acceptanceCriteria.join('; ')}`
+      }
       if (m.falsifiableHypothesis) {
         line += ` — *Hypothesis:* ${m.falsifiableHypothesis}`
       }
@@ -298,6 +312,9 @@ export class GoalDecompositionPlanner {
         line += ` (Note: ${m.notes})`
       }
       lines.push(line)
+      if (m.id === activeM?.id) {
+        buildActiveInterventionActions(m).forEach((action, index) => lines.push(`   Action ${index + 1}: ${action}`))
+      }
     }
 
     if (promptWindow.omittedAfter > 0) {
@@ -310,7 +327,7 @@ export class GoalDecompositionPlanner {
       lines.push(
         '\n[ALL CHECKLIST MILESTONES COMPLETED - FINAL REPORT REQUIRED]\nAll operational checklist tasks are complete. DO NOT execute any more file edits or commands.\nReply with a comprehensive final report (in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.'
       )
-    } else if (!activeM || isCompletionMilestoneTitle(activeM.title)) {
+    } else if (!activeM || isCompletionMilestoneTitle(activeM)) {
       // Every milestone that could still be worked on is done or abandoned, and only the
       // closing milestone is left. The generic branch below would be self-contradictory here:
       // it renders "Task m-N: ... invoke finish" as the active milestone while its own
@@ -343,7 +360,7 @@ export class GoalDecompositionPlanner {
           closureStep,
           `3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.`,
           `4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.`,
-          `5. AUTO-ADAPTATION DIRECTIVE: If any CLI scaffolding command fails or hangs, construct the required project files directly using write_file (e.g. package.json, vite.config.ts, index.html, src/App.tsx) directly in the workspace root.`,
+          `5. If a scaffolding command fails or hangs, create only the files named by the active milestone; preserve the accepted stack and existing infrastructure.`,
         ].join('\n')
       )
     }

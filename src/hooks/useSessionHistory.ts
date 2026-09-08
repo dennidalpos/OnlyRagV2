@@ -12,9 +12,7 @@ import {
 import { logger } from '../lib/logger'
 
 const LEGACY_SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
-const LEGACY_PLANS_STORAGE_KEY = 'onlyrag_session_plans_v1'
 const MIGRATION_FLAG_KEY = 'onlyrag_sessions_migrated_to_filesystem_v1'
-const PLANS_MIGRATION_FLAG_KEY = 'onlyrag_session_plans_migrated_to_filesystem_v1'
 const PERSIST_DEBOUNCE_MS = 800
 
 export interface ExecutedPromptResult {
@@ -70,35 +68,6 @@ async function migrateLegacySessions(): Promise<void> {
     logger.info('useSessionHistory', `Migrated ${res?.migrated ?? 0} legacy coding session(s) to the filesystem store.`)
   } catch (err: any) {
     logger.warn('useSessionHistory', `Legacy session migration failed, will retry on next launch: ${err?.message}`)
-  }
-}
-
-/**
- * One-shot import of the plan history previously kept in localStorage, keyed by session id.
- * Plans now live inside their own session record, so the ones whose session no longer
- * exists are dropped instead of leaking as orphans forever.
- */
-function migrateLegacyPlans(sessions: CodingSession[]): CodingSession[] {
-  if (localStorage.getItem(PLANS_MIGRATION_FLAG_KEY) === 'done') return sessions
-  const raw = localStorage.getItem(LEGACY_PLANS_STORAGE_KEY)
-  if (!raw) {
-    localStorage.setItem(PLANS_MIGRATION_FLAG_KEY, 'done')
-    return sessions
-  }
-
-  try {
-    const plansBySession = JSON.parse(raw) as Record<string, AgentPlan[]>
-    const migrated = sessions.map((session) => {
-      const legacyPlans = plansBySession?.[session.id]
-      if (!Array.isArray(legacyPlans) || legacyPlans.length === 0 || (session.plans?.length ?? 0) > 0) return session
-      return { ...session, plans: legacyPlans }
-    })
-    localStorage.removeItem(LEGACY_PLANS_STORAGE_KEY)
-    localStorage.setItem(PLANS_MIGRATION_FLAG_KEY, 'done')
-    return migrated
-  } catch (err: any) {
-    logger.warn('useSessionHistory', `Legacy plan migration failed, will retry on next launch: ${err?.message}`)
-    return sessions
   }
 }
 
@@ -202,12 +171,8 @@ export function useSessionHistory(workspacePath: string | null) {
         setActiveSessionId(fresh.id)
         schedulePersist(fresh)
       } else {
-        const withPlans = migrateLegacyPlans(stored)
-        setSessions(withPlans)
-        setActiveSessionId(withPlans[0].id)
-        withPlans.forEach((session, index) => {
-          if (session !== stored[index]) schedulePersist(session)
-        })
+        setSessions(stored)
+        setActiveSessionId(stored[0].id)
       }
       setIsLoadingSessions(false)
     }

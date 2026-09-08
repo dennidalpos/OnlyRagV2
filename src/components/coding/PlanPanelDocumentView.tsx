@@ -1,79 +1,23 @@
 import React from 'react'
-import { FileText, Edit3 } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { AgentPlan } from '../../hooks/usePlanApproval'
+import { renderAgentPlanMarkdown } from '../../../shared/domain/agent/planCompilation'
 
 interface PlanPanelDocumentViewProps {
   plan: AgentPlan
-  isEditing: boolean
-  isSaving: boolean
-  editedText: string
-  onStartEdit: () => void
-  onCancelEdit: () => void
-  onChangeEditedText: (text: string) => void
-  onSaveEdit: () => void
 }
 
-export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({
-  plan,
-  isEditing,
-  isSaving,
-  editedText,
-  onStartEdit,
-  onCancelEdit,
-  onChangeEditedText,
-  onSaveEdit,
-}) => {
+export const PlanPanelDocumentView: React.FC<PlanPanelDocumentViewProps> = ({ plan }) => {
   return (
     <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2.5 shadow-md">
       <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
         <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
           <FileText className="w-4 h-4 text-cyan-400" /> Artefatto Piano v{plan.version}
         </span>
-
-        {!isEditing && (plan.status === 'ready' || plan.status === 'approved') && (
-          <button
-            type="button"
-            onClick={onStartEdit}
-            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-medium rounded-lg flex items-center gap-1 transition-colors"
-          >
-            <Edit3 className="w-3 h-3 text-cyan-400" /> Modifica
-          </button>
-        )}
       </div>
-
-      {isEditing ? (
-        <div className="space-y-2">
-          <textarea
-            value={editedText}
-            onChange={(e) => onChangeEditedText(e.target.value)}
-            rows={10}
-            aria-label="Testo del piano"
-            className="w-full bg-slate-950 border border-cyan-500/60 rounded-xl p-3 text-xs font-mono text-slate-100 outline-none leading-relaxed resize-y"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCancelEdit}
-              disabled={isSaving}
-              className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold rounded-lg"
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={onSaveEdit}
-              disabled={isSaving}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-950/40"
-            >
-              {isSaving ? 'Validazione...' : 'Salva nuova revisione'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="whitespace-pre-wrap font-mono text-xs text-slate-200 leading-relaxed p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80">
-          {plan.planText}
-        </div>
-      )}
+      <div className="whitespace-pre-wrap font-mono text-xs text-slate-200 leading-relaxed p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80">
+        {renderAgentPlanMarkdown(plan)}
+      </div>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { FileSystemRepository } from './fileSystemRepository'
+import { contentVersion } from './fileContentVersion'
 
 describe('FileSystemRepository Unit Tests', () => {
   const repo = new FileSystemRepository()
@@ -42,6 +43,26 @@ describe('FileSystemRepository Unit Tests', () => {
     expect(readSlice.content).toContain('3: gamma')
     expect(readSlice.content).toContain('4: delta')
     expect(readSlice.content).not.toContain('1: alpha')
+  })
+
+  it('conditionally writes existing files and exclusively creates new files', () => {
+    const existing = path.join(tempDir, 'existing.txt')
+    fs.writeFileSync(existing, 'user revision')
+    let snapshots = 0
+
+    const stale = repo.writeFileVersioned(existing, 'agent revision', contentVersion('old revision'), () => snapshots++)
+    expect(stale).toMatchObject({ success: false, currentContentHash: contentVersion('user revision') })
+    expect(fs.readFileSync(existing, 'utf-8')).toBe('user revision')
+    expect(snapshots).toBe(0)
+
+    const updated = repo.writeFileVersioned(existing, 'agent revision', contentVersion('user revision'), () => snapshots++)
+    expect(updated.success).toBe(true)
+    expect(fs.readFileSync(existing, 'utf-8')).toBe('agent revision')
+    expect(snapshots).toBe(1)
+
+    const created = path.join(tempDir, 'created.txt')
+    expect(repo.writeFileVersioned(created, 'new', undefined, () => snapshots++).success).toBe(true)
+    expect(fs.readFileSync(created, 'utf-8')).toBe('new')
   })
 
   it('should delete a file successfully', async () => {

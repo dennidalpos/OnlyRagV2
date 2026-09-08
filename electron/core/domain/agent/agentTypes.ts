@@ -105,6 +105,7 @@ export interface AgentToolCall {
     replacementContent?: string
     replacements?: AgentToolReplacementChunk[]
     content?: string
+    expectedContentHash?: string
     command?: string
     query?: string
     url?: string

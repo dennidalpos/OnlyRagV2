@@ -15,13 +15,13 @@ function makePlan(length: number): PlanMilestone[] {
 }
 
 describe('selectPromptMilestoneWindow', () => {
-  it('returns the original identities when the plan fits', () => {
+  it('keeps only the active intervention in the prompt', () => {
     const plan = makePlan(2)
     const window = selectPromptMilestoneWindow(plan, 'm-1')
 
-    expect(window.entries.map((entry) => entry.milestone)).toEqual(plan)
+    expect(window.entries.map((entry) => entry.milestone)).toEqual([plan[0]])
     expect(window.omittedBefore).toBe(0)
-    expect(window.omittedAfter).toBe(0)
+    expect(window.omittedAfter).toBe(1)
   })
 
   it('limits only prompt presentation and keeps the active milestone visible', () => {
@@ -37,12 +37,9 @@ describe('selectPromptMilestoneWindow', () => {
     const plan = makePlan(21)
     const window = selectPromptMilestoneWindow(plan, 'm-2')
 
-    expect(window.entries.map((entry) => entry.milestone.id)).toEqual(
-      Array.from({ length: 15 }, (_, index) => `m-${index + 1}`)
-    )
-    expect(window.entries.map((entry) => entry.milestone.verificationCommand)).toEqual(
-      Array.from({ length: 15 }, (_, index) => `check-${index + 1}`)
-    )
-    expect(window.omittedAfter).toBe(6)
+    expect(window.entries.map((entry) => entry.milestone.id)).toEqual(['m-2'])
+    expect(window.entries.map((entry) => entry.milestone.verificationCommand)).toEqual(['check-2'])
+    expect(window.omittedBefore).toBe(1)
+    expect(window.omittedAfter).toBe(19)
   })
 })

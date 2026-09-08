@@ -2,6 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import * as ts from 'typescript'
 import { logger } from '../../../diagnostics'
+import { contentVersion } from './fileContentVersion'
 import { isIgnoredPath, validatePathSafety as domainValidatePathSafety } from '../../domain/agent/contextFilter'
 import {
   MAX_FILE_READ_BYTES,
@@ -113,7 +114,7 @@ export class FileSystemRepository {
     filePath: string,
     startLine?: number,
     endLine?: number
-  ): Promise<{ success: boolean; content?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }> {
+  ): Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }> {
     const resolved = validatePathSafety(filePath)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
@@ -131,6 +132,7 @@ export class FileSystemRepository {
       }
 
       const rawContent = await fs.promises.readFile(resolved, 'utf-8')
+      const contentHash = contentVersion(rawContent)
       const lines = rawContent.split(/\r?\n/)
       const totalLines = lines.length
 
@@ -141,10 +143,10 @@ export class FileSystemRepository {
         const formattedSlice = slicedLines
           .map((line, idx) => `${s + idx}: ${line}`)
           .join('\n')
-        return { success: true, content: formattedSlice, totalLines, startLine: s, endLine: e }
+        return { success: true, content: formattedSlice, contentHash, totalLines, startLine: s, endLine: e }
       }
 
-      return { success: true, content: rawContent, totalLines }
+      return { success: true, content: rawContent, contentHash, totalLines }
     } catch (err: any) {
       logger.log('ERROR', 'WorkspaceRepo', `Error reading file '${filePath}': ${err.message}`)
       return { success: false, error: err.message }
@@ -185,6 +187,41 @@ export class FileSystemRepository {
     } catch (err: any) {
       logger.log('ERROR', 'WorkspaceRepo', `Failed to write file ${filePath}: ${err.message}`)
       return { success: false, error: err.message }
+    }
+  }
+
+  /** Checks and writes in one synchronous section to prevent app-level interleaving. */
+  writeFileVersioned(
+    filePath: string,
+    content: string,
+    expectedContentHash: string | undefined,
+    beforeWrite: () => void,
+  ): { success: boolean; error?: string; currentContentHash?: string } {
+    const resolved = validatePathSafety(filePath)
+    if (!resolved) return { success: false, error: 'Invalid file path' }
+
+    try {
+      const exists = fs.existsSync(resolved)
+      if (exists) {
+        const currentContentHash = contentVersion(fs.readFileSync(resolved, 'utf-8'))
+        if (!expectedContentHash || expectedContentHash !== currentContentHash) {
+          return { success: false, error: 'File version conflict', currentContentHash }
+        }
+        beforeWrite()
+        fs.writeFileSync(resolved, content, 'utf-8')
+      } else {
+        if (expectedContentHash) return { success: false, error: 'File no longer exists' }
+        fs.mkdirSync(path.dirname(resolved), { recursive: true })
+        beforeWrite()
+        fs.writeFileSync(resolved, content, { encoding: 'utf-8', flag: 'wx' })
+      }
+      logger.log('INFO', 'WorkspaceRepo', `Versioned write to file: ${resolved}`)
+      return { success: true }
+    } catch (err: any) {
+      const currentContentHash = fs.existsSync(resolved)
+        ? contentVersion(fs.readFileSync(resolved, 'utf-8'))
+        : undefined
+      return { success: false, error: err.code === 'EEXIST' ? 'File was created concurrently' : err.message, currentContentHash }
     }
   }
 

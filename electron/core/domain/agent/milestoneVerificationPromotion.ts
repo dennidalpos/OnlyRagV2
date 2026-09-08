@@ -20,23 +20,33 @@ export interface PromotionCandidate {
  */
 export function selectMilestonesProvenByVerification(
   milestones: readonly PlanMilestone[],
+  verificationCommand: string,
   deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus
 ): PromotionCandidate[] {
+  const executed = verificationCommand.trim().toLowerCase()
   return milestones
     .filter((m) => m.status !== 'verified' && m.status !== 'failed')
     .filter((m) => !isCompletionMilestoneTitle(m.title))
+    .filter((m) => !m.verificationCommand || m.verificationCommand.trim().toLowerCase() === executed)
     .filter((m) => deliverableStatusOf(m) === 'satisfied')
     .map((m) => ({ id: m.id, title: m.title }))
 }
 
-/** The note recorded on a milestone promoted this way, naming the command that proved it. */
+export function verificationEvidenceKind(verificationCommand: string): 'compilation' | 'behavior' {
+  return /(^|[\s:&|])(test(?::\S+)?|pytest|vitest|jest|mocha)([\s:&|]|$)/i.test(verificationCommand)
+    ? 'behavior'
+    : 'compilation'
+}
+
+/** Records command evidence separately from the artifact prerequisite. */
 export function promotionNote(verificationCommand: string): string {
-  return `Verified: "${verificationCommand}" passed with every file this milestone names present on disk.`
+  const evidence = verificationEvidenceKind(verificationCommand) === 'behavior' ? 'Behavior' : 'Compilation'
+  return `${evidence} evidence: "${verificationCommand}" passed; every declared artifact is also present.`
 }
 
 /** The note recorded when a deliverable lands but nothing has verified it yet. */
 export function awaitingVerificationNote(evidencePath: string): string {
-  return `"${evidencePath}" was written for this milestone and every file it names is on disk. ${AWAITING_VERIFICATION_MARKER} before this can count as verified.`
+  return `Artifact present: "${evidencePath}" and every file this milestone names are on disk. ${AWAITING_VERIFICATION_MARKER}; presence alone proves neither compilation nor behavior.`
 }
 
 /**

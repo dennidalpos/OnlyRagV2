@@ -282,6 +282,23 @@ Here is the microtask execution plan:
     expect(compact.activeMicroTask).toBe('m-1: Create a new React project using Vite.')
     expect(compact.pendingMicroTasks[1]).toBe('m-2: Initialize Tailwind CSS in the project.')
   })
+
+  it('limits the turn prompt without deleting canonical milestones', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.initializePlan(Array.from({ length: 20 }, (_, index) => ({
+      id: `m-${index + 1}`,
+      title: `Implement capability ${index + 1} — \`src/file-${index + 1}.ts\``,
+      status: 'pending' as const,
+    })))
+
+    const prompt = planner.compileProgressPrompt()
+
+    expect(planner.getMilestones()).toHaveLength(20)
+    expect(prompt).toContain('**m-1:')
+    expect(prompt).toContain('**m-15:')
+    expect(prompt).not.toContain('**m-16:')
+    expect(prompt).toContain('5 later milestones omitted from this turn; retained in canonical state')
+  })
   describe('closure directive', () => {
     const activePlan = [
       { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' as const },

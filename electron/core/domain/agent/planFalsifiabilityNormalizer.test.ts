@@ -149,15 +149,14 @@ describe('normalizePlanFalsifiability', () => {
     expect(normalizePlanFalsifiability(input)).toBe(input)
   })
 
-  it('consolidates adjacent milestones targeting the exact same deliverable file', () => {
+  it('keeps distinct interventions targeting the same file', () => {
     const input = plan(
       'Create src/styles/globals.css',
       'Add Tailwind directives to src/styles/globals.css',
       'Create src/components/Sidebar.tsx'
     )
     const result = normalizePlanFalsifiability(input)
-    expect(result).toHaveLength(2)
-    expect(result[0].title).toBe('Create src/styles/globals.css; Add Tailwind directives to src/styles/globals.css')
-    expect(result[1].title).toBe('Create src/components/Sidebar.tsx')
+    expect(result).toHaveLength(3)
+    expect(result.map((milestone) => milestone.title)).toEqual(input.map((milestone) => milestone.title))
   })
 })

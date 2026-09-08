@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { partialDeliveryDirective, redeliveredMilestoneDirective, selectMilestonesProvenByVerification } from './milestoneVerificationPromotion'
+import {
+  partialDeliveryDirective,
+  promotionNote,
+  redeliveredMilestoneDirective,
+  selectMilestonesProvenByVerification,
+} from './milestoneVerificationPromotion'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 
-function milestone(id: string, title: string, status: PlanMilestone['status'] = 'pending'): PlanMilestone {
-  return { id, title, status }
+function milestone(
+  id: string,
+  title: string,
+  status: PlanMilestone['status'] = 'pending',
+  verificationCommand = 'npm run build'
+): PlanMilestone {
+  return { id, title, status, verificationCommand }
 }
 
 /** Deliverable status keyed by milestone id, defaulting to satisfied. */
@@ -20,18 +30,18 @@ describe('selectMilestonesProvenByVerification', () => {
       milestone('m-2', 'Create `vite.config.ts`', 'in_progress'),
       milestone('m-3', 'Create `src/App.tsx`', 'pending'),
     ]
-    expect(selectMilestonesProvenByVerification(plan, statusMap()).map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3'])
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1', 'm-2', 'm-3'])
   })
 
   it('leaves alone a milestone that is already verified', () => {
     const plan = [milestone('m-1', 'Create `a.ts`', 'verified'), milestone('m-2', 'Create `b.ts`')]
-    expect(selectMilestonesProvenByVerification(plan, statusMap()).map((m) => m.id)).toEqual(['m-2'])
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-2'])
   })
 
   it('does not resurrect a milestone the loop guard abandoned', () => {
     // `failed` means the work genuinely did not happen; a later green build does not undo that.
     const plan = [milestone('m-1', 'Create `a.ts`', 'failed'), milestone('m-2', 'Create `b.ts`')]
-    expect(selectMilestonesProvenByVerification(plan, statusMap()).map((m) => m.id)).toEqual(['m-2'])
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-2'])
   })
 
   it('never promotes the completion milestone, which the finish tool owns', () => {
@@ -39,25 +49,42 @@ describe('selectMilestonesProvenByVerification', () => {
       milestone('m-1', 'Create `a.ts`'),
       milestone('m-2', '🛑 Completamento dell ultimo task, riepilogo finale e arresto dell agente (invoke "finish")'),
     ]
-    expect(selectMilestonesProvenByVerification(plan, statusMap()).map((m) => m.id)).toEqual(['m-1'])
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1'])
   })
 
   it('never promotes a milestone that names no artefact', () => {
     // The nkn0 lesson: nothing the build compiled can speak for "ensure buttons are 44x44 px",
     // so closing it on a passing build would fabricate verification all over again.
     const plan = [milestone('m-1', 'Ensure buttons have a minimum touch target of 44x44 px'), milestone('m-2', 'Create `a.ts`')]
-    const proven = selectMilestonesProvenByVerification(plan, statusMap({ 'm-1': 'not_applicable' }))
+    const proven = selectMilestonesProvenByVerification(plan, 'npm run build', statusMap({ 'm-1': 'not_applicable' }))
     expect(proven.map((m) => m.id)).toEqual(['m-2'])
   })
 
   it('never promotes a milestone whose files are missing or are placeholders', () => {
     const plan = [milestone('m-1', 'Create `a.ts`'), milestone('m-2', 'Create `b.ts`')]
-    const proven = selectMilestonesProvenByVerification(plan, statusMap({ 'm-1': 'unsatisfied' }))
+    const proven = selectMilestonesProvenByVerification(plan, 'npm run build', statusMap({ 'm-1': 'unsatisfied' }))
     expect(proven.map((m) => m.id)).toEqual(['m-2'])
   })
 
   it('promotes nothing when the plan is empty', () => {
-    expect(selectMilestonesProvenByVerification([], statusMap())).toEqual([])
+    expect(selectMilestonesProvenByVerification([], 'npm run build', statusMap())).toEqual([])
+  })
+
+  it('promotes only milestones associated with the command that passed', () => {
+    const plan = [
+      milestone('m-1', 'Create `a.ts`', 'pending', 'npm run build'),
+      milestone('m-2', 'Behavior works — `a.test.ts`', 'pending', 'npm test'),
+      milestone('m-3', 'Create `b.ts`', 'pending', 'npm run lint'),
+    ]
+
+    expect(selectMilestonesProvenByVerification(plan, 'npm run build', statusMap()).map((m) => m.id)).toEqual(['m-1'])
+  })
+})
+
+describe('promotionNote', () => {
+  it('distinguishes compilation from behavior evidence', () => {
+    expect(promotionNote('npm run build')).toContain('Compilation evidence')
+    expect(promotionNote('npm test')).toContain('Behavior evidence')
   })
 })
 

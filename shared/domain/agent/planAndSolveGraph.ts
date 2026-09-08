@@ -1,5 +1,6 @@
 import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
 import { extractDeliverablePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
+import { selectPromptMilestoneWindow } from './planPromptWindow'
 
 export interface PlanMilestone {
   id: string
@@ -272,7 +273,13 @@ export class GoalDecompositionPlanner {
       'Execute systematically. Mark milestones verified only when validated.',
     ]
 
-    for (const [idx, m] of this.milestones.entries()) {
+    const activeM = this.getActiveMilestone()
+    const promptWindow = selectPromptMilestoneWindow(this.milestones, activeM?.id)
+    if (promptWindow.omittedBefore > 0) {
+      lines.push(`[${promptWindow.omittedBefore} earlier milestones omitted from this turn; retained in canonical state.]`)
+    }
+
+    for (const { milestone: m, planIndex } of promptWindow.entries) {
       let icon = '[ ]'
       if (m.status === 'verified') icon = '[x]'
       else if (m.status === 'in_progress') icon = '[>]'
@@ -280,7 +287,7 @@ export class GoalDecompositionPlanner {
 
       // Render the id explicitly: titles no longer carry a self-label (see stripRedundantIdPrefix),
       // and the model needs the canonical id here to address a milestone via "update_plan".
-      let line = `${idx + 1}. ${icon} **${m.id}: ${m.title}**`
+      let line = `${planIndex + 1}. ${icon} **${m.id}: ${m.title}**`
       if (m.falsifiableHypothesis) {
         line += ` — *Hypothesis:* ${m.falsifiableHypothesis}`
       }
@@ -293,7 +300,10 @@ export class GoalDecompositionPlanner {
       lines.push(line)
     }
 
-    const activeM = this.getActiveMilestone()
+    if (promptWindow.omittedAfter > 0) {
+      lines.push(`[${promptWindow.omittedAfter} later milestones omitted from this turn; retained in canonical state.]`)
+    }
+
     const failedMilestones = this.milestones.filter((m) => m.status === 'failed')
 
     if (progress.completed === progress.total && progress.total > 0) {

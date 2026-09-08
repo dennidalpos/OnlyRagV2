@@ -3,6 +3,7 @@ import { DiagnosticOutputReducer } from '../domain/agent/diagnosticOutputReducer
 import { checkVerificationCommandSafety, unsafeVerificationNote } from '../../../shared/domain/agent/verificationCommandSafety'
 import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
+import { promotionNote } from '../domain/agent/milestoneVerificationPromotion'
 import { findUnsatisfiedDeliverables, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
@@ -98,7 +99,7 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         // the milestone failed without saying why.
         const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
         effectiveNotes = passed
-          ? `Auto-verified by running: ${verifyCmd}`
+          ? promotionNote(verifyCmd)
           : `Verification command failed (exit ${verifyRes.code}): ${verifyCmd}\n${outputTail}`
         verificationRanLog = passed
           ? `✅ Verification command passed: ${verifyCmd}`

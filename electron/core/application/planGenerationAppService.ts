@@ -17,7 +17,6 @@ import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { GoalDecompositionPlanner, type PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
-import { MAX_PLAN_MILESTONES } from '../../../shared/domain/agent/planMilestoneCapper'
 import { compilePlanFromText, renderPlanMilestones, type WorkspaceScaffoldFacts } from '../../../shared/domain/agent/planCompilation'
 import { resolvePrimaryProfileVerificationTargets, resolveProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
 import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
@@ -53,7 +52,7 @@ const PLAN_SYSTEM_PROMPT =
   '   - The path is MANDATORY on every microtask that produces a file. It is the only proof of that step the system can check, and a microtask without one is folded into the previous step as a criterion.\n' +
   '   - Name a FILE, never a folder. "- [ ] m-1: The project has a clean architecture — `src/services/`" cannot be checked: a folder is not a deliverable, and writing a file inside one creates it. If a layout matters, say so on the file that lives there: "- [ ] m-1: The task service fetches and stores tasks — `src/services/taskService.ts`".\n' +
   '2. ATOMIC DELIVERABLE COHESION (1 FILE / DELIVERABLE = 1 COMPLETE MICRO-TASK): Every single file deliverable MUST be specified as exactly ONE complete milestone (create and configure the file with all required styles/logic in that one step). NEVER split creation and content of the same file into separate microtasks (do NOT write "m-2: Create globals.css" and "m-3: Add Tailwind to globals.css" — write "- [ ] m-2: The app has its Tailwind base styles — `src/styles/globals.css`").\n' +
-  '3. PHASE ORDER (3 to 15 granular microtasks — 15 is a HARD LIMIT; anything beyond it is consolidated automatically). Order the microtasks in these phases, and never start a later phase before the earlier one is covered:\n' +
+  '3. PHASE ORDER (target 3 to 15 granular microtasks). Order the microtasks in these phases, and never start a later phase before the earlier one is covered; do not omit required work to meet the target:\n' +
   '   - Phase A — Buildable skeleton: the files without which nothing can compile (`package.json`, `index.html`, `vite.config.ts`, `tsconfig.json`). On an empty workspace these are MANDATORY and come first; see rule 4.\n' +
   '   - Phase B — Wiring: the entrypoint actually loads the application. `index.html` MUST reference the entry script and the entry script (`src/main.tsx`) MUST mount the root component; a page that loads no script compiles to nothing.\n' +
   '   - Phase C — Capabilities: one microtask per file, each stating the behaviour that file delivers.\n' +
@@ -218,7 +217,7 @@ export class PlanGenerationAppService {
       logger.log(
         'INFO',
         'PlanGenerationAppService',
-        `Plan compiled: ${parsedMilestones.length} raw milestones reduced to ${milestones.length} falsifiable ones (max ${MAX_PLAN_MILESTONES}); acceptance criteria folded into the deliverables they qualify.`
+        `Plan compiled: ${parsedMilestones.length} raw milestones normalized to ${milestones.length} falsifiable ones; acceptance criteria folded into the deliverables they qualify.`
       )
     }
     if (req.settings.enableCodingAgentDebugLog) {

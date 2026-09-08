@@ -1,9 +1,9 @@
 /**
  * Plan Compilation.
  *
- * Turning a model's checklist text into the plan the agent actually executes takes five
- * ordered passes, and every call site needs all five in the same order. They used to be
- * applied ad hoc — parsing everywhere, capping in most places, normalisation nowhere — which
+ * Turning a model's checklist text into the plan the agent actually executes takes four
+ * ordered passes, and every call site needs all four in the same order. They used to be
+ * applied ad hoc — parsing and normalisation differed by caller — which
  * is how the renderer, the plan-approval flow and the agent loop ended up able to disagree
  * about what the plan even was.
  *
@@ -11,15 +11,11 @@
  *  1. parse        — recognise the checklist structure (the canonical parser).
  *  2. normalise    — fold acceptance criteria into the deliverables they qualify, so every
  *                    surviving entry is something that can be shown done or not done.
- *  3. cap          — merge whatever still exceeds the plan length a small model can hold.
- *  4. ensure runnable  — append the project's own check as a milestone no write can close.
- *  5. ensure entrypoint — prepend the entry files a greenfield web plan never asks for.
+ *  3. ensure runnable  — append the project's own check as a milestone no write can close.
+ *  4. ensure entrypoint — prepend the entry files a greenfield web plan never asks for.
  *
- * Normalising before capping matters: criteria folded away in step 2 are entries step 3 no
- * longer has to merge, so the cap spends its budget on real work instead of on requirements
- * that were never steps. Steps 4 and 5 run after the cap on purpose: what they add are the
- * entries the plan may never lose to a merge — the proof at the end, the entrypoint at the
- * start.
+ * The canonical plan is never capped or merged. Turn prompts select a bounded view while
+ * persistence and verification retain every intervention identity and command.
  */
 
 import {
@@ -28,7 +24,6 @@ import {
   type PlanMilestone,
 } from './planAndSolveGraph'
 import { normalizePlanFalsifiability } from './planFalsifiabilityNormalizer'
-import { capPlanMilestones } from './planMilestoneCapper'
 import { extractDeliverablePaths } from './milestoneDeliverableResolver'
 
 /**
@@ -159,7 +154,7 @@ export function ensureEntrypointMilestones(
   return [...prepended, ...milestones].map((m, idx) => ({ ...m, id: `m-${idx + 1}` }))
 }
 
-/** Applies normalisation and capping to milestones that are already parsed. */
+/** Applies canonical normalisation without merging distinct interventions. */
 export function compilePlanMilestones(
   milestones: PlanMilestone[],
   verificationCommand?: string | null,
@@ -167,12 +162,9 @@ export function compilePlanMilestones(
 ): PlanMilestone[] {
   // Closing the session is application control flow, never executable user work. Old persisted
   // plans are still recognised by isCompletionMilestoneTitle, but new canonical revisions drop
-  // the synthetic “invoke finish” entry before normalisation, capping and display.
+  // the synthetic “invoke finish” entry before normalisation and display.
   const operationalMilestones = milestones.filter((milestone) => !isCompletionMilestoneTitle(milestone.title))
-  const compiled = ensureRunnableMilestone(
-    capPlanMilestones(normalizePlanFalsifiability(operationalMilestones)),
-    verificationCommand
-  )
+  const compiled = ensureRunnableMilestone(normalizePlanFalsifiability(operationalMilestones), verificationCommand)
   return ensureEntrypointMilestones(compiled, workspace)
 }
 

@@ -158,4 +158,21 @@ describe('application-owned closure compilation', () => {
     expect(plan).toHaveLength(1)
     expect(plan[0].title).toContain('src/app.ts')
   })
+
+  it('preserves every intervention identity and verification command beyond fifteen entries', () => {
+    const source = Array.from({ length: 18 }, (_, index) => ({
+      id: `m-${index + 1}`,
+      title: `Capability ${index + 1} — \`src/file-${index + 1}.ts\``,
+      status: 'pending' as const,
+      verificationCommand: `npm run check-${index + 1}`,
+    }))
+
+    const compiled = compilePlanMilestones(source)
+
+    expect(compiled).toHaveLength(source.length)
+    expect(compiled.map((milestone) => milestone.id)).toEqual(source.map((milestone) => milestone.id))
+    expect(compiled.map((milestone) => milestone.verificationCommand)).toEqual(
+      source.map((milestone) => milestone.verificationCommand)
+    )
+  })
 })

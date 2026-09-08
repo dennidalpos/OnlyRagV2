@@ -40,6 +40,10 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 * **Evidenza**: Nelle sessioni live, quando il modello si trova in stallo, tende a riscrivere ripetutamente gli stessi file senza modifiche sostanziali (*no-op rewrite*) oppure a ri-completare milestone già chiuse.
 * **Soluzione ([`agentOrchestratorCircuitBreakerAndVerification.ts`](../electron/core/application/agentOrchestratorCircuitBreakerAndVerification.ts))**: Il circuit breaker rileva se un file non ha diff rispetto alla versione su disco o se una milestone era già completa, interrompendo il loop e indirizzando il modello verso l'obiettivo successivo non ancora soddisfatto.
 
+### 2.4. Piano completo e prove non intercambiabili
+* **Problema**: Il precedente tetto a 15 fondeva interventi distinti. Nel gruppo risultante sopravviveva solo il primo `verificationCommand`, quindi un suo esito positivo poteva sostituire le prove successive. Anche due interventi adiacenti sullo stesso file venivano accorpati perdendo identità e metadati.
+* **Soluzione**: La compilazione conserva ogni intervento e limita solo la finestra ripetuta nel prompt ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts)). Il controllo globale copre le milestone senza prova dedicata; quando una milestone dichiara un comando, la promozione richiede la corrispondenza con quello eseguito, oltre alla presenza degli artefatti. Le note distinguono presenza, compilazione e comportamento.
+
 ---
 
 ## 3. Gestione Dinamica della Memoria di Contesto

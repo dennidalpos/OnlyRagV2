@@ -49,12 +49,15 @@ Il modello non ha l'autorità di dichiarare le milestone "completate". Lo stato 
 - I file previsti dal deliverable esistono su disco e non sono semplici placeholder o commenti ([`milestoneDeliverableResolver.ts`](../shared/domain/agent/milestoneDeliverableResolver.ts)).
 - I comandi di verifica dichiarati nel piano vengono eseguiti con exit code 0 ([`milestoneVerificationPromotion.ts`](../electron/core/domain/agent/milestoneVerificationPromotion.ts)).
 
+Le prove restano separate: la presenza dell'artefatto è un prerequisito, build/typecheck sono evidenza di compilazione e i test sono evidenza comportamentale. Il controllo globale dell'app copre le milestone senza prova dedicata; una milestone che dichiara un comando richiede invece proprio quel comando, che non può essere sostituito da altre verifiche del piano.
+
 ---
 
 ## 3. Gestione del Budget di Contesto
 
 1. **Calcolo Dinamico `num_ctx`** ([`contextWindowCalculator.ts`](../shared/domain/agent/contextWindowCalculator.ts)): Calcola i token BPE effettivi con tokenizer OpenAI `o200k_base`, allocando il contesto ottimale su Ollama in funzione della VRAM disponibile (da 4096 a 32768).
 2. **Compattazione Memoria Episodica** ([`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts)): Distilla i turni intermedi mantenendo un tetto fisso per il contesto (~18% per la struttura dei file) e preservando intatti gli ultimi scambi e gli errori bloccanti correnti.
+3. **Finestra del piano** ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts)): Il piano canonico conserva tutte le identità, i criteri e i comandi. Ogni turno mostra al modello al massimo 15 milestone attorno a quella attiva, segnalando quante restano fuori dalla finestra senza fonderle o rinumerarle.
 
 ---
 

@@ -23,9 +23,8 @@ import type { ToolResultProcessingContext } from './agentOrchestratorToolResultT
  * refused nothing. All twelve of its `run_command` calls were `npm install`, and `finish` was
  * never invoked.
  *
- * These tests pin the two halves of that diagnosis, which point in opposite directions and are
- * easy to confuse: the promotion DECISION was correct on this exact input all along, and the
- * promotion was never TRIGGERED because no exit path ran a check.
+ * These tests retain the workspace fixture while enforcing the corrected evidence boundary:
+ * the application check covers milestones without a dedicated proof but cannot replace one.
  */
 
 const LIVE_MILESTONE_TITLES: readonly [string, string][] = [
@@ -114,39 +113,35 @@ describe('milestone promotion on the live-full-task workspace', () => {
     fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('finds all fourteen milestones promotable on the files that run actually produced', () => {
-    // The heart of the diagnosis. Every title resolves against the real workspace, including
-    // m-4's bare `index.html` (written to `src/index.html`, matched by the probe's basename
-    // fallback) and m-3's `src/services/`, which names no file and is therefore no obstacle.
-    // Nothing in the promotion decision was blocking; it was simply never asked.
+  it('uses the application-owned check for milestones without a dedicated command', () => {
     writeLiveWorkspace(LIVE_WRITTEN_FILES)
     const plan = livePlan()
 
-    expect(selectMilestonesAwaitingVerification(makeDeps(plan)).map((m) => m.id)).toEqual(
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(
       LIVE_MILESTONE_TITLES.map(([id]) => id)
     )
   })
 
-  it('promotes all fourteen the moment a verification is reported as passing', () => {
+  it('promotes the historical plan with the application-owned check', () => {
     writeLiveWorkspace(LIVE_WRITTEN_FILES)
     const plan = livePlan()
     const logs: string[] = []
 
     expect(promoteMilestonesProvenBy(makeDeps(plan, logs), 'npm run build')).toBe(14)
     expect(plan.every((m) => m.status === 'verified')).toBe(true)
-    expect(plan[0].notes).toContain('npm run build')
     expect(logs.join('\n')).toContain('14 milestone verificate')
   })
 
-  it('still refuses a milestone whose own file was never written', () => {
-    // §6.2.3 is not relaxed by any of this: the terminal check promotes what is on disk and
-    // nothing else. Removing `src/components/Sidebar.tsx` must strand m-10 alone.
+  it('requires both the associated command and the declared artifact', () => {
     writeLiveWorkspace(LIVE_WRITTEN_FILES.filter((f) => f !== 'src/components/Sidebar.tsx'))
     const plan = livePlan()
+    plan[8].verificationCommand = 'npm run build'
+    plan[9].verificationCommand = 'npm run build'
+    plan.forEach((milestone, index) => {
+      if (index !== 8 && index !== 9) milestone.verificationCommand = 'npm test'
+    })
 
-    const promotable = selectMilestonesAwaitingVerification(makeDeps(plan)).map((m) => m.id)
-    expect(promotable).not.toContain('m-10')
-    expect(promotable).toHaveLength(13)
+    expect(selectMilestonesAwaitingVerification(makeDeps(plan), 'npm run build').map((m) => m.id)).toEqual(['m-9'])
   })
 
   it('promotes nothing when the workspace holds only placeholders', () => {

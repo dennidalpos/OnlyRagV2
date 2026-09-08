@@ -502,7 +502,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
     const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
     expect(m1.status).toBe('verified')
-    expect(m1.notes).toContain('Auto-verified by running: node -e "process.exit(0)"')
+    expect(m1.notes).toContain('Compilation evidence: "node -e "process.exit(0)"" passed')
   })
 
   it('never executes a verificationCommand that writes the workspace, even from a restored session', async () => {

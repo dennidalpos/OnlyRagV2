@@ -354,36 +354,27 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
 }
 
 /**
- * The milestones a passing verification WOULD promote, without promoting them.
- *
- * Split out so callers can preview which plan items a passing project check would prove before
- * they promote anything. Terminal policy now lives in agentOrchestratorApplicationClosure.ts.
+ * Previews milestones whose declared command matches the passing check and whose artifacts exist.
  */
 export function selectMilestonesAwaitingVerification(
-  deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner'>
+  deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner'>,
+  verificationCommand: string
 ): { id: string; title: string }[] {
   if (!deps.workspacePath) return []
   const probe = createWorkspaceDeliverableProbe(deps.workspacePath)
-  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), (m) =>
+  return selectMilestonesProvenByVerification(deps.goalPlanner.getMilestones(), verificationCommand, (m) =>
     resolveMilestoneDeliverableStatus(m.title, probe)
   )
 }
 
 /**
- * Promotes every milestone the passing verification has just proven, and reports how many.
- *
- * One green build attests to all the files it compiled, so the promotion is plan-wide rather
- * than limited to whichever milestone happened to be active — that narrow rule is what left
- * earlier milestones stranded while a later one closed.
- *
- * The count is returned because the caller at budget exhaustion states it in the session
- * summary; the callers on the tool-result path ignore it, as they always did.
+ * Promotes only milestones explicitly associated with the passing verification.
  */
 export function promoteMilestonesProvenBy(
   deps: Pick<ToolResultProcessingContext, 'workspacePath' | 'goalPlanner' | 'emitLog'>,
   verificationCommand: string
 ): number {
-  const proven = selectMilestonesAwaitingVerification(deps)
+  const proven = selectMilestonesAwaitingVerification(deps, verificationCommand)
   if (proven.length === 0) return 0
 
   for (const milestone of proven) {

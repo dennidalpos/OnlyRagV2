@@ -1,0 +1,72 @@
+import { discoverProjectProfile } from '../infrastructure/filesystem/projectProfileDiscovery'
+import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
+import { resolveProfileVerificationTargets } from '../domain/agent/projectProfileVerificationResolver'
+import type { ProjectProfile } from '../domain/agent/projectProfileContract'
+import type { UserInterviewAnswer } from '../../../shared/types'
+
+export interface ProjectPlanningFacts {
+  workspace: 'unknown' | 'empty' | 'existing' | 'monorepo' | 'multi-project'
+  stack: {
+    languages: string[]
+    packageManagers: string[]
+    testFrameworks: string[]
+    buildTools: string[]
+  }
+  relevantFiles: string[]
+  verificationCommands: string[]
+  previousDecisions: Array<{ question: string; answer: string; provenance: string }>
+}
+
+export interface ProjectPlanningDiscovery {
+  facts: ProjectPlanningFacts
+  profile: ProjectProfile | null
+}
+
+function relevantRepoFiles(repoMap: string, prompt: string, limit = 8): string[] {
+  const tokens = Array.from(new Set((prompt.toLowerCase().match(/[a-z0-9_.-]{3,}/g) || [])))
+  return repoMap
+    .split(/\r?\n/)
+    .map((line, index) => ({
+      path: line.replace(/^📄\s*/, '').split(/\s+➔\s+/)[0].trim(),
+      index,
+      score: tokens.reduce((total, token) => total + (line.toLowerCase().includes(token) ? 1 : 0), 0),
+    }))
+    .filter((entry) => entry.path && entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map((entry) => entry.path)
+}
+
+/** Reads shared workspace facts once for interview and planning. */
+export function collectProjectPlanningFacts(
+  workspacePath: string | null | undefined,
+  prompt: string,
+  previousDecisions: readonly UserInterviewAnswer[] = []
+): ProjectPlanningDiscovery {
+  const profile = workspacePath ? discoverProjectProfile(workspacePath) : null
+  const projects = profile?.projects || []
+  const unique = (values: string[]) => [...new Set(values)].sort()
+  const stack = {
+    languages: unique(projects.flatMap((project) => project.toolchain.languages)),
+    packageManagers: unique(projects.flatMap((project) => project.toolchain.packageManagers)),
+    testFrameworks: unique(projects.flatMap((project) => project.toolchain.testFrameworks)),
+    buildTools: unique(projects.flatMap((project) => project.toolchain.buildTools)),
+  }
+  const relevantFiles = workspacePath ? relevantRepoFiles(generateCompactRepoMap(workspacePath, 150), prompt) : []
+  const workspace = profile?.classification || 'unknown'
+
+  return {
+    profile,
+    facts: {
+      workspace,
+      stack,
+      relevantFiles,
+      verificationCommands: profile ? resolveProfileVerificationTargets(profile).map((target) => target.command) : [],
+      previousDecisions: previousDecisions.map((decision) => ({
+        question: decision.questionText,
+        answer: decision.selectedOption,
+        provenance: decision.provenance || 'unspecified',
+      })),
+    },
+  }
+}

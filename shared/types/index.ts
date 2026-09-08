@@ -656,11 +656,11 @@ export interface IElectronAPI {
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
   agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
   /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
-  agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings) => Promise<InterviewAnalysisResult>
+  agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<InterviewAnalysisResult>
   /** Enriches prompt with user's confirmed interview answers. */
-  agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[]) => Promise<string>
+  agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>
   /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
-  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null) => Promise<PlanGenerationResult>
+  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<PlanGenerationResult>
   /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
   agentPlanParseText?: (planText: string, workspacePath?: string | null) => Promise<PlanMilestone[]>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
@@ -684,6 +684,7 @@ export interface IElectronAPI {
 export interface InterviewQuestion {
   id: string
   question: string
+  rationale: string
   options: string[]
   recommendedIndex: number
 }

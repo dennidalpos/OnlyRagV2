@@ -153,6 +153,28 @@ export function findToolSchema(toolName: string): OllamaToolSchema | undefined {
   return OLLAMA_TOOL_SCHEMA_CATALOG.find((entry) => entry.function.name === toolName)
 }
 
+/** Returns schemas in policy order and ignores unknown names. */
+export function selectToolSchemas(toolNames: readonly string[]): OllamaToolSchema[] {
+  return toolNames
+    .map((name) => findToolSchema(name))
+    .filter((entry): entry is OllamaToolSchema => Boolean(entry))
+}
+
+/** Compact text fallback for models without native tool calling. */
+export function renderToolPromptCatalog(toolNames: readonly string[]): string {
+  const lines = selectToolSchemas(toolNames).map(({ function: definition }) => {
+    const fields = Object.entries(definition.parameters.properties).map(([name, property]) => {
+      const optional = definition.parameters.required.includes(name) ? '' : '?'
+      return `"${name}"${optional}: ${property.type}`
+    })
+    return `- ${definition.name}: { ${fields.join(', ')} } — ${definition.description}`
+  })
+  return [
+    'AVAILABLE TOOLS FOR THIS TURN (emit exactly one JSON block with tool, parameters and explanation):',
+    ...lines,
+  ].join('\n')
+}
+
 /** A plausible value for a parameter, used only to render the example call. */
 function exampleValueFor(paramName: string, type: string): string {
   if (type === 'integer' || type === 'number') return '1'

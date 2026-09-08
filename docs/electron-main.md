@@ -27,19 +27,22 @@ Infrastructure Layer (electron/core/infrastructure/)
 ### 1.2. Application Layer (`electron/core/application/`)
 * **Responsabilità**: Orchestrazione dei casi d'uso ad alto livello senza dettagli tecnologici diretti:
   * [`agentOrchestratorAppService.ts`](../electron/core/application/agentOrchestratorAppService.ts): Gestisce il ciclo di vita completo del Coding Agent Studio, loop guards, emissione eventi e coordinamento dei tool.
+  * [`agentOrchestratorTurnDispatch.ts`](../electron/core/application/agentOrchestratorTurnDispatch.ts): Separa raccolta del contesto e singola proposta LLM nel ciclo governato dall'applicazione.
   * [`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts): Esecuzione sicura dei tool atomici (`write_file`, `replace_chunk`, `run_command`, `git_commit`, `grep_search`).
+  * [`projectPlanningFacts.ts`](../electron/core/application/projectPlanningFacts.ts): Aggrega discovery, repo-map, verifiche e decisioni per intervista e planner senza cache tra workspace.
+  * [`interviewValidation.ts`](../shared/domain/agent/interviewValidation.ts): Valida lingua, corrispondenza e provenienza delle decisioni prima dell'arricchimento del piano.
   * [`ollamaAppService.ts`](../electron/core/application/ollamaAppService.ts) & [`ollamaModelUpdateAppService.ts`](../electron/core/application/ollamaModelUpdateAppService.ts): Gestione download, aggiornamenti, benchmark ed eviction dei modelli.
   * [`projectRegistryAppService.ts`](../electron/core/application/projectRegistryAppService.ts): Gestione persistente delle cartelle progetto e metadati `.onlyrag/`.
 
 ### 1.3. Domain Layer (`electron/core/domain/` e `shared/domain/`)
 * **Responsabilità**: Logica pura di business indipendente da qualsiasi framework o I/O.
 * **Componenti Puri Condivisi**: La logica condivisa tra Main e Renderer risiede in [`shared/domain/`](../shared/domain/) (es. `verificationCommandSafety.ts`, `milestoneDeliverableResolver.ts`, `hardwareProfileTiers.ts`, `contextWindowCalculator.ts`).
-* **Componenti Dominio Main**: [`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts), [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts), [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts), [`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts), [`toolParser.ts`](../electron/core/domain/agent/toolParser.ts).
+* **Componenti Dominio Main**: [`agentExecutionPhase.ts`](../electron/core/domain/agent/agentExecutionPhase.ts), [`turnToolPolicy.ts`](../electron/core/domain/agent/turnToolPolicy.ts), [`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts), [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts), [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts), [`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts), [`ollamaStructuredResponse.ts`](../electron/core/domain/agent/ollamaStructuredResponse.ts), [`toolParser.ts`](../electron/core/domain/agent/toolParser.ts).
 
 ### 1.4. Infrastructure Layer (`electron/core/infrastructure/`)
 * **Responsabilità**: Implementazione concreta dell'I/O (chiamate HTTP, processi di sistema, file system):
   * [`sidecarHttpClient.ts`](../electron/core/infrastructure/http/sidecarHttpClient.ts): Client HTTP centralizzato verso FastAPI `:8000`.
-  * [`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts): Client HTTP unificato verso Ollama `:11434` (eviction via `keep_alive: 0`, query unificate `/api/tags` e `/api/ps`).
+  * [`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts): Client HTTP unificato verso Ollama `:11434`, incluse risposte strutturate `/api/chat`, eviction e query `/api/tags`/`/api/ps`.
   * [`persistentPowerShellSession.ts`](../electron/core/infrastructure/process/persistentPowerShellSession.ts): Sessione PowerShell persistente con capture degli stream stdout/stderr, codici di uscita ed isolamento ambiente.
   * [`sidecarProcessManager.ts`](../electron/core/infrastructure/process/sidecarProcessManager.ts): Gestione del ciclo di vita del processo Python (avvio, monitoraggio PID, reclaim della porta orfana `:8000`).
 

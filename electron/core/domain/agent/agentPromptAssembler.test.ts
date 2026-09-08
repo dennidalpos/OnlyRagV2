@@ -112,6 +112,25 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     expect(nativeToolCalling.prompt).toContain('Fix typo in index.html')
   })
 
+  it('renders only the application-selected tools for text fallback models', () => {
+    const { prompt } = assembleTurnPrompt({
+      userTask: 'Fix typo in index.html',
+      agentMode: 'agent',
+      stepCount: 1,
+      maxSteps: 50,
+      workspacePath: 'D:/project',
+      toolOutputHistory: [],
+      settings: defaultSettings,
+      runtimeOpts,
+      availableToolNames: ['replace_file_content', 'ask'],
+    })
+
+    expect(prompt).toContain('AVAILABLE TOOLS FOR THIS TURN')
+    expect(prompt).toContain('- replace_file_content:')
+    expect(prompt).not.toContain('- write_file:')
+    expect(prompt).not.toContain('- run_command:')
+  })
+
   it('should render ∞ when maxSteps is Infinity or 0', () => {
     const { prompt } = assembleTurnPrompt({
       userTask: 'Long running task',

@@ -1,4 +1,4 @@
-import type { AgentToolCall } from '../domain/agent/agentTypes'
+import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import type { AgentExecutionMode } from '../../../shared/types'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
@@ -27,6 +27,7 @@ export interface ToolGateContext {
   emitLog: EmitLog
   requestApproval: RequestApproval
   capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
+  allowedToolsForTurn?: readonly SupportedToolName[]
 }
 
 export type ToolGateResult =
@@ -156,6 +157,17 @@ function denyFsm(ctx: ToolGateContext) {
  * see the gate doc-comments above for why each one must run where it does.
  */
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
+  if (ctx.allowedToolsForTurn && !ctx.allowedToolsForTurn.includes(ctx.parsedTool.tool)) {
+    const allowed = ctx.allowedToolsForTurn.join(', ') || 'none'
+    const feedback = `[TURN TOOL POLICY DENIED] Tool "${ctx.parsedTool.tool}" is not available for this phase. Available now: ${allowed}.`
+    ctx.episodicCompactor.recordStep(
+      { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: `Turn policy denied: ${ctx.parsedTool.tool}` },
+      feedback
+    )
+    ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
+    return { outcome: 'denied' }
+  }
+
   let approvalGranted = false
   let toolCallForExecution: AgentToolCall = ctx.parsedTool
   const policyConsent = await gateNetworkApproved(ctx)

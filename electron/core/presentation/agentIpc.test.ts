@@ -23,6 +23,9 @@ vi.mock('../application/planGenerationAppService', () => ({
   },
 }))
 vi.mock('../application/aiDebugBundleService', () => ({ aiDebugBundleService: {} }))
+vi.mock('../application/agentInterviewAppService', () => ({
+  agentInterviewAppService: { conductInterview: vi.fn(), enrichPromptWithAnswers: vi.fn() },
+}))
 vi.mock('../application/agentSessionStateAppService', () => ({
   agentSessionStateAppService: {
     loadSessionState: vi.fn(),
@@ -32,6 +35,7 @@ vi.mock('../application/agentSessionStateAppService', () => ({
 
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
+import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { registerAgentIpcHandlers } from './agentIpc'
 
 describe('agent IPC session-state facade', () => {
@@ -73,5 +77,28 @@ describe('agent IPC session-state facade', () => {
     await expect(handlers.get('agent:plan-parse-text')?.({}, '- [ ] Edit', '/repo')).resolves.toEqual([])
 
     expect(planGenerationAppService.parsePlanText).toHaveBeenCalledWith('- [ ] Edit', '/repo')
+  })
+
+  it('forwards workspace context and prior decisions to interview and planning', async () => {
+    const settings = {} as any
+    const decisions = [{ questionId: 'q1', questionText: 'Storage', selectedOption: 'Local' }]
+
+    await handlers.get('agent:plan-interview')?.({}, 'Build app', 'model', settings, '/repo', decisions)
+    await handlers.get('agent:plan-generate')?.({}, 'Build app', 'model', settings, [], '/repo', decisions)
+
+    expect(agentInterviewAppService.conductInterview).toHaveBeenCalledWith('Build app', 'model', settings, '/repo', decisions)
+    expect(planGenerationAppService.generatePlanText).toHaveBeenCalledWith(expect.objectContaining({
+      workspacePath: '/repo',
+      previousDecisions: decisions,
+    }))
+  })
+
+  it('forwards the current question set when enriching answers', async () => {
+    const answers = [{ questionId: 'q1', questionText: 'Storage?', selectedOption: 'SQLite', provenance: 'explicit' }]
+    const questions = [{ id: 'q1', question: 'Storage?', rationale: 'Changes persistence.', options: ['SQLite', 'JSON'], recommendedIndex: 0 }]
+
+    await handlers.get('agent:plan-enrich-prompt')?.({}, 'Build app', answers, questions)
+
+    expect(agentInterviewAppService.enrichPromptWithAnswers).toHaveBeenCalledWith('Build app', answers, questions)
   })
 })

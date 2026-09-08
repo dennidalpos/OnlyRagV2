@@ -5,11 +5,10 @@
  *
  * Analyzes user prompts before plan generation to identify architectural,
  * styling, persistence, or library choices. Generates structured multiple-choice
- * questions with a recommended default and write-in support, validated via jsonrepair.
+ * questions with a recommended default and write-in support.
  */
 
 import os from 'node:os'
-import { jsonrepair } from 'jsonrepair'
 import { ollamaAppService } from './ollamaAppService'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
@@ -21,45 +20,48 @@ import type {
   UserInterviewAnswer,
 } from '../../../shared/types'
 import { composeInterviewDecisionPrompt } from '../../../shared/domain/agent/interviewDecisionContext'
+import {
+  validateInterviewAnswers,
+  validateInterviewQuestionLanguage,
+} from '../../../shared/domain/agent/interviewValidation'
+import {
+  interviewPhaseResponseSchema,
+  toOllamaJsonSchema,
+  validateStructuredContent,
+} from '../domain/agent/ollamaStructuredResponse'
+import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projectPlanningFacts'
 
 export type { InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
-const INTERVIEW_SYSTEM_PROMPT = `You are an expert AI Software Architect. Your job is to analyze the user's coding request before formulating an implementation plan.
+const INTERVIEW_SYSTEM_PROMPT = `Analyze a coding request before planning.
+Treat projectFacts and previousDecisions as authoritative unless the request explicitly changes them.
+Do not ask about choices already fixed by the workspace or a previous decision.
+Return no questions when the request is clear or project conventions resolve the choice.
+Otherwise ask normally one and at most two independent questions about unresolved behavior or real trade-offs.
+Each question has a brief rationale, two or three distinct concrete options and a recommended option. Never replace an indispensable user choice with a default.
+Never ask for permission to proceed. Use the same language as the request.`
 
-Evaluate whether the request has significant architectural, technological, styling, or library choices that would genuinely benefit from the user's explicit preference (for example: CSS framework vs Vanilla CSS, state management/persistence strategy, single-file HTML vs modular SPA structure).
-
-If the request is already clear, well-scoped, or has obvious standard choices, respond with:
-{"hasQuestions": false, "questions": []}
-
-If there are 1-2 genuine technical trade-offs to clarify, output a valid JSON block with this exact schema:
-{
-  "hasQuestions": true,
-  "questions": [
-    {
-      "id": "q1",
-      "question": "Concise description of the technical choice",
-      "options": [
-        "Recommended option",
-        "Alternative option 1",
-        "Alternative option 2"
-      ],
-      "recommendedIndex": 0
-    }
+function questionResolvedByFacts(question: InterviewQuestion, facts: ProjectPlanningFacts): boolean {
+  const text = question.question.toLowerCase()
+  const categories = [
+    { pattern: /\b(workspace|progetto|project|greenfield|esistente|existing)\b/, known: facts.workspace !== 'unknown' },
+    { pattern: /\b(linguaggio|language|stack|framework)\b/, known: facts.stack.languages.length > 0 },
+    { pattern: /\b(package manager|gestore pacchetti|npm|pnpm|yarn|cargo)\b/, known: facts.stack.packageManagers.length > 0 },
+    { pattern: /\b(test framework|framework di test|vitest|jest|pytest)\b/, known: facts.stack.testFrameworks.length > 0 },
+    { pattern: /\b(build tool|strumento di build|vite|webpack)\b/, known: facts.stack.buildTools.length > 0 },
+    { pattern: /\b(verifica|verification|build command|comando di build|test command)\b/, known: facts.verificationCommands.length > 0 },
   ]
+  if (categories.some(({ pattern, known }) => known && pattern.test(text))) return true
+  return facts.previousDecisions.some((decision) => decision.question.trim().toLowerCase() === text.trim())
 }
-
-STRICT RULES:
-1. At most 1-2 questions, each with 2-3 clear and concrete options.
-2. The option at index 0 (recommendedIndex: 0) MUST be the best standard, self-sufficient default choice.
-3. NEVER ask trivial confirmation questions (e.g. "do you want to proceed?"). Only ask about real technical architectural trade-offs.
-4. CRITICAL LANGUAGE DIRECTIVE: The question and options text MUST be written in the EXACT same language used by the user in their prompt (e.g. Italian if prompt is in Italian, English if English, French if French, Spanish if Spanish, German if German, etc.).
-5. Respond EXCLUSIVELY with the valid JSON block.`
 
 export class AgentInterviewAppService {
   async conductInterview(
     prompt: string,
     model: string | undefined,
-    settings: AppSettings
+    settings: AppSettings,
+    workspacePath?: string | null,
+    previousDecisions: readonly UserInterviewAnswer[] = []
   ): Promise<InterviewAnalysisResult> {
     const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
     const cachedGpu = getCachedGpuInfo()
@@ -71,117 +73,86 @@ export class AgentInterviewAppService {
       cpuCount: os.cpus()?.length,
     })
     runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx)
-    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
+    runtimeOpts.num_predict = Math.min(HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx), 768)
     runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
 
-    const fullPrompt = `${INTERVIEW_SYSTEM_PROMPT}\n\nUser request to analyze:\n\n${prompt}`
-
-    let accumulated = ''
     try {
-      const res = await ollamaAppService.generateStream(
-        modelToUse,
-        fullPrompt,
-        (chunk: string) => {
-          accumulated += chunk
-        },
-        () => {},
-        runtimeOpts
-      )
+      const { facts } = collectProjectPlanningFacts(workspacePath, prompt, previousDecisions)
+      const response = await ollamaAppService.generateStructured({
+        model: modelToUse,
+        systemPrompt: INTERVIEW_SYSTEM_PROMPT,
+        userContent: JSON.stringify({ request: prompt, projectFacts: facts }),
+        format: toOllamaJsonSchema(interviewPhaseResponseSchema),
+        host: settings.ollamaHost,
+        options: runtimeOpts,
+      })
 
-      if (!res.success) {
-        logger.log('WARN', 'AgentInterviewAppService', `Interview generation failed: ${res.error}`)
-        return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: res.error || 'Interview generation failed' }
-      }
-
-      const repaired = this.extractAndRepairJson(accumulated)
-      if (!repaired) {
-        logger.log('WARN', 'AgentInterviewAppService', `Could not extract or repair valid JSON from model output: ${accumulated}`)
-        return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: 'Invalid interview response' }
-      }
-
-      const parsed = JSON.parse(repaired)
-      if (typeof parsed !== 'object' || parsed === null) {
-        return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: 'Interview response is not an object' }
-      }
-
-      if (parsed.hasQuestions === false && Array.isArray(parsed.questions) && parsed.questions.length === 0) {
-        return { status: 'completed', hasQuestions: false, questions: [], rawResponse: accumulated }
-      }
-
-      if (parsed.hasQuestions !== true || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+      if (response.status !== 'complete') {
+        logger.log('WARN', 'AgentInterviewAppService', `Interview generation ${response.status}: ${response.error}`)
         return {
           status: 'error',
           hasQuestions: false,
           questions: [],
-          rawResponse: accumulated,
-          error: 'Interview response does not match the required result shape',
+          rawResponse: response.content,
+          error: response.error,
         }
       }
 
-      const validatedQuestions: InterviewQuestion[] = []
-      for (const q of parsed.questions) {
-        if (
-          typeof q.id === 'string' &&
-          typeof q.question === 'string' &&
-          Array.isArray(q.options) &&
-          q.options.length >= 2
-        ) {
-          const recIdx = typeof q.recommendedIndex === 'number' && q.recommendedIndex >= 0 && q.recommendedIndex < q.options.length
-            ? q.recommendedIndex
-            : 0
-          validatedQuestions.push({
-            id: q.id,
-            question: q.question,
-            options: q.options.map(String),
-            recommendedIndex: recIdx,
-          })
+      const validated = validateStructuredContent(response.content, interviewPhaseResponseSchema)
+      if (validated.status === 'invalid') {
+        logger.log('WARN', 'AgentInterviewAppService', `Interview schema rejected: ${validated.error}`)
+        return {
+          status: 'error',
+          hasQuestions: false,
+          questions: [],
+          rawResponse: response.content,
+          error: `Invalid interview response: ${validated.error}`,
+        }
+      }
+
+      const unresolvedQuestions = validated.data.questions.filter((question) => !questionResolvedByFacts(question, facts))
+      const languageError = validateInterviewQuestionLanguage(prompt, unresolvedQuestions)
+      if (languageError) {
+        return {
+          status: 'error',
+          hasQuestions: false,
+          questions: [],
+          rawResponse: response.content,
+          error: `Invalid interview response: ${languageError}`,
+        }
+      }
+      if (!validated.data.hasQuestions || unresolvedQuestions.length === 0) {
+        return {
+          status: 'completed',
+          hasQuestions: false,
+          questions: [],
+          rawResponse: response.content,
         }
       }
 
       return {
-        status: validatedQuestions.length > 0 ? 'clarification_required' : 'error',
-        hasQuestions: validatedQuestions.length > 0,
-        questions: validatedQuestions,
-        rawResponse: accumulated,
-        ...(validatedQuestions.length === 0 ? { error: 'Interview response contained no valid questions' } : {}),
+        status: 'clarification_required',
+        hasQuestions: true,
+        questions: unresolvedQuestions as InterviewQuestion[],
+        rawResponse: response.content,
       }
     } catch (parseErr: any) {
       logger.log('WARN', 'AgentInterviewAppService', `Failed to parse interview response: ${parseErr.message}`)
-      return { status: 'error', hasQuestions: false, questions: [], rawResponse: accumulated, error: parseErr.message }
-    }
-  }
-
-  /**
-   * Extracts JSON block and repairs syntax errors using jsonrepair.
-   */
-  private extractAndRepairJson(rawText: string): string | null {
-    if (!rawText) return null
-    let candidate = rawText.trim()
-
-    // Strip markdown code fences if present
-    const fenceMatch = candidate.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-    if (fenceMatch) {
-      candidate = fenceMatch[1].trim()
-    } else {
-      const firstBrace = candidate.indexOf('{')
-      const lastBrace = candidate.lastIndexOf('}')
-      if (firstBrace >= 0 && lastBrace > firstBrace) {
-        candidate = candidate.slice(firstBrace, lastBrace + 1)
-      }
-    }
-
-    try {
-      return jsonrepair(candidate)
-    } catch {
-      return null
+      return { status: 'error', hasQuestions: false, questions: [], error: parseErr.message }
     }
   }
 
   /**
    * Enriches the original user prompt with the confirmed interview answers.
    */
-  enrichPromptWithAnswers(originalPrompt: string, answers: UserInterviewAnswer[]): string {
-    return composeInterviewDecisionPrompt(originalPrompt, answers || [])
+  enrichPromptWithAnswers(
+    originalPrompt: string,
+    answers: UserInterviewAnswer[],
+    questions: InterviewQuestion[]
+  ): string {
+    const validated = validateInterviewAnswers(questions || [], answers || [])
+    if (!validated.valid) throw new Error(`Invalid interview answers: ${validated.error}`)
+    return composeInterviewDecisionPrompt(originalPrompt, validated.answers)
   }
 }
 

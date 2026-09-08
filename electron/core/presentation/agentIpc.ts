@@ -8,7 +8,7 @@ import { planGenerationAppService } from '../application/planGenerationAppServic
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AppSettings } from '../../../shared/types'
+import type { AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle('agent:start-task', async (_, payload: AgentTaskPayload) => {
@@ -46,8 +46,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-interview',
-    async (_, prompt: string, model: string | undefined, settings: AppSettings) => {
-      return agentInterviewAppService.conductInterview(prompt, model, settings)
+    async (_, prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+      return agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions)
     }
   )
 
@@ -56,8 +56,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-enrich-prompt',
-    async (_, prompt: string, answers: any[]) => {
-      return agentInterviewAppService.enrichPromptWithAnswers(prompt, answers)
+    async (_, prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) => {
+      return agentInterviewAppService.enrichPromptWithAnswers(prompt, answers, questions)
     }
   )
 
@@ -68,8 +68,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-generate',
-    async (_, prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: any[], workspacePath?: string | null) => {
-      return planGenerationAppService.generatePlanText({ prompt, model, settings, pendingResidueMilestones, workspacePath })
+    async (_, prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: any[], workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+      return planGenerationAppService.generatePlanText({ prompt, model, settings, pendingResidueMilestones, workspacePath, previousDecisions })
     }
   )
 

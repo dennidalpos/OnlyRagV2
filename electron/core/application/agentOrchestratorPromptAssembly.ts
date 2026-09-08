@@ -19,6 +19,7 @@ import { buildExplicitFirstCommandDirective } from '../domain/agent/planDirectiv
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
+import { resolveTurnToolPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
@@ -101,37 +102,18 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   }
 }
 
-/** Per-file cap for injected file content. Generous: the model must emit the whole file back. */
-const INJECTED_FILE_CHAR_CAP = 12000
-/** A turn is about a handful of files; more than this is a plan problem, not a prompt one. */
-const MAX_INJECTED_FILES = 3
+const PRIMARY_FILE_CHAR_CAP = 12000
+const SUPPORT_FILE_CHAR_CAP = 3000
+const MAX_SUPPORT_FILES = 2
 
-/**
- * Hands the model the current content of the files this turn is about to rewrite.
- *
- * ## Why the system supplies this rather than asking for it
- *
- * The coding prompt already says it (rule 7: "consult the repository map and read files before
- * acting. If a file already exists and satisfies the requirement, edit it — never overwrite it
- * wholesale"). Across four independent full-task runs in logs/coding_agent_audit.log the model
- * issued 74 `write_file` calls and `read_file` exactly ZERO times — and `replace_file_content`
- * zero times too. It uses three tools out of the fifteen in the catalog.
- *
- * That is not inattention, it is arithmetic. `replace_file_content` needs `TargetContent` to
- * match the file byte for byte, so it is unreachable without a prior read; a read costs one of
- * the fifty steps and moves no milestone, since the deliverable probe measures files on disk;
- * and every directive the arbiter can emit names `write_file` or `run_command`, never a read.
- * `write_file` is the only tool that always makes measurable progress in a single step, so it is
- * the only tool used — and a wholesale write with no knowledge of the current file replaces it
- * with a stub. That is how "src/pages/DashboardPage.tsx" ended a run at 208 bytes.
- *
- * Blueprint §6.2.1: when the system holds a datum the model cannot deduce, it hands the datum
- * over instead of instructing the model to go and get it. Adding a twelfth rule telling it to
- * read harder is precisely the move that principle exists to rule out.
- *
- * Silent on every failure: a file that cannot be read is one the model will have to fetch
- * itself, which is worse but not broken. Failing the turn over it would be.
- */
+function boundedFileContent(content: string, cap: number): string {
+  if (content.length <= cap) return content
+  const half = Math.floor(cap / 2)
+  const omitted = content.length - (half * 2)
+  return `${content.slice(0, half)}\n[CONTENT OMITTED: ${omitted} chars; use read_file for the required range]\n${content.slice(-half)}`
+}
+
+/** Injects one primary file and at most two bounded support fragments. */
 export function readTurnFileContext(
   ctx: TurnDispatchContext,
   targets: readonly string[] | undefined,
@@ -141,16 +123,17 @@ export function readTurnFileContext(
 
   const root = path.resolve(ctx.workspacePath)
   const blocks: string[] = []
-  for (const relativePath of targets.slice(0, MAX_INJECTED_FILES)) {
+  for (const [index, relativePath] of targets.slice(0, 1 + MAX_SUPPORT_FILES).entries()) {
     try {
       const absolute = path.resolve(root, relativePath)
-      // Never read outside the workspace on a path that came from a scanner or a plan title.
-      if (!absolute.startsWith(root)) continue
+      if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) continue
       const content = fs.readFileSync(absolute, 'utf-8')
       if (!content.trim()) continue
-      blocks.push(`--- ${relativePath} (${reason}) ---\n${content.slice(0, INJECTED_FILE_CHAR_CAP)}`)
+      const role = index === 0 ? 'PRIMARY EDIT FILE' : 'SUPPORT FRAGMENT'
+      const cap = index === 0 ? PRIMARY_FILE_CHAR_CAP : SUPPORT_FILE_CHAR_CAP
+      blocks.push(`--- ${role}: ${relativePath} (${reason}) ---\n${boundedFileContent(content, cap)}`)
     } catch {
-      // Missing or unreadable: nothing to hand over, and read_file still exists.
+      // The model can request missing context through read_file.
     }
   }
 
@@ -173,12 +156,49 @@ export function resolveTurnFileTargets(
   }
   if (directive.kind !== 'focus') return { targets: [], reason: '' }
 
-  const activeTitle = ctx.goalPlanner.getActiveMilestone()?.title
-  if (!activeTitle) return { targets: [], reason: '' }
+  const activeTitle = ctx.goalPlanner.getActiveMilestone()?.title || ctx.userTask
   return {
     targets: extractDeliverablePaths(activeTitle),
     reason: 'already on disk for the active milestone — edit it rather than overwrite it',
   }
+}
+
+function resolveEditTargetState(ctx: TurnDispatchContext, targets: readonly string[]): EditTargetState {
+  if (!ctx.workspacePath || targets.length === 0) return 'unknown'
+  const root = path.resolve(ctx.workspacePath)
+  const target = path.resolve(root, targets[0])
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) return 'unknown'
+  return fs.existsSync(target) ? 'existing' : 'missing'
+}
+
+/** Builds the fresh, bounded facts needed for only the current operation. */
+export function buildCurrentOperationContext(
+  ctx: TurnDispatchContext,
+  directive: PlanDirectiveDecision,
+  toolPolicy: TurnToolPolicy,
+  targets: readonly string[]
+): string {
+  const milestone = ctx.goalPlanner.getActiveMilestone()
+  const latestFailure = [...ctx.episodicCompactor.getRecentFullLogs()].reverse().find((entry) => entry.isFailure)
+  const constraints = [
+    `mode=${ctx.fsmMode.getMode()}`,
+    `workspace=${ctx.workspacePath || 'standalone'}`,
+    `allowed tools=${toolPolicy.allowedTools.join(', ')}`,
+    milestone?.notes ? `accepted decision=${milestone.notes}` : '',
+  ].filter(Boolean)
+  const relevant = targets.length > 0 ? targets.slice(0, 3).join(', ') : 'none selected yet'
+  const failure = latestFailure
+    ? `${latestFailure.tool}${latestFailure.target ? ` (${latestFailure.target})` : ''}: ${latestFailure.output.slice(0, 1200)}`
+    : 'none'
+
+  return [
+    'CURRENT OPERATION CONTEXT:',
+    `- Objective: ${milestone?.title || ctx.userTask}`,
+    `- Directive: ${directive.kind}`,
+    `- Accepted constraints: ${constraints.join('; ')}`,
+    `- Relevant paths: ${relevant}`,
+    `- Last useful error: ${failure}`,
+  ].join('\n')
 }
 
 export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection, compiledHistoryBlock: string) {
@@ -193,7 +213,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.episodicCompactor.getEpisodes(),
     ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build')
   )
-  const planBlock = [
+  const progressPlanBlock = [
     buildExplicitFirstCommandDirective(ctx.userTask, ctx.stepCount === 1),
     ctx.goalPlanner.compileProgressPrompt({ directive }),
   ]
@@ -222,6 +242,16 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   // objective datum the model cannot deduce, so it hands the datum over rather than issuing an
   // instruction that assumes the model already has it (blueprint §6.2.1).
   const turnFiles = resolveTurnFileTargets(ctx, directive)
+  const toolPolicy = resolveTurnToolPolicy({
+    directiveKind: directive.kind,
+    editTargetState: resolveEditTargetState(ctx, turnFiles.targets),
+    userTask: ctx.userTask,
+  })
+  ctx.emitLog('info', `🧰 Tool policy [${directive.kind}]: ${toolPolicy.rationale} — ${toolPolicy.allowedTools.join(', ')}.`)
+  const planBlock = [
+    buildCurrentOperationContext(ctx, directive, toolPolicy, turnFiles.targets),
+    progressPlanBlock,
+  ].filter(Boolean).join('\n\n')
   const rewriteTargetBlock = policy.includePinnedFiles ? readTurnFileContext(ctx, turnFiles.targets, turnFiles.reason) : ''
 
   const skillsBlock = !policy.includeSkills
@@ -282,6 +312,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     settings: ctx.settings,
     runtimeOpts: selection.runtimeOpts,
     toolCallingCapable: selection.targetModelToolCallingCapable,
+    availableToolNames: toolPolicy.allowedTools,
   })
   const basePrompt = assembled.prompt
 
@@ -312,7 +343,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     ctx.emitLog('info', `🗜️ Context Compacted: ${compactionResult.originalChars} → ${compactionResult.finalChars} chars (heuristic, zero-cost)`)
   }
 
-  return { assembled, compactionResult, turnPrompt }
+  return { assembled, compactionResult, turnPrompt, toolPolicy }
 }
 
 /** Keeps the selected per-model context stable; prompt size is handled by compaction, not ctx resizing. */

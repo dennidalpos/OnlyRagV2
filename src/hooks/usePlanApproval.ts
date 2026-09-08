@@ -6,6 +6,8 @@ import {
   composeInterviewDecisionPrompt,
   createAcceptedRecommendationAnswers,
 } from '../../shared/domain/agent/interviewDecisionContext'
+import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
+import { validateInterviewAnswers } from '../../shared/domain/agent/interviewValidation'
 import { renderPlanMilestones } from '../../shared/domain/agent/planCompilation'
 
 export type { AgentPlan } from '../types'
@@ -13,14 +15,15 @@ export type { AgentPlan } from '../types'
 export async function resolveInterviewPrompt(
   originalPrompt: string,
   answers: UserInterviewAnswer[],
-  enrichPrompt: ((prompt: string, interviewAnswers: UserInterviewAnswer[]) => Promise<string>) | undefined,
-  onEnrichmentFailure: (reason: unknown) => void
+  enrichPrompt: ((prompt: string, interviewAnswers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>) | undefined,
+  onEnrichmentFailure: (reason: unknown) => void,
+  questions: InterviewQuestion[] = []
 ): Promise<string> {
   const losslessPrompt = composeInterviewDecisionPrompt(originalPrompt, answers)
   if (!enrichPrompt || answers.length === 0) return losslessPrompt
 
   try {
-    const enriched = await enrichPrompt(originalPrompt, answers)
+    const enriched = await enrichPrompt(originalPrompt, answers, questions)
     const preservesInputs = typeof enriched === 'string'
       && enriched.includes(originalPrompt)
       && answers.every((answer) => enriched.includes(answer.selectedOption))
@@ -173,6 +176,9 @@ export function usePlanApproval({
       // prior residual work instead of restarting from zero.
       const lastApprovedPlan = [...existingHistory].reverse().find((p) => p.status === 'approved' && p.milestones && p.milestones.length > 0)
       const pendingResidueMilestones = lastApprovedPlan?.milestones?.filter((m) => m.status !== 'verified')
+      const previousDecisions = interviewContext?.answers?.length
+        ? interviewContext.answers
+        : [...existingHistory].reverse().find((plan) => plan.interviewAnswers?.length)?.interviewAnswers || []
 
       const initialPlan: AgentPlan = {
         id: planId,
@@ -203,7 +209,8 @@ export function usePlanApproval({
               modelToUse,
               settings,
               pendingResidueMilestones,
-              scope.workspacePath
+              scope.workspacePath,
+              previousDecisions
             )
             if (!isFlowCurrent(scope)) return null
             returnedPlanText = genRes?.planText?.trim() || ''
@@ -444,12 +451,22 @@ export function usePlanApproval({
       setInterviewQuestions([])
       pendingFlowRef.current = { prompt, targetModel, currentStep, questions: [], scope }
 
-      // Check if pre-flight interview is supported and enabled
-      if (window.electronAPI?.agentPlanInterview && settings && settings.enablePrePlanInterview !== false) {
+      const previousDecisions = [...planHistoryRef.current]
+        .reverse()
+        .find((plan) => plan.interviewAnswers?.length)?.interviewAnswers || []
+      const needsInterview = shouldRunPlanInterview(prompt, previousDecisions)
+
+      if (needsInterview && window.electronAPI?.agentPlanInterview && settings && settings.enablePrePlanInterview !== false) {
         setIsAnalyzingInterview(true)
         try {
           const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-          const interviewRes = await window.electronAPI.agentPlanInterview(prompt, modelToUse, settings)
+          const interviewRes = await window.electronAPI.agentPlanInterview(
+            prompt,
+            modelToUse,
+            settings,
+            scope.workspacePath,
+            previousDecisions,
+          )
           if (!isFlowCurrent(scope)) return null
           setIsAnalyzingInterview(false)
 
@@ -530,6 +547,11 @@ export function usePlanApproval({
     async (answers: UserInterviewAnswer[]) => {
       const pending = pendingFlowRef.current
       if (!pending) return
+      const validation = validateInterviewAnswers(pending.questions, answers)
+      if (!validation.valid) {
+        logger.warn('usePlanApproval', `Interview answers rejected: ${validation.error}`)
+        return null
+      }
       pendingFlowRef.current = null
       setIsInterviewActive(false)
       setInterviewQuestions([])
@@ -537,16 +559,17 @@ export function usePlanApproval({
 
       const effectivePrompt = await resolveInterviewPrompt(
         pending.prompt,
-        answers,
+        validation.answers,
         window.electronAPI?.agentPlanEnrichPrompt,
-        (err: any) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message || String(err)}`)
+        (err: any) => logger.warn('usePlanApproval', `agentPlanEnrichPrompt failed: ${err?.message || String(err)}`),
+        pending.questions
       )
       if (!isFlowCurrent(pending.scope)) return null
       setIsAnalyzingInterview(false)
 
       return generatePlan(effectivePrompt, pending.targetModel, pending.currentStep, {
         originalPrompt: pending.prompt,
-        answers,
+        answers: validation.answers,
       }, pending.scope)
     },
     [generatePlan, isFlowCurrent]

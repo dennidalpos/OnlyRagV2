@@ -1,160 +1,160 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { AgentInterviewAppService } from './agentInterviewAppService'
 import { ollamaAppService } from './ollamaAppService'
 import type { AppSettings } from '../../../shared/types'
 
 vi.mock('./ollamaAppService', () => ({
-  ollamaAppService: {
-    generateStream: vi.fn(),
-  },
+  ollamaAppService: { generateStructured: vi.fn() },
 }))
 
 describe('AgentInterviewAppService', () => {
   let service: AgentInterviewAppService
-  const mockSettings: AppSettings = {
-    codingModel: 'qwen2.5-coder:7b',
-  } as any
+  const settings = { codingModel: 'qwen2.5-coder:7b', ollamaHost: '' } as AppSettings
 
   beforeEach(() => {
     service = new AgentInterviewAppService()
-    vi.mocked(ollamaAppService.generateStream).mockReset()
     vi.clearAllMocks()
   })
 
-  it('returns hasQuestions: false when LLM responds with no questions', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(
-      async (_model, _prompt, onChunk) => {
-        onChunk('{"hasQuestions": false, "questions": []}')
-        return { success: true }
-      }
-    )
+  it('returns completed when the validated response has no questions', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+    })
 
-    const result = await service.conductInterview('Crea una funzione somma', 'qwen2.5-coder:7b', mockSettings)
-    expect(result.status).toBe('completed')
-    expect(result.hasQuestions).toBe(false)
-    expect(result.questions).toHaveLength(0)
+    const result = await service.conductInterview('Crea una funzione somma', undefined, settings)
+
+    expect(result).toMatchObject({ status: 'completed', hasQuestions: false, questions: [] })
   })
 
-  it('applies the selected coding model context preference to the pre-flight interview', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+  it('parses schema-constrained questions', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status: 'complete',
+      content: JSON.stringify({
+        hasQuestions: true,
+        questions: [{ id: 'q1', question: 'Quale stile preferisci?', rationale: 'La scelta cambia compatibilità e controllo.', options: ['CSS', 'Web Animations'], recommendedIndex: 0 }],
+      }),
+    })
+
+    const result = await service.conductInterview('Crea animazioni', undefined, settings)
+
+    expect(result.status).toBe('clarification_required')
+    expect(result.questions[0]).toMatchObject({ id: 'q1', recommendedIndex: 0 })
+  })
+
+  it('drops questions already answered by fresh workspace facts', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-interview-facts-'))
+    fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.0.0' }))
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status: 'complete',
+      content: JSON.stringify({
+        hasQuestions: true,
+        questions: [{ id: 'q1', question: 'Quale package manager?', rationale: 'La scelta cambia i file di lock.', options: ['npm', 'pnpm'], recommendedIndex: 1 }],
+      }),
+    })
+
+    try {
+      await expect(service.conductInterview('Aggiorna il progetto', undefined, settings, workspacePath)).resolves.toMatchObject({
+        status: 'completed',
+        hasQuestions: false,
+        questions: [],
+      })
+    } finally {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects questions written in a different detectable language', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status: 'complete',
+      content: JSON.stringify({
+        hasQuestions: true,
+        questions: [{
+          id: 'q1',
+          question: 'Which storage do you prefer?',
+          rationale: 'The choice changes the data format and portability.',
+          options: ['SQLite', 'JSON'],
+          recommendedIndex: 0,
+        }],
+      }),
+    })
+
+    const result = await service.conductInterview('Crea una pagina con filtri', undefined, settings)
+
+    expect(result).toMatchObject({ status: 'error', error: expect.stringContaining('request language') })
+  })
+
+  it('applies context preferences and separates instructions from data', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+    })
 
     await service.conductInterview(
       'Crea una funzione somma',
       'qwen2.5-coder:7b',
-      { ...mockSettings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } }
+      { ...settings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } }
     )
 
-    expect(vi.mocked(ollamaAppService.generateStream).mock.calls[0][4]).toEqual(
-      expect.objectContaining({ num_ctx: 8192 })
-    )
-  })
-
-  it('parses and repairs structured multiple choice questions from markdown json block', async () => {
-    const rawResponse = `Ecco le scelte:\n\`\`\`json\n{\n  "hasQuestions": true,\n  "questions": [\n    {\n      "id": "q1",\n      "question": "Quale stile di animazione preferisci?",\n      "options": ["CSS Keyframes", "Web Animations API", "Tailwind CSS"],\n      "recommendedIndex": 0\n    }\n  ]\n}\n\`\`\``
-    
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(
-      async (_model, _prompt, onChunk) => {
-        onChunk(rawResponse)
-        return { success: true }
-      }
-    )
-
-    const result = await service.conductInterview('Crea una landing page con animazioni', 'qwen2.5-coder:7b', mockSettings)
-    expect(result.hasQuestions).toBe(true)
-    expect(result.status).toBe('clarification_required')
-    expect(result.questions).toHaveLength(1)
-    expect(result.questions[0].question).toBe('Quale stile di animazione preferisci?')
-    expect(result.questions[0].options).toEqual(['CSS Keyframes', 'Web Animations API', 'Tailwind CSS'])
-    expect(result.questions[0].recommendedIndex).toBe(0)
-  })
-
-  it('repairs malformed JSON (trailing commas, unescaped quotes) via jsonrepair', async () => {
-    const malformed = `{"hasQuestions": true, "questions": [{"id": "q1", "question": "Framework?", "options": ["Vanilla JS", "React",], "recommendedIndex": 0,},],}`
-    
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(
-      async (_model, _prompt, onChunk) => {
-        onChunk(malformed)
-        return { success: true }
-      }
-    )
-
-    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
-    expect(result.hasQuestions).toBe(true)
-    expect(result.questions).toHaveLength(1)
-    expect(result.questions[0].options).toEqual(['Vanilla JS', 'React'])
-  })
-
-  it('reports transport failure as an error rather than as a successful no-question analysis', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'connection refused' })
-
-    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
-
-    expect(result).toMatchObject({
-      status: 'error',
-      hasQuestions: false,
-      questions: [],
-      error: 'connection refused',
+    const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
+    expect(request.options).toEqual(expect.objectContaining({ num_ctx: 8192 }))
+    expect(request.systemPrompt).not.toContain('Crea una funzione somma')
+    expect(JSON.parse(request.userContent)).toMatchObject({
+      request: 'Crea una funzione somma',
+      projectFacts: { workspace: 'unknown', relevantFiles: [], previousDecisions: [] },
     })
+    expect(request.format).toEqual(expect.objectContaining({ type: 'object' }))
   })
 
-  it('reports invalid JSON as an error rather than continuing to generic planning', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-      onChunk('not a structured interview response')
-      return { success: true }
+  it('rejects malformed or semantically invalid JSON', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'complete', content: '{"hasQuestions":true,',
     })
+    const malformed = await service.conductInterview('Crea un gioco', undefined, settings)
+    expect(malformed.error).toContain('Response is not valid JSON')
 
-    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Interview response is not an object')
-  })
-
-  it('rejects an invalid result shape instead of interpreting it as no questions', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-      onChunk('{"hasQuestions": true, "questions": []}')
-      return { success: true }
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'complete', content: '{"hasQuestions":true,"questions":[]}',
     })
-
-    const result = await service.conductInterview('Crea un gioco', 'qwen2.5-coder:7b', mockSettings)
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Interview response does not match the required result shape')
+    const inconsistent = await service.conductInterview('Crea un gioco', undefined, settings)
+    expect(inconsistent.error).toContain('hasQuestions must match')
   })
 
-  it('enriches prompt correctly with user confirmed answers', () => {
-    const original = 'Crea una calcolatrice moderna'
-    const answers = [
-      {
-        questionId: 'q1',
-        questionText: 'Layout UI',
-        selectedOption: 'Grid moderna con CSS Grid',
-        isCustom: false,
-      },
-      {
-        questionId: 'q2',
-        questionText: 'Gestione Cronologia',
-        selectedOption: 'Salva in localStorage',
-        isCustom: true,
-      },
+  it('does not use transport failures or incomplete responses', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'transport_error', content: '', error: 'connection refused',
+    })
+    const failed = await service.conductInterview('Crea un gioco', undefined, settings)
+    expect(failed).toMatchObject({ status: 'error', error: 'connection refused' })
+
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'incomplete', content: '{"hasQuestions":false', error: 'Ollama response incomplete (length)',
+    })
+    const incomplete = await service.conductInterview('Crea un gioco', undefined, settings)
+    expect(incomplete).toMatchObject({ status: 'error', error: 'Ollama response incomplete (length)' })
+  })
+
+  it('enriches the prompt with answer provenance', () => {
+    const questions = [
+      { id: 'q1', question: 'Router', rationale: 'Changes navigation.', options: ['React Router', 'Custom'], recommendedIndex: 0 },
+      { id: 'q2', question: 'Theme', rationale: 'Changes presentation.', options: ['Dark', 'Light'], recommendedIndex: 0 },
     ]
-
-    const enriched = service.enrichPromptWithAnswers(original, answers)
-    expect(enriched).toContain('Crea una calcolatrice moderna')
-    expect(enriched).toContain('[ORIGINAL USER REQUEST]\nCrea una calcolatrice moderna')
-    expect(enriched).toContain('[INTERVIEW DECISIONS]')
-    expect(enriched).toContain('- [EXPLICIT USER ANSWER] Layout UI: Grid moderna con CSS Grid')
-    expect(enriched).toContain('- [EXPLICIT USER ANSWER] Gestione Cronologia: Salva in localStorage (Custom)')
-  })
-
-  it('keeps accepted recommendations and unconfirmed assumptions distinct from explicit answers', () => {
     const enriched = service.enrichPromptWithAnswers('Build a dashboard', [
       { questionId: 'q1', questionText: 'Router', selectedOption: 'React Router', provenance: 'accepted_recommendation' },
       { questionId: 'q2', questionText: 'Theme', selectedOption: 'Dark', provenance: 'explicit' },
-      { questionId: 'q3', questionText: 'Storage', selectedOption: 'Local only', provenance: 'unconfirmed_assumption' },
-    ])
+    ], questions)
 
+    expect(enriched).toContain('[ORIGINAL USER REQUEST]\nBuild a dashboard')
     expect(enriched).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
     expect(enriched).toContain('[EXPLICIT USER ANSWER] Theme: Dark')
-    expect(enriched).toContain('[UNCONFIRMED ASSUMPTION] Storage: Local only')
+  })
+
+  it('rejects answers for stale question IDs', () => {
+    expect(() => service.enrichPromptWithAnswers('Build', [{
+      questionId: 'old', questionText: 'Old?', selectedOption: 'A', provenance: 'explicit',
+    }], [{
+      id: 'current', question: 'Current?', rationale: 'Changes behavior.', options: ['A', 'B'], recommendedIndex: 0,
+    }])).toThrow('Unknown or stale question ID')
   })
 })

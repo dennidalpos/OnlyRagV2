@@ -3,6 +3,8 @@ import {
   OLLAMA_TOOL_SCHEMA_CATALOG,
   buildToolSchemaCorrectionDirective,
   findToolSchema,
+  renderToolPromptCatalog,
+  selectToolSchemas,
 } from './ollamaToolSchemaCatalog'
 
 describe('findToolSchema', () => {
@@ -10,6 +12,16 @@ describe('findToolSchema', () => {
     expect(findToolSchema('write_file')?.function.name).toBe('write_file')
     expect(findToolSchema('validate_visual_artifact')?.function.name).toBe('validate_visual_artifact')
     expect(findToolSchema('teleport_file')).toBeUndefined()
+  })
+})
+
+describe('phase-filtered catalogues', () => {
+  it('keeps only the selected native and text schemas', () => {
+    expect(selectToolSchemas(['read_file', 'finish']).map((entry) => entry.function.name)).toEqual(['read_file', 'finish'])
+    const prompt = renderToolPromptCatalog(['replace_file_content'])
+    expect(prompt).toContain('replace_file_content')
+    expect(prompt).not.toContain('write_file')
+    expect(prompt).not.toContain('run_command')
   })
 })
 

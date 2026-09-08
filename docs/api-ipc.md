@@ -12,9 +12,9 @@ Registrati in [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts).
 | `agent:start-task` | `{ prompt, workspacePath, model?, contextFiles?, approvedPlan? }` | `{ success: boolean, sessionId: string }` | Avvia il ciclo agentico autonomo (Tool Calling Loop). |
 | `agent:cancel-task` | `{ sessionId: string }` | `{ success: boolean }` | Interrompe immediatamente il task agentico in corso. |
 | `agent:plan-seed` | `{ prompt, workspacePath }` | `AgentPlan` | Genera una bozza deterministica iniziale del piano. |
-| `agent:plan-interview` | `{ prompt, workspacePath, previousAnswers? }` | `{ questions: ClarificationQuestion[] }` | Esegue l'intervista preliminare di chiarimento requisiti. |
-| `agent:plan-generate` | `{ prompt, workspacePath, interviewAnswers? }` | `AgentPlan` | Compila e valida il piano di lavoro definitivo. |
-| `agent:plan-enrich-prompt`| `{ originalPrompt, answers }` | `{ enrichedPrompt: string }` | Arricchisce il prompt con le risposte dell'intervista. |
+| `agent:plan-interview` | `(prompt, model?, settings, workspacePath?, previousDecisions?)` | `InterviewAnalysisResult` | Esegue l'intervista con fatti freschi del workspace e risposta Ollama vincolata da schema; errori di trasporto, incompletezza e schema restano distinti internamente. |
+| `agent:plan-generate` | `(prompt, model?, settings, pendingResidueMilestones?, workspacePath?, previousDecisions?)` | `PlanGenerationResult` | Valida il piano JSON, include fatti e decisioni del progetto e deriva il Markdown canonico senza esporre il protocollo Ollama al Renderer. |
+| `agent:plan-enrich-prompt`| `(prompt, answers, questions)` | `string` | Valida risposte, ID correnti e provenienza prima di arricchire il prompt. |
 | `agent:plan-parse-text` | `{ rawPlanText }` | `AgentPlan` | Parser di salvataggio/riparazione piani in formato testo. |
 | `agent:get-plan-state` | `{ sessionId, workspacePath }` | `AgentPlan \| null` | Recupera lo stato attuale del piano per la sessione. |
 | `agent:get-queue-status` | `{}` | `{ pendingCount: number, running: boolean }` | Monitora lo stato della coda di prompt multi-step. |

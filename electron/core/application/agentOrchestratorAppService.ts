@@ -5,7 +5,7 @@ import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
 import { runToolGates } from './agentOrchestratorToolGates'
 import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
-import { runTurnDispatch } from './agentOrchestratorTurnDispatch'
+import { collectTurnContext, requestTurnProposal } from './agentOrchestratorTurnDispatch'
 import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
 import { closeAgentRunFromEvidence } from './agentOrchestratorApplicationClosure'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -155,6 +155,7 @@ export async function runAgentOrchestratorLoop(
     skillMatchingOptions,
     skillsBlock,
     episodicCompactor,
+    phaseController,
     goalPlanner,
     fsmMode,
     executionGuard,
@@ -179,11 +180,24 @@ export async function runAgentOrchestratorLoop(
     clearSessionTimeout,
   } = boot
 
+  const phaseLabels = {
+    collect_context: 'Raccolta contesto',
+    propose_action: 'Proposta corrente',
+    apply_action: 'Applicazione',
+    verify: 'Verifica',
+    outcome: 'Esito',
+  } as const
+  const setExecutionPhase = (phase: keyof typeof phaseLabels) => {
+    phaseController.transition(phase)
+    emitStepUpdate(phaseLabels[phase])
+  }
+
   if (!workspacePath && !isStandaloneMode) {
     const errorMsg = 'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
     emitLog('info', `❌ Errore Workspace: ${errorMsg}`)
     emitDone(false, errorMsg)
     clearSessionTimeout()
+    setExecutionPhase('outcome')
     finalizeSession()
     return { success: false, summary: errorMsg }
   }
@@ -204,6 +218,7 @@ export async function runAgentOrchestratorLoop(
       persistCurrentState,
       buildSessionTracker,
       finalizeSession,
+      setExecutionPhase,
     }, request)
 
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
@@ -211,7 +226,7 @@ export async function runAgentOrchestratorLoop(
 
   while (stepCountBox.value < MAX_STEPS && isSessionActive()) {
     stepCountBox.value++
-    emitStepUpdate(`Step ${stepCountBox.value}/${maxStepsLabel}`)
+    setExecutionPhase('collect_context')
     // Periodic checkpoint: persisting on every single step is unnecessary I/O churn.
     // The first step and every Nth step get a checkpoint; mutating tool calls also
     // trigger an immediate persist (see hasFileMutations below). All session-ending
@@ -223,7 +238,7 @@ export async function runAgentOrchestratorLoop(
     // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx,
     // decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
     // See agentOrchestratorTurnDispatch.ts for the exact step order rationale.
-    const dispatchOutcome = await runTurnDispatch({
+    const turnContext = {
       userTask,
       initialUserTask,
       agentMode,
@@ -257,8 +272,14 @@ export async function runAgentOrchestratorLoop(
       persistCurrentState,
       finalizeSession,
       closeApplicationRun,
-    })
-    if (dispatchOutcome.outcome === 'return') return dispatchOutcome.result
+    }
+    const preparedTurn = await collectTurnContext(turnContext)
+    setExecutionPhase('propose_action')
+    const dispatchOutcome = await requestTurnProposal(turnContext, preparedTurn)
+    if (dispatchOutcome.outcome === 'return') {
+      setExecutionPhase('outcome')
+      return dispatchOutcome.result
+    }
     const {
       streamedOutput,
       hasRecentToolFailure,
@@ -297,11 +318,18 @@ export async function runAgentOrchestratorLoop(
       buildSessionTracker,
       closeApplicationRun,
     })
-    if (interpretation.outcome === 'continue') continue
-    if (interpretation.outcome === 'return') return interpretation.result
+    if (interpretation.outcome === 'continue') {
+      setExecutionPhase('collect_context')
+      continue
+    }
+    if (interpretation.outcome === 'return') {
+      setExecutionPhase('outcome')
+      return interpretation.result
+    }
     const parsedTool = interpretation.parsedTool
 
     if (fsmMode.getMode() === 'PLAN') {
+      setExecutionPhase('outcome')
       emitLog('info', `[PLAN Mode] Proposed Tool (${parsedTool.tool}):`, JSON.stringify(parsedTool.parameters, null, 2))
       emitDone(true, `Plan Mode completed step proposal for ${parsedTool.tool}`)
       if (settings.enableCodingAgentDebugLog) {
@@ -315,6 +343,7 @@ export async function runAgentOrchestratorLoop(
     // Approval + FSM permission gates (git_commit always-confirm, ASK-mode mutating-tool
     // approval, FSM tool-permission check) — see agentOrchestratorToolGates.ts for the
     // exact gate ordering rationale.
+    setExecutionPhase('apply_action')
     const gateResult = await runToolGates({
       parsedTool,
       agentMode,
@@ -325,8 +354,12 @@ export async function runAgentOrchestratorLoop(
       emitLog,
       requestApproval,
       capabilityPolicyMode: settings.capabilityPolicyMode,
+      allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
     })
-    if (gateResult.outcome === 'denied') continue
+    if (gateResult.outcome === 'denied') {
+      setExecutionPhase('collect_context')
+      continue
+    }
     const toolCallForExecution = gateResult.toolCallForExecution
 
     // Orchestrator-level pseudo-tool: the model's explicit handle on plan progression.
@@ -334,6 +367,7 @@ export async function runAgentOrchestratorLoop(
     // loop's GoalDecompositionPlanner, not on disk. Before this tool existed, milestone
     // status could only ever be inferred heuristically from tool side effects.
     if ((parsedTool.tool as string) === 'update_plan') {
+      setExecutionPhase('verify')
       await handleUpdatePlanTool({
         parsedTool,
         goalPlanner,
@@ -347,6 +381,7 @@ export async function runAgentOrchestratorLoop(
         stepCount: stepCountBox.value,
         maxStepsLabel,
       })
+      setExecutionPhase('collect_context')
       continue
     }
 
@@ -364,9 +399,11 @@ export async function runAgentOrchestratorLoop(
       undefined,
       gateResult.policyConsent,
       sessionId,
+      preparedTurn.toolPolicy.allowedTools,
     )
     agentToolExecutorService.endJournalStep()
 
+    setExecutionPhase('verify')
     const processingOutcome = await runToolResultProcessing({
       toolRes,
       parsedTool,
@@ -393,12 +430,16 @@ export async function runAgentOrchestratorLoop(
       finalizeSession,
       closeApplicationRun,
     })
-    if (processingOutcome.outcome === 'return') return processingOutcome.result
+    if (processingOutcome.outcome === 'return') {
+      setExecutionPhase('outcome')
+      return processingOutcome.result
+    }
   }
 
   // Cancellation and timeout persist their own terminal checkpoint. Do not fall through to
   // the ordinary epilogue, which would overwrite that reason with a successful completion.
   if (session.isCancelled) {
+    setExecutionPhase('outcome')
     return {
       success: false,
       summary: session.terminalSummary || "Task interrotto dall'utente.",

@@ -63,6 +63,25 @@ describe('AgentToolExecutorService Unit Tests', () => {
     expect(readRes.outputForHistory).toContain('Hello AI Agent')
   })
 
+  it('enforces the current-turn tool policy at the executor boundary', async () => {
+    const filePath = path.join(tempDir, 'blocked.txt')
+    const result = await agentToolExecutorService.executeTool(
+      { tool: 'write_file', parameters: { filePath, content: 'blocked' } },
+      tempDir,
+      settings,
+      undefined,
+      undefined,
+      '',
+      undefined,
+      undefined,
+      'test-policy',
+      ['read_file'],
+    )
+
+    expect(result.outputForHistory).toContain('TURN TOOL POLICY DENIED')
+    expect(fs.existsSync(filePath)).toBe(false)
+  })
+
   it('should route validate_visual_artifact through the runner and return structured evidence', async () => {
     const artifactPath = path.join(tempDir, 'dist', 'index.html')
     fs.mkdirSync(path.dirname(artifactPath), { recursive: true })

@@ -13,7 +13,7 @@ import fs from 'node:fs'
 import type { ChildProcess } from 'node:child_process'
 import { shell } from 'electron'
 import { logger } from '../../diagnostics'
-import type { AgentToolCall } from '../domain/agent/agentTypes'
+import type { AgentToolCall, SupportedToolName } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import { AtomicWorkspaceJournal, RollbackResult } from '../infrastructure/filesystem/atomicWorkspaceJournal'
 import { PersistentPowerShellSession } from '../infrastructure/process/persistentPowerShellSession'
@@ -360,8 +360,17 @@ export class AgentToolExecutorService {
     signal?: AbortSignal,
     policyConsent: CapabilityConsent = { requested: false, granted: false },
     policySessionId: string = 'agent-execution',
+    allowedToolsForTurn?: readonly SupportedToolName[],
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
+
+    if (allowedToolsForTurn && !allowedToolsForTurn.includes(tool)) {
+      return {
+        outputForHistory: `[TURN TOOL POLICY DENIED] Tool "${tool}" is not available for this phase.`,
+        logMessage: `Turn tool policy denied: ${tool}`,
+        isTerminal: true,
+      }
+    }
 
     const policyBlock = await this.policyBlock(parsedTool, workspacePath, settings, policyConsent, policySessionId)
     if (policyBlock) return policyBlock

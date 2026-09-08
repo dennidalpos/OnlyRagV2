@@ -10,6 +10,8 @@ import type { AgentSession } from './agentOrchestratorTypes'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
 import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProfileTiers'
+import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
+import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 
 
 export type EmitLog = (
@@ -71,6 +73,18 @@ export interface TurnDispatchData {
   compiledHistoryBlock: string
   targetModel: string
   fallbackModel: string
+}
+
+export interface PreparedAgentTurn {
+  selection: ModelSelection
+  assembled: { stableSection: string; historyBlock: string }
+  turnPrompt: string
+  contextReuseDecision: OllamaContextReuseDecision
+  wasCompacted: boolean
+  hasRecentToolFailure: boolean
+  errorCountInHistory: number
+  compiledHistoryBlock: string
+  toolPolicy: TurnToolPolicy
 }
 
 export type TurnDispatchOutcome =

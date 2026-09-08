@@ -1,10 +1,16 @@
-import { OLLAMA_TOOL_SCHEMA_CATALOG } from '../domain/agent/ollamaToolSchemaCatalog'
+import { selectToolSchemas } from '../domain/agent/ollamaToolSchemaCatalog'
 import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeOrGrowContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
-import type { TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
+import type {
+  PreparedAgentTurn,
+  TurnDispatchContext,
+  TurnDispatchOutcome,
+  ModelSelection,
+} from './agentOrchestratorTurnDispatchTypes'
+import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
 
 export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
@@ -14,7 +20,8 @@ async function dispatchToLlm(
   assembled: { stableSection: string; historyBlock: string },
   turnPrompt: string,
   contextReuseDecision: OllamaContextReuseDecision,
-  wasCompacted: boolean
+  wasCompacted: boolean,
+  toolPolicy: TurnToolPolicy
 ): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
   const latchProtocol = (protocol: 'native' | 'text') => {
     ctx.session.toolCallingProtocolByModel = {
@@ -29,7 +36,7 @@ async function dispatchToLlm(
     keepAlive: '30m',
     ollamaEndpoint: ctx.settings.ollamaHost,
     toolCallingCapable,
-    toolCatalog: toolCallingCapable ? OLLAMA_TOOL_SCHEMA_CATALOG : undefined,
+    toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
     previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
     onTokenChunk: (chunk) => {
       if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
@@ -69,21 +76,36 @@ async function dispatchToLlm(
   }
 }
 
-/**
- * Routes the turn to a model, assembles and (if needed) compacts the prompt, freezes/grows the
- * session's num_ctx, decides Ollama context-cache reuse (see agentOrchestratorPromptAssembly.ts
- * for all of the above), and dispatches to the LLM with resilient fallback. Mirrors the exact
- * step order from the original inline loop body.
- */
-export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDispatchOutcome> {
+/** Collects the bounded context and runtime facts before the model is consulted. */
+export async function collectTurnContext(ctx: TurnDispatchContext): Promise<PreparedAgentTurn> {
   const hasRecentToolFailure = ctx.episodicCompactor.failureCount > 0
   const errorCountInHistory = ctx.episodicCompactor.failureCount
   const compiledHistoryBlock = ctx.episodicCompactor.compilePromptHistoryBlock(10000)
 
   const selection = selectModelForTurn(ctx)
-  const { assembled, compactionResult, turnPrompt } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
+  const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
   freezeOrGrowContextWindow(ctx, turnPrompt, selection.runtimeOpts, selection.contextCeiling)
 
+  const contextReuseDecision = decideContextReuse(ctx, selection, assembled, turnPrompt, compactionResult.wasCompacted)
+  return {
+    selection,
+    assembled,
+    turnPrompt,
+    contextReuseDecision,
+    wasCompacted: compactionResult.wasCompacted,
+    hasRecentToolFailure,
+    errorCountInHistory,
+    compiledHistoryBlock,
+    toolPolicy,
+  }
+}
+
+/** Requests exactly one current-turn proposal from the selected model. */
+export async function requestTurnProposal(
+  ctx: TurnDispatchContext,
+  prepared: PreparedAgentTurn
+): Promise<TurnDispatchOutcome> {
+  const { selection, assembled, turnPrompt, contextReuseDecision, wasCompacted, toolPolicy } = prepared
   ctx.emitLog(
     'tool_call',
     `[Step ${ctx.stepCount}/${ctx.maxStepsLabel}] Consulting LLM (${selection.targetModel}) [ctx:${selection.runtimeOpts.num_ctx}${
@@ -94,8 +116,7 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
     codingAgentLogger.logTurnPrompt(ctx.sessionId, ctx.stepCount, selection.targetModel, selection.runtimeOpts.num_ctx, turnPrompt)
   }
 
-  const contextReuseDecision = decideContextReuse(ctx, selection, assembled, turnPrompt, compactionResult.wasCompacted)
-  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, turnPrompt, contextReuseDecision, compactionResult.wasCompacted)
+  const dispatchResult = await dispatchToLlm(ctx, selection, assembled, turnPrompt, contextReuseDecision, wasCompacted, toolPolicy)
 
   if ('error' in dispatchResult) {
     ctx.emitLog('info', `LLM Stream error on step ${ctx.stepCount}: ${dispatchResult.error}`)
@@ -138,9 +159,9 @@ export async function runTurnDispatch(ctx: TurnDispatchContext): Promise<TurnDis
     outcome: 'proceed',
     data: {
       streamedOutput: dispatchResult.streamedOutput,
-      hasRecentToolFailure,
-      errorCountInHistory,
-      compiledHistoryBlock,
+      hasRecentToolFailure: prepared.hasRecentToolFailure,
+      errorCountInHistory: prepared.errorCountInHistory,
+      compiledHistoryBlock: prepared.compiledHistoryBlock,
       targetModel: effectiveUsedModel,
       fallbackModel: selection.fallbackModel,
     },

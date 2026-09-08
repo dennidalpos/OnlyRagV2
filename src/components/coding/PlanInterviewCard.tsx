@@ -15,16 +15,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
   onSkipWithRecommended,
   isGenerating = false,
 }) => {
-  // State maps question.id -> selected option string (pre-seeded with recommended option)
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {}
-    for (const q of questions) {
-      initial[q.id] = q.options[q.recommendedIndex] || q.options[0] || ''
-    }
-    return initial
-  })
-
-  // State maps question.id -> custom text input
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({})
   const [activeCustomIds, setActiveCustomIds] = useState<Record<string, boolean>>({})
   const [explicitSelectionIds, setExplicitSelectionIds] = useState<Record<string, boolean>>({})
@@ -45,7 +36,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
   const handleConfirm = () => {
     const answers: UserInterviewAnswer[] = questions.map((q) => {
       const isCustom = Boolean(activeCustomIds[q.id] && customInputs[q.id]?.trim())
-      const chosen = isCustom ? customInputs[q.id].trim() : (selectedOptions[q.id] || q.options[0] || '')
+      const chosen = isCustom ? customInputs[q.id].trim() : selectedOptions[q.id]
       return {
         questionId: q.id,
         questionText: q.question,
@@ -56,6 +47,11 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
     })
     onConfirm(answers)
   }
+
+  const canConfirm = questions.every((question) =>
+    explicitSelectionIds[question.id]
+    || Boolean(activeCustomIds[question.id] && customInputs[question.id]?.trim())
+  )
 
   return (
     <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 border border-cyan-500/30 shadow-2xl space-y-4 text-xs select-text animate-fadeIn">
@@ -89,6 +85,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
                 </span>
                 <span className="leading-snug">{q.question}</span>
               </div>
+              <p className="pl-7 text-[11px] leading-relaxed text-slate-400">{q.rationale}</p>
 
               {/* Options Grid */}
               <div className="grid grid-cols-1 gap-1.5 pt-1">
@@ -176,7 +173,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
 
         <button
           type="button"
-          disabled={isGenerating}
+          disabled={isGenerating || !canConfirm}
           onClick={handleConfirm}
           className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-950/50 transition-all flex items-center justify-center gap-1.5 active:scale-95 focus-ring cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >

@@ -152,8 +152,11 @@ flowchart TD
 ## 5. Agent Studio: Tool Loop & Resilienza
 
 - **Autonomous Tool Calling Loop**: Ispezione (`read_file`, `list_dir`, `grep_search`), modifica (`replace_file_content`, `multi_replace_file_content`, `write_file`), esecuzione (`run_command` in sessione persistente PowerShell, `inspect_os_env`) e web research (`fetch_web_content`, `web_search`).
+- **Application-Owned Phases**: Un solo orchestratore attraversa `collect_context → propose_action → apply_action → verify → outcome`; il controller rifiuta salti di fase e la chiusura terminale viene decisa dopo le prove.
+- **Operation-Scoped Context**: Ogni proposta riceve un riepilogo fresco dell'operazione, un file primario, al massimo due supporti e l'ultimo errore utile; mappa, RAG e skill seguono la policy della direttiva, mentre la traiettoria completa resta persistita fuori dal payload.
 - **Strict Serial Concurrency Queue (`TaskQueueAppService` & `PQueue`)**: Tutti i task agentici sono serializzati atomicamente (`concurrency: 1`), azzerando le race condition.
 - **Action Loop Fingerprinting & Multi-State Oscillation Prevention**: Rilevamento avanzato di loop ripetuti o alternati a $k$-stati con iniezione di direttive correttive forzate.
 - **Transactional Workspace Journal (`AtomicWorkspaceJournal`)**: Snapshot preventivo del workspace prima di ogni mutazione, con rollback automatico in caso di errore o abort.
 - **Plan Approval System**: Decomposizione in milestone falsificabili con avanzamento convalidato esclusivamente su evidenza reale su filesystem e test superati.
+- **Structured Ollama Protocol**: Intervista e piano usano `/api/chat` con JSON Schema derivato da Zod; il loop usa `tools` separatamente. Risposte incomplete o terminate per limite token non raggiungono parser ed executor. L'arricchimento IPC riceve anche le domande correnti per rifiutare risposte obsolete.
 - **SLM Log Diagnostics**: Analisi anomalie a doppio motore (FastAPI Sidecar su `/agent/logs/analyze` e fallback nativo Node.js) con suggerimenti operativi di ripristino (*remediation*).

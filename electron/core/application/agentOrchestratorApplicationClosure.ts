@@ -15,6 +15,7 @@ import type {
   ApplicationClosureRequest,
   ApplicationClosureTrigger,
 } from './agentOrchestratorApplicationClosureTypes'
+import type { AgentExecutionPhase } from '../domain/agent/agentExecutionPhase'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -34,6 +35,7 @@ export interface ApplicationClosureContext {
   ) => Promise<void>
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
   finalizeSession: () => void
+  setExecutionPhase: (phase: AgentExecutionPhase) => void
 }
 
 function evidenceLevelFromCommand(command: string | undefined): 'structural' | 'behavioral' | undefined {
@@ -204,6 +206,7 @@ export async function closeAgentRunFromEvidence(
 
   const tracker = ctx.buildSessionTracker()
   const summary = renderClosureSummary(status, request, tracker, evidence)
+  ctx.setExecutionPhase('outcome')
   agentToolExecutorService.commitJournal()
   const success = status === 'verified'
   ctx.emitLog('info', `Chiusura applicativa: ${status}`, summary, {

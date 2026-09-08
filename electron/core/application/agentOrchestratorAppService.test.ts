@@ -96,6 +96,39 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(tracker).toContain('All tasks done perfectly.')
   })
 
+  it('runs and persists the explicit application phase sequence', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce('```json\n{"tool":"write_file","parameters":{"filePath":"phase.ts","content":"export const phase = true"}}\n```')
+      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
+    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const sessionId = 'explicit-phase-sequence'
+
+    await runAgentOrchestratorLoop({
+      sessionId,
+      userTask: 'Create phase.ts',
+      agentMode: 'agent',
+      workspacePath: tempDir,
+      settings: { ...buildDefaultAgentSettings(), verifyBeforeFinish: false },
+    }, mockWin)
+
+    const firstCatalog = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].toolCatalog || []
+    expect(firstCatalog.map((entry) => entry.function.name)).toEqual(expect.arrayContaining(['write_file']))
+    expect(firstCatalog.map((entry) => entry.function.name)).not.toEqual(expect.arrayContaining(['read_file', 'run_command']))
+
+    const calls = vi.mocked(mockWin.webContents.send).mock.calls as Array<[string, { statusText?: string }]>
+    const statuses = calls
+      .filter(([channel]) => channel === 'agent:step-update')
+      .map(([, data]) => data.statusText)
+    expect(statuses).toEqual(expect.arrayContaining([
+      'Raccolta contesto', 'Proposta corrente', 'Applicazione', 'Verifica', 'Esito',
+    ]))
+    const saved = JSON.parse(fs.readFileSync(
+      path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`),
+      'utf-8'
+    ))
+    expect(saved.executionPhase).toBe('outcome')
+  })
+
   it('should intercept repetitive loop calls and inject intervention directive', async () => {
     // Model repeats the exact same failing command 3 times, then finishes
     const duplicateToolJson = '```json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test.py" }\n}\n```'

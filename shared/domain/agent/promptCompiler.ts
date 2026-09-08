@@ -21,6 +21,8 @@ export interface CompileOptions {
    * This is the only thing prompt assembly adapts to: there is no per-model-family branching.
    */
   capabilities?: readonly string[]
+  /** Runtime-owned partial values, such as a phase-filtered tool catalogue. */
+  partialOverrides?: Readonly<Record<string, string>>
 }
 
 export interface CompiledPrompt {
@@ -56,7 +58,7 @@ export class PromptCompiler {
    * still references as partials.
    */
   static compileModulePrompt(module: FeatureModule, options: CompileOptions = {}): CompiledPrompt {
-    const { variables = {}, settings, capabilities = [] } = options
+    const { variables = {}, settings, capabilities = [], partialOverrides = {} } = options
 
     const root = rootNodeForModule(module)
     if (!root) return { prompt: '', isCustom: false }
@@ -69,6 +71,10 @@ export class PromptCompiler {
       if (isOmitted(child, capabilities)) {
         // AGT2: the schema is already on the wire via the native `tools` parameter.
         partials[child.partialName as string] = ''
+        continue
+      }
+      if (child.partialName && Object.hasOwn(partialOverrides, child.partialName)) {
+        partials[child.partialName] = partialOverrides[child.partialName]
         continue
       }
       const resolvedChild = resolveNodeTemplate(child.id, settings)
@@ -93,12 +99,14 @@ export class PromptCompiler {
   static compileCodingPrompt(
     variables: Record<string, unknown> = {},
     settings?: AppSettings,
-    toolCallingCapable = false
+    toolCallingCapable = false,
+    toolPromptOverride?: string
   ): CompiledPrompt {
     return PromptCompiler.compileModulePrompt('coding', {
       variables,
       settings,
       capabilities: toolCallingCapable ? ['tools'] : [],
+      partialOverrides: toolPromptOverride === undefined ? undefined : { tools: toolPromptOverride },
     })
   }
 

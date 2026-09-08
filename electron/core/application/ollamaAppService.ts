@@ -1,6 +1,11 @@
 import { checkOllamaStatus } from '../../diagnostics'
-import { ollamaHttpClient, type OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
-export type { OllamaModelMetrics }
+import {
+  ollamaHttpClient,
+  type OllamaModelMetrics,
+  type OllamaStructuredRequest,
+  type OllamaStructuredResponse,
+} from '../infrastructure/http/ollamaHttpClient'
+export type { OllamaModelMetrics, OllamaStructuredRequest, OllamaStructuredResponse }
 import { ollamaInstallerRepository } from '../infrastructure/process/ollamaInstallerRepository'
 import { ollamaModelUpdateAppService, type ModelUpdateCheckResult } from './ollamaModelUpdateAppService'
 export type { ModelUpdateCheckResult }
@@ -42,6 +47,10 @@ export class OllamaAppService {
     customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number }
   ) {
     return ollamaHttpClient.generateStream(model, prompt, onChunk, onDone, customOptions)
+  }
+
+  generateStructured(request: OllamaStructuredRequest): Promise<OllamaStructuredResponse> {
+    return ollamaHttpClient.generateStructured(request)
   }
 
   async getInstalledModels(host?: string): Promise<string[]> {

@@ -46,6 +46,7 @@ describe('application-owned agent closure', () => {
     const persistCurrentState = vi.fn(async () => {})
     const finalizeSession = vi.fn()
     const emitDone = vi.fn()
+    const setExecutionPhase = vi.fn()
     const episodicCompactor = new EpisodicMemoryCompactor(6)
     const active = options?.active ?? true
 
@@ -80,9 +81,10 @@ describe('application-owned agent closure', () => {
         summaryText,
       }),
       finalizeSession,
+      setExecutionPhase,
     }
 
-    return { ctx, emitDone, persistCurrentState, finalizeSession, filePath }
+    return { ctx, emitDone, persistCurrentState, finalizeSession, setExecutionPhase, filePath }
   }
 
   it('returns verified only from passing behavioral evidence', async () => {
@@ -93,7 +95,7 @@ describe('application-owned agent closure', () => {
       command: 'npm test',
       evidenceLevel: 'behavioral',
     })
-    const { ctx, emitDone, persistCurrentState, finalizeSession } = makeContext()
+    const { ctx, emitDone, persistCurrentState, finalizeSession, setExecutionPhase } = makeContext()
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'model_silence',
@@ -104,6 +106,7 @@ describe('application-owned agent closure', () => {
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: true, completionStatus: 'verified' } })
     expect(emitDone).toHaveBeenCalledWith(true, expect.stringContaining('VERIFICATO'), 'verified')
     expect(persistCurrentState).toHaveBeenCalledWith('model_silence', 'verified')
+    expect(setExecutionPhase).toHaveBeenCalledWith('outcome')
     expect(finalizeSession).toHaveBeenCalledTimes(1)
   })
 

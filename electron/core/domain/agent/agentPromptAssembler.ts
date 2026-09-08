@@ -1,7 +1,8 @@
 import { PromptCompiler } from '../../../../shared/domain/agent/promptCompiler'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
 import type { AppSettings } from '../../../../shared/types'
-import type { AgentMode } from './agentTypes'
+import type { AgentMode, SupportedToolName } from './agentTypes'
+import { renderToolPromptCatalog } from './ollamaToolSchemaCatalog'
 
 export interface PromptAssemblerInput {
   userTask: string
@@ -22,6 +23,8 @@ export interface PromptAssemblerInput {
   runtimeOpts: OllamaRuntimeOptions
   /** When true, omits the prose tool schema block — the model receives it via native tool-calling instead (see AGT2). */
   toolCallingCapable?: boolean
+  /** Application-selected tools for this proposal. */
+  availableToolNames?: readonly SupportedToolName[]
 }
 
 export interface AssembledPrompt {
@@ -82,6 +85,7 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
     settings,
     runtimeOpts,
     toolCallingCapable,
+    availableToolNames,
   } = input
 
   // Format combined user task if initial task exists and differs from turn prompt
@@ -105,7 +109,8 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
       currentDate,
     },
     settings,
-    toolCallingCapable
+    toolCallingCapable,
+    availableToolNames ? renderToolPromptCatalog(availableToolNames) : undefined
   )
 
   // Priority 1.5: Dynamic Execution Plan & Goal Decomposition

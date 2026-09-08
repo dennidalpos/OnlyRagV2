@@ -176,6 +176,8 @@ export class AgentStreamTransport {
 
               let buffer = ''
               let fullText = ''
+              let sawDone = false
+              let doneReason: string | undefined
 
               res.on('data', (chunk) => {
                 if (isCancelled()) {
@@ -202,6 +204,10 @@ export class AgentStreamTransport {
                     if (parsed.done && Array.isArray(parsed.context) && onContextReceived) {
                       onContextReceived(parsed.context, targetModel)
                     }
+                    if (parsed.done === true) {
+                      sawDone = true
+                      doneReason = parsed.done_reason
+                    }
                   },
                   (jsonErr) => {
                     logger.log('WARN', 'AgentStreamTransport', `Partial stream JSON parse skipped: ${jsonErr.message}`)
@@ -211,6 +217,11 @@ export class AgentStreamTransport {
 
               res.on('end', () => {
                 cleanupTimers()
+                if (!isCancelled() && (!sawDone || doneReason === 'length')) {
+                  recordMetric(200, 'parse')
+                  reject(new Error(`Ollama response incomplete${doneReason ? ` (${doneReason})` : ''}`))
+                  return
+                }
                 recordMetric(200, 'none')
                 resolve(fullText)
               })
@@ -366,6 +377,8 @@ export class AgentStreamTransport {
           let buffer = ''
           let fullText = ''
           let resolvedToolCall: string | null = null
+          let sawDone = false
+          let doneReason: string | undefined
 
           res.on('data', (chunk) => {
             if (isCancelled()) {
@@ -392,6 +405,10 @@ export class AgentStreamTransport {
                 if (Array.isArray(toolCalls) && toolCalls.length > 0 && toolCalls[0]?.function?.name) {
                   resolvedToolCall = serializeNativeToolCall(toolCalls[0].function.name, toolCalls[0].function.arguments || {})
                 }
+                if (parsed?.done === true) {
+                  sawDone = true
+                  doneReason = parsed.done_reason
+                }
               },
               (jsonErr) => {
                 logger.log('WARN', 'AgentStreamTransport', `Partial chat stream JSON parse skipped: ${jsonErr.message}`)
@@ -401,6 +418,11 @@ export class AgentStreamTransport {
 
           res.on('end', () => {
             cleanupTimers()
+            if (!isCancelled() && (!sawDone || doneReason === 'length')) {
+              recordMetric(200, 'parse')
+              reject(new Error(`Ollama tool response incomplete${doneReason ? ` (${doneReason})` : ''}`))
+              return
+            }
             recordMetric(200, 'none')
             session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
             resolve(resolvedToolCall ?? fullText)

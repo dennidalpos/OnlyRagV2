@@ -6,6 +6,28 @@ import { httpMetrics } from './httpMetrics'
 
 export type { OllamaModelMetrics }
 
+export interface OllamaStructuredRequest {
+  model: string
+  systemPrompt: string
+  userContent: string
+  format: Record<string, unknown>
+  host?: string
+  keepAlive?: string
+  options?: {
+    num_ctx?: number
+    temperature?: number
+    top_p?: number
+    repeat_penalty?: number
+    num_thread?: number
+    num_predict?: number
+  }
+}
+
+export type OllamaStructuredResponse =
+  | { status: 'complete'; content: string; doneReason?: string }
+  | { status: 'incomplete'; content: string; error: string }
+  | { status: 'transport_error'; content: string; error: string }
+
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
 export interface RawOllamaTagModel {
@@ -698,6 +720,100 @@ export class OllamaHttpClient {
         resolve({ success: false, error: 'Generation timeout' })
       })
 
+      req.write(postData)
+      req.end()
+    })
+  }
+
+  generateStructured(request: OllamaStructuredRequest): Promise<OllamaStructuredResponse> {
+    if (!request.model.trim() || !request.systemPrompt.trim()) {
+      return Promise.resolve({ status: 'transport_error', content: '', error: 'Invalid structured generation request' })
+    }
+    if (request.host) this.setBaseHost(request.host)
+
+    if (this.activeOllamaReq) {
+      this.activeOllamaReq.destroy()
+      this.activeOllamaReq = null
+    }
+
+    const urlOpts = this.resolveUrl('/api/chat')
+    const postData = JSON.stringify({
+      model: request.model,
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userContent },
+      ],
+      format: request.format,
+      stream: false,
+      keep_alive: request.keepAlive || '30m',
+      options: {
+        num_ctx: request.options?.num_ctx || 16384,
+        temperature: request.options?.temperature ?? 0.1,
+        top_p: request.options?.top_p ?? 0.9,
+        repeat_penalty: request.options?.repeat_penalty ?? 1.1,
+        ...(request.options?.num_thread ? { num_thread: request.options.num_thread } : {}),
+        ...(request.options?.num_predict ? { num_predict: request.options.num_predict } : {}),
+      },
+    })
+
+    return new Promise((resolve) => {
+      const startedAt = Date.now()
+      let settled = false
+      const finish = (result: OllamaStructuredResponse) => {
+        if (settled) return
+        settled = true
+        this.activeOllamaReq = null
+        httpMetrics.record(
+          '/api/chat',
+          result.status === 'transport_error' ? 0 : 200,
+          result.status === 'complete' ? 'none' : result.status === 'incomplete' ? 'parse' : 'network',
+          Date.now() - startedAt
+        )
+        resolve(result)
+      }
+      const req = http.request({
+        hostname: urlOpts.hostname,
+        port: urlOpts.port,
+        path: urlOpts.path,
+        method: 'POST',
+        agent: httpAgent,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      }, (res) => {
+        let raw = ''
+        res.on('data', (chunk) => { raw += chunk.toString() })
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            finish({ status: 'transport_error', content: '', error: `Ollama HTTP ${res.statusCode}: ${raw.slice(0, 200)}` })
+            return
+          }
+          try {
+            const parsed = JSON.parse(raw)
+            const content = typeof parsed?.message?.content === 'string' ? parsed.message.content : ''
+            if (parsed?.done !== true || parsed?.done_reason === 'length') {
+              finish({ status: 'incomplete', content, error: `Ollama response incomplete${parsed?.done_reason ? ` (${parsed.done_reason})` : ''}` })
+              return
+            }
+            finish({ status: 'complete', content, doneReason: parsed.done_reason })
+          } catch (err: any) {
+            finish({ status: 'transport_error', content: '', error: `Invalid Ollama response: ${err.message}` })
+          }
+        })
+      })
+
+      this.activeOllamaReq = req
+      req.on('error', (err: any) => {
+        const message = err.code === 'ECONNREFUSED'
+          ? 'Ollama service is not running locally (http://127.0.0.1:11434).'
+          : err.message
+        finish({ status: 'transport_error', content: '', error: message })
+      })
+      req.setTimeout(600000, () => {
+        req.destroy()
+        finish({ status: 'transport_error', content: '', error: 'Structured generation timeout' })
+      })
       req.write(postData)
       req.end()
     })

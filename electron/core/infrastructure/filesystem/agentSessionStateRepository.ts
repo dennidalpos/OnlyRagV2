@@ -8,6 +8,7 @@ import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolve
 import type { AgentCompletionStatus } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
+import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
 
 export type AgentSessionTerminationReason =
   | 'finish'
@@ -38,6 +39,8 @@ export interface SavedAgentSessionState {
   terminationReason?: AgentSessionTerminationReason
   /** Evidence-based outcome of an application-owned terminal path. */
   completionStatus?: AgentCompletionStatus
+  /** Last application-owned phase; absent in sessions saved before CAS-11. */
+  executionPhase?: AgentExecutionPhase
 }
 
 export class AgentSessionStateRepository {

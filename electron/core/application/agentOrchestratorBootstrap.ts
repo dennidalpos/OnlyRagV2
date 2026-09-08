@@ -12,6 +12,7 @@ import type { SkillMatchingOptions } from './skillAppService'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
+import type { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { resolveSessionContext } from './agentOrchestratorSessionContext'
@@ -42,6 +43,7 @@ export interface BootstrapParams {
  * closures (emitLog, persistCurrentState, requestApproval, finalizeSession, ...) that share that state by reference.
  */
 export interface AgentSessionBootstrap {
+  phaseController: AgentExecutionPhaseController
   userTask: string
   initialUserTask: string
   agentMode: AgentExecutionMode
@@ -140,6 +142,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     sessionChangedFiles: state.sessionChangedFiles,
     goalPlanner: state.goalPlanner,
     episodicCompactor: state.episodicCompactor,
+    phaseController: state.phaseController,
     session,
     isSessionActive,
   })

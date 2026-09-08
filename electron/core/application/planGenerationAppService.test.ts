@@ -1,326 +1,208 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 import { planGenerationAppService } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { extractDeliverablePaths } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 import { isFalsifiableMilestone } from '../../../shared/domain/agent/planFalsifiabilityNormalizer'
-import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AppSettings } from '../../../shared/types'
 
 vi.mock('./ollamaAppService', () => ({
-  ollamaAppService: {
-    generateStream: vi.fn(),
-  },
+  ollamaAppService: { generateStructured: vi.fn() },
 }))
 
+const settings: AppSettings = {
+  defaultModel: 'llama3.2',
+  codingModel: 'qwen2.5-coder:7b',
+  ollamaHost: '',
+} as AppSettings
+
+function complete(milestones: Array<{
+  id: string
+  objective: string
+  filePath?: string
+  verificationCommand?: string
+}>) {
+  return { status: 'complete' as const, content: JSON.stringify({ milestones }) }
+}
+
 describe('PlanGenerationAppService', () => {
-  const settings: AppSettings = {
-    defaultModel: 'llama3.2',
-    ocrEngine: 'native_cuda',
-    ollamaHost: '',
-    codingModel: 'qwen2.5-coder:7b',
-    translationModel: 'llama3.2',
-    visionModel: 'llama3.2-vision',
-    embeddingModel: 'nomic-embed-text',
-    allowTerminalExecution: true,
-    allowFileModifications: true,
-    customPromptOverrides: {},
-  }
+  beforeEach(() => vi.clearAllMocks())
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+  it('uses structured generation and derives canonical Markdown', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { id: 'm-1', objective: 'The schema accepts credentials', filePath: 'src/schema.ts' },
+      { id: 'm-2', objective: 'The endpoint logs users in', filePath: 'src/auth.ts' },
+    ]))
 
-  it('should route generation through hardware-profile runtime options and parse milestones from the response', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-      onChunk('- [ ] Design the schema\n- [ ] Implement the endpoint\n')
-      return { success: true }
-    })
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Add login', settings })
 
-    const result = await planGenerationAppService.generatePlanText({ prompt: 'Add a login endpoint', settings })
-
-    expect(ollamaAppService.generateStream).toHaveBeenCalledWith(
-      'qwen2.5-coder:7b',
-      expect.stringContaining('Add a login endpoint'),
-      expect.any(Function),
-      expect.any(Function),
-      expect.objectContaining({ num_ctx: expect.any(Number), temperature: expect.any(Number) })
-    )
-    expect(result.planText).toContain('Design the schema')
+    expect(result.status).toBe('success')
+    expect(result.planText).toContain('- [ ] m-1: The schema accepts credentials — `src/schema.ts`')
     expect(result.milestones).toHaveLength(2)
-    expect(result.milestones[0].title).toBe('Design the schema')
-    expect(result.milestones[0].status).toBe('pending')
+    const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
+    expect(request.model).toBe('qwen2.5-coder:7b')
+    expect(request.systemPrompt).not.toContain('Add login')
+    expect(JSON.parse(request.userContent).request).toBe('Add login')
+    expect(request.format).toEqual(expect.objectContaining({ type: 'object' }))
   })
 
-  it('should fold pending residue milestones into the prompt as reconciliation context (C7)', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+  it('passes pending residue as data without mixing it into instructions', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { id: 'm-1', objective: 'Password hashing works', filePath: 'src/auth.ts' },
+    ]))
 
     await planGenerationAppService.generatePlanText({
-      prompt: 'Continue the auth work',
+      prompt: 'Continue auth',
       settings,
-      pendingResidueMilestones: [
-        { id: 'm-1', title: 'Add password hashing', status: 'pending' },
-        { id: 'm-2', title: 'Wire up login route', status: 'in_progress' },
-      ],
+      pendingResidueMilestones: [{ id: 'm-7', title: 'Add password hashing', status: 'in_progress' }],
     })
 
-    expect(ollamaAppService.generateStream).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.stringContaining('CONTESTO DI RICONCILIAZIONE'),
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Object)
-    )
-    const [, promptArg] = vi.mocked(ollamaAppService.generateStream).mock.calls[0]
-    expect(promptArg).toContain('Add password hashing')
-    expect(promptArg).toContain('Wire up login route')
+    const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
+    const data = JSON.parse(request.userContent)
+    expect(data.pendingMilestones).toEqual([{ id: 'm-7', title: 'Add password hashing', status: 'in_progress' }])
+    expect(request.systemPrompt).not.toContain('Add password hashing')
   })
 
-  it('should NOT include a reconciliation block when there is no pending residue', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
-
-    await planGenerationAppService.generatePlanText({ prompt: 'Fresh task', settings })
-
-    const [, promptArg] = vi.mocked(ollamaAppService.generateStream).mock.calls[0]
-    expect(promptArg).not.toContain('CONTESTO DI RICONCILIAZIONE')
-  })
-
-  it('returns an explicit non-executable error instead of a generic plan when generation fails', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'connection refused' })
-
-    const result = await planGenerationAppService.generatePlanText({ prompt: 'Refactor the auth module', settings })
-
-    expect(result).toEqual({
-      status: 'error',
-      planText: '',
-      milestones: [],
-      error: 'connection refused',
+  it('keeps transport, incomplete, and schema failures non-executable', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'transport_error', content: '', error: 'connection refused',
     })
-  })
-
-  it('retains a partial draft as diagnostic evidence while marking it non-executable', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-      onChunk('- [ ] Partial auth change — `src/auth.ts`')
-      return { success: false, error: 'stream interrupted' }
+    expect(await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).toEqual({
+      status: 'error', planText: '', milestones: [], error: 'connection refused',
     })
 
-    const result = await planGenerationAppService.generatePlanText({ prompt: 'Refactor auth', settings })
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('stream interrupted')
-    expect(result.planText).toContain('Partial auth change')
-    expect(result.milestones).toHaveLength(1)
-  })
-
-  it('rejects a successful transport response that contains no executable milestones', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-      onChunk('I would first think about the architecture.')
-      return { success: true }
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'incomplete', content: '{"milestones":[', error: 'Ollama response incomplete (length)',
     })
+    const incomplete = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
+    expect(incomplete).toMatchObject({ status: 'error', milestones: [], error: 'Ollama response incomplete (length)' })
 
-    const result = await planGenerationAppService.generatePlanText({ prompt: 'Refactor auth', settings })
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Plan response contained no executable milestones')
-    expect(result.planText).toContain('think about the architecture')
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'complete', content: '{"milestones":[]}',
+    })
+    const invalid = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
+    expect(invalid.status).toBe('error')
+    expect(invalid.milestones).toEqual([])
+    expect(invalid.error).toContain('Invalid plan response')
   })
 
-  it('should use the explicit model override when provided instead of settings.codingModel', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+  it('keeps schema validity distinct from verification correctness', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { id: 'm-1', objective: 'The build passes', verificationCommand: 'npm run invented' },
+    ]))
 
-    await planGenerationAppService.generatePlanText({ prompt: 'Task', model: 'llama3.1:8b', settings })
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
 
-    expect(ollamaAppService.generateStream).toHaveBeenCalledWith(
-      'llama3.1:8b',
-      expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Object)
-    )
+    expect(result).toMatchObject({ status: 'error', milestones: [] })
+    expect(result.error).toContain('unavailable verification command')
   })
 
-  it('applies the selected coding model context preference to planning', async () => {
-    vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+  it('uses explicit model and configured context length', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { id: 'm-1', objective: 'Task works', filePath: 'src/task.ts' },
+    ]))
 
     await planGenerationAppService.generatePlanText({
       prompt: 'Task',
-      settings: { ...settings, modelContextLengths: { 'qwen2.5-coder:7b': 8192 } },
+      model: 'llama3.1:8b',
+      settings: { ...settings, modelContextLengths: { 'llama3.1:8b': 8192 } },
     })
 
-    expect(vi.mocked(ollamaAppService.generateStream).mock.calls[0][4]).toEqual(
-      expect.objectContaining({ num_ctx: 8192 })
-    )
+    const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
+    expect(request.model).toBe('llama3.1:8b')
+    expect(request.options).toEqual(expect.objectContaining({ num_ctx: 8192 }))
   })
 
-  it('parsePlanText should re-parse arbitrary plan text through the same canonical parser', () => {
-    const milestones = planGenerationAppService.parsePlanText('1. First step\n2. Second step\n3. Third step')
-    expect(milestones).toHaveLength(3)
-    expect(milestones[0].title).toBe('First step')
+  it('re-parses user-edited Markdown through the canonical compiler', () => {
+    const milestones = planGenerationAppService.parsePlanText('1. First step\n2. Second step')
+    expect(milestones.map((milestone) => milestone.title)).toEqual(['First step', 'Second step'])
   })
-  describe('project-resolved verification commands', () => {
+
+  describe('workspace facts and verification commands', () => {
     let workspacePath: string
 
     beforeEach(() => {
-      workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-plan-verify-'))
-      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+      workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-plan-'))
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+        { id: 'm-1', objective: 'The dashboard renders', filePath: 'src/Dashboard.tsx' },
+      ]))
     })
 
-    afterEach(() => {
-      try {
-        fs.rmSync(workspacePath, { recursive: true, force: true })
-      } catch {}
+    afterEach(() => fs.rmSync(workspacePath, { recursive: true, force: true }))
+
+    const requestData = () => JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].userContent)
+
+    it('passes only commands declared by the project', async () => {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({
+        scripts: { build: 'vite build', test: 'vitest run', dev: 'vite' },
+      }))
+
+      await planGenerationAppService.generatePlanText({ prompt: 'Add dashboard', settings, workspacePath })
+
+      expect(requestData().workspace).toBe('existing')
+      expect(requestData().allowedVerificationCommands).toEqual(expect.arrayContaining(['npm run build', 'npm run test']))
+      expect(requestData().allowedVerificationCommands).not.toContain('npm run dev')
     })
 
-    const capturedPrompt = () => vi.mocked(ollamaAppService.generateStream).mock.calls[0][1] as string
+    it('passes an empty command list for an empty workspace', async () => {
+      await planGenerationAppService.generatePlanText({ prompt: 'Create app', settings, workspacePath })
 
-    it('offers the planner only the commands the workspace manifest actually declares', async () => {
-      fs.writeFileSync(
-        path.join(workspacePath, 'package.json'),
-        JSON.stringify({ scripts: { build: 'vite build', dev: 'vite', test: 'vitest run' } })
-      )
-
-      await planGenerationAppService.generatePlanText({ prompt: 'Add a dashboard', settings, workspacePath })
-
-      const prompt = capturedPrompt()
-      expect(prompt).toContain('`npm run build`')
-      expect(prompt).toContain('`npm run test`')
-      // `dev` never exits, so proposing it as a proof would hang the verification forever.
-      expect(prompt).not.toContain('`npm run dev`')
-      expect(prompt).toContain('FORBIDDEN from inventing')
+      expect(requestData()).toMatchObject({ workspace: 'empty', allowedVerificationCommands: [] })
     })
 
-    it('tells the planner no command exists rather than letting it invent one', async () => {
-      await planGenerationAppService.generatePlanText({ prompt: 'Scaffold a new app', settings, workspacePath })
-
-      const prompt = capturedPrompt()
-      expect(prompt).toContain('VERIFICATION COMMANDS AVAILABLE IN THIS PROJECT: NONE.')
-      expect(prompt).toContain('DO NOT EXIST here until a microtask creates them')
-    })
-
-    it('does not add greenfield scaffolding milestones to an existing project plan', async () => {
-      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ name: 'existing-app' }))
-
-      const result = await planGenerationAppService.generatePlanText({ prompt: 'Fix the dashboard', settings, workspacePath })
-
-      expect(result.milestones.map((milestone) => milestone.title).join('\n')).not.toMatch(/package\.json|index\.html|src\/main\.tsx/)
-    })
-
-    it('keeps the verification command the planner declares on a checklist line', async () => {
+    it('keeps a declared verification command through compilation', async () => {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
-      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-        onChunk('- [ ] m-1: Create `src/App.tsx` shell\n- [ ] m-2: Build pulita — verify: `npm run build`\n')
-        return { success: true }
-      })
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+        { id: 'm-1', objective: 'The page renders', filePath: 'src/App.tsx' },
+        { id: 'm-2', objective: 'The project builds', verificationCommand: 'npm run build' },
+      ]))
 
-      const result = await planGenerationAppService.generatePlanText({ prompt: 'Add a page', settings, workspacePath })
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Add page', settings, workspacePath })
 
-      expect(result.milestones[1].title).toBe('Build pulita')
-      expect(result.milestones[1].verificationCommand).toBe('npm run build')
+      expect(result.milestones[1]).toMatchObject({ title: 'The project builds', verificationCommand: 'npm run build' })
+      expect(planGenerationAppService.parsePlanText(result.planText, workspacePath)).toEqual(result.milestones)
     })
 
-    it('round-trips the displayed canonical revision in an existing project', async () => {
-      fs.writeFileSync(path.join(workspacePath, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
-      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-        onChunk('- [ ] m-1: La pagina mostra il profilo — `src/Profile.tsx`\n')
-        return { success: true }
-      })
+    it('does not inject greenfield scaffolding into an existing project', async () => {
+      fs.writeFileSync(path.join(workspacePath, 'package.json'), '{"name":"existing"}')
 
-      const generated = await planGenerationAppService.generatePlanText({ prompt: 'Aggiungi profilo', settings, workspacePath })
-      const reparsed = planGenerationAppService.parsePlanText(generated.planText, workspacePath)
+      const result = await planGenerationAppService.generatePlanText({ prompt: 'Fix dashboard', settings, workspacePath })
 
-      expect(reparsed.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
-        .toEqual(generated.milestones.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
-      expect(generated.planText).toContain('verify: `npm run build`')
-    })
-
-    it('round-trips compiler-added entry requirements in an empty workspace', async () => {
-      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-        onChunk('- [ ] m-1: La pagina principale funziona — `src/App.tsx`\n')
-        return { success: true }
-      })
-
-      const generated = await planGenerationAppService.generatePlanText({ prompt: 'Crea una app', settings, workspacePath })
-      const reparsed = planGenerationAppService.parsePlanText(generated.planText, workspacePath)
-
-      expect(reparsed.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
-        .toEqual(generated.milestones.map(({ id, title, status, verificationCommand }) => ({ id, title, status, verificationCommand })))
-      expect(generated.milestones.map((milestone) => milestone.title).join('\n')).toMatch(/package\.json/)
-      expect(generated.milestones.map((milestone) => milestone.title).join('\n')).toMatch(/src\/main\.tsx/)
+      expect(result.milestones.map((milestone) => milestone.title).join('\n')).not.toMatch(/package\.json|index\.html/)
     })
   })
 
-  /**
-   * The shape rule of blueprint §1.5: a plan whose milestones only name files reaches 100% on a
-   * dead application. These lock the two halves that make the new shape safe — the capability
-   * is stated, and the path is still there for the deliverable probe to check.
-   */
-  describe('capability-shaped microtasks', () => {
-    const capturedPrompt = () => vi.mocked(ollamaAppService.generateStream).mock.calls[0][1] as string
+  it('keeps capability and deliverable evidence together', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { id: 'm-1', objective: 'The user can finish a task', filePath: 'src/TasksPage.tsx' },
+    ]))
 
-    it('asks the planner for what works, not for the file to create', async () => {
-      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Task app', settings })
 
-      await planGenerationAppService.generatePlanText({ prompt: 'Crea una dashboard', settings })
+    expect(extractDeliverablePaths(result.milestones[0].title)).toEqual(['src/TasksPage.tsx'])
+    expect(result.milestones.every(isFalsifiableMilestone)).toBe(true)
+  })
 
-      const prompt = capturedPrompt()
-      expect(prompt).toContain('EVERY MICRO-TASK STATES WHAT WORKS, THEN NAMES THE FILE THAT MAKES IT WORK')
-      expect(prompt).toContain('The Tasks page lists the tasks and marks one complete — `src/pages/TasksPage.tsx`')
-      expect(prompt).toContain('DO NOT WRITE: "- [ ] m-7: Create `src/pages/TasksPage.tsx`"')
-      // The entrypoint phase exists because a page that loads no script compiles to nothing
-      // (blueprint §5.6f): 14/15 milestones verified, zero JavaScript emitted.
-      expect(prompt).toContain('Phase B — Wiring')
-      // An inspection step names nothing on disk, so the normalizer folds it away: asking for
-      // one would spend a milestone the plan never gets back.
-      expect(prompt).toContain('Never write a microtask for reading, inspecting or analysing the workspace')
-    })
+  it('round-trips compiler-added entry requirements for an empty web workspace', async () => {
+    const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-greenfield-'))
+    try {
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+        { id: 'm-1', objective: 'The app renders', filePath: 'src/App.tsx' },
+      ]))
 
-    it('keeps the greenfield skeleton an imperative, not a cross-reference', async () => {
-      // Measured regression, 2026-08-25: the first live run with the rewritten prompt produced a
-      // plan that began at `src/` and never named index.html, main.tsx, vite.config.ts or
-      // tsconfig.json. Fifty steps, twenty-four writes, zero builds, no entrypoint on disk. The
-      // rewrite had turned "the first microtasks MUST establish the buildable project skeleton"
-      // into "start at phase A", and the model followed the format but not the pointer.
-      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: true })
+      const generated = await planGenerationAppService.generatePlanText({ prompt: 'Create app', settings, workspacePath })
+      const reparsed = planGenerationAppService.parsePlanText(generated.planText, workspacePath)
 
-      await planGenerationAppService.generatePlanText({ prompt: 'Crea una dashboard da zero', settings })
-
-      const prompt = capturedPrompt()
-      expect(prompt).toContain('the FIRST microtasks MUST establish the buildable project skeleton')
-      for (const file of ['`package.json`', '`index.html`', '`vite.config.ts`', '`tsconfig.json`', '`src/main.tsx`', '`src/App.tsx`']) {
-        expect(prompt).toContain(file)
-      }
-    })
-
-    it('keeps the deliverable checkable when the title leads with the capability', async () => {
-      vi.mocked(ollamaAppService.generateStream).mockImplementation(async (_model, _prompt, onChunk) => {
-        onChunk(
-          '- [ ] m-1: La pagina carica lo script di ingresso — `index.html`\n' +
-            '- [ ] m-2: The user can mark a task finished — `src/pages/TasksPage.tsx`\n'
-        )
-        return { success: true }
-      })
-
-      const result = await planGenerationAppService.generatePlanText({ prompt: 'Task app', settings })
-
-      expect(result.milestones).toHaveLength(2)
-      expect(extractDeliverablePaths(result.milestones[0].title)).toEqual(['index.html'])
-      expect(extractDeliverablePaths(result.milestones[1].title)).toEqual(['src/pages/TasksPage.tsx'])
-      expect(result.milestones.every(isFalsifiableMilestone)).toBe(true)
-      // "finished" in a capability clause is not the closing milestone: reading it as one would
-      // hand the work to the finish tool and hide it from getActiveMilestone.
-      expect(isCompletionMilestoneTitle(result.milestones[1].title)).toBe(false)
-    })
-
-    it('does not turn a failed generation into executable fallback milestones', async () => {
-      vi.mocked(ollamaAppService.generateStream).mockResolvedValue({ success: false, error: 'offline' })
-
-      const result = await planGenerationAppService.generatePlanText({ prompt: 'Crea una todo app', settings })
-
-      expect(result.status).toBe('error')
-      expect(result.milestones).toEqual([])
-      expect(result.planText).toBe('')
-    })
+      const identity = (milestones: typeof generated.milestones) => milestones.map(({ id, title, status, verificationCommand }) => ({
+        id, title, status, verificationCommand,
+      }))
+      expect(identity(reparsed)).toEqual(identity(generated.milestones))
+      expect(generated.milestones.map((milestone) => milestone.title).join('\n')).toMatch(/package\.json/)
+      expect(generated.milestones.map((milestone) => milestone.title).join('\n')).toMatch(/src\/main\.tsx/)
+    } finally {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
   })
 })

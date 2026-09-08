@@ -44,6 +44,30 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 * **Problema**: Il precedente tetto a 15 fondeva interventi distinti. Nel gruppo risultante sopravviveva solo il primo `verificationCommand`, quindi un suo esito positivo poteva sostituire le prove successive. Anche due interventi adiacenti sullo stesso file venivano accorpati perdendo identità e metadati.
 * **Soluzione**: La compilazione conserva ogni intervento e limita solo la finestra ripetuta nel prompt ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts)). Il controllo globale copre le milestone senza prova dedicata; quando una milestone dichiara un comando, la promozione richiede la corrispondenza con quello eseguito, oltre alla presenza degli artefatti. Le note distinguono presenza, compilazione e comportamento.
 
+### 2.5. Schema, correttezza e autorizzazione
+* **Evidenza (Ollama 0.33.3, 2026-09-08)**: `/api/chat` con `format` ha prodotto JSON conforme ma una domanda inutile per una richiesta già determinata. Con `tools` e `format` simultanei il modello ha restituito contenuto conforme allo schema senza `tool_calls`.
+* **Soluzione**: Intervista e piano usano schema Zod tramite `format`; il loop usa `tools` senza `format`. `done`, schema, correttezza del piano e autorizzazione dell'executor restano controlli separati. Nessun contenuto incompleto viene eseguito.
+
+### 2.6. Fasi applicative, non un secondo orchestratore
+* **Problema**: La costruzione del prompt e l'inferenza erano una singola operazione, mentre proposta, applicazione e verifica erano visibili soltanto dall'ordine delle chiamate nel loop.
+* **Soluzione**: [`agentExecutionPhase.ts`](../electron/core/domain/agent/agentExecutionPhase.ts) ammette solo transizioni esplicite; il loop esistente resta l'unico coordinatore e continua a usare executor, gate, persistenza, log e chiusura preesistenti. Il checkpoint registra l'ultima fase senza riprendere operazioni potenzialmente parziali.
+
+### 2.7. Catalogo tool minimo per turno
+* **Problema**: Esporre circa trenta schemi a ogni inferenza consuma contesto e permette a un modello compatto di scegliere operazioni non pertinenti alla fase.
+* **Soluzione**: La direttiva applicativa seleziona una allowlist breve. Il catalogo inviato via `/api/chat` e quello testuale contengono gli stessi soli tool; gate ed executor respingono anche una chiamata valida ma non esposta. Le capacità avanzate sono ammesse solo quando nominate dall'obiettivo o richieste dalla direttiva corrente.
+
+### 2.8. Fatti prima delle domande
+* **Problema**: Intervista e planner potevano chiedere stack, package manager o verifiche già determinate dai manifest del workspace.
+* **Soluzione**: Un collector comune aggrega il discovery esistente, seleziona voci pertinenti dalla repo-map e conserva la provenienza delle decisioni. L'intervista filtra le domande già risolte; il collector non usa cache, quindi ogni workspace o revisione vede fatti aggiornati.
+
+### 2.9. Intervista pre-plan selettiva
+* **Problema**: Una chiamata preliminare obbligatoria raddoppiava le inferenze anche per richieste operative chiare.
+* **Soluzione**: Una policy deterministica invia direttamente al planner le richieste chiare e attiva il modello intervistatore solo per alternative irrisolte esplicite o su richiesta dell'utente. Evita così di affidare a un modello compatto un fragile schema combinato domanda/piano.
+
+### 2.10. Conferma delle decisioni
+* **Problema**: Una preselezione UI o un ID di una vecchia intervista potevano essere interpretati come risposta confermata.
+* **Soluzione**: Schema e validatore controllano cardinalità, unicità, lingua, opzioni e raccomandazione. L'arricchimento richiede il set corrente di domande e provenienza esplicita; il pulsante di conferma resta inattivo finché ogni scelta non viene effettuata, mentre l'azione separata sui consigli ne registra l'accettazione.
+
 ---
 
 ## 3. Gestione Dinamica della Memoria di Contesto
@@ -55,6 +79,10 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 ### 3.2. Compattatore Euristico delle Memorie Episodiche
 * **Evidenza**: Conservare l'intero dump dei turni precedenti esaurisce la finestra di contesto entro 10-15 step dell'agente.
 * **Soluzione ([`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts))**: Mantiene una quota fissa per la mappa del workspace (~18% di `maxContextChars`), comprime i turni storici intermedi distillando solo le azioni chiave e gli esiti dei comandi, preservando integrali solo l'ultimo turno e gli errori bloccanti attivi.
+
+### 3.3. Contesto per operazione
+* **Problema**: Mappa, RAG, skill, file e cronologia completi nello stesso turno riducono lo spazio di output e rendono meno visibile l'errore corrente.
+* **Soluzione**: La direttiva seleziona i blocchi pertinenti e un riepilogo operativo concentra obiettivo, vincoli, percorsi e ultimo errore. Vengono iniettati un file primario e due soli supporti; i file oltre budget mostrano testa, coda e quantità omessa, senza troncamenti invisibili. La cronologia resta persistita nel checkpoint.
 
 ---
 

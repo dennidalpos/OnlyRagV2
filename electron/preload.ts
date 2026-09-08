@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { IElectronAPI, AppSettings, CodingSession, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload } from '../shared/types'
+import type { IElectronAPI, AppSettings, CodingSession, InterviewQuestion, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
 
 const api: IElectronAPI = {
   runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),
@@ -189,14 +189,14 @@ const api: IElectronAPI = {
   /** SLM Agent Studio: trigger log anomaly scan; returns structured diagnostic report. */
   agentLogsAnalyze: (extraPaths?: string[]) => ipcRenderer.invoke('agent:logs-analyze', extraPaths),
   /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
-  agentPlanInterview: (prompt: string, model: string | undefined, settings: AppSettings) =>
-    ipcRenderer.invoke('agent:plan-interview', prompt, model, settings),
+  agentPlanInterview: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) =>
+    ipcRenderer.invoke('agent:plan-interview', prompt, model, settings, workspacePath, previousDecisions),
   /** Enriches prompt with user's confirmed interview answers. */
-  agentPlanEnrichPrompt: (prompt: string, answers: any[]) =>
-    ipcRenderer.invoke('agent:plan-enrich-prompt', prompt, answers),
+  agentPlanEnrichPrompt: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) =>
+    ipcRenderer.invoke('agent:plan-enrich-prompt', prompt, answers, questions),
   /** Plan Approval: draft a plan via the backend (hardware-routed), parsed into canonical milestones. */
-  agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null) =>
-    ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, pendingResidueMilestones, workspacePath),
+  agentPlanGenerate: (prompt: string, model: string | undefined, settings: AppSettings, pendingResidueMilestones?: PlanMilestone[], workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) =>
+    ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, pendingResidueMilestones, workspacePath, previousDecisions),
   /** Plan Approval: re-parse (e.g. user-edited) plan text into canonical milestones. */
   agentPlanParseText: (planText: string, workspacePath?: string | null) =>
     ipcRenderer.invoke('agent:plan-parse-text', planText, workspacePath),

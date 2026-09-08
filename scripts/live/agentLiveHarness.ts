@@ -153,7 +153,7 @@ export async function seedGeneratedPlan(args: {
       selectedOption: q.options[q.recommendedIndex],
       provenance: 'accepted_recommendation',
     }))
-    effectivePrompt = agentInterviewAppService.enrichPromptWithAnswers(args.userTask, answers)
+    effectivePrompt = agentInterviewAppService.enrichPromptWithAnswers(args.userTask, answers, questions)
   }
 
   const plan = await planGenerationAppService.generatePlanText({

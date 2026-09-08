@@ -5,6 +5,7 @@ import type { AgentSession } from './agentOrchestratorTypes'
 import { SessionDebtTracker } from '../domain/agent/sessionDebtTracker'
 import { agentSessionStateRepository, type AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import type { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
 
 export interface SessionPersistenceParams {
   sessionId: string
@@ -19,6 +20,7 @@ export interface SessionPersistenceParams {
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>
   goalPlanner: GoalDecompositionPlanner
   episodicCompactor: EpisodicMemoryCompactor
+  phaseController: AgentExecutionPhaseController
   session: AgentSession
   isSessionActive: () => boolean
 }
@@ -50,6 +52,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
     sessionChangedFiles,
     goalPlanner,
     episodicCompactor,
+    phaseController,
     session,
     isSessionActive,
   } = params
@@ -102,6 +105,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
         : isPlanCompleted ? 'COMPLETED' : 'IN_PROGRESS',
       terminationReason,
       completionStatus,
+      executionPhase: phaseController.getPhase(),
     })
 
     if (workspacePath) {

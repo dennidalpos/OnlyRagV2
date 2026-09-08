@@ -20,6 +20,7 @@ describe('usePlanApproval & Plan Refactoring Unit Tests', () => {
       {
         id: 'router',
         question: 'Quale router?',
+        rationale: 'La scelta cambia la navigazione.',
         options: ['React Router', 'Router custom'],
         recommendedIndex: 0,
       },
@@ -144,7 +145,7 @@ describe('usePlanApproval interview and error flow', () => {
       agentPlanInterview: vi.fn().mockResolvedValue({
         status: 'clarification_required',
         hasQuestions: true,
-        questions: [{ id: 'router', question: 'Quale router?', options: ['React Router', 'Custom'], recommendedIndex: 0 }],
+        questions: [{ id: 'router', question: 'Quale router?', rationale: 'La scelta cambia la navigazione.', options: ['React Router', 'Custom'], recommendedIndex: 0 }],
       }),
       agentPlanEnrichPrompt: vi.fn(async (prompt: string, answers: UserInterviewAnswer[]) =>
         `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: ${answers[0].selectedOption}`
@@ -155,7 +156,7 @@ describe('usePlanApproval interview and error flow', () => {
     })
 
     await act(async () => {
-      await currentHook.startPlanFlow('Crea una dashboard')
+      await currentHook.startPlanFlow('Quale router scegliere: React Router o Custom?')
     })
     expect(currentHook.isInterviewActive).toBe(true)
 
@@ -168,11 +169,12 @@ describe('usePlanApproval interview and error flow', () => {
       'qwen2.5-coder:7b',
       settings,
       undefined,
-      '/repo'
+      '/repo',
+      [expect.objectContaining({ selectedOption: 'React Router', provenance: 'accepted_recommendation' })],
     )
     expect(currentHook.currentPlan).toMatchObject({
       status: 'ready',
-      originalPrompt: 'Crea una dashboard',
+      originalPrompt: 'Quale router scegliere: React Router o Custom?',
       interviewAnswers: [expect.objectContaining({ selectedOption: 'React Router', provenance: 'accepted_recommendation' })],
     })
 
@@ -203,7 +205,7 @@ describe('usePlanApproval interview and error flow', () => {
       agentPlanInterview: vi.fn().mockResolvedValue({
         status: 'clarification_required',
         hasQuestions: true,
-        questions: [{ id: 'theme', question: 'Quale tema?', options: ['Scuro', 'Chiaro'], recommendedIndex: 0 }],
+        questions: [{ id: 'theme', question: 'Quale tema?', rationale: 'La scelta cambia la presentazione.', options: ['Scuro', 'Chiaro'], recommendedIndex: 0 }],
       }),
       agentPlanEnrichPrompt: vi.fn(async (prompt: string, answers: UserInterviewAnswer[]) =>
         `[ORIGINAL USER REQUEST]\n${prompt}\n\n[INTERVIEW DECISIONS]\n- [EXPLICIT USER ANSWER] Tema: ${answers[0].selectedOption}`
@@ -214,7 +216,7 @@ describe('usePlanApproval interview and error flow', () => {
     })
 
     await act(async () => {
-      await currentHook.startPlanFlow('Crea una dashboard')
+      await currentHook.startPlanFlow('Quale tema scegliere: Scuro o Chiaro?')
       await currentHook.confirmInterviewAnswers([{
         questionId: 'theme',
         questionText: 'Quale tema?',
@@ -242,7 +244,7 @@ describe('usePlanApproval interview and error flow', () => {
     expect(agentPlanGenerate.mock.calls[1][0]).toContain('[EXPLICIT USER ANSWER] Tema: Chiaro')
     expect(currentHook.currentPlan).toMatchObject({
       status: 'ready',
-      originalPrompt: 'Crea una dashboard',
+      originalPrompt: 'Quale tema scegliere: Scuro o Chiaro?',
       interviewAnswers: [expect.objectContaining({ selectedOption: 'Chiaro', provenance: 'explicit' })],
     })
   })
@@ -261,7 +263,7 @@ describe('usePlanApproval interview and error flow', () => {
     })
 
     await act(async () => {
-      await currentHook.startPlanFlow('Crea una dashboard')
+      await currentHook.startPlanFlow('Quale storage scegliere: SQLite o JSON?')
     })
 
     expect(agentPlanGenerate).not.toHaveBeenCalled()
@@ -271,6 +273,24 @@ describe('usePlanApproval interview and error flow', () => {
       errorMessage: 'Invalid interview response',
       planText: '{partial',
     })
+  })
+
+  it('sends a clear request directly to the planner', async () => {
+    const agentPlanInterview = vi.fn()
+    const agentPlanGenerate = vi.fn().mockResolvedValue({
+      status: 'success',
+      planText: '- [ ] Correggi il bootstrap',
+      milestones: [{ id: 'm-1', title: 'Correggi il bootstrap — `src/main.tsx`', status: 'pending' }],
+    })
+    installElectronApi({ agentPlanInterview, agentPlanGenerate })
+
+    await act(async () => {
+      await currentHook.startPlanFlow('Correggi il bootstrap in src/main.tsx')
+    })
+
+    expect(agentPlanInterview).not.toHaveBeenCalled()
+    expect(agentPlanGenerate).toHaveBeenCalledOnce()
+    expect(currentHook.currentPlan).toMatchObject({ status: 'ready' })
   })
 
   it('keeps the backend-compiled milestones as the displayed and approved revision', async () => {
@@ -469,7 +489,7 @@ describe('usePlanApproval interview and error flow', () => {
 
     let pending!: Promise<AgentPlan | null>
     await act(async () => {
-      pending = currentHook.startPlanFlow('Richiesta sessione vecchia')
+      pending = currentHook.startPlanFlow('Prima di procedere chiedimi quale storage preferisco')
       await Promise.resolve()
     })
     harnessSessionId = 'session-2'
@@ -478,7 +498,7 @@ describe('usePlanApproval interview and error flow', () => {
     resolveInterview({
       status: 'clarification_required',
       hasQuestions: true,
-      questions: [{ id: 'late', question: 'Tardiva?', options: ['Sì', 'No'], recommendedIndex: 0 }],
+      questions: [{ id: 'late', question: 'Tardiva?', rationale: 'La scelta cambia il comportamento.', options: ['Sì', 'No'], recommendedIndex: 0 }],
     })
     await act(async () => {
       await pending

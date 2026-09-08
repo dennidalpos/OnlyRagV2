@@ -9,7 +9,7 @@ vi.mock('../../diagnostics', () => ({
   getMemoryInfo: () => ({ totalRAMGB: 16 }),
 }))
 
-import { readTurnFileContext, resolveTurnFileTargets } from './agentOrchestratorPromptAssembly'
+import { buildCurrentOperationContext, readTurnFileContext, resolveTurnFileTargets } from './agentOrchestratorPromptAssembly'
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 
@@ -71,6 +71,48 @@ describe('readTurnFileContext', () => {
     expect(readTurnFileContext(ctxWith(), [], 'because')).toBe('')
     expect(readTurnFileContext(ctxWith(), undefined, 'because')).toBe('')
     expect(readTurnFileContext({} as TurnDispatchContext, ['a.ts'], 'because')).toBe('')
+  })
+
+  it('includes one primary file, two support fragments and visible omission markers', () => {
+    for (const [name, size] of [['primary.ts', 13000], ['support-a.ts', 4000], ['support-b.ts', 20], ['ignored.ts', 20]] as const) {
+      fs.writeFileSync(path.join(tempDir, name), name.repeat(Math.ceil(size / name.length)).slice(0, size))
+    }
+
+    const block = readTurnFileContext(ctxWith(), ['primary.ts', 'support-a.ts', 'support-b.ts', 'ignored.ts'], 'test')
+    expect(block).toContain('PRIMARY EDIT FILE: primary.ts')
+    expect(block).toContain('SUPPORT FRAGMENT: support-a.ts')
+    expect(block).toContain('SUPPORT FRAGMENT: support-b.ts')
+    expect(block).not.toContain('ignored.ts')
+    expect(block).toContain('CONTENT OMITTED:')
+  })
+})
+
+describe('buildCurrentOperationContext', () => {
+  it('keeps objective, constraints, relevant paths and only the latest useful error together', () => {
+    const ctx = {
+      userTask: 'Fix the app',
+      workspacePath: tempDir,
+      fsmMode: { getMode: () => 'AGENT' },
+      goalPlanner: { getActiveMilestone: () => ({ title: 'Fix src/app.ts', notes: 'Keep the public API' }) },
+      episodicCompactor: {
+        getRecentFullLogs: () => [
+          { step: 1, tool: 'run_command', target: 'npm test', output: 'old error', isFailure: true },
+          { step: 2, tool: 'run_command', target: 'npm test', output: 'latest error', isFailure: true },
+        ],
+      },
+    } as unknown as TurnDispatchContext
+    const block = buildCurrentOperationContext(
+      ctx,
+      focus,
+      { allowedTools: ['write_file'], rationale: 'test' },
+      ['src/app.ts'],
+    )
+
+    expect(block).toContain('Objective: Fix src/app.ts')
+    expect(block).toContain('accepted decision=Keep the public API')
+    expect(block).toContain('Relevant paths: src/app.ts')
+    expect(block).toContain('latest error')
+    expect(block).not.toContain('old error')
   })
 })
 

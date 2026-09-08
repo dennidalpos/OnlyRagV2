@@ -9,6 +9,7 @@ import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSo
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -31,6 +32,7 @@ export interface SessionStateParams {
 
 /** Loop-scoped state machines, guards and counters, restored from any saved session state. */
 export interface SessionState {
+  phaseController: AgentExecutionPhaseController
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
@@ -62,6 +64,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const { payload, sessionId, workspacePath, agentMode, userTask, settings, emitLog } = params
 
   const episodicCompactor = new EpisodicMemoryCompactor(6)
+  const phaseController = new AgentExecutionPhaseController()
   const goalPlanner = new GoalDecompositionPlanner()
   const fsmMode = new AgentRuntimeModeFsm(agentMode)
   const isUnlimitedSteps = settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
@@ -107,6 +110,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const sessionChangedFiles = new Map<string, { additions: number; deletions: number }>()
 
   return {
+    phaseController,
     episodicCompactor,
     goalPlanner,
     fsmMode,

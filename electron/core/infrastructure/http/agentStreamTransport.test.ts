@@ -137,7 +137,7 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     const mock = await startMockOllama((req, res) => {
       hitPath = req.url || ''
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.write(JSON.stringify({ response: 'plain completion text' }) + '\n')
+      res.write(JSON.stringify({ response: 'plain completion text', done: true }) + '\n')
       res.end()
     })
     activeServer = mock.server
@@ -160,7 +160,7 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     const mock = await startMockOllama((req, res) => {
       hitPath = req.url || ''
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.write(JSON.stringify({ response: 'plain completion text' }) + '\n')
+      res.write(JSON.stringify({ response: 'plain completion text', done: true }) + '\n')
       res.end()
     })
     activeServer = mock.server
@@ -197,6 +197,27 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
       })
     ).rejects.toThrow(/not pulled/)
   })
+
+  it('rejects a native tool call when the stream never reaches done', async () => {
+    const mock = await startMockOllama((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        message: { tool_calls: [{ function: { name: 'read_file', arguments: { filePath: 'partial.ts' } } }] },
+        done: false,
+      }) + '\n')
+    })
+    activeServer = mock.server
+
+    await expect(AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen2.5-coder:7b',
+      prompt: 'Read partial.ts',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      toolCallingCapable: true,
+      toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
+    })).rejects.toThrow(/incomplete/)
+  })
 })
 
 describe('AgentStreamTransport — /api/generate context continuation (AGT1: Ollama context/KV-cache reuse)', () => {
@@ -217,7 +238,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
       req.on('end', () => {
         capturedBody = JSON.parse(raw)
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.write(JSON.stringify({ response: 'ok' }) + '\n')
+        res.write(JSON.stringify({ response: 'ok', done: true }) + '\n')
         res.end()
       })
     })
@@ -244,7 +265,7 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
       req.on('end', () => {
         capturedBody = JSON.parse(raw)
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.write(JSON.stringify({ response: 'ok' }) + '\n')
+        res.write(JSON.stringify({ response: 'ok', done: true }) + '\n')
         res.end()
       })
     })
@@ -334,6 +355,22 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
     expect(capturedBody.options.num_predict).toBe(6144)
     expect(capturedBody.options.stop).toEqual(AGENT_STOP_SEQUENCES)
     expect(capturedBody.options.num_ctx).toBe(8192)
+  })
+
+  it('rejects a text tool response truncated by num_predict', async () => {
+    const mock = await startMockOllama((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ response: '{"tool":"write_file"', done: true, done_reason: 'length' }) + '\n')
+    })
+    activeServer = mock.server
+
+    await expect(AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen2.5-coder:7b',
+      prompt: 'Write a file',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+    })).rejects.toThrow(/incomplete \(length\)/)
   })
 
   it('should forward num_predict and the stop sequences on the native tool-calling /api/chat path too', async () => {

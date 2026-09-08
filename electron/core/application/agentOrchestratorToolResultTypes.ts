@@ -9,6 +9,7 @@ import type { AgentActionLoopDetector } from '../domain/agent/loopDetector'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { AgentTaskResult } from '../domain/agent/agentTypes'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
+import type { RecoveryFailureState } from '../domain/agent/recoveryBudget'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -24,7 +25,6 @@ export type EmitLog = (
 export interface ToolResultMutableFlags {
   hasFileMutations: boolean
   hasVerifiedBuild: boolean
-  currentOverriddenModel: string | null
 }
 
 export interface ToolResultProcessingContext {
@@ -38,7 +38,6 @@ export interface ToolResultProcessingContext {
   settings: AppSettings
   workspacePath: string | null
   targetModel: string
-  fallbackModel: string
   isUnlimitedSteps: boolean
   flags: ToolResultMutableFlags
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>
@@ -49,6 +48,7 @@ export interface ToolResultProcessingContext {
   /** Same instance the response interpreter checks against: this step feeds the real
    *  execution outcome back into it. */
   loopDetector: AgentActionLoopDetector
+  recoveryState: { executionRecoveryFailure?: RecoveryFailureState }
   isSessionActive: () => boolean
   targetWindow: BrowserWindow | null
   emitLog: EmitLog

@@ -27,7 +27,7 @@ function makeContext(planner: GoalDecompositionPlanner): ToolResultProcessingCon
     toolStartedAtMs: Date.now(),
     stepCount: 19,
     workspacePath: tempDir,
-    flags: { hasFileMutations: false, hasVerifiedBuild: false, currentOverriddenModel: null },
+    flags: { hasFileMutations: false, hasVerifiedBuild: false },
     sessionChangedFiles: new Map(),
     goalPlanner: planner,
     executionGuard: new TransactionalExecutionGuard(tempDir),

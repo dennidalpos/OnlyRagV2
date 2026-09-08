@@ -149,6 +149,7 @@ export async function runAgentOrchestratorLoop(
     pinnedFilesContextStr,
     projectContextMapStr,
     availableModels,
+    codingModel,
     modelCapabilities,
     modelMetrics,
     skillMatchContext,
@@ -251,6 +252,7 @@ export async function runAgentOrchestratorLoop(
       sessionId,
       payload,
       availableModels,
+      codingModel,
       modelCapabilities,
       modelMetrics,
       attachedContext,
@@ -262,7 +264,6 @@ export async function runAgentOrchestratorLoop(
       episodicCompactor,
       goalPlanner,
       fsmMode,
-      currentOverriddenModel: mutableFlags.currentOverriddenModel,
       hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
       session,
       sessionNumCtxBox,
@@ -286,7 +287,6 @@ export async function runAgentOrchestratorLoop(
       errorCountInHistory,
       compiledHistoryBlock,
       targetModel,
-      fallbackModel,
     } = dispatchOutcome.data
 
     // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with
@@ -403,6 +403,15 @@ export async function runAgentOrchestratorLoop(
     )
     agentToolExecutorService.endJournalStep()
 
+    if (!isSessionActive()) {
+      setExecutionPhase('outcome')
+      return {
+        success: false,
+        summary: session.terminalSummary || "Task interrotto dall'utente.",
+        completionStatus: session.completionStatus || 'cancelled',
+      }
+    }
+
     setExecutionPhase('verify')
     const processingOutcome = await runToolResultProcessing({
       toolRes,
@@ -413,7 +422,6 @@ export async function runAgentOrchestratorLoop(
       settings,
       workspacePath,
       targetModel,
-      fallbackModel,
       isUnlimitedSteps,
       flags: mutableFlags,
       sessionChangedFiles,
@@ -422,6 +430,7 @@ export async function runAgentOrchestratorLoop(
       executionGuard,
       circuitBreaker,
       loopDetector,
+      recoveryState: responseInterpreterState,
       isSessionActive,
       targetWindow: session.targetWindow,
       emitLog,

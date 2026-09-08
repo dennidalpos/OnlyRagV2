@@ -94,9 +94,10 @@ describe('ProcessToolService run_command', () => {
       'Fix the command.',
     )
 
-    expect(result).toMatchObject({ isTerminal: true, logDetail: 'failure details' })
+    expect(result).toMatchObject({ isTerminal: true, logDetail: 'failure details', effectOutcome: 'uncertain' })
     expect(result.outputForHistory).toContain('Exit Code: 1 - TIMED OUT')
     expect(result.outputForHistory).toContain('[DIRECTIVE]')
+    expect(result.outputForHistory).toContain('[UNCERTAIN EFFECT - DO NOT RETRY]')
   })
 })
 

@@ -9,6 +9,7 @@ import type { AgentCompletionStatus } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
+import type { RecoveryFailureState } from '../../domain/agent/recoveryBudget'
 
 export type AgentSessionTerminationReason =
   | 'finish'
@@ -41,6 +42,10 @@ export interface SavedAgentSessionState {
   completionStatus?: AgentCompletionStatus
   /** Last application-owned phase; absent in sessions saved before CAS-11. */
   executionPhase?: AgentExecutionPhase
+  recoveryFailures?: {
+    schema?: RecoveryFailureState
+    execution?: RecoveryFailureState
+  }
 }
 
 export class AgentSessionStateRepository {

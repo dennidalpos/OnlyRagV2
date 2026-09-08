@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { HardwareProfileResolver, AGENT_STOP_SEQUENCES } from './hardwareProfileResolver'
 
 describe('HardwareProfileResolver Domain Unit Tests', () => {
+  it('uses separate output caps for interview, plan and edit generations', () => {
+    expect(HardwareProfileResolver.deriveNumPredict(16384, 'interview')).toBe(768)
+    expect(HardwareProfileResolver.deriveNumPredict(16384, 'plan')).toBe(2048)
+    expect(HardwareProfileResolver.deriveNumPredict(16384, 'edit')).toBe(4096)
+  })
+
   it('should resolve Low profile with 4096 context and thread throttling', () => {
     const opts = HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 8 })
     expect(opts.num_ctx).toBe(4096)

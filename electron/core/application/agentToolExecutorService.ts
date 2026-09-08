@@ -573,6 +573,7 @@ export class AgentToolExecutorService {
             logMessage: `Terminal Command Finished: ${cmd}`,
             logDetail: rawOutput.slice(0, 1000),
             isTerminal: true,
+            effectOutcome: 'confirmed',
           }
       }
 

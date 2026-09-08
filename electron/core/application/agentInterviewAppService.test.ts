@@ -98,7 +98,8 @@ describe('AgentInterviewAppService', () => {
     )
 
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
-    expect(request.options).toEqual(expect.objectContaining({ num_ctx: 8192 }))
+    expect(request.options).toEqual(expect.objectContaining({ num_ctx: 8192, num_predict: 768 }))
+    expect(request.keepAlive).toBe('30m')
     expect(request.systemPrompt).not.toContain('Crea una funzione somma')
     expect(JSON.parse(request.userContent)).toMatchObject({
       request: 'Crea una funzione somma',
@@ -108,13 +109,13 @@ describe('AgentInterviewAppService', () => {
   })
 
   it('rejects malformed or semantically invalid JSON', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'complete', content: '{"hasQuestions":true,',
     })
     const malformed = await service.conductInterview('Crea un gioco', undefined, settings)
     expect(malformed.error).toContain('Response is not valid JSON')
 
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'complete', content: '{"hasQuestions":true,"questions":[]}',
     })
     const inconsistent = await service.conductInterview('Crea un gioco', undefined, settings)
@@ -122,17 +123,19 @@ describe('AgentInterviewAppService', () => {
   })
 
   it('does not use transport failures or incomplete responses', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'transport_error', content: '', error: 'connection refused',
     })
     const failed = await service.conductInterview('Crea un gioco', undefined, settings)
-    expect(failed).toMatchObject({ status: 'error', error: 'connection refused' })
+    expect(failed).toMatchObject({ status: 'error' })
+    expect(failed.error).toContain('connection refused')
 
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'incomplete', content: '{"hasQuestions":false', error: 'Ollama response incomplete (length)',
     })
     const incomplete = await service.conductInterview('Crea un gioco', undefined, settings)
-    expect(incomplete).toMatchObject({ status: 'error', error: 'Ollama response incomplete (length)' })
+    expect(incomplete).toMatchObject({ status: 'error' })
+    expect(incomplete.error).toContain('Ollama response incomplete (length)')
   })
 
   it('enriches the prompt with answer provenance', () => {

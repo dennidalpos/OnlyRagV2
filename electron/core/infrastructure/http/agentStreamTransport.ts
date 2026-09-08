@@ -81,14 +81,7 @@ export class AgentStreamTransport {
       ollamaUrl = new URL('http://127.0.0.1:11434/api/generate')
     }
 
-    let streamedOutput = ''
-    let attempts = 0
-    const maxAttempts = 2
-
-    while (attempts < maxAttempts) {
-      attempts++
-      try {
-        streamedOutput = await new Promise<string>((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
           const postData = JSON.stringify({
             model: targetModel,
             prompt,
@@ -244,24 +237,7 @@ export class AgentStreamTransport {
 
           req.write(postData)
           req.end()
-        })
-        break
-      } catch (err: any) {
-        const isFatal =
-          err.message.includes('not pulled') ||
-          err.message.includes('not reachable') ||
-          err.message.includes('not running')
-
-        if (attempts < maxAttempts && !isFatal) {
-          logger.log('INFO', 'AgentStreamTransport', `Ollama request attempt ${attempts} failed (${err.message}). Retrying in 1s...`)
-          await new Promise((r) => setTimeout(r, 1000))
-        } else {
-          throw err
-        }
-      }
-    }
-
-    return streamedOutput
+    })
   }
 
   /**

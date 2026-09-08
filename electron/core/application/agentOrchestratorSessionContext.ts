@@ -17,6 +17,7 @@ import { skillInstallApprovalService, type SkillInstallCandidate } from './skill
 import { ollamaAppService } from './ollamaAppService'
 import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTagMatcher'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -45,6 +46,8 @@ export interface SessionContext {
   pinnedFilesContextStr: string
   projectContextMapStr: string
   availableModels: string[]
+  /** Exact coding model pinned for this execution. */
+  codingModel: string
   modelCapabilities: Record<string, string[]>
   /**
    * The per-model facts Ollama reports on `/api/tags`, keyed by model tag. `contextLength` is
@@ -90,6 +93,8 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     : ''
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
+  const requestedCodingModel = payload.activeModel || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
+  const codingModel = findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
   // One `/api/tags` read, both facts. `getModelMetrics` returns the capabilities array AND the
   // trained `context_length` in the same record; the older `getModelCapabilities` call fetched
   // the identical payload and threw the context length away, so the turn dispatcher sized
@@ -101,12 +106,10 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     Object.entries(modelMetrics).map(([name, metrics]) => [name, metrics.capabilities])
   )
 
-  const warmUpModel = settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
-
   emitLog(
     'info',
     `Task received: "${userTask}"`,
-    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${warmUpModel} | Workspace: ${workspacePath || 'Standalone'}`
+    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${codingModel} | Workspace: ${workspacePath || 'Standalone'}`
   )
 
   if (settings.enableCodingAgentDebugLog) {
@@ -114,12 +117,12 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
       sessionId,
       userTask,
       agentMode,
-      warmUpModel,
+      codingModel,
       workspacePath
     )
   }
 
-  void ollamaAppService.preloadModel(warmUpModel, settings.ollamaHost).catch(() => {})
+  void ollamaAppService.preloadModel(codingModel, settings.ollamaHost).catch(() => {})
 
   const skillMatchContext = {
     userTask,
@@ -163,6 +166,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     pinnedFilesContextStr,
     projectContextMapStr,
     availableModels,
+    codingModel,
     modelCapabilities,
     modelMetrics,
     skillMatchContext,

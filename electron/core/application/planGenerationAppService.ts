@@ -1,6 +1,5 @@
 import os from 'node:os'
-import { ollamaAppService } from './ollamaAppService'
-import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
+import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
@@ -22,6 +21,7 @@ import {
   validateStructuredContent,
   type PlanningPhaseResponse,
 } from '../domain/agent/ollamaStructuredResponse'
+import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
 Use one intervention for a small fix and normally three to five for medium work; never exceed fifteen.
@@ -119,7 +119,8 @@ export class PlanGenerationAppService {
       cpuCount: os.cpus()?.length,
     })
     runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx)
-    runtimeOpts.num_predict = Math.min(HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx), 2048)
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx, 'plan')
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx, 'plan')
 
     const discovery = collectProjectPlanningFacts(req.workspacePath, req.prompt, req.previousDecisions)
     const profile = discovery.profile
@@ -140,29 +141,33 @@ export class PlanGenerationAppService {
     let structuredPlan: PlanningPhaseResponse | null = null
     let generationError: string | undefined
     try {
-      const response = await ollamaAppService.generateStructured({
+      const response = await generateStructuredWithRecovery({
         model,
         systemPrompt: PLAN_SYSTEM_PROMPT,
         userContent,
         format: toOllamaJsonSchema(planningPhaseResponseSchema),
         host: req.settings.ollamaHost,
+        keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,
-      })
-      if (response.status !== 'complete') {
-        generationError = response.error
-      } else {
-        const validated = validateStructuredContent(response.content, planningPhaseResponseSchema)
+      }, (content) => {
+        const validated = validateStructuredContent(content, planningPhaseResponseSchema)
         if (validated.status === 'invalid') {
-          generationError = `Invalid plan response: ${validated.error}`
-        } else {
-          const inventedCommand = validated.data.interventions
-            .map((item) => item.verificationCommand)
-            .find((command) => command && !executableVerificationCommands.includes(command))
-          generationError = inventedCommand
-            ? `Plan response used an unavailable verification command: ${inventedCommand}`
-            : reconcilePreviousWork(validated.data, previousInterventions)
-          if (!generationError) structuredPlan = validated.data
+          return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
         }
+        const inventedCommand = validated.data.interventions
+          .map((item) => item.verificationCommand)
+          .find((command) => command && !executableVerificationCommands.includes(command))
+        const error = inventedCommand
+          ? `Plan response used an unavailable verification command: ${inventedCommand}`
+          : reconcilePreviousWork(validated.data, previousInterventions)
+        return error
+          ? { status: 'invalid', error }
+          : { status: 'valid', data: validated.data }
+      })
+      if (response.status === 'success') {
+        structuredPlan = response.data
+      } else {
+        generationError = response.error
       }
     } catch (error: any) {
       generationError = error.message || 'Plan generation failed'

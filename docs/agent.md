@@ -29,6 +29,9 @@ Le transizioni sono validate da [`agentExecutionPhase.ts`](../electron/core/doma
 - Una risposta è utilizzabile solo con `done: true`, `done_reason` diverso da `length` e schema valido. Il piano Markdown viene derivato dal JSON validato.
 - Il loop di esecuzione usa `/api/chat` con `tools` senza `format`: Ollama 0.33.3 accetta entrambi i campi ma, nella prova locale, `format` sopprime `tool_calls`. Il fallback testuale resta temporaneamente per i modelli senza tool calling nativo.
 - Schema valido, correttezza semantica e autorizzazione sono indipendenti: i compilatori di piano e gli executor mantengono gli ultimi due controlli.
+- I recuperi hanno budget separati per trasporto, schema ed esecuzione, ma condividono un tetto di due chiamate nella generazione strutturata: dopo il primo errore viene concessa una sola correzione, al secondo il flusso si arresta con firma e motivo diagnostico. Il fallback da tool calling nativo a testo consuma lo stesso budget di trasporto e non attiva retry annidati.
+- Un comando interrotto, scaduto o fallito dopo il dispatch produce un esito `uncertain`: l'orchestratore non lo ripete automaticamente, conserva la consegna parziale e chiude attraverso il gate applicativo. Annullamento utente e relativo motivo terminale hanno precedenza sul recupero.
+- Il modello coding viene risolto e precaricato una sola volta all'avvio dell'esecuzione; i turni successivi mantengono quel tag e il primo `num_ctx` effettivo. Non esistono cambio modello o crescita del contesto impliciti come strategia di recupero.
 
 ### 1.2 Tool per fase
 
@@ -81,10 +84,12 @@ Le prove restano separate: la presenza dell'artefatto è un prerequisito, build/
 
 ## 3. Gestione del Budget di Contesto
 
-1. **Calcolo Dinamico `num_ctx`** ([`contextWindowCalculator.ts`](../shared/domain/agent/contextWindowCalculator.ts)): Calcola i token BPE effettivi con tokenizer OpenAI `o200k_base`, allocando il contesto ottimale su Ollama in funzione della VRAM disponibile (da 4096 a 32768).
+1. **Selezione iniziale `num_ctx`** ([`hardwareProfileResolver.ts`](../electron/core/domain/agent/hardwareProfileResolver.ts)): risolve una volta il limite hardware, la preferenza per modello e il `context_length` dichiarato da Ollama; la finestra resta poi fissa per l'esecuzione.
 2. **Compattazione Memoria Episodica** ([`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts)): Distilla i turni intermedi mantenendo un tetto fisso per il contesto (~18% per la struttura dei file) e preservando intatti gli ultimi scambi e gli errori bloccanti correnti.
 3. **Intervento attivo** ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts), [`activeInterventionActions.ts`](../shared/domain/agent/activeInterventionActions.ts)): il piano canonico conserva tutto il lavoro, ma ogni turno espone soltanto l'intervento corrente e fino a quattro azioni sequenziali. Edit collegati restano circoscritti al contratto modificato e la verifica avviene dopo il gruppo coerente.
 4. **Contesto operativo corrente**: obiettivo attivo, vincoli accettati, tool ammessi, percorsi pertinenti e ultimo errore utile sono raccolti in un blocco breve. Il codice iniettato contiene un file primario e al massimo due frammenti di supporto; ogni omissione è marcata con la dimensione esclusa e l'indicazione di usare `read_file`. La traiettoria completa resta nel checkpoint della sessione, fuori dal payload corrente.
+
+Le richieste agente attraversano la coda a concorrenza 1; il lock globale impedisce agli altri moduli UI di competere per il modello residente. Tutte le fasi coding usano temperatura `0.1` e keep-alive `30m`, con tetti distinti: 768 token per intervista, 2048 per piano e 4096 per edit. La diagnostica modelli espone l'allocazione osservata da `/api/ps`: memoria totale, quota GPU e quota CPU/RAM. Questi valori sono misure del modello caricato, non stime o soglie universali ricavate dal numero di parametri.
 
 ### 3.1. Piano strutturato
 

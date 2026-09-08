@@ -6,7 +6,7 @@ vi.mock('../../diagnostics', () => ({
   getMemoryInfo: () => ({ totalRAMGB: 32 }),
 }))
 
-import { selectModelForTurn, freezeOrGrowContextWindow } from './agentOrchestratorPromptAssembly'
+import { selectModelForTurn, freezeContextWindow } from './agentOrchestratorPromptAssembly'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
 import type { AppSettings, OllamaModelMetrics } from '../../../shared/types'
@@ -34,8 +34,8 @@ let logs: string[]
 function contextWith(modelMetrics: Record<string, OllamaModelMetrics>): TurnDispatchContext {
   return {
     settings: { codingModel: MODEL, defaultModel: MODEL, hardwareProfile: 'High' } as unknown as AppSettings,
+    codingModel: MODEL,
     hardwareFacts: { hasGpu: true, vramTotalMB: 24576, systemRamGB: 32, cpuCount: 16 },
-    currentOverriddenModel: null,
     availableModels: [MODEL],
     modelCapabilities: { [MODEL]: ['completion', 'tools'] },
     modelMetrics,
@@ -83,15 +83,22 @@ describe('selectModelForTurn — context ceiling', () => {
     expect(selection.contextCeiling).toBeNull()
     expect(selection.runtimeOpts.num_ctx).toBe(4096)
   })
+
+  it('keeps the bootstrap model when settings change during an execution', () => {
+    const ctx = contextWith(metricsWith(8192))
+    ctx.settings.codingModel = 'other-model:latest'
+    ctx.availableModels.push('other-model:latest')
+    expect(selectModelForTurn(ctx).targetModel).toBe(MODEL)
+  })
 })
 
-describe('freezeOrGrowContextWindow — selected ctx versus prompt budget', () => {
+describe('freezeContextWindow — selected ctx versus prompt budget', () => {
   it('freezes the window on the first turn and holds it on the next', () => {
     const ctx = contextWith(metricsWith(131072))
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts }
-    freezeOrGrowContextWindow(ctx, 'short prompt', runtimeOpts, 131072)
+    freezeContextWindow(ctx, runtimeOpts)
     const frozen = ctx.sessionNumCtxBox.value
-    freezeOrGrowContextWindow(ctx, 'a different short prompt', runtimeOpts, 131072)
+    freezeContextWindow(ctx, runtimeOpts)
     expect(ctx.sessionNumCtxBox.value).toBe(frozen)
   })
 
@@ -99,21 +106,18 @@ describe('freezeOrGrowContextWindow — selected ctx versus prompt budget', () =
     const ctx = contextWith(metricsWith(131072))
     ctx.sessionNumCtxBox.value = 2048
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts, num_predict: 1024 }
-    freezeOrGrowContextWindow(ctx, 'x '.repeat(12_000), runtimeOpts, 131072)
+    freezeContextWindow(ctx, runtimeOpts)
     expect(ctx.sessionNumCtxBox.value).toBe(2048)
-    expect(runtimeOpts.num_ctx).toBe(32768)
+    expect(runtimeOpts.num_ctx).toBe(2048)
     expect(logs.some((l) => l.includes('Context window grown'))).toBe(false)
   })
 
-  /**
-   * A fallback model gets its own selected context; the session box is diagnostic state only.
-   */
-  it('holds a frozen window down to the ceiling when a smaller model is swapped in', () => {
+  it('does not swap the frozen window when later model facts differ', () => {
     const ctx = contextWith(metricsWith(8192))
     ctx.sessionNumCtxBox.value = 32768
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts }
-    freezeOrGrowContextWindow(ctx, 'short prompt', runtimeOpts, 8192)
-    expect(runtimeOpts.num_ctx).toBe(8192)
+    freezeContextWindow(ctx, runtimeOpts)
+    expect(runtimeOpts.num_ctx).toBe(32768)
     expect(ctx.sessionNumCtxBox.value).toBe(32768)
   })
 
@@ -121,7 +125,7 @@ describe('freezeOrGrowContextWindow — selected ctx versus prompt budget', () =
     const ctx = contextWith(metricsWith(undefined))
     ctx.sessionNumCtxBox.value = 16384
     const runtimeOpts = { ...selectModelForTurn(ctx).runtimeOpts }
-    freezeOrGrowContextWindow(ctx, 'short prompt', runtimeOpts, null)
-    expect(runtimeOpts.num_ctx).toBe(4096)
+    freezeContextWindow(ctx, runtimeOpts)
+    expect(runtimeOpts.num_ctx).toBe(16384)
   })
 })

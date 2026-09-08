@@ -12,7 +12,7 @@ Executed and verified in session. Date: 2026-09-08.
 
 | Workflow | Command | Shell / Cwd | Notes / Examples |
 | :--- | :--- | :--- | :--- |
-| **Fast Verification** | `npm run test:fast` | pwsh / root | 224 files, 1873 tests |
+| **Fast Verification** | `npm run test:fast` | pwsh / root | 226 files, 1872 tests |
 | **Full Verification** | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` | pwsh / root | Types, tests, cycles, deadcode |
 | **Single Target** | `npx vitest run <path>` | pwsh / root | Vitest target |
 | **Format Check** | `npm run format:check` | pwsh / root | Git diff whitespace & conflict marker check |

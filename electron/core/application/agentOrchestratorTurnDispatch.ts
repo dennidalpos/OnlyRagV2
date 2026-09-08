@@ -3,7 +3,7 @@ import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCa
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
-import { selectModelForTurn, assembleTurnPrompt, freezeOrGrowContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
+import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
 import type {
   PreparedAgentTurn,
   TurnDispatchContext,
@@ -11,6 +11,12 @@ import type {
   ModelSelection,
 } from './agentOrchestratorTurnDispatchTypes'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
+import {
+  recordRecoveryFailure,
+  recoveryStopDiagnostic,
+  type RecoveryFailureState,
+} from '../domain/agent/recoveryBudget'
+import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
 
 export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
@@ -33,7 +39,7 @@ async function dispatchToLlm(
     targetModel: selection.targetModel,
     prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
     runtimeOpts: selection.runtimeOpts,
-    keepAlive: '30m',
+    keepAlive: CODING_MODEL_KEEP_ALIVE,
     ollamaEndpoint: ctx.settings.ollamaHost,
     toolCallingCapable,
     toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
@@ -59,20 +65,34 @@ async function dispatchToLlm(
       ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
     },
   })
-  try {
-    let streamedOutput: string
+  let transportFailure: RecoveryFailureState | undefined
+  let toolCallingCapable = selection.targetModelToolCallingCapable
+  while (true) {
     try {
-      streamedOutput = await stream(selection.targetModelToolCallingCapable)
-    } catch (probeError) {
-      if (!selection.targetModelToolCallingProbe) throw probeError
-      latchProtocol('text')
-      streamedOutput = await stream(false)
+      const streamedOutput = await stream(toolCallingCapable)
+      ctx.session.activeCancelHandle = null
+      return { streamedOutput, usedModel: selection.targetModel }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      ctx.session.activeCancelHandle = null
+      if (!ctx.isSessionActive()) return { error: message }
+
+      const fatal = /not pulled|not reachable|not running/i.test(message)
+      if (fatal) return { error: message }
+
+      const signature = message.toLowerCase().replace(/\d+/g, '#').slice(0, 240)
+      const decision = recordRecoveryFailure(transportFailure, signature)
+      transportFailure = decision.state
+      if (decision.action === 'stop') {
+        return { error: `${recoveryStopDiagnostic('transport', decision.state)} Last error: ${message}` }
+      }
+
+      if (selection.targetModelToolCallingProbe && toolCallingCapable) {
+        latchProtocol('text')
+        toolCallingCapable = false
+      }
+      ctx.emitLog('info', `Recupero trasporto Ollama 1/1 dopo: ${message}`)
     }
-    ctx.session.activeCancelHandle = null
-    return { streamedOutput, usedModel: selection.targetModel }
-  } catch (err: any) {
-    ctx.session.activeCancelHandle = null
-    return { error: err.message }
   }
 }
 
@@ -83,8 +103,8 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
   const compiledHistoryBlock = ctx.episodicCompactor.compilePromptHistoryBlock(10000)
 
   const selection = selectModelForTurn(ctx)
+  freezeContextWindow(ctx, selection.runtimeOpts)
   const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
-  freezeOrGrowContextWindow(ctx, turnPrompt, selection.runtimeOpts, selection.contextCeiling)
 
   const contextReuseDecision = decideContextReuse(ctx, selection, assembled, turnPrompt, compactionResult.wasCompacted)
   return {
@@ -118,6 +138,19 @@ export async function requestTurnProposal(
 
   const dispatchResult = await dispatchToLlm(ctx, selection, assembled, turnPrompt, contextReuseDecision, wasCompacted, toolPolicy)
 
+  if (!ctx.isSessionActive()) {
+    const completionStatus = ctx.session.completionStatus || 'cancelled'
+    const terminalSummary = ctx.session.terminalSummary || 'Task cancelled by user.'
+    ctx.emitLog('info', terminalSummary)
+    ctx.emitDone(false, terminalSummary, completionStatus)
+    if (ctx.settings.enableCodingAgentDebugLog) {
+      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, 'Task cancelled by user.')
+    }
+    agentToolExecutorService.rollbackJournal()
+    ctx.finalizeSession()
+    return { outcome: 'return', result: { success: false, summary: terminalSummary, completionStatus } }
+  }
+
   if ('error' in dispatchResult) {
     ctx.emitLog('info', `LLM Stream error on step ${ctx.stepCount}: ${dispatchResult.error}`)
     const closure = await ctx.closeApplicationRun({
@@ -130,19 +163,6 @@ export async function requestTurnProposal(
         ? closure.result
         : { success: false, summary: `LLM Error: ${dispatchResult.error}`, completionStatus: 'blocked' },
     }
-  }
-
-  if (!ctx.isSessionActive()) {
-    const completionStatus = ctx.session.completionStatus || 'cancelled'
-    const terminalSummary = ctx.session.terminalSummary || 'Task cancelled by user.'
-    ctx.emitLog('info', terminalSummary)
-    ctx.emitDone(false, terminalSummary, completionStatus)
-    if (ctx.settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, false, 'Task cancelled by user.')
-    }
-    agentToolExecutorService.rollbackJournal()
-    ctx.finalizeSession()
-    return { outcome: 'return', result: { success: false, summary: terminalSummary, completionStatus } }
   }
 
   const effectiveUsedModel = dispatchResult.usedModel || selection.targetModel
@@ -163,7 +183,6 @@ export async function requestTurnProposal(
       errorCountInHistory: prepared.errorCountInHistory,
       compiledHistoryBlock: prepared.compiledHistoryBlock,
       targetModel: effectiveUsedModel,
-      fallbackModel: selection.fallbackModel,
     },
   }
 }

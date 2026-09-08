@@ -36,6 +36,8 @@ export interface TurnDispatchContext {
   sessionId: string
   payload: AgentTaskPayload
   availableModels: string[]
+  /** Exact model selected once during bootstrap and held for the execution. */
+  codingModel: string
   modelCapabilities: Record<string, string[]>
   /** `/api/tags` facts per model tag. Carries the trained `context_length` that caps `num_ctx`. */
   modelMetrics: Record<string, OllamaModelMetrics>
@@ -48,7 +50,6 @@ export interface TurnDispatchContext {
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
-  currentOverriddenModel: string | null
   /**
    * A real verification has passed and no file has been written since. Read by the plan block,
    * which stops demanding more work once the project is provably done — see
@@ -56,7 +57,7 @@ export interface TurnDispatchContext {
    */
   hasVerifiedBuild: boolean
   session: AgentSession
-  /** Frozen per-session Ollama context window, boxed so this module can grow it in place. */
+  /** Frozen per-session Ollama context window. */
   sessionNumCtxBox: { value: number | null }
   isSessionActive: () => boolean
   emitLog: EmitLog
@@ -72,7 +73,6 @@ export interface TurnDispatchData {
   errorCountInHistory: number
   compiledHistoryBlock: string
   targetModel: string
-  fallbackModel: string
 }
 
 export interface PreparedAgentTurn {
@@ -95,13 +95,12 @@ export interface ModelSelection {
   targetModel: string
   targetModelToolCallingCapable: boolean
   targetModelToolCallingProbe: boolean
-  fallbackModel: string
   runtimeOpts: OllamaRuntimeOptions
   /**
    * The largest `num_ctx` Ollama will honour for `targetModel`: its trained `context_length`,
    * as reported on `/api/tags`. Null when Ollama reported none, in which case nothing caps the
    * hardware profile's own sizing. `runtimeOpts` is already clamped to this — the field is kept
-   * so the per-turn growth in freezeOrGrowContextWindow cannot climb back over the ceiling.
+   * so diagnostics can explain the initial clamp.
    */
   contextCeiling: number | null
 }

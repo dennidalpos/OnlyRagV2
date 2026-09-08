@@ -219,10 +219,13 @@ export class ProcessToolService {
   ): ToolExecutionResult {
     const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${rawOutput.slice(0, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
     return {
-      outputForHistory: output,
+      outputForHistory: result.timedOut || result.interruptedByPrompt
+        ? `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nThe process was stopped after it began; inspect state before any further mutation.`
+        : output,
       logMessage: 'Terminal Command Failed (Auto-Healing Diagnostic Captured)',
       logDetail: rawOutput.slice(0, 1000),
       isTerminal: true,
+      effectOutcome: result.timedOut || result.interruptedByPrompt ? 'uncertain' : 'confirmed',
     }
   }
 
@@ -402,7 +405,12 @@ export class ProcessToolService {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nFailed executing command "${command}": ${message}`
-      return { outputForHistory: output, logMessage: `Terminal Execution Exception: ${message}`, isTerminal: true }
+      return {
+        outputForHistory: `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nExecution failed after dispatch; inspect state before any further mutation.`,
+        logMessage: `Terminal Execution Exception: ${message}`,
+        isTerminal: true,
+        effectOutcome: 'uncertain',
+      }
     }
   }
 }

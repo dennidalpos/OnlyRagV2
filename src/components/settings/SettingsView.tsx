@@ -37,6 +37,7 @@ import { compareContextAllocation } from '../../services/contextAllocation'
 import { ModelContextControl } from './ModelContextControl'
 import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
 import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
+import { resolveOllamaRuntimeMemory } from '../../../shared/domain/hardware/ollamaRuntimeMemory'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -456,8 +457,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                   const isRunning = Boolean(runningInfo)
                   const hasUpdate = Boolean(updateAvailableMap[modelName])
                   const isUpdatingThis = isModelUpdating(modelName)
-                  const vramBytes = runningInfo?.size_vram || 0
-                  const vramGB = (vramBytes / 1024 ** 3).toFixed(1)
+                  const memory = resolveOllamaRuntimeMemory(runningInfo?.size, runningInfo?.size_vram)
                   const requestedContext = settings.modelContextLengths?.[modelName]
                   const contextStatus = compareContextAllocation(requestedContext, runningInfo?.context_length)
                   const usedByModules = modelUsage.get(modelName) || []
@@ -517,7 +517,11 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                       {/* Running VRAM / RAM detail if active */}
                         {isRunning && (
                           <div className="space-y-1 text-[10px] font-mono text-emerald-400/90 bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-900/40">
-                            <div>VRAM: {vramGB} GB</div>
+                            {memory && (
+                              <div>
+                                GPU: {(memory.gpuBytes / 1024 ** 3).toFixed(1)} GB ({memory.gpuPercent}%) · CPU/RAM: {(memory.cpuBytes / 1024 ** 3).toFixed(1)} GB ({memory.cpuPercent}%)
+                              </div>
+                            )}
                             {runningInfo?.context_length !== undefined && (
                               <div className={contextStatus === 'underallocated' ? 'text-amber-300' : undefined}>
                                 Context allocato: {runningInfo.context_length} token

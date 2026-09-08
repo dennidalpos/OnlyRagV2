@@ -40,6 +40,16 @@ export interface HardwareEnvironment {
   cpuCount?: number
 }
 
+export type GenerationPhase = 'interview' | 'plan' | 'edit'
+
+export const CODING_MODEL_KEEP_ALIVE = '30m'
+
+const OUTPUT_CAP_BY_PHASE: Record<GenerationPhase, number> = {
+  interview: 768,
+  plan: 2048,
+  edit: 4096,
+}
+
 export class HardwareProfileResolver {
 
   /**
@@ -48,7 +58,6 @@ export class HardwareProfileResolver {
    * one without letting the reserve crowd out the prompt.
    */
   private static readonly GENERATION_RESERVE_RATIO = 0.35
-  private static readonly GENERATION_RESERVE_CAP_TOKENS = 4096
   /**
    * Chars per BPE token for this prompt mix (English directives + markdown + code). Measured at
    * ~4.08 on real audit-log prompts; 3.6 is the conservative side of that, so the char budget
@@ -56,9 +65,9 @@ export class HardwareProfileResolver {
    */
   private static readonly CHARS_PER_TOKEN = 3.6
 
-  static deriveNumPredict(numCtx: number): number {
+  static deriveNumPredict(numCtx: number, phase: GenerationPhase = 'edit'): number {
     return Math.min(
-      HardwareProfileResolver.GENERATION_RESERVE_CAP_TOKENS,
+      OUTPUT_CAP_BY_PHASE[phase],
       Math.floor(numCtx * HardwareProfileResolver.GENERATION_RESERVE_RATIO)
     )
   }
@@ -68,8 +77,8 @@ export class HardwareProfileResolver {
    * held back. Everything upstream (HeuristicContextCompactor, the assembler's per-block caps)
    * budgets in chars, so this is the single place where the token window is translated.
    */
-  static deriveMaxContextChars(numCtx: number): number {
-    const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx)
+  static deriveMaxContextChars(numCtx: number, phase: GenerationPhase = 'edit'): number {
+    const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx, phase)
     return Math.floor(promptTokens * HardwareProfileResolver.CHARS_PER_TOKEN)
   }
   /**

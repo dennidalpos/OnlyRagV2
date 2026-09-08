@@ -51,7 +51,7 @@ export interface SessionState {
   /** Boxed so both the timeout watchdog closure and the turn loop see the current step. */
   stepCountBox: { value: number }
   initialUserTask: string
-  /** Frozen per-session Ollama context window, boxed so agentOrchestratorTurnDispatch.ts can grow it in place. */
+  /** Frozen per-session Ollama context window. */
   sessionNumCtxBox: { value: number | null }
   /** Per-file line deltas applied during this session, for the UI's change metrics. */
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>
@@ -96,7 +96,6 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const mutableFlags: SessionState['mutableFlags'] = {
     hasFileMutations: false,
     hasVerifiedBuild: false,
-    currentOverriddenModel: null,
   }
   // Same pattern, for the counters agentOrchestratorResponseInterpreter.ts advances.
   const responseInterpreterState: SessionState['responseInterpreterState'] = {
@@ -116,6 +115,9 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const initialUserTask = savedState?.initialUserTask || payload.initialUserTask || userTask
 
   if (savedState) {
+    responseInterpreterState.schemaRecoveryFailure = savedState.recoveryFailures?.schema
+    responseInterpreterState.executionRecoveryFailure = savedState.recoveryFailures?.execution
+    responseInterpreterState.schemaRejectionStreak = savedState.recoveryFailures?.schema?.equivalentFailures || 0
     stepCountBox.value = savedState.stepCount || 0
     if (savedState.episodes && savedState.episodes.length > 0) {
       episodicCompactor.fromState(savedState.episodes, savedState.recentFullLogs)

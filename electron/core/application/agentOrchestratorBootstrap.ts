@@ -54,6 +54,7 @@ export interface AgentSessionBootstrap {
   pinnedFilesContextStr: string
   projectContextMapStr: string
   availableModels: string[]
+  codingModel: string
   modelCapabilities: Record<string, string[]>
   modelMetrics: Record<string, OllamaModelMetrics>
   skillMatchContext: SkillMatchContext
@@ -69,7 +70,7 @@ export interface AgentSessionBootstrap {
   surfacedDodReasons: Set<string>
   mutableFlags: ToolResultMutableFlags
   responseInterpreterState: ResponseInterpreterState
-  /** Frozen per-session Ollama context window, boxed so agentOrchestratorTurnDispatch.ts can grow it in place. */
+  /** Frozen per-session Ollama context window. */
   sessionNumCtxBox: { value: number | null }
   /** Per-file line deltas applied during this session, for the UI's change metrics. */
   sessionChangedFiles: Map<string, { additions: number; deletions: number }>
@@ -143,6 +144,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     goalPlanner: state.goalPlanner,
     episodicCompactor: state.episodicCompactor,
     phaseController: state.phaseController,
+    responseInterpreterState: state.responseInterpreterState,
     session,
     isSessionActive,
   })

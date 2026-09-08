@@ -42,7 +42,7 @@ function makeContext(command: string, flags: ToolResultMutableFlags): ToolResult
 }
 
 function freshFlags(): ToolResultMutableFlags {
-  return { hasFileMutations: false, hasVerifiedBuild: true, currentOverriddenModel: null }
+  return { hasFileMutations: false, hasVerifiedBuild: true }
 }
 
 beforeEach(() => {
@@ -105,6 +105,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
       circuitBreaker: new StagnationCircuitBreaker(12, 5),
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector: new AgentActionLoopDetector(2),
+      recoveryState: {},
       sessionId: 'session-build-freshness',
       isSessionActive: () => false,
       targetWindow: null,
@@ -150,7 +151,6 @@ describe('build freshness — a verification command does not invalidate itself'
     const flags: ToolResultMutableFlags = {
       hasFileMutations: false,
       hasVerifiedBuild: false,
-      currentOverriddenModel: null,
     }
     const ctx = makeContext('npm run build', flags)
 
@@ -166,7 +166,6 @@ describe('build freshness — a verification command does not invalidate itself'
     const flags: ToolResultMutableFlags = {
       hasFileMutations: true,
       hasVerifiedBuild: false,
-      currentOverriddenModel: null,
     }
     const ctx = makeContext('open_in_browser', flags)
     ctx.parsedTool = { tool: 'open_in_browser', parameters: { filePath: 'dist/index.html' } }

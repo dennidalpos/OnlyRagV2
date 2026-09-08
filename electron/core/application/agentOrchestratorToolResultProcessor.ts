@@ -8,6 +8,7 @@ import {
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
+import { recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -98,6 +99,8 @@ export function isFailureOutput(outputForHistory: string): boolean {
     // built and simply never armed.
     output.includes('[PACKAGE DOES NOT EXIST') ||
     output.includes('[VERSION DOWNGRADE REFUSED') ||
+    output.includes('[ENSURE_TOOL INSTALL FAILED]') ||
+    output.includes('[ENSURE_TOOL ERROR]') ||
     output.includes('Security Violation') ||
     output.toLowerCase().startsWith('error:')
   )
@@ -115,6 +118,9 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   const targetParam = extractTargetParam(parsedTool)
   const distilledOutput = distillOutput(toolRes, isToolFailure)
+  const isMutating =
+    ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) &&
+    !toolRes.noOpMutation
 
   // Closes the loop detector's feedback path: it records INTENT before the tool runs, and only
   // this line tells it what actually happened. Without it every repeat looks like a failing
@@ -123,13 +129,38 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   emitChangeMetrics(ctx)
 
-  // Classified by tool name, then corrected by what the tool actually did: a `write_file`
-  // whose content was already on disk mutated nothing, and treating it as a mutation cleared
-  // the verified-build flag and re-advanced milestones on evidence that had not changed. See
-  // redundantWriteDetector.ts.
-  const isMutating =
-    ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) &&
-    !toolRes.noOpMutation
+  if (isToolFailure) {
+    const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
+    const decision = recordRecoveryFailure(ctx.recoveryState.executionRecoveryFailure, signature)
+    ctx.recoveryState.executionRecoveryFailure = decision.state
+    if (toolRes.effectOutcome === 'uncertain' || decision.action === 'stop') {
+      const reason = toolRes.effectOutcome === 'uncertain'
+        ? `Effetto incerto dopo "${parsedTool.tool}": l'operazione non viene ripetuta automaticamente.`
+        : recoveryStopDiagnostic('execution', decision.state)
+      ctx.episodicCompactor.recordStep({
+        step: ctx.stepCount,
+        tool: parsedTool.tool,
+        target: targetParam,
+        status: 'FAILURE',
+        summary: toolRes.logMessage,
+      }, distilledOutput)
+      ctx.emitLog('terminal', reason, toolRes.logDetail, {
+        category: parsedTool.tool === 'run_command' ? 'command_execution' : 'tool_execution',
+        toolName: parsedTool.tool,
+        target: targetParam,
+        status: 'failure',
+      })
+      const closure = await ctx.closeApplicationRun({
+        trigger: 'guard_stop',
+        reason,
+        modelSummary: toolRes.outputForHistory,
+      })
+      return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
+    }
+  } else if (isMutating || ['run_command', 'run_tests', 'ensure_tool'].includes(parsedTool.tool)) {
+    ctx.recoveryState.executionRecoveryFailure = undefined
+  }
+
   const breakerOutcome = await runCircuitBreaker(ctx, isMutating, isToolFailure)
   if (breakerOutcome) return breakerOutcome
 
@@ -143,10 +174,6 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     },
     distilledOutput
   )
-
-  if (!isToolFailure && ctx.flags.currentOverriddenModel) {
-    ctx.flags.currentOverriddenModel = null
-  }
 
   if (isMutating && !isToolFailure) {
     await recordMutationSideEffects(ctx, targetParam)

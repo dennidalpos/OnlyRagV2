@@ -32,10 +32,8 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
     cpuCount: os.cpus()?.length,
   }
 
-  const candidateCoding = ctx.settings.codingModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
-  const targetModel: string = ctx.currentOverriddenModel
-    ? ctx.currentOverriddenModel
-    : findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
+  const candidateCoding = ctx.codingModel || ctx.settings.codingModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
+  const targetModel = findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
   // Native tool-calling routing: when the primary model is detected as tool-calling capable
   // (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool
@@ -87,16 +85,10 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(preferredContext)
   runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(preferredContext)
 
-  // Resilience fallback only — the model swapped in when the primary OOMs or crashes.
-  // It is NOT a routing tier: nothing selects it based on task difficulty.
-  const candidateFallback = ctx.settings.codingFallbackModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
-  const fallbackModel = findMatchingInstalledModel(candidateFallback, ctx.availableModels) || candidateFallback
-
   return {
     targetModel,
     targetModelToolCallingCapable,
     targetModelToolCallingProbe: route.probe,
-    fallbackModel,
     runtimeOpts,
     contextCeiling,
   }
@@ -347,19 +339,17 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
 }
 
 /** Keeps the selected per-model context stable; prompt size is handled by compaction, not ctx resizing. */
-export function freezeOrGrowContextWindow(
+export function freezeContextWindow(
   ctx: TurnDispatchContext,
-  turnPrompt: string,
-  runtimeOpts: OllamaRuntimeOptions,
-  contextCeiling: number | null = null
+  runtimeOpts: OllamaRuntimeOptions
 ) {
   if (ctx.sessionNumCtxBox.value === null) {
     ctx.sessionNumCtxBox.value = runtimeOpts.num_ctx
+  } else {
+    runtimeOpts.num_ctx = ctx.sessionNumCtxBox.value
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx, 'edit')
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx, 'edit')
   }
-  // The model selector has already resolved the user preference against the model maximum.
-  // `turnPrompt` and the session box are intentionally not allowed to rewrite it.
-  void turnPrompt
-  void contextCeiling
 }
 
 /**

@@ -7,6 +7,7 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
+import { agentToolExecutorService } from './agentToolExecutorService'
 import type { AppSettings } from '../../../shared/types'
 
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
@@ -112,6 +113,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     }, mockWin)
 
     const firstCatalog = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].toolCatalog || []
+    expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].keepAlive).toBe('30m')
     expect(firstCatalog.map((entry) => entry.function.name)).toEqual(expect.arrayContaining(['write_file']))
     expect(firstCatalog.map((entry) => entry.function.name)).not.toEqual(expect.arrayContaining(['read_file', 'run_command']))
 
@@ -129,16 +131,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(saved.executionPhase).toBe('outcome')
   })
 
-  it('should intercept repetitive loop calls and inject intervention directive', async () => {
-    // Model repeats the exact same failing command 3 times, then finishes
+  it('stops after the corrective attempt repeats the same execution failure', async () => {
     const duplicateToolJson = '```json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test.py" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Pivoted and completed." }\n}\n```'
-
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce(duplicateToolJson)
       .mockResolvedValueOnce(duplicateToolJson)
-      .mockResolvedValueOnce(duplicateToolJson)
-      .mockResolvedValueOnce(finishJson)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -151,17 +148,18 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(false)
     expect(res.completionStatus).toBe('unverifiable')
-    expect(res.summary).toContain('Pivoted and completed.')
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(4)
+    expect(res.summary).toContain('execution recovery stopped after 2/2 failures')
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
 
-  it('must not grant a fresh ask-redirect grace period to a model that just escaped an exhausted write-loop stagnation budget', async () => {
+  it('does not reach a later ask after the execution recovery budget is exhausted', async () => {
     const duplicateToolJson = '```json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest still_failing.py" }\n}\n```'
     const askJson = '```json\n{\n  "tool": "ask",\n  "parameters": { "question": "What should we do next?" }\n}\n```'
 
-    let call = vi.mocked(AgentStreamTransport.streamCompletion)
-    for (let i = 0; i < 8; i++) call = call.mockResolvedValueOnce(duplicateToolJson)
-    for (let i = 0; i < 3; i++) call = call.mockResolvedValueOnce(askJson)
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(duplicateToolJson)
+      .mockResolvedValueOnce(duplicateToolJson)
+      .mockResolvedValueOnce(askJson)
 
     const res = await runAgentOrchestratorLoop(
       {
@@ -171,10 +169,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       },
       null
     )
-    vi.mocked(AgentStreamTransport.streamCompletion).mockReset()
-
     expect(res.success).toBe(false)
-    expect(res.summary).toContain('What should we do next?')
+    expect(res.summary).not.toContain('What should we do next?')
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
 
   it('should trip stagnation circuit breaker when repeated failures occur on complex tasks', async () => {
@@ -211,8 +208,34 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       null
     )
 
-    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(5)
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
     expect(res.success).toBe(false)
+  })
+
+  it('does not request another model turn after a command returns an uncertain effect', async () => {
+    const execute = vi.spyOn(agentToolExecutorService, 'executeTool').mockResolvedValueOnce({
+      outputForHistory: '[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\n[UNCERTAIN EFFECT - DO NOT RETRY]',
+      logMessage: 'Command timed out',
+      isTerminal: true,
+      effectOutcome: 'uncertain',
+    })
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce('```json\n{"tool":"run_command","parameters":{"command":"pytest failing_test.py"}}\n```')
+      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"should not run"}}\n```')
+
+    try {
+      const res = await runAgentOrchestratorLoop({
+        userTask: 'Debug test failures',
+        agentMode: 'agent',
+        workspacePath: tempDir,
+      }, null)
+
+      expect(res.summary).toContain('Effetto incerto')
+      expect(execute).toHaveBeenCalledOnce()
+      expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(1)
+    } finally {
+      execute.mockRestore()
+    }
   })
 
   it('should execute in plan mode and complete with step proposal without mutating files', async () => {

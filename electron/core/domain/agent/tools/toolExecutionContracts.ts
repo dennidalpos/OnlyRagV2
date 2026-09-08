@@ -67,6 +67,7 @@ export const toolExecutionResultSchema = z.object({
   }).strict().optional(),
   verification: z.object({ ran: z.literal(true), passed: z.boolean() }).strict().optional(),
   noOpMutation: z.boolean().optional(),
+  effectOutcome: z.enum(['none', 'confirmed', 'uncertain']).optional(),
 }).strict()
 
 export interface ToolExecutionResult {
@@ -78,6 +79,8 @@ export interface ToolExecutionResult {
   changeStats?: { filePath: string; additions: number; deletions: number }
   verification?: { ran: true; passed: boolean }
   noOpMutation?: boolean
+  /** Whether an externally visible effect is known after execution returns. */
+  effectOutcome?: 'none' | 'confirmed' | 'uncertain'
 }
 
 /** Maps file-mutating tools to the mutation shape shown by the approval surface. */

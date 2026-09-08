@@ -184,7 +184,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
       hasRecentToolFailure: false,
       errorCountInHistory: 0,
       compiledHistoryBlock: '',
-      flags: { hasFileMutations: true, hasVerifiedBuild, currentOverriddenModel: null },
+      flags: { hasFileMutations: true, hasVerifiedBuild },
       surfacedDodReasons: new Set<string>(),
       state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
       episodicCompactor: {
@@ -314,7 +314,7 @@ describe('a repeated command must not abandon a milestone that is already delive
       hasRecentToolFailure: false,
       errorCountInHistory: 0,
       compiledHistoryBlock: '',
-      flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
+      flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
       state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
       episodicCompactor: { recordStep: () => {}, getEpisodes: () => [], lastFailureOutputFor: () => null } as unknown as ResponseInterpreterContext['episodicCompactor'],
@@ -427,7 +427,7 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
       hasRecentToolFailure: false,
       errorCountInHistory: 0,
       compiledHistoryBlock: '',
-      flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
+      flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
       state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
       episodicCompactor: {

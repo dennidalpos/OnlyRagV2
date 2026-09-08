@@ -9,8 +9,7 @@
  */
 
 import os from 'node:os'
-import { ollamaAppService } from './ollamaAppService'
-import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
+import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
 import { logger, getCachedGpuInfo, getMemoryInfo } from '../../diagnostics'
 import type {
@@ -30,6 +29,7 @@ import {
   validateStructuredContent,
 } from '../domain/agent/ollamaStructuredResponse'
 import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projectPlanningFacts'
+import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 
 export type { InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
@@ -73,55 +73,41 @@ export class AgentInterviewAppService {
       cpuCount: os.cpus()?.length,
     })
     runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx)
-    runtimeOpts.num_predict = Math.min(HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx), 768)
-    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx, 'interview')
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx, 'interview')
 
     try {
       const { facts } = collectProjectPlanningFacts(workspacePath, prompt, previousDecisions)
-      const response = await ollamaAppService.generateStructured({
+      const response = await generateStructuredWithRecovery({
         model: modelToUse,
         systemPrompt: INTERVIEW_SYSTEM_PROMPT,
         userContent: JSON.stringify({ request: prompt, projectFacts: facts }),
         format: toOllamaJsonSchema(interviewPhaseResponseSchema),
         host: settings.ollamaHost,
+        keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,
+      }, (content) => {
+        const validated = validateStructuredContent(content, interviewPhaseResponseSchema)
+        if (validated.status === 'invalid') return validated
+        const unresolvedQuestions = validated.data.questions.filter((question) => !questionResolvedByFacts(question, facts))
+        const languageError = validateInterviewQuestionLanguage(prompt, unresolvedQuestions)
+        return languageError
+          ? { status: 'invalid', error: languageError }
+          : { status: 'valid', data: { response: validated.data, unresolvedQuestions } }
       })
 
-      if (response.status !== 'complete') {
-        logger.log('WARN', 'AgentInterviewAppService', `Interview generation ${response.status}: ${response.error}`)
+      if (response.status === 'error') {
+        logger.log('WARN', 'AgentInterviewAppService', `Interview generation failed: ${response.error}`)
         return {
           status: 'error',
           hasQuestions: false,
           questions: [],
-          rawResponse: response.content,
           error: response.error,
         }
       }
 
-      const validated = validateStructuredContent(response.content, interviewPhaseResponseSchema)
-      if (validated.status === 'invalid') {
-        logger.log('WARN', 'AgentInterviewAppService', `Interview schema rejected: ${validated.error}`)
-        return {
-          status: 'error',
-          hasQuestions: false,
-          questions: [],
-          rawResponse: response.content,
-          error: `Invalid interview response: ${validated.error}`,
-        }
-      }
-
-      const unresolvedQuestions = validated.data.questions.filter((question) => !questionResolvedByFacts(question, facts))
-      const languageError = validateInterviewQuestionLanguage(prompt, unresolvedQuestions)
-      if (languageError) {
-        return {
-          status: 'error',
-          hasQuestions: false,
-          questions: [],
-          rawResponse: response.content,
-          error: `Invalid interview response: ${languageError}`,
-        }
-      }
-      if (!validated.data.hasQuestions || unresolvedQuestions.length === 0) {
+      const { response: validated, unresolvedQuestions } = response.data
+      if (!validated.hasQuestions || unresolvedQuestions.length === 0) {
         return {
           status: 'completed',
           hasQuestions: false,

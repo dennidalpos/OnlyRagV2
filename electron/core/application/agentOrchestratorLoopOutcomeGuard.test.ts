@@ -44,7 +44,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
       hasRecentToolFailure: false,
       errorCountInHistory: 0,
       compiledHistoryBlock: '',
-      flags: { hasFileMutations: true, hasVerifiedBuild: false, currentOverriddenModel: null },
+      flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
       state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
       episodicCompactor: new EpisodicMemoryCompactor(6),

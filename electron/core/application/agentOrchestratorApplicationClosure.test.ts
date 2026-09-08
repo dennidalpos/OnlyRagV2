@@ -58,7 +58,6 @@ describe('application-owned agent closure', () => {
       flags: {
         hasFileMutations: options?.hasFileMutations ?? true,
         hasVerifiedBuild: false,
-        currentOverriddenModel: null,
       },
       state: {
         noToolStreak: 0,

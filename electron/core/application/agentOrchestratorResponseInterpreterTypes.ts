@@ -10,6 +10,7 @@ import type { ToolResultMutableFlags } from './agentOrchestratorToolResultProces
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 import type { AgentSessionTerminationReason } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
+import type { RecoveryFailureState } from '../domain/agent/recoveryBudget'
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -34,6 +35,10 @@ export interface ResponseInterpreterState {
    * escalate or terminate. See toolRejectionEscalation.ts.
    */
   schemaRejectionStreak: number
+  /** Persistable bounded budget for equivalent invalid tool calls. */
+  schemaRecoveryFailure?: RecoveryFailureState
+  /** Persistable bounded budget for failed tool executions. */
+  executionRecoveryFailure?: RecoveryFailureState
   stagnationStreak: number
   /**
    * Consecutive loop blocks whose repeated action had actually SUCCEEDED before. Counted apart

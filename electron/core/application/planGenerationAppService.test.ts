@@ -5,6 +5,7 @@ import path from 'node:path'
 import { planGenerationAppService } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { isFalsifiableMilestone } from '../../../shared/domain/agent/planFalsifiabilityNormalizer'
+import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import type { AgentPlan, AppSettings } from '../../../shared/types'
 
 vi.mock('./ollamaAppService', () => ({ ollamaAppService: { generateStructured: vi.fn() } }))
@@ -80,6 +81,10 @@ describe('PlanGenerationAppService', () => {
     expect(result.milestones.every(isFalsifiableMilestone)).toBe(true)
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
     expect(request.model).toBe('qwen2.5-coder:7b')
+    expect(request.keepAlive).toBe('30m')
+    expect(request.options?.num_predict).toBe(
+      HardwareProfileResolver.deriveNumPredict(request.options?.num_ctx || 0, 'plan')
+    )
     expect(JSON.parse(request.userContent).request).toBe('Add login')
     expect(request.format).toEqual(expect.objectContaining({ type: 'object' }))
   })
@@ -116,27 +121,40 @@ describe('PlanGenerationAppService', () => {
   })
 
   it('keeps transport, incomplete, schema, and invented-command failures non-executable', async () => {
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'transport_error', content: '', error: 'connection refused',
     })
-    expect(await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).toMatchObject({
-      status: 'error', milestones: [], error: 'connection refused',
-    })
+    const transport = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
+    expect(transport).toMatchObject({ status: 'error', milestones: [] })
+    expect(transport.error).toContain('connection refused')
 
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'incomplete', content: '{', error: 'Ollama response incomplete (length)',
     })
-    expect(await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).toMatchObject({
-      status: 'error', milestones: [], error: 'Ollama response incomplete (length)',
-    })
+    const incomplete = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
+    expect(incomplete).toMatchObject({ status: 'error', milestones: [] })
+    expect(incomplete.error).toContain('Ollama response incomplete (length)')
 
-    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({ status: 'complete', content: '{}' })
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({ status: 'complete', content: '{}' })
     expect((await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).error).toContain('Invalid plan response')
 
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
       { id: 'm-1', objective: 'Build passes', filePaths: [], acceptanceCriteria: ['Build exits 0'], verificationCommand: 'npm run invented' },
     ]))
     expect((await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).error).toContain('unavailable verification command')
+  })
+
+  it('uses the single schema correction to recover a malformed plan', async () => {
+    vi.mocked(ollamaAppService.generateStructured)
+      .mockResolvedValueOnce({ status: 'complete', content: '{}' })
+      .mockResolvedValueOnce(complete([intervention('m-1', 'Corrected plan')]))
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })
+
+    expect(result.status).toBe('success')
+    expect(ollamaAppService.generateStructured).toHaveBeenCalledTimes(2)
+    const correction = JSON.parse(vi.mocked(ollamaAppService.generateStructured).mock.calls[1][0].userContent)
+    expect(correction.schemaCorrection.validationError).toContain('Invalid plan response')
   })
 
   describe('workspace facts', () => {

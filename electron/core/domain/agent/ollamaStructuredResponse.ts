@@ -62,7 +62,6 @@ export const planningPhaseResponseSchema = z.object({
   }).strict()).max(15),
 }).strict()
 
-export type InterviewPhaseResponse = z.infer<typeof interviewPhaseResponseSchema>
 export type PlanningPhaseResponse = z.infer<typeof planningPhaseResponseSchema>
 
 export type StructuredValidationResult<T> =

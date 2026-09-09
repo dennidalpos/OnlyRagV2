@@ -5,7 +5,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "build": "tsc && vite build && electron-builder --publish never",
     "preview": "vite preview",
     "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
     "format:check": "git diff --check HEAD",
@@ -101,6 +101,7 @@
   "build": {
     "appId": "com.onlyrag.v2",
     "productName": "OnlyRag V2",
+    "publish": null,
     "npmRebuild": false,
     "directories": {
       "output": "dist"

@@ -32,7 +32,7 @@ import {
 import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projectPlanningFacts'
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 
-export type { InterviewAnalysisResult, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
+export type { InterviewAnalysisResult, UserInterviewAnswer } from '../../../shared/types'
 
 const INTERVIEW_SYSTEM_PROMPT = `Analyze a coding request before planning.
 Treat projectFacts and previousDecisions as authoritative unless the request explicitly changes them.

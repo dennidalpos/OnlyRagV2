@@ -26,16 +26,12 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { AgentCompletionStatus, AppSettings } from '../../src/types'
+import type { AgentCompletionStatus, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../src/types'
 import type { PlanMilestone } from '../../shared/domain/agent/planAndSolveGraph'
 import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import type { SavedAgentSessionState } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
-import {
-  agentInterviewAppService,
-  type InterviewQuestion,
-  type UserInterviewAnswer,
-} from '../../electron/core/application/agentInterviewAppService'
+import { agentInterviewAppService } from '../../electron/core/application/agentInterviewAppService'
 import { agentSessionStateRepository } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { codingAgentLogger } from '../../electron/core/infrastructure/logging/codingAgentLogger'
 

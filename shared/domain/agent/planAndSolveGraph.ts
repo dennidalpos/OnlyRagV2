@@ -1,4 +1,3 @@
-import { checkVerificationCommandSafety, unsafeVerificationNote } from './verificationCommandSafety'
 import { extractDeliverablePaths, AWAITING_VERIFICATION_MARKER } from './milestoneDeliverableResolver'
 import { selectPromptMilestoneWindow } from './planPromptWindow'
 import { buildActiveInterventionActions } from './activeInterventionActions'
@@ -17,21 +16,8 @@ export interface CompactPlanState {
 }
 
 /**
- * Recognises the plan's own closing milestone (the "write the final report and stop" entry
- * the planner appends). It is the one milestone the finish tool owns: nothing else may mark
- * it verified, and the Definition of Done gate must not count it as outstanding work.
- *
- * The keyword alone is not enough, and the reason arrived with capability-shaped titles. The
- * previous rule matched the substring anywhere, so *"The user can mark a task finished —
- * `src/pages/TasksPage.tsx`"* read as the closing milestone: exempt from falsifiability,
- * skipped by `getActiveMilestone`, and owned by a finish tool that would never write that
- * file. Italian plans collide on the same edge (`riepilogo` is also a perfectly ordinary
- * component name), and the plan format now puts real prose in every title.
- *
- * A closing milestone names no artefact — it is the report, not a deliverable — so a title
- * that names a file is work, whatever words it uses. Doubt resolves towards "this is work":
- * misreading work as the closing entry hides it from the agent entirely, while misreading
- * the closing entry as work merely leaves it on the checklist for the finish tool to own.
+ * Recognises persisted legacy closing milestones so they are not treated as outstanding work.
+ * Canonical v2 plans do not create these entries; the application owns session closure.
  */
 export function isCompletionMilestoneTitle(input: string | Pick<PlanMilestone, 'title' | 'filePaths'>): boolean {
   const title = typeof input === 'string' ? input : input.title
@@ -40,7 +26,6 @@ export function isCompletionMilestoneTitle(input: string | Pick<PlanMilestone, '
   return extractDeliverablePaths(title || '').length === 0
 }
 
-/** One milestone changing status, emitted so callers can record who moved it and why. */
 export interface MilestoneTransition {
   id: string
   title: string
@@ -53,22 +38,15 @@ export class GoalDecompositionPlanner {
   private milestones: PlanMilestone[] = []
   private transitionListener?: (transition: MilestoneTransition) => void
 
-  /**
-   * Registers a listener notified whenever a milestone's status actually changes.
-   *
-   * The planner stays free of any logging dependency — it only announces the change, and the
-   * application layer decides what to do with it. Answering "which step closed this milestone,
-   * and on what grounds?" previously meant diffing full plan snapshots by hand.
-   */
   public onMilestoneTransition(listener: (transition: MilestoneTransition) => void): void {
     this.transitionListener = listener
   }
 
   public initializePlan(milestones: PlanMilestone[]): void {
-    this.milestones = milestones.map((m, idx) => ({
-      ...m,
-      id: m.id || `milestone-${idx + 1}`,
-      status: m.status || 'pending',
+    this.milestones = milestones.map((milestone, index) => ({
+      ...milestone,
+      id: milestone.id || `milestone-${index + 1}`,
+      status: milestone.status || 'pending',
     }))
   }
 
@@ -80,93 +58,36 @@ export class GoalDecompositionPlanner {
     return this.milestones
   }
 
-  /**
-   * Replaces the plan with a newly emitted one while carrying over the progress already
-   * earned: any incoming milestone whose title or deliverable paths match an existing
-   * verified/failed one keeps that status. Lets the agent re-plan mid-session (scope discovered
-   * late, a milestone that turned out to need splitting) without silently resetting to 0%.
-   */
-  public replacePlanPreservingProgress(milestones: PlanMilestone[]): void {
-    const previousByTitle = new Map<string, PlanMilestone>()
-    const previousByDeliverable = new Map<string, PlanMilestone>()
-
-    for (const m of this.milestones) {
-      previousByTitle.set(m.title.trim().toLowerCase(), m)
-      const deliverables = m.filePaths?.length ? m.filePaths : extractDeliverablePaths(m.title)
-      if (deliverables.length > 0) {
-        previousByDeliverable.set(deliverables.sort().join('|'), m)
-      }
-    }
-
-    this.milestones = milestones.map((m, idx) => {
-      let previous = previousByTitle.get((m.title || '').trim().toLowerCase())
-      if (!previous) {
-        const deliverables = m.filePaths?.length ? m.filePaths : extractDeliverablePaths(m.title || '')
-        if (deliverables.length > 0) {
-          previous = previousByDeliverable.get(deliverables.sort().join('|'))
-        }
-      }
-
-      const carriedStatus = previous && (previous.status === 'verified' || previous.status === 'failed')
-        ? previous.status
-        : m.status || 'pending'
-
-      return {
-        ...m,
-        id: m.id || `milestone-${idx + 1}`,
-        status: carriedStatus,
-        notes: m.notes || previous?.notes,
-      }
-    })
-  }
-
   public hasPlan(): boolean {
     return this.milestones.length > 0
   }
 
-  /**
-   * Returns the current active milestone that needs work.
-   *
-   * An `in_progress` milestone whose deliverable files are ALREADY on disk (awaiting a later
-   * build/test verification command) must NOT trap the agent into repeating edits on that same file.
-   * The focus cleanly advances to the first milestone with unfinished work (`pending` or `in_progress`
-   * with missing deliverables), and only defaults to verification/completion when all implementation
-   * deliverables are satisfied.
-   */
   public getActiveMilestone(isDeliverableSatisfied?: (milestone: PlanMilestone) => boolean): PlanMilestone | undefined {
-    // 1. Is there an in_progress milestone that actually needs work?
-    const inProgressUnsatisfied = this.milestones.find((m) => {
-      if (m.status !== 'in_progress') return false
-      if (isCompletionMilestoneTitle(m)) return false
-      if (isDeliverableSatisfied) {
-        return !isDeliverableSatisfied(m)
-      }
-      if (m.notes && m.notes.includes(AWAITING_VERIFICATION_MARKER)) {
-        return false
-      }
-      return true
+    const inProgressUnsatisfied = this.milestones.find((milestone) => {
+      if (milestone.status !== 'in_progress' || isCompletionMilestoneTitle(milestone)) return false
+      if (isDeliverableSatisfied) return !isDeliverableSatisfied(milestone)
+      return !milestone.notes?.includes(AWAITING_VERIFICATION_MARKER)
     })
     if (inProgressUnsatisfied) return inProgressUnsatisfied
 
-    // 2. Is there a pending operational milestone?
-    const nextPending = this.milestones.find((m) => m.status === 'pending' && !isCompletionMilestoneTitle(m))
+    const nextPending = this.milestones.find(
+      (milestone) => milestone.status === 'pending' && !isCompletionMilestoneTitle(milestone)
+    )
     if (nextPending) return nextPending
 
-    // 3. If all operational implementation milestones are satisfied, return the first in_progress (e.g. for build verification)
-    const anyInProgress = this.milestones.find((m) => m.status === 'in_progress' && !isCompletionMilestoneTitle(m))
+    const anyInProgress = this.milestones.find(
+      (milestone) => milestone.status === 'in_progress' && !isCompletionMilestoneTitle(milestone)
+    )
     if (anyInProgress) return anyInProgress
 
-    // 4. Finally, any non-verified milestone (including completion milestone)
-    return this.milestones.find((m) => m.status === 'pending' || m.status === 'in_progress')
+    return this.milestones.find((milestone) => milestone.status === 'pending' || milestone.status === 'in_progress')
   }
 
-  /** Same id-or-title-substring lookup updateMilestone uses, exposed so callers can inspect
-   *  a milestone (e.g. its verificationCommand) before deciding what status to apply. */
   public findMilestone(idOrIndex: string | number): PlanMilestone | undefined {
-    if (typeof idOrIndex === 'number') {
-      return this.milestones[idOrIndex]
-    }
-    return this.milestones.find((m) => m.id === idOrIndex || m.title.toLowerCase().includes(idOrIndex.toLowerCase()))
+    if (typeof idOrIndex === 'number') return this.milestones[idOrIndex]
+    return this.milestones.find(
+      (milestone) => milestone.id === idOrIndex || milestone.title.toLowerCase().includes(idOrIndex.toLowerCase())
+    )
   }
 
   public updateMilestone(idOrIndex: string | number, status: PlanMilestone['status'], notes?: string): boolean {
@@ -176,7 +97,6 @@ export class GoalDecompositionPlanner {
     const previousStatus = target.status
     target.status = status
     if (notes) target.notes = notes
-
     if (previousStatus !== status) {
       this.transitionListener?.({
         id: target.id,
@@ -190,18 +110,14 @@ export class GoalDecompositionPlanner {
   }
 
   public isAllVerified(): boolean {
-    return this.milestones.length > 0 && this.milestones.every((m) => m.status === 'verified')
+    return this.milestones.length > 0 && this.milestones.every((milestone) => milestone.status === 'verified')
   }
 
   public getProgressSummary(): { completed: number; total: number; percentage: number } {
     const total = this.milestones.length
     if (total === 0) return { completed: 0, total: 0, percentage: 0 }
-    const completed = this.milestones.filter((m) => m.status === 'verified').length
-    return {
-      completed,
-      total,
-      percentage: Math.round((completed / total) * 100),
-    }
+    const completed = this.milestones.filter((milestone) => milestone.status === 'verified').length
+    return { completed, total, percentage: Math.round((completed / total) * 100) }
   }
 
   public getCompactState(customObjective?: string): CompactPlanState {
@@ -212,97 +128,58 @@ export class GoalDecompositionPlanner {
     milestones: ReadonlyArray<PlanMilestone>,
     customObjective?: string
   ): CompactPlanState {
-    const totalCount = milestones.length
-    const completedMilestones = milestones.filter((m) => m.status === 'verified')
-    const pendingMilestones = milestones.filter((m) => m.status !== 'verified')
-    const completedCount = completedMilestones.length
-    const isCompleted = totalCount > 0 && pendingMilestones.length === 0
-
-    const lastCompleted = completedMilestones.length > 0 ? completedMilestones[completedMilestones.length - 1] : null
-    const restorePoint = lastCompleted ? `${lastCompleted.id}: ${lastCompleted.title}` : 'None (Session Initialized)'
-
-    const activeMilestone = pendingMilestones.length > 0 ? pendingMilestones[0] : null
-    const activeMicroTask = activeMilestone ? `${activeMilestone.id}: ${activeMilestone.title}` : 'None (Plan Completed)'
-
-    const pendingMicroTasks = pendingMilestones.map((m) => `${m.id}: ${m.title}`)
+    const completedMilestones = milestones.filter((milestone) => milestone.status === 'verified')
+    const pendingMilestones = milestones.filter((milestone) => milestone.status !== 'verified')
+    const lastCompleted = completedMilestones.at(-1)
+    const activeMilestone = pendingMilestones[0]
 
     return {
       objective: customObjective || 'Execution Plan',
-      restorePoint,
-      activeMicroTask,
-      pendingMicroTasks,
-      completedCount,
-      totalCount,
-      isCompleted,
+      restorePoint: lastCompleted ? `${lastCompleted.id}: ${lastCompleted.title}` : 'None (Session Initialized)',
+      activeMicroTask: activeMilestone ? `${activeMilestone.id}: ${activeMilestone.title}` : 'None (Plan Completed)',
+      pendingMicroTasks: pendingMilestones.map((milestone) => `${milestone.id}: ${milestone.title}`),
+      completedCount: completedMilestones.length,
+      totalCount: milestones.length,
+      isCompleted: milestones.length > 0 && pendingMilestones.length === 0,
     }
   }
 
-  /**
-   * Renders the plan block for the next turn.
-   *
-   * `directive` is one decision, already arbitrated: which single instruction this turn's
-   * prompt carries is decided in planDirectiveArbiter.ts, not here and not by whichever guard
-   * appended last. Both of its fields REPLACE standing text rather than joining it — the focus
-   * block's default directives assert things that are false in each of those states, and a
-   * prompt that says both is a prompt the model resolves by picking one.
-   *
-   * `blockDirective` replaces the whole focus block: the session is closable, the dependencies
-   * are not installed, or every deliverable is on disk and only a real check can move the plan.
-   * In all three the block's directive 1 ("achieve this milestone's goals") and directive 4
-   * ("do NOT invoke finish until every milestone is verified") point the opposite way.
-   *
-   * `closureStepDirective` replaces directive 2 alone, when the active milestone names no
-   * artefact. Directive 2 promises that writing the milestone's files closes it; for that
-   * milestone there are none to write.
-   *
-   * Typed structurally rather than importing PlanDirectiveDecision: the arbiter reads this
-   * module, so a type import back would close the cycle.
-   */
   public compileProgressPrompt(context?: {
     directive?: { blockDirective?: string | null; closureStepDirective?: string | null } | null
   }): string {
     if (this.milestones.length === 0) return ''
     const blockDirective = context?.directive?.blockDirective
-
     const progress = this.getProgressSummary()
     const lines = [
       `### STRUCTURED EXECUTION PLAN (${progress.completed}/${progress.total} verified - ${progress.percentage}%)`,
       'Execute systematically. Mark milestones verified only when validated.',
     ]
 
-    const activeM = this.getActiveMilestone()
-    const promptWindow = selectPromptMilestoneWindow(this.milestones, activeM?.id)
+    const activeMilestone = this.getActiveMilestone()
+    const promptWindow = selectPromptMilestoneWindow(this.milestones, activeMilestone?.id)
     if (promptWindow.omittedBefore > 0) {
       lines.push(`[${promptWindow.omittedBefore} earlier milestones omitted from this turn; retained in canonical state.]`)
     }
 
-    for (const { milestone: m, planIndex } of promptWindow.entries) {
-      let icon = '[ ]'
-      if (m.status === 'verified') icon = '[x]'
-      else if (m.status === 'in_progress') icon = '[>]'
-      else if (m.status === 'failed') icon = '[!]'
-
-      // Render the id explicitly: titles no longer carry a self-label (see stripRedundantIdPrefix),
-      // and the model needs the canonical id here to address a milestone via "update_plan".
-      let line = `${planIndex + 1}. ${icon} **${m.id}: ${m.title}**`
-      if (m.filePaths?.length) {
-        line += ` — *Files:* ${m.filePaths.map((filePath) => `\`${filePath}\``).join(', ')}`
+    for (const { milestone, planIndex } of promptWindow.entries) {
+      const icon = milestone.status === 'verified'
+        ? '[x]'
+        : milestone.status === 'in_progress'
+          ? '[>]'
+          : milestone.status === 'failed'
+            ? '[!]'
+            : '[ ]'
+      let line = `${planIndex + 1}. ${icon} **${milestone.id}: ${milestone.title}**`
+      if (milestone.filePaths?.length) {
+        line += ` — *Files:* ${milestone.filePaths.map((filePath) => `\`${filePath}\``).join(', ')}`
       }
-      if (m.acceptanceCriteria?.length) {
-        line += ` — *Criteria:* ${m.acceptanceCriteria.join('; ')}`
-      }
-      if (m.falsifiableHypothesis) {
-        line += ` — *Hypothesis:* ${m.falsifiableHypothesis}`
-      }
-      if (m.verificationCommand) {
-        line += ` — *Verify with:* \`${m.verificationCommand}\``
-      }
-      if (m.notes) {
-        line += ` (Note: ${m.notes})`
-      }
+      if (milestone.acceptanceCriteria?.length) line += ` — *Criteria:* ${milestone.acceptanceCriteria.join('; ')}`
+      if (milestone.falsifiableHypothesis) line += ` — *Hypothesis:* ${milestone.falsifiableHypothesis}`
+      if (milestone.verificationCommand) line += ` — *Verify with:* \`${milestone.verificationCommand}\``
+      if (milestone.notes) line += ` (Note: ${milestone.notes})`
       lines.push(line)
-      if (m.id === activeM?.id) {
-        buildActiveInterventionActions(m).forEach((action, index) => lines.push(`   Action ${index + 1}: ${action}`))
+      if (milestone.id === activeMilestone?.id) {
+        buildActiveInterventionActions(milestone).forEach((action, index) => lines.push(`   Action ${index + 1}: ${action}`))
       }
     }
 
@@ -310,22 +187,14 @@ export class GoalDecompositionPlanner {
       lines.push(`[${promptWindow.omittedAfter} later milestones omitted from this turn; retained in canonical state.]`)
     }
 
-    const failedMilestones = this.milestones.filter((m) => m.status === 'failed')
-
+    const failedMilestones = this.milestones.filter((milestone) => milestone.status === 'failed')
     if (progress.completed === progress.total && progress.total > 0) {
       lines.push(
         '\n[ALL CHECKLIST MILESTONES COMPLETED - FINAL REPORT REQUIRED]\nAll operational checklist tasks are complete. DO NOT execute any more file edits or commands.\nReply with a comprehensive final report (in the user\'s language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.'
       )
-    } else if (!activeM || isCompletionMilestoneTitle(activeM)) {
-      // Every milestone that could still be worked on is done or abandoned, and only the
-      // closing milestone is left. The generic branch below would be self-contradictory here:
-      // it renders "Task m-N: ... invoke finish" as the active milestone while its own
-      // directive 4 forbids finishing until everything is verified -- which abandoned
-      // milestones make permanently false. Faced with no legal move the model asked a
-      // question instead, and the session died as STOPPED/FAILED (session-1787471833056-o5fk,
-      // step 45). Abandoned work is reported in the final summary, not used to block it.
+    } else if (!activeMilestone || isCompletionMilestoneTitle(activeMilestone)) {
       const failedList = failedMilestones.length > 0
-        ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((m) => `- ${m.id}: ${m.title}`).join('\n')}`
+        ? `\nThe following milestones were abandoned and MUST be reported as incomplete in your summary:\n${failedMilestones.map((milestone) => `- ${milestone.id}: ${milestone.title}`).join('\n')}`
         : ''
       lines.push(
         `\n[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]\nEvery milestone that can still be worked on is either verified or abandoned. DO NOT execute any more file edits or commands, and DO NOT ask the user a question.\nReply with a comprehensive final report (in the user's language) detailing:\n1. Summary of Functional Changes\n2. List of Modified/Created Files\n3. Verification & Test Results\n4. Work left incomplete and why\n5. Final Conclusion\nThe application will independently evaluate the evidence and close the session; no finish tool is required.${failedList}`
@@ -333,227 +202,24 @@ export class GoalDecompositionPlanner {
     } else if (blockDirective) {
       lines.push(`\n${blockDirective}`)
     } else {
-      // Kept as a list so directive 2 can be swapped out: it is the one that asserts writing
-      // this milestone's files will close it, which is false for a milestone that names none.
       const closureStep =
         context?.directive?.closureStepDirective ||
-        `2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.`
-
+        '2. Once the required files for this milestone are created or updated, invoke "update_plan" to mark it verified or proceed directly to the next milestone.'
       lines.push(
         [
-          `\n[CURRENT ACTIVE MICRO-TASK FOCUS]`,
-          `🎯 ACTIVE MILESTONE (Focus on this step now):`,
-          `👉 **Task ${activeM.id}: ${activeM.title}**`,
-          `Directives:`,
-          `1. Focus your actions on achieving the goals of this milestone.`,
+          '\n[CURRENT ACTIVE MICRO-TASK FOCUS]',
+          '🎯 ACTIVE MILESTONE (Focus on this step now):',
+          `👉 **Task ${activeMilestone.id}: ${activeMilestone.title}**`,
+          'Directives:',
+          '1. Focus your actions on achieving the goals of this milestone.',
           closureStep,
-          `3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.`,
-          `4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.`,
-          `5. If a scaffolding command fails or hangs, create only the files named by the active milestone; preserve the accepted stack and existing infrastructure.`,
+          '3. Never repeat identical file writes or commands in a loop. If configuration or boilerplate files are already created, advance immediately to implementing components in src/.',
+          '4. Do NOT invoke "finish" until all operational checklist milestones are completed and verified.',
+          '5. If a scaffolding command fails or hangs, create only the files named by the active milestone; preserve the accepted stack and existing infrastructure.',
         ].join('\n')
       )
     }
 
     return lines.join('\n')
-  }
-
-  /**
-   * Planner models routinely emit their own "m-3: " / "3. " label inside the milestone title.
-   * Callers then prefix the canonical id again, so prompts rendered "Task m-1: m-1: Create ..."
-   * — duplicated noise in the plan block, the active-milestone focus line and the session
-   * tracker, on every single turn. Strip a leading self-label so the id is written exactly once.
-   */
-  private static stripRedundantIdPrefix(title: string): string {
-    if (!title) return title
-    // Deliberately narrow: only an `m-N` / `milestone N` self-label, which is the canonical id
-    // form this class emits and therefore the one that actually doubles up. Prefixes like
-    // "Step 1: " are the model's own prose and are left intact.
-    const stripped = title.replace(/^\s*(?:m[-_]?\d+|milestone\s*\d+)\s*[:.)-]\s+/i, '').trim()
-    return stripped || title.trim()
-  }
-
-  /**
-   * Pulls a trailing verification directive off a checklist line.
-   *
-   * The JSON plan payload has always carried `verificationCommand`, but a plan drafted as a
-   * markdown checklist — which is what the planning prompt actually asks for, and what the
-   * user edits by hand — had no way to express one: the field only ever survived the JSON
-   * path, so `update_plan` fell back to trusting the model's own claim that a milestone was
-   * done. A checklist line can now say how it is proven, in the form the planning prompt
-   * mandates: `- [ ] m-4: Create \`src/App.tsx\` — verify: \`npm run build\``.
-   *
-   * Recognised endings (case-insensitive, `verifica`/`verification` accepted alongside
-   * `verify`, since the plan is written in the user's language):
-   *   `— verify: npm run build`   `(verify: npm run build)`   `[verifica: npm test]`
-   */
-  private static extractVerificationDirective(title: string): { title: string; verificationCommand?: string } {
-    if (!title) return { title }
-
-    // Emphasis markers are tolerated around the keyword because getPlanMarkdown renders the
-    // directive as "— *Verify with:* `cmd`", and that rendered plan is exactly what the user
-    // edits by hand and sends back through this parser: without this the field would be lost
-    // on every round trip through the UI.
-    const KEYWORD = '[*_]{0,2}\\s*(?:verify with|verified by|verificato con|verification|verifica|verify)\\s*[:=]\\s*[*_]{0,2}\\s*'
-    const PATTERNS = [
-      // Bracketed: "... (verify: npm run build)" / "... [verifica: npm test]"
-      new RegExp(`\\s*[([]\\s*${KEYWORD}([^)\\]]+?)\\s*[)\\]]\\s*$`, 'i'),
-      // Separated by a dash or sentence punctuation: "... — verify: npm run build"
-      new RegExp(`\\s*(?:[—–]|--|-|;|,|\\.)\\s*${KEYWORD}(.+?)\\s*$`, 'i'),
-    ]
-
-    for (const pattern of PATTERNS) {
-      const match = title.match(pattern)
-      if (!match) continue
-      // Backticks/quotes are markdown decoration around the command, never part of it.
-      const command = match[1].replace(/^[`'"*_]+|[`'"*_.]+$/g, '').trim()
-      const remainingTitle = title.slice(0, match.index).trim()
-      // A line that is ONLY a verification directive still has to keep a title, so an
-      // over-eager match that would empty it is discarded rather than applied.
-      if (!command || !remainingTitle) continue
-      return { title: remainingTitle, verificationCommand: command }
-    }
-
-    return { title }
-  }
-
-  /**
-   * Admits a declared verification command into the plan only if executing it could actually
-   * falsify the milestone. A refused command is dropped rather than kept and skipped, so no
-   * later code path can rediscover it and run it; the reason is recorded on the milestone so
-   * the plan states why this step carries no proof. See verificationCommandSafety.ts.
-   *
-   * Dropping the command never makes a milestone unfalsifiable: the entries that carry one
-   * also name their deliverable paths, which isFalsifiableMilestone accepts on their own.
-   */
-  private static adoptVerificationCommand(command?: string): Pick<PlanMilestone, 'verificationCommand' | 'notes'> {
-    if (!command) return {}
-    const verdict = checkVerificationCommandSafety(command)
-    if (verdict.isSafe) return { verificationCommand: command }
-    return { notes: unsafeVerificationNote(command, verdict.reason || 'it is not a check') }
-  }
-
-  public static parsePlanFromText(text: string): PlanMilestone[] {
-    if (!text || typeof text !== 'string') return []
-
-    // Strip thinking tags from reasoning models (e.g. DeepSeek-R1, Qwen) so internal thoughts don't pollute milestones
-    const sanitizedText = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '').trim()
-
-    // 1. Try extracting <plan>...</plan> JSON or structured checklist
-    const planBlockMatch = sanitizedText.match(/<plan>([\s\S]*?)<\/plan>/i)
-    const sourceText = planBlockMatch ? planBlockMatch[1] : sanitizedText
-
-    // Check for JSON array inside plan block
-    const jsonMatch = sourceText.match(/\[\s*\{[\s\S]*\}\s*\]/)
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0])
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item: any, idx: number) => ({
-            id: item.id || `m-${idx + 1}`,
-            title: this.stripRedundantIdPrefix(item.title || item.step || item.name || `Milestone ${idx + 1}`),
-            status: (item.status as any) || 'pending',
-            falsifiableHypothesis: item.falsifiableHypothesis || item.hypothesis || undefined,
-            ...this.adoptVerificationCommand(item.verificationCommand || item.verify || undefined),
-          }))
-        }
-      } catch {}
-    }
-
-    // 2. Markdown checklist & micro-task parser with automatic sub-bullet flattening
-    const rawLines = sourceText.split(/\r?\n/)
-    interface RawBlock {
-      topTitle: string
-      topStatus: PlanMilestone['status']
-      children: Array<{ title: string; status: PlanMilestone['status'] }>
-    }
-
-    const blocks: RawBlock[] = []
-    let currentBlock: RawBlock | null = null
-
-    for (const rawLine of rawLines) {
-      const trimmed = rawLine.trim()
-      // Skip markdown code fence delimiters (```markdown, ```, etc.) without discarding plan lines inside
-      if (trimmed.startsWith('```')) continue
-      if (!trimmed || trimmed.startsWith('#')) continue
-
-      const isIndented = /^\s{2,}/.test(rawLine) || rawLine.startsWith('\t')
-
-      if (isIndented && currentBlock) {
-        // Match sub-bullet or indented checkbox
-        const subMatch = rawLine.match(/^\s*(?:[-*+]|\d+[\.)])\s*(?:\[([ xX>!])\]\s*)?(.+)$/)
-        if (subMatch) {
-          const flag = (subMatch[1] || '').toLowerCase()
-          let status: PlanMilestone['status'] = 'pending'
-          if (flag === 'x') status = 'verified'
-          else if (flag === '>') status = 'in_progress'
-          else if (flag === '!') status = 'failed'
-          else if (currentBlock.topStatus !== 'pending') status = currentBlock.topStatus
-
-          const body = subMatch[2].trim().replace(/\*\*/g, '')
-          if (body.length > 2 && !body.startsWith('http')) {
-            currentBlock.children.push({ title: body, status })
-            continue
-          }
-        }
-      }
-
-      // Check top-level checklist item
-      const topCheckMatch = trimmed.match(/^(?:[-*+]|\d+[\.)])\s*\[([ xX>!])\]\s*(.+)$/)
-      if (topCheckMatch) {
-        const flag = (topCheckMatch[1] || '').toLowerCase()
-        let status: PlanMilestone['status'] = 'pending'
-        if (flag === 'x') status = 'verified'
-        else if (flag === '>') status = 'in_progress'
-        else if (flag === '!') status = 'failed'
-
-        const body = topCheckMatch[2].trim().replace(/\*\*/g, '')
-        currentBlock = { topTitle: body, topStatus: status, children: [] }
-        blocks.push(currentBlock)
-        continue
-      }
-
-      // Check top-level numbered item
-      const topNumMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/)
-      if (topNumMatch) {
-        const body = topNumMatch[2].trim().replace(/\*\*/g, '')
-        if (body.length > 3 && !body.startsWith('http')) {
-          currentBlock = { topTitle: body, topStatus: 'pending', children: [] }
-          blocks.push(currentBlock)
-          continue
-        }
-      }
-
-      // Check top-level bullet item
-      const topBulletMatch = trimmed.match(/^[-*+]\s+(.+)$/)
-      if (topBulletMatch) {
-        const body = topBulletMatch[1].trim().replace(/\*\*/g, '')
-        if (body.length > 3 && !body.startsWith('http')) {
-          currentBlock = { topTitle: body, topStatus: 'pending', children: [] }
-          blocks.push(currentBlock)
-          continue
-        }
-      }
-    }
-
-    // Flatten blocks into discrete PlanMilestone items
-    const milestones: PlanMilestone[] = []
-    let counter = 1
-    for (const block of blocks) {
-      const entries = block.children.length > 0
-        ? block.children
-        : [{ title: block.topTitle, status: block.topStatus }]
-
-      for (const entry of entries) {
-        const { title, verificationCommand } = this.extractVerificationDirective(entry.title)
-        milestones.push({
-          id: `m-${counter++}`,
-          title: this.stripRedundantIdPrefix(title),
-          status: entry.status,
-          ...this.adoptVerificationCommand(verificationCommand),
-        })
-      }
-    }
-
-    return milestones
   }
 }

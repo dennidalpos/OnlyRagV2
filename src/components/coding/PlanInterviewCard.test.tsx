@@ -42,4 +42,23 @@ describe('PlanInterviewCard', () => {
     await act(async () => recommended.click())
     expect(confirm.disabled).toBe(false)
   })
+
+  it('disables incompatible actions while generating the plan', async () => {
+    await act(async () => root.render(<PlanInterviewCard
+      questions={[{
+        id: 'storage',
+        question: 'Quale persistenza preferisci?',
+        rationale: 'La scelta cambia portabilità e gestione dei dati.',
+        options: ['SQLite', 'File JSON'],
+        recommendedIndex: 0,
+      }]}
+      onConfirm={vi.fn()}
+      onSkipWithRecommended={vi.fn()}
+      isGenerating
+    />))
+
+    expect(Array.from(container.querySelectorAll('button, input')).every((control) => (
+      control as HTMLButtonElement | HTMLInputElement
+    ).disabled)).toBe(true)
+  })
 })

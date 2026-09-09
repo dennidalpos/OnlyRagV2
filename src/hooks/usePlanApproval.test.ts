@@ -325,6 +325,28 @@ describe('usePlanApproval interview and error flow', () => {
     expect(onPlanApproved).toHaveBeenCalledWith(expect.objectContaining({ milestones: compiledMilestones }))
   })
 
+  it('persists a validated review before replacing the visible plan revision', async () => {
+    installElectronApi({
+      agentPlanGenerate: vi.fn().mockResolvedValue(planResult([
+        { id: 'm-1', title: 'Crea pagina', filePaths: ['src/Page.tsx'], status: 'pending' },
+      ])),
+    })
+    await act(async () => {
+      await currentHook.startPlanFlow('Crea pagina')
+    })
+    const revision = { ...currentHook.currentPlan!, objective: 'Pagina accessibile' }
+
+    let saved = false
+    await act(async () => {
+      saved = await currentHook.savePlanReview(revision)
+    })
+
+    expect(saved).toBe(true)
+    expect(onPersistPlan).toHaveBeenCalledWith(revision)
+    expect(currentHook.currentPlan?.objective).toBe('Pagina accessibile')
+    expect(currentHook.isSavingPlanReview).toBe(false)
+  })
+
   it('does not execute when seeding returns false and leaves the revision retryable', async () => {
     const agentPlanSeed = vi.fn().mockResolvedValue(false)
     installElectronApi({

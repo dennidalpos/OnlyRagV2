@@ -129,6 +129,7 @@ describe('milestone promotion on the live-full-task workspace', () => {
 
     expect(promoteMilestonesProvenBy(makeDeps(plan, logs), 'npm run build')).toBe(14)
     expect(plan.every((m) => m.status === 'verified')).toBe(true)
+    expect(plan.every((m) => Object.keys(m.fileEvidence || {}).length > 0)).toBe(true)
     expect(logs.join('\n')).toContain('14 milestone verificate')
   })
 

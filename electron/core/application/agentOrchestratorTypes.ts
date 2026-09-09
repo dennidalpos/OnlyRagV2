@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
-import type { AgentCompletionStatus } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 
 export interface ApprovalResponse {
@@ -46,4 +46,6 @@ export interface AgentSession {
   ollamaRuntimeProfile?: OllamaSessionRuntimeProfile
   /** Bounded per-turn inference measurements persisted with the session. */
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
+  /** Last project check, including an explicit unavailable state. */
+  lastVerification?: AgentVerificationEvidence
 }

@@ -3,7 +3,8 @@ import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceValidator'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
-import { applyUniqueReplacements, versionConflictFeedback } from '../../versionedFileMutation'
+import { validateAST } from '../../fuzzyPatchEngine'
+import { applyUniqueReplacements, compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
 
 export interface MultiReplaceFileRepository {
   readIfExists(absolutePath: string): string
@@ -11,12 +12,12 @@ export interface MultiReplaceFileRepository {
     absolutePath: string,
     content: string,
     expectedContentHash: string,
-    beforeWrite: () => void,
-  ): { success: boolean; error?: string; currentContentHash?: string }
+    recordCommittedWrite: (originalContent: string | null) => void,
+  ): { success: boolean; error?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean }
 }
 
 export interface MultiReplaceFileJournal {
-  recordBeforeModification(filePath: string): void
+  recordOriginalState(filePath: string, originalContent: string | null): void
 }
 
 export async function executeMultiReplaceFileContentTool(
@@ -73,11 +74,20 @@ export async function executeMultiReplaceFileContentTool(
     }
   }
 
+  const astCheck = validateAST(safePath, prepared.content)
+  if (!astCheck.isValid) {
+    return {
+      outcome: 'rejected',
+      outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nMulti-replace blocked before disk persistence to prevent syntax corruption.`,
+      logMessage: `Multi Replace Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
+    }
+  }
+
   const result = repository.writeFileVersioned(
     safePath,
     prepared.content,
     actualHash,
-    () => journal.recordBeforeModification(safePath),
+    (originalContent) => journal.recordOriginalState(safePath, originalContent),
   )
   if (result.success) return {
     outcome: 'success',
@@ -86,9 +96,14 @@ export async function executeMultiReplaceFileContentTool(
     changeStats: buildChangeStats(safePath, beforeContent, prepared.content),
   }
 
-  if (result.currentContentHash) return {
+  if (result.conflict) return {
     outcome: 'rejected',
-    outputForHistory: versionConflictFeedback(String(filePath), actualHash, result.currentContentHash),
+    outputForHistory: versionConflictFeedback(
+      String(filePath),
+      actualHash,
+      result.currentContentHash || 'missing',
+      compactMutationDiff(result.currentContent || '', prepared.content),
+    ),
     logMessage: `Multi-replace rejected: concurrent change in ${path.basename(filePath)}`,
   }
 

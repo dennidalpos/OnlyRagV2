@@ -65,6 +65,7 @@ export function usePlanApproval({
   const [activePlanIndex, setActivePlanIndex] = useState<number>(0)
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
   const [isApprovingPlan, setIsApprovingPlan] = useState<boolean>(false)
+  const [isSavingPlanReview, setIsSavingPlanReview] = useState<boolean>(false)
 
   // Pre-flight Clarification Interview state
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
@@ -121,6 +122,7 @@ export function usePlanApproval({
     approvalInFlightRef.current.clear()
     setIsGeneratingPlan(false)
     setIsApprovingPlan(false)
+    setIsSavingPlanReview(false)
     setIsAnalyzingInterview(false)
     setIsInterviewActive(false)
     setInterviewQuestions([])
@@ -369,6 +371,29 @@ export function usePlanApproval({
     })
   }, [currentPlan, updateCurrentSessionPlans])
 
+  const savePlanReview = useCallback(async (revision: AgentPlan): Promise<boolean> => {
+    const target = currentPlan
+    if (!target || target.status !== 'ready' || revision.id !== target.id) return false
+    const context = { ...activeContextRef.current }
+    setIsSavingPlanReview(true)
+    try {
+      const persisted = await onPersistPlan(revision)
+      if (!persisted) return false
+      const active = activeContextRef.current
+      if (active.activeSessionId !== context.activeSessionId || active.workspacePath !== context.workspacePath) return false
+      replacePlanRevision(revision)
+      return true
+    } catch (err: any) {
+      logger.warn('usePlanApproval', `Could not persist plan review ${revision.id}: ${err?.message}`)
+      return false
+    } finally {
+      const active = activeContextRef.current
+      if (active.activeSessionId === context.activeSessionId && active.workspacePath === context.workspacePath) {
+        setIsSavingPlanReview(false)
+      }
+    }
+  }, [currentPlan, onPersistPlan, replacePlanRevision])
+
   const selectPlanVersion = useCallback((idx: number) => {
     if (idx >= 0 && idx < planHistory.length) {
       setActivePlanIndex(idx)
@@ -556,6 +581,7 @@ export function usePlanApproval({
     activePlanIndex,
     isGeneratingPlan,
     isApprovingPlan,
+    isSavingPlanReview,
     generatePlan,
     startPlanFlow,
     interviewQuestions,
@@ -566,6 +592,7 @@ export function usePlanApproval({
     retryCurrentPlan,
     handleApprovePlan,
     handleRejectPlan,
+    savePlanReview,
     selectPlanVersion,
     resetPlanHistory,
   }

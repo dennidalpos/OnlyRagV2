@@ -155,6 +155,8 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         isExecuting={isExecuting}
         currentStep={currentStep}
         maxSteps={maxSteps}
+        currentStatusText={currentStatusText}
+        onCancel={onCancel}
       />
 
       <AgentTimeline
@@ -183,7 +185,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         agentPrompt={agentPrompt}
         setAgentPrompt={setAgentPrompt}
         onExecute={onExecute}
-        onCancel={onCancel}
         isExecuting={isExecuting}
         queueLength={promptQueue.length}
         agentMode={agentMode}

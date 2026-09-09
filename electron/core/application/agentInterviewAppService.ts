@@ -19,6 +19,7 @@ import type {
   UserInterviewAnswer,
 } from '../../../shared/types'
 import { composeInterviewDecisionPrompt } from '../../../shared/domain/agent/interviewDecisionContext'
+import { explicitAlternativeInterviewFallback } from '../../../shared/domain/agent/planInterviewPolicy'
 import {
   validateInterviewAnswers,
   validateInterviewQuestionLanguage,
@@ -97,6 +98,10 @@ export class AgentInterviewAppService {
       })
 
       if (response.status === 'error') {
+        const fallbackQuestions = explicitAlternativeInterviewFallback(prompt)
+        if (fallbackQuestions.length > 0) {
+          return { status: 'clarification_required', hasQuestions: true, questions: fallbackQuestions }
+        }
         logger.log('WARN', 'AgentInterviewAppService', `Interview generation failed: ${response.error}`)
         return {
           status: 'error',
@@ -108,6 +113,15 @@ export class AgentInterviewAppService {
 
       const { response: validated, unresolvedQuestions } = response.data
       if (!validated.hasQuestions || unresolvedQuestions.length === 0) {
+        const fallbackQuestions = explicitAlternativeInterviewFallback(prompt)
+        if (fallbackQuestions.length > 0) {
+          return {
+            status: 'clarification_required',
+            hasQuestions: true,
+            questions: fallbackQuestions,
+            rawResponse: response.content,
+          }
+        }
         return {
           status: 'completed',
           hasQuestions: false,

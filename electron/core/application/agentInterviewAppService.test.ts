@@ -29,6 +29,24 @@ describe('AgentInterviewAppService', () => {
     expect(result).toMatchObject({ status: 'completed', hasQuestions: false, questions: [] })
   })
 
+  it('falls back to alternatives stated explicitly when the model returns no questions', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+    })
+
+    const result = await service.conductInterview(
+      'Aggiungi persistenza: prima di procedere chiedimi se usare localStorage oppure file JSON.',
+      undefined,
+      settings
+    )
+
+    expect(result).toMatchObject({
+      status: 'clarification_required',
+      hasQuestions: true,
+      questions: [{ options: ['localStorage', 'file JSON'], recommendedIndex: 0 }],
+    })
+  })
+
   it('parses schema-constrained questions', async () => {
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
       status: 'complete',

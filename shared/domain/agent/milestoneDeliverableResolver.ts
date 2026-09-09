@@ -25,6 +25,7 @@ export interface DeliverableProbeResult {
    * Left undefined for anything large, which is definitionally not a stub.
    */
   content?: string
+  contentHash?: string
 }
 
 /** Injected by the infrastructure/application layer; the domain never touches `fs`. */

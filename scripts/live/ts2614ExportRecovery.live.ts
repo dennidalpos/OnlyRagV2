@@ -81,7 +81,8 @@ describe('live: TS2614 export recovery', () => {
     const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'TaskCard.ts'), 'utf-8')
 
     expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)
-    expect(result.success).toBe(true)
+    expect(metrics).toMatchObject({ verified: 1, failed: 0, pending: 0, completionStatus: 'unverifiable' })
+    expect(result).toMatchObject({ success: false, completionStatus: 'unverifiable' })
     expect(source).toMatch(/import Button from ["']\.\/Button["']/)
     expect(source).not.toMatch(/import\s*\{\s*Button\s*\}\s*from\s+["']\.\/Button["']/)
     expect(fs.readFileSync(path.join(WORKSPACE, 'src', 'Button.ts'), 'utf-8')).toBe(fixture.buttonSource)

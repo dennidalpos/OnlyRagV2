@@ -12,7 +12,8 @@ Executed and verified in session. Date: 2026-09-09.
 
 | Workflow | Command | Shell / Cwd | Notes / Examples |
 | :--- | :--- | :--- | :--- |
-| **Fast Verification** | `npm run test:fast` | pwsh / root | 228 files, 1882 tests |
+| **Fast Verification** | `npm run test:fast` | pwsh / root | 228 files, 1892 tests |
+| **Static Quality** | `npm run quality:static` | pwsh / root | Biome lint all; format-check newly added files |
 | **Full Verification** | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` | pwsh / root | Fail-fast on dependency cycles; known dead-code finding W2.07 |
 | **Single Target** | `npx vitest run <path>` | pwsh / root | Vitest target |
 | **Format Check** | `npm run format:check` | pwsh / root | Git diff whitespace & conflict marker check |

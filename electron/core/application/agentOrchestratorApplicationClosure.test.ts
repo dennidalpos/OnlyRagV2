@@ -46,6 +46,7 @@ describe('application-owned agent closure', () => {
     const persistCurrentState = vi.fn(async () => {})
     const finalizeSession = vi.fn()
     const emitDone = vi.fn()
+    const emitLog = vi.fn()
     const setExecutionPhase = vi.fn()
     const episodicCompactor = new EpisodicMemoryCompactor(6)
     const active = options?.active ?? true
@@ -69,7 +70,7 @@ describe('application-owned agent closure', () => {
       goalPlanner,
       episodicCompactor,
       isSessionActive: () => active,
-      emitLog: () => {},
+      emitLog,
       emitDone,
       persistCurrentState,
       buildSessionTracker: (summaryText?: string) => new SessionDebtTracker({
@@ -81,9 +82,17 @@ describe('application-owned agent closure', () => {
       }),
       finalizeSession,
       setExecutionPhase,
+      getExecutionPhase: () => 'verify',
+      runtimeProfile: {
+        model: 'qwen2.5-coder:7b',
+        host: 'http://127.0.0.1:11434',
+        digest: 'sha256:test',
+        options: { num_ctx: 8192, num_predict: 2048, maxContextChars: 24000, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, stop: [] },
+      },
+      recordVerificationEvidence: (evidence) => { ctx.lastVerification = evidence },
     }
 
-    return { ctx, emitDone, persistCurrentState, finalizeSession, setExecutionPhase, filePath }
+    return { ctx, emitDone, emitLog, persistCurrentState, finalizeSession, setExecutionPhase, filePath }
   }
 
   it('returns verified only from passing behavioral evidence', async () => {
@@ -94,7 +103,7 @@ describe('application-owned agent closure', () => {
       command: 'npm test',
       evidenceLevel: 'behavioral',
     })
-    const { ctx, emitDone, persistCurrentState, finalizeSession, setExecutionPhase } = makeContext()
+    const { ctx, emitDone, emitLog, persistCurrentState, finalizeSession, setExecutionPhase } = makeContext()
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'model_silence',
@@ -105,6 +114,13 @@ describe('application-owned agent closure', () => {
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: true, completionStatus: 'verified' } })
     expect(emitDone).toHaveBeenCalledWith(true, expect.stringContaining('VERIFICATO'), 'verified')
     expect(persistCurrentState).toHaveBeenCalledWith('model_silence', 'verified')
+    expect(ctx.lastVerification).toMatchObject({ status: 'verified', command: 'npm test' })
+    expect(emitLog).toHaveBeenCalledWith(
+      'info',
+      'Diagnostica sessione: verified',
+      expect.stringContaining('Recupero schema: 0/2'),
+      expect.objectContaining({ category: 'generic_info', modelName: 'qwen2.5-coder:7b' })
+    )
     expect(setExecutionPhase).toHaveBeenCalledWith('outcome')
     expect(finalizeSession).toHaveBeenCalledTimes(1)
   })
@@ -202,7 +218,7 @@ describe('application-owned agent closure', () => {
 
     expect(outcome).toEqual({ outcome: 'continue' })
     expect(ctx.state.verificationFixCycles).toBe(1)
-    expect(persistCurrentState).not.toHaveBeenCalled()
+    expect(persistCurrentState).toHaveBeenCalledWith()
     expect(finalizeSession).not.toHaveBeenCalled()
   })
 })

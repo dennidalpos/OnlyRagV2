@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { resolveMilestoneDeliverableStatus, isDeliverableOfMilestone, extractDeliverablePaths, findUnsatisfiedDeliverables, AWAITING_VERIFICATION_MARKER } from '../../../shared/domain/agent/milestoneDeliverableResolver'
-import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import {
   awaitingVerificationNote,
   partialDeliveryDirective,
@@ -378,6 +378,11 @@ export function promoteMilestonesProvenBy(
   if (proven.length === 0) return 0
 
   for (const milestone of proven) {
+    const target = deps.goalPlanner.getMilestones().find((candidate) => candidate.id === milestone.id)
+    if (target && deps.workspacePath) {
+      const fileEvidence = captureMilestoneFileEvidence(deps.workspacePath, target)
+      if (fileEvidence) target.fileEvidence = fileEvidence
+    }
     deps.goalPlanner.updateMilestone(milestone.id, 'verified', promotionNote(verificationCommand))
   }
   const progress = deps.goalPlanner.getProgressSummary()

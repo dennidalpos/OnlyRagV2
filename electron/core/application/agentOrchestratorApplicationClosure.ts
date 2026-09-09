@@ -1,4 +1,4 @@
-import type { AgentCompletionStatus, AppSettings } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentVerificationEvidence, AppSettings } from '../../../shared/types'
 import { isCompletionMilestoneTitle, type GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
@@ -16,6 +16,10 @@ import type {
   ApplicationClosureTrigger,
 } from './agentOrchestratorApplicationClosureTypes'
 import type { AgentExecutionPhase } from '../domain/agent/agentExecutionPhase'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
+import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
+import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
+import { redactSecrets } from '../../logRedactor'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -36,6 +40,58 @@ export interface ApplicationClosureContext {
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
   finalizeSession: () => void
   setExecutionPhase: (phase: AgentExecutionPhase) => void
+  getExecutionPhase?: () => AgentExecutionPhase
+  runtimeProfile?: OllamaSessionRuntimeProfile
+  generationTelemetry?: readonly OllamaGenerationTelemetry[]
+  lastVerification?: AgentVerificationEvidence
+  recordVerificationEvidence?: (evidence: AgentVerificationEvidence) => void
+}
+
+function toVerificationEvidence(run: VerificationRunResult): AgentVerificationEvidence {
+  return {
+    status: run.status === 'unverifiable' ? 'unavailable' : run.status,
+    checkedAt: new Date().toISOString(),
+    command: run.command,
+    evidenceLevel: run.evidenceLevel,
+    detail: run.failureDetail ? redactSecrets(run.failureDetail) : undefined,
+  }
+}
+
+function renderDiagnosticDetail(
+  ctx: ApplicationClosureContext,
+  request: ApplicationClosureRequest,
+  status: AgentCompletionStatus,
+  verification?: AgentVerificationEvidence
+): string {
+  const recovery = (label: string, used = 0, limit = MAX_FAILURES_PER_RECOVERY_CATEGORY) =>
+    `${label}: ${used}/${limit}`
+  const runtime = ctx.runtimeProfile
+  const latest = ctx.generationTelemetry?.at(-1)
+  const lines = [
+    `Fase prima della chiusura: ${ctx.getExecutionPhase?.() || 'non disponibile'}`,
+    `Esito: ${status}`,
+    `Motivo di stop: ${redactSecrets(request.reason)}`,
+    `Verifica: ${verification?.status || 'non eseguita'}`,
+  ]
+  if (verification?.command) lines.push(`Comando: ${redactSecrets(verification.command)}`)
+  if (verification?.evidenceLevel) lines.push(`Livello evidenza: ${verification.evidenceLevel}`)
+  if (verification?.detail) lines.push(`Dettaglio verifica: ${verification.detail}`)
+  lines.push(
+    recovery('Recupero schema', ctx.state.schemaRecoveryFailure?.totalFailures),
+    recovery('Recupero esecuzione', ctx.state.executionRecoveryFailure?.totalFailures),
+    recovery('Correzioni verifica', ctx.state.verificationFixCycles, MAX_VERIFICATION_FIX_CYCLES)
+  )
+  if (runtime) {
+    lines.push(
+      `Runtime: modello=${runtime.model}; digest=${runtime.digest || 'non disponibile'}; num_ctx=${runtime.options.num_ctx}; num_predict=${runtime.options.num_predict}`
+    )
+  }
+  if (latest) {
+    lines.push(
+      `Ultima generazione: step=${latest.step}; durata=${latest.wallDurationMs}ms; prompt=${latest.promptTokens ?? 'n/d'} token; output=${latest.completionTokens ?? 'n/d'} token`
+    )
+  }
+  return redactSecrets(lines.join('\n'))
 }
 
 function evidenceLevelFromCommand(command: string | undefined): 'structural' | 'behavioral' | undefined {
@@ -138,6 +194,9 @@ export async function closeAgentRunFromEvidence(
   if (shouldRunVerification) {
     ctx.emitLog('info', '🔎 Verifica finale governata dall’applicazione...')
     run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk))
+    const verificationEvidence = toVerificationEvidence(run)
+    ctx.recordVerificationEvidence?.(verificationEvidence)
+    ctx.lastVerification = verificationEvidence
     if (!ctx.isSessionActive()) {
       return {
         outcome: 'closed',
@@ -165,6 +224,7 @@ export async function closeAgentRunFromEvidence(
         ctx.emitLog('info', `🔒 Verifica fallita (giro ${decision.cyclesSpent}): correzione richiesta.`, decision.directive, {
           category: 'system_alert',
         })
+        await ctx.persistCurrentState()
         return { outcome: 'continue' }
       }
     }
@@ -206,11 +266,25 @@ export async function closeAgentRunFromEvidence(
 
   const tracker = ctx.buildSessionTracker()
   const summary = renderClosureSummary(status, request, tracker, evidence)
+  if (!ctx.lastVerification && status === 'unverifiable') {
+    const unavailable: AgentVerificationEvidence = {
+      status: 'unavailable',
+      checkedAt: new Date().toISOString(),
+      detail: redactSecrets(evidence),
+    }
+    ctx.lastVerification = unavailable
+    ctx.recordVerificationEvidence?.(unavailable)
+  }
+  const diagnosticDetail = renderDiagnosticDetail(ctx, request, status, ctx.lastVerification)
   ctx.setExecutionPhase('outcome')
   agentToolExecutorService.commitJournal()
   const success = status === 'verified'
   ctx.emitLog('info', `Chiusura applicativa: ${status}`, summary, {
     category: status === 'verified' ? 'final_report' : 'system_alert',
+  })
+  ctx.emitLog('info', `Diagnostica sessione: ${status}`, diagnosticDetail, {
+    category: 'generic_info',
+    modelName: ctx.runtimeProfile?.model,
   })
   ctx.emitDone(success, summary, status)
   if (ctx.settings.enableCodingAgentDebugLog) {

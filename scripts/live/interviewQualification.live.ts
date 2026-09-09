@@ -55,6 +55,16 @@ describe('live: interview qualification', () => {
       answers,
       interview.questions
     )
+    const recommendedPrompt = agentInterviewAppService.enrichPromptWithAnswers(
+      ambiguous,
+      interview.questions.map((question) => ({
+        questionId: question.id,
+        questionText: question.question,
+        selectedOption: question.options[question.recommendedIndex],
+        provenance: 'accepted_recommendation',
+      })),
+      interview.questions
+    )
     const plan = await planGenerationAppService.generatePlanText({
       prompt: effectivePrompt,
       model: MODEL,
@@ -65,6 +75,14 @@ describe('live: interview qualification', () => {
 
     console.log(JSON.stringify({ model: MODEL, questions: interview.questions, answers, planStatus: plan.status }))
     expect(effectivePrompt).toContain('Usa localStorage nel browser, senza backend.')
+    expect(recommendedPrompt).toContain('[ACCEPTED RECOMMENDATION]')
     expect(plan.status, plan.error).toBe('success')
+    expect(plan.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: interview.questions[0].id,
+        statement: expect.stringContaining('Usa localStorage nel browser, senza backend.'),
+        source: 'explicit_user',
+      }),
+    ]))
   })
 })

@@ -93,6 +93,18 @@ function reconcilePreviousWork(
   return undefined
 }
 
+function normalizeFreshPlanReferences(
+  plan: PlanningPhaseResponse,
+  previousInterventions: readonly PlanMilestone[]
+): PlanningPhaseResponse {
+  if (previousInterventions.length > 0) return plan
+  return {
+    ...plan,
+    interventions: plan.interventions.map(({ sourceInterventionId: _ignored, ...intervention }) => intervention),
+    supersededWork: [],
+  }
+}
+
 function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
   return plan.interventions.map((intervention, index) => ({
     id: `m-${index + 1}`,
@@ -184,12 +196,13 @@ export class PlanGenerationAppService {
         if (validated.status === 'invalid') {
           return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
         }
+        const freshPlan = normalizeFreshPlanReferences(validated.data, previousInterventions)
         const sanitized = sanitizeVerificationCommands(
-          validated.data,
+          freshPlan,
           executableVerificationCommands,
           discovery.scaffold.requirements[0]?.path
         )
-        const error = sanitized.error || reconcilePreviousWork(sanitized.plan || validated.data, previousInterventions)
+        const error = sanitized.error || reconcilePreviousWork(sanitized.plan || freshPlan, previousInterventions)
         return error
           ? { status: 'invalid', error }
           : { status: 'valid', data: sanitized.plan! }

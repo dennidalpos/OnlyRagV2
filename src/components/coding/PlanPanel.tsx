@@ -8,6 +8,7 @@ import { PlanPanelHeader } from './PlanPanelHeader'
 import { PlanPanelChecklistView } from './PlanPanelChecklistView'
 import { PlanPanelDocumentView } from './PlanPanelDocumentView'
 import { PlanInterviewCard } from './PlanInterviewCard'
+import { PlanReviewCard } from './PlanReviewCard'
 
 interface PlanPanelProps {
   plan: AgentPlan | null
@@ -17,6 +18,7 @@ interface PlanPanelProps {
   isGenerating: boolean
   isExecuting?: boolean
   isApprovingPlan?: boolean
+  isSavingPlanReview?: boolean
   interviewQuestions?: InterviewQuestion[]
   isInterviewActive?: boolean
   isAnalyzingInterview?: boolean
@@ -25,6 +27,7 @@ interface PlanPanelProps {
   onRetry?: () => void
   onApprove: () => void
   onReject: () => void
+  onSaveReview?: (revision: AgentPlan) => Promise<boolean>
   completedStepCount?: number
 }
 
@@ -36,6 +39,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   isGenerating,
   isExecuting = false,
   isApprovingPlan = false,
+  isSavingPlanReview = false,
   interviewQuestions = [],
   isInterviewActive = false,
   isAnalyzingInterview = false,
@@ -44,6 +48,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   onRetry,
   onApprove,
   onReject,
+  onSaveReview,
   completedStepCount = 0,
 }) => {
   const [viewMode, setViewMode] = useState<'checklist' | 'document'>('checklist')
@@ -178,6 +183,12 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               </div>
             </div>
 
+            <PlanReviewCard
+              plan={plan}
+              disabled={isExecuting || isApprovingPlan || isSavingPlanReview}
+              onSave={onSaveReview}
+            />
+
             {plan.status === 'approved' && viewMode === 'checklist' ? (
               <PlanPanelChecklistView
                 version={plan.version}
@@ -204,16 +215,16 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
                 <button
                   type="button"
                   onClick={onReject}
-                  disabled={isApprovingPlan}
+                  disabled={isApprovingPlan || isSavingPlanReview}
                   className="px-3.5 py-2 bg-slate-950 hover:bg-rose-950/50 border border-slate-800 hover:border-rose-800/80 text-rose-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 focus-ring"
                 >
-                  <XCircle className="w-3.5 h-3.5 text-rose-400" /> Rifiuta
+                  <XCircle className="w-3.5 h-3.5 text-rose-400" /> Annulla piano
                 </button>
 
                 <button
                   type="button"
                   onClick={onApprove}
-                  disabled={isApprovingPlan}
+                  disabled={isApprovingPlan || isSavingPlanReview}
                   className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-950/50 focus-ring active:scale-95"
                 >
                   {isApprovingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 fill-current" />}

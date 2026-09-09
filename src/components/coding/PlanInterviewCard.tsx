@@ -55,23 +55,21 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
 
   return (
     <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-950 border border-cyan-500/30 shadow-2xl space-y-4 text-xs select-text animate-fadeIn">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2 text-cyan-400 font-bold tracking-wide uppercase text-[11px]">
           <Sliders className="w-4 h-4 text-cyan-400" />
-          <span>Intervista Preliminare Pre-Plan</span>
+          <span>Scelte per il piano</span>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-[10px] text-cyan-300">
           <Sparkles className="w-3 h-3 text-cyan-400" />
-          <span>Interactive AI</span>
+          <span>{questions.length} scelte</span>
         </div>
       </div>
 
       <p className="text-slate-300 text-[11px] leading-relaxed">
-        L'AI ha analizzato la tua richiesta e individuato alcune scelte tecniche consigliate prima di delineare il piano d'azione:
+        Conferma un'alternativa oppure scrivi una risposta libera. Il consiglio viene applicato solo se lo accetti.
       </p>
 
-      {/* Questions list */}
       <div className="space-y-4">
         {questions.map((q, qIndex) => {
           const currentSelected = selectedOptions[q.id]
@@ -87,7 +85,6 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
               </div>
               <p className="pl-7 text-[11px] leading-relaxed text-slate-400">{q.rationale}</p>
 
-              {/* Options Grid */}
               <div className="grid grid-cols-1 gap-1.5 pt-1">
                 {q.options.map((opt, optIndex) => {
                   const isSelected = !isCustomActive && currentSelected === opt
@@ -97,6 +94,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
                     <button
                       key={optIndex}
                       type="button"
+                      disabled={isGenerating}
                       onClick={() => handleSelectOption(q.id, opt)}
                       className={`text-left px-3 py-2 rounded-lg border text-xs transition-all flex items-center justify-between gap-2 focus-ring cursor-pointer ${
                         isSelected
@@ -124,7 +122,6 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
                   )
                 })}
 
-                {/* Custom Write-In Option */}
                 <div
                   className={`mt-1 p-2 rounded-lg border transition-all ${
                     isCustomActive
@@ -138,16 +135,18 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
                       id={`custom_${q.id}`}
                       name={`group_${q.id}`}
                       checked={isCustomActive}
+                      disabled={isGenerating}
                       onChange={() => setActiveCustomIds((prev) => ({ ...prev, [q.id]: true }))}
                       className="accent-cyan-500"
                     />
                     <label htmlFor={`custom_${q.id}`} className="text-[11px] font-medium text-slate-300 cursor-pointer">
-                      Altra scelta personalizzata (write-in):
+                      Risposta libera
                     </label>
                   </div>
                   <input
                     type="text"
                     value={customInputs[q.id] || ''}
+                    disabled={isGenerating}
                     onChange={(e) => handleCustomChange(q.id, e.target.value)}
                     onFocus={() => setActiveCustomIds((prev) => ({ ...prev, [q.id]: true }))}
                     placeholder="Es. usa una specifica libreria o impostazione..."
@@ -160,7 +159,6 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
         })}
       </div>
 
-      {/* Action Buttons */}
       <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
         <button
           type="button"
@@ -168,7 +166,7 @@ export const PlanInterviewCard: React.FC<PlanInterviewCardProps> = ({
           onClick={onSkipWithRecommended}
           className="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-all focus-ring cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Salta e usa consigliati
+          Accetta tutti i consigli
         </button>
 
         <button

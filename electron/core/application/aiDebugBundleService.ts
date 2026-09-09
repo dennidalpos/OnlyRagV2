@@ -15,6 +15,9 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { DEV_TOOL_ALLOWLIST, extractVersion } from '../domain/agent/devToolchain'
 import stripAnsi from 'strip-ansi'
 import type { AppSettings } from '../../../shared/types'
+import { redactSecrets } from '../../logRedactor'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
+import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 
 export interface AiDebugBundleOptions {
   sessionId: string
@@ -133,6 +136,42 @@ export class AiDebugBundleService {
     // 7. Compile the Final Markdown Bundle
     const userPrompt = sessionState?.userTask || sessionState?.initialUserTask || 'N/A'
     const agentMode = sessionState?.agentMode || 'AGENT'
+    const runtime = sessionState?.ollamaRuntimeProfile
+    const lastVerification = sessionState?.lastVerification
+    const telemetry = sessionState?.ollamaGenerationTelemetry || []
+    const telemetryRows = telemetry.slice(-20).map((item) =>
+      `| ${item.step} | ${item.model} | ${item.numCtx} | ${item.wallDurationMs} | ${item.promptTokens ?? '-'} | ${item.completionTokens ?? '-'} |`
+    )
+    const recovery = sessionState?.recoveryFailures
+    const recoverySummary = [
+      `- **Schema:** ${recovery?.schema?.totalFailures || 0}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}`,
+      `- **Execution:** ${recovery?.execution?.totalFailures || 0}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}`,
+      `- **Verification:** ${recovery?.verificationFixCycles || 0}/${MAX_VERIFICATION_FIX_CYCLES}`,
+    ].join('\n')
+    const verificationSummary = lastVerification
+      ? [
+          `- **Status:** ${lastVerification.status}`,
+          `- **Checked at:** ${lastVerification.checkedAt}`,
+          `- **Command:** ${lastVerification.command || 'Unavailable'}`,
+          `- **Evidence level:** ${lastVerification.evidenceLevel || 'None'}`,
+          lastVerification.detail ? `- **Detail:** ${lastVerification.detail}` : '',
+        ].filter(Boolean).join('\n')
+      : '- **Status:** not run'
+    const runtimeSummary = runtime
+      ? [
+          `- **Pinned model:** \`${runtime.model}\``,
+          `- **Model digest:** \`${runtime.digest || 'Unavailable'}\``,
+          `- **Ollama endpoint:** \`${runtime.host}\``,
+          `- **Runtime options:** num_ctx=${runtime.options.num_ctx}, num_predict=${runtime.options.num_predict}, temperature=${runtime.options.temperature}`,
+        ].join('\n')
+      : '- No pinned runtime profile was persisted.'
+    const telemetryTable = telemetryRows.length > 0
+      ? [
+          '| Step | Model | num_ctx | Wall ms | Prompt tokens | Output tokens |',
+          '|:---:|:---|---:|---:|---:|---:|',
+          ...telemetryRows,
+        ].join('\n')
+      : 'No generation telemetry was persisted.'
 
     const bundle = `# 🐞 ONLYRAG V2 — CODING AGENT DEBUG BUNDLE
 *Generato per AI Diagnostic Assistant — ${timestamp}*
@@ -151,6 +190,12 @@ export class AiDebugBundleService {
 - **Active Workspace:** \`${workspacePath || 'Standalone'}\`
 - **Active Skills:** ${activeSkills.length > 0 ? activeSkills.map((s) => `\`${s}\``).join(', ') : 'None'}
 - **Session ID:** \`${sessionId}\`
+
+### Reproducible Ollama Runtime
+${runtimeSummary}
+
+### Generation Telemetry (last 20 turns)
+${telemetryTable}
 
 ---
 
@@ -189,10 +234,23 @@ ${gitDiffBlock}
 ${planSummary}
 
 ---
+
+## 8. Application Outcome & Verification
+- **Execution phase:** ${sessionState?.executionPhase || 'Unavailable'}
+- **Completion status:** ${sessionState?.completionStatus || 'IN_PROGRESS'}
+- **Stop reason:** ${sessionState?.terminationReason || 'None'}
+
+### Last Verification
+${verificationSummary}
+
+### Recovery Budgets
+${recoverySummary}
+
+---
 *Fine del Debug Diagnostic Bundle.*
 `
 
-    return bundle
+    return redactSecrets(bundle)
   }
 }
 

@@ -4,6 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { FileSystemRepository } from './fileSystemRepository'
 import { contentVersion } from './fileContentVersion'
+import { AtomicWorkspaceJournal } from './atomicWorkspaceJournal'
 
 describe('FileSystemRepository Unit Tests', () => {
   const repo = new FileSystemRepository()
@@ -55,14 +56,66 @@ describe('FileSystemRepository Unit Tests', () => {
     expect(fs.readFileSync(existing, 'utf-8')).toBe('user revision')
     expect(snapshots).toBe(0)
 
-    const updated = repo.writeFileVersioned(existing, 'agent revision', contentVersion('user revision'), () => snapshots++)
+    let recordedOriginal: string | null | undefined
+    const updated = repo.writeFileVersioned(existing, 'agent revision', contentVersion('user revision'), (original) => {
+      snapshots++
+      recordedOriginal = original
+    })
     expect(updated.success).toBe(true)
     expect(fs.readFileSync(existing, 'utf-8')).toBe('agent revision')
     expect(snapshots).toBe(1)
+    expect(recordedOriginal).toBe('user revision')
 
     const created = path.join(tempDir, 'created.txt')
-    expect(repo.writeFileVersioned(created, 'new', undefined, () => snapshots++).success).toBe(true)
+    expect(repo.writeFileVersioned(created, 'new', undefined, (original) => {
+      snapshots++
+      recordedOriginal = original
+    }).success).toBe(true)
     expect(fs.readFileSync(created, 'utf-8')).toBe('new')
+    expect(recordedOriginal).toBeNull()
+  })
+
+  it('rejects a concurrent edit before atomic replacement without recording a snapshot', () => {
+    const existing = path.join(tempDir, 'concurrent.txt')
+    fs.writeFileSync(existing, 'initial')
+    const interleavedRepo = new FileSystemRepository((filePath) => fs.writeFileSync(filePath, 'external edit'))
+    let snapshots = 0
+
+    const result = interleavedRepo.writeFileVersioned(
+      existing,
+      'agent edit',
+      contentVersion('initial'),
+      () => snapshots++,
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      conflict: true,
+      currentContent: 'external edit',
+      currentContentHash: contentVersion('external edit'),
+    })
+    expect(fs.readFileSync(existing, 'utf-8')).toBe('external edit')
+    expect(snapshots).toBe(0)
+    expect(fs.readdirSync(tempDir).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('leaves rollback empty after a version conflict', () => {
+    const existing = path.join(tempDir, 'rollback-conflict.txt')
+    fs.writeFileSync(existing, 'initial')
+    const journal = new AtomicWorkspaceJournal()
+    const interleavedRepo = new FileSystemRepository((filePath) => fs.writeFileSync(filePath, 'external edit'))
+
+    const result = interleavedRepo.writeFileVersioned(
+      existing,
+      'agent edit',
+      contentVersion('initial'),
+      (original) => journal.recordOriginalState(existing, original),
+    )
+    journal.endStep()
+
+    expect(result.success).toBe(false)
+    expect(journal.rollbackLastStep()).toEqual({ restoredCount: 0, errors: [] })
+    expect(fs.readFileSync(existing, 'utf-8')).toBe('external edit')
   })
 
   it('should delete a file successfully', async () => {

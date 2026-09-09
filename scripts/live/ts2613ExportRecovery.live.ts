@@ -82,7 +82,8 @@ describe('live: TS2613 export recovery', () => {
     const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'Dashboard.ts'), 'utf-8')
 
     expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)
-    expect(result.success).toBe(true)
+    expect(metrics).toMatchObject({ verified: 1, failed: 0, pending: 0, completionStatus: 'unverifiable' })
+    expect(result).toMatchObject({ success: false, completionStatus: 'unverifiable' })
     expect(source).toContain("import { Widget } from './Widget'")
     expect(source).not.toContain("import Widget from './Widget'")
     expect(fs.readFileSync(path.join(WORKSPACE, 'src', 'Widget.ts'), 'utf-8')).toBe(fixture.widgetSource)

@@ -33,6 +33,7 @@ Le transizioni sono validate da [`agentExecutionPhase.ts`](../electron/core/doma
 - Un comando interrotto, scaduto o fallito dopo il dispatch produce un esito `uncertain`: l'orchestratore non lo ripete automaticamente, conserva la consegna parziale e chiude attraverso il gate applicativo. Annullamento utente e relativo motivo terminale hanno precedenza sul recupero.
 - Ogni risultato tool dichiara `outcome: success | failure | rejected | blocked`; budget di recupero, memoria episodica e loop detector non interpretano marker nel testo.
 - Modello, endpoint, digest e opzioni runtime vengono salvati nel checkpoint. Una ripresa li riusa senza ricalcolo e si blocca se endpoint, tag o digest non sono più gli stessi.
+- Il checkpoint conserva anche ultima fase, motivo terminale, budget consumati e ultima verifica come `verified`, `failed` o `unavailable`. La timeline mostra fase e stop nel percorso principale; il riepilogo diagnostico resta espandibile e applica la redazione delle credenziali anche ai log UI e ai bundle esportati.
 
 ### 1.2 Tool per fase
 
@@ -48,7 +49,7 @@ Il backend assegna gli ID canonici di decisioni e interventi, senza dipendere da
 
 ### 1.4 Intervista selettiva
 
-[`planInterviewPolicy.ts`](../shared/domain/agent/planInterviewPolicy.ts) invia direttamente al planner le richieste operative chiare. L'intervista viene attivata solo per una scelta alternativa esplicita ancora irrisolta o quando l'utente chiede di essere consultato; produce normalmente una domanda e non più di due. Dopo le risposte viene eseguita la sola inferenza necessaria a generare il piano, senza ripetere decisioni già acquisite.
+[`planInterviewPolicy.ts`](../shared/domain/agent/planInterviewPolicy.ts) invia direttamente al planner le richieste operative chiare. L'intervista viene attivata solo per una scelta alternativa esplicita ancora irrisolta o quando l'utente chiede di essere consultato; produce normalmente una domanda e non più di due. Se il modello omette una scelta già formulata come due alternative, la policy costruisce una domanda deterministica dalle opzioni esplicite. Dopo le risposte viene eseguita la sola inferenza necessaria a generare il piano, senza ripetere decisioni già acquisite.
 
 ### 1.5 Contratto delle decisioni
 
@@ -94,19 +95,23 @@ La promozione automatica riconosce solo i comandi di verifica risolti dal profil
 3. **Intervento attivo** ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts), [`activeInterventionActions.ts`](../shared/domain/agent/activeInterventionActions.ts)): il piano canonico conserva tutto il lavoro, ma ogni turno espone soltanto l'intervento corrente e fino a quattro azioni sequenziali. Edit collegati restano circoscritti al contratto modificato e la verifica avviene dopo il gruppo coerente.
 4. **Contesto operativo corrente**: obiettivo attivo, vincoli accettati, tool ammessi, percorsi pertinenti e ultimo errore utile sono raccolti in un blocco breve. Il codice iniettato contiene un file primario e al massimo due frammenti di supporto; ogni omissione è marcata con la dimensione esclusa e l'indicazione di usare `read_file`. La traiettoria completa resta nel checkpoint della sessione, fuori dal payload corrente.
 
+Il bundle diagnostico ricostruisce profilo Ollama, digest, opzioni, telemetria delle ultime generazioni, verifica applicativa, fase, stop e budget di recupero dal checkpoint. La cronologia completa è disponibile nel bundle, ma non viene reinserita obbligatoriamente nel prompt di ogni turno.
+
 Intervista, piano, agente, warm-up, unload, benchmark e streaming UI attraversano una coda Main globale a concorrenza 1. L'annullamento di una richiesta in attesa rimuove solo quella richiesta; non interrompe la generazione attiva. Tutte le fasi coding usano temperatura `0.1` e keep-alive `30m`, con tetti distinti: 768 token per intervista, 2048 per piano e 4096 per edit. Ogni turno agente registra nel checkpoint contesto, tempi e token restituiti da Ollama, più memoria totale, GPU, CPU/RAM e contesto caricato osservati da `/api/ps`.
 
 ### 3.1. Piano strutturato
 
-Il piano persistito usa esclusivamente `formatVersion: 2`: obiettivo, decisioni/assunzioni, evidenze conservate, lavoro superato e interventi sono campi strutturati. Ogni intervento dichiara file, criteri di accettazione e riferimenti di verifica; checklist e Markdown sono viste derivate. Il backend rifiuta una ripianificazione che omette lavoro residuo senza conservarlo tramite `sourceInterventionId` o dichiararlo in `supersededWork`.
+Il piano persistito usa esclusivamente `formatVersion: 2`: obiettivo, decisioni/assunzioni, evidenze conservate, lavoro superato e interventi sono campi strutturati. Ogni intervento dichiara file, criteri di accettazione e riferimenti di verifica; checklist e Markdown sono viste derivate. Un piano nuovo scarta riferimenti inventati a lavoro precedente; una ripianificazione continua invece a essere rifiutata se omette lavoro residuo senza conservarlo tramite `sourceInterventionId` o dichiararlo in `supersededWork`.
+
+La revisione UI mostra decisioni confermate e assunzioni prima degli interventi. Le modifiche a obiettivo, file e comandi di verifica sono validate e persistite prima di sostituire il piano visibile; un cambio di sessione durante il salvataggio non può applicare la revisione alla nuova sessione. Le risposte esplicite dell'intervista restano disponibili quando la generazione del piano viene riprovata.
 
 Non è prevista migrazione dei vecchi piani testuali: il caricamento mantiene la sessione ma ignora revisioni prive di `formatVersion: 2`. L'esecuzione usa `filePaths` e gli altri campi canonici, non il testo renderizzato.
 
-Alla ripresa, deliverable persistiti vengono riletti dal disco. Una prova file ancora valida resta verificata; file mancanti riaprono l'intervento e i comandi precedentemente riusciti devono essere rieseguiti, perché potrebbero precedere modifiche esterne.
+Alla verifica di una milestone vengono persistiti gli hash dei deliverable dichiarati. Il resume li ricalcola: file mancanti, modificati o prove legacy senza fingerprint riaprono l'intervento; i comandi precedentemente riusciti devono comunque essere rieseguiti.
 
 ### 3.2. Edit vincolati alla versione letta
 
-`read_file` restituisce una `FILE VERSION` SHA-256. `write_file` la richiede per sovrascrivere un file esistente, mentre la creazione usa scrittura esclusiva; `replace_file_content` e `multi_replace_file_content` applicano solo blocchi esatti e univoci. Subito prima della persistenza [`fileSystemRepository.ts`](../electron/core/infrastructure/filesystem/fileSystemRepository.ts) ricontrolla la versione e registra il journal soltanto per una scrittura accettata. In conflitto nessun contenuto viene scritto: l'agente riceve hash correnti, diff sintetico quando disponibile e l'ordine di rileggere e rigenerare l'edit.
+`read_file` restituisce una `FILE VERSION` SHA-256. `write_file` la richiede per sovrascrivere un file esistente, mentre la creazione usa scrittura esclusiva; `replace_file_content` e `multi_replace_file_content` applicano solo blocchi esatti e univoci, con validazione AST sul contenuto finale. [`fileSystemRepository.ts`](../electron/core/infrastructure/filesystem/fileSystemRepository.ts) prepara un file temporaneo, ricontrolla la versione e sostituisce atomicamente il target. Il journal registra lo stato originale solo dopo il commit. In conflitto non restano scritture o snapshot: l'agente riceve hash corrente, diff current/proposed e l'ordine di rileggere l'edit.
 
 ---
 

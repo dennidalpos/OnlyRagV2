@@ -71,6 +71,35 @@ describe('AiDebugBundleService Unit Tests', () => {
         },
       ],
       userTask: 'Fix typo in app.ts',
+      executionPhase: 'outcome',
+      terminationReason: 'verification_failed',
+      completionStatus: 'blocked',
+      recoveryFailures: {
+        schema: { signature: 'schema:test', equivalentFailures: 1, totalFailures: 1 },
+        verificationFixCycles: 2,
+      },
+      ollamaRuntimeProfile: {
+        model: 'qwen2.5-coder:7b',
+        host: 'http://127.0.0.1:11434?token=secret-value',
+        digest: 'sha256:test',
+        options: { num_ctx: 8192, num_predict: 2048, maxContextChars: 24000, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, stop: [] },
+      },
+      ollamaGenerationTelemetry: [{
+        step: 2,
+        model: 'qwen2.5-coder:7b',
+        numCtx: 8192,
+        startedAt: new Date().toISOString(),
+        wallDurationMs: 420,
+        promptTokens: 100,
+        completionTokens: 20,
+      }],
+      lastVerification: {
+        status: 'failed',
+        checkedAt: new Date().toISOString(),
+        command: 'npm test',
+        evidenceLevel: 'behavioral',
+        detail: 'password=secret-password',
+      },
       updatedAt: new Date().toISOString(),
     } as any)
 
@@ -98,6 +127,14 @@ describe('AiDebugBundleService Unit Tests', () => {
     expect(bundle).toContain('TargetContent was not found in src/app.ts')
     expect(bundle).toContain('```diff\n+const app = true;\n-const app = false;\n```')
     expect(bundle).toContain('Refactor app.ts')
+    expect(bundle).toContain('## 8. Application Outcome & Verification')
+    expect(bundle).toContain('**Status:** failed')
+    expect(bundle).toContain('**Schema:** 1/2')
+    expect(bundle).toContain('**Verification:** 2/3')
+    expect(bundle).toContain('| 2 | qwen2.5-coder:7b | 8192 | 420 | 100 | 20 |')
+    expect(bundle).toContain('token=[redacted]')
+    expect(bundle).not.toContain('secret-value')
+    expect(bundle).not.toContain('secret-password')
   })
 
   it('should handle sessions with no git or state gracefully', async () => {

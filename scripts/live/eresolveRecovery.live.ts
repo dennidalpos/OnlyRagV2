@@ -77,7 +77,7 @@ function installedVersion(pkg: string): string | null {
 
 describe('live: eresolve recovery', () => {
   it('resolves a peer-version conflict instead of asking or forcing', async () => {
-    const settings = loadRealSettings({ maxToolCallSteps: 16 } as never)
+    const settings = loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 16 } as never)
     seedConflictingWorkspace()
 
     const result = await runAgentOrchestratorLoop(
@@ -93,7 +93,7 @@ describe('live: eresolve recovery', () => {
       null
     )
 
-    reportRun({
+    const metrics = reportRun({
       label: 'eresolve recovery',
       workspacePath: WORKSPACE,
       sessionId: SESSION,
@@ -103,6 +103,11 @@ describe('live: eresolve recovery', () => {
     console.log(`vite installed: ${installedVersion('vite')} (started at ${PINNED_VITE})`)
     console.log(`plugin installed: ${installedVersion('@vitejs/plugin-react')}`)
 
-    expect(result).toBeTruthy()
+    expect(metrics.commands[0]).toBe(`[step 1] FAILURE npm install ${CONFLICTING_PLUGIN}`)
+    expect(metrics.commands.some((command) => command.includes('npm run build') && command.includes('SUCCESS'))).toBe(true)
+    expect(metrics.commands.join('\n')).not.toMatch(/--force|--legacy-peer-deps/)
+    expect(metrics.completionStatus).toBeDefined()
+    expect(installedVersion('vite')).not.toBe(PINNED_VITE)
+    expect(installedVersion('@vitejs/plugin-react')).not.toBeNull()
   })
 })

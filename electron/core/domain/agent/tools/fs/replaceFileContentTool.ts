@@ -2,7 +2,7 @@ import path from 'node:path'
 import type { AgentToolCall } from '../../agentTypes'
 import { validatePathSafety } from '../../contextFilter'
 import { validateAST } from '../../fuzzyPatchEngine'
-import { applyUniqueReplacements, versionConflictFeedback } from '../../versionedFileMutation'
+import { applyUniqueReplacements, compactMutationDiff, versionConflictFeedback } from '../../versionedFileMutation'
 import type { SkillAdherenceViolation } from '../../../skills/skillAdherenceValidator'
 import type { ToolExecutionResult } from '../toolExecutionContracts'
 
@@ -13,12 +13,12 @@ export interface ReplaceFileRepository {
     absolutePath: string,
     content: string,
     expectedContentHash: string,
-    beforeWrite: () => void,
-  ): { success: boolean; error?: string; currentContentHash?: string }
+    recordCommittedWrite: (originalContent: string | null) => void,
+  ): { success: boolean; error?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean }
 }
 
 export interface ReplaceFileJournal {
-  recordBeforeModification(filePath: string): void
+  recordOriginalState(filePath: string, originalContent: string | null): void
 }
 
 export async function executeReplaceFileContentTool(
@@ -85,13 +85,18 @@ export async function executeReplaceFileContentTool(
     safePath,
     replacement.content,
     actualHash,
-    () => journal.recordBeforeModification(safePath),
+    (originalContent) => journal.recordOriginalState(safePath, originalContent),
   )
   if (!writeResult.success) {
-    if (writeResult.currentContentHash) {
+    if (writeResult.conflict) {
       return {
         outcome: 'rejected',
-        outputForHistory: versionConflictFeedback(String(filePath), actualHash, writeResult.currentContentHash),
+        outputForHistory: versionConflictFeedback(
+          String(filePath),
+          actualHash,
+          writeResult.currentContentHash || 'missing',
+          compactMutationDiff(writeResult.currentContent || '', replacement.content),
+        ),
         logMessage: `Replacement rejected: concurrent change in ${path.basename(filePath)}`,
       }
     }

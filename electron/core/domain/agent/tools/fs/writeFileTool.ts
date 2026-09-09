@@ -13,8 +13,8 @@ export interface WriteFileRepository {
     absolutePath: string,
     content: string,
     expectedContentHash: string | undefined,
-    beforeWrite: () => void,
-  ): { success: boolean; error?: string; currentContentHash?: string }
+    recordCommittedWrite: (originalContent: string | null) => void,
+  ): { success: boolean; error?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean }
 }
 
 export interface WriteFileSupportRepository {
@@ -23,7 +23,7 @@ export interface WriteFileSupportRepository {
 }
 
 export interface WriteFileJournal {
-  recordBeforeModification(filePath: string): void
+  recordOriginalState(filePath: string, originalContent: string | null): void
 }
 
 export interface WriteFileDependencies {
@@ -140,13 +140,18 @@ export async function executeWriteFileTool(
     safePath,
     content,
     parameters.expectedContentHash,
-    () => dependencies.journal.recordBeforeModification(safePath),
+    (originalContent) => dependencies.journal.recordOriginalState(safePath, originalContent),
   )
   if (!result.success) {
-    if (result.currentContentHash) {
+    if (result.conflict) {
       return {
         outcome: 'rejected',
-        outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, result.currentContentHash),
+        outputForHistory: versionConflictFeedback(
+          String(filePath),
+          parameters.expectedContentHash,
+          result.currentContentHash || 'missing',
+          compactMutationDiff(result.currentContent || '', content),
+        ),
         logMessage: `Write File Rejected: concurrent change in ${path.basename(safePath)}`,
       }
     }

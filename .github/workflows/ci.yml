@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,6 +37,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           npm ci
           if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
+
+      - name: Run Static Quality Gate (Fail-Fast)
+        shell: pwsh
+        env:
+          STATIC_QUALITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm run quality:static
+          if ($LASTEXITCODE -ne 0) { throw "Static quality gate failed with exit code $LASTEXITCODE." }
 
       - name: Install Python Dependencies
         shell: pwsh

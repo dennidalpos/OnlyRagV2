@@ -70,9 +70,9 @@ All architectural, operational, API and setup specifications reside in the canon
 ### 4. 🤖 Autonomous AI Coding Agent Studio
 * **Multi-Step Tool Execution**: Autonomous inspection (`read_file`, `list_dir`, `grep_search`), precise multi-chunk modification (`replace_file_content`, `multi_replace_file_content`), and sandboxed PowerShell execution (`run_command`).
 * **Dynamic Policy Modes**:
-  * **Plan Mode**: Generates technical implementation blueprints before executing changes.
-  * **Ask Mode**: Read-only research runs autonomously; destructive actions require explicit user approval.
-  * **Agent Mode**: Fully autonomous multi-turn development loop with auto-healing feedback on test/build errors.
+  * **Ask**: Default supervised path; inspection runs autonomously and mutations require approval.
+  * **Edit**: Fully autonomous multi-turn implementation with auto-healing feedback on test/build errors.
+  * **Plan**: Explicit workspace for technical blueprints before execution.
 * **Single Configured Model**: Every module, coding included, runs on one model chosen in Settings, with exact installed Ollama tag resolution and an optional fallback used only on OOM or crash.
 
 ### 5. 🧩 Multi-Marketplace Skill Hub
@@ -174,6 +174,7 @@ npm run dev
 | `npm run test` | Executes full Vitest unit and integration test suite |
 | `npm run test:fast` | Runs Vitest in summarized fast mode with dot reporter |
 | `npm run test:sidecar` | Runs Python Pytest suite against FastAPI sidecar endpoints |
+| `npm run quality:static` | Runs pinned Biome lint and formatting checks for newly added source/config files |
 | `npm run lint` | Runs the serial repository gate: JSON, TypeScript, Python syntax, Vitest, and bundle smoke test |
 | `npm run clean` | Removes only regenerable build artifacts and repository caches (`scripts/clean_repo.ps1`); tracked files, dependencies, logs and user data are preserved |
 | `npm run clean:logs` | Removes application logs; use `-StopAppProcesses` only when the local app must be stopped first |

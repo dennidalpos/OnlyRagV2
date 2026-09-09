@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import { logger, generateDiagnosticsReport, DiagnosticsData, sanitizeLogMessage } from './diagnostics'
+import { redactSecrets } from './logRedactor'
 
 describe('SystemDiagnosticsLogger Tests', () => {
   it('should write logs and clear both in-memory buffer and physical file on disk', () => {
@@ -67,5 +68,16 @@ describe('SystemDiagnosticsLogger Tests', () => {
     expect(inMemory).not.toContain('token=secret')
     expect(onDisk).toContain('[details redacted]')
     expect(onDisk).not.toContain('token=secret')
+  })
+
+  it('redacts credentials without removing useful diagnostic endpoints and paths', () => {
+    const message = 'Run at C:\\workspace via http://user:pass@127.0.0.1:11434?token=secret-value'
+
+    const redacted = redactSecrets(message)
+
+    expect(redacted).toContain('C:\\workspace')
+    expect(redacted).toContain('http://[redacted]@127.0.0.1:11434?token=[redacted]')
+    expect(redacted).not.toContain('pass')
+    expect(redacted).not.toContain('secret-value')
   })
 })

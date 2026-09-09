@@ -19,6 +19,7 @@ import { resolveSessionContext } from './agentOrchestratorSessionContext'
 import { initializeSessionState } from './agentOrchestratorSessionState'
 import { buildSessionPersistence } from './agentOrchestratorSessionPersistence'
 import { armSessionWatchdog } from './agentOrchestratorSessionWatchdog'
+import { redactSecrets } from '../../logRedactor'
 
 export type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -106,9 +107,13 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         timestamp: new Date().toISOString(),
         type,
-        message,
-        detail,
         ...meta,
+        message: redactSecrets(message),
+        detail: detail ? redactSecrets(detail) : undefined,
+        target: meta?.target ? redactSecrets(meta.target) : meta?.target,
+        testRun: meta?.testRun
+          ? { ...meta.testRun, summary: redactSecrets(meta.testRun.summary) }
+          : undefined,
       })
     }
   }

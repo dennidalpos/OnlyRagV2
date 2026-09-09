@@ -9,5 +9,6 @@ export interface PlanMilestone {
   falsifiableHypothesis?: string
   verificationCommand?: string
   proposedVerificationCommand?: string
+  fileEvidence?: Record<string, string>
   notes?: string
 }

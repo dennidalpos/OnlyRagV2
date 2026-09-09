@@ -103,6 +103,21 @@ describe('PlanGenerationAppService', () => {
     expect(result.decisions[0].id).toBe('a-1')
   })
 
+  it('drops invented prior-work references from a fresh plan', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([{
+      ...intervention('m-1', 'Persist locally'),
+      sourceInterventionId: 'invented-prior-work',
+    }], {
+      supersededWork: [{ interventionId: 'also-invented', reason: 'Not selected.' }],
+    }))
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Persist locally', settings })
+
+    expect(result.status).toBe('success')
+    expect(result.milestones[0].sourceInterventionId).toBeUndefined()
+    expect(result.supersededWork).toEqual([])
+  })
+
   it('preserves evidence and requires every residual intervention to be carried or superseded', async () => {
     const previous = previousPlan()
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([

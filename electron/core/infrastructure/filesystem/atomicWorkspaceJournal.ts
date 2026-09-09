@@ -36,6 +36,17 @@ export class AtomicWorkspaceJournal {
     this.snapshotInto(this.currentStepBackup, resolved)
   }
 
+  public recordOriginalState(filePath: string, originalContent: string | null): void {
+    if (!filePath || typeof filePath !== 'string') return
+    const resolved = path.resolve(filePath)
+    this.recordEntry(this.backupMap, resolved, originalContent)
+    this.recordEntry(this.currentStepBackup, resolved, originalContent)
+  }
+
+  private recordEntry(map: Map<string, FileBackupEntry>, resolved: string, originalContent: string | null): void {
+    if (!map.has(resolved)) map.set(resolved, { originalContent, modifiedTimestamp: Date.now() })
+  }
+
   private snapshotInto(map: Map<string, FileBackupEntry>, resolved: string): void {
     if (map.has(resolved)) {
       return // Keep the baseline already captured for this window intact

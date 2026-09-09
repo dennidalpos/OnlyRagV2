@@ -307,6 +307,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
                 isGenerating={planApproval.isGeneratingPlan}
                 isExecuting={c.isExecuting}
                 isApprovingPlan={planApproval.isApprovingPlan}
+                isSavingPlanReview={planApproval.isSavingPlanReview}
                 interviewQuestions={planApproval.interviewQuestions}
                 isInterviewActive={planApproval.isInterviewActive}
                 isAnalyzingInterview={planApproval.isAnalyzingInterview}
@@ -315,6 +316,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
                 onRetry={planApproval.retryCurrentPlan}
                 onApprove={planApproval.handleApprovePlan}
                 onReject={planApproval.handleRejectPlan}
+                onSaveReview={planApproval.savePlanReview}
                 completedStepCount={c.currentStep}
               />
             )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldRunPlanInterview } from './planInterviewPolicy'
+import { explicitAlternativeInterviewFallback, shouldRunPlanInterview } from './planInterviewPolicy'
 
 describe('shouldRunPlanInterview', () => {
   it('sends clear implementation requests directly to planning', () => {
@@ -23,5 +23,17 @@ describe('shouldRunPlanInterview', () => {
       selectedOption: 'SQLite',
       provenance: 'explicit',
     }])).toBe(false)
+  })
+
+  it('extracts explicit Italian and English alternatives deterministically', () => {
+    expect(explicitAlternativeInterviewFallback(
+      'Prima di procedere chiedimi se usare localStorage oppure file JSON.'
+    )[0]).toMatchObject({
+      options: ['localStorage', 'file JSON'],
+      recommendedIndex: 0,
+    })
+    expect(explicitAlternativeInterviewFallback('Ask me whether to use SQLite or IndexedDB.')[0].options)
+      .toEqual(['SQLite', 'IndexedDB'])
+    expect(explicitAlternativeInterviewFallback('Correggi il timeout.')).toEqual([])
   })
 })

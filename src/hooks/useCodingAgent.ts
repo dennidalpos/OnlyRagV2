@@ -26,7 +26,7 @@ export type CodingAgentTab = 'editor' | 'terminal' | 'git_diff' | 'grep_search' 
  * terminal, git, grep, approvals, queue and session-history hooks.
  */
 export function useCodingAgent(settings?: AppSettings) {
-  const [agentMode, setAgentModeState] = useState<AgentMode>('plan')
+  const [agentMode, setAgentModeState] = useState<AgentMode>('ask')
   const [activeTab, setActiveTab] = useState<CodingAgentTab>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 

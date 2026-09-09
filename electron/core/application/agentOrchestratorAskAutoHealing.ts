@@ -2,6 +2,7 @@ import type { AgentToolCall, AgentTaskResult, AgentLogEntry } from '../domain/ag
 import type { AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
 type EmitLog = (
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
@@ -30,6 +31,7 @@ export interface AskToolContext {
   emitDone: (success: boolean, summary: string) => void
   persistCurrentState: () => Promise<void>
   finalizeSession: () => void
+  closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
 export type AskToolOutcome =
@@ -104,6 +106,19 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
   ctx.emitLog('info', `❓ AI Agent Question: ${question}`, undefined, {
     category: 'agent_question',
   })
+  if (ctx.agentMode === 'agent') {
+    const closure = await ctx.closeApplicationRun({
+      trigger: 'guard_stop',
+      reason: gaveUpWhileStuck
+        ? 'Il modello ha esaurito il recupero automatico e richiede intervento.'
+        : 'Il modello richiede una decisione dell\'utente prima di proseguire.',
+      modelSummary: question,
+    })
+    return closure.outcome === 'closed'
+      ? { outcome: 'return', result: closure.result }
+      : { outcome: 'continue', stagnationStreak: ctx.stagnationStreak }
+  }
+
   ctx.emitDone(!gaveUpWhileStuck, question)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logToolCall(ctx.sessionId, ctx.stepCount, 'ask', parsedTool.parameters, parsedTool.explanation)

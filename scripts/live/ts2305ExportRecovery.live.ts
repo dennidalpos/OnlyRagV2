@@ -92,7 +92,8 @@ describe('live: TS2305 export recovery', () => {
     const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'TaskCard.tsx'), 'utf-8')
 
     expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)
-    expect(result.success).toBe(true)
+    expect(metrics).toMatchObject({ verified: 1, failed: 0, pending: 0, completionStatus: 'unverifiable' })
+    expect(result).toMatchObject({ success: false, completionStatus: 'unverifiable' })
     const importLine = source.split('\n').find((line) => line.trimStart().startsWith('import ')) || ''
     expect(importLine).not.toMatch(/\b(Card|List)\b/)
     expect(importLine).toMatch(/\b(Dialog|Menu|Listbox|Switch)\b/)

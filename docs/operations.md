@@ -29,9 +29,10 @@ Tutti i comandi elencati sono registrati in [`package.json`](../package.json) e 
 | Workflow | Comando | Descrizione |
 | :--- | :--- | :--- |
 | **Sviluppo Locale** | `npm run dev` | Avvia il server Vite in modalità dev con hot-reload. |
-| **Verifica Veloce** | `npm run test:fast` | Esegue la suite completa di 1841 unit test con Vitest (~2.5 min). |
+| **Verifica Veloce** | `npm run test:fast` | Esegue 1901 test in 230 file con Vitest (~3.5 min). |
 | **Unit Test Singoli** | `npx vitest run <path>` | Esegue un singolo target di test. |
 | **Verifica Tipi** | `npm run typecheck` | Esegue `tsc --noEmit` su Main, Preload e Renderer. |
+| **Qualità Statica** | `npm run quality:static` | Esegue Biome 2.5.12: lint su tutto il codice e format check sui file nuovi. |
 | **Controllo Formattazione** | `npm run format:check` | Verifica marker di conflitto git e whitespace (`git diff --check`). |
 | **Audit Codice Completo** | `npm run audit:all` | Script PowerShell che verifica tipi, test, deadcode e cicli architetturali. |
 | **Audit Cicli di Import** | `npm run audit:cycles` | Rileva dipendenze circolari con dpdm (garanzia 0 cicli). |
@@ -51,6 +52,7 @@ Gli script PowerShell operano con policy rigorosa **Fail-Fast** (`$ErrorActionPr
 * **[`scripts/audit_codebase.ps1`](../scripts/audit_codebase.ps1)**: Esegue in sequenza fail-fast: typecheck TypeScript, analisi dead code con Knip, controllo del grafo delle dipendenze con Skott, rilevamento cicli con DPDM e suite test.
 * **[`scripts/build_package.ps1`](../scripts/build_package.ps1)**: Compila l'eseguibile standalone del FastAPI Sidecar con PyInstaller, effettua la build di produzione Vite/TypeScript e crea l'installer eseguibile NSIS per Windows.
 * **[`scripts/setup_dev_environment.ps1`](../scripts/setup_dev_environment.ps1)**: Inizializza l'ambiente di sviluppo, controlla le versioni di Node/Python, crea il virtualenv e installa le dipendenze.
+* **[`scripts/check_static_quality.mjs`](../scripts/check_static_quality.mjs)**: Esegue il lint Biome sull'intero repository e limita il formatter ai file aggiunti rispetto alla base CI; i file legacy modificati restano coperti da `format:check` finché non vengono migrati esplicitamente.
 * **[`scripts/validate_documentation.mjs`](../scripts/validate_documentation.mjs)**: Controlla che tutti i collegamenti ipertestuali tra i documenti `.md` esistano e che ogni invocazione `npm run <script>` esista in `package.json`.
 
 ---
@@ -60,3 +62,4 @@ Gli script PowerShell operano con policy rigorosa **Fail-Fast** (`$ErrorActionPr
 1. **Zero Regressioni**: Nessuna modifica può essere considerata conclusa se `npm run test:fast` o `npm run typecheck` falliscono.
 2. **Zero Cicli Architetturali**: La struttura deve rispettare l'isolamento dei livelli: zero import diretti tra Renderer e Main.
 3. **Integrità Documentale**: `npm run docs:check` deve sempre terminare con esito positivo prima di ogni rilascio.
+4. **Analisi Statica Separata**: la CI esegue `npm run quality:static` prima del gate composito; [`biome.json`](../biome.json) abilita il preset correctness e regole anti-duplicazione, lasciando a TypeScript i controlli unused già attivi.

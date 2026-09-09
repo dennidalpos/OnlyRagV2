@@ -28,6 +28,7 @@ interface CreateDirectoryRepository {
 
 interface DeleteFileJournal {
   recordBeforeModification(filePath: string): void
+  recordOriginalState(filePath: string, originalContent: string | null): void
 }
 
 interface DeleteFileDependencies {

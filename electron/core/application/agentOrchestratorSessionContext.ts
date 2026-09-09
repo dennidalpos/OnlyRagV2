@@ -100,6 +100,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
   if (savedState?.ollamaRuntimeProfile) session.ollamaRuntimeProfile = savedState.ollamaRuntimeProfile
   session.ollamaGenerationTelemetry = savedState?.ollamaGenerationTelemetry || []
+  session.lastVerification = savedState?.lastVerification
   const requestedCodingModel = payload.activeModel || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
   const codingModel = session.ollamaRuntimeProfile?.model || findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
   // One `/api/tags` read, both facts. `getModelMetrics` returns the capabilities array AND the

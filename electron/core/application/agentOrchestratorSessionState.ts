@@ -10,8 +10,8 @@ import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transa
 import { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { AgentExecutionPhaseController } from '../domain/agent/agentExecutionPhase'
-import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
-import { resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
+import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { resolveDeclaredFilePaths, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -68,6 +68,17 @@ export function revalidateRestoredMilestones(
     if (probe && resolveMilestoneDeliverableStatus(milestone, probe) === 'unsatisfied') {
       return { ...milestone, status: 'pending', notes: 'Persisted file evidence is stale; deliverables must be restored.' }
     }
+    const declaredFiles = resolveDeclaredFilePaths(milestone)
+    if (probe && declaredFiles.length > 0) {
+      const currentEvidence = captureMilestoneFileEvidence(workspacePath!, milestone)
+      const persistedEvidence = milestone.fileEvidence
+      const fingerprintMatches = currentEvidence && persistedEvidence
+        && declaredFiles.every((filePath) => currentEvidence[filePath] === persistedEvidence[filePath])
+        && Object.keys(persistedEvidence).length === declaredFiles.length
+      if (!fingerprintMatches) {
+        return { ...milestone, status: 'pending', notes: 'Persisted file evidence changed; rerun milestone verification.' }
+      }
+    }
     if (milestone.verificationCommand) {
       return { ...milestone, status: 'in_progress', notes: 'Persisted command evidence is stale; rerun verification.' }
     }
@@ -120,6 +131,7 @@ export async function initializeSessionState(params: SessionStateParams): Promis
     responseInterpreterState.pendingVersionConflictReadPath = savedState.recoveryFailures?.versionConflictReadPath
     responseInterpreterState.versionedReadEvidence = savedState.versionedReadEvidence
     responseInterpreterState.schemaRejectionStreak = savedState.recoveryFailures?.schema?.equivalentFailures || 0
+    responseInterpreterState.verificationFixCycles = savedState.recoveryFailures?.verificationFixCycles || 0
     stepCountBox.value = savedState.stepCount || 0
     if (savedState.episodes && savedState.episodes.length > 0) {
       episodicCompactor.fromState(savedState.episodes, savedState.recentFullLogs)

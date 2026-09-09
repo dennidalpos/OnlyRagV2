@@ -11,7 +11,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_IGNORED_DIRS } from '../../domain/agent/contextFilter'
-import type { DeliverableProbe, DeliverableProbeResult } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
+import { resolveDeclaredFilePaths, type DeliverableProbe, type DeliverableProbeResult } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
+import type { PlanMilestone } from '../../../../shared/domain/agent/planMilestone'
+import { contentVersion } from './fileContentVersion'
 
 const MISSING: DeliverableProbeResult = { exists: false, contentLength: 0 }
 
@@ -69,7 +71,7 @@ function buildBasenameIndex(root: string): Map<string, string> {
  * workspace is reported missing rather than probed: milestone titles are model-authored
  * text, so a path token in one is untrusted input like any other.
  */
-export function createWorkspaceDeliverableProbe(workspacePath: string): DeliverableProbe {
+function buildWorkspaceDeliverableProbe(workspacePath: string, includeHash: boolean): DeliverableProbe {
   const root = path.resolve(workspacePath)
   let basenameIndex: Map<string, string> | null = null
 
@@ -77,10 +79,15 @@ export function createWorkspaceDeliverableProbe(workspacePath: string): Delivera
     try {
       const stats = fs.statSync(resolved)
       if (!stats.isFile()) return MISSING
-      if (stats.size === 0 || stats.size > MAX_INSPECTABLE_BYTES) {
-        return { exists: true, contentLength: stats.size }
+      const shouldRead = includeHash || (stats.size > 0 && stats.size <= MAX_INSPECTABLE_BYTES)
+      if (!shouldRead) return { exists: true, contentLength: stats.size }
+      const body = fs.readFileSync(resolved, 'utf-8')
+      return {
+        exists: true,
+        contentLength: stats.size,
+        ...(stats.size <= MAX_INSPECTABLE_BYTES ? { content: body } : {}),
+        ...(includeHash ? { contentHash: contentVersion(body) } : {}),
       }
-      return { exists: true, contentLength: stats.size, content: fs.readFileSync(resolved, 'utf-8') }
     } catch {
       return MISSING
     }
@@ -120,4 +127,25 @@ export function createWorkspaceDeliverableProbe(workspacePath: string): Delivera
     const found = basenameIndex.get(relativePath)
     return found ? inspect(path.resolve(root, found)) : MISSING
   }
+}
+
+export function createWorkspaceDeliverableProbe(workspacePath: string): DeliverableProbe {
+  return buildWorkspaceDeliverableProbe(workspacePath, false)
+}
+
+export function captureMilestoneFileEvidence(
+  workspacePath: string,
+  milestone: Pick<PlanMilestone, 'title' | 'filePaths'>,
+): Record<string, string> | undefined {
+  const deliverables = resolveDeclaredFilePaths(milestone)
+  if (deliverables.length === 0) return undefined
+
+  const probe = buildWorkspaceDeliverableProbe(workspacePath, true)
+  const evidence: Record<string, string> = {}
+  for (const deliverable of deliverables) {
+    const result = probe(deliverable)
+    if (!result.exists || !result.contentHash) return undefined
+    evidence[deliverable] = result.contentHash
+  }
+  return evidence
 }

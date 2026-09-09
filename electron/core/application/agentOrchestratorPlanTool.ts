@@ -5,7 +5,7 @@ import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSo
 import { resolveMilestoneUpdate } from '../domain/agent/milestoneUpdateAuthority'
 import { promotionNote } from '../domain/agent/milestoneVerificationPromotion'
 import { findUnsatisfiedDeliverables, resolveMilestoneDeliverableStatus } from '../../../shared/domain/agent/milestoneDeliverableResolver'
-import { createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
+import { captureMilestoneFileEvidence, createWorkspaceDeliverableProbe } from '../infrastructure/filesystem/workspaceDeliverableProbe'
 import { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
@@ -140,6 +140,10 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         planFeedback = authorityVerdict.directive
         planLog = `update_plan rejected: ${authorityVerdict.reason}`
       } else if (goalPlanner.updateMilestone(milestoneRef, effectiveStatus, effectiveNotes ?? `Set to '${effectiveStatus}' by the model at step ${stepCount}.`)) {
+        if (effectiveStatus === 'verified' && workspacePath && targetMilestone) {
+          const fileEvidence = captureMilestoneFileEvidence(workspacePath, targetMilestone)
+          if (fileEvidence) targetMilestone.fileEvidence = fileEvidence
+        }
         const progress = goalPlanner.getProgressSummary()
         const mismatchNote =
           effectiveStatus !== nextStatus

@@ -3,7 +3,7 @@ import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilat
 import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
 import { rejectionAbortSummary } from '../domain/agent/toolRejectionEscalation'
-import { recordRecoveryFailure } from '../domain/agent/recoveryBudget'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure } from '../domain/agent/recoveryBudget'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { handleAskTool } from './agentOrchestratorAskAutoHealing'
@@ -117,8 +117,8 @@ async function handleMissingToolCall(
     ctx.emitLog(
       'info',
       rejected
-        ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}] (${ctx.state.schemaRejectionStreak}x): ${rejected.errors.join('; ')}`
-        : `Step ${ctx.stepCount} Tool Call Rejected: no parsable JSON tool call.`
+        ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}] — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: ${rejected.errors.join('; ')}`
+        : `Step ${ctx.stepCount} Tool Call Rejected — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: no parsable JSON tool call.`
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, toolLabel, feedback)
@@ -221,6 +221,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
       emitDone: ctx.emitDone,
       persistCurrentState: ctx.persistCurrentState,
       finalizeSession: ctx.finalizeSession,
+      closeApplicationRun: ctx.closeApplicationRun,
     })
     if (askOutcome.outcome === 'continue') {
       ctx.state.stagnationStreak = askOutcome.stagnationStreak

@@ -62,6 +62,8 @@ describe('live: version downgrade guard', () => {
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
     expect(metrics.commands).toContain('[step 1] FAILURE npm install vite@^4.0.0')
+    expect(metrics.completionStatus).toBeDefined()
+    expect(result.success).toBe(false)
     expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
     expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
     expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')
@@ -95,11 +97,11 @@ describe('live: version downgrade guard', () => {
       success: result.success,
       summary: result.summary,
     })
-    // The executor turns a preflight refusal into a successful tool result: the requested
-    // command was handled safely, and npm was never started. A real npm ETARGET would be a
-    // failure result and would be evidence of a broken preflight.
-    expect(metrics.commands).toContain('[step 1] SUCCESS npm install vite@^999.0.0')
-    expect(result.success).toBe(true)
+    // A preflight refusal is a confirmed failure outcome: the guard prevented npm from
+    // starting, while the file invariants below prove that the workspace stayed intact.
+    expect(metrics.commands).toContain('[step 1] FAILURE npm install vite@^999.0.0')
+    expect(metrics.completionStatus).toBeDefined()
+    expect(result.success).toBe(false)
     expect(fs.readFileSync(path.join(WORKSPACE, 'package.json'), 'utf-8')).toBe(fixture.packageJson)
     expect(fs.readFileSync(path.join(WORKSPACE, 'package-lock.json'), 'utf-8')).toBe(`${fixture.packageJson}\n`)
     expect(JSON.parse(fs.readFileSync(path.join(WORKSPACE, 'node_modules', 'vite', 'package.json'), 'utf-8')).version).toBe('5.4.0')

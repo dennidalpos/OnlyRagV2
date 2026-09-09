@@ -10,7 +10,7 @@ Le viste principali dell'applicazione sono caricate tramite code splitting dinam
 
 | Vista | Path Componente | Scopo |
 | :--- | :--- | :--- |
-| **Coding Agent Studio** | [`CodingAgentView.tsx`](../src/components/coding/CodingAgentView.tsx) | Studio di sviluppo con Monaco Editor, Terminale PowerShell, Git Diff, Plan Panel e Timeline agentica. |
+| **Coding Agent Studio** | [`CodingAgentView.tsx`](../src/components/coding/CodingAgentView.tsx) | Studio con azioni principali Chiedi/Modifica, accesso esplicito al Plan, Monaco Editor, Git Diff e Timeline agentica. |
 | **RAG Chat** | [`ChatView.tsx`](../src/components/chat/ChatView.tsx) | Interfaccia conversazionale con grounding documentale, visualizzazione citazioni e gestione multi-sessione. |
 | **Document Ingestion** | [`IngestionView.tsx`](../src/components/ingestion/IngestionView.tsx) | Upload e parsing ad alta velocità (PyMuPDF + RapidOCR o Vision LLM), editor Markdown ed esportazione. |
 | **Translation** | [`TranslationView.tsx`](../src/components/translation/TranslationView.tsx) | Traduzione bilingue Markdown side-by-side e traduzione geometrica in-place su file PDF e Word. |
@@ -43,5 +43,8 @@ Gli hook in [`src/hooks/`](../src/hooks/) incapsulano lo stato e i flussi asincr
 ## 4. UI e Componenti Specializzati
 
 * **Timeline Virtualizzata** ([`AgentTimeline.tsx`](../src/components/coding/AgentTimeline.tsx)): Renderizzata con `@tanstack/react-virtual` per garantire 60 FPS costanti anche con sessioni contenenti centinaia di tool eseguiti, diff di codice e log di build.
+* **Diagnostica sessione** ([`AgentTimelineMessage.tsx`](../src/components/coding/AgentTimelineMessage.tsx)): fase e stop restano immediati; esito verifica, budget di recupero e runtime riproducibile sono raccolti in un dettaglio espandibile. I controlli non disponibili restano distinti da quelli falliti.
+* **Gerarchia Studio** ([`AgentModeSelector.tsx`](../src/components/coding/AgentModeSelector.tsx)): Chiedi è il percorso iniziale supervisionato, Modifica avvia l'esecuzione autonoma e Plan resta una scelta esplicita. Stato corrente e Stop restano nell'header; Terminale e diagnostica sono espandibili da Dettagli, mentre skill e storico restano nel menu strumenti.
+* **Intervista e revisione Plan** ([`PlanInterviewCard.tsx`](../src/components/coding/PlanInterviewCard.tsx), [`PlanReviewCard.tsx`](../src/components/coding/PlanReviewCard.tsx)): i consigli richiedono accettazione esplicita e ogni domanda ammette una risposta libera. Prima della checklist sono visibili decisioni confermate e assunzioni; risultato, file e check possono essere validati e salvati come nuova revisione. Durante generazione o salvataggio le azioni incompatibili restano disabilitate; retry e cambio sessione conservano soltanto lo stato appartenente alla sessione corrente.
 * **Monaco Editor Ufficiale** ([`monacoTheme.ts`](../src/lib/monacoTheme.ts)): Configurazione centralizzata del tema scuro `onlyrag-dark`, font stack (Fira Code / Cascadia Code), ligature e minimappa.
 * **Normalizzazione Centralizzata Errori** ([`errorNormalizer.ts`](../src/lib/errors/errorNormalizer.ts)): Pulisce caratteri ANSI, categorizza errori di rete, GPU CUDA (OOM), permessi filesystem (`EACCES`, `EBUSY`) e genera suggerimenti correttivi (*remediation*) per l'utente.

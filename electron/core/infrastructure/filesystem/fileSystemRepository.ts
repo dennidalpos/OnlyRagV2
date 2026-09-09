@@ -24,6 +24,8 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
 }
 
 export class FileSystemRepository {
+  constructor(private readonly versionedCommitInterleave?: (filePath: string) => void) {}
+
   async listFiles(targetPath: string) {
     const rootDir = validatePathSafety(targetPath)
     if (!rootDir) return []
@@ -190,38 +192,61 @@ export class FileSystemRepository {
     }
   }
 
-  /** Checks and writes in one synchronous section to prevent app-level interleaving. */
+  /** Commits through a sibling temp file after a final version check. */
   writeFileVersioned(
     filePath: string,
     content: string,
     expectedContentHash: string | undefined,
-    beforeWrite: () => void,
-  ): { success: boolean; error?: string; currentContentHash?: string } {
+    recordCommittedWrite: (originalContent: string | null) => void,
+  ): { success: boolean; error?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean } {
     const resolved = validatePathSafety(filePath)
     if (!resolved) return { success: false, error: 'Invalid file path' }
 
+    let tempPath: string | undefined
     try {
       const exists = fs.existsSync(resolved)
       if (exists) {
-        const currentContentHash = contentVersion(fs.readFileSync(resolved, 'utf-8'))
+        const originalContent = fs.readFileSync(resolved, 'utf-8')
+        const currentContentHash = contentVersion(originalContent)
         if (!expectedContentHash || expectedContentHash !== currentContentHash) {
-          return { success: false, error: 'File version conflict', currentContentHash }
+          return { success: false, error: 'File version conflict', currentContentHash, currentContent: originalContent, conflict: true }
         }
-        beforeWrite()
-        fs.writeFileSync(resolved, content, 'utf-8')
+
+        tempPath = path.join(path.dirname(resolved), `.${path.basename(resolved)}.${process.pid}.${Date.now()}.tmp`)
+        fs.writeFileSync(tempPath, content, { encoding: 'utf-8', flag: 'wx' })
+
+        this.versionedCommitInterleave?.(resolved)
+        const latestContent = fs.readFileSync(resolved, 'utf-8')
+        const latestHash = contentVersion(latestContent)
+        if (latestHash !== expectedContentHash) {
+          return { success: false, error: 'File version conflict', currentContentHash: latestHash, currentContent: latestContent, conflict: true }
+        }
+
+        fs.renameSync(tempPath, resolved)
+        tempPath = undefined
+        recordCommittedWrite(originalContent)
       } else {
-        if (expectedContentHash) return { success: false, error: 'File no longer exists' }
+        if (expectedContentHash) return { success: false, error: 'File no longer exists', conflict: true }
         fs.mkdirSync(path.dirname(resolved), { recursive: true })
-        beforeWrite()
+        this.versionedCommitInterleave?.(resolved)
         fs.writeFileSync(resolved, content, { encoding: 'utf-8', flag: 'wx' })
+        recordCommittedWrite(null)
       }
       logger.log('INFO', 'WorkspaceRepo', `Versioned write to file: ${resolved}`)
       return { success: true }
     } catch (err: any) {
-      const currentContentHash = fs.existsSync(resolved)
-        ? contentVersion(fs.readFileSync(resolved, 'utf-8'))
-        : undefined
-      return { success: false, error: err.code === 'EEXIST' ? 'File was created concurrently' : err.message, currentContentHash }
+      const currentContent = fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf-8') : undefined
+      const currentContentHash = currentContent === undefined ? undefined : contentVersion(currentContent)
+      const conflict = err.code === 'EEXIST' || currentContentHash !== expectedContentHash
+      return {
+        success: false,
+        error: err.code === 'EEXIST' ? 'File was created concurrently' : err.message,
+        currentContentHash,
+        currentContent,
+        conflict,
+      }
+    } finally {
+      if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
     }
   }
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderOpen, PanelLeft } from 'lucide-react'
+import { FolderOpen, PanelLeft, Square } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 
 interface AgentSessionHeaderBarProps {
@@ -11,6 +11,8 @@ interface AgentSessionHeaderBarProps {
   isExecuting?: boolean
   currentStep?: number
   maxSteps?: number | string
+  currentStatusText?: string
+  onCancel?: () => void
 }
 
 export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
@@ -22,6 +24,8 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
   isExecuting = false,
   currentStep = 0,
   maxSteps = 50,
+  currentStatusText = '',
+  onCancel,
 }) => {
   const { t } = useTranslation()
 
@@ -74,15 +78,30 @@ export const AgentSessionHeaderBar: React.FC<AgentSessionHeaderBarProps> = ({
         )}
       </div>
 
-      {/* Right: Step Counter when executing */}
       <div className="flex items-center gap-1.5">
+        {isExecuting && currentStatusText && (
+          <span className="max-w-[220px] truncate text-[10px] font-semibold text-cyan-200" title={currentStatusText}>
+            {currentStatusText}
+          </span>
+        )}
         {isExecuting && currentStep > 0 && (
           <span className="px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-mono text-[10px] font-bold animate-pulse">
             Step {currentStep}/{maxSteps}
           </span>
         )}
+        {isExecuting && onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label={t('coding.stopTask')}
+            title={t('coding.stopTask')}
+            className="h-7 px-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1.5 text-[10px] font-bold transition-colors focus-ring"
+          >
+            <Square className="w-3 h-3 fill-current" />
+            {t('coding.stopTask')}
+          </button>
+        )}
       </div>
     </div>
   )
 }
-

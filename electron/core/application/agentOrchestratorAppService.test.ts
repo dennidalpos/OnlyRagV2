@@ -8,6 +8,7 @@ import { runProjectVerification } from './agentOrchestratorVerificationRunner'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import { agentToolExecutorService } from './agentToolExecutorService'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { AppSettings } from '../../../shared/types'
 
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
@@ -73,6 +74,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(false)
     expect(res.error).toBe('Task prompt is required')
+    expect(res.completionStatus).toBe('blocked')
   })
 
   it('should route finish through the application evidence gate and persist the model report', async () => {
@@ -174,6 +176,40 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
   })
 
+  it('persists application closure when ask recovery is exhausted', async () => {
+    const sessionId = 'ask-recovery-terminal-closure'
+    const askJson = (attempt: number) =>
+      `\`\`\`json\n{"tool":"ask","parameters":{"question":"What should we do next? Attempt ${attempt}"}}\n\`\`\``
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce(askJson(1))
+      .mockResolvedValueOnce(askJson(2))
+      .mockResolvedValueOnce(askJson(3))
+    await agentSessionStateRepository.seedPlanMilestones(
+      sessionId,
+      tempDir,
+      [{ id: 'm-ask', title: 'Fix app.ts', status: 'pending' }],
+      'Fix app.ts'
+    )
+
+    const res = await runAgentOrchestratorLoop(
+      { userTask: 'Fix app.ts', agentMode: 'agent', workspacePath: tempDir, sessionId },
+      null
+    )
+    const saved = JSON.parse(fs.readFileSync(
+      path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`),
+      'utf-8'
+    ))
+
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(3)
+    expect(res.completionStatus).toBe('blocked')
+    expect(saved).toMatchObject({
+      status: 'FAILED',
+      terminationReason: 'circuit_breaker',
+      completionStatus: 'blocked',
+      executionPhase: 'outcome',
+    })
+  })
+
   it('should trip stagnation circuit breaker when repeated failures occur on complex tasks', async () => {
     const failingCommandJson = (n: number) =>
       `\`\`\`json\n{\n  "tool": "run_command",\n  "parameters": { "command": "pytest failing_test_${n}.py" }\n}\n\`\`\``
@@ -210,6 +246,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
     expect(res.success).toBe(false)
+    expect(res.completionStatus).toBe('unverifiable')
   })
 
   it('does not request another model turn after a command returns an uncertain effect', async () => {
@@ -746,6 +783,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     expect(res.success).toBe(false)
     expect(res.summary).toContain('Nessuna cartella di progetto / workspace specificata')
+    expect(res.completionStatus).toBe('blocked')
   })
 
   const verificationWriteJson =

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
-  Square,
   ArrowDown,
   RotateCcw,
   ClipboardList,
@@ -25,7 +24,6 @@ interface PromptComposerProps {
   agentPrompt: string
   setAgentPrompt: (prompt: string) => void
   onExecute: () => void
-  onCancel: () => void
   isExecuting: boolean
   queueLength: number
   agentMode: AgentMode
@@ -61,7 +59,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   agentPrompt,
   setAgentPrompt,
   onExecute,
-  onCancel,
   isExecuting,
   queueLength,
   agentMode,
@@ -346,18 +343,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
             <AgentModeSelector agentMode={agentMode} setAgentMode={setAgentMode} />
 
             {/* Action Buttons: Accoda / Send / Stop */}
-            {isExecuting && (
-              <button
-                type="button"
-                onClick={onCancel}
-                aria-label={t('coding.stopTask')}
-                title={t('coding.stopTask')}
-                className="w-7 h-7 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition-all shadow-lg shadow-rose-950/50 active:scale-95 shrink-0 cursor-pointer focus-ring"
-              >
-                <Square className="w-3 h-3 fill-current" />
-              </button>
-            )}
-
             {isExecuting ? (
               <button
                 type="button"

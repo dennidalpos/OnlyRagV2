@@ -8,7 +8,7 @@ import {
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
-import { recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
+import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -176,6 +176,11 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       })
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
+    ctx.emitLog('info', `Recupero esecuzione ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: correzione richiesta.`, toolRes.logDetail, {
+      category: 'system_alert',
+      toolName: parsedTool.tool,
+      target: targetParam,
+    })
   } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool'].includes(parsedTool.tool))) {
     ctx.recoveryState.executionRecoveryFailure = undefined
   }

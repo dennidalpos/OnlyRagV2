@@ -10,7 +10,7 @@ interface AgentModeSelectorProps {
 export const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({ agentMode, setAgentMode }) => {
   const { t } = useTranslation()
 
-  const modes: AgentMode[] = ['plan', 'ask', 'agent']
+  const modes: AgentMode[] = ['ask', 'agent']
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const currentIdx = modes.indexOf(agentMode)
@@ -26,50 +26,50 @@ export const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({ agentMode,
   }
 
   return (
-    <div
-      className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5 text-[10px] shrink-0"
-      role="radiogroup"
-      aria-label="Agent Mode"
-      onKeyDown={handleKeyDown}
-    >
+    <div className="flex items-center gap-1 text-[10px] shrink-0">
+      <div
+        className="flex items-center bg-slate-900/90 rounded-xl border border-slate-800 p-0.5"
+        role="radiogroup"
+        aria-label="Azioni principali"
+        onKeyDown={handleKeyDown}
+      >
+        <button
+          type="button"
+          role="radio"
+          tabIndex={agentMode === 'ask' || agentMode === 'plan' ? 0 : -1}
+          aria-checked={agentMode === 'ask'}
+          onClick={() => setAgentMode('ask')}
+          title={`${t('coding.askMode')}: ${t('coding.askModeDesc')}`}
+          className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
+            agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold border border-amber-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {t('coding.askModeShort')}
+        </button>
+        <button
+          type="button"
+          role="radio"
+          tabIndex={agentMode === 'agent' ? 0 : -1}
+          aria-checked={agentMode === 'agent'}
+          onClick={() => setAgentMode('agent')}
+          title={`${t('coding.agentMode')}: ${t('coding.agentModeDesc')}`}
+          className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
+            agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {t('coding.agentModeShort')}
+        </button>
+      </div>
       <button
         type="button"
-        role="radio"
-        tabIndex={agentMode === 'plan' ? 0 : -1}
-        aria-checked={agentMode === 'plan'}
+        aria-pressed={agentMode === 'plan'}
         onClick={() => setAgentMode('plan')}
         title={`${t('coding.planMode')}: ${t('coding.planModeDesc')}`}
-        className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-          agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+        className={`px-2 py-1 rounded-lg border font-semibold transition-all focus-ring ${
+          agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold border-cyan-800/80 shadow-sm' : 'border-slate-800 text-slate-400 hover:text-slate-200'
         }`}
       >
         {t('coding.planModeShort')}
-      </button>
-      <button
-        type="button"
-        role="radio"
-        tabIndex={agentMode === 'ask' ? 0 : -1}
-        aria-checked={agentMode === 'ask'}
-        onClick={() => setAgentMode('ask')}
-        title={`${t('coding.askMode')}: ${t('coding.askModeDesc')}`}
-        className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-          agentMode === 'ask' ? 'bg-amber-950 text-amber-300 font-bold border border-amber-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        {t('coding.askModeShort')}
-      </button>
-      <button
-        type="button"
-        role="radio"
-        tabIndex={agentMode === 'agent' ? 0 : -1}
-        aria-checked={agentMode === 'agent'}
-        onClick={() => setAgentMode('agent')}
-        title={`${t('coding.agentMode')}: ${t('coding.agentModeDesc')}`}
-        className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-          agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        {t('coding.agentModeShort')}
       </button>
     </div>
   )

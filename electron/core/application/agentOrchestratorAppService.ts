@@ -111,7 +111,7 @@ export async function runAgentOrchestratorLoop(
   customSessionId?: string
 ): Promise<AgentTaskResult> {
   if (!payload.userTask || !payload.userTask.trim()) {
-    return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required' }
+    return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required', completionStatus: 'blocked' }
   }
 
   const sessionId = payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
@@ -208,11 +208,12 @@ export async function runAgentOrchestratorLoop(
   if (!workspacePath && !isStandaloneMode) {
     const errorMsg = 'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
     emitLog('info', `❌ Errore Workspace: ${errorMsg}`)
-    emitDone(false, errorMsg)
+    emitDone(false, errorMsg, 'blocked')
+    await persistCurrentState('runtime_validation', 'blocked')
     clearSessionTimeout()
     setExecutionPhase('outcome')
     finalizeSession()
-    return { success: false, summary: errorMsg }
+    return { success: false, summary: errorMsg, completionStatus: 'blocked' }
   }
 
   const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
@@ -232,6 +233,11 @@ export async function runAgentOrchestratorLoop(
       buildSessionTracker,
       finalizeSession,
       setExecutionPhase,
+      getExecutionPhase: () => phaseController.getPhase(),
+      runtimeProfile: session.ollamaRuntimeProfile,
+      generationTelemetry: session.ollamaGenerationTelemetry,
+      lastVerification: session.lastVerification,
+      recordVerificationEvidence: (evidence) => { session.lastVerification = evidence },
     }, request)
 
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.

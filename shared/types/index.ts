@@ -707,6 +707,15 @@ export interface UserInterviewAnswer {
 /** Evidence-based terminal state emitted by the application-owned agent closure. */
 export type AgentCompletionStatus = 'verified' | 'unverifiable' | 'blocked' | 'cancelled'
 
+/** Last application-owned verification attempt persisted with a coding session. */
+export interface AgentVerificationEvidence {
+  status: 'verified' | 'failed' | 'unavailable'
+  checkedAt: string
+  command?: string
+  evidenceLevel?: 'structural' | 'behavioral'
+  detail?: string
+}
+
 export interface AgentDoneResult {
   success: boolean
   summary: string
@@ -758,6 +767,8 @@ export interface PlanMilestone {
   verificationCommand?: string
   /** Suggested after scaffolding; never executable until rediscovered from project capabilities. */
   proposedVerificationCommand?: string
+  /** Content hashes captured when file-backed evidence was verified. */
+  fileEvidence?: Record<string, string>
   notes?: string
 }
 

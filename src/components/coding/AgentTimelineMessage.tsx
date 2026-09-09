@@ -279,10 +279,22 @@ export const AgentTimelineMessage: React.FC<AgentTimelineMessageProps> = React.m
               {isLoopWarning ? 'Loop Intervention' : 'System Alert'}
             </span>
           </div>
-          <span className="opacity-60 font-mono">{formatClockTime(log.timestamp)}</span>
+          <div className="flex items-center gap-1">
+            <span className="opacity-60 font-mono">{formatClockTime(log.timestamp)}</span>
+            {log.detail && (
+              <button
+                type="button"
+                onClick={() => onToggleExpand(log.id)}
+                className="p-0.5 rounded text-slate-400 hover:text-slate-200 focus-ring"
+                aria-label={isExpanded ? 'Comprimi dettaglio diagnostico' : 'Espandi dettaglio diagnostico'}
+              >
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
         </div>
         <div className="text-[11px] leading-relaxed">{log.message}</div>
-        {log.detail && (
+        {isExpanded && log.detail && (
           <div className="mt-1 p-2 rounded bg-black/40 border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-40 whitespace-pre-wrap">
             {log.detail}
           </div>

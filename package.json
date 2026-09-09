@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
     "format:check": "git diff --check HEAD",
+    "quality:static": "node ./scripts/check_static_quality.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:fast": "vitest run --reporter=dot",
@@ -60,6 +61,7 @@
     "dompurify": "^3.4.13"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.12",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.0.7",
     "@tanstack/react-virtual": "^3.14.10",

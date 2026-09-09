@@ -5,7 +5,7 @@ import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
-import type { AgentCompletionStatus } from '../../../../shared/types'
+import type { AgentCompletionStatus, AgentVerificationEvidence } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
@@ -48,10 +48,12 @@ export interface SavedAgentSessionState {
     schema?: RecoveryFailureState
     execution?: RecoveryFailureState
     versionConflictReadPath?: string
+    verificationFixCycles?: number
   }
   versionedReadEvidence?: { filePath: string; contentHash: string }
   ollamaRuntimeProfile?: OllamaSessionRuntimeProfile
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
+  lastVerification?: AgentVerificationEvidence
 }
 
 export class AgentSessionStateRepository {

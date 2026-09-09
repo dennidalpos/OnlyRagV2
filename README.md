@@ -178,8 +178,12 @@ npm run dev
 | `npm run lint` | Runs the serial repository gate: JSON, TypeScript, Python syntax, Vitest, and bundle smoke test |
 | `npm run clean` | Removes only regenerable build artifacts and repository caches (`scripts/clean_repo.ps1`); tracked files, dependencies, logs and user data are preserved |
 | `npm run clean:logs` | Removes application logs; use `-StopAppProcesses` only when the local app must be stopped first |
-| `npm run clean:full` | Full reset: cleans repo cache and user LanceDB storage in AppData |
-| `npm run package:win` | Packages Windows NSIS installer setup binary (`scripts/build_package.ps1`) |
+| `npm run clean:tests` | Removes only OnlyRag-owned `%TEMP%` residues and `Desktop/onlyrag_live*` test workspaces |
+| `npm run clean:installer-cache` | Removes the Electron updater cache without touching the installed app or user settings |
+| `npm run clean:full` | Full destructive reset: repo cache, logs, test residues, updater cache, settings, and user LanceDB storage |
+| `npm run assets:generate` | Rebuilds the multi-resolution installer ICO and synchronizes public icons from canonical assets |
+| `npm run assets:check` | Validates source dimensions, public icon copies, and required ICO frames without writing files |
+| `npm run package:win` | Validates assets, builds sidecar/app, packages NSIS, and reports signature plus SHA-256 |
 
 ---
 

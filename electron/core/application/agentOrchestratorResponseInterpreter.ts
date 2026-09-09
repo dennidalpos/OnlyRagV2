@@ -1,5 +1,4 @@
-import { GoalDecompositionPlanner, isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
-import { compilePlanMilestones } from '../../../shared/domain/agent/planCompilation'
+import { isCompletionMilestoneTitle } from '../../../shared/domain/agent/planAndSolveGraph'
 import { parseAgentToolCall, type ToolCallRejection } from '../domain/agent/toolParser'
 import { buildToolSchemaCorrectionDirective } from '../domain/agent/ollamaToolSchemaCatalog'
 import { rejectionAbortSummary } from '../domain/agent/toolRejectionEscalation'
@@ -11,56 +10,6 @@ import { handleFinishTool, handleLoopDetection } from './agentOrchestratorFinish
 import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
 export type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
-
-/**
- * Without a plan yet, any checklist-shaped output seeds one. With a plan already in place,
- * only an explicit <plan> block may replace it — a stray numbered list in prose must not
- * clobber the active plan — and the replacement carries over the milestones already verified
- * or failed, so re-planning never resets progress to 0%.
- */
-async function extractOrRevisePlan(ctx: ResponseInterpreterContext) {
-  const outputText = ctx.streamedOutput || ''
-  const hasExplicitPlanBlock = outputText.includes('<plan>')
-  if (!ctx.goalPlanner.hasPlan() && (hasExplicitPlanBlock || outputText.includes('- [ ]') || outputText.includes('1. '))) {
-    // The >= 2 threshold asks "did the model actually emit a checklist?", so it is applied to
-    // the PARSED milestones. Applying it after compilation would let a two-item plan whose
-    // second item is an acceptance criterion fold to one entry and then be discarded whole.
-    const parsedMilestones = GoalDecompositionPlanner.parsePlanFromText(outputText)
-    if (parsedMilestones.length >= 2) {
-      const extractedMilestones = compilePlanMilestones(parsedMilestones)
-      // A brand-new plan can only ever start pending: parsePlanFromText's checkbox status
-      // (verified/in_progress/failed) is meant for RE-parsing a plan that was already running
-      // (resume, revision). Trusting it here would let a model that mistakenly echoes "[x]"
-      // on its first turn seed a plan that's already 100% "done" -- compileProgressPrompt then
-      // orders it to call finish immediately, closing the task without doing any work.
-      ctx.goalPlanner.initializePlan(extractedMilestones.map((m) => ({ ...m, status: 'pending' })))
-      ctx.emitLog('info', `📋 Execution Plan Initialized (${extractedMilestones.length} milestones)`)
-      // The plan is written out in full exactly when it changes shape -- here and on revision
-      // below. Per-step snapshots were removed; individual status changes are logged as
-      // transitions instead (see agentOrchestratorSessionPersistence.ts).
-      if (ctx.settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logPlanMilestoneUpdate(ctx.sessionId, ctx.stepCount, [...ctx.goalPlanner.getMilestones()], 'Plan initialized')
-      }
-    }
-    return
-  }
-  if (ctx.goalPlanner.hasPlan() && hasExplicitPlanBlock) {
-    const parsedRevision = GoalDecompositionPlanner.parsePlanFromText(ctx.streamedOutput)
-    if (parsedRevision.length >= 2) {
-      const revisedMilestones = compilePlanMilestones(parsedRevision)
-      ctx.goalPlanner.replacePlanPreservingProgress(revisedMilestones)
-      const progress = ctx.goalPlanner.getProgressSummary()
-      ctx.emitLog(
-        'info',
-        `📋 Execution Plan Revised (${revisedMilestones.length} milestones, ${progress.completed} already verified carried over)`
-      )
-      if (ctx.settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logPlanMilestoneUpdate(ctx.sessionId, ctx.stepCount, [...ctx.goalPlanner.getMilestones()], 'Plan revised')
-      }
-      await ctx.persistCurrentState()
-    }
-  }
-}
 
 async function handleMissingToolCall(
   ctx: ResponseInterpreterContext,
@@ -184,8 +133,6 @@ async function handleMissingToolCall(
  * above. Mirrors the exact step order from the original inline loop body.
  */
 export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
-  await extractOrRevisePlan(ctx)
-
   const rejections: ToolCallRejection[] = []
   const parsedTool = parseAgentToolCall(ctx.streamedOutput, (rejection) => rejections.push(rejection))
   if (!parsedTool) return handleMissingToolCall(ctx, rejections)

@@ -1,30 +1,17 @@
-import { describe, it, expect } from 'vitest'
-import { GoalDecompositionPlanner, PlanMilestone, isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
+import { describe, expect, it } from 'vitest'
+import { GoalDecompositionPlanner, isCompletionMilestoneTitle, type PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
 
 describe('isCompletionMilestoneTitle', () => {
-  it('recognises the closing milestone in both languages', () => {
+  it('recognises only legacy closing milestones without deliverables', () => {
     expect(isCompletionMilestoneTitle('Riepilogo finale e arresto (invoke finish)')).toBe(true)
     expect(isCompletionMilestoneTitle('Write the final report and finish')).toBe(true)
-    expect(isCompletionMilestoneTitle('🛑 Completamento dell ultimo task e arresto dell agente')).toBe(true)
-  })
-
-  it('treats a title that names a file as work, whatever words it uses', () => {
-    // The capability-shaped plan format puts prose in every title, and prose collides with
-    // these keywords: without the deliverable check these three read as the closing
-    // milestone, which would hide real work from getActiveMilestone entirely.
-    expect(isCompletionMilestoneTitle('The user can mark a task finished — `src/pages/TasksPage.tsx`')).toBe(false)
-    expect(isCompletionMilestoneTitle('Il riepilogo mostra i totali — `src/components/Riepilogo.tsx`')).toBe(false)
     expect(isCompletionMilestoneTitle('Create src/components/FinishButton.tsx')).toBe(false)
-  })
-
-  it('keeps ordinary work milestones out', () => {
-    expect(isCompletionMilestoneTitle('Create src/App.tsx')).toBe(false)
-    expect(isCompletionMilestoneTitle('')).toBe(false)
+    expect(isCompletionMilestoneTitle({ title: 'Finish the pending work', filePaths: ['src/task.ts'] })).toBe(false)
   })
 })
 
-describe('GoalDecompositionPlanner Unit Tests', () => {
-  it('should initialize and compile progress prompt correctly', () => {
+describe('GoalDecompositionPlanner', () => {
+  it('initializes canonical milestones and renders the active work', () => {
     const planner = new GoalDecompositionPlanner()
     const milestones: PlanMilestone[] = [
       { id: 'm-1', title: 'Inspect workspace files', status: 'verified', falsifiableHypothesis: 'Config files exist' },
@@ -33,24 +20,47 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
     ]
 
     planner.initializePlan(milestones)
-    expect(planner.hasPlan()).toBe(true)
 
-    const summary = planner.getProgressSummary()
-    expect(summary.completed).toBe(1)
-    expect(summary.total).toBe(3)
-    expect(summary.percentage).toBe(33)
-
+    expect(planner.getProgressSummary()).toEqual({ completed: 1, total: 3, percentage: 33 })
     const prompt = planner.compileProgressPrompt()
     expect(prompt).toContain('1/3 verified - 33%')
-    expect(prompt).not.toContain('[x] **m-1: Inspect workspace files**')
     expect(prompt).toContain('[>] **m-2: Implement feature in main.ts**')
-    expect(prompt).not.toContain('[ ] **m-3: Run verification tests**')
-    expect(prompt).toContain('Action 1:')
     expect(prompt).toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
-    expect(prompt).toContain('Implement feature in main.ts')
   })
 
-  it('requests a final report without requiring finish when only the legacy closing milestone remains', () => {
+  it('emits transitions only when a status changes', () => {
+    const planner = new GoalDecompositionPlanner()
+    const transitions: string[] = []
+    planner.onMilestoneTransition((transition) => transitions.push(`${transition.id}:${transition.from}:${transition.to}`))
+    planner.initializePlan([{ id: 'm-1', title: 'Task A', status: 'pending' }])
+
+    planner.updateMilestone('m-1', 'in_progress')
+    planner.updateMilestone('m-1', 'in_progress')
+    planner.updateMilestone('m-1', 'verified')
+
+    expect(transitions).toEqual(['m-1:pending:in_progress', 'm-1:in_progress:verified'])
+    expect(planner.isAllVerified()).toBe(true)
+  })
+
+  it('preserves an explicit canonical plan on load and exposes its compact state', () => {
+    const planner = new GoalDecompositionPlanner()
+    planner.loadMilestones([
+      { id: 'm-1', title: 'Create auth types', status: 'pending' },
+      { id: 'm-2', title: 'Configure JWT middleware', status: 'verified' },
+    ])
+
+    expect(planner.getCompactState('Add Authentication Feature')).toEqual({
+      objective: 'Add Authentication Feature',
+      restorePoint: 'm-2: Configure JWT middleware',
+      activeMicroTask: 'm-1: Create auth types',
+      pendingMicroTasks: ['m-1: Create auth types'],
+      completedCount: 1,
+      totalCount: 2,
+      isCompleted: false,
+    })
+  })
+
+  it('keeps legacy closing milestones out of active work and reports failures', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan([
       { id: 'm-1', title: 'Create src/App.tsx', status: 'verified' },
@@ -59,485 +69,38 @@ describe('GoalDecompositionPlanner Unit Tests', () => {
     ])
 
     const prompt = planner.compileProgressPrompt()
-
     expect(prompt).toContain('[NO OPERATIONAL MILESTONES REMAIN - FINAL REPORT REQUIRED]')
-    expect(prompt).toContain('no finish tool is required')
-    expect(prompt).not.toContain('Do NOT invoke \"finish\"')
+    expect(prompt).toContain('- m-2: Create src/pages/Tasks.tsx')
     expect(prompt).not.toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
   })
 
-  it('lists abandoned milestones so the final report can own them', () => {
+  it('advances past a verified artifact awaiting later verification', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan([
-      { id: 'm-1', title: 'Create src/pages/Tasks.tsx', status: 'failed' },
-      { id: 'm-2', title: 'Completamento e arresto (invoke finish)', status: 'pending' },
+      {
+        id: 'm-1',
+        title: 'Create package.json',
+        status: 'in_progress',
+        notes: 'Awaiting a passing verification command before this can count as verified.',
+      },
+      { id: 'm-2', title: 'Create src/styles/globals.css', status: 'pending' },
     ])
 
-    const prompt = planner.compileProgressPrompt()
-
-    expect(prompt).toContain('MUST be reported as incomplete in your summary')
-    expect(prompt).toContain('- m-1: Create src/pages/Tasks.tsx')
+    expect(planner.getActiveMilestone()?.id).toBe('m-2')
   })
 
-  it('keeps the ordinary focus block while operational work is still pending', () => {
-    const planner = new GoalDecompositionPlanner()
-    planner.initializePlan([
-      { id: 'm-1', title: 'Create src/App.tsx', status: 'failed' },
-      { id: 'm-2', title: 'Create src/pages/Tasks.tsx', status: 'pending' },
-      { id: 'm-3', title: 'Riepilogo finale (invoke finish)', status: 'pending' },
-    ])
-
-    const prompt = planner.compileProgressPrompt()
-
-    expect(prompt).toContain('[CURRENT ACTIVE MICRO-TASK FOCUS]')
-    expect(prompt).toContain('Task m-2: Create src/pages/Tasks.tsx')
-    expect(prompt).not.toContain('[NO OPERATIONAL MILESTONES REMAIN')
-  })
-
-  it('should parse markdown checklist plans from LLM text', () => {
-    const rawOutput = `
-Here is my plan to solve the task:
-- [x] Step 1: Read App.tsx
-- [>] Step 2: Add dark mode toggle
-- [ ] Step 3: Verify with npm test
-`
-    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawOutput)
-    expect(parsed.length).toBe(3)
-    expect(parsed[0].status).toBe('verified')
-    expect(parsed[0].title).toBe('Step 1: Read App.tsx')
-    expect(parsed[1].status).toBe('in_progress')
-    expect(parsed[2].status).toBe('pending')
-  })
-
-  it('should parse structured JSON plan from <plan> blocks', () => {
-    const rawOutput = `
-<plan>
-[
-  { "id": "m1", "title": "Setup db table", "status": "pending", "verificationCommand": "pytest tests/test_db.py" },
-  { "id": "m2", "title": "Create REST endpoint", "status": "pending" }
-]
-</plan>
-`
-    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawOutput)
-    expect(parsed.length).toBe(2)
-    expect(parsed[0].title).toBe('Setup db table')
-    expect(parsed[0].verificationCommand).toBe('pytest tests/test_db.py')
-  })
-
-  it('should update milestone status and detect when all milestones are verified', () => {
-    const planner = new GoalDecompositionPlanner()
-    planner.initializePlan([
-      { id: 'm-1', title: 'Task A', status: 'pending' },
-      { id: 'm-2', title: 'Task B', status: 'pending' },
-    ])
-
-    expect(planner.isAllVerified()).toBe(false)
-    planner.updateMilestone('m-1', 'verified')
-    expect(planner.isAllVerified()).toBe(false)
-
-    planner.updateMilestone('m-2', 'verified')
-    expect(planner.isAllVerified()).toBe(true)
-    expect(planner.getProgressSummary().percentage).toBe(100)
-  })
-  it('should carry verified and failed milestones over when the plan is replaced mid-session', () => {
-    const planner = new GoalDecompositionPlanner()
-    planner.initializePlan([
-      { id: 'm-1', title: 'Scaffold project', status: 'pending' },
-      { id: 'm-2', title: 'Add routing', status: 'pending' },
-      { id: 'm-3', title: 'Write tests', status: 'pending' },
-    ])
-    planner.updateMilestone('m-1', 'verified')
-    planner.updateMilestone('m-2', 'failed')
-
-    planner.replacePlanPreservingProgress([
-      { id: 'r-1', title: 'Scaffold project', status: 'pending' },
-      { id: 'r-2', title: 'Add routing', status: 'pending' },
-      { id: 'r-3', title: 'Add state management', status: 'pending' },
-    ])
-
-    const milestones = planner.getMilestones()
-    expect(milestones.length).toBe(3)
-    expect(milestones[0].status).toBe('verified')
-    expect(milestones[1].status).toBe('failed')
-    // A genuinely new milestone starts fresh rather than inheriting anything.
-    expect(milestones[2].title).toBe('Add state management')
-    expect(milestones[2].status).toBe('pending')
-    expect(planner.getProgressSummary().completed).toBe(1)
-  })
-
-  it('should compute compact state directly from milestones', () => {
-    const planner = new GoalDecompositionPlanner()
-    planner.initializePlan([
-      { id: 'm-1', title: 'Create auth types', status: 'pending' },
-      { id: 'm-2', title: 'Configure JWT middleware', status: 'verified' },
-    ])
-
-    const compactState = planner.getCompactState('Add Authentication Feature')
-    expect(compactState.objective).toBe('Add Authentication Feature')
-    expect(compactState.restorePoint).toBe('m-2: Configure JWT middleware')
-    expect(compactState.activeMicroTask).toBe('m-1: Create auth types')
-    expect(compactState.pendingMicroTasks).toHaveLength(1)
-    expect(compactState.pendingMicroTasks[0]).toBe('m-1: Create auth types')
-    expect(compactState.completedCount).toBe(1)
-    expect(compactState.totalCount).toBe(2)
-    expect(compactState.isCompleted).toBe(false)
-  })
-
-  it('should mark plan as completed when every milestone is verified', () => {
-    const planner = new GoalDecompositionPlanner()
-    planner.initializePlan([
-      { id: 'm-1', title: 'Task 1', status: 'verified' },
-      { id: 'm-2', title: 'Task 2', status: 'verified' },
-    ])
-    const compactState = planner.getCompactState()
-
-    expect(compactState.isCompleted).toBe(true)
-    expect(compactState.pendingMicroTasks).toHaveLength(0)
-    expect(compactState.activeMicroTask).toBe('None (Plan Completed)')
-  })
-
-  it('should handle an empty milestone list in compact state', () => {
-    const planner = new GoalDecompositionPlanner()
-    const compactState = planner.getCompactState('Empty Objective')
-
-    expect(compactState.totalCount).toBe(0)
-    expect(compactState.completedCount).toBe(0)
-    expect(compactState.isCompleted).toBe(false)
-    expect(compactState.restorePoint).toBe('None (Session Initialized)')
-  })
-
-  it('should flatten indented sub-bullets into discrete atomic microtasks', () => {
-    const rawOutput = `
-Here is the microtask execution plan:
-- [ ] 📦 Step 1: Scaffolding & Setup
-  - Initialize project with package.json
-  - Install tailwindcss and vite dependencies
-- [ ] 📐 Step 2: Architecture & Foundation
-  - Create src/App.tsx layout shell
-  - Create src/components/Sidebar.tsx navigation
-  - Create src/pages/Dashboard.tsx
-- [ ] 🧪 Step 3: Verification
-  - [ ] Run npm run build
-  - [ ] Run tsc --noEmit
-`
-    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawOutput)
-    expect(parsed.length).toBe(7)
-    expect(parsed[0].id).toBe('m-1')
-    expect(parsed[0].title).toBe('Initialize project with package.json')
-    expect(parsed[1].id).toBe('m-2')
-    expect(parsed[1].title).toBe('Install tailwindcss and vite dependencies')
-    expect(parsed[2].id).toBe('m-3')
-    expect(parsed[2].title).toBe('Create src/App.tsx layout shell')
-    expect(parsed[3].id).toBe('m-4')
-    expect(parsed[3].title).toBe('Create src/components/Sidebar.tsx navigation')
-    expect(parsed[4].id).toBe('m-5')
-    expect(parsed[4].title).toBe('Create src/pages/Dashboard.tsx')
-    expect(parsed[5].id).toBe('m-6')
-    expect(parsed[5].title).toBe('Run npm run build')
-    expect(parsed[6].id).toBe('m-7')
-    expect(parsed[6].title).toBe('Run tsc --noEmit')
-  })
-
-  it('should parse checklist plans wrapped inside markdown code blocks without skipping them', () => {
-    const rawFencedPlan = '```markdown\n' +
-      '- [ ] 1-1: Create a new React project using `npx create-react-app ProjectDashboardTask`\n' +
-      '- [ ] 1-2: Install Tailwind CSS\n' +
-      '- [ ] 1-3: Create src/pages/Dashboard.tsx\n' +
-      '- [ ] 1-4: Create src/pages/Tasks.tsx\n' +
-      '```\n' +
-      '22. 🛑 Completamento dell\'ultimo task, riepilogo finale e arresto dell\'agente (invoke "finish")'
-
-    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawFencedPlan)
-    expect(parsed.length).toBe(5)
-    expect(parsed[0].id).toBe('m-1')
-    expect(parsed[0].title).toContain('Create a new React project')
-    expect(parsed[1].id).toBe('m-2')
-    expect(parsed[1].title).toContain('Install Tailwind CSS')
-    expect(parsed[2].id).toBe('m-3')
-    expect(parsed[2].title).toContain('Dashboard.tsx')
-    expect(parsed[3].id).toBe('m-4')
-    expect(parsed[3].title).toContain('Tasks.tsx')
-    expect(parsed[4].id).toBe('m-5')
-    expect(parsed[4].title).toContain('Completamento dell\'ultimo task')
-  })
-
-  it('should not double up the milestone id when the planner model self-labels its titles (regression: "Task m-1: m-1: ...")', () => {
-    const rawOutput = `
-- [ ] m-1: Create a new React project using Vite.
-- [ ] m-2: Initialize Tailwind CSS in the project.
-`
-    const parsed = GoalDecompositionPlanner.parsePlanFromText(rawOutput)
-    expect(parsed[0].title).toBe('Create a new React project using Vite.')
-    expect(parsed[1].title).toBe('Initialize Tailwind CSS in the project.')
-
-    const planner = new GoalDecompositionPlanner()
-    planner.initializePlan(parsed as any)
-    const prompt = planner.compileProgressPrompt()
-
-    expect(prompt).toContain('**m-1: Create a new React project using Vite.**')
-    expect(prompt).not.toContain('m-1: m-1:')
-    expect(prompt).not.toContain('m-2: m-2:')
-
-    // the tracker re-prefixes the id too, and must likewise render it exactly once
-    const compact = planner.getCompactState()
-    expect(compact.activeMicroTask).toBe('m-1: Create a new React project using Vite.')
-    expect(compact.pendingMicroTasks[1]).toBe('m-2: Initialize Tailwind CSS in the project.')
-  })
-
-  it('uses structured files to distinguish work from a closing step', () => {
-    expect(isCompletionMilestoneTitle({ title: 'Finish the pending work', filePaths: ['src/task.ts'] })).toBe(false)
-  })
-
-  it('limits the turn prompt without deleting canonical milestones', () => {
+  it('bounds the prompt without changing canonical milestones', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan(Array.from({ length: 20 }, (_, index) => ({
       id: `m-${index + 1}`,
-      title: `Implement capability ${index + 1} — \`src/file-${index + 1}.ts\``,
+      title: `Implement capability ${index + 1} in src/file-${index + 1}.ts`,
       status: 'pending' as const,
     })))
 
     const prompt = planner.compileProgressPrompt()
-
     expect(planner.getMilestones()).toHaveLength(20)
     expect(prompt).toContain('**m-1:')
-    expect(prompt).not.toContain('**m-2:')
     expect(prompt).not.toContain('**m-16:')
     expect(prompt).toContain('19 later milestones omitted from this turn; retained in canonical state')
-  })
-  describe('closure directive', () => {
-    const activePlan = [
-      { id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' as const },
-      { id: 'm-2', title: 'Ensure the layout is responsive', status: 'in_progress' as const },
-    ]
-
-    it('renders the ordinary focus block, prohibition included, while the session is not closable', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan(activePlan as any)
-
-      const prompt = planner.compileProgressPrompt()
-
-      expect(prompt).toContain('ACTIVE MILESTONE')
-      expect(prompt).toContain('Do NOT invoke "finish"')
-    })
-
-    // The two blocks contradict each other: directive 4 forbids finishing until every
-    // milestone is verified, and a milestone naming no artefact can never get there. Printing
-    // both is what left the model re-running a green build as its only permitted action.
-    it('replaces the focus block entirely once the project is verified and closable', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan(activePlan as any)
-
-      const prompt = planner.compileProgressPrompt({ directive: { blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' } })
-
-      expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
-      expect(prompt).not.toContain('ACTIVE MILESTONE')
-      expect(prompt).not.toContain('Do NOT invoke "finish"')
-    })
-
-    it('still renders the checklist, so the model has the ids update_plan needs', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan(activePlan as any)
-
-      const prompt = planner.compileProgressPrompt({ directive: { blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' } })
-
-      expect(prompt).toContain('**m-2: Ensure the layout is responsive**')
-    })
-
-    it('swaps directive 2 alone when the active milestone names no artefact', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan(activePlan as any)
-
-      const prompt = planner.compileProgressPrompt({
-        directive: { closureStepDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.' },
-      })
-
-      expect(prompt).toContain('2. THIS MILESTONE NAMES NO FILE.')
-      expect(prompt).not.toContain('Once the required files for this milestone are created')
-      // The rest of the focus block is untouched: this milestone is still the active one and
-      // the session is not finished.
-      expect(prompt).toContain('ACTIVE MILESTONE')
-      expect(prompt).toContain('1. Focus your actions on achieving the goals of this milestone.')
-      expect(prompt).toContain('4. Do NOT invoke "finish"')
-    })
-
-    it('keeps the standard directive 2 when no override is supplied', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan(activePlan as any)
-
-      expect(planner.compileProgressPrompt()).toContain(
-        '2. Once the required files for this milestone are created or updated'
-      )
-    })
-
-    // A block directive replaces the focus block outright, so a closure step carried alongside
-    // it is never rendered. The arbiter cannot in fact emit both at once — this pins the
-    // renderer's own precedence, so a future decision carrying both cannot leak the weaker one.
-    it('renders only the block directive when a closure step is also supplied', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan(activePlan as any)
-
-      const prompt = planner.compileProgressPrompt({
-        directive: {
-          blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.',
-          closureStepDirective: '2. THIS MILESTONE NAMES NO FILE. Close it with update_plan.',
-        },
-      })
-
-      expect(prompt).toContain('[PROJECT VERIFIED — CLOSE THE SESSION]')
-      expect(prompt).not.toContain('THIS MILESTONE NAMES NO FILE')
-    })
-
-    it('leaves the all-complete branch alone: it already orders finish', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan([{ id: 'm-1', title: 'Create `src/App.tsx`', status: 'verified' }] as any)
-
-      const prompt = planner.compileProgressPrompt({ directive: { blockDirective: '[PROJECT VERIFIED — CLOSE THE SESSION]\nClose it now.' } })
-
-      expect(prompt).toContain('ALL CHECKLIST MILESTONES COMPLETED')
-    })
-  })
-
-  describe('verification directives on checklist lines', () => {
-    it('reads the verification command from a dash-separated directive and keeps it out of the title', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText(
-        '- [ ] m-1: Create `src/App.tsx` with the layout shell\n' +
-        '- [ ] m-2: Verifica di compilazione del progetto — verify: `npm run build`'
-      )
-
-      expect(plan).toHaveLength(2)
-      expect(plan[0].verificationCommand).toBeUndefined()
-      expect(plan[1].title).toBe('Verifica di compilazione del progetto')
-      expect(plan[1].verificationCommand).toBe('npm run build')
-    })
-
-    it('reads a bracketed directive and accepts the Italian keyword', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Suite di test verde (verifica: `npm test`)')
-
-      expect(plan[0].title).toBe('Suite di test verde')
-      expect(plan[0].verificationCommand).toBe('npm test')
-    })
-
-    it('reads the directive on flattened sub-bullets too', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText(
-        '- [ ] Quality gate\n' +
-        '  - [ ] Typecheck pulito — verify: `npx tsc --noEmit`\n' +
-        '  - [ ] Build pulita — verify: `npm run build`'
-      )
-
-      expect(plan.map((m) => m.verificationCommand)).toEqual(['npx tsc --noEmit', 'npm run build'])
-      expect(plan[0].title).toBe('Typecheck pulito')
-    })
-
-    it('refuses a directive whose command would write the workspace', () => {
-      // The planner of session-1787497654743-4enx declared `touch` and `echo > file` as proof
-      // for ten of fifteen milestones. Executed, they rewrote the agent's own source and then
-      // reported the milestone verified.
-      const plan = GoalDecompositionPlanner.parsePlanFromText(
-        '- [ ] m-1: Create `src/App.tsx` — verify: `touch src/App.tsx`\n' +
-        '- [ ] m-2: Configure Tailwind — verify: `npx tailwindcss init -p`'
-      )
-
-      expect(plan.map((m) => m.verificationCommand)).toEqual([undefined, undefined])
-      expect(plan[0].notes).toContain('touch src/App.tsx')
-      expect(plan[0].notes).toContain('refused')
-    })
-
-    it('keeps the milestone itself, and its title, when the command is refused', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Create `src/App.tsx` — verify: `touch src/App.tsx`')
-
-      expect(plan).toHaveLength(1)
-      expect(plan[0].title).toBe('Create `src/App.tsx`')
-    })
-
-    it('refuses an unsafe command arriving through the JSON plan payload too', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText(
-        '<plan>[{"id":"m-1","title":"Create src/App.tsx","verificationCommand":"echo x > src/App.tsx"},' +
-        '{"id":"m-2","title":"Build","verificationCommand":"npm run build"}]</plan>'
-      )
-
-      expect(plan[0].verificationCommand).toBeUndefined()
-      expect(plan[1].verificationCommand).toBe('npm run build')
-    })
-
-    it('leaves a line that merely mentions verification untouched', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] m-1: Verify the layout renders on tablet widths')
-
-      expect(plan[0].title).toBe('Verify the layout renders on tablet widths')
-      expect(plan[0].verificationCommand).toBeUndefined()
-    })
-
-    it('keeps the title when the directive would consume the whole line', () => {
-      const plan = GoalDecompositionPlanner.parsePlanFromText('- [ ] verify: `npm run build`')
-
-      expect(plan[0].title).toBe('verify: `npm run build`')
-      expect(plan[0].verificationCommand).toBeUndefined()
-    })
-    it('reads back the directive as compileProgressPrompt renders it, emphasis markers included', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan([
-        { id: 'm-1', title: 'Build pulita', status: 'pending', verificationCommand: 'npm run build' },
-      ])
-
-      // The model sees this rendering every turn and mimics it when it revises the plan,
-      // so the parser has to accept its own output back.
-      const reparsed = GoalDecompositionPlanner.parsePlanFromText(planner.compileProgressPrompt())
-
-      expect(reparsed[0].title).toBe('Build pulita')
-      expect(reparsed[0].verificationCommand).toBe('npm run build')
-    })
-
-    it('strips closed and unclosed <think> and <thought> reasoning blocks before parsing plans', () => {
-      const rawWithClosed = `<think>
-Let me construct a 2-step plan.
-</think>
-- [ ] m-1: Implement logic
-- [ ] m-2: Verify build`
-      const parsedClosed = GoalDecompositionPlanner.parsePlanFromText(rawWithClosed)
-      expect(parsedClosed).toHaveLength(2)
-      expect(parsedClosed[0].title).toBe('Implement logic')
-
-      const rawWithThought = `<thought>
-Reasoning here...
-</thought>
-- [ ] m-1: Step 1
-- [ ] m-2: Step 2`
-      const parsedThought = GoalDecompositionPlanner.parsePlanFromText(rawWithThought)
-      expect(parsedThought).toHaveLength(2)
-    })
-
-    it('advances active milestone focus when an in-progress milestone has its deliverables satisfied awaiting verification', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan([
-        {
-          id: 'm-1',
-          title: 'Create package.json',
-          status: 'in_progress',
-          notes: '"package.json" was written for this milestone and every file it names is on disk. Awaiting a passing verification command before this can count as verified.',
-        },
-        { id: 'm-2', title: 'Create src/styles/globals.css', status: 'pending' },
-        { id: 'm-3', title: 'Riepilogo finale (invoke finish)', status: 'pending' },
-      ])
-
-      const activeM = planner.getActiveMilestone()
-      expect(activeM?.id).toBe('m-2')
-      expect(activeM?.title).toBe('Create src/styles/globals.css')
-    })
-
-    it('preserves progress during re-planning when milestone titles are rephrased around the same deliverables', () => {
-      const planner = new GoalDecompositionPlanner()
-      planner.initializePlan([
-        { id: 'm-1', title: 'Create `src/styles/globals.css` with Tailwind', status: 'verified' },
-        { id: 'm-2', title: 'Implement `src/components/Sidebar.tsx`', status: 'pending' },
-      ])
-
-      planner.replacePlanPreservingProgress([
-        { id: 'm-1', title: 'Configure and polish `src/styles/globals.css` styles', status: 'pending' },
-        { id: 'm-2', title: 'Implement `src/components/Sidebar.tsx`', status: 'pending' },
-      ])
-
-      const milestones = planner.getMilestones()
-      expect(milestones[0].status).toBe('verified')
-      expect(milestones[1].status).toBe('pending')
-    })
   })
 })

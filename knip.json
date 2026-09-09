@@ -19,6 +19,7 @@
     "nvidia-smi"
   ],
   "ignoreDependencies": [
-    "@types/diff"
+    "@types/diff",
+    "@biomejs/biome"
   ]
 }

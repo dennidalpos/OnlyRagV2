@@ -102,6 +102,11 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 * **Soluzione**: la promozione automatica accetta solo un comando risolto dal profilo del progetto. Il gate dei comandi rifiuta inoltre install/add come prova, proteggendo piani ripristinati o modificati.
 * **Verifica**: regressione deterministica sul comando live; nessuna modifica a `hasVerifiedBuild` e nessuna chiamata di promozione.
 
+### 2.16. Un solo canale per i piani eseguibili (CAS-27)
+* **Problema**: il loop poteva estrarre checklist Markdown e blocchi `<plan>` dalla risposta di un turno. Quel secondo canale ricostruiva milestone fuori dal contratto JSON v2 e poteva quindi ignorare i controlli applicati da generazione, revisione e persistenza.
+* **Soluzione**: i piani entrano nell'esecuzione solo dal modello `AgentPlan` validato. L'interprete del turno tratta ogni risposta come proposta tool o report; non crea né sostituisce più il piano. Il riconoscimento delle milestone finali resta limitato alle sessioni legacy già persistite.
+* **Residuo esplicito**: il fallback testuale dei tool e la continuazione `/api/generate` restano attivi per modelli locali che non popolano `tool_calls`; la loro rimozione richiede una nuova qualifica live native-only.
+
 ---
 
 ## 3. Gestione Dinamica della Memoria di Contesto

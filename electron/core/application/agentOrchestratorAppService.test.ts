@@ -294,7 +294,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
   })
 
-  it('should persist a plan initialized during a PLAN-mode step before the step returns', async () => {
+  it('does not infer a plan from execution output during a PLAN-mode step', async () => {
     const planWithChecklistJson =
       '- [ ] Design database schema\n- [ ] Implement API endpoints\n\n' +
       '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
@@ -316,34 +316,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const statePath = path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`)
     expect(fs.existsSync(statePath)).toBe(true)
     const savedState = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
-    expect(savedState.planMilestones.length).toBe(2)
-    expect(savedState.planMilestones[0].title).toContain('Design database schema')
-  })
-
-  it('must never seed a freshly-initialized plan with already-verified milestones', async () => {
-    const wronglyCheckedPlanJson =
-      '<plan>\n[\n  { "id": "m1", "title": "Design database schema", "status": "verified" },\n' +
-      '  { "id": "m2", "title": "Implement API endpoints", "status": "verified" }\n]\n</plan>\n\n' +
-      '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
-    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(wronglyCheckedPlanJson)
-
-    const sessionId = 'test-plan-fresh-checked-session'
-    const res = await runAgentOrchestratorLoop(
-      {
-        userTask: 'Plan the architecture',
-        agentMode: 'plan',
-        workspacePath: tempDir,
-      },
-      null,
-      sessionId
-    )
-
-    expect(res.success).toBe(true)
-
-    const statePath = path.join(tempDir, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`)
-    const savedState = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
-    expect(savedState.planMilestones.length).toBe(2)
-    expect(savedState.planMilestones.every((m: { status: string }) => m.status === 'pending')).toBe(true)
+    expect(savedState.planMilestones).toEqual([])
   })
 
   it('should hot-swap from plan to agent mode smoothly on consecutive turns', async () => {
@@ -545,60 +518,6 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(respondToApproval(sessionId, true)).toBe(false)
   })
 
-  it('should let the model advance the plan explicitly through the update_plan tool', async () => {
-    const planJson =
-      '<plan>\n- [ ] Scaffold project\n- [ ] Add tests\n</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
-    const updateJson =
-      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Plan advanced." }\n}\n```'
-
-    vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(planJson)
-      .mockResolvedValueOnce(updateJson)
-      .mockResolvedValueOnce(finishJson)
-      .mockResolvedValueOnce(finishJson)
-
-    const res = await runAgentOrchestratorLoop(
-      { userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId: 'plan-tool-session' },
-      null
-    )
-
-    expect(res.success).toBe(false)
-    expect(res.completionStatus).toBe('blocked')
-    const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-tool-session.json')
-    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
-    const verified = saved.planMilestones.filter((m: any) => m.status === 'verified')
-    expect(verified.length).toBe(1)
-    expect(verified[0].id).toBe('m-1')
-  })
-
-  it('should only mark a milestone verified when its verificationCommand actually exits 0', async () => {
-    const planJson =
-      '<plan>[{"id":"m-1","title":"Scaffold project","verificationCommand":"node -e \\"process.exit(0)\\""},{"id":"m-2","title":"Add tests"}]</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
-    const updateJson =
-      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Plan advanced." }\n}\n```'
-
-    vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(planJson)
-      .mockResolvedValueOnce(updateJson)
-      .mockResolvedValueOnce(finishJson)
-      .mockResolvedValueOnce(finishJson)
-
-    const res = await runAgentOrchestratorLoop(
-      { userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId: 'plan-verify-pass-session' },
-      null
-    )
-
-    expect(res.success).toBe(false)
-    expect(res.completionStatus).toBe('unverifiable')
-    const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-verify-pass-session.json')
-    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
-    const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
-    expect(m1.status).toBe('verified')
-    expect(m1.notes).toContain('Compilation evidence: "node -e "process.exit(0)"" passed')
-  })
-
   it('never executes a verificationCommand that writes the workspace, even from a restored session', async () => {
     // Plans parsed today drop such a command at ingestion, but a session persisted before that
     // rule existed still carries it, and executing it is what rewrote src/App.tsx and
@@ -635,33 +554,6 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
     expect(m1.status).not.toBe('verified')
     expect(m1.notes).toContain('refused')
-  })
-
-  it('should set the milestone to failed when the model claims verified but its verificationCommand actually fails', async () => {
-    const planJson =
-      '<plan>[{"id":"m-1","title":"Scaffold project","verificationCommand":"node -e \\"process.exit(1)\\""},{"id":"m-2","title":"Add tests"}]</plan>\n\n```json\n{\n  "tool": "list_dir",\n  "parameters": { "dirPath": "." }\n}\n```'
-    const updateJson =
-      '```json\n{\n  "tool": "update_plan",\n  "parameters": { "milestoneId": "m-1", "status": "verified" }\n}\n```'
-    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Done." }\n}\n```'
-
-    vi.mocked(AgentStreamTransport.streamCompletion)
-      .mockResolvedValueOnce(planJson)
-      .mockResolvedValueOnce(updateJson)
-      .mockResolvedValueOnce(finishJson)
-      .mockResolvedValueOnce(finishJson)
-
-    const res = await runAgentOrchestratorLoop(
-      { userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId: 'plan-verify-fail-session' },
-      null
-    )
-
-    expect(res.success).toBe(false)
-    expect(res.completionStatus).toBe('blocked')
-    const statePath = path.join(tempDir, '.onlyrag', 'sessions', '.agent_state_plan-verify-fail-session.json')
-    const saved = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
-    const m1 = saved.planMilestones.find((m: any) => m.id === 'm-1')
-    expect(m1.status).toBe('failed')
-    expect(m1.notes).toContain('Verification command failed')
   })
 
   it('should keep num_ctx frozen across turns instead of resizing it per prompt', async () => {

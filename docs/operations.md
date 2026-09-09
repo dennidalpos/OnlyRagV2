@@ -29,6 +29,7 @@ Tutti i comandi elencati sono registrati in [`package.json`](../package.json) e 
 | Workflow | Comando | Descrizione |
 | :--- | :--- | :--- |
 | **Sviluppo Locale** | `npm run dev` | Avvia il server Vite in modalità dev con hot-reload. |
+| **Build Locale** | `npm run build` | Compila e crea il pacchetto Windows senza alcun upload o tentativo di pubblicazione. |
 | **Verifica Veloce** | `npm run test:fast` | Esegue 1902 test in 230 file con Vitest (~3 min). |
 | **Unit Test Singoli** | `npx vitest run <path>` | Esegue un singolo target di test. |
 | **Verifica Tipi** | `npm run typecheck` | Esegue `tsc --noEmit` su Main, Preload e Renderer. |
@@ -70,4 +71,4 @@ Gli script PowerShell operano con policy rigorosa **Fail-Fast** (`$ErrorActionPr
 1. **Zero Regressioni**: Nessuna modifica può essere considerata conclusa se `npm run test:fast` o `npm run typecheck` falliscono.
 2. **Zero Cicli Architetturali**: La struttura deve rispettare l'isolamento dei livelli: zero import diretti tra Renderer e Main.
 3. **Integrità Documentale**: `npm run docs:check` deve sempre terminare con esito positivo prima di ogni rilascio.
-4. **Analisi Statica Separata**: la CI esegue `npm run quality:static` prima del gate composito; [`biome.json`](../biome.json) abilita il preset correctness e regole anti-duplicazione, lasciando a TypeScript i controlli unused già attivi.
+4. **Analisi Statica Separata**: la CI esegue `npm run quality:static` prima del gate composito; [`biome.json`](../biome.json) abilita il preset correctness e regole anti-duplicazione, lasciando a TypeScript i controlli unused già attivi. Knip esclude esplicitamente `@biomejs/biome`, invocato dal percorso dinamico in `scripts/check_static_quality.mjs` che l'analisi statica non risolve.

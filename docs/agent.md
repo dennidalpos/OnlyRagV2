@@ -107,6 +107,8 @@ La revisione UI mostra decisioni confermate e assunzioni prima degli interventi.
 
 Non è prevista migrazione dei vecchi piani testuali: il caricamento mantiene la sessione ma ignora revisioni prive di `formatVersion: 2`. L'esecuzione usa `filePaths` e gli altri campi canonici, non il testo renderizzato.
 
+CAS-27 ha rimosso dal loop il parser di checklist e blocchi `<plan>` prodotti durante l'esecuzione: quel canale poteva aggirare validazione, decisioni e persistenza del planner JSON v2. Le milestone storiche di sola chiusura restano riconosciute unicamente al ripristino di sessioni già salvate e non vengono create dai piani correnti.
+
 Alla verifica di una milestone vengono persistiti gli hash dei deliverable dichiarati. Il resume li ricalcola: file mancanti, modificati o prove legacy senza fingerprint riaprono l'intervento; i comandi precedentemente riusciti devono comunque essere rieseguiti.
 
 ### 3.2. Edit vincolati alla versione letta

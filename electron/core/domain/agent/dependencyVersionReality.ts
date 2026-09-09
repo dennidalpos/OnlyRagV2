@@ -1,26 +1,6 @@
-/**
- * Dependency Version Reality.
- *
- * Compares the versions a model wrote into `package.json` against what the registry actually
- * publishes, and turns the difference into one instruction.
- *
- * The model cannot do this itself, and that is the whole point: every version it writes comes
- * from training data with a cutoff. Measured on 2026-08-25 — `typescript@^4.7.3` that could not
- * parse the installed `@types/node` (run 10, 0/12), `vite@^4.0.0` and `react@^18.2.0` years
- * behind, and `@tailwindcss/react` and `react-tailwindcss@^0.0.1` that do not exist on npm at
- * all. No prompt wording fixes a knowledge cutoff.
- *
- * Two findings, and they are not the same instruction:
- *
- * * **A package that does not exist** must be removed from the manifest and from the code that
- *   imports it. Installing it can never succeed, and the series shows the agent ordering exactly
- *   that thirteen times before a failure threshold stopped it.
- * * **A major version behind** is reported with the real number so the model can write it, and
- *   only when it is a MAJOR behind: a minor or patch gap is not worth a turn, and churning the
- *   manifest for it would be the busywork this codebase keeps removing.
- *
- * Pure domain: the registry lookup is injected.
- */
+/** Compares declared dependencies with injected registry facts and emits one remediation. */
+
+import { maxSatisfying, valid, validRange } from 'semver'
 
 export interface DeclaredDependency {
   name: string
@@ -32,10 +12,12 @@ export interface RegistryFact {
   name: string
   exists: boolean
   latest?: string
+  versions?: readonly string[]
 }
 
 export interface VersionRealityFindings {
   nonexistent: string[]
+  unpublished: Array<{ name: string; declared: string; latest: string }>
   outdated: Array<{ name: string; declared: string; latest: string }>
 }
 
@@ -87,7 +69,7 @@ const CONFIG_BREAKING_ON_MAJOR = new Set(['typescript', 'tailwindcss', 'eslint']
 
 export function findVersionReality(declared: DeclaredDependency[], facts: RegistryFact[]): VersionRealityFindings {
   const byName = new Map(facts.map((f) => [f.name, f]))
-  const findings: VersionRealityFindings = { nonexistent: [], outdated: [] }
+  const findings: VersionRealityFindings = { nonexistent: [], unpublished: [], outdated: [] }
 
   for (const dep of declared) {
     const fact = byName.get(dep.name)
@@ -97,6 +79,11 @@ export function findVersionReality(declared: DeclaredDependency[], facts: Regist
       continue
     }
     if (!fact.latest) continue
+    if (fact.versions && validRange(dep.range) && valid(fact.latest)
+      && !maxSatisfying([...fact.versions], dep.range, { includePrerelease: true })) {
+      findings.unpublished.push({ name: dep.name, declared: dep.range, latest: fact.latest })
+      continue
+    }
     if (CONFIG_BREAKING_ON_MAJOR.has(dep.name)) continue
     const declaredMajor = majorOf(dep.range)
     const latestMajor = majorOf(fact.latest)
@@ -129,6 +116,18 @@ export function buildVersionRealityDirective(findings: VersionRealityFindings): 
       `Directives:`,
       `1. Your next tool call MUST be "write_file" on "package.json", with the complete file and ${names.length === 1 ? 'that entry' : 'those entries'} removed.`,
       `2. Do NOT try to install ${names.length === 1 ? 'it' : 'them'} again, with or without flags. Once the manifest is clean, the files importing ${names.length === 1 ? 'it' : 'them'} are the next thing the compiler will name.`,
+    ].join('\n')
+  }
+
+  if (findings.unpublished.length > 0) {
+    const shown = findings.unpublished.slice(0, 5)
+    return [
+      `\n\n[THESE VERSION RANGES MATCH NO PUBLISHED RELEASE]`,
+      ...shown.map((item) => `- ${item.name}: you declared ${item.declared}, npm currently publishes ${item.latest}`),
+      `No install can succeed while package.json contains ${shown.length === 1 ? 'this range' : 'these ranges'}.`,
+      `Directives:`,
+      `1. Your next tool call MUST be "write_file" on "package.json", with the complete file and ${shown.length === 1 ? 'that range' : 'those ranges'} replaced by the current version${shown.length === 1 ? '' : 's'} above.`,
+      `2. Do NOT run an install first and do NOT guess another version.`,
     ].join('\n')
   }
 

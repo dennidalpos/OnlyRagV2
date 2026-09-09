@@ -45,3 +45,33 @@ describe('runToolGates network-approved policy', () => {
     if (result.outcome === 'allowed') expect(result.policyConsent?.consentId).toMatch(/^consent-/)
   })
 })
+
+describe('runToolGates version refresh', () => {
+  const base = {
+    agentMode: 'agent' as const,
+    fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+    workspacePath: 'C:\\workspace',
+    stepCount: 3,
+    episodicCompactor: { recordStep: vi.fn() } as any,
+    emitLog: vi.fn(),
+    requestApproval: vi.fn(),
+    allowedToolsForTurn: ['read_file'] as const,
+    requiredReadPath: 'src/App.tsx',
+  }
+
+  it('rejects a read of another file', async () => {
+    const result = await runToolGates({
+      ...base,
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'src/Other.tsx' } },
+    })
+    expect(result.outcome).toBe('denied')
+  })
+
+  it('accepts the required file read', async () => {
+    const result = await runToolGates({
+      ...base,
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } },
+    })
+    expect(result.outcome).toBe('allowed')
+  })
+})

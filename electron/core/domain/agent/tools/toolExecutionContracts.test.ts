@@ -44,6 +44,7 @@ describe('tool execution contracts', () => {
 
   it('validates the common dispatcher result envelope', () => {
     expect(toolExecutionResultSchema.safeParse({
+      outcome: 'success',
       outputForHistory: 'done',
       logMessage: 'Tool completed',
       isTerminal: true,
@@ -53,6 +54,7 @@ describe('tool execution contracts', () => {
 
   it('accepts the terminal MODEL_UNSUITABLE outcome', () => {
     expect(toolExecutionResultSchema.safeParse({
+      outcome: 'blocked',
       outputForHistory: 'The requested tool capability is unavailable.',
       logMessage: 'Model capability unavailable',
       isTerminal: true,

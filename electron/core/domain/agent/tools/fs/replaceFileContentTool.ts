@@ -37,21 +37,22 @@ export async function executeReplaceFileContentTool(
   const replacementContent = parameters.replacementContent || ''
   const pathCheck = validatePathSafety(filePath, workspacePath)
   if (!pathCheck.safePath) {
-    return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `File Replace Rejected: ${pathCheck.error}` }
+    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `File Replace Rejected: ${pathCheck.error}` }
   }
   const safePath = pathCheck.safePath
 
   if (!filePath || !targetContent) {
-    return { outputForHistory: `File not found or missing parameters for replacement: ${filePath || 'unknown'}`, logMessage: 'Missing replace parameters' }
+    return { outcome: 'rejected', outputForHistory: `File not found or missing parameters for replacement: ${filePath || 'unknown'}`, logMessage: 'Missing replace parameters' }
   }
   if (!repository.exists(safePath)) {
-    return { outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
+    return { outcome: 'failure', outputForHistory: `Error: File not found for replacement: ${filePath}`, logMessage: `File not found: ${filePath}` }
   }
 
   const currentContent = repository.readIfExists(safePath)
   const actualHash = contentVersion(currentContent)
   if (parameters.expectedContentHash && parameters.expectedContentHash !== actualHash) {
     return {
+      outcome: 'rejected',
       outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, actualHash),
       logMessage: `Replacement rejected: stale version for ${path.basename(filePath)}`,
     }
@@ -59,12 +60,13 @@ export async function executeReplaceFileContentTool(
   const replacement = applyUniqueReplacements(currentContent, [{ targetContent, replacementContent }])
   if (!replacement.success) {
     const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${replacement.error}\nCurrent version: ${actualHash}\nRead the file again and generate a fresh exact edit. No content was written.`
-    return { outputForHistory: failureFeedback, logMessage: `Replacement failed in ${path.basename(filePath)}: ${replacement.error}` }
+    return { outcome: 'rejected', outputForHistory: failureFeedback, logMessage: `Replacement failed in ${path.basename(filePath)}: ${replacement.error}` }
   }
 
   const skillViolation = skillAdherence(String(filePath), replacementContent, activeSkillGuidelines)
   if (skillViolation) {
     return {
+      outcome: 'rejected',
       outputForHistory: buildSkillRefusal(String(filePath), skillViolation),
       logMessage: `File Replace Rejected: violates active skill ${skillViolation.skillName}`,
     }
@@ -73,6 +75,7 @@ export async function executeReplaceFileContentTool(
   const astCheck = validateAST(safePath, replacement.content)
   if (!astCheck.isValid) {
     return {
+      outcome: 'rejected',
       outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nReplacement blocked before disk persistence to prevent syntax corruption.`,
       logMessage: `File Replace Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
     }
@@ -87,14 +90,16 @@ export async function executeReplaceFileContentTool(
   if (!writeResult.success) {
     if (writeResult.currentContentHash) {
       return {
+        outcome: 'rejected',
         outputForHistory: versionConflictFeedback(String(filePath), actualHash, writeResult.currentContentHash),
         logMessage: `Replacement rejected: concurrent change in ${path.basename(filePath)}`,
       }
     }
-    return { outputForHistory: `Error writing replaced content to ${filePath}: ${writeResult.error}`, logMessage: `Write error in ${path.basename(filePath)}` }
+    return { outcome: 'failure', outputForHistory: `Error writing replaced content to ${filePath}: ${writeResult.error}`, logMessage: `Write error in ${path.basename(filePath)}` }
   }
 
   return {
+    outcome: 'success',
     outputForHistory: `Successfully replaced content in ${filePath}`,
     logMessage: `Successfully replaced target chunk in ${path.basename(filePath)}`,
     changeStats: buildChangeStats(safePath, currentContent, replacement.content),

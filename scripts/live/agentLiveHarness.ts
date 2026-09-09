@@ -28,6 +28,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { AgentCompletionStatus, AppSettings } from '../../src/types'
 import type { PlanMilestone } from '../../shared/domain/agent/planAndSolveGraph'
+import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import type { SavedAgentSessionState } from '../../electron/core/infrastructure/filesystem/agentSessionStateRepository'
 import { planGenerationAppService } from '../../electron/core/application/planGenerationAppService'
 import {
@@ -122,9 +123,8 @@ export interface SeededPlan {
  * started exactly there — those are the choices the interview exists to settle before a single
  * milestone is drafted.
  *
- * The interview is genuinely optional: `conductInterview` answers `hasQuestions: false` for a
- * request it considers already well-scoped, and also whenever the model's JSON cannot be
- * repaired. Both cases fall through to the original prompt, so a scenario never blocks on it.
+ * The interview is genuinely optional: the same deterministic policy used by the renderer
+ * skips model inference when the request contains no unresolved choice.
  */
 export async function seedGeneratedPlan(args: {
   sessionId: string
@@ -141,7 +141,7 @@ export async function seedGeneratedPlan(args: {
   let answers: UserInterviewAnswer[] = []
   let effectivePrompt = args.userTask
 
-  if (policy !== 'skip') {
+  if (policy !== 'skip' && shouldRunPlanInterview(args.userTask)) {
     const interview = await agentInterviewAppService.conductInterview(args.userTask, model, args.settings)
     if (interview.status === 'error') {
       throw new Error(`Pre-plan interview failed: ${interview.error || 'unknown error'}`)
@@ -253,6 +253,8 @@ export interface LiveRunMetrics {
   commands: string[]
   toolCalls: number
   failedToolCalls: number
+  runtimeProfile?: SavedAgentSessionState['ollamaRuntimeProfile']
+  generations: NonNullable<SavedAgentSessionState['ollamaGenerationTelemetry']>
 }
 
 /** Reads milestone delivery and the application-owned terminal status plus their context. */
@@ -287,6 +289,8 @@ export function readRunMetrics(args: {
       .map((e) => `[step ${e.step}] ${e.status} ${e.target || '(no command recorded)'}`),
     toolCalls: episodes.length,
     failedToolCalls: episodes.filter((e) => e.status === 'FAILURE' || e.status === 'BLOCKED').length,
+    runtimeProfile: state.ollamaRuntimeProfile,
+    generations: state.ollamaGenerationTelemetry || [],
   }
 }
 
@@ -325,10 +329,17 @@ export function reportRun(args: {
   )
   console.log(`application closure: ${metrics.completionStatus || 'not persisted'}`)
   console.log(`tool calls: ${metrics.toolCalls} (${metrics.failedToolCalls} failed or blocked)`)
+  console.log(`runtime: ${JSON.stringify(metrics.runtimeProfile || null)}`)
+  console.log(`generations: ${metrics.generations.length}`)
   console.log(`commands executed: ${metrics.commands.length}`)
   for (const c of metrics.commands) console.log(`  ${c}`)
 
   const snapshotDir = snapshotLiveAuditLogs({ sessionId: args.sessionId, label: args.label })
+  fs.writeFileSync(
+    path.join(snapshotDir, 'metrics.json'),
+    JSON.stringify({ label: args.label, capturedAt: new Date().toISOString(), ...metrics }, null, 2),
+    'utf-8'
+  )
   console.log(`audit snapshot: ${snapshotDir}`)
 
   console.log(

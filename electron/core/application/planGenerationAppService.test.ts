@@ -89,6 +89,20 @@ describe('PlanGenerationAppService', () => {
     expect(request.format).toEqual(expect.objectContaining({ type: 'object' }))
   })
 
+  it('assigns canonical IDs instead of trusting model labels', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { ...intervention('first', 'Create schema'), id: 'first' },
+      { ...intervention('second', 'Create endpoint'), id: 'step_two' },
+    ], {
+      assumptions: [{ id: 'assumption_one', statement: 'Reuse the stack', rationale: 'It is declared.' }],
+    }))
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Add login', settings })
+
+    expect(result.milestones.map((item) => item.id)).toEqual(['m-1', 'm-2'])
+    expect(result.decisions[0].id).toBe('a-1')
+  })
+
   it('preserves evidence and requires every residual intervention to be carried or superseded', async () => {
     const previous = previousPlan()
     vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
@@ -144,6 +158,17 @@ describe('PlanGenerationAppService', () => {
     expect((await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).error).toContain('unavailable verification command')
   })
 
+  it('drops unavailable verification commands from file-backed interventions', async () => {
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      { ...intervention('m-1', 'Create manifest', 'package.json'), verificationCommand: 'npm init -y' },
+    ]))
+
+    const result = await planGenerationAppService.generatePlanText({ prompt: 'Create a React app', settings })
+
+    expect(result.status).toBe('success')
+    expect(result.milestones[0].verificationCommand).toBeUndefined()
+  })
+
   it('uses the single schema correction to recover a malformed plan', async () => {
     vi.mocked(ollamaAppService.generateStructured)
       .mockResolvedValueOnce({ status: 'complete', content: '{}' })
@@ -194,6 +219,27 @@ describe('PlanGenerationAppService', () => {
       fs.writeFileSync(path.join(workspacePath, 'package.json'), '{"name":"existing"}')
       const existing = await planGenerationAppService.generatePlanText({ prompt: 'Fix app', settings, workspacePath })
       expect(existing.milestones.flatMap((item) => item.filePaths || [])).not.toContain('index.html')
+    })
+
+    it('maps a command-only setup intervention to the canonical greenfield scaffold', async () => {
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([{
+        id: 'm-1',
+        objective: 'Initialize the project',
+        filePaths: [],
+        acceptanceCriteria: ['The project is initialized'],
+        verificationCommand: 'npx create-react-app project-dashboard-task',
+      }]))
+
+      const result = await planGenerationAppService.generatePlanText({
+        prompt: 'Create a React app',
+        settings,
+        workspacePath,
+      })
+
+      expect(result.status).toBe('success')
+      const setup = result.milestones.find((item) => item.title === 'Initialize the project')
+      expect(setup).toMatchObject({ filePaths: ['package.json'] })
+      expect(setup?.verificationCommand).toBeUndefined()
     })
 
     it('does not impose web entrypoints on Python or non-web JavaScript', async () => {

@@ -52,6 +52,7 @@ export async function executeWriteFileTool(
 
   if (targetKind === 'contradictory') {
     return {
+      outcome: 'rejected',
       outputForHistory: `[WRITE_FILE REJECTED: PATH IS A DIRECTORY]\n"${filePath}" ends with a path separator, so it names a directory, but content was supplied for it.\nDirectives:\n1. To create the folder, call create_directory with dirPath "${filePath}".\n2. To write this content, call write_file again with the full file path, including the file name and extension.`,
       logMessage: `Write File Rejected: directory path with content ("${filePath}")`,
     }
@@ -61,23 +62,24 @@ export async function executeWriteFileTool(
     const dirPath = String(filePath)
     const dirCheck = validatePathSafety(dirPath, workspacePath)
     if (!dirCheck.safePath) {
-      return { outputForHistory: `Security Violation: ${dirCheck.error}`, logMessage: `Create Directory Rejected: ${dirCheck.error}` }
+      return { outcome: 'rejected', outputForHistory: `Security Violation: ${dirCheck.error}`, logMessage: `Create Directory Rejected: ${dirCheck.error}` }
     }
     try {
       dependencies.supportRepository.mkdir(dirCheck.safePath)
       return {
+        outcome: 'success',
         outputForHistory: `Created DIRECTORY ${dirPath} (not a file: the path ends with a separator, so it was routed to create_directory). To add files inside it, call write_file with a full path such as "${dirPath.replace(/[\\/]+$/, '')}/example.ts".`,
         logMessage: `Created directory ${path.basename(dirCheck.safePath)} (write_file routed to create_directory)`,
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
-      return { outputForHistory: `Error creating directory ${dirPath}: ${message}`, logMessage: `Create directory error: ${message}` }
+      return { outcome: 'failure', outputForHistory: `Error creating directory ${dirPath}: ${message}`, logMessage: `Create directory error: ${message}` }
     }
   }
 
   const pathCheck = validatePathSafety(filePath, workspacePath)
   if (!pathCheck.safePath) {
-    return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
+    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Write File Rejected: ${pathCheck.error}` }
   }
   const safePath = pathCheck.safePath
 
@@ -85,6 +87,7 @@ export async function executeWriteFileTool(
   const rootConfigPath = rootConfigPathForMisplacedSourceFile(workspaceRelativePath)
   if (rootConfigPath) {
     return {
+      outcome: 'rejected',
       outputForHistory: `[ROOT CONFIG PATH REJECTED]\n"${workspaceRelativePath}" is a project configuration or entry file, so build tools will not discover it under src/.\nWrite the same complete content to "${rootConfigPath}" instead.`,
       logMessage: `Write File Rejected: root config targeted under src (${workspaceRelativePath})`,
     }
@@ -93,6 +96,7 @@ export async function executeWriteFileTool(
   const skillViolation = skillAdherence(workspaceRelativePath, content, activeSkillGuidelines)
   if (skillViolation) {
     return {
+      outcome: 'rejected',
       outputForHistory: buildSkillRefusal(workspaceRelativePath, skillViolation),
       logMessage: `Write File Rejected: violates active skill ${skillViolation.skillName}`,
     }
@@ -101,6 +105,7 @@ export async function executeWriteFileTool(
   const astCheck = validateAST(safePath, content)
   if (!astCheck.isValid) {
     return {
+      outcome: 'rejected',
       outputForHistory: `[PRE-COMMIT AST VALIDATION ERROR IN ${filePath}]\n${astCheck.syntaxError} (Line ${astCheck.line || '?'}:${astCheck.character || '?'})\nFile write blocked before disk persistence to prevent workspace corruption. Please fix syntax error.`,
       logMessage: `Write File Rejected (AST Syntax Error): ${astCheck.syntaxError}`,
     }
@@ -112,6 +117,7 @@ export async function executeWriteFileTool(
   const redundant = detectRedundantWrite(exists, beforeContent, content)
   if (redundant.isRedundant && redundant.kind) {
     return {
+      outcome: 'success',
       outputForHistory: buildRedundantWriteNotice(String(filePath), redundant.kind, redundant.isEmpty),
       logMessage: `No-op write: ${path.basename(safePath)} was already up to date`,
       noOpMutation: true,
@@ -119,6 +125,7 @@ export async function executeWriteFileTool(
   }
   if (exists && parameters.expectedContentHash !== actualHash) {
     return {
+      outcome: 'rejected',
       outputForHistory: versionConflictFeedback(
         String(filePath),
         parameters.expectedContentHash,
@@ -138,15 +145,17 @@ export async function executeWriteFileTool(
   if (!result.success) {
     if (result.currentContentHash) {
       return {
+        outcome: 'rejected',
         outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, result.currentContentHash),
         logMessage: `Write File Rejected: concurrent change in ${path.basename(safePath)}`,
       }
     }
-    return { outputForHistory: `Error writing file ${filePath}: ${result.error}`, logMessage: `Write file error: ${result.error}` }
+    return { outcome: 'failure', outputForHistory: `Error writing file ${filePath}: ${result.error}`, logMessage: `Write file error: ${result.error}` }
   }
 
   const typecheckDiagnostic = workspacePath ? dependencies.incrementalTypecheck(workspacePath, safePath) || '' : ''
   return {
+    outcome: 'success',
     outputForHistory: `Successfully wrote file ${filePath} (${exists ? 'updated existing file' : 'created new file'})${dependencies.importIntegrityDirective(filePath, content, workspacePath)}${await dependencies.versionRealityDirective(filePath, content)}${typecheckDiagnostic}`,
     logMessage: `${exists ? 'Updated existing file' : 'Created new file'} ${path.basename(safePath)}`,
     changeStats: dependencies.buildChangeStats(safePath, beforeContent, content),

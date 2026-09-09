@@ -545,16 +545,14 @@ export function trackVerification(ctx: ToolResultProcessingContext, isToolFailur
 
   if (ctx.parsedTool.tool !== 'run_command') return
 
-  // A successful build/typecheck/lint satisfies the Definition of Done gate and advances verification milestones
   const rawCmd = ctx.parsedTool.parameters?.command || ''
-  const cmdStr = rawCmd.toLowerCase()
-  // The keyword scan alone is a substring match on the command text, so `touch src/test.tsx`
-  // matches "test" and `echo "build ok" > out.log` matches "build" — both would have raised
-  // hasVerifiedBuild and promoted milestones plan-wide on a command that wrote the workspace
-  // and could not fail. The safety check is what makes the keyword mean what it reads as.
-  const isVerificationCmd =
-    ['test', 'typecheck', 'build', 'lint', 'pytest', 'tsc'].some((kw) => cmdStr.includes(kw)) &&
-    checkVerificationCommandSafety(rawCmd).isSafe
+  const normalizedCommand = rawCmd.trim().replace(/\s+/g, ' ').toLowerCase()
+  const projectChecks = ctx.workspacePath
+    ? resolvePrimaryProfileVerificationTargets(discoverProjectProfile(ctx.workspacePath))
+    : []
+  const isVerificationCmd = projectChecks.some((target) =>
+    target.command.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedCommand
+  ) && checkVerificationCommandSafety(rawCmd).isSafe
   if (isVerificationCmd && !ctx.toolRes.outputForHistory.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') && !isToolFailure) {
     ctx.flags.hasVerifiedBuild = true
     promoteMilestonesProvenBy(ctx, ctx.parsedTool.parameters?.command || 'verification command')

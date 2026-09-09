@@ -31,7 +31,8 @@ Le transizioni sono validate da [`agentExecutionPhase.ts`](../electron/core/doma
 - Schema valido, correttezza semantica e autorizzazione sono indipendenti: i compilatori di piano e gli executor mantengono gli ultimi due controlli.
 - I recuperi hanno budget separati per trasporto, schema ed esecuzione, ma condividono un tetto di due chiamate nella generazione strutturata: dopo il primo errore viene concessa una sola correzione, al secondo il flusso si arresta con firma e motivo diagnostico. Il fallback da tool calling nativo a testo consuma lo stesso budget di trasporto e non attiva retry annidati.
 - Un comando interrotto, scaduto o fallito dopo il dispatch produce un esito `uncertain`: l'orchestratore non lo ripete automaticamente, conserva la consegna parziale e chiude attraverso il gate applicativo. Annullamento utente e relativo motivo terminale hanno precedenza sul recupero.
-- Il modello coding viene risolto e precaricato una sola volta all'avvio dell'esecuzione; i turni successivi mantengono quel tag e il primo `num_ctx` effettivo. Non esistono cambio modello o crescita del contesto impliciti come strategia di recupero.
+- Ogni risultato tool dichiara `outcome: success | failure | rejected | blocked`; budget di recupero, memoria episodica e loop detector non interpretano marker nel testo.
+- Modello, endpoint, digest e opzioni runtime vengono salvati nel checkpoint. Una ripresa li riusa senza ricalcolo e si blocca se endpoint, tag o digest non sono più gli stessi.
 
 ### 1.2 Tool per fase
 
@@ -42,6 +43,8 @@ Le transizioni sono validate da [`agentExecutionPhase.ts`](../electron/core/doma
 [`projectPlanningFacts.ts`](../electron/core/application/projectPlanningFacts.ts) riusa discovery e repo-map per fornire a intervista e planner classificazione del workspace, stack, file pertinenti e decisioni precedenti. I fatti sono riletti a ogni richiesta; domande già risolte dal repository o da una decisione confermata vengono filtrate dall'app.
 
 Le verifiche sono divise tra comandi **eseguibili**, osservati nei manifest correnti e ammessi dal gate, e check **proposti**, validi solo dopo la creazione dello scaffold. Su greenfield [`greenfieldScaffoldResolver.ts`](../electron/core/domain/agent/greenfieldScaffoldResolver.ts) deriva lo scheletro minimo esclusivamente dallo stack esplicito o confermato: Python, Rust e JavaScript non web non ricevono entrypoint HTML/React. Una directory con file esistenti non viene riclassificata come greenfield solo perché manca un manifest.
+
+Il backend assegna gli ID canonici di decisioni e interventi, senza dipendere dalle etichette del modello. Un comando di setup inventato non diventa una verifica: su greenfield viene ricondotto al primo file dello scaffold, mentre fuori da uno scaffold deterministico il piano viene rifiutato.
 
 ### 1.4 Intervista selettiva
 
@@ -80,6 +83,8 @@ Il modello non ha l'autorità di dichiarare le milestone "completate". Lo stato 
 
 Le prove restano separate: la presenza dell'artefatto è un prerequisito, build/typecheck sono evidenza di compilazione e i test sono evidenza comportamentale. Il controllo globale dell'app copre le milestone senza prova dedicata; una milestone che dichiara un comando richiede invece proprio quel comando, che non può essere sostituito da altre verifiche del piano.
 
+La promozione automatica riconosce solo i comandi di verifica risolti dal profilo corrente. Installazioni e modifiche alle dipendenze sono rifiutate come prova anche quando terminano con exit code 0; nomi di pacchetto come `eslint-config-prettier` non possono più attivare il lint tramite una semplice corrispondenza testuale.
+
 ---
 
 ## 3. Gestione del Budget di Contesto
@@ -89,7 +94,7 @@ Le prove restano separate: la presenza dell'artefatto è un prerequisito, build/
 3. **Intervento attivo** ([`planPromptWindow.ts`](../shared/domain/agent/planPromptWindow.ts), [`activeInterventionActions.ts`](../shared/domain/agent/activeInterventionActions.ts)): il piano canonico conserva tutto il lavoro, ma ogni turno espone soltanto l'intervento corrente e fino a quattro azioni sequenziali. Edit collegati restano circoscritti al contratto modificato e la verifica avviene dopo il gruppo coerente.
 4. **Contesto operativo corrente**: obiettivo attivo, vincoli accettati, tool ammessi, percorsi pertinenti e ultimo errore utile sono raccolti in un blocco breve. Il codice iniettato contiene un file primario e al massimo due frammenti di supporto; ogni omissione è marcata con la dimensione esclusa e l'indicazione di usare `read_file`. La traiettoria completa resta nel checkpoint della sessione, fuori dal payload corrente.
 
-Le richieste agente attraversano la coda a concorrenza 1; il lock globale impedisce agli altri moduli UI di competere per il modello residente. Tutte le fasi coding usano temperatura `0.1` e keep-alive `30m`, con tetti distinti: 768 token per intervista, 2048 per piano e 4096 per edit. La diagnostica modelli espone l'allocazione osservata da `/api/ps`: memoria totale, quota GPU e quota CPU/RAM. Questi valori sono misure del modello caricato, non stime o soglie universali ricavate dal numero di parametri.
+Intervista, piano, agente, warm-up, unload, benchmark e streaming UI attraversano una coda Main globale a concorrenza 1. L'annullamento di una richiesta in attesa rimuove solo quella richiesta; non interrompe la generazione attiva. Tutte le fasi coding usano temperatura `0.1` e keep-alive `30m`, con tetti distinti: 768 token per intervista, 2048 per piano e 4096 per edit. Ogni turno agente registra nel checkpoint contesto, tempi e token restituiti da Ollama, più memoria totale, GPU, CPU/RAM e contesto caricato osservati da `/api/ps`.
 
 ### 3.1. Piano strutturato
 
@@ -110,5 +115,7 @@ Alla ripresa, deliverable persistiti vengono riletti dal disco. Una prova file a
 - **Live Test Harness** ([`scripts/live/agentLiveHarness.ts`](../scripts/live/agentLiveHarness.ts)): Ambiente di test automatizzato che esegue sessioni agentiche complete contro modelli reali su Ollama.
 - **Scenari di Regressione**:
   - `agentBenchmark.test.ts`: test di riparazione codice guidata.
-  - `fullTaskRun.live.ts`: esecuzione end-to-end con creazione workspace temporaneo, installazione dipendenze, test e commit.
-- **Riferimento Razionali**: Per i casi studio dettagliati e i log di run storiche, consultare [`code-rationales.md`](./code-rationales.md).
+  - `fullTaskRun.live.ts`: esecuzione end-to-end in workspace isolato con modello e run configurabili.
+  - `interviewQualification.live.ts`: separa la policy deterministica dalla qualità delle domande e delle risposte libere.
+- **Ambito qualificato**: CAS-23 non abilita i modelli 1.5B/3B/7B al task autonomo greenfield multi-file. Restano utilizzabili per pianificazione o modifiche piccole e supervisionate; i guardrail deterministici continuano a fermare gli esiti non provati.
+- **Rapporto CAS-23**: metodo, misure e residui sono in [`agent-live-testing.md`](./agent-live-testing.md); i razionali generali restano in [`code-rationales.md`](./code-rationales.md).

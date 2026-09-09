@@ -6,6 +6,7 @@ export class DiagnosticsToolService {
   executeAsk(parameters: AgentToolCall['parameters'], explanation?: string): ToolExecutionResult {
     const question = parameters.question || parameters.query || explanation || 'Clarification requested from user.'
     return {
+      outcome: 'success',
       outputForHistory: `Agent requested clarification: "${question}"`,
       logMessage: `Agent Question: ${question}`,
       logDetail: question,

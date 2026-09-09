@@ -22,10 +22,10 @@ export function executeGitStatus(cwd: string, run: GitRun): import('../toolExecu
     const outStr = stdout.trim()
       ? `[GIT STATUS: ${cwd}]\n${stdout.trim()}\n[END GIT STATUS]`
       : `[GIT STATUS: ${cwd}]\nWorking tree clean (no modified or untracked files).\n[END GIT STATUS]`
-    return { outputForHistory: outStr, logMessage: `Git Status checked in ${cwd.split(/[\\/]/).pop() || cwd}` }
+    return { outcome: 'success', outputForHistory: outStr, logMessage: `Git Status checked in ${cwd.split(/[\\/]/).pop() || cwd}` }
   } catch (error: unknown) {
     const message = (error as { message?: string })?.message || 'Unknown git error'
-    return { outputForHistory: `Git Status Error: ${message}`, logMessage: `Git Status Error: ${message}` }
+    return { outcome: 'failure', outputForHistory: `Git Status Error: ${message}`, logMessage: `Git Status Error: ${message}` }
   }
 }
 
@@ -37,7 +37,7 @@ export function executeGitDiff(
   run: GitRun,
 ): import('../toolExecutionContracts').ToolExecutionResult {
   if (targetPath && pathCheck && !pathCheck.safePath) {
-    return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Git Diff Rejected: ${pathCheck.error}` }
+    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Git Diff Rejected: ${pathCheck.error}` }
   }
   try {
     const fileArg = pathCheck?.safePath ? ` -- "${pathCheck.safePath}"` : ''
@@ -47,10 +47,10 @@ export function executeGitDiff(
     const outStr = stdout.trim()
       ? `[GIT DIFF (${staged ? 'staged' : 'unstaged'}): ${targetPath || cwd}]\n\`\`\`diff\n${truncated}\n\`\`\`\n[END GIT DIFF]`
       : `[GIT DIFF: ${targetPath || cwd}]\nNo differences detected.\n[END GIT DIFF]`
-    return { outputForHistory: outStr, logMessage: `Git Diff completed for ${targetPath ? targetPath.split(/[\\/]/).pop() : 'workspace'}` }
+    return { outcome: 'success', outputForHistory: outStr, logMessage: `Git Diff completed for ${targetPath ? targetPath.split(/[\\/]/).pop() : 'workspace'}` }
   } catch (error: unknown) {
     const message = (error as { message?: string })?.message || 'Unknown git error'
-    return { outputForHistory: `Git Diff Error: ${message}`, logMessage: `Git Diff Error: ${message}` }
+    return { outcome: 'failure', outputForHistory: `Git Diff Error: ${message}`, logMessage: `Git Diff Error: ${message}` }
   }
 }
 

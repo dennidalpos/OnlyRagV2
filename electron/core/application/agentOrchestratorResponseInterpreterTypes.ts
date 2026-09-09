@@ -39,6 +39,10 @@ export interface ResponseInterpreterState {
   schemaRecoveryFailure?: RecoveryFailureState
   /** Persistable bounded budget for failed tool executions. */
   executionRecoveryFailure?: RecoveryFailureState
+  /** Existing file that must be read before another edit is accepted. */
+  pendingVersionConflictReadPath?: string
+  /** Latest read hash, consumed by the next edit of that file. */
+  versionedReadEvidence?: { filePath: string; contentHash: string }
   stagnationStreak: number
   /**
    * Consecutive loop blocks whose repeated action had actually SUCCEEDED before. Counted apart

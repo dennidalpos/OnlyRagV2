@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTurnToolPolicy } from './turnToolPolicy'
+import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy } from './turnToolPolicy'
 
 describe('resolveTurnToolPolicy', () => {
   it('exposes reads for exploration and one edit shape for known targets', () => {
@@ -28,5 +28,15 @@ describe('resolveTurnToolPolicy', () => {
   it('allows only finish after verified closure', () => {
     const result = resolveTurnToolPolicy({ directiveKind: 'session_closure', editTargetState: 'unknown', userTask: 'Commit this work' })
     expect(result.allowedTools).toEqual(['finish'])
+  })
+})
+
+describe('resolveVersionConflictTurnPolicy', () => {
+  it('permits only a fresh read of the conflicted file', () => {
+    expect(resolveVersionConflictTurnPolicy('src/App.tsx')).toEqual({
+      allowedTools: ['read_file'],
+      rationale: 'the stale edit must be refreshed from src/App.tsx',
+      requiredReadPath: 'src/App.tsx',
+    })
   })
 })

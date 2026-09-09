@@ -87,6 +87,21 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 * **Problema**: Una riscrittura completa poteva sovrascrivere modifiche dell'utente avvenute dopo la lettura; il fuzzy matching poteva scegliere un blocco simile o uno tra più blocchi uguali.
 * **Soluzione**: Le letture espongono un hash SHA-256. Riscritture esistenti e scritture finali dei replace vengono confrontate di nuovo prima della persistenza; i nuovi file usano creazione esclusiva. I replace richiedono corrispondenza esatta e univoca e i batch vengono preparati integralmente prima del journal, quindi un errore non lascia applicazioni parziali. Il conflitto restituisce una diagnostica utile senza toccare il disco.
 
+### 2.13. Affidabilità runtime Ollama (W2.10)
+* **Problema**: percorsi Main indipendenti potevano interrompersi a vicenda; inoltre rifiuti tool non riconosciuti dai marker testuali venivano registrati come successi e una sessione ripresa poteva cambiare profilo.
+* **Soluzione**: una coda globale serializza tutte le generazioni e isola l'annullamento delle richieste in attesa. Gli executor dichiarano un esito strutturato. Il checkpoint fissa e rivalida endpoint, modello, digest e opzioni e conserva per turno tempi/token Ollama e split memoria CPU/GPU osservato da `/api/ps`.
+* **Verifica**: suite completa 228 file / 1869 test; due esecuzioni complete consecutive non hanno riprodotto il timeout intermittente di `capabilityPolicyAuditRepository.test.ts` (chiusura W2.08 senza aumento del timeout).
+
+### 2.14. Qualifica live CAS-23
+* **Evidenza (2026-09-09)**: sei run corrette cold/warm con qwen2.5-coder 1.5B/3B/7B hanno chiuso 0 milestone verificate. Gli stop sono stati sicuri, ma conflitti di versione ripetuti, tool malformati e JSX scritto in file `.js` impediscono l'autonomia multi-file.
+* **Correzioni confermate**: gli ID del piano sono canonici lato applicazione; i setup command-only vengono ricondotti allo scaffold; range npm non pubblicati vengono corretti con fatti registry prima dell'installazione.
+* **Limite**: un `npm install` riuscito ha promosso una milestone intermedia senza provarne il deliverable; 1.5B/3B hanno inoltre ignorato una richiesta esplicita di intervista. I dati completi sono in [`agent-live-testing.md`](./agent-live-testing.md).
+
+### 2.15. Installazione non equivale a verifica (W2.12)
+* **Problema**: `npm install eslint-config-prettier@10.1.8` conteneva la sottostringa `lint`; il vecchio riconoscimento per keyword lo classificava come controllo riuscito e promuoveva milestone con artefatti presenti.
+* **Soluzione**: la promozione automatica accetta solo un comando risolto dal profilo del progetto. Il gate dei comandi rifiuta inoltre install/add come prova, proteggendo piani ripristinati o modificati.
+* **Verifica**: regressione deterministica sul comando live; nessuna modifica a `hasVerifiedBuild` e nessuna chiamata di promozione.
+
 ---
 
 ## 3. Gestione Dinamica della Memoria di Contesto

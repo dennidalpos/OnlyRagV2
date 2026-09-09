@@ -28,7 +28,7 @@
     "clean:user": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode UserData",
     "clean:full": "powershell -ExecutionPolicy Bypass -File ./scripts/clean_workspace.ps1 -Mode Full",
     "package:win": "powershell -ExecutionPolicy Bypass -File ./scripts/build_package.ps1",
-    "audit:cycles": "dpdm --circular --warning=false src/main.tsx electron/main.ts",
+    "audit:cycles": "dpdm --circular --warning=false --exit-code circular:1 src/main.tsx electron/main.ts",
     "audit:deadcode": "knip",
     "audit:graph": "skott --displayMode=webapp",
     "audit:all": "powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast"

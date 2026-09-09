@@ -23,14 +23,15 @@ describe('AgentToolExecutorService dispatcher contract', () => {
 
   it('routes representative filesystem, diagnostic, and git tools through one result contract', async () => {
     const calls = [
-      { tool: 'list_dir' as const, parameters: { dirPath: '.' } },
-      { tool: 'ask' as const, parameters: { question: 'Need clarification' } },
-      { tool: 'git_status' as const, parameters: {} },
+      { tool: 'list_dir' as const, parameters: { dirPath: '.' }, outcome: 'success' },
+      { tool: 'ask' as const, parameters: { question: 'Need clarification' }, outcome: 'success' },
+      { tool: 'git_status' as const, parameters: {}, outcome: 'failure' },
     ]
 
     for (const call of calls) {
-      const result = await executor.executeTool(call, workspacePath, settings)
+      const result = await executor.executeTool({ tool: call.tool, parameters: call.parameters }, workspacePath, settings)
       expect(toolExecutionResultSchema.safeParse(result).success, call.tool).toBe(true)
+      expect(result.outcome, call.tool).toBe(call.outcome)
       expect(result.logMessage.length, call.tool).toBeGreaterThan(0)
     }
   })
@@ -43,6 +44,7 @@ describe('AgentToolExecutorService dispatcher contract', () => {
     )
 
     expect(toolExecutionResultSchema.safeParse(result).success).toBe(true)
+    expect(result.outcome).toBe('rejected')
     expect(result.outputForHistory).toContain('Unrecognized or unsupported tool')
     expect(result.terminalCode).toBe('MODEL_UNSUITABLE')
   })

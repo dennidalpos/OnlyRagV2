@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import type { AgentCompletionStatus } from '../../../shared/types'
+import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 
 export interface ApprovalResponse {
   approved: boolean
@@ -41,4 +42,8 @@ export interface AgentSession {
   /** Terminal state set by cancellation/timeout before an in-flight operation unwinds. */
   completionStatus?: AgentCompletionStatus
   terminalSummary?: string
+  /** Model, endpoint and options frozen for this resumable run. */
+  ollamaRuntimeProfile?: OllamaSessionRuntimeProfile
+  /** Bounded per-turn inference measurements persisted with the session. */
+  ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
 }

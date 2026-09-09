@@ -34,12 +34,12 @@ export async function executeMultiReplaceFileContentTool(
   const replacements = (parameters.replacements || []) as Array<{ targetContent: string; replacementContent: string }>
   const pathCheck = validatePathSafety(filePath, workspacePath)
   if (!pathCheck.safePath) {
-    return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Multi Replace Rejected: ${pathCheck.error}` }
+    return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Multi Replace Rejected: ${pathCheck.error}` }
   }
   const safePath = pathCheck.safePath
 
   if (!filePath || replacements.length === 0) {
-    return { outputForHistory: `Missing parameters or empty chunks for multi-replace: ${filePath || 'unknown'}`, logMessage: 'Missing multi-replace parameters' }
+    return { outcome: 'rejected', outputForHistory: `Missing parameters or empty chunks for multi-replace: ${filePath || 'unknown'}`, logMessage: 'Missing multi-replace parameters' }
   }
 
   const skillViolation = skillAdherence(
@@ -49,6 +49,7 @@ export async function executeMultiReplaceFileContentTool(
   )
   if (skillViolation) {
     return {
+      outcome: 'rejected',
       outputForHistory: buildSkillRefusal(String(filePath), skillViolation),
       logMessage: `Multi Replace Rejected: violates active skill ${skillViolation.skillName}`,
     }
@@ -58,6 +59,7 @@ export async function executeMultiReplaceFileContentTool(
   const actualHash = contentVersion(beforeContent)
   if (parameters.expectedContentHash && parameters.expectedContentHash !== actualHash) {
     return {
+      outcome: 'rejected',
       outputForHistory: versionConflictFeedback(String(filePath), parameters.expectedContentHash, actualHash),
       logMessage: `Multi-replace rejected: stale version for ${path.basename(filePath)}`,
     }
@@ -65,6 +67,7 @@ export async function executeMultiReplaceFileContentTool(
   const prepared = applyUniqueReplacements(beforeContent, replacements)
   if (!prepared.success) {
     return {
+      outcome: 'rejected',
       outputForHistory: `[REPLACE FILE ERROR IN ${filePath}]\n${prepared.error}\nCurrent version: ${actualHash}\nRead the file again and regenerate the complete replacement set. No content was written.`,
       logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${prepared.error}`,
     }
@@ -77,16 +80,18 @@ export async function executeMultiReplaceFileContentTool(
     () => journal.recordBeforeModification(safePath),
   )
   if (result.success) return {
+    outcome: 'success',
     outputForHistory: `Successfully replaced ${prepared.replacedCount} chunks in ${filePath}`,
     logMessage: `Successfully applied ${prepared.replacedCount} replacements in ${path.basename(filePath)}`,
     changeStats: buildChangeStats(safePath, beforeContent, prepared.content),
   }
 
   if (result.currentContentHash) return {
+    outcome: 'rejected',
     outputForHistory: versionConflictFeedback(String(filePath), actualHash, result.currentContentHash),
     logMessage: `Multi-replace rejected: concurrent change in ${path.basename(filePath)}`,
   }
 
   const failureFeedback = `[REPLACE FILE ERROR IN ${filePath}]\n${result.error}\nNo partial replacement was written.`
-  return { outputForHistory: failureFeedback, logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${result.error}` }
+  return { outcome: 'failure', outputForHistory: failureFeedback, logMessage: `Multi-replace failed in ${path.basename(filePath)}: ${result.error}` }
 }

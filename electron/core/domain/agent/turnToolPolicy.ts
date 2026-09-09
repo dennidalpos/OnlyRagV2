@@ -12,6 +12,7 @@ export interface TurnToolPolicyInput {
 export interface TurnToolPolicy {
   allowedTools: readonly SupportedToolName[]
   rationale: string
+  requiredReadPath?: string
 }
 
 const EXPLORATION_TOOLS: readonly SupportedToolName[] = [
@@ -88,5 +89,13 @@ export function resolveTurnToolPolicy(input: TurnToolPolicyInput): TurnToolPolic
         ? policy([editTool], `the active deliverable needs only ${editTool}`)
         : policy(EXPLORATION_TOOLS, 'the next target is not known, so this turn is read-only exploration')
     }
+  }
+}
+
+export function resolveVersionConflictTurnPolicy(filePath: string): TurnToolPolicy {
+  return {
+    allowedTools: ['read_file'],
+    rationale: `the stale edit must be refreshed from ${filePath}`,
+    requiredReadPath: filePath,
   }
 }

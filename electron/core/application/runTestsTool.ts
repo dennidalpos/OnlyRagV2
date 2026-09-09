@@ -29,6 +29,7 @@ export async function executeRunTestsTool(
     )
     if (!detected) {
       return {
+        outcome: 'blocked',
         outputForHistory:
           'No test command specified and no recognized test runner (package.json "test" script, or pytest.ini/pyproject.toml/setup.cfg) was found in the workspace. Provide an explicit "command" parameter.',
         logMessage: 'run_tests: no test runner detected',
@@ -42,6 +43,7 @@ export async function executeRunTestsTool(
   const secCheck = checkCommandSecurity(execCmd)
   if (!secCheck.isAllowed) {
     return {
+      outcome: 'rejected',
       outputForHistory: `[SECURITY GUARDRAIL BLOCK]\nCommand: "${execCmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason}`,
       logMessage: `[SECURITY BLOCK] Forbidden test command: "${execCmd}"`,
       isTerminal: true,
@@ -75,6 +77,7 @@ export async function executeRunTestsTool(
       : `[TEST RUN RESULT]\nCommand: "${sanitizedCmd}"${detectionNote}\n${statusLine}\n\nOutput:\n${rawOutput.slice(0, 4000)}`
 
     return {
+      outcome: !res.timedOut && parsed.success ? 'success' : 'failure',
       outputForHistory,
       logMessage: `Test Run: ${statusLine}`,
       logDetail: rawOutput.slice(0, 1000),
@@ -84,6 +87,7 @@ export async function executeRunTestsTool(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     return {
+      outcome: 'failure',
       outputForHistory: `[TEST RUN ERROR]\nFailed executing test command "${sanitizedCmd}": ${message}`,
       logMessage: `Test Run Exception: ${message}`,
       isTerminal: true,

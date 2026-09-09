@@ -24,7 +24,8 @@ param(
     [string]$Mode = "All",
 
     [switch]$WebUI = $false,
-    [switch]$Fast = $false
+    [switch]$Fast = $false,
+    [string[]]$CycleEntryPoints = @("src/main.tsx", "electron/main.ts")
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,9 +51,9 @@ try {
         if (-not $Fast) {
             Write-Host "`n[1/3] Analisi delle dipendenze circolari (dpdm)..." -ForegroundColor Yellow
         }
-        npx dpdm --circular --warning=false src/main.tsx electron/main.ts
+        npx dpdm --circular --warning=false --exit-code "circular:1" @CycleEntryPoints
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "[WARN] Rilevati avvisi durante l'analisi dpdm." -ForegroundColor Yellow
+            throw "dpdm detected circular dependencies."
         } else {
             if (-not $Fast) { Write-Host "[OK] Scansione dipendenze circolari dpdm completata." -ForegroundColor Green }
         }

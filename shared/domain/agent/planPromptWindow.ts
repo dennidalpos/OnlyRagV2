@@ -1,4 +1,4 @@
-import type { PlanMilestone } from './planAndSolveGraph'
+import type { PlanMilestone } from './planMilestone'
 
 export const MAX_PROMPT_MILESTONES = 1
 

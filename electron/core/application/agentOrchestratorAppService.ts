@@ -3,7 +3,7 @@ import { logger } from '../../diagnostics'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { handleUpdatePlanTool } from './agentOrchestratorPlanTool'
 import { runToolGates } from './agentOrchestratorToolGates'
-import { runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
+import { applyVersionedReadEvidence, runToolResultProcessing } from './agentOrchestratorToolResultProcessor'
 import { interpretTurnResponse } from './agentOrchestratorResponseInterpreter'
 import { collectTurnContext, requestTurnProposal } from './agentOrchestratorTurnDispatch'
 import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
@@ -155,6 +155,7 @@ export async function runAgentOrchestratorLoop(
     skillMatchContext,
     skillMatchingOptions,
     skillsBlock,
+    resumeValidationError,
     episodicCompactor,
     phaseController,
     goalPlanner,
@@ -191,6 +192,17 @@ export async function runAgentOrchestratorLoop(
   const setExecutionPhase = (phase: keyof typeof phaseLabels) => {
     phaseController.transition(phase)
     emitStepUpdate(phaseLabels[phase])
+  }
+
+  if (resumeValidationError) {
+    const errorMsg = `Ripresa sessione bloccata: ${resumeValidationError}`
+    emitLog('info', `❌ ${errorMsg}`)
+    emitDone(false, errorMsg, 'blocked')
+    await persistCurrentState('runtime_validation', 'blocked')
+    clearSessionTimeout()
+    setExecutionPhase('outcome')
+    finalizeSession()
+    return { success: false, summary: errorMsg, completionStatus: 'blocked' }
   }
 
   if (!workspacePath && !isStandaloneMode) {
@@ -262,6 +274,7 @@ export async function runAgentOrchestratorLoop(
       skillMatchingOptions,
       skillsBlock,
       episodicCompactor,
+      responseInterpreterState,
       goalPlanner,
       fsmMode,
       hasVerifiedBuild: mutableFlags.hasVerifiedBuild,
@@ -274,7 +287,9 @@ export async function runAgentOrchestratorLoop(
       finalizeSession,
       closeApplicationRun,
     }
+    const hadRuntimeProfile = Boolean(session.ollamaRuntimeProfile)
     const preparedTurn = await collectTurnContext(turnContext)
+    if (!hadRuntimeProfile && session.ollamaRuntimeProfile) await persistCurrentState()
     setExecutionPhase('propose_action')
     const dispatchOutcome = await requestTurnProposal(turnContext, preparedTurn)
     if (dispatchOutcome.outcome === 'return') {
@@ -355,12 +370,15 @@ export async function runAgentOrchestratorLoop(
       requestApproval,
       capabilityPolicyMode: settings.capabilityPolicyMode,
       allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
+      requiredReadPath: preparedTurn.toolPolicy.requiredReadPath,
     })
     if (gateResult.outcome === 'denied') {
       setExecutionPhase('collect_context')
       continue
     }
-    const toolCallForExecution = gateResult.toolCallForExecution
+    const versionedEdit = applyVersionedReadEvidence(gateResult.toolCallForExecution, responseInterpreterState)
+    const toolCallForExecution = versionedEdit.toolCall
+    if (versionedEdit.consumed) await persistCurrentState()
 
     // Orchestrator-level pseudo-tool: the model's explicit handle on plan progression.
     // Handled here rather than in agentToolExecutorService because the plan lives in this
@@ -415,7 +433,7 @@ export async function runAgentOrchestratorLoop(
     setExecutionPhase('verify')
     const processingOutcome = await runToolResultProcessing({
       toolRes,
-      parsedTool,
+      parsedTool: toolCallForExecution,
       toolStartedAtMs,
       stepCount: stepCountBox.value,
       sessionId,

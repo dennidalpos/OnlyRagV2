@@ -56,6 +56,17 @@ describe('findVersionReality', () => {
     expect(findings.outdated.some((o) => o.name === 'vite')).toBe(false)
   })
 
+  it('reports declared ranges that match no published version', () => {
+    const findings = findVersionReality(
+      [{ name: 'react-dom', range: '^19.8.0' }],
+      [{ name: 'react-dom', exists: true, latest: '19.2.0', versions: ['19.1.0', '19.2.0'] }]
+    )
+
+    expect(findings.unpublished).toEqual([
+      { name: 'react-dom', declared: '^19.8.0', latest: '19.2.0' },
+    ])
+  })
+
   it('never reports a package the registry could not be reached about', () => {
     // An unreachable network answers exists:true with no version. Reporting "does not exist"
     // there would send the agent deleting a correct dependency.
@@ -70,6 +81,7 @@ describe('buildVersionRealityDirective', () => {
   it('deals with the invented package first, since no install can succeed while it is declared', () => {
     const directive = buildVersionRealityDirective({
       nonexistent: ['@tailwindcss/react'],
+      unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
     })!
 
@@ -82,6 +94,7 @@ describe('buildVersionRealityDirective', () => {
   it('gives the real version number, because the model cannot know it', () => {
     const directive = buildVersionRealityDirective({
       nonexistent: [],
+      unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
     })!
 
@@ -90,7 +103,20 @@ describe('buildVersionRealityDirective', () => {
   })
 
   it('says nothing when the manifest matches reality', () => {
-    expect(buildVersionRealityDirective({ nonexistent: [], outdated: [] })).toBeNull()
+    expect(buildVersionRealityDirective({ nonexistent: [], unpublished: [], outdated: [] })).toBeNull()
+  })
+
+  it('replaces an unpublished manifest range before install', () => {
+    const directive = buildVersionRealityDirective({
+      nonexistent: [],
+      unpublished: [{ name: 'react-dom', declared: '^19.8.0', latest: '19.2.0' }],
+      outdated: [],
+    })!
+
+    expect(directive).toContain('MATCH NO PUBLISHED RELEASE')
+    expect(directive).toContain('write_file')
+    expect(directive).toContain('19.2.0')
+    expect(directive).toContain('Do NOT run an install first')
   })
 })
 
@@ -101,6 +127,7 @@ describe('one instruction per message', () => {
   it('never orders an install alongside the manifest rewrite', () => {
     const outdated = buildVersionRealityDirective({
       nonexistent: [],
+      unpublished: [],
       outdated: [{ name: 'typescript', declared: '^4.7.3', latest: '5.9.2' }],
     })!
 
@@ -109,7 +136,7 @@ describe('one instruction per message', () => {
   })
 
   it('never orders a source edit alongside removing an invented package', () => {
-    const missing = buildVersionRealityDirective({ nonexistent: ['@tailwindcss/react'], outdated: [] })!
+    const missing = buildVersionRealityDirective({ nonexistent: ['@tailwindcss/react'], unpublished: [], outdated: [] })!
 
     expect(missing).toContain('Do NOT try to install')
     expect(missing.match(/MUST be/g)).toHaveLength(1)

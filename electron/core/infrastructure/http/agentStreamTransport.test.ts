@@ -155,6 +155,26 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     expect(output).toBe('plain completion text')
   })
 
+  it('reports Ollama timing and token counters from the final stream record', async () => {
+    const mock = await startMockOllama((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ response: 'done', done: true, total_duration: 8_000_000, prompt_eval_count: 12, eval_count: 3 }) + '\n')
+    })
+    activeServer = mock.server
+    const received: Array<{ totalDurationMs?: number; promptTokens?: number; completionTokens?: number }> = []
+
+    await AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen2.5-coder:7b',
+      prompt: 'Work',
+      runtimeOpts,
+      ollamaEndpoint: mock.baseUrl,
+      isCancelled: () => false,
+      onGenerationTelemetry: (telemetry) => received.push(telemetry),
+    })
+
+    expect(received).toMatchObject([{ totalDurationMs: 8, promptTokens: 12, completionTokens: 3 }])
+  })
+
   it('should NOT route to /api/chat when toolCatalog is empty even if toolCallingCapable is true', async () => {
     let hitPath = ''
     const mock = await startMockOllama((req, res) => {

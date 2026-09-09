@@ -40,12 +40,12 @@ export const interviewPhaseResponseSchema = z.object({
 export const planningPhaseResponseSchema = z.object({
   objective: nonEmptyText,
   assumptions: z.array(z.object({
-    id: z.string().trim().regex(/^a-\d+$/),
+    id: nonEmptyText,
     statement: nonEmptyText,
     rationale: nonEmptyText.max(240),
   }).strict()).max(5),
   interventions: z.array(z.object({
-    id: z.string().trim().regex(/^m-\d+$/),
+    id: nonEmptyText,
     objective: nonEmptyText,
     filePaths: z.array(nonEmptyText).max(1),
     acceptanceCriteria: z.array(nonEmptyText).min(1).max(3),

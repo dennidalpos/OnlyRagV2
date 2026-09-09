@@ -117,6 +117,8 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   if (savedState) {
     responseInterpreterState.schemaRecoveryFailure = savedState.recoveryFailures?.schema
     responseInterpreterState.executionRecoveryFailure = savedState.recoveryFailures?.execution
+    responseInterpreterState.pendingVersionConflictReadPath = savedState.recoveryFailures?.versionConflictReadPath
+    responseInterpreterState.versionedReadEvidence = savedState.versionedReadEvidence
     responseInterpreterState.schemaRejectionStreak = savedState.recoveryFailures?.schema?.equivalentFailures || 0
     stepCountBox.value = savedState.stepCount || 0
     if (savedState.episodes && savedState.episodes.length > 0) {

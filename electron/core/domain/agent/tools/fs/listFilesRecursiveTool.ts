@@ -20,6 +20,7 @@ export function executeListFilesRecursiveTool(
   const pathCheck = validatePathSafety(dirPath, workspacePath)
   if (!pathCheck.safePath) {
     return {
+      outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
       logMessage: `List Files Recursive Rejected: ${pathCheck.error}`,
     }
@@ -28,6 +29,7 @@ export function executeListFilesRecursiveTool(
   try {
     if (!repository.exists(pathCheck.safePath)) {
       return {
+        outcome: 'failure',
         outputForHistory: `Directory not found: ${dirPath}`,
         logMessage: `Directory not found: ${dirPath}`,
       }
@@ -36,6 +38,7 @@ export function executeListFilesRecursiveTool(
     const discovered = repository.listRecursive(pathCheck.safePath, maxDepth, IGNORED_DIRECTORIES)
     const output = `Recursive Directory Structure for [${dirPath}] (depth <= ${maxDepth}, ${discovered.length} items):\n${discovered.slice(0, MAX_RECURSIVE_LIST_ITEMS).join('\n')}`
     return {
+      outcome: 'success',
       outputForHistory: output,
       logMessage: `Recursive List: ${discovered.length} items in ${dirPath}`,
       logDetail: output.slice(0, 800),
@@ -43,6 +46,7 @@ export function executeListFilesRecursiveTool(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     return {
+      outcome: 'failure',
       outputForHistory: `Error listing files recursively: ${message}`,
       logMessage: `Recursive list error: ${message}`,
     }

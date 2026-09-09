@@ -114,6 +114,14 @@ describe('checkVerificationCommandSafety', () => {
     expect(checkVerificationCommandSafety('npx create-react-app .').isSafe).toBe(false)
   })
 
+  it('rejects dependency changes as milestone evidence', () => {
+    for (const command of ['npm install', 'npm i eslint', 'pnpm add react', 'pip install pytest', 'cargo add serde']) {
+      const verdict = checkVerificationCommandSafety(command)
+      expect(verdict.isSafe, command).toBe(false)
+      expect(verdict.reason, command).toContain('does not verify')
+    }
+  })
+
   it('refuses a command that only prints the file the milestone just wrote', () => {
     // Seven of fifteen milestones in session-1787562597025-q8a5 declared exactly this shape.
     for (const command of [

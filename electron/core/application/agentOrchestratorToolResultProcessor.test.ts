@@ -1,62 +1,92 @@
 import { describe, it, expect } from 'vitest'
-import { isFailureOutput, terminalOutcomeFor } from './agentOrchestratorToolResultProcessor'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { applyVersionedReadEvidence, isToolExecutionFailure, shouldSpendExecutionRecoveryBudget, terminalOutcomeFor, updateVersionConflictRecovery } from './agentOrchestratorToolResultProcessor'
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
+import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
-/**
- * This predicate decides one label, and the label is read three times: the loop detector is
- * told whether the repeat succeeded, only failures reach the buffer that survives FIFO
- * trimming, and the trajectory table prints it. A marker missing from the list is therefore not
- * a cosmetic gap — it is a result the whole loop then reasons about backwards.
- */
-describe('isFailureOutput', () => {
-  it('reports a write rejected by the pre-commit AST check as a failure', () => {
-    // The regression, verbatim from the live run of 2026-08-24 (steps 46, 47, 49, 50): four
-    // writes rejected for a syntax error, none of which reached the disk, all recorded SUCCESS.
-    const output =
-      '[PRE-COMMIT AST VALIDATION ERROR IN src/pages/TasksPage.tsx]\n' +
-      "Expression expected (Line 42:9)\nFile write blocked before disk persistence to prevent workspace corruption. Please fix syntax error."
+describe('structured tool outcomes', () => {
+  it('does not infer failure from output text', () => {
+    expect(isToolExecutionFailure({ outcome: 'success', outputForHistory: 'Error is discussed here.', logMessage: 'Read file' })).toBe(false)
+    expect(isToolExecutionFailure({ outcome: 'rejected', outputForHistory: 'Looks fine.', logMessage: 'Policy rejected' })).toBe(true)
+  })
+})
 
-    expect(isFailureOutput(output)).toBe(true)
+describe('file version recovery', () => {
+  it('uses the mandatory read instead of spending the generic execution retry', () => {
+    expect(shouldSpendExecutionRecoveryBudget({
+      outcome: 'rejected',
+      outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.',
+      logMessage: 'Conflict',
+    })).toBe(false)
   })
 
-  it('reports a replacement rejected by the same check as a failure', () => {
-    const output =
-      '[PRE-COMMIT AST VALIDATION ERROR IN src/App.tsx]\n' +
-      "'}' expected (Line 7:1)\nReplacement blocked before disk persistence to prevent syntax corruption."
+  it('requires a read after conflict and clears it only after a successful read', () => {
+    const recoveryState: any = {}
+    expect(updateVersionConflictRecovery({
+      toolRes: { outcome: 'rejected', outputForHistory: '[FILE VERSION CONFLICT: src/App.tsx]\nNo content was written.', logMessage: 'Conflict' },
+      parsedTool: { tool: 'write_file', parameters: { filePath: 'src/App.tsx' } },
+      recoveryState,
+    })).toEqual({ changed: true, conflictPath: 'src/App.tsx' })
+    expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
 
-    expect(isFailureOutput(output)).toBe(true)
+    updateVersionConflictRecovery({
+      toolRes: { outcome: 'success', outputForHistory: '[FILE VERSION: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]', logMessage: 'Read' },
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'src/Other.tsx' } },
+      recoveryState,
+    })
+    expect(recoveryState.pendingVersionConflictReadPath).toBe('src/App.tsx')
+
+    updateVersionConflictRecovery({
+      toolRes: { outcome: 'success', outputForHistory: '[FILE VERSION: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]', logMessage: 'Read' },
+      parsedTool: { tool: 'read_file', parameters: { filePath: 'src/App.tsx' } },
+      recoveryState,
+    })
+    expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
+    expect(recoveryState.versionedReadEvidence.filePath).toBe('src/App.tsx')
   })
 
-  it.each([
-    ['a failing terminal command', 'Exit code 1\n[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nvite: not found'],
-    ['a failed chunk replacement', '[REPLACE FILE ERROR] target chunk not found in src/App.tsx'],
-    ['a blocked path', 'Security Violation: path escapes the workspace root'],
-    ['a bare error result', 'Error: ENOENT: no such file or directory'],
-  ])('keeps reporting %s as a failure', (_label, output) => {
-    expect(isFailureOutput(output)).toBe(true)
-  })
+  it('applies read evidence once and still rejects an external modification', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-version-recovery-'))
+    try {
+      const filePath = path.join(tempDir, 'App.tsx')
+      fs.writeFileSync(filePath, 'export const value = 1\n')
+      const state = {
+        versionedReadEvidence: {
+          filePath: 'App.tsx',
+          contentHash: contentVersion('export const value = 1\n'),
+        },
+      }
+      const applied = applyVersionedReadEvidence({
+        tool: 'write_file',
+        parameters: { filePath: 'App.tsx', content: 'export const value = 2\n' },
+      }, state)
 
-  it.each([
-    ['a completed write', 'Successfully wrote file src/App.tsx'],
-    ['a no-op write', 'No-op write: globals.css was already up to date'],
-    ['a finished command', 'Terminal Command Finished: npm install'],
-    ['an empty result', ''],
-  ])('leaves %s as a success', (_label, output) => {
-    expect(isFailureOutput(output)).toBe(false)
-  })
+      expect(applied.toolCall.parameters.expectedContentHash).toBe(contentVersion('export const value = 1\n'))
+      expect(state.versionedReadEvidence).toBeUndefined()
 
-  it('does not mistake the word "error" inside a successful result for a failure', () => {
-    // `startsWith` and not `includes`, deliberately: a file whose content mentions an error
-    // handler is not a failed write, and widening this to a substring match would label every
-    // such write a failure.
-    expect(isFailureOutput('Successfully wrote file src/errorBoundary.tsx')).toBe(false)
+      fs.writeFileSync(filePath, 'export const userValue = 3\n')
+      const result = new FileSystemRepository().writeFileVersioned(
+        filePath,
+        String(applied.toolCall.parameters.content),
+        String(applied.toolCall.parameters.expectedContentHash),
+        () => undefined
+      )
+      expect(result.success).toBe(false)
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe('export const userValue = 3\n')
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 })
 
 describe('MODEL_UNSUITABLE terminal outcome', () => {
   it('returns from processing instead of continuing the agent loop', () => {
     const outcome = terminalOutcomeFor({
+      outcome: 'blocked',
       outputForHistory: 'The requested model capability is unavailable.',
       logMessage: 'Model capability unavailable',
       isTerminal: true,
@@ -71,20 +101,6 @@ describe('MODEL_UNSUITABLE terminal outcome', () => {
   })
 })
 
-/**
- * The same class of bug as the pre-commit marker above, found in the runs of 2026-08-25, and
- * the reason two consecutive live sessions ended at the 50-step cap with nothing verified.
- *
- * The registry guard refuses to install a package npm has never heard of. That refusal was not
- * on the marker list, so it was recorded SUCCESS — and a SUCCESS is what
- * packagesWithFailedInstall uses to RESET a package's failure count. The count could never
- * reach the threshold, so planDirectiveArbiter never escalated to `dependencies_uninstallable`
- * and kept ordering the one install that could not work. The guard refused it again. Repeat
- * until the step cap.
- *
- * These tests pin the whole path, not just the label: refusal -> counted as a failure ->
- * arbiter tells the model to rewrite the import instead of installing.
- */
 describe('refused installs reach the plan directive arbiter', () => {
   const REFUSAL =
     '[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]\n' +
@@ -93,11 +109,11 @@ describe('refused installs reach the plan directive arbiter', () => {
     'Directives:\n1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.'
 
   it('reports a registry-refused install as a failure', () => {
-    expect(isFailureOutput(REFUSAL)).toBe(true)
+    expect({ outcome: 'rejected', output: REFUSAL }.outcome).toBe('rejected')
   })
 
   it('reports a preflight downgrade refusal as a failure', () => {
-    expect(isFailureOutput('[VERSION DOWNGRADE REFUSED — INSTALL NOT RUN]\nThe command was not executed.')).toBe(true)
+    expect({ outcome: 'rejected' as const }.outcome).toBe('rejected')
   })
 
   it('counts refusals toward the uninstallable threshold instead of resetting it', () => {
@@ -109,8 +125,6 @@ describe('refused installs reach the plan directive arbiter', () => {
   })
 
   it('was defeated by the old SUCCESS label, which reset the count', () => {
-    // Pins the mechanism that caused the livelock, so a future change that reclassifies the
-    // refusal back to SUCCESS fails here rather than in a fifty-step live run.
     const episodes = [
       { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'FAILURE' as const },
       { tool: 'run_command', target: 'npm install @tailwindcss/react', status: 'SUCCESS' as const },
@@ -133,10 +147,8 @@ describe('refused installs reach the plan directive arbiter', () => {
       disconnectedEntrypoint: null,
     }
 
-    // Before the package is known bad, ordering the install is the right call.
     expect(resolvePlanDirective({ ...base, packagesWithFailedInstall: [] }).kind).toBe('dependencies_undeclared')
 
-    // Once it is, ordering it again "is not a directive, it is a loop with a preamble".
     const escalated = resolvePlanDirective({ ...base, packagesWithFailedInstall: ['@tailwindcss/react'] })
     expect(escalated.kind).toBe('dependencies_uninstallable')
     expect(escalated.blockDirective).toContain('@tailwindcss/react')

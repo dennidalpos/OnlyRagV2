@@ -20,6 +20,7 @@ export class RecoveryToolService {
     const summary = `[ATOMIC WORKSPACE ROLLBACK EXECUTED]\nRestored: ${result.restoredCount} file(s).\n` +
       (result.errors.length > 0 ? `Errors: ${result.errors.join('; ')}` : 'All journaled modifications successfully reverted to pre-session state.')
     return {
+      outcome: result.errors.length > 0 ? 'failure' : 'success',
       outputForHistory: summary,
       logMessage: `Workspace Rollback: ${result.restoredCount} files restored`,
     }
@@ -32,6 +33,7 @@ export class RecoveryToolService {
   executeRollbackLastStep(): ToolExecutionResult {
     if (!this.journal.canRollbackLastStep) {
       return {
+        outcome: 'blocked',
         outputForHistory: '[ROLLBACK LAST STEP] Nothing to undo: the previous step made no file changes, or there is no completed step yet.',
         logMessage: 'Rollback Last Step: nothing to undo',
       }
@@ -40,6 +42,7 @@ export class RecoveryToolService {
     const summary = `[LAST STEP ROLLBACK EXECUTED]\nRestored: ${result.restoredCount} file(s) to their state before the previous step.\n` +
       (result.errors.length > 0 ? `Errors: ${result.errors.join('; ')}` : 'Only the previous step\'s changes were reverted; earlier steps in this session are untouched.')
     return {
+      outcome: result.errors.length > 0 ? 'failure' : 'success',
       outputForHistory: summary,
       logMessage: `Rollback Last Step: ${result.restoredCount} files restored`,
     }

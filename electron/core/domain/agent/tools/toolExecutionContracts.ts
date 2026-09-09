@@ -55,6 +55,7 @@ export const toolContractSchema = z.object({
 })
 
 export const toolExecutionResultSchema = z.object({
+  outcome: z.enum(['success', 'failure', 'rejected', 'blocked']),
   outputForHistory: z.string(),
   logMessage: z.string(),
   logDetail: z.string().optional(),
@@ -71,6 +72,7 @@ export const toolExecutionResultSchema = z.object({
 }).strict()
 
 export interface ToolExecutionResult {
+  outcome: 'success' | 'failure' | 'rejected' | 'blocked'
   outputForHistory: string
   logMessage: string
   logDetail?: string
@@ -82,6 +84,8 @@ export interface ToolExecutionResult {
   /** Whether an externally visible effect is known after execution returns. */
   effectOutcome?: 'none' | 'confirmed' | 'uncertain'
 }
+
+export type ClassifiedToolExecutionResult = ToolExecutionResult
 
 /** Maps file-mutating tools to the mutation shape shown by the approval surface. */
 export const FILE_MUTATION_TOOL_TO_PROPOSAL_TYPE: Partial<Record<AgentToolCall['tool'], PendingMutationType>> = {

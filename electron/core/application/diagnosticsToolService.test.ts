@@ -8,6 +8,7 @@ describe('DiagnosticsToolService ask', () => {
     const result = service.executeAsk({ question: 'Which database should I use?', query: 'ignored' }, 'ignored')
 
     expect(result).toEqual({
+      outcome: 'success',
       outputForHistory: 'Agent requested clarification: "Which database should I use?"',
       logMessage: 'Agent Question: Which database should I use?',
       logDetail: 'Which database should I use?',

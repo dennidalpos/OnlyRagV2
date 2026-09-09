@@ -37,17 +37,17 @@ export class WebToolService {
     signal: AbortSignal | undefined,
   ): Promise<ToolExecutionResult> {
     if (allowFileModifications === false) {
-      return { outputForHistory: 'Direct file download disabled in Settings.', logMessage: 'File download disabled in settings' }
+      return { outcome: 'blocked', outputForHistory: 'Direct file download disabled in Settings.', logMessage: 'File download disabled in settings' }
     }
 
     const url = parameters.url
     const filePath = parameters.filePath
     const pathCheck = validatePathSafety(filePath, workspacePath)
     if (!pathCheck.safePath) {
-      return { outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Download File Rejected: ${pathCheck.error}` }
+      return { outcome: 'rejected', outputForHistory: `Security Violation: ${pathCheck.error}`, logMessage: `Download File Rejected: ${pathCheck.error}` }
     }
     if (!url || !filePath) {
-      return { outputForHistory: 'Missing URL or file path for download', logMessage: 'Missing download parameters' }
+      return { outcome: 'rejected', outputForHistory: 'Missing URL or file path for download', logMessage: 'Missing download parameters' }
     }
 
     this.dependencies.recordBeforeModification(pathCheck.safePath)
@@ -55,13 +55,14 @@ export class WebToolService {
       webClient.downloadFile(targetUrl, targetPath, workspaceRoot, abortSignal))
     const result = await downloadFile(url, pathCheck.safePath, workspacePath, signal)
     if (!result.success) {
-      return { outputForHistory: `Download failed from ${url}: ${result.error}`, logMessage: `Download File Failed: ${result.error}` }
+      return { outcome: 'failure', outputForHistory: `Download failed from ${url}: ${result.error}`, logMessage: `Download File Failed: ${result.error}` }
     }
 
     const hashFile = this.dependencies.hashFile || ((targetPath: string) =>
       crypto.createHash('sha256').update(fs.readFileSync(targetPath)).digest('hex'))
     const provenance = hashFile(pathCheck.safePath)
     return {
+      outcome: 'success',
       outputForHistory: `Successfully downloaded ${result.downloadedBytes} bytes from ${url} to ${filePath}\nProvenance SHA-256: ${provenance}`,
       logMessage: `Successfully downloaded ${result.downloadedBytes} bytes to ${path.basename(filePath)}`,
       logDetail: `SHA-256: ${provenance}`,

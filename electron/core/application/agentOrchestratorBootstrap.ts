@@ -60,6 +60,7 @@ export interface AgentSessionBootstrap {
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
   skillsBlock: string
+  resumeValidationError: string | null
   episodicCompactor: EpisodicMemoryCompactor
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm

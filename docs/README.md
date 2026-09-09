@@ -10,6 +10,7 @@ Questa directory costituisce l'unica fonte di verità (*source of truth*) tecnic
 | :--- | :--- | :--- |
 | **Architettura Generale** | [`architecture.md`](./architecture.md) | Topologia multi-processo, Clean Architecture a 4 layer, Resource Coordinator e RAG flow. |
 | **Autonomous Coding Agent** | [`agent.md`](./agent.md) | Tool calling loop, circuit breakers, loop detector, authority milestone e compattazione memoria. |
+| **Qualifica Live Agent** | [`agent-live-testing.md`](./agent-live-testing.md) | Metodo, metriche CAS-23, limiti supportati e residui delle prove Ollama reali. |
 | **Razionali ed Evidenze** | [`code-rationales.md`](./code-rationales.md) | Diario delle evidenze empiriche, lezioni storiche delle live session e psicologia degli SLM compatti. |
 | **Pipeline RAG & Sidecar** | [`rag-sidecar.md`](./rag-sidecar.md) | Python FastAPI Sidecar, LanceDB embedded, OCR/Vision (RapidOCR vs LLM) e traduzione in-place. |
 | **Electron Main Process** | [`electron-main.md`](./electron-main.md) | Struttura dei 4 layer Main, isolamento con `shared/`, gestione processi (PowerShell, sidecar :8000). |
@@ -34,6 +35,6 @@ Questa directory costituisce l'unica fonte di verità (*source of truth*) tecnic
 
 - **Nuovo Contributore**: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md) → [`agent.md`](./agent.md).
 - **Integrazione API & IPC**: [`api-ipc.md`](./api-ipc.md) → [`api-rest.md`](./api-rest.md).
-- **Coding Agent Maintainer**: [`agent.md`](./agent.md) → [`code-rationales.md`](./code-rationales.md) → [`electron-main.md`](./electron-main.md).
+- **Coding Agent Maintainer**: [`agent.md`](./agent.md) → [`agent-live-testing.md`](./agent-live-testing.md) → [`code-rationales.md`](./code-rationales.md).
 - **RAG & Search Specialist**: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).
 - **Quality & Release Engineer**: [`operations.md`](./operations.md) → [`libraries.md`](./libraries.md).

@@ -12,6 +12,7 @@ import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './age
 import type { HardwareFacts } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import type { OllamaContextReuseDecision } from '../domain/agent/ollamaContextCacheManager'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
+import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 
 
 export type EmitLog = (
@@ -48,6 +49,7 @@ export interface TurnDispatchContext {
   skillMatchingOptions: SkillMatchingOptions
   skillsBlock?: string
   episodicCompactor: EpisodicMemoryCompactor
+  responseInterpreterState: ResponseInterpreterState
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
   /**

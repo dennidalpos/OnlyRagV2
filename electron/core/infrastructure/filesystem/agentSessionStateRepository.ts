@@ -10,6 +10,7 @@ import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
 import type { RecoveryFailureState } from '../../domain/agent/recoveryBudget'
+import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../../domain/agent/ollamaSessionRuntime'
 
 export type AgentSessionTerminationReason =
   | 'finish'
@@ -20,6 +21,7 @@ export type AgentSessionTerminationReason =
   | 'verification_failed'
   | 'model_silence'
   | 'transport_error'
+  | 'runtime_validation'
   | 'protocol_error'
   | 'plan_proposal'
 
@@ -45,7 +47,11 @@ export interface SavedAgentSessionState {
   recoveryFailures?: {
     schema?: RecoveryFailureState
     execution?: RecoveryFailureState
+    versionConflictReadPath?: string
   }
+  versionedReadEvidence?: { filePath: string; contentHash: string }
+  ollamaRuntimeProfile?: OllamaSessionRuntimeProfile
+  ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
 }
 
 export class AgentSessionStateRepository {

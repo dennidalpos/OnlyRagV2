@@ -1,5 +1,5 @@
 import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
-import type { ToolExecutionResult } from './agentToolExecutorService'
+import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import {
   DiagnosticOutputReducer,
   extractErrorDiagnostics,
@@ -12,11 +12,71 @@ import { recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/r
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
+export function isToolExecutionFailure(toolRes: ClassifiedToolExecutionResult): boolean {
+  return toolRes.outcome !== 'success'
+}
+
+export function shouldSpendExecutionRecoveryBudget(toolRes: ClassifiedToolExecutionResult): boolean {
+  return isToolExecutionFailure(toolRes) && !toolRes.outputForHistory.includes('[FILE VERSION CONFLICT:')
+}
+
 export function terminalOutcomeFor(
-  toolRes: ToolExecutionResult
+  toolRes: ClassifiedToolExecutionResult
 ): Extract<ToolResultProcessingOutcome, { outcome: 'return' }> | null {
   if (toolRes.terminalCode !== 'MODEL_UNSUITABLE') return null
   return { outcome: 'return', result: { success: false, summary: toolRes.outputForHistory, completionStatus: 'blocked' } }
+}
+
+type VersionRecoveryUpdate = { changed: boolean; conflictPath?: string }
+
+function sameFilePath(left: string, right: string): boolean {
+  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
+  return normalize(left) === normalize(right)
+}
+
+export function updateVersionConflictRecovery(ctx: Pick<ToolResultProcessingContext, 'toolRes' | 'parsedTool' | 'recoveryState'>): VersionRecoveryUpdate {
+  const conflict = ctx.toolRes.outputForHistory.match(/\[FILE VERSION CONFLICT:\s*([^\]\r\n]+)\]/)
+  if (ctx.toolRes.outcome !== 'success' && conflict) {
+    const conflictPath = conflict[1].trim()
+    ctx.recoveryState.pendingVersionConflictReadPath = conflictPath
+    ctx.recoveryState.versionedReadEvidence = undefined
+    return { changed: true, conflictPath }
+  }
+  if (ctx.toolRes.outcome === 'success' && ctx.parsedTool.tool === 'read_file') {
+    const filePath = String(ctx.parsedTool.parameters.filePath || '')
+    const version = ctx.toolRes.outputForHistory.match(/\[FILE VERSION:\s*(sha256:[a-f0-9]+)\]/i)?.[1]
+    if (!filePath || !version) return { changed: false }
+    ctx.recoveryState.versionedReadEvidence = { filePath, contentHash: version }
+    if (ctx.recoveryState.pendingVersionConflictReadPath && sameFilePath(filePath, ctx.recoveryState.pendingVersionConflictReadPath)) {
+      ctx.recoveryState.pendingVersionConflictReadPath = undefined
+      ctx.recoveryState.executionRecoveryFailure = undefined
+    }
+    return { changed: true }
+  }
+  return { changed: false }
+}
+
+const VERSIONED_EDIT_TOOLS = new Set(['write_file', 'replace_file_content', 'multi_replace_file_content'])
+
+export function applyVersionedReadEvidence(
+  toolCall: AgentToolCall,
+  state: Pick<ToolResultProcessingContext['recoveryState'], 'versionedReadEvidence'>
+): { toolCall: AgentToolCall; consumed: boolean } {
+  const evidence = state.versionedReadEvidence
+  if (!evidence || !VERSIONED_EDIT_TOOLS.has(toolCall.tool)) return { toolCall, consumed: false }
+
+  state.versionedReadEvidence = undefined
+  const filePath = String(toolCall.parameters.filePath || '')
+  if (!sameFilePath(filePath, evidence.filePath) || toolCall.parameters.expectedContentHash) {
+    return { toolCall, consumed: true }
+  }
+  return {
+    consumed: true,
+    toolCall: {
+      ...toolCall,
+      parameters: { ...toolCall.parameters, expectedContentHash: evidence.contentHash },
+    },
+  }
 }
 
 function extractTargetParam(parsedTool: AgentToolCall): string | undefined {
@@ -29,7 +89,7 @@ function extractTargetParam(parsedTool: AgentToolCall): string | undefined {
   )
 }
 
-function distillOutput(toolRes: ToolExecutionResult, isToolFailure: boolean): string {
+function distillOutput(toolRes: ClassifiedToolExecutionResult, isToolFailure: boolean): string {
   let distilled = toolRes.isTerminal ? DiagnosticOutputReducer.distillTerminalOutput(toolRes.outputForHistory, 2500) : toolRes.outputForHistory
   if (isToolFailure && toolRes.isTerminal) {
     const frame = extractErrorDiagnostics(toolRes.outputForHistory)
@@ -64,49 +124,6 @@ function emitChangeMetrics(ctx: ToolResultProcessingContext) {
 }
 
 /**
- * Whether a tool result reports a failure.
- *
- * A whitelist of markers rather than a flag on ToolExecutionResult, because that is what the
- * loop has always used and every producer already emits these strings. What matters is that
- * the list is complete: the label is read three times over — `recordOutcome` feeds it to the
- * loop detector, only failures enter the buffer that survives FIFO trimming, and the
- * trajectory table prints it for whoever reads the run.
- *
- * The AST marker was missing. Live run of 2026-08-24, steps 46, 47, 49 and 50: four writes
- * rejected by the pre-commit AST check, none of which reached the disk, all four recorded as
- * SUCCESS. The model was consequently handed the redundancy directive — whose text says "this
- * is NOT a failure and it is NOT counted against you" — about a file that did not exist.
- */
-export function isFailureOutput(outputForHistory: string): boolean {
-  const output = outputForHistory || ''
-  return (
-    output.includes('[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]') ||
-    output.includes('[REPLACE FILE ERROR') ||
-    output.includes('[PRE-COMMIT AST VALIDATION ERROR IN') ||
-    // A refused install is a failed install. The registry guard in agentToolExecutorService.ts
-    // returns this marker WITHOUT running npm, and because it was absent from this list the
-    // refusal was recorded as SUCCESS — which packagesWithFailedInstall (installCommandParser.ts)
-    // reads as "this package installed fine" and uses to RESET the package's failure count to
-    // zero. The count could therefore never reach FAILURES_BEFORE_UNINSTALLABLE, the arbiter
-    // never reached `dependencies_uninstallable`, and it went on ordering the same impossible
-    // install every turn while the guard went on refusing it.
-    //
-    // Measured in logs/coding_agent_audit.log, session live-full-task 2026-08-25T11:03: the
-    // model was ordered to install "@tailwindcss/react" (a package that does not exist) at
-    // steps 9, 11, 18, 19, 25, 26, 32, 33, 39, 40, 46 and 48, with the loop detector blocking
-    // the turns in between, until the 50-step cap ended the session with 0 milestones verified.
-    // The 08:37 run of the same day did the same. The escape those runs needed was already
-    // built and simply never armed.
-    output.includes('[PACKAGE DOES NOT EXIST') ||
-    output.includes('[VERSION DOWNGRADE REFUSED') ||
-    output.includes('[ENSURE_TOOL INSTALL FAILED]') ||
-    output.includes('[ENSURE_TOOL ERROR]') ||
-    output.includes('Security Violation') ||
-    output.toLowerCase().startsWith('error:')
-  )
-}
-
-/**
  * Post-processes a tool execution result: change-metrics IPC, stagnation circuit breaker
  * (which may end the session), episodic recording, mutation/verification bookkeeping (see
  * agentOrchestratorCircuitBreakerAndVerification.ts), and the final tool-result log line.
@@ -114,7 +131,8 @@ export function isFailureOutput(outputForHistory: string): boolean {
  */
 export async function runToolResultProcessing(ctx: ToolResultProcessingContext): Promise<ToolResultProcessingOutcome> {
   const { toolRes, parsedTool } = ctx
-  const isToolFailure = isFailureOutput(toolRes.outputForHistory)
+  const isToolFailure = isToolExecutionFailure(toolRes)
+  const versionRecovery = updateVersionConflictRecovery(ctx)
 
   const targetParam = extractTargetParam(parsedTool)
   const distilledOutput = distillOutput(toolRes, isToolFailure)
@@ -126,10 +144,11 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   // this line tells it what actually happened. Without it every repeat looks like a failing
   // one, and a command that keeps succeeding gets its milestone abandoned as FAILED.
   ctx.loopDetector.recordOutcome(parsedTool, !isToolFailure)
+  if (versionRecovery.conflictPath) ctx.loopDetector.resetTarget(versionRecovery.conflictPath)
 
   emitChangeMetrics(ctx)
 
-  if (isToolFailure) {
+  if (isToolFailure && shouldSpendExecutionRecoveryBudget(toolRes)) {
     const signature = `${parsedTool.tool}:${targetParam || ''}:${toolRes.logMessage.toLowerCase()}`
     const decision = recordRecoveryFailure(ctx.recoveryState.executionRecoveryFailure, signature)
     ctx.recoveryState.executionRecoveryFailure = decision.state
@@ -157,7 +176,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
       })
       return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
-  } else if (isMutating || ['run_command', 'run_tests', 'ensure_tool'].includes(parsedTool.tool)) {
+  } else if (!isToolFailure && (isMutating || ['run_command', 'run_tests', 'ensure_tool'].includes(parsedTool.tool))) {
     ctx.recoveryState.executionRecoveryFailure = undefined
   }
 
@@ -174,6 +193,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     },
     distilledOutput
   )
+  if (versionRecovery.changed) await ctx.persistCurrentState()
 
   if (isMutating && !isToolFailure) {
     await recordMutationSideEffects(ctx, targetParam)

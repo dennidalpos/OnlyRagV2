@@ -94,8 +94,8 @@ function reconcilePreviousWork(
 }
 
 function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
-  return plan.interventions.map((intervention) => ({
-    id: intervention.id,
+  return plan.interventions.map((intervention, index) => ({
+    id: `m-${index + 1}`,
     title: intervention.objective,
     status: 'pending',
     filePaths: intervention.filePaths,
@@ -105,6 +105,36 @@ function toMilestones(plan: PlanningPhaseResponse): PlanMilestone[] {
     sourceInterventionId: intervention.sourceInterventionId,
     falsifiableHypothesis: intervention.acceptanceCriteria.join('; '),
   }))
+}
+
+function sanitizeVerificationCommands(
+  plan: PlanningPhaseResponse,
+  executableCommands: readonly string[],
+  scaffoldFilePath?: string
+): { plan?: PlanningPhaseResponse; error?: string } {
+  const unavailableCommandOnly = plan.interventions.find((item) =>
+    item.verificationCommand
+    && !executableCommands.includes(item.verificationCommand)
+    && item.filePaths.length === 0
+  )
+  if (unavailableCommandOnly?.verificationCommand && !scaffoldFilePath) {
+    return { error: `Plan response used an unavailable verification command: ${unavailableCommandOnly.verificationCommand}` }
+  }
+
+  return {
+    plan: {
+      ...plan,
+      interventions: plan.interventions.map((item) =>
+        item.verificationCommand && !executableCommands.includes(item.verificationCommand)
+          ? {
+              ...item,
+              filePaths: item.filePaths.length > 0 ? item.filePaths : [scaffoldFilePath!],
+              verificationCommand: undefined,
+            }
+          : item
+      ),
+    },
+  }
 }
 
 export class PlanGenerationAppService {
@@ -154,15 +184,15 @@ export class PlanGenerationAppService {
         if (validated.status === 'invalid') {
           return { status: 'invalid', error: `Invalid plan response: ${validated.error}` }
         }
-        const inventedCommand = validated.data.interventions
-          .map((item) => item.verificationCommand)
-          .find((command) => command && !executableVerificationCommands.includes(command))
-        const error = inventedCommand
-          ? `Plan response used an unavailable verification command: ${inventedCommand}`
-          : reconcilePreviousWork(validated.data, previousInterventions)
+        const sanitized = sanitizeVerificationCommands(
+          validated.data,
+          executableVerificationCommands,
+          discovery.scaffold.requirements[0]?.path
+        )
+        const error = sanitized.error || reconcilePreviousWork(sanitized.plan || validated.data, previousInterventions)
         return error
           ? { status: 'invalid', error }
-          : { status: 'valid', data: validated.data }
+          : { status: 'valid', data: sanitized.plan! }
       })
       if (response.status === 'success') {
         structuredPlan = response.data
@@ -186,8 +216,8 @@ export class PlanGenerationAppService {
 
     const previousDecisions = req.previousPlan?.decisions || []
     const answerDecisions = decisionsFromAnswers(req.previousDecisions || [])
-    const assumptionDecisions: PlanDecision[] = structuredPlan?.assumptions.map((assumption) => ({
-      id: assumption.id,
+    const assumptionDecisions: PlanDecision[] = structuredPlan?.assumptions.map((assumption, index) => ({
+      id: `a-${index + 1}`,
       statement: assumption.statement,
       source: 'assumption',
       rationale: assumption.rationale,

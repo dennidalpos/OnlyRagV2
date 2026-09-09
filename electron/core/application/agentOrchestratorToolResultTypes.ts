@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { AgentCompletionStatus, AppSettings } from '../../../shared/types'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
-import type { ToolExecutionResult } from './agentToolExecutorService'
+import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { StagnationCircuitBreaker } from '../domain/agent/stagnationCircuitBreaker'
@@ -28,7 +28,7 @@ export interface ToolResultMutableFlags {
 }
 
 export interface ToolResultProcessingContext {
-  toolRes: ToolExecutionResult
+  toolRes: ClassifiedToolExecutionResult
   parsedTool: AgentToolCall
   /** Wall-clock ms captured immediately before the tool ran; used to attribute files a
    *  shell command touched (see commandTouchedFilesScanner.ts). */
@@ -48,7 +48,11 @@ export interface ToolResultProcessingContext {
   /** Same instance the response interpreter checks against: this step feeds the real
    *  execution outcome back into it. */
   loopDetector: AgentActionLoopDetector
-  recoveryState: { executionRecoveryFailure?: RecoveryFailureState }
+  recoveryState: {
+    executionRecoveryFailure?: RecoveryFailureState
+    pendingVersionConflictReadPath?: string
+    versionedReadEvidence?: { filePath: string; contentHash: string }
+  }
   isSessionActive: () => boolean
   targetWindow: BrowserWindow | null
   emitLog: EmitLog

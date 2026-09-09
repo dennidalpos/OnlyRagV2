@@ -25,8 +25,11 @@ import os from 'node:os'
 import { runAgentOrchestratorLoop } from '../../electron/core/application/agentOrchestratorAppService'
 import { loadRealSettings, reportRun, resetWorkspace, seedGeneratedPlan } from './agentLiveHarness'
 
-const WORKSPACE = path.join(os.homedir(), 'Desktop', 'onlyrag_live_fulltask')
-const SESSION = 'live-full-task'
+const MODEL = process.env.ONLYRAG_LIVE_MODEL || 'qwen2.5-coder:7b'
+const RUN_LABEL = process.env.ONLYRAG_LIVE_RUN || 'default'
+const SAFE_RUN = `${MODEL}-${RUN_LABEL}`.replace(/[^a-z0-9_-]+/gi, '-')
+const WORKSPACE = path.join(os.homedir(), 'Desktop', `onlyrag_live_fulltask_${SAFE_RUN}`)
+const SESSION = `live-full-task-${SAFE_RUN}`
 
 /**
  * The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone
@@ -79,7 +82,7 @@ Ensure the application is fully runnable, usable and responsive before moving to
 
 describe('live: full task run', () => {
   it('plans and executes the original audit task against a real model', async () => {
-    const settings = loadRealSettings({ codingModel: 'qwen2.5-coder:7b' })
+    const settings = loadRealSettings({ codingModel: MODEL })
     resetWorkspace(WORKSPACE)
 
     const seeded = await seedGeneratedPlan({
@@ -117,7 +120,7 @@ describe('live: full task run', () => {
     // the metrics block is what turns "red" into "50/50 steps, 0/13 verified, blocked,
     // 4 commands run".
     const metrics = reportRun({
-      label: 'full task run',
+      label: `full task run ${MODEL} ${RUN_LABEL}`,
       workspacePath: WORKSPACE,
       sessionId: SESSION,
       success: result.success,

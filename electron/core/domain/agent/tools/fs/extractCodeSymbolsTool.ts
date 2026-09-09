@@ -23,6 +23,7 @@ export async function executeExtractCodeSymbolsTool(
   const pathCheck = validatePathSafety(targetPath, workspacePath)
   if (!pathCheck.safePath) {
     return {
+      outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
       logMessage: `Extract Code Symbols Rejected: ${pathCheck.error}`,
     }
@@ -34,6 +35,7 @@ export async function executeExtractCodeSymbolsTool(
     if (result.symbols.length === 0) {
       const output = `[CODE SYMBOLS: ${targetPath}]\nNo symbols (functions, classes, interfaces) matching filter '${filterKind || 'all'}' found in file.\n[END CODE SYMBOLS]`
       return {
+        outcome: 'success',
         outputForHistory: output,
         logMessage: `Code Symbols: 0 found in ${path.basename(pathCheck.safePath)}`,
       }
@@ -44,6 +46,7 @@ export async function executeExtractCodeSymbolsTool(
       .join('\n')
     const output = `[CODE SYMBOLS: ${targetPath} (${result.symbols.length} symbols found)]\n${formatted}\n[END CODE SYMBOLS]`
     return {
+      outcome: 'success',
       outputForHistory: output,
       logMessage: `Code Symbols: ${result.symbols.length} symbols in ${path.basename(pathCheck.safePath)}`,
       logDetail: formatted.slice(0, 600),
@@ -51,6 +54,7 @@ export async function executeExtractCodeSymbolsTool(
   }
 
   return {
+    outcome: 'failure',
     outputForHistory: `Error: Extracting code symbols failed: ${result.error || targetPath}`,
     logMessage: `Code Symbols Error: ${result.error || targetPath}`,
   }

@@ -18,6 +18,8 @@ import { ollamaAppService } from './ollamaAppService'
 import type { OllamaModelMetrics } from '../infrastructure/http/ollamaHttpClient'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTagMatcher'
+import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
+import { validateRestoredOllamaRuntime } from '../domain/agent/ollamaSessionRuntime'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -59,6 +61,8 @@ export interface SessionContext {
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
   skillsBlock: string
+  /** Non-null when a resumed run cannot safely reproduce its pinned runtime. */
+  resumeValidationError: string | null
 }
 
 async function scanProjectMap(workspacePath: string): Promise<string> {
@@ -93,8 +97,11 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     : ''
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
+  const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
+  if (savedState?.ollamaRuntimeProfile) session.ollamaRuntimeProfile = savedState.ollamaRuntimeProfile
+  session.ollamaGenerationTelemetry = savedState?.ollamaGenerationTelemetry || []
   const requestedCodingModel = payload.activeModel || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
-  const codingModel = findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
+  const codingModel = session.ollamaRuntimeProfile?.model || findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
   // One `/api/tags` read, both facts. `getModelMetrics` returns the capabilities array AND the
   // trained `context_length` in the same record; the older `getModelCapabilities` call fetched
   // the identical payload and threw the context length away, so the turn dispatcher sized
@@ -105,6 +112,9 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const modelCapabilities: Record<string, string[]> = Object.fromEntries(
     Object.entries(modelMetrics).map(([name, metrics]) => [name, metrics.capabilities])
   )
+  const resumeValidationError = session.ollamaRuntimeProfile
+    ? validateRestoredOllamaRuntime(session.ollamaRuntimeProfile, settings.ollamaHost, availableModels, modelMetrics)
+    : null
 
   emitLog(
     'info',
@@ -172,5 +182,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     skillMatchContext,
     skillMatchingOptions,
     skillsBlock,
+    resumeValidationError,
   }
 }

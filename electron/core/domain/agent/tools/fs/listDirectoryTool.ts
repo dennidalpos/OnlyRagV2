@@ -15,6 +15,7 @@ export function executeListDirectoryTool(
   const pathCheck = validatePathSafety(dirPath, workspacePath)
   if (!pathCheck.safePath) {
     return {
+      outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
       logMessage: `List Dir Rejected: ${pathCheck.error}`,
     }
@@ -27,17 +28,20 @@ export function executeListDirectoryTool(
         `Listed directory [${dirPath}] (${entries.length} items):\n` +
         entries.map((entry) => `${entry.isDir ? '[DIR]' : '[FILE]'} ${entry.name}`).join('\n')
       return {
+        outcome: 'success',
         outputForHistory: output,
         logMessage: `Directory Listing Result (${entries.length} items)`,
       }
     }
     return {
+      outcome: 'failure',
       outputForHistory: `Directory not found: ${dirPath}`,
       logMessage: `Directory not found: ${dirPath}`,
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     return {
+      outcome: 'failure',
       outputForHistory: `Error listing directory ${dirPath}: ${message}`,
       logMessage: `Error listing directory: ${message}`,
     }

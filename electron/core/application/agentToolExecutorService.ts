@@ -46,8 +46,8 @@ import {
   isLongRunningCommand,
   resolveCommandTimeoutMs,
 } from '../domain/agent/tools/execution/commandPolicy'
-import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
-export type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
+import { toolExecutionResultSchema, type ClassifiedToolExecutionResult, type ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
+export type { ClassifiedToolExecutionResult, ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 
 export class AgentToolExecutorService {
   private repo = new FileSystemRepository()
@@ -172,6 +172,7 @@ export class AgentToolExecutorService {
     if (policy.allowed) return null
 
     return {
+      outcome: 'blocked',
       outputForHistory: `[POLICY BLOCK] ${policy.reason}`,
       logMessage: `[POLICY BLOCK] ${parsedTool.tool}: ${policy.reason}`,
       isTerminal: true,
@@ -298,11 +299,16 @@ export class AgentToolExecutorService {
 
     // Report each package fact at most once per session to prevent infinite rewrite loops.
     findings.nonexistent = findings.nonexistent.filter((name) => !this.reportedVersionFacts.has(name))
+    findings.unpublished = findings.unpublished.filter((item) => !this.reportedVersionFacts.has(item.name))
     findings.outdated = findings.outdated.filter((o) => !this.reportedVersionFacts.has(o.name))
 
     const directive = buildVersionRealityDirective(findings)
     if (!directive) return ''
-    for (const name of [...findings.nonexistent, ...findings.outdated.map((o) => o.name)]) {
+    for (const name of [
+      ...findings.nonexistent,
+      ...findings.unpublished.map((item) => item.name),
+      ...findings.outdated.map((o) => o.name),
+    ]) {
       this.reportedVersionFacts.add(name)
     }
     logger.log('WARN', 'AgentToolExecutor', `[VERSION_REALITY] package.json declares versions the registry contradicts`)
@@ -368,11 +374,39 @@ export class AgentToolExecutorService {
     policyConsent: CapabilityConsent = { requested: false, granted: false },
     policySessionId: string = 'agent-execution',
     allowedToolsForTurn?: readonly SupportedToolName[],
+  ): Promise<ClassifiedToolExecutionResult> {
+    const result = await this.dispatchTool(
+      parsedTool,
+      workspacePath,
+      settings,
+      onTerminalOutput,
+      onProcessSpawned,
+      activeSkillGuidelines,
+      signal,
+      policyConsent,
+      policySessionId,
+      allowedToolsForTurn,
+    )
+    return toolExecutionResultSchema.parse(result)
+  }
+
+  private async dispatchTool(
+    parsedTool: AgentToolCall,
+    workspacePath: string | null | undefined,
+    settings: AppSettings,
+    onTerminalOutput?: (data: string) => void,
+    onProcessSpawned?: (proc: ChildProcess) => void,
+    activeSkillGuidelines: string = '',
+    signal?: AbortSignal,
+    policyConsent: CapabilityConsent = { requested: false, granted: false },
+    policySessionId: string = 'agent-execution',
+    allowedToolsForTurn?: readonly SupportedToolName[],
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
 
     if (allowedToolsForTurn && !allowedToolsForTurn.includes(tool)) {
       return {
+        outcome: 'rejected',
         outputForHistory: `[TURN TOOL POLICY DENIED] Tool "${tool}" is not available for this phase.`,
         logMessage: `Turn tool policy denied: ${tool}`,
         isTerminal: true,
@@ -460,11 +494,11 @@ export class AgentToolExecutorService {
 
       case 'run_command': {
         if (settings.allowTerminalExecution === false) {
-          return { outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true }
+          return { outcome: 'blocked', outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true }
         }
         const cmd = parameters.command
         if (!cmd) {
-          return { outputForHistory: 'Missing command parameter', logMessage: 'Missing command parameter', isTerminal: true }
+          return { outcome: 'rejected', outputForHistory: 'Missing command parameter', logMessage: 'Missing command parameter', isTerminal: true }
         }
 
         const installPreconditionFailure = await this.processToolService.validateInstallPreconditions(cmd, workspacePath)
@@ -569,6 +603,7 @@ export class AgentToolExecutorService {
           }
 
           return {
+            outcome: 'success',
             outputForHistory: `Ran command: "${cmd}"\nOutput:\n${rawOutput}`,
             logMessage: `Terminal Command Finished: ${cmd}`,
             logDetail: rawOutput.slice(0, 1000),
@@ -620,7 +655,7 @@ export class AgentToolExecutorService {
             redaction: { applied: false, fields: [] },
             error: 'Visual validation requires an active workspace.',
           })
-          return { outputForHistory: JSON.stringify(result), logMessage: result.error || 'Visual validation unavailable', isTerminal: true }
+          return { outcome: 'blocked', outputForHistory: JSON.stringify(result), logMessage: result.error || 'Visual validation unavailable', isTerminal: true }
         }
         const outputDirectory = path.join(workspacePath, '.onlyrag', 'visual-validation')
         fs.mkdirSync(outputDirectory, { recursive: true })
@@ -637,6 +672,7 @@ export class AgentToolExecutorService {
             })
           : visualValidationResultSchema.parse({ status: 'verified', ...evidence })
         return {
+          outcome: result.status === 'verified' ? 'success' : 'blocked',
           outputForHistory: JSON.stringify(result),
           logMessage: `Visual validation ${result.status}: ${parameters.artifactPath || 'artifact'}`,
           logDetail: JSON.stringify(result).slice(0, 4000),
@@ -650,6 +686,7 @@ export class AgentToolExecutorService {
 
       default:
         return {
+          outcome: 'rejected',
           outputForHistory: `Unrecognized or unsupported tool: ${tool}`,
           logMessage: `Unsupported tool ${tool}`,
           isTerminal: true,

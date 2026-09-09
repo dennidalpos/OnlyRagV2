@@ -36,6 +36,12 @@ describe('AgentSessionStateRepository Unit Tests', () => {
         { id: 'm1', title: 'Setup structure', status: 'verified' },
       ],
       userTask: 'Fix replace file content bug',
+      ollamaRuntimeProfile: {
+        model: 'qwen2.5-coder:7b',
+        host: 'http://127.0.0.1:11434',
+        options: { num_ctx: 4096, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1024, stop: [], maxContextChars: 10000 },
+      },
+      ollamaGenerationTelemetry: [{ step: 5, model: 'qwen2.5-coder:7b', numCtx: 4096, startedAt: '2026-09-08T00:00:00.000Z', wallDurationMs: 500 }],
       updatedAt: new Date().toISOString(),
     }
 
@@ -49,6 +55,8 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loaded?.episodes.length).toBe(2)
     expect(loaded?.episodes[1].status).toBe('FAILURE')
     expect(loaded?.recentFullLogs[0].output).toContain('Target content mismatch')
+    expect(loaded?.ollamaRuntimeProfile?.options.num_ctx).toBe(4096)
+    expect(loaded?.ollamaGenerationTelemetry?.[0].wallDurationMs).toBe(500)
 
     const cleared = await agentSessionStateRepository.clearSessionState('session-test-123', tempDir)
     expect(cleared).toBe(true)

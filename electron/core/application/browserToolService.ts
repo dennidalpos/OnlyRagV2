@@ -21,6 +21,7 @@ export class BrowserToolService {
     const url = parameters.url
     if (!filePath && !url) {
       return {
+        outcome: 'rejected',
         outputForHistory: 'Error: missing "filePath" or "url" parameter to open in browser.',
         logMessage: 'Open in browser: missing parameter',
       }
@@ -30,6 +31,7 @@ export class BrowserToolService {
       if (url && (/^https?:\/\//i).test(url)) {
         await this.dependencies.openExternal(url)
         return {
+          outcome: 'success',
           outputForHistory: `Successfully opened URL in default web browser: ${url}`,
           logMessage: `Opened URL in browser: ${url}`,
         }
@@ -39,12 +41,14 @@ export class BrowserToolService {
         const pathCheck = validatePathSafety(filePath, workspacePath)
         if (!pathCheck.safePath) {
           return {
+            outcome: 'rejected',
             outputForHistory: `Security Violation: ${pathCheck.error}`,
             logMessage: `Open in Browser Rejected: ${pathCheck.error}`,
           }
         }
         if (!this.dependencies.exists(pathCheck.safePath)) {
           return {
+            outcome: 'failure',
             outputForHistory: `Error: File not found to open: ${filePath}`,
             logMessage: `File not found: ${filePath}`,
           }
@@ -52,23 +56,27 @@ export class BrowserToolService {
         const openError = await this.dependencies.openPath(pathCheck.safePath)
         if (openError) {
           return {
+            outcome: 'failure',
             outputForHistory: `Error opening ${filePath} in default system application: ${openError}`,
             logMessage: `Failed to open ${filePath}: ${openError}`,
           }
         }
         return {
+          outcome: 'success',
           outputForHistory: `Successfully opened ${filePath} in default web browser / viewer.`,
           logMessage: `Opened ${path.basename(filePath)} in browser`,
         }
       }
 
       return {
+        outcome: 'rejected',
         outputForHistory: 'Error: invalid target for open_in_browser.',
         logMessage: 'Invalid open_in_browser target',
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return {
+        outcome: 'failure',
         outputForHistory: `Error opening in browser: ${message}`,
         logMessage: `Browser open error: ${message}`,
       }

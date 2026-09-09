@@ -112,7 +112,11 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
       recoveryFailures: {
         schema: responseInterpreterState.schemaRecoveryFailure,
         execution: responseInterpreterState.executionRecoveryFailure,
+        versionConflictReadPath: responseInterpreterState.pendingVersionConflictReadPath,
       },
+      versionedReadEvidence: responseInterpreterState.versionedReadEvidence,
+      ollamaRuntimeProfile: session.ollamaRuntimeProfile,
+      ollamaGenerationTelemetry: session.ollamaGenerationTelemetry,
     })
 
     if (workspacePath) {

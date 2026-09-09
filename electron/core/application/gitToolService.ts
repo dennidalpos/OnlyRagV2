@@ -25,7 +25,7 @@ export class GitToolService {
 
   executeCommit(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
     const result = this.commit(workspacePath || process.cwd(), parameters.commitMessage || '')
-    return { outputForHistory: result.output, logMessage: result.logMessage }
+    return { outcome: result.success ? 'success' : 'failure', outputForHistory: result.output, logMessage: result.logMessage }
   }
 
   commit(cwd: string, commitMessage: string): GitCommitResult {

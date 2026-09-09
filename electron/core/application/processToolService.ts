@@ -69,7 +69,7 @@ export class ProcessToolService {
         `Do NOT pass tool names to run_command. Use the tool directly.`,
       ].join('\n')
       logger.log('WARN', 'ProcessToolService', `[TOOL_AS_SHELL_BLOCK] Model tried to run tool "${confusedToolName}" as shell command`)
-      return { outputForHistory: output, logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: output, logMessage: `[TOOL_AS_SHELL_BLOCK] Blocked shell execution of tool "${confusedToolName}"`, isTerminal: true }
     }
 
     if (isBlockingDevServerCommand(command)) {
@@ -84,7 +84,7 @@ export class ProcessToolService {
         `3. If you need the running app visually verified, tell the user it is ready to start manually -- do not attempt to launch it yourself.`,
       ].join('\n')
       logger.log('WARN', 'ProcessToolService', `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`)
-      return { outputForHistory: output, logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: output, logMessage: `[BLOCKING_DEV_SERVER_BLOCK] Blocked non-exiting command: "${command}"`, isTerminal: true }
     }
 
     return null
@@ -101,21 +101,21 @@ export class ProcessToolService {
         `1. Do NOT run this install again, and do NOT add --force or --legacy-peer-deps.`,
         `2. If your code imports "${unknownPackage}", it is importing something that does not exist: use a real package, or write that code yourself.`,
       ].join('\n')
-      return { outputForHistory: output, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: output, logMessage: `Install refused: ${unknownPackage} does not exist on npm`, isTerminal: true }
     }
 
     const packageJson = workspacePath && this.dependencies.readPackageJson ? await this.dependencies.readPackageJson(workspacePath) : null
     const invalidTarget = await firstInvalidRegistryInstallTarget(command, packageJson, this.dependencies.lookupPackages)
     if (invalidTarget) {
       logger.log('WARN', 'ProcessToolService', `[INSTALL_VERSION_REFUSED] ${command}`)
-      return { outputForHistory: invalidTarget.refusal, logMessage: `Install refused: ${invalidTarget.name} has a ${invalidTarget.kind} requested version`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: invalidTarget.refusal, logMessage: `Install refused: ${invalidTarget.name} has a ${invalidTarget.kind} requested version`, isTerminal: true }
     }
 
     if (!this.dependencies.lookupPackage) return null
     const downgrade = await firstDowngradingInstallTarget(command, packageJson, this.dependencies.lookupPackage)
     if (downgrade) {
       logger.log('WARN', 'ProcessToolService', `[VERSION_DOWNGRADE_REFUSED] ${command}`)
-      return { outputForHistory: downgrade.refusal, logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: downgrade.refusal, logMessage: `Install refused: would downgrade ${downgrade.name} below the declared major`, isTerminal: true }
     }
     return null
   }
@@ -142,7 +142,7 @@ export class ProcessToolService {
       `Directive: proceed with the next step of your plan -- this dependency is already installed.`,
     ].join('\n')
     logger.log('WARN', 'ProcessToolService', `[REDUNDANT_INSTALL_SKIP] Skipped already-installed packages: ${declared.join(', ')}`)
-    return { outputForHistory: output, logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${declared.join(', ')}`, isTerminal: true }
+    return { outcome: 'success', outputForHistory: output, logMessage: `[REDUNDANT_INSTALL_SKIP] Skipped already-installed: ${declared.join(', ')}`, isTerminal: true }
   }
 
   buildCommonFailureDirectives(
@@ -219,6 +219,7 @@ export class ProcessToolService {
   ): ToolExecutionResult {
     const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nCommand: "${command}" (Exit Code: ${result.code}${result.timedOut ? ' - TIMED OUT' : ''}${result.interruptedByPrompt ? ' - INTERACTIVE PROMPT DETECTED' : ''})\nCaptured Error Stack Trace & Failure Output:\n\`\`\`\n${rawOutput.slice(0, 4000)}\n\`\`\`${directives}\n\n${healingTail}`
     return {
+      outcome: 'failure',
       outputForHistory: result.timedOut || result.interruptedByPrompt
         ? `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nThe process was stopped after it began; inspect state before any further mutation.`
         : output,
@@ -250,6 +251,7 @@ export class ProcessToolService {
     const hostLine = `Guest OS Environment: ${os.platform()} ${os.arch()} | CPUs: ${os.cpus().length} (${os.cpus()[0]?.model || ''}) | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB`
     const output = `${hostLine}\n\n${formatToolchainInventory(this.dependencies.probeToolchain?.() || [])}`
     return {
+      outcome: 'success',
       outputForHistory: output,
       logMessage: 'Guest OS Environment & Toolchain Inventory',
       logDetail: output,
@@ -264,7 +266,7 @@ export class ProcessToolService {
     onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
   ): Promise<ToolExecutionResult> {
     if (allowTerminalExecution === false) {
-      return Promise.resolve({ outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true })
+      return Promise.resolve({ outcome: 'blocked', outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true })
     }
     return executeRunTestsTool(command, workspacePath, (path) => this.dependencies.getShellSession(path), onTerminalOutput, onProcessSpawned)
   }
@@ -282,6 +284,7 @@ export class ProcessToolService {
     if (!definition) {
       const allowed = DEV_TOOL_ALLOWLIST.map((tool) => tool.id).join(', ')
       return {
+        outcome: 'rejected',
         outputForHistory: `[ENSURE_TOOL REJECTED] '${requested || '(empty)'}' is not an installable development tool. Allowed: ${allowed}. Installing anything else is not permitted — ask the user instead.`,
         logMessage: `ensure_tool rejected: '${requested}' is not allow-listed`,
         isTerminal: true,
@@ -292,6 +295,7 @@ export class ProcessToolService {
     const status = probeDevTool(definition.id, probeVersion)
     if (status.installed) {
       return {
+        outcome: 'success',
         outputForHistory: `${definition.displayName} is already installed (version ${status.version}). No installation performed.`,
         logMessage: `${definition.displayName} already present (${status.version})`,
         isTerminal: true,
@@ -300,6 +304,7 @@ export class ProcessToolService {
 
     if (allowTerminalExecution === false) {
       return {
+        outcome: 'blocked',
         outputForHistory: `${definition.displayName} is missing, but terminal execution is disabled in Settings so it cannot be installed. Ask the user to install it manually.`,
         logMessage: 'ensure_tool blocked: terminal execution disabled',
         isTerminal: true,
@@ -310,6 +315,7 @@ export class ProcessToolService {
     const installCmd = buildInstallCommand(definition.id)
     if (!installTarget || !installCmd) {
       return {
+        outcome: 'failure',
         outputForHistory: `[ENSURE_TOOL ERROR] No installation package is registered for '${definition.id}'.`,
         logMessage: `ensure_tool: no package for ${definition.id}`,
         isTerminal: true,
@@ -318,6 +324,7 @@ export class ProcessToolService {
 
     if ((this.dependencies.platform || process.platform) !== 'win32') {
       return {
+        outcome: 'blocked',
         outputForHistory: `[ENSURE_TOOL UNSUPPORTED] Automatic installation is only implemented for Windows (winget). Install ${definition.displayName} manually, then continue.`,
         logMessage: 'ensure_tool: unsupported platform',
         isTerminal: true,
@@ -340,6 +347,7 @@ export class ProcessToolService {
       if (verified.installed) {
         logger.log('INFO', 'ProcessToolService', `[ENSURE_TOOL] ${definition.displayName} installed: ${verified.version}`)
         return {
+          outcome: 'success',
           outputForHistory: `Successfully installed ${installTarget.displayName}. ${definition.displayName} is now available (version ${verified.version}). PATH refreshed for this session.`,
           logMessage: `Installed ${installTarget.displayName} (${definition.id} ${verified.version})`,
           logDetail: installCmd,
@@ -349,6 +357,7 @@ export class ProcessToolService {
 
       const rawOutput = DiagnosticOutputReducer.composeCommandOutput(result.stdout, result.stderr, result.code)
       return {
+        outcome: 'failure',
         outputForHistory: `[ENSURE_TOOL INSTALL FAILED]\nCommand: "${installCmd}"\n${definition.displayName} is still not detectable after installation.\nOutput:\n${rawOutput.slice(0, 2000)}\n\nDo not retry the same installation. Continue without this tool or ask the user to install it manually.`,
         logMessage: `ensure_tool: ${definition.displayName} still missing after install`,
         logDetail: rawOutput.slice(0, 1000),
@@ -357,6 +366,7 @@ export class ProcessToolService {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       return {
+        outcome: 'failure',
         outputForHistory: `[ENSURE_TOOL ERROR] Failed installing ${installTarget.displayName}: ${message}`,
         logMessage: `ensure_tool exception: ${message}`,
         isTerminal: true,
@@ -375,7 +385,7 @@ export class ProcessToolService {
     const security = checkCommandSecurity(command)
     if (!security.isAllowed) {
       const output = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${command}"\nExecution FORBIDDEN by Security Policy: ${security.blockedReason}\nDirective: Refrain from executing dangerous commands.`
-      return { outputForHistory: output, logMessage: `[SECURITY BLOCK] Forbidden command: "${command}"`, isTerminal: true }
+      return { outcome: 'rejected', outputForHistory: output, logMessage: `[SECURITY BLOCK] Forbidden command: "${command}"`, isTerminal: true }
     }
 
     let executableCommand = security.sanitizedCommand
@@ -406,6 +416,7 @@ export class ProcessToolService {
       const message = error instanceof Error ? error.message : String(error)
       const output = `[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\nFailed executing command "${command}": ${message}`
       return {
+        outcome: 'failure',
         outputForHistory: `${output}\n\n[UNCERTAIN EFFECT - DO NOT RETRY]\nExecution failed after dispatch; inspect state before any further mutation.`,
         logMessage: `Terminal Execution Exception: ${message}`,
         isTerminal: true,

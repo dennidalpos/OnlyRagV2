@@ -6,6 +6,7 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
 import { shellCommandHasEgress } from '../domain/agent/offlineStrictPolicy'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
+import path from 'node:path'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -28,6 +29,7 @@ export interface ToolGateContext {
   requestApproval: RequestApproval
   capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
   allowedToolsForTurn?: readonly SupportedToolName[]
+  requiredReadPath?: string
 }
 
 export type ToolGateResult =
@@ -166,6 +168,20 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     )
     ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
     return { outcome: 'denied' }
+  }
+
+  if (ctx.requiredReadPath) {
+    const requested = String(ctx.parsedTool.parameters.filePath || '')
+    const root = ctx.workspacePath ? path.resolve(ctx.workspacePath) : process.cwd()
+    if (ctx.parsedTool.tool !== 'read_file' || path.resolve(root, requested) !== path.resolve(root, ctx.requiredReadPath)) {
+      const feedback = `[FILE VERSION RECOVERY DENIED] Read "${ctx.requiredReadPath}" before proposing another edit.`
+      ctx.episodicCompactor.recordStep(
+        { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: 'Required version refresh was not performed' },
+        feedback
+      )
+      ctx.emitLog('info', `🔒 Lettura versione richiesta: ${ctx.requiredReadPath}`)
+      return { outcome: 'denied' }
+    }
   }
 
   let approvalGranted = false

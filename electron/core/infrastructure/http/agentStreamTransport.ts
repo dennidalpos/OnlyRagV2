@@ -5,6 +5,8 @@ import type { OllamaToolSchema } from '../../domain/agent/ollamaToolSchemaCatalo
 import type { ObservedToolCallingProtocol } from '../../../../shared/domain/agent/ollamaToolCallingCapability'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
+import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
+import type { OllamaStreamTelemetry } from '../../domain/agent/ollamaSessionRuntime'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -40,6 +42,26 @@ export interface StreamSession {
    */
   onContextReceived?: (context: number[], respondingModel: string) => void
   onToolProtocolObserved?: (protocol: ObservedToolCallingProtocol) => void
+  onGenerationTelemetry?: (telemetry: OllamaStreamTelemetry) => void
+}
+
+function durationMs(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.round(value / 1_000_000) : undefined
+}
+
+function streamTelemetry(parsed: Record<string, unknown>, model: string, numCtx: number, startedAt: number): OllamaStreamTelemetry {
+  return {
+    model,
+    numCtx,
+    startedAt: new Date(startedAt).toISOString(),
+    wallDurationMs: Date.now() - startedAt,
+    totalDurationMs: durationMs(parsed.total_duration),
+    loadDurationMs: durationMs(parsed.load_duration),
+    promptEvalDurationMs: durationMs(parsed.prompt_eval_duration),
+    evalDurationMs: durationMs(parsed.eval_duration),
+    promptTokens: typeof parsed.prompt_eval_count === 'number' ? parsed.prompt_eval_count : undefined,
+    completionTokens: typeof parsed.eval_count === 'number' ? parsed.eval_count : undefined,
+  }
 }
 
 /**
@@ -54,7 +76,15 @@ function serializeNativeToolCall(name: string, args: Record<string, unknown>): s
 }
 
 export class AgentStreamTransport {
-  static async streamCompletion(session: StreamSession): Promise<string> {
+  static streamCompletion(session: StreamSession): Promise<string> {
+    const scheduled = ollamaGenerationScheduler.schedule('agent', (setActiveCancel) =>
+      this.streamCompletionNow({ ...session, onCancelHandle: setActiveCancel })
+    )
+    session.onCancelHandle?.(scheduled.cancel)
+    return scheduled.promise
+  }
+
+  private static async streamCompletionNow(session: StreamSession): Promise<string> {
     if (session.toolCallingCapable && session.toolCatalog && session.toolCatalog.length > 0) {
       return this.streamChatWithTools(session)
     }
@@ -71,6 +101,7 @@ export class AgentStreamTransport {
       onCancelHandle,
       previousContext,
       onContextReceived,
+      onGenerationTelemetry,
     } = session
 
     const hostStr = ollamaEndpoint?.trim() || 'http://127.0.0.1:11434'
@@ -171,6 +202,7 @@ export class AgentStreamTransport {
               let fullText = ''
               let sawDone = false
               let doneReason: string | undefined
+              let completedTelemetry: OllamaStreamTelemetry | undefined
 
               res.on('data', (chunk) => {
                 if (isCancelled()) {
@@ -200,6 +232,7 @@ export class AgentStreamTransport {
                     if (parsed.done === true) {
                       sawDone = true
                       doneReason = parsed.done_reason
+                      completedTelemetry = streamTelemetry(parsed, targetModel, runtimeOpts.num_ctx, metricStartedAt)
                     }
                   },
                   (jsonErr) => {
@@ -216,6 +249,7 @@ export class AgentStreamTransport {
                   return
                 }
                 recordMetric(200, 'none')
+                if (completedTelemetry) onGenerationTelemetry?.(completedTelemetry)
                 resolve(fullText)
               })
             }
@@ -355,6 +389,7 @@ export class AgentStreamTransport {
           let resolvedToolCall: string | null = null
           let sawDone = false
           let doneReason: string | undefined
+          let completedTelemetry: OllamaStreamTelemetry | undefined
 
           res.on('data', (chunk) => {
             if (isCancelled()) {
@@ -384,6 +419,7 @@ export class AgentStreamTransport {
                 if (parsed?.done === true) {
                   sawDone = true
                   doneReason = parsed.done_reason
+                  completedTelemetry = streamTelemetry(parsed, targetModel, runtimeOpts.num_ctx, metricStartedAt)
                 }
               },
               (jsonErr) => {
@@ -400,6 +436,7 @@ export class AgentStreamTransport {
               return
             }
             recordMetric(200, 'none')
+            if (completedTelemetry) session.onGenerationTelemetry?.(completedTelemetry)
             session.onToolProtocolObserved?.(resolvedToolCall ? 'native' : 'text')
             resolve(resolvedToolCall ?? fullText)
           })

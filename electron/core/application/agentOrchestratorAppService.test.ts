@@ -214,6 +214,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
   it('does not request another model turn after a command returns an uncertain effect', async () => {
     const execute = vi.spyOn(agentToolExecutorService, 'executeTool').mockResolvedValueOnce({
+      outcome: 'failure',
       outputForHistory: '[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]\n[UNCERTAIN EFFECT - DO NOT RETRY]',
       logMessage: 'Command timed out',
       isTerminal: true,

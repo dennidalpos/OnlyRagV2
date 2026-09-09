@@ -1,59 +1,4 @@
-/**
- * Verification Command Safety.
- *
- * A milestone's `verificationCommand` is executed for real by `update_plan`, and a zero exit
- * code promotes the milestone to `verified`. That makes the command a claim about the code —
- * so it must be capable of failing, and it must not be the thing that produces the artefact
- * it is supposed to judge.
- *
- * Neither held. In coding_agent_audit.log session-1787497654743-4enx the planner emitted
- * `touch src/App.tsx` and `echo "import React..." > src/pages/Tasks.tsx` as verification for
- * ten of fifteen milestones. Both ran. `touch` is translated to `New-Item -Force`, which
- * truncates an existing file; the `echo` redirection rewrote the agent's own source as
- * UTF-16LE with the `\n` escapes left literal. `src/App.tsx` and `src/pages/Tasks.tsx` ended
- * the session as invalid TypeScript, and the log recorded "Verification command passed" for
- * the very command that had just destroyed them.
- *
- * The planning prompt already forbids inventing commands (see buildVerificationCommandsBlock).
- * A 7B model disobeyed it, which is the normal case rather than the exceptional one, so the
- * contract is enforced here in code instead of being asked for in prose.
- *
- * Six rejection families, all fatal to the promise a verification makes:
- *  - MUTATING: the command writes to the workspace. It cannot be trusted to judge the file it
- *    just wrote, and in the observed session it actively corrupted source.
- *  - VACUOUS: the command exits 0 whatever the state of the code (`echo`, `true`, `cd`). It
- *    can never fail, so promoting on its exit code is the same rubber stamp the
- *    verificationCommand mechanism exists to remove.
- *  - EXISTENCE-ONLY: the command prints a file or lists a directory (`cat`, `Get-Content`,
- *    `ls`). It fails only when the target is absent, and the target is the file the agent has
- *    just written — see EXISTENCE_ONLY_COMMANDS for the session where this carried seven of
- *    fifteen milestones and promoted one that was missing half its deliverables.
- *  - GUI-MODE: a real test runner invoked in its windowed mode (`cypress open`, `--headed`,
- *    `--ui`). See isGuiModeVerificationSegment.
- *  - INTERACTIVE: the command opens an editor or pager that waits on a keypress (`nano`,
- *    `vim`). In coding_agent_audit.log session-1787518626817-72a8 the planner emitted `nano
- *    <file>` as the verification for six of ten implementation milestones. There is no
- *    non-interactive way to run it: without a TTY it hangs until the run_command timeout,
- *    and with one its exit code reports only whether the editor was closed, never whether the
- *    file is correct. Every milestone that carried it was abandoned by the loop guard after
- *    the model spent its retries unable to produce a passing run.
- *  - NON-EXITING: the command starts a dev/watch server or other process that never exits on
- *    its own (`--watch`, `vite`, `npm run dev`). The same session declared `npx tailwindcss
- *    -i ./src/styles/globals.css -o ./dist/output.css --watch` as the verification for two
- *    milestones; run_command's BLOCKING_DEV_SERVER_BLOCK guard (see
- *    isBlockingDevServerCommand in agentToolExecutorService.ts, whose patterns this mirrors)
- *    correctly refuses to execute it, but only at execution time — the milestone had already
- *    been handed a "proof" that can never run to completion, so it could never be verified.
- *
- * Build and test commands stay allowed even though they write to `dist/` or `coverage/`:
- * their exit code reflects the code under test, which is the property that matters. The
- * denylist targets commands whose *only* effect is to author a named file.
- *
- * All four families are enforced here in code rather than requested of the model in prose,
- * because the failure is not particular to one model: any Ollama-compatible model driving
- * this agent can propose `nano` or `--watch` as a check, and the harness — not the model's
- * judgement — is what has to keep it out of the plan.
- */
+/** Rejects commands that cannot provide falsifiable, non-mutating milestone evidence. */
 
 export interface VerificationCommandVerdict {
   /** True when the command may be executed as proof of a milestone. */
@@ -225,6 +170,16 @@ function isNonExitingVerificationSegment(segment: string): boolean {
   )
 }
 
+function isDependencyMutationSegment(segment: string): boolean {
+  const cmd = segment.trim().toLowerCase()
+  return (
+    /^(npm|pnpm|yarn|bun)\s+(install|i|add)\b/.test(cmd) ||
+    /^(pip|pip3|poetry|uv)\s+(install|add)\b/.test(cmd) ||
+    /^python(?:3)?\s+-m\s+pip\s+install\b/.test(cmd) ||
+    /^(cargo\s+add|go\s+get)\b/.test(cmd)
+  )
+}
+
 /** Replaces contents of quoted spans to prevent false positives from string literals (e.g. JSX tag `>`). */
 function stripQuotedSpans(command: string): string {
   return command.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''")
@@ -290,6 +245,10 @@ export function checkVerificationCommandSafety(rawCommand: string): Verification
     // `npm create vite`, `npx create-react-app .`
     if (parts.some((t) => t === 'create' || t.startsWith('create-'))) {
       return { isSafe: false, reason: 'it scaffolds a project (`create`), which generates the artefact instead of checking it' }
+    }
+
+    if (isDependencyMutationSegment(segment)) {
+      return { isSafe: false, reason: 'it changes dependencies; a successful install does not verify the deliverable' }
     }
 
     if ((head === 'sed' || head === 'perl') && parts.some((t) => t === '-i' || t.startsWith('-i.'))) {

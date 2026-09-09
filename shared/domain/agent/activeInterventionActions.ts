@@ -1,4 +1,4 @@
-import type { PlanMilestone } from './planAndSolveGraph'
+import type { PlanMilestone } from './planMilestone'
 
 const MAX_ACTIVE_ACTIONS = 4
 

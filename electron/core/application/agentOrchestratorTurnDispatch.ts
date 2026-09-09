@@ -17,6 +17,8 @@ import {
   type RecoveryFailureState,
 } from '../domain/agent/recoveryBudget'
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
+import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
+import { ollamaAppService } from './ollamaAppService'
 
 export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
@@ -29,6 +31,7 @@ async function dispatchToLlm(
   wasCompacted: boolean,
   toolPolicy: TurnToolPolicy
 ): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
+  let generationTelemetry: OllamaStreamTelemetry | undefined
   const latchProtocol = (protocol: 'native' | 'text') => {
     ctx.session.toolCallingProtocolByModel = {
       ...ctx.session.toolCallingProtocolByModel,
@@ -57,6 +60,7 @@ async function dispatchToLlm(
     isCancelled: () => !ctx.isSessionActive(),
     onCancelHandle: (abort) => { ctx.session.activeCancelHandle = abort },
     onToolProtocolObserved: selection.targetModelToolCallingProbe ? latchProtocol : undefined,
+    onGenerationTelemetry: (telemetry) => { generationTelemetry = telemetry },
     onContextReceived: (contextTokens, respondingModel) => {
       if (wasCompacted) return
       ctx.session.ollamaContextTokens = contextTokens
@@ -71,6 +75,14 @@ async function dispatchToLlm(
     try {
       const streamedOutput = await stream(toolCallingCapable)
       ctx.session.activeCancelHandle = null
+      if (generationTelemetry) {
+        const running = await ollamaAppService.getRunningModels(ctx.settings.ollamaHost)
+        const loaded = running.models.find((model) => model.name === selection.targetModel || model.model === selection.targetModel)
+        ctx.session.ollamaGenerationTelemetry = [
+          ...(ctx.session.ollamaGenerationTelemetry || []),
+          enrichOllamaGenerationTelemetry(generationTelemetry, ctx.stepCount, loaded),
+        ].slice(-200)
+      }
       return { streamedOutput, usedModel: selection.targetModel }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)

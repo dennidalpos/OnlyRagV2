@@ -19,7 +19,8 @@ import { buildExplicitFirstCommandDirective } from '../domain/agent/planDirectiv
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 import type { TurnDispatchContext, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 import { resolveModelContextLength } from '../../../shared/domain/settings/modelContextPreference'
-import { resolveTurnToolPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
+import { resolveTurnToolPolicy, resolveVersionConflictTurnPolicy, type EditTargetState, type TurnToolPolicy } from '../domain/agent/turnToolPolicy'
+import { normalizeOllamaHost } from '../domain/agent/ollamaSessionRuntime'
 
 /** Resolves the coding model and hardware-tuned runtime options for the turn. */
 export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
@@ -48,12 +49,20 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
     ctx.session.ollamaContextModel = undefined
   }
 
-  const runtimeOpts = HardwareProfileResolver.resolveOllamaOptions(
-    'Auto',
-    {
-      ...hardwareFacts,
+  const pinnedRuntime = ctx.session.ollamaRuntimeProfile
+  const runtimeOpts = pinnedRuntime
+    ? { ...pinnedRuntime.options, stop: [...pinnedRuntime.options.stop] }
+    : HardwareProfileResolver.resolveOllamaOptions('Auto', { ...hardwareFacts })
+
+  if (pinnedRuntime) {
+    return {
+      targetModel,
+      targetModelToolCallingCapable,
+      targetModelToolCallingProbe: route.probe,
+      runtimeOpts,
+      contextCeiling: ctx.modelMetrics?.[targetModel]?.contextLength ?? null,
     }
-  )
+  }
 
   // The hardware profile answers "how much context can this MACHINE hold". It cannot answer
   // "how much will Ollama actually use", and the two disagree constantly: Ollama clamps any
@@ -84,6 +93,13 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   runtimeOpts.num_ctx = preferredContext
   runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(preferredContext)
   runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(preferredContext)
+
+  ctx.session.ollamaRuntimeProfile = {
+    model: targetModel,
+    host: normalizeOllamaHost(ctx.settings.ollamaHost),
+    digest: ctx.modelMetrics?.[targetModel]?.digest,
+    options: { ...runtimeOpts, stop: [...runtimeOpts.stop] },
+  }
 
   return {
     targetModel,
@@ -233,15 +249,23 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   // is the same principle as every other injection in this codebase: the system holds an
   // objective datum the model cannot deduce, so it hands the datum over rather than issuing an
   // instruction that assumes the model already has it (blueprint §6.2.1).
-  const turnFiles = resolveTurnFileTargets(ctx, directive)
-  const toolPolicy = resolveTurnToolPolicy({
-    directiveKind: directive.kind,
-    editTargetState: resolveEditTargetState(ctx, turnFiles.targets),
-    userTask: ctx.userTask,
-  })
+  const requiredReadPath = ctx.responseInterpreterState.pendingVersionConflictReadPath
+  const turnFiles = requiredReadPath
+    ? { targets: [requiredReadPath], reason: 'the file whose previous edit used a stale version' }
+    : resolveTurnFileTargets(ctx, directive)
+  const toolPolicy = requiredReadPath
+    ? resolveVersionConflictTurnPolicy(requiredReadPath)
+    : resolveTurnToolPolicy({
+        directiveKind: directive.kind,
+        editTargetState: resolveEditTargetState(ctx, turnFiles.targets),
+        userTask: ctx.userTask,
+      })
   ctx.emitLog('info', `🧰 Tool policy [${directive.kind}]: ${toolPolicy.rationale} — ${toolPolicy.allowedTools.join(', ')}.`)
   const planBlock = [
     buildCurrentOperationContext(ctx, directive, toolPolicy, turnFiles.targets),
+    requiredReadPath
+      ? `[FILE VERSION RECOVERY]\nCall read_file on "${requiredReadPath}" now. No edit is available until that read succeeds.`
+      : '',
     progressPlanBlock,
   ].filter(Boolean).join('\n\n')
   const rewriteTargetBlock = policy.includePinnedFiles ? readTurnFileContext(ctx, turnFiles.targets, turnFiles.reason) : ''

@@ -3,6 +3,7 @@ import { logger } from '../../../diagnostics'
 import type { RunningModelInfo, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
+import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 
 export type { OllamaModelMetrics }
 
@@ -29,6 +30,7 @@ export type OllamaStructuredResponse =
   | { status: 'transport_error'; content: string; error: string }
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
+type OllamaUrl = { hostname: string; port: number | string; path: string }
 
 export interface RawOllamaTagModel {
   name?: string
@@ -48,7 +50,7 @@ export interface RawOllamaTagModel {
 }
 
 export class OllamaHttpClient {
-  private activeOllamaReq: http.ClientRequest | null = null
+  private pendingStreamCancel: (() => void) | null = null
   private activePullReq: http.ClientRequest | null = null
   private baseHost: string = 'http://127.0.0.1:11434'
 
@@ -330,9 +332,15 @@ export class OllamaHttpClient {
       return Promise.resolve({ success: false, error: 'Invalid model name' })
     }
     const cleanModel = modelName.trim()
+    const urlOpts = this.resolveUrl('/api/generate')
     logger.log('INFO', 'OllamaClient', `Requesting immediate model eviction (keep_alive: 0) for: ${cleanModel}`)
 
-    const urlOpts = this.resolveUrl('/api/generate')
+    return ollamaGenerationScheduler.schedule('unload', (setActiveCancel) =>
+      this.unloadModelNow(cleanModel, urlOpts, setActiveCancel)
+    ).promise
+  }
+
+  private unloadModelNow(cleanModel: string, urlOpts: OllamaUrl, setActiveCancel: (cancel: () => void) => void): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const postData = JSON.stringify({
         model: cleanModel,
@@ -365,6 +373,7 @@ export class OllamaHttpClient {
         logger.log('WARN', 'OllamaClient', `Failed to unload model ${cleanModel}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
+      setActiveCancel(() => req.destroy())
 
       req.setTimeout(10000, () => {
         req.destroy()
@@ -389,8 +398,14 @@ export class OllamaHttpClient {
       return Promise.resolve({ success: false, error: 'Invalid model name' })
     }
     const cleanModel = modelName.trim()
-
     const urlOpts = this.resolveUrl('/api/generate')
+
+    return ollamaGenerationScheduler.schedule('preload', (setActiveCancel) =>
+      this.preloadModelNow(cleanModel, keepAlive, urlOpts, setActiveCancel)
+    ).promise
+  }
+
+  private preloadModelNow(cleanModel: string, keepAlive: string, urlOpts: OllamaUrl, setActiveCancel: (cancel: () => void) => void): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const postData = JSON.stringify({
         model: cleanModel,
@@ -423,6 +438,7 @@ export class OllamaHttpClient {
         logger.log('WARN', 'OllamaClient', `Model warm-up skipped for ${cleanModel}: ${err.message}`)
         resolve({ success: false, error: err.message })
       })
+      setActiveCancel(() => req.destroy())
 
       req.setTimeout(120000, () => {
         req.destroy()
@@ -452,14 +468,14 @@ export class OllamaHttpClient {
   }
 
   cancelStream() {
-    if (this.activeOllamaReq) {
+    if (this.pendingStreamCancel) {
       logger.log('INFO', 'OllamaClient', 'User requested cancellation of active Ollama stream.')
       try {
-        this.activeOllamaReq.destroy()
+        this.pendingStreamCancel()
       } catch (err: any) {
         logger.log('WARN', 'OllamaClient', `Error destroying active Ollama stream: ${err.message}`)
       }
-      this.activeOllamaReq = null
+      this.pendingStreamCancel = null
     }
   }
 
@@ -629,17 +645,26 @@ export class OllamaHttpClient {
     customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string }
   ): Promise<{ success: boolean; error?: string }> {
     if (typeof prompt !== 'string') return Promise.resolve({ success: false, error: 'Invalid prompt' })
-
-    if (this.activeOllamaReq) {
-      try {
-        this.activeOllamaReq.destroy()
-      } catch (err: any) {
-        logger.log('WARN', 'OllamaClient', `Failed destroying existing active stream request: ${err.message}`)
-      }
-      this.activeOllamaReq = null
-    }
-
     const urlOpts = this.resolveUrl('/api/generate')
+
+    const scheduled = ollamaGenerationScheduler.schedule('stream', (setActiveCancel) =>
+      this.generateStreamNow(model, prompt, onChunk, onDone, customOptions, urlOpts, setActiveCancel)
+    )
+    this.pendingStreamCancel = scheduled.cancel
+    return scheduled.promise.finally(() => {
+      if (this.pendingStreamCancel === scheduled.cancel) this.pendingStreamCancel = null
+    })
+  }
+
+  private generateStreamNow(
+    model: string,
+    prompt: string,
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    customOptions: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string } | undefined,
+    urlOpts: OllamaUrl,
+    setActiveCancel: (cancel: () => void) => void
+  ): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const postData = JSON.stringify({
         model: model || 'llama3.2',
@@ -695,17 +720,15 @@ export class OllamaHttpClient {
             )
           })
           res.on('end', () => {
-            this.activeOllamaReq = null
             onDone()
             resolve({ success: true })
           })
         }
       )
 
-      this.activeOllamaReq = req
+      setActiveCancel(() => req.destroy())
 
       req.on('error', (err: any) => {
-        this.activeOllamaReq = null
         const errMsg = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
         onChunk(`\n[Ollama Connection Error: ${errMsg}]`)
         onDone()
@@ -714,7 +737,6 @@ export class OllamaHttpClient {
 
       req.setTimeout(600000, () => {
         req.destroy()
-        this.activeOllamaReq = null
         onChunk('\n[Generation Timed Out (600s limit)]')
         onDone()
         resolve({ success: false, error: 'Generation timeout' })
@@ -730,13 +752,18 @@ export class OllamaHttpClient {
       return Promise.resolve({ status: 'transport_error', content: '', error: 'Invalid structured generation request' })
     }
     if (request.host) this.setBaseHost(request.host)
-
-    if (this.activeOllamaReq) {
-      this.activeOllamaReq.destroy()
-      this.activeOllamaReq = null
-    }
-
     const urlOpts = this.resolveUrl('/api/chat')
+
+    return ollamaGenerationScheduler.schedule('structured', (setActiveCancel) =>
+      this.generateStructuredNow(request, urlOpts, setActiveCancel)
+    ).promise
+  }
+
+  private generateStructuredNow(
+    request: OllamaStructuredRequest,
+    urlOpts: OllamaUrl,
+    setActiveCancel: (cancel: () => void) => void
+  ): Promise<OllamaStructuredResponse> {
     const postData = JSON.stringify({
       model: request.model,
       messages: [
@@ -762,7 +789,6 @@ export class OllamaHttpClient {
       const finish = (result: OllamaStructuredResponse) => {
         if (settled) return
         settled = true
-        this.activeOllamaReq = null
         httpMetrics.record(
           '/api/chat',
           result.status === 'transport_error' ? 0 : 200,
@@ -803,7 +829,7 @@ export class OllamaHttpClient {
         })
       })
 
-      this.activeOllamaReq = req
+      setActiveCancel(() => req.destroy())
       req.on('error', (err: any) => {
         const message = err.code === 'ECONNREFUSED'
           ? 'Ollama service is not running locally (http://127.0.0.1:11434).'
@@ -829,9 +855,23 @@ export class OllamaHttpClient {
     logger.log('INFO', 'OllamaClient', `Starting performance benchmark for model: ${modelName} (isEmbedding: ${isLikelyEmbedding})`)
 
     if (isLikelyEmbedding) {
-      return this.benchmarkEmbeddingModel(modelName.trim())
+      const urlOpts = this.resolveUrl('/api/embeddings')
+      return ollamaGenerationScheduler.schedule('benchmark', () => this.benchmarkEmbeddingModel(modelName.trim(), urlOpts)).promise
     }
 
+    const urlOpts = this.resolveUrl('/api/generate')
+    const embeddingUrlOpts = this.resolveUrl('/api/embeddings')
+    return ollamaGenerationScheduler.schedule('benchmark', (setActiveCancel) =>
+      this.benchmarkGenerationModel(modelName, urlOpts, embeddingUrlOpts, setActiveCancel)
+    ).promise
+  }
+
+  private benchmarkGenerationModel(
+    modelName: string,
+    urlOpts: OllamaUrl,
+    embeddingUrlOpts: OllamaUrl,
+    setActiveCancel: (cancel: () => void) => void
+  ): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
     return new Promise((resolve) => {
       const benchmarkPrompt = 'Write a 40 word explanation of how gravity works.'
       const postData = JSON.stringify({
@@ -841,7 +881,6 @@ export class OllamaHttpClient {
         options: { num_predict: 50 },
       })
 
-      const urlOpts = this.resolveUrl('/api/generate')
       const req = http.request(
         {
           hostname: urlOpts.hostname,
@@ -865,7 +904,7 @@ export class OllamaHttpClient {
                 // If generate fails with embedding error, fallback to embedding benchmark
                 if (data.includes('embedding') || data.includes('not support')) {
                   logger.log('INFO', 'OllamaClient', `Generate failed for ${modelName}, falling back to embedding benchmark`)
-                  this.benchmarkEmbeddingModel(modelName.trim()).then(resolve)
+                  this.benchmarkEmbeddingModel(modelName.trim(), embeddingUrlOpts).then(resolve)
                   return
                 }
                 resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: `HTTP ${res.statusCode}: ${data.slice(0, 100)}` })
@@ -899,6 +938,7 @@ export class OllamaHttpClient {
         logger.log('ERROR', 'OllamaClient', `Error benchmarking model ${modelName}: ${err.message}`)
         resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: err.message })
       })
+      setActiveCancel(() => req.destroy())
 
       req.setTimeout(60000, () => {
         req.destroy()
@@ -910,7 +950,7 @@ export class OllamaHttpClient {
     })
   }
 
-  private benchmarkEmbeddingModel(modelName: string): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
+  private benchmarkEmbeddingModel(modelName: string, urlOpts = this.resolveUrl('/api/embeddings')): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
     return new Promise((resolve) => {
       const startTime = Date.now()
       const postData = JSON.stringify({
@@ -918,7 +958,6 @@ export class OllamaHttpClient {
         prompt: 'Benchmark semantic retrieval text for embedding generation throughput and vector latency testing.',
       })
 
-      const urlOpts = this.resolveUrl('/api/embeddings')
       const req = http.request(
         {
           hostname: urlOpts.hostname,

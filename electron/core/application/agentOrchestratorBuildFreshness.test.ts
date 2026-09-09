@@ -123,7 +123,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
     const flags = freshFlags()
 
     await runToolResultProcessing(
-      makeWriteContext({ outputForHistory: '[NO-OP WRITE: ...]', logMessage: 'No-op write', noOpMutation: true }, flags)
+      makeWriteContext({ outcome: 'success', outputForHistory: '[NO-OP WRITE: ...]', logMessage: 'No-op write', noOpMutation: true }, flags)
     )
 
     expect(flags.hasVerifiedBuild).toBe(true)
@@ -134,7 +134,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
     const flags = freshFlags()
 
     await runToolResultProcessing(
-      makeWriteContext({ outputForHistory: 'Successfully wrote file App.tsx', logMessage: 'Wrote App.tsx' }, flags)
+      makeWriteContext({ outcome: 'success', outputForHistory: 'Successfully wrote file App.tsx', logMessage: 'Wrote App.tsx' }, flags)
     )
 
     expect(flags.hasVerifiedBuild).toBe(false)
@@ -144,6 +144,7 @@ describe('build freshness — a write that changed nothing is not a mutation', (
 
 describe('build freshness — a verification command does not invalidate itself', () => {
   it('ends the step verified even though the build wrote its own output files', () => {
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
     fs.mkdirSync(path.join(tempDir, 'dist'))
     fs.writeFileSync(path.join(tempDir, 'dist', 'bundle.js'), 'console.log(1)')
 
@@ -162,6 +163,24 @@ describe('build freshness — a verification command does not invalidate itself'
     expect(flags.hasVerifiedBuild).toBe(true)
   })
 
+  it('does not treat a successful dependency install containing "eslint" as verification', () => {
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ scripts: { lint: 'eslint .' } }))
+    const flags: ToolResultMutableFlags = { hasFileMutations: true, hasVerifiedBuild: false }
+    const updates: string[] = []
+    const ctx = makeContext('npm install eslint-config-prettier@10.1.8', flags)
+    ctx.goalPlanner = {
+      getActiveMilestone: () => null,
+      getMilestones: () => [{ id: 'm-1', title: 'Create `package.json`', status: 'pending', filePaths: ['package.json'] }],
+      updateMilestone: (id: string) => { updates.push(id); return true },
+      getProgressSummary: () => ({ completed: 0, total: 1, percentage: 0 }),
+    } as unknown as ToolResultProcessingContext['goalPlanner']
+
+    trackVerification(ctx, false)
+
+    expect(flags.hasVerifiedBuild).toBe(false)
+    expect(updates).toEqual([])
+  })
+
   it('does not promote a milestone or set the verification flag after a positive browser preview', () => {
     const flags: ToolResultMutableFlags = {
       hasFileMutations: true,
@@ -178,7 +197,7 @@ describe('build freshness — a verification command does not invalidate itself'
   it('invalidates stale verification after a failed dependency install', () => {
     const flags = freshFlags()
     const ctx = makeContext('npm install @onlyrag/not-published-probe', flags)
-    ctx.toolRes = { outputForHistory: '[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]', logMessage: 'Install refused' }
+    ctx.toolRes = { outcome: 'rejected', outputForHistory: '[PACKAGE DOES NOT EXIST — INSTALL NOT RUN]', logMessage: 'Install refused' }
 
     trackVerification(ctx, true)
 

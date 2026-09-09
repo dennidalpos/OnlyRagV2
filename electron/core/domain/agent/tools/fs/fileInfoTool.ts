@@ -22,6 +22,7 @@ export function executeFileInfoTool(
   const pathCheck = validatePathSafety(targetPath, workspacePath)
   if (!pathCheck.safePath) {
     return {
+      outcome: 'rejected',
       outputForHistory: `Security Violation: ${pathCheck.error}`,
       logMessage: `Get File Info Rejected: ${pathCheck.error}`,
     }
@@ -31,6 +32,7 @@ export function executeFileInfoTool(
     const info = repository.getFileInfo(pathCheck.safePath)
     if (!info) {
       return {
+        outcome: 'success',
         outputForHistory: `[FILE INFO: ${targetPath}]\nStatus: Does Not Exist\n[END FILE INFO]`,
         logMessage: `File Info: File not found: ${targetPath}`,
       }
@@ -45,12 +47,14 @@ export function executeFileInfoTool(
       `[END FILE INFO]`
 
     return {
+      outcome: 'success',
       outputForHistory: infoStr,
       logMessage: `File Info retrieved for ${path.basename(pathCheck.safePath)}`,
     }
   } catch (error: unknown) {
     const message = (error as { message?: string })?.message || 'Unknown file info error'
     return {
+      outcome: 'failure',
       outputForHistory: `Get File Info Error: ${message}`,
       logMessage: `File Info Error: ${message}`,
     }

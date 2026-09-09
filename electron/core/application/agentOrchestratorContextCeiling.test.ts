@@ -90,6 +90,16 @@ describe('selectModelForTurn — context ceiling', () => {
     ctx.availableModels.push('other-model:latest')
     expect(selectModelForTurn(ctx).targetModel).toBe(MODEL)
   })
+
+  it('reuses the persisted runtime options without recalculating them', () => {
+    const ctx = contextWith(metricsWith(8192))
+    ctx.session.ollamaRuntimeProfile = {
+      model: MODEL,
+      host: 'http://127.0.0.1:11434',
+      options: { ...HardwareProfileResolver.resolveOllamaOptions('Low', { cpuCount: 4 }), num_ctx: 3072 },
+    }
+    expect(selectModelForTurn(ctx).runtimeOpts.num_ctx).toBe(3072)
+  })
 })
 
 describe('freezeContextWindow — selected ctx versus prompt budget', () => {

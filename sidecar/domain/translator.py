@@ -12,31 +12,22 @@ from sidecar.schemas import IngestResponse
 from sidecar.domain.ingestion import extract_document_markdown
 from sidecar.services.ingest_service import update_and_reindex_document
 
-# Delimiter injected between run texts in a translation batch prompt. The model is instructed to
-# preserve it verbatim so the response can be split back into the same number of segments, in the
-# same order, and reassigned 1:1 to the runs that produced them.
+# Preserved/removed during cleanup of legacy batch responses.
 _RUN_SEPARATOR = "<<<RUN_SEP>>>"
 _TRANSLATE_BATCH_MAX_CHARS = 350
 _TRANSLATE_BATCH_MAX_ITEMS = 4
 _OLLAMA_URL = "http://127.0.0.1:11434"
 
-# Fase 3 auto-fit: never shrink text below this absolute size or this fraction of the original
-# span size, whichever floor is higher -- keeps reinserted text legible instead of vanishing.
+# Legibility floors for PDF text reinsertion.
 _PDF_AUTOFIT_MIN_SIZE = 6.0
 _PDF_AUTOFIT_MIN_RATIO = 0.4
-# Binary search stops refining once the [lo, hi] font-size bracket is this narrow.
 _PDF_AUTOFIT_TOLERANCE = 0.25
 
-# Fase 4: bundled static Regular-weight fonts (see sidecar/assets/fonts/OFL-*.txt for license and
-# provenance -- SIL Open Font License 1.1, Noto Project). No PDF base14 font covers CJK or
-# Cyrillic/Greek, so every PDF reinsertion goes through one of these instead of a built-in font.
+# Bundled fonts cover scripts unsupported by PDF Base 14 fonts.
 _PDF_FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
 _PDF_FALLBACK_FONT_FILE = os.path.join(_PDF_FONT_DIR, "NotoSans-Regular.otf")  # Latin, Cyrillic, Greek
 
-# target_lang (free-text from the frontend language picker) -> bundled font file, matched
-# case-insensitively by substring, first match wins. More specific hints are listed before the
-# broader ones they'd otherwise be shadowed by (e.g. "traditional chinese" before "chinese").
-# Anything not matched here falls back to _PDF_FALLBACK_FONT_FILE.
+# Ordered specific-to-general substring rules for frontend language labels.
 _PDF_LANG_FONT_RULES: List[Tuple[str, str]] = [
     ("japanese", os.path.join(_PDF_FONT_DIR, "NotoSansCJKjp-Regular.otf")),
     ("korean", os.path.join(_PDF_FONT_DIR, "NotoSansCJKkr-Regular.otf")),
@@ -82,12 +73,10 @@ def detect_block_language(text: str) -> Optional[str]:
 
     cleaned = text.strip()
 
-    # 1. High-confidence Unicode script detection for non-Latin writing systems
     for lang, pattern in _LANG_PATTERNS.items():
         if pattern.search(cleaned):
             return lang
 
-    # 2. Universal statistical language detection
     if _LANGDETECT_AVAILABLE:
         try:
             detected_code = langdetect.detect(cleaned)
@@ -241,16 +230,12 @@ def _should_skip_translation(s: str) -> bool:
         return True
     if trimmed.startswith("http://") or trimmed.startswith("https://"):
         return True
-    # Email addresses
     if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', trimmed):
         return True
-    # Dates (e.g. 18/06/2024, 2024-06-18, 18.06.2024)
     if re.match(r'^\d{1,4}[/\-\.]\d{1,2}[/\-\.]\d{1,4}$', trimmed):
         return True
-    # Pure punctuation / symbols
     if all(c in "-_*=|/\\:.,;•§°º#~ " for c in trimmed):
         return True
-    # Standard alphanumeric identifier codes (e.g. tax codes, contract numbers, serial IDs)
     if re.match(r'^[A-Z0-9\-_]{4,}$', trimmed) and any(c.isdigit() for c in trimmed):
         return True
     letters_only = re.sub(r'[^a-zA-Z\u00C0-\u017F\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]', '', trimmed)
@@ -338,11 +323,9 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     if not text:
         return source_text
 
-    # 1. Remove markdown code fences
     cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", text.strip())
     cleaned = re.sub(r"\s*```$", "", cleaned).strip()
 
-    # 2. Remove common conversational preambles
     preamble_patterns = [
         r"^(?:Here\s+(?:is|are)\s+the\s+(?:translated\s+)?(?:translation|text|version)(?:\s+of\s+(?:the\s+)?(?:given\s+)?(?:text|phrase|word|document|sentence|item))?(?:\s+from\s+[a-zA-Z]+\s+to\s+[a-zA-Z]+)?\s*:?\s*)",
         r"^(?:The\s+translation\s+(?:of\s+(?:the\s+)?(?:given\s+)?(?:text|phrase|word|document|sentence|item)\s+)?(?:from\s+[a-zA-Z]+\s+to\s+[a-zA-Z]+\s+)?is\s*:?\s*)",
@@ -356,13 +339,11 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
     for pat in preamble_patterns:
         cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()
 
-    # 3. Remove parenthesized or bracketed explanatory notes / translation notes
     cleaned = re.sub(r'\[\s*(?:Note|Explanation|Translation note|NB|N\.B\.)\s*:.*?\]', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\(\s*(?:Note|Explanation|Translation note|NB|N\.B\.)\s*:.*?\)', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\s*\[\s*Note\s*:.*?$', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\s*\(\s*Note\s*:.*?$', '', cleaned, flags=re.IGNORECASE)
 
-    # 4. Check for refusal & meta-commentary hallucinations
     refusal_patterns = [
         r"^I cannot translate.*",
         r"^I am unable to translate.*",
@@ -382,19 +363,16 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
         if re.match(rpat, cleaned, flags=re.IGNORECASE):
             return source_text
 
-    # 5. Remove trailing conversational chatter
     cleaned = re.split(r"\n\s*(?:Note|Explanation|Please note|Let me know|Is there anything else)\s*:", cleaned, flags=re.IGNORECASE)[0]
 
-    # 6. Remove leaked delimiter tokens and fragments (strictly matching delimiter tags, never arbitrary word substrings)
+    # Match tags only; arbitrary substrings can be translated content.
     cleaned = re.sub(r'<{1,4}\s*(?:run_sep|run_s|segment|seg)\b[^>]*>{0,4}', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'</\s*(?:run_sep|run_s|segment|seg)\s*>', '', cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace(_RUN_SEPARATOR, "")
 
-    # 7. Strip enclosing quotes if the entire string is wrapped in quotes
     if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
         cleaned = cleaned[1:-1].strip()
 
-    # 8. Protect and restore immutable emails and URLs from source text
     if source_text:
         source_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', source_text)
         for semail in source_emails:
@@ -403,7 +381,6 @@ def _clean_translated_segment(text: str, source_text: str = "") -> str:
                 if mangled_match:
                     cleaned = cleaned.replace(mangled_match.group(0), semail)
 
-    # Normalize excessive empty lines
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
 
     return cleaned.strip() or source_text
@@ -414,7 +391,6 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     if not texts:
         return []
 
-    # Clean input strings: universal Unicode normalization and ftfy
     clean_texts = [
         _smart_decode_pdf_text(t).strip()
         for t in texts
@@ -429,7 +405,6 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
         unmasked = _unmask_immutable_entities(cleaned, token_map)
         return [unmasked]
 
-    # Filter out non-translatable or already-in-target-language indices for batch call
     active_indices: List[int] = []
     active_texts: List[str] = []
     token_maps: List[Dict[str, str]] = []
@@ -444,7 +419,6 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
     if not active_texts:
         return clean_texts
 
-    # Structured XML batch format preserving multi-line blocks
     segments_in = [f"<seg id=\"{k+1}\">\n{t}\n</seg>" for k, t in enumerate(active_texts)]
     batch_prompt = "\n\n".join(segments_in)
 
@@ -456,14 +430,12 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
 
     parsed_batch: Dict[int, str] = {}
     if raw_batch_output:
-        # 1. Primary parser: XML tags <seg id="K">...</seg>
         for m in re.finditer(r'<seg\s+id=[\'"]?(\d+)[\'"]?>([\s\S]*?)</seg>', raw_batch_output, re.IGNORECASE):
             idx = int(m.group(1))
             val = m.group(2).strip()
             if 1 <= idx <= len(active_texts):
                 parsed_batch[idx] = val
 
-        # 2. Fallback parser: bracketed [K] format if XML tags were omitted
         if len(parsed_batch) < len(active_texts):
             bracket_matches = list(re.finditer(r'\[(\d+)\]\s*([\s\S]*?)(?=(?:\[\d+\]|$))', raw_batch_output))
             if bracket_matches and len(bracket_matches) >= len(parsed_batch):
@@ -479,7 +451,6 @@ def _translate_texts_with_fallback(texts: List[str], source_lang: str, target_la
             num = k + 1
             trans = parsed_batch.get(num, "")
             cleaned = _clean_translated_segment(trans, active_texts[k])
-            # If echoed verbatim or empty, try single call
             if not cleaned or cleaned.strip().lower() == active_texts[k].strip().lower():
                 single = _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False) if num_ctx is None else _call_ollama_translate(active_texts[k], source_lang, target_lang, model, is_batch=False, num_ctx=num_ctx)
                 if single.strip():
@@ -599,7 +570,6 @@ def _cluster_ocr_lines_to_blocks(lines: List[Dict[str, Any]]) -> List[Dict[str, 
             # Font size must be similar (within 20%)
             size_diff = abs(prev["size"] - l["size"]) / max(1.0, min(prev["size"], l["size"]))
             if size_diff <= 0.20:
-                # Left alignment check or paragraph-width overlap
                 left_diff = abs(l["bbox"][0] - prev["bbox"][0])
                 if left_diff <= 15.0:
                     is_same = True
@@ -714,7 +684,6 @@ def _extract_pdf_page_blocks(page: "pymupdf.Page") -> List[Dict[str, Any]]:
                 "is_ocr": False
             })
 
-    # Scanned PDF fallback: if no native text blocks exist on the page, detect text blocks via RapidOCR
     if not blocks_out:
         blocks_out = _extract_ocr_page_blocks(page)
 
@@ -815,7 +784,6 @@ def _resolve_output_filepath(file_path: str, filename: str, target_lang: str, ta
     out_filename = f"{base_name}_{lang_suffix}{ext}"
     out_path = os.path.join(dest_dir, out_filename)
 
-    # Ensure it never collides with or overwrites the original file
     if os.path.abspath(out_path) == os.path.abspath(file_path):
         out_filename = f"{base_name}_{lang_suffix}_{int(time.time())}{ext}"
         out_path = os.path.join(dest_dir, out_filename)
@@ -845,17 +813,13 @@ def _redact_and_reinsert_pdf_blocks(page: "pymupdf.Page", blocks: List[Dict[str,
         rect = _padded_block_rect(block)
         fit_size = _resolve_autofit_font_size(rect, text, orig_size, font_file)
 
-        # First pass: try fitting in original rect at optimal fit_size
         overflow = page.insert_textbox(rect, text, fontsize=fit_size, fontname=font_alias, fontfile=font_file, color=color_rgb)
         if overflow < 0:
-            # Second pass: dynamic vertical expansion with collision avoidance
             extra_h = max(8.0, orig_size * 1.5)
-            # Find the top coordinate of the next block directly below to avoid collisions
             max_expand_y1 = page.rect.y1 - 10.0
             for other in blocks:
                 if other is not block:
                     ox0, oy0, ox1, _ = other["bbox"]
-                    # If other block is below and horizontally overlaps
                     if oy0 > rect.y1 and not (ox1 < rect.x0 or ox0 > rect.x1):
                         max_expand_y1 = min(max_expand_y1, oy0 - 2.0)
 
@@ -1110,4 +1074,3 @@ def translate_document_inplace(
     raise UnsupportedDocumentTypeError(
         f"In-place translation is not supported for file type '{file_type}'. Supported: docx, pdf."
     )
-

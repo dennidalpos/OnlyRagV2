@@ -49,7 +49,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(
     diagnostics,
   )
-  // Assesses any model tag against the host, including preset options absent from the catalogs.
   const getModelFit = buildModelFitLookup(diagnostics)
 
   const downloadedModels = diagnostics?.ollama.models ?? []
@@ -75,23 +74,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     recommendations.embeddingTierModels[0]?.modelName ||
     'nomic-embed-text'
 
-  /**
-   * The one-click coding set for the detected hardware tier.
-   *
-   * `recCoding` above answers "what fits this GPU". This answers the question a user actually
-   * has on first launch — "which of these has anyone checked?" — by putting the models this app
-   * has been RUN against ahead of the ones it merely catalogs. See codingModelMatrix.ts, and
-   * note the list there is short because it is evidence-backed rather than aspirational.
-   *
-   * Empty when nothing in the catalog fits the tier, which the step renders as such: a wizard
-   * that installs a model too large for the machine has done the user real harm.
-   */
   const verifiedCodingSet = selectWizardCodingSet(
     buildCodingCatalogForWizard(),
     recommendations.profileTier
   ).map((entry) => entry.modelName)
 
-  // Model State across all Functional Slots
   const [selectedCoding, setSelectedCoding] = useState<string>(
     settings.codingModel || settings.defaultModel || recCoding
   )
@@ -123,12 +110,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     settings.embeddingModel || recEmbedding
   )
 
-  // Runtime Preferences State
   const [ocrEngine, setOcrEngine] = useState<'native_cuda' | 'vision_model'>(
     settings.ocrEngine || 'native_cuda'
   )
 
-  // Download & Installation Progress State
   const [isInstallingOllama, setIsInstallingOllama] = useState(false)
   const [isPullingModels, setIsPullingModels] = useState(false)
   const [pullingStatusText, setPullingStatusText] = useState('')
@@ -138,7 +123,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const [skippedModels, setSkippedModels] = useState<string[]>([])
   const isCancelledRef = useRef<boolean>(false)
 
-  // Disk Space Pre-Check State
   const [diskCheck, setDiskCheck] = useState<{
     allowed: boolean
     requiredGB: number
@@ -150,7 +134,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 
   const prevIsOpenRef = useRef<boolean>(false)
 
-  // Sync settings only when modal initially opens
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       if (settings.codingModel || settings.defaultModel) {
@@ -214,7 +197,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     onClose,
   ])
 
-  // ESC Key Listener for Accessibility
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -226,7 +208,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isPullingModels, handleCloseWithSave])
 
-  // Live Stream Progress Listener
   useEffect(() => {
     if (!window.electronAPI?.onOllamaPullProgress) return
     const unsub = window.electronAPI.onOllamaPullProgress((data) => {
@@ -257,7 +238,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     return isOllamaModelInstalled(modelName, downloadedModels)
   }
 
-  // Calculate unique missing models
   const uniqueSelectedModels = Array.from(
     new Set([
       selectedCoding,
@@ -277,7 +257,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     .filter((m) => !isModelDownloaded(m.trim()))
     .filter((m) => !skippedModels.includes(m.trim()))
 
-  // Check Disk Space when entering Step 3 (Summary & Download)
   useEffect(() => {
     if (step === 3 && missingModels.length > 0 && window.electronAPI?.checkDiskSpace) {
       setIsCheckingDisk(true)
@@ -338,8 +317,6 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     }
 
     if (diskCheck && !diskCheck.allowed) {
-      // Reported through the wizard's own error channel rather than a blocking native alert:
-      // the message stays inside the dialog the user is looking at, in the app's own styling.
       setPullErrorDetail(
         t('hardwareWizard.insufficientDiskSpaceAlert', {
           free: diskCheck.freeGB,

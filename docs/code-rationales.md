@@ -148,3 +148,10 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 
 * **UX**: per azioni distruttive su una riga, la conferma resta in sede per mantenere visibile il target; gli eventi sono fermati e `Escape` viene intercettato prima dei contenitori padre.
 * **OCR**: la normalizzazione ripara l'encoding, protegge URL, email e codici fiscali, separa pattern fusi e usa SymSpell con fallback Viterbi, preservando punteggiatura e maiuscole.
+
+### 4.4. Primitive UI e traduzione documentale (DOC-02)
+
+* **Overlay modali**: `Modal` centralizza portal su `document.body`, blocco dello scroll, focus iniziale e livelli di stacking, evitando clipping o stacking context ereditati. Le classi del pannello sostituiscono integralmente il default: l'ordine di token in `className` non risolve in modo affidabile utility Tailwind in conflitto. Le finestre di approvazione non sono dismissible, perché backdrop o Escape non devono equivalere a un rifiuto implicito.
+* **Wizard hardware**: il set di coding proposto incrocia solo modelli validati con il tier rilevato; un elenco vuoto e' preferibile a installare un modello non sostenibile dall'host. La matrice delle evidenze rimane in `codingModelMatrix.ts`.
+* **Traduzione PDF**: le risposte batch restano strutturate in segmenti XML e la pulizia elimina esclusivamente tag delimitatori, mai sottostringhe arbitrarie del testo tradotto. Il reinserimento usa font Noto distribuiti (SIL Open Font License 1.1) poiche' i font PDF Base 14 non coprono CJK, cirillico o greco; le regole di lingua sono ordinate dalla piu' specifica alla piu' generale. L'auto-fit mantiene una dimensione minima leggibile e limita l'espansione verticale prima del blocco successivo.
+* **OCR**: l'ordine di ricerca della configurazione RapidOCR copre ambiente Python, PyInstaller e pacchetto Electron. Il raggruppamento spaziale preserva colonne di moduli separate; per la vision OCR senza CUDA, il ridimensionamento riduce i token visivi e il timeout piu' ampio evita scadenze premature.

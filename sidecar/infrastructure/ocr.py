@@ -5,7 +5,6 @@ from typing import Dict, Any, Optional, List, Tuple
 from sidecar.config import httpx_client, logger
 from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
 
-# OCR Engine Singleton Caches
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
 _RAPIDOCR_ENGINE: Any = None
 _INSTALLED_OLLAMA_MODELS_CACHE: Optional[set] = None
@@ -47,14 +46,11 @@ def compute_deskew_angle(image_np: Any) -> float:
         else:
             gray = image_np
 
-        # Binarize with Otsu
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
 
-        # Dilate horizontally to connect text lines
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (30, 5))
         dilated = cv2.dilate(thresh, kernel, iterations=2)
 
-        # Find all contours
         contours, _ = cv2.findContours(dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         angles = []
         for c in contours:
@@ -112,14 +108,12 @@ def deskew_image(image_bytes: bytes) -> bytes:
 def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew: bool = True) -> bytes:
     """Prepares image for OCR, normalizing color channels, applying CLAHE luminance enhancement, deskewing (optional), and downscaling only if exceeding max_dim."""
     try:
-        # 1. Apply deskewing first for scanned images when rotation is allowed
         if allow_deskew:
             try:
                 image_bytes = deskew_image(image_bytes)
             except Exception as deskew_err:
                 logger.debug(f"Deskewing step failed in _prepare_image_for_ocr: {deskew_err}")
 
-        # 2. Apply OpenCV CLAHE & mild unsharp masking on luminance channel
         try:
             import cv2
             import numpy as np
@@ -130,7 +124,6 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew
                 l, a, b = cv2.split(lab)
                 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
                 cl = clahe.apply(l)
-                # Unsharp mask on luminance
                 gaussian = cv2.GaussianBlur(cl, (0, 0), 2.0)
                 unsharp = cv2.addWeighted(cl, 1.25, gaussian, -0.25, 0)
                 merged = cv2.merge((unsharp, a, b))
@@ -146,7 +139,6 @@ def _prepare_image_for_ocr(image_bytes: bytes, max_dim: int = 2560, allow_deskew
         Image.MAX_IMAGE_PIXELS = 60_000_000
         img = Image.open(io.BytesIO(image_bytes))
 
-        # Auto-orient EXIF metadata if present
         try:
             img = ImageOps.exif_transpose(img)
         except Exception:
@@ -187,7 +179,6 @@ def _rapidocr_cuda_available() -> bool:
 def _find_rapidocr_config() -> Optional[str]:
     """Locates rapidocr_onnxruntime config.yaml across packaged PyInstaller and standard Python environments."""
     import sys
-    # 1. Check direct module path
     try:
         import rapidocr_onnxruntime
         mod_dir = os.path.dirname(os.path.abspath(rapidocr_onnxruntime.__file__))
@@ -197,19 +188,16 @@ def _find_rapidocr_config() -> Optional[str]:
     except Exception:
         pass
 
-    # 2. Check sys._MEIPASS (PyInstaller runtime)
     if hasattr(sys, "_MEIPASS"):
         meipass_cfg = os.path.join(getattr(sys, "_MEIPASS"), "rapidocr_onnxruntime", "config.yaml")
         if os.path.exists(meipass_cfg):
             return meipass_cfg
 
-    # 3. Check executable-relative _internal directory
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
     internal_cfg = os.path.join(exe_dir, "_internal", "rapidocr_onnxruntime", "config.yaml")
     if os.path.exists(internal_cfg):
         return internal_cfg
 
-    # 4. Check resources directory in packaged Electron installation
     res_cfg = os.path.join(exe_dir, "..", "resources", "sidecar", "_internal", "rapidocr_onnxruntime", "config.yaml")
     if os.path.exists(res_cfg):
         return os.path.abspath(res_cfg)
@@ -243,10 +231,8 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
     if not extracted:
         return ""
 
-    # Sort top-to-bottom, left-to-right
     extracted.sort(key=lambda b: (b["y0"], b["x0"]))
 
-    # Cluster horizontally aligned boxes into visual lines
     lines: List[Dict[str, Any]] = []
     for b in extracted:
         matched_line = None
@@ -255,7 +241,7 @@ def _reconstruct_layout_from_ocr_boxes(raw_results: Any) -> str:
             line_h = line["h"]
             vert_match = abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h))
             if vert_match:
-                # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
+                # Keep separate form columns from becoming one OCR line.
                 horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
                 if horiz_gap <= max(16.0, line_h * 0.85):
                     matched_line = line
@@ -340,7 +326,6 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
     engine = _get_rapidocr_engine()
     prepared_bytes = _prepare_image_for_ocr(image_bytes, max_dim=2560, allow_deskew=False)
 
-    # Compute scale factors between prepared_bytes and original image_bytes
     scale_x, scale_y = 1.0, 1.0
     try:
         from PIL import Image
@@ -386,10 +371,9 @@ def run_rapid_ocr_with_boxes(image_bytes: bytes) -> List[Dict[str, Any]]:
         for line in lines:
             line_cy = line["cy"]
             line_h = line["h"]
-            # Check vertical alignment
             vert_match = abs(b["cy"] - line_cy) <= line_h * 0.5 or (min(b["y1"], line["y1"]) - max(b["y0"], line["y0"]) > 0.4 * min(b["h"], line_h))
             if vert_match:
-                # Column separation guard: do not merge horizontally distant blocks (e.g. form fields on distinct columns)
+                # Keep separate form columns from becoming one OCR line.
                 horiz_gap = b["x0"] - line["x1"] if b["x0"] >= line["x1"] else line["x0"] - b["x1"]
                 if horiz_gap <= max(16.0, line_h * 0.85):
                     matched_line = line
@@ -455,9 +439,8 @@ def run_vision_ocr(
 ) -> str:
     """Uses Ollama Vision model for OCR and document vision parsing with adaptive timeout for CPU/GPU hosts."""
     is_cuda_avail = _rapidocr_cuda_available() or detect_gpu_acceleration().get("has_cuda", False)
-    # On CPU-only hosts, downscale to 1024 to reduce visual patch tokenization and speed up inference ~3-4x
+    # Bound CPU-only vision tokenization and latency.
     vision_max_dim = 1536 if is_cuda_avail else 1024
-    # On CPU-only hosts, allow up to 60s for full response generation
     vision_timeout = 25.0 if is_cuda_avail else 60.0
 
     candidate_models = list(dict.fromkeys(m for m in [model, "llama3.2-vision", "minicpm-v", "moondream", "llava"] if m))
@@ -510,7 +493,6 @@ def detect_gpu_acceleration() -> Dict[str, Any]:
         "backend": "cpu"
     }
 
-    # 1. Try PyTorch CUDA
     try:
         import torch
         if torch.cuda.is_available():
@@ -525,7 +507,6 @@ def detect_gpu_acceleration() -> Dict[str, Any]:
     except ImportError:
         pass
 
-    # 2. Try ONNX Runtime CUDA
     try:
         import onnxruntime as ort
         if "CUDAExecutionProvider" in ort.get_available_providers():
@@ -538,7 +519,6 @@ def detect_gpu_acceleration() -> Dict[str, Any]:
     except ImportError:
         pass
 
-    # 3. Fallback to nvidia-smi execution check
     try:
         res = subprocess.run(
             ["nvidia-smi", "--query-gpu=gpu_name,memory.total,memory.free,driver_version", "--format=csv,noheader,nounits"],
@@ -570,4 +550,3 @@ def get_ocr_runtime_info() -> Dict[str, Any]:
         "provider": "CUDAExecutionProvider" if has_cuda_provider else "CPUExecutionProvider",
         "host_has_gpu": bool(gpu_info.get("has_cuda", False)),
     }
-

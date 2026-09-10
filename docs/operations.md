@@ -29,7 +29,7 @@ Tutti i comandi elencati sono registrati in [`package.json`](../package.json) e 
 | Workflow | Comando | Descrizione |
 | :--- | :--- | :--- |
 | **Sviluppo Locale** | `npm run dev` | Avvia il server Vite in modalità dev con hot-reload. |
-| **Build Locale** | `npm run build` | Compila e crea il pacchetto Windows senza alcun upload o tentativo di pubblicazione. |
+| **Build Locale** | `npm run build` | Compila TypeScript e i bundle Renderer, Main e Preload senza richiedere il sidecar release. |
 | **Verifica Veloce** | `npm run test:fast` | Esegue 1902 test in 230 file con Vitest (~3 min). |
 | **Unit Test Singoli** | `npx vitest run <path>` | Esegue un singolo target di test. |
 | **Verifica Tipi** | `npm run typecheck` | Esegue `tsc --noEmit` su Main, Preload e Renderer. |
@@ -43,7 +43,7 @@ Tutti i comandi elencati sono registrati in [`package.json`](../package.json) e 
 | **Rigenera OpenAPI** | `npm run generate:openapi` | Rigenera il contratto machine-readable `openapi-2.3.0.json`. |
 | **Verifica Asset** | `npm run assets:check` | Verifica PNG/SVG sincronizzati e frame ICO 16–256 px senza scrivere file. |
 | **Generazione Asset** | `npm run assets:generate` | Rigenera l'ICO multi-risoluzione e sincronizza le icone pubbliche. |
-| **Packaging Windows** | `npm run package:win` | Valida asset, compila sidecar e bundle, crea NSIS e riporta firma e SHA-256. |
+| **Packaging Windows** | `npm run package:win` | Valida asset, compila sidecar e bundle, crea l'installer NSIS e riporta firma e SHA-256. |
 | **Pulizia Repository** | `npm run clean` | Rimuove solo output e cache rigenerabili, preservando dipendenze e dati locali. |
 | **Pulizia Test** | `npm run clean:tests` | Rimuove residui OnlyRag in `%TEMP%`, dati test locali e workspace live sul Desktop. |
 | **Pulizia Cache Installer** | `npm run clean:installer-cache` | Rimuove la cache updater senza toccare app installata o impostazioni. |

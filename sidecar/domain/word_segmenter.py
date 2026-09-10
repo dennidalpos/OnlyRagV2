@@ -20,7 +20,7 @@ try:
 except ImportError:
     _SYMSPELL_AVAILABLE = False
 
-# Standard ISO 639-1 two-letter language code normalization map
+# ISO 639-1 aliases.
 _LANG_CODE_MAP: Dict[str, str] = {
     "italian": "it", "italiano": "it", "it": "it", "ita": "it",
     "english": "en", "inglese": "en", "en": "en", "eng": "en",
@@ -38,21 +38,18 @@ _LANG_CODE_MAP: Dict[str, str] = {
 }
 
 def normalize_language_code(lang: Optional[str]) -> str:
-    """Normalizes any language string or code to standard 2-letter ISO 639-1 code (defaults to 'it')."""
+    """Return an ISO 639-1 code, defaulting to Italian."""
     if not lang:
         return "it"
     cleaned = lang.strip().lower().split("_")[0].split("-")[0]
     return _LANG_CODE_MAP.get(cleaned, _LANG_CODE_MAP.get(lang.strip().lower(), "it"))
 
-# Genuine standalone 1-letter words / abbreviations in Latin/European languages (conjunctions, prepositions, articles, pronouns, units)
+# Accepted standalone one-letter tokens.
 _VALID_SINGLE_LETTERS: Set[str] = {"a", "e", "i", "o", "u", "y", "d", "n", "c", "v", "p", "s", "l", "m", "g", "k", "h"}
 
 
 class MultiLangVocabManager:
-    """
-    Manages multi-language vocabulary word frequencies and SymSpell statistical segmentation engines.
-    Integrates wordfreq (45+ languages) with symspellpy and local custom terminology caches.
-    """
+    """Manage word-frequency, SymSpell, and local vocabulary caches."""
     def __init__(self, cache_dir: Optional[str] = None):
         if not cache_dir:
             appdata = os.environ.get("APPDATA") or os.path.expanduser("~/.onlyrag_v2")
@@ -81,17 +78,17 @@ class MultiLangVocabManager:
             logger.warning(f"Error loading custom vocabularies from {self.cache_dir}: {e}")
 
     def get_word_zipf(self, word: str, lang: str = "it") -> float:
-        """Returns the Zipf frequency (0.0 to 8.0) of a word in the specified language."""
+        """Return a word's Zipf frequency."""
         if not word:
             return 0.0
         w_lower = word.lower()
         norm_lang = normalize_language_code(lang)
 
-        # 1. Check local / dynamic custom vocabulary cache
+        # Prefer custom vocabulary.
         if norm_lang in self._local_vocab_cache and w_lower in self._local_vocab_cache[norm_lang]:
             return float(self._local_vocab_cache[norm_lang][w_lower])
 
-        # 2. Check universal wordfreq database
+        # Fall back to wordfreq.
         if _WORDFREQ_AVAILABLE:
             try:
                 freq = wordfreq.zipf_frequency(w_lower, norm_lang)
@@ -106,11 +103,11 @@ class MultiLangVocabManager:
         return 0.0
 
     def is_known_word(self, word: str, lang: str = "it") -> bool:
-        """Returns True if word is recognized with significant statistical frequency."""
+        """Return whether a word has meaningful frequency."""
         return self.get_word_zipf(word, lang) >= 2.0
 
     def get_symspell_engine(self, lang: str = "it") -> Optional[Any]:
-        """Returns a cached SymSpell engine initialized from universal wordfreq corpus for the language."""
+        """Return the cached SymSpell engine for a language."""
         if not _SYMSPELL_AVAILABLE:
             return None
         norm_lang = normalize_language_code(lang)
@@ -123,7 +120,7 @@ class MultiLangVocabManager:
                 freq_dict = wordfreq.get_frequency_dict(norm_lang)
                 for w, freq in freq_dict.items():
                     sym.create_dictionary_entry(w, max(1, int(freq * 1_000_000_000)))
-            # Add custom local words if present
+            # Merge custom terms.
             if norm_lang in self._local_vocab_cache:
                 for cw, z_score in self._local_vocab_cache[norm_lang].items():
                     sym.create_dictionary_entry(cw, int(10 ** z_score))
@@ -145,27 +142,24 @@ def get_vocab_manager() -> MultiLangVocabManager:
 
 
 def _is_italian_fiscal_code(token: str) -> bool:
-    """Checks if token is a standard 16-character Italian Fiscal Code (Codice Fiscale)."""
+    """Return whether a token is an Italian fiscal code."""
     return bool(re.match(r'^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$', token))
 
 
 def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
-    """
-    Statistical word segmentation using symspellpy word_segmentation powered by wordfreq,
-    with automatic casing preservation and DP fallback.
-    """
+    """Segment a compound with SymSpell, then Viterbi while preserving casing."""
     if len(text) <= 3:
         return text
 
     norm_lang = normalize_language_code(lang)
     vocab_mgr = get_vocab_manager()
 
-    # If the whole word is a known high-frequency token, don't split
+    # Keep known words intact.
     whole_zipf = vocab_mgr.get_word_zipf(text, norm_lang)
     if whole_zipf >= 2.5:
         return text
 
-    # 1. Primary: SymSpell standard statistical word segmentation
+    # Try SymSpell first.
     sym_engine = vocab_mgr.get_symspell_engine(norm_lang)
     if sym_engine is not None:
         try:
@@ -173,7 +167,7 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
             corrected = (res.corrected_string or "").strip()
             if corrected and " " in corrected:
                 words = corrected.split()
-                # Verify segmented words
+                # Reject implausible segments.
                 if len(words) > 1 and all(len(w) > 1 or w in _VALID_SINGLE_LETTERS for w in words):
                     if text.isupper():
                         return corrected.upper()
@@ -183,7 +177,7 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
         except Exception as e:
             logger.debug(f"SymSpell segmentation error: {e}")
 
-    # 2. Fallback: Dynamic programming Viterbi unigram segmentation
+    # Fall back to Viterbi.
     is_upper = text.isupper()
     is_title = text.istitle()
     n = len(text)
@@ -242,20 +236,11 @@ def _viterbi_segment_compound(text: str, lang: str = "it") -> str:
 
 
 def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
-    """
-    Normalizes spacing on OCR text using standard ftfy and symspellpy libraries:
-    - Automatically repairs encoding / mojibake via ftfy
-    - Isolates email addresses, URLs, and formatted Italian Fiscal Codes
-    - Separates fused TLDs (e.g. .comovvero -> .com ovvero)
-    - Separates email keywords (e.g. e-mailgestione -> e-mail gestione)
-    - Splits letters and digits (e.g. Laurentina449 -> Laurentina 449)
-    - Splits camelCase / PascalCase (e.g. TelepassFamily -> Telepass Family)
-    - Segments fused compound words statistically via SymSpell & wordfreq
-    """
+    """Normalize OCR spacing while preserving protected tokens and casing."""
     if not text or not text.strip():
         return ""
 
-    # 0. Clean unprintable control characters and repair text via ftfy
+    # Repair encoding and strip controls.
     try:
         text = ftfy.fix_text(text)
     except Exception:
@@ -264,7 +249,7 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = text.replace("\xa0", " ").replace("\u00a0", " ").replace("\x00", "").replace("\ufeff", "")
     text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
 
-    # 1. Pre-separate common domain TLDs when fused with trailing words
+    # Separate fused TLDs.
     text = re.sub(
         r'(\.(?:info|tech|biz|com|net|org|gov|edu|eu|it|io|me|ai|co))([a-zA-Z]{2,})',
         r'\1 \2',
@@ -272,14 +257,14 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
         flags=re.IGNORECASE
     )
 
-    # 2. Pre-separate email prefixes, company forms, and trailing abbreviations when fused
+    # Separate common fused abbreviations.
     text = re.sub(r'(?i)(e-mail|email|casella|indirizzo|pec)(?=[a-zA-Z0-9])', r' \1 ', text)
     text = re.sub(r'(?i)([a-zA-Z]+)(e-mail|email)', r'\1 \2', text)
     text = re.sub(r'([a-zA-Z]+)(S\.p\.A\.|Spa|S\.r\.l\.|Srl)', r'\1 \2', text, flags=re.IGNORECASE)
     text = re.sub(r'(S\.p\.A\.|Spa|S\.r\.l\.|Srl)([a-zA-Z]+)', r'\1 \2', text, flags=re.IGNORECASE)
     text = re.sub(r'([a-zA-Z]+)(a\.r\.|c\.a\.|c\.p\.)', r'\1 \2', text, flags=re.IGNORECASE)
 
-    # 3. Protect complete URLs, emails, and Italian Fiscal Codes using placeholders
+    # Protect opaque tokens before segmentation.
     protected: List[str] = []
     def _protect_token(m: re.Match) -> str:
         idx = len(protected)
@@ -290,24 +275,24 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _protect_token, text)
     text = re.sub(r'\b[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]\b', _protect_token, text)
 
-    # 4. Standard typographic and abbreviation marker separation
+    # Separate abbreviation markers.
     text = re.sub(r'([a-zA-Z]+)(N[°º\.\?])', r'\1 \2', text)
     text = re.sub(r'(?i)(N[°º\.\?])(?=[0-9A-Z])', r'\1 ', text)
 
-    # 4. Separate asterisks and symbols
+    # Separate symbols.
     text = re.sub(r'(\*+)', r' \1 ', text)
     text = re.sub(r'([,;:\?!])', r'\1 ', text)
     text = re.sub(r'(?<=[a-zA-Z])(\/)(?=[a-zA-Z])', r' \1 ', text)
 
-    # 5. Split digits and letters (excluding protected tokens and degree symbols)
+    # Split letters and digits.
     text = re.sub(r'(?<=[a-zA-Z°º])([0-9]+)', r' \1', text)
     text = re.sub(r'(?<=[0-9])([a-zA-Z]+)', r' \1', text)
 
-    # 6. Split PascalCase / camelCase
+    # Split compound casing.
     text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
     text = re.sub(r'([A-Z]{2,})([A-Z][a-z])', r'\1 \2', text)
 
-    # 7. De-fragment sequences of isolated uppercase 1-2 letter chunks (e.g. "MA N TO VA NO" -> "MANTOVANO")
+    # Rejoin fragmented uppercase tokens.
     def _defragment_spaced_letters(s: str) -> str:
         pattern = r'\b([A-Za-z]{1,2}(?:\s+[A-Za-z]{1,2}){2,})\b'
         def _merge(m: re.Match) -> str:
@@ -326,7 +311,7 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
     cleaned_tokens: List[str] = []
 
     for raw_tok in tokens:
-        # Check for placeholder
+        # Restore protected tokens unchanged.
         if raw_tok.startswith("__PROT_TOK_") and raw_tok.endswith("__"):
             try:
                 prot_idx = int(raw_tok[len("__PROT_TOK_"):-2])
@@ -335,7 +320,7 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
             except (ValueError, IndexError):
                 pass
 
-        # Handle compounds containing apostrophes (e.g. Aseguitodell'eserciziodeldirittodirecessodal)
+        # Segment apostrophe-delimited compounds.
         if "'" in raw_tok:
             sub_parts = raw_tok.split("'")
             seg_parts = []
@@ -352,7 +337,7 @@ def normalize_ocr_token_spacing(text: str, lang: str = "it") -> str:
             cleaned_tokens.append("'".join(seg_parts))
             continue
 
-        # Extract leading and trailing punctuation
+        # Preserve punctuation around segments.
         match = re.match(r'^([^a-zA-Z0-9]*)(.*?)([^a-zA-Z0-9]*)$', raw_tok)
         if match:
             pre, core, post = match.groups()

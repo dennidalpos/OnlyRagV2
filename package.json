@@ -5,7 +5,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder --publish never",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "setup:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/setup_dev_environment.ps1",
     "format:check": "git diff --check HEAD",

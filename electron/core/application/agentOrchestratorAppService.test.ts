@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import type { BrowserWindow } from 'electron'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask, respondToApproval } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
 import { runProjectVerification } from './agentOrchestratorVerificationRunner'
@@ -10,6 +11,14 @@ import { buildDefaultAgentSettings } from './agentOrchestratorSessionSetup'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import type { AppSettings } from '../../../shared/types'
+
+function createMockWindow(): { window: BrowserWindow; send: ReturnType<typeof vi.fn> } {
+  const send = vi.fn()
+  return {
+    window: { isDestroyed: vi.fn(() => false), webContents: { send } } as unknown as BrowserWindow,
+    send,
+  }
+}
 
 vi.mock('../infrastructure/http/agentStreamTransport', () => ({
   AgentStreamTransport: {
@@ -103,7 +112,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     vi.mocked(AgentStreamTransport.streamCompletion)
       .mockResolvedValueOnce('```json\n{"tool":"write_file","parameters":{"filePath":"phase.ts","content":"export const phase = true"}}\n```')
       .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
-    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const mockWin = createMockWindow()
     const sessionId = 'explicit-phase-sequence'
 
     await runAgentOrchestratorLoop({
@@ -112,14 +121,14 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       agentMode: 'agent',
       workspacePath: tempDir,
       settings: { ...buildDefaultAgentSettings(), verifyBeforeFinish: false },
-    }, mockWin)
+    }, mockWin.window)
 
     const firstCatalog = vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].toolCatalog || []
     expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].keepAlive).toBe('30m')
     expect(firstCatalog.map((entry) => entry.function.name)).toEqual(expect.arrayContaining(['write_file']))
     expect(firstCatalog.map((entry) => entry.function.name)).not.toEqual(expect.arrayContaining(['read_file', 'run_command']))
 
-    const calls = vi.mocked(mockWin.webContents.send).mock.calls as Array<[string, { statusText?: string }]>
+    const calls = mockWin.send.mock.calls as Array<[string, { statusText?: string }]>
     const statuses = calls
       .filter(([channel]) => channel === 'agent:step-update')
       .map(([, data]) => data.statusText)
@@ -357,16 +366,16 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(writeFileJson)
       .mockResolvedValueOnce(finishJson)
 
-    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const mockWin = createMockWindow()
     const sessionId = 'test-ask-approval-session'
 
     const resultPromise = runAgentOrchestratorLoop(
       { sessionId, userTask: 'Update the entrypoint file', agentMode: 'ask', workspacePath: tempDir },
-      mockWin
+      mockWin.window
     )
 
     await vi.waitFor(() => {
-      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+      expect(mockWin.send).toHaveBeenCalledWith(
         'agent:approval-request',
         expect.objectContaining({ sessionId, type: 'write_file' })
       )
@@ -392,16 +401,16 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(writeFileJson)
       .mockResolvedValueOnce(finishJson)
 
-    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const mockWin = createMockWindow()
     const sessionId = 'test-ask-partial-approval-session'
 
     const resultPromise = runAgentOrchestratorLoop(
       { sessionId, userTask: 'Update two lines in partial.ts', agentMode: 'ask', workspacePath: tempDir },
-      mockWin
+      mockWin.window
     )
 
     await vi.waitFor(() => {
-      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+      expect(mockWin.send).toHaveBeenCalledWith(
         'agent:approval-request',
         expect.objectContaining({ sessionId, type: 'write_file' })
       )
@@ -421,16 +430,16 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(writeFileJson)
       .mockResolvedValueOnce(finishJson)
 
-    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const mockWin = createMockWindow()
     const sessionId = 'test-ask-rejection-session'
 
     const resultPromise = runAgentOrchestratorLoop(
       { sessionId, userTask: 'Update the entrypoint file', agentMode: 'ask', workspacePath: tempDir },
-      mockWin
+      mockWin.window
     )
 
     await vi.waitFor(() => {
-      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+      expect(mockWin.send).toHaveBeenCalledWith(
         'agent:approval-request',
         expect.objectContaining({ sessionId, type: 'write_file' })
       )
@@ -468,16 +477,16 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(commitJson)
       .mockResolvedValueOnce(finishJson)
 
-    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const mockWin = createMockWindow()
     const sessionId = 'test-agent-commit-approval-session'
 
     const resultPromise = runAgentOrchestratorLoop(
       { sessionId, userTask: 'Commit the changes', agentMode: 'agent', workspacePath: tempDir },
-      mockWin
+      mockWin.window
     )
 
     await vi.waitFor(() => {
-      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+      expect(mockWin.send).toHaveBeenCalledWith(
         'agent:approval-request',
         expect.objectContaining({ sessionId, type: 'git_commit' })
       )
@@ -496,16 +505,16 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.ts", "content": "console.log(1)" }\n}\n```'
     vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson)
 
-    const mockWin = { isDestroyed: () => false, webContents: { send: vi.fn() } } as any
+    const mockWin = createMockWindow()
     const sessionId = 'test-cancel-during-approval-session'
 
     const resultPromise = runAgentOrchestratorLoop(
       { sessionId, userTask: 'Update the entrypoint file', agentMode: 'ask', workspacePath: tempDir },
-      mockWin
+      mockWin.window
     )
 
     await vi.waitFor(() => {
-      expect(mockWin.webContents.send).toHaveBeenCalledWith(
+      expect(mockWin.send).toHaveBeenCalledWith(
         'agent:approval-request',
         expect.objectContaining({ sessionId, type: 'write_file' })
       )

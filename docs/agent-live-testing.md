@@ -51,3 +51,16 @@ Le prove live TS2305, TS2613 e TS2614 del 9 settembre seguono conflitto → lett
 Le regressioni downgrade ed ERESOLVE verificano traiettoria dei comandi, assenza di flag forzati, versioni installate e integrità dei manifest. Un rifiuto preventivo resta un esito tool `FAILURE` confermato: il successo del guard è provato dagli invarianti del workspace, non falsificando l'esito del comando richiesto. Il probe ERESOLVE fissa esplicitamente `qwen2.5-coder:7b`, evitando modelli embedding-only presenti nelle impostazioni utente.
 
 Il fallback per alternative esplicite è qualificato live su `qwen2.5-coder:1.5b`, `3b` e `7b`: dalla richiesta vengono estratte le due opzioni, la risposta libera viene validata e la decisione entra nel piano. Nei piani nuovi vengono eliminati riferimenti inventati a interventi precedenti; sui resume resta obbligatoria la riconciliazione completa. La run greenfield 1.5B resta sotto la soglia funzionale (0/13), ma ora termina con `blocked`, motivo e residui persistiti invece di lasciare `completionStatus` vuoto.
+
+## CAS-29: qwen3-coder 30B native-tool qualification
+
+Il 10 settembre 2026, `qwen3-coder:30b` (digest `06c1097e...e90bca`, `num_ctx=16384`) ha eseguito lo scenario completo su Windows:
+
+| Run | Milestone verificate | Chiusura | Step | Tool falliti/bloccati |
+| :--- | ---: | :--- | ---: | ---: |
+| cold-1 | 0/7 | `blocked` | 26/999 | 17/27 |
+| warm-1 | 0/7 | `blocked` | 11/999 | 8/11 |
+
+La run cold ha alternato `dir` valido con `ls -la` non portabile e poi ha richiesto un file assente; la warm ha fallito `npm create vite` e ha ripetuto la lettura di `src/main.jsx` assente. Entrambe hanno esposto residui e chiuso tramite circuit breaker, senza promuovere milestone né dichiarare successo.
+
+Questo scenario misura il risultato applicativo, ma non prova che ogni chiamata usi `message.tool_calls` strutturato né esercita annullamento e chiusura applicativa. Il workhorse non è quindi qualificato per native-only e il fallback testuale con la continuazione `/api/generate` resta attivo. Il residuo CAS-30 richiede un probe live delimitato per questi tre contratti prima di qualsiasi rimozione.

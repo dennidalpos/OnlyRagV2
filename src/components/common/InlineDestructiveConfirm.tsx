@@ -2,36 +2,18 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Trash2, Check, X, type LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 
-/**
- * The app's single way to confirm a destructive action: the action's own button turns into a
- * confirm/cancel pair in the space it already occupies.
- *
- * Destructive confirmation had four different shapes — this in-place pattern for documents, a
- * full-screen dialog for removing a project, the browser's native `confirm()` for skills, hubs
- * and Ollama models, and nothing at all for sessions, which deleted on the first click. This
- * is the document pattern, extracted so every module answers the question the same way.
- *
- * A dialog is the wrong instrument here. It steals the whole screen to ask about a single row,
- * hides the very item being deleted behind its own backdrop, and needs an overlay, a portal
- * and a scroll lock to behave — for a question that fits in two buttons.
- */
+/** In-place confirmation that keeps the destructive target visible. */
 
 export interface InlineDestructiveConfirmProps {
   onConfirm: () => void
-  /** Names the target for screen readers, e.g. the filename or project name. */
+  /** Accessible target name. */
   itemLabel: string
-  /**
-   * One short line shown beside the confirm buttons — for consequences the user cannot infer,
-   * such as removing a project leaving its files on disk untouched.
-   */
+  /** Consequence not evident from the action. */
   hint?: string
-  /** Tailwind sizing for the icons; defaults suit a dense list row. */
   iconClassName?: string
   className?: string
-  /** Trigger icon. Defaults to a trash can; pass another for a destructive action that is not
-   *  a deletion, such as resetting a locally edited skill back to its published version. */
+  /** Alternative destructive-action icon. */
   icon?: LucideIcon
-  /** Tooltip and accessible verb for the trigger. Defaults to the shared "delete" label. */
   actionLabel?: string
 }
 
@@ -58,8 +40,7 @@ export const InlineDestructiveConfirm: React.FC<InlineDestructiveConfirmProps> =
         setIsConfirming(false)
       }
     }
-    // Capture phase: an ancestor dropdown or modal also listens for Escape, and the first
-    // press must back out of the confirmation rather than close the container around it.
+    // Let Escape cancel confirmation before ancestor handlers close their container.
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [isConfirming])
@@ -69,7 +50,7 @@ export const InlineDestructiveConfirm: React.FC<InlineDestructiveConfirmProps> =
       <button
         type="button"
         onClick={(event) => {
-          // Rows are usually clickable themselves (select document, switch project).
+          // Prevent the row action while entering confirmation.
           event.stopPropagation()
           setIsConfirming(true)
         }}

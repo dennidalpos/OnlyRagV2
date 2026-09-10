@@ -107,6 +107,16 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 * **Soluzione**: i piani entrano nell'esecuzione solo dal modello `AgentPlan` validato. L'interprete del turno tratta ogni risposta come proposta tool o report; non crea né sostituisce più il piano. Il riconoscimento delle milestone finali resta limitato alle sessioni legacy già persistite.
 * **Residuo esplicito**: il fallback testuale dei tool e la continuazione `/api/generate` restano attivi per modelli locali che non popolano `tool_calls`; la loro rimozione richiede una nuova qualifica live native-only.
 
+### 2.17. Doppi di test tipizzati (W2.06)
+
+* **Problema**: i test HTTP e di orchestrazione costruivano `EventEmitter` e `BrowserWindow` parziali con `as any`, nascondendo incompatibilità nelle API effettivamente usate.
+* **Soluzione**: factory locali restituiscono i contratti Node/Electron tipizzati e rendono disponibili gli spy necessari alle asserzioni, limitando l'adattamento strutturale al confine del doppio.
+
+### 2.18. Qualifica negativa del workhorse (CAS-29)
+
+* **Evidenza (2026-09-10)**: qwen3-coder 30B si è fermato in sicurezza in entrambe le run cold/warm (0/7 milestone), alternando comandi Unix e percorsi non ancora creati.
+* **Decisione**: nessuna rimozione del fallback. La qualifica native-only resta subordinata a una prova live esplicita di `message.tool_calls`, annullamento e chiusura applicativa.
+
 ---
 
 ## 3. Gestione Dinamica della Memoria di Contesto
@@ -133,3 +143,8 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 ### 4.2. Quoting e Falsi Positivi JSX
 * **Caso Limite Storico**: Un comando shell contenente un echo con markup JSX (es. `echo "<div className=...>"` o reindirizzamento testuale) veniva intercettato dal parser di sicurezza come tentativo di redirection malevola (`>`).
 * **Risoluzione**: Sostituzione delle porzioni racchiuse tra virgolette prima dell'analisi degli operatori di redirezione, eliminando i falsi positivi senza indebolire le guardie di sicurezza.
+
+### 4.3. Conferme inline e normalizzazione OCR (DOC-01)
+
+* **UX**: per azioni distruttive su una riga, la conferma resta in sede per mantenere visibile il target; gli eventi sono fermati e `Escape` viene intercettato prima dei contenitori padre.
+* **OCR**: la normalizzazione ripara l'encoding, protegge URL, email e codici fiscali, separa pattern fusi e usa SymSpell con fallback Viterbi, preservando punteggiatura e maiuscole.

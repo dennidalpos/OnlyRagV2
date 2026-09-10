@@ -1,8 +1,48 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import https from 'node:https'
 import EventEmitter from 'node:events'
+import type { ClientRequest, IncomingMessage, RequestOptions } from 'node:http'
 import { OllamaRegistryClient } from './ollamaRegistryClient'
 import { httpMetrics } from './httpMetrics'
+
+type MockClientRequest = ClientRequest & {
+  setTimeout: ReturnType<typeof vi.fn>
+  destroy: ReturnType<typeof vi.fn>
+  end: ReturnType<typeof vi.fn>
+}
+
+function createMockRequest(): MockClientRequest {
+  return Object.assign(new EventEmitter(), {
+    setTimeout: vi.fn(),
+    destroy: vi.fn(),
+    end: vi.fn(),
+  }) as MockClientRequest
+}
+
+function createMockResponse(statusCode: number): IncomingMessage {
+  return Object.assign(new EventEmitter(), { statusCode, headers: {} }) as IncomingMessage
+}
+
+function mockRegistryRequest(
+  request: MockClientRequest,
+  response?: IncomingMessage,
+  onResponse?: (response: IncomingMessage) => void
+): void {
+  vi.spyOn(https, 'request').mockImplementation(((
+    _options: string | URL | RequestOptions,
+    optionsOrCallback?: RequestOptions | ((response: IncomingMessage) => void),
+    callback?: (response: IncomingMessage) => void
+  ) => {
+    const responseCallback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    if (response && responseCallback) {
+      process.nextTick(() => {
+        responseCallback(response)
+        onResponse?.(response)
+      })
+    }
+    return request
+  }) as unknown as typeof https.request)
+}
 
 describe('OllamaRegistryClient Unit Tests', () => {
   let client: OllamaRegistryClient
@@ -27,20 +67,11 @@ describe('OllamaRegistryClient Unit Tests', () => {
     const crypto = await import('node:crypto')
     const expectedDigest = crypto.createHash('sha256').update(mockPayload).digest('hex')
 
-    const mockReq = new EventEmitter() as any
-    mockReq.setTimeout = vi.fn()
-    mockReq.destroy = vi.fn()
-    mockReq.end = vi.fn()
-
-    vi.spyOn(https, 'request').mockImplementation((_options: any, callback: any) => {
-      const mockRes = new EventEmitter() as any
-      mockRes.statusCode = 200
-      process.nextTick(() => {
-        if (callback) callback(mockRes)
-        mockRes.emit('data', mockPayload)
-        mockRes.emit('end')
-      })
-      return mockReq
+    const mockReq = createMockRequest()
+    const mockRes = createMockResponse(200)
+    mockRegistryRequest(mockReq, mockRes, () => {
+      mockRes.emit('data', mockPayload)
+      mockRes.emit('end')
     })
 
     const res = await client.fetchRemoteManifestDigest('qwen2.5-coder:7b')
@@ -53,20 +84,11 @@ describe('OllamaRegistryClient Unit Tests', () => {
   })
 
   it('should return success false on HTTP 404', async () => {
-    const mockReq = new EventEmitter() as any
-    mockReq.setTimeout = vi.fn()
-    mockReq.destroy = vi.fn()
-    mockReq.end = vi.fn()
-
-    vi.spyOn(https, 'request').mockImplementation((_options: any, callback: any) => {
-      const mockRes = new EventEmitter() as any
-      mockRes.statusCode = 404
-      process.nextTick(() => {
-        if (callback) callback(mockRes)
-        mockRes.emit('data', Buffer.from('{"error":"not found"}'))
-        mockRes.emit('end')
-      })
-      return mockReq
+    const mockReq = createMockRequest()
+    const mockRes = createMockResponse(404)
+    mockRegistryRequest(mockReq, mockRes, () => {
+      mockRes.emit('data', Buffer.from('{"error":"not found"}'))
+      mockRes.emit('end')
     })
 
     const res = await client.fetchRemoteManifestDigest('custom-local-model:latest')
@@ -79,17 +101,13 @@ describe('OllamaRegistryClient Unit Tests', () => {
   })
 
   it('should handle request network errors gracefully', async () => {
-    const mockReq = new EventEmitter() as any
-    mockReq.setTimeout = vi.fn()
-    mockReq.destroy = vi.fn()
-    mockReq.end = vi.fn()
-
-    vi.spyOn(https, 'request').mockImplementation(() => {
+    const mockReq = createMockRequest()
+    vi.spyOn(https, 'request').mockImplementation((() => {
       process.nextTick(() => {
         mockReq.emit('error', new Error('ENOTFOUND'))
       })
       return mockReq
-    })
+    }) as typeof https.request)
 
     const res = await client.fetchRemoteManifestDigest('qwen2.5-coder:7b')
     expect(res.success).toBe(false)

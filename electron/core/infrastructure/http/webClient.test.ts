@@ -5,8 +5,48 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import EventEmitter from 'node:events'
+import type { ClientRequest, IncomingHttpHeaders, IncomingMessage, RequestOptions } from 'node:http'
 import { htmlToCleanMarkdown, parseDuckDuckGoHtmlResults, WebClient } from './webClient'
 import { httpMetrics } from './httpMetrics'
+
+type MockClientRequest = ClientRequest & {
+  destroy: ReturnType<typeof vi.fn>
+}
+
+function createMockRequest(): MockClientRequest {
+  return Object.assign(new EventEmitter(), { destroy: vi.fn() }) as MockClientRequest
+}
+
+function createMockResponse(
+  statusCode: number,
+  headers: IncomingHttpHeaders = {},
+  statusMessage?: string
+): IncomingMessage {
+  return Object.assign(new EventEmitter(), { statusCode, headers, statusMessage, setEncoding: vi.fn() }) as unknown as IncomingMessage
+}
+
+function mockHttpsGet(
+  response: IncomingMessage,
+  request: MockClientRequest,
+  onResponse?: (response: IncomingMessage) => void,
+  deferred = false
+): void {
+  vi.spyOn(https, 'get').mockImplementation(((
+    _url: string | URL | RequestOptions,
+    optionsOrCallback?: RequestOptions | ((response: IncomingMessage) => void),
+    callback?: (response: IncomingMessage) => void
+  ) => {
+    const responseCallback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    if (!responseCallback) throw new Error('Expected HTTP response callback')
+    const invokeCallback = () => {
+      responseCallback(response)
+      onResponse?.(response)
+    }
+    if (deferred) queueMicrotask(invokeCallback)
+    else invokeCallback()
+    return request
+  }) as unknown as typeof https.get)
+}
 
 describe('WebClient Unit Tests & SSRF Protection', () => {
   const client = new WebClient()
@@ -108,19 +148,13 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
   })
 
   it('records fetch HTTP metrics without retaining the URL', async () => {
-    const response = Object.assign(new EventEmitter(), {
-      statusCode: 200,
-      headers: {},
-      setEncoding: vi.fn(),
-    })
-    const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
-    vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-      args[2](response)
+    const response = createMockResponse(200)
+    const request = createMockRequest()
+    mockHttpsGet(response, request, () => {
       queueMicrotask(() => {
         response.emit('data', '<html><body><h1>Fetched</h1></body></html>')
         response.emit('end')
       })
-      return request as any
     })
 
     const result = await client.fetchWebContent('https://example.com/private?token=secret')
@@ -135,22 +169,16 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
   it('records download HTTP metrics after writing the file', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-'))
     try {
-      const response = Object.assign(new EventEmitter(), {
-        statusCode: 200,
-        headers: {},
-        pipe: (destination: fs.WriteStream) => {
-          const chunk = Buffer.from('downloaded')
-          response.emit('data', chunk)
-          destination.end(chunk)
-          return destination
-        },
-      })
-      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
+      const response = createMockResponse(200)
+      response.pipe = <T extends NodeJS.WritableStream>(destination: T): T => {
+        const chunk = Buffer.from('downloaded')
+        response.emit('data', chunk)
+        destination.end(chunk)
+        return destination
+      }
+      const request = createMockRequest()
       vi.spyOn(http, 'get')
-      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-        args[2](response)
-        return request as any
-      })
+      mockHttpsGet(response, request)
 
       const result = await client.downloadFile('https://example.com/archive.zip?token=secret', path.join(tempRoot, 'archive.zip'), tempRoot)
 
@@ -181,12 +209,9 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
   })
 
   it('cancels an in-flight fetch and destroys the active request', async () => {
-    const response = Object.assign(new EventEmitter(), { statusCode: 200, headers: {}, setEncoding: vi.fn() })
-    const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
-    vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-      args[2](response)
-      return request as any
-    })
+    const response = createMockResponse(200)
+    const request = createMockRequest()
+    mockHttpsGet(response, request)
 
     const controller = new AbortController()
     const pending = client.fetchWebContent('https://example.com/slow', 16000, controller.signal)
@@ -203,21 +228,15 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-cancel-'))
     const targetPath = path.join(tempRoot, 'partial.zip')
     try {
-      const response = Object.assign(new EventEmitter(), {
-        statusCode: 200,
-        headers: {},
-        pipe: (destination: fs.WriteStream) => {
-          setTimeout(() => {
-            if (!destination.destroyed) destination.end(Buffer.from('partial'))
-          }, 50)
-          return destination
-        },
-      })
-      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
-      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-        queueMicrotask(() => args[2](response))
-        return request as any
-      })
+      const response = createMockResponse(200)
+      response.pipe = <T extends NodeJS.WritableStream>(destination: T): T => {
+        setTimeout(() => {
+          destination.end(Buffer.from('partial'))
+        }, 50)
+        return destination
+      }
+      const request = createMockRequest()
+      mockHttpsGet(response, request, undefined, true)
 
       const controller = new AbortController()
       const pending = client.downloadFile('https://example.com/slow.zip', targetPath, tempRoot, controller.signal)
@@ -239,15 +258,9 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-mime-'))
     const targetPath = path.join(tempRoot, 'payload.bin')
     try {
-      const response = Object.assign(new EventEmitter(), {
-        statusCode: 200,
-        headers: { 'content-type': 'application/x-msdownload' },
-      })
-      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
-      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-        queueMicrotask(() => args[2](response))
-        return request as any
-      })
+      const response = createMockResponse(200, { 'content-type': 'application/x-msdownload' })
+      const request = createMockRequest()
+      mockHttpsGet(response, request, undefined, true)
 
       await expect(client.downloadFile('https://example.com/payload.bin', targetPath, tempRoot)).resolves.toMatchObject({
         success: false,
@@ -265,15 +278,10 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-redirect-'))
     const targetPath = path.join(tempRoot, 'redirected.bin')
     try {
-      const response = Object.assign(new EventEmitter(), {
-        statusCode: 302,
-        headers: { location: 'https://example.com/next' },
-      })
-      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
-      const get = vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-        queueMicrotask(() => args[2](response))
-        return request as any
-      })
+      const response = createMockResponse(302, { location: 'https://example.com/next' })
+      const request = createMockRequest()
+      mockHttpsGet(response, request, undefined, true)
+      const get = vi.mocked(https.get)
 
       await expect(client.downloadFile('https://example.com/start', targetPath, tempRoot)).resolves.toMatchObject({
         success: false,
@@ -291,16 +299,9 @@ describe('WebClient Unit Tests & SSRF Protection', () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-webclient-err500-'))
     const targetPath = path.join(tempRoot, 'failed.bin')
     try {
-      const response = Object.assign(new EventEmitter(), {
-        statusCode: 500,
-        statusMessage: 'Internal Server Error',
-        headers: {},
-      })
-      const request = Object.assign(new EventEmitter(), { destroy: vi.fn() })
-      vi.spyOn(https, 'get').mockImplementation((...args: any[]) => {
-        queueMicrotask(() => args[2](response))
-        return request as any
-      })
+      const response = createMockResponse(500, {}, 'Internal Server Error')
+      const request = createMockRequest()
+      mockHttpsGet(response, request, undefined, true)
 
       const res = await client.downloadFile('https://example.com/failed.bin', targetPath, tempRoot)
       expect(res.success).toBe(false)

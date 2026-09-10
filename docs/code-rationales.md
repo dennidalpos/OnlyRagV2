@@ -115,8 +115,8 @@ L'agente di coding è progettato e testato primariamente per modelli locali comp
 ### 2.18. Qualifica negativa del workhorse (CAS-29)
 
 * **Evidenza (2026-09-10)**: qwen3-coder 30B si è fermato in sicurezza in entrambe le run cold/warm (0/7 milestone), alternando comandi Unix e percorsi non ancora creati.
-* **Preflight osservato (2026-09-10)**: Ollama `0.33.3` rileva `qwen3-coder:30b` (manifest `06c1097efce0`, `18 GB`, `30.5B`, `Q4_K_M`, capability `tools`), ma la RTX 2070 offre `6724 MiB` liberi su `8192 MiB`. Non e' stata avviata una nuova run: la VRAM libera e' inferiore alla dimensione indicata del modello e non consente una qualifica senza CPU offload o thrashing.
-* **Decisione**: nessuna rimozione del fallback. La qualifica native-only resta subordinata a una prova live esplicita di `message.tool_calls`, annullamento e chiusura applicativa.
+* **Qualifica CAS-29/CAS-30 (2026-09-10)**: su Ollama `0.33.3`, `qwen3-coder:30b` ha emesso `message.tool_calls` strutturato e corretto in cold e warm (`read_file(package.json)`), ha ricevuto annullamento di uno stream reale dopo il primo chunk e il processo Electron smoke ha chiuso tramite `app.quit()` su Windows. La telemetria ha osservato `19190975034 B` totali e `6393618758 B` GPU a `num_ctx=4096`; l'offload CPU implicito e la latenza maggiore sono ammessi per privilegiare la correttezza.
+* **Decisione**: CAS-29 e CAS-30 sono chiusi per i tre contratti qualificati. Il fallback testuale e la continuazione `/api/generate` restano per compatibilita con modelli diversi; non viene rimossa alcuna protezione contro CUDA OOM, timeout, anomalie, loop o eviction.
 
 ---
 

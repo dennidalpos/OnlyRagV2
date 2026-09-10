@@ -89,7 +89,7 @@ Per i dettagli approfonditi su ciascun ambito, consultare:
 
 ---
 
-## 3. Router Gerarchico a 2 Livelli (Zero VRAM Thrashing)
+## 3. Router Gerarchico a 2 Livelli (Gestione delle Risorse)
 
 OnlyRag V2 previene la saturazione della VRAM e il thrashing dei modelli attraverso un router a due stadi:
 
@@ -109,14 +109,14 @@ sequenceDiagram
         Coord->>Ollama: Evict modelli effimeri o secondari (keep_alive: 0)
     end
     Coord->>Ollama: Invocazione modello target (keep_alive: 30m)
-    Ollama-->>User: Risposta in streaming con zero VRAM thrashing
+    Ollama-->>User: Risposta in streaming con telemetria delle risorse
 ```
 
 ### Livello 1: Global Resource & Lifecycle Coordinator
 - **Model Pinning**: Mantiene residente in memoria il modello di lavoro primario (`keep_alive: '30m'`).
 - **Ephemeral Eviction**: I modelli di supporto (traduzione rapida o OCR) vengono scaricati immediatamente dopo l'esecuzione (`keep_alive: 0m`).
 - **Model Context Selection**: Risolve `num_ctx` dal default hardware, dalla preferenza per modello e dal `context_length` supportato; il budget del prompt viene compattato separatamente.
-- **Coding Studio Primary Workhorse Model**: Architettura basata su **Modello di Lavoro Fisso (Workhorse Model)** impostato dall'utente (`codingModel`, es. `qwen2.5-coder:7b`). Il modello rimane stabilmente allocato in memoria per tutta la sessione garantendo il riutilizzo della KV-cache (zero VRAM thrashing e zero latenza di reload). L'esecuzione avviene direttamente tramite streaming HTTP su daemon locale o server Ollama remoto.
+- **Coding Studio Primary Workhorse Model**: Architettura basata su **Modello di Lavoro Fisso (Workhorse Model)** impostato dall'utente (`codingModel`, es. `qwen2.5-coder:7b`). Il keep-alive favorisce il riutilizzo della KV-cache, ma CPU offload e maggiore latenza sono accettati quando necessari per la correttezza della risposta. Telemetria, limiti di contesto e protezioni contro CUDA OOM, timeout, anomalie, loop ed eviction restano attivi. L'esecuzione avviene direttamente tramite streaming HTTP su daemon locale o server Ollama remoto.
 - **RAG Chat Domain Sub-Router**: Classificazione semantica tramite **Vector Centroid Semantic Matching** ($<1\text{ms}$) tra Medical, Legal e General.
 - **Chit-Chat Direct Bypass**: Identificazione di saluti o domande convenzionali per escludere il retrieval vettoriale riducendo la latenza a $<100\text{ms}$.
 - **Proprieta' del Sidecar all'Avvio (`orphanPortReclaim.ts` + `SidecarProcessManager.reclaimOrphanSidecarPort`)**: All'avvio, se l'endpoint `/health` risponde ma il riferimento `sidecarProcess` del processo Electron corrente è nullo, il sistema identifica il processo in ascolto su `:8000` (`netstat -ano`), ne verifica l'immagine eseguibile (`tasklist`) e lo termina solo se appartiene alla lista chiusa di binari autorizzati (`sidecar.exe`, interpreti Python).

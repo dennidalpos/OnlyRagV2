@@ -44,7 +44,7 @@ Follow the strict **Presentation $\rightarrow$ Application $\rightarrow$ Domain 
   - **Ask Mode**: Read-only research runs autonomously; file edits and shell commands require explicit user approval.
   - **Agent Mode**: Fully autonomous multi-turn loop with automated error recovery.
 - **Deterministic Workhorse Model Architecture**:
-  - **Workhorse Model (Primary)**: The agent operates deterministically on the user's primary development model (`codingModel`, e.g. `qwen2.5-coder:7b`, `qwen3:8b`, `deepseek-r1:8b`), keeping it loaded in VRAM and retaining KV-cache continuity across turns (zero VRAM thrashing).
+  - **Workhorse Model (Primary)**: The agent operates deterministically on the user's primary development model (`codingModel`, e.g. `qwen2.5-coder:7b`, `qwen3:8b`, `deepseek-r1:8b`), using keep-alive to favor KV-cache continuity across turns. CPU offload and its added latency are acceptable when needed for answer correctness; retain the existing CUDA OOM, timeout, anomaly, loop, and eviction safeguards.
   - **Unified Coding Prompt Architecture**: Single unified, high-performance system prompt containing core execution directives, anti-stub rules, and tool formatting rules without artificial complexity tier fragmentation.
   - **Exact Tag Resolution**: Resolves target model names to exact local Ollama tags (`findMatchingInstalledModel`).
   - **Single Hardware Ladder**: `hardwareProfileTiers.ts` is the only place host tiers (`legacy`/`entry`/`midrange`/`highend`/`extreme`), the safe-VRAM formula, the usable-RAM budget, the CPU throughput ceiling and minimum-hardware detection are defined. The model matrix, the complexity router, the agent runtime options and the Ollama OS parameters all consume it — never re-derive a VRAM threshold locally.

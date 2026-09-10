@@ -5,7 +5,7 @@
 ## 1. Identity & Scope
 - **Purpose**: Local desktop AI assistant and coding studio with RAG, Ollama, and Python sidecar.
 - **Out of Scope**: Cloud LLM API forwarding; non-local proprietary services.
-- **Hard Constraints**: Zero VRAM thrashing (pinned workhorse model); strict process isolation (Renderer/Main share only via `shared/`).
+- **Hard Constraints**: Strict process isolation (Renderer/Main share only via `shared/`). CPU offload and the resulting latency are acceptable when required for response correctness; retain safeguards against CUDA OOM, timeouts, anomalies, loops, and unsafe eviction.
 
 ## 2. Verified Commands
 Executed and verified in session. Date: 2026-09-09.

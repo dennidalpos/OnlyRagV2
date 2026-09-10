@@ -1,5 +1,3 @@
 {
-  "todos": [
-    "CAS-30 | P2 affidabilita runtime | impatto medio | urgenza bassa | sforzo M | BLOCKED/residuo | dipendenze: CAS-29 resta non qualificata (precedenti cold/warm 0/7 milestone; preflight native-only 2026-09-10 non eseguito: qwen3-coder:30b da 18 GB, RTX 2070 con 6724 MiB VRAM libera su 8192 MiB) | Qualifica live delimitata su message.tool_calls strutturato, annullamento e chiusura applicativa Windows non eseguibile senza CPU offload o VRAM thrashing. Fallback testuale e continuazione /api/generate restano attivi. Sblocco: host con almeno 18 GB di VRAM libera e telemetria che confermi residenza senza CPU offload al contesto scelto; poi evidenza CAS-29 cold/warm native-only riproducibile dei tre contratti, documentata in docs/agent-live-testing.md, prima di correggere solo cause misurate."
-  ]
+  "todos": []
 }

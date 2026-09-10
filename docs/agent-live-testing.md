@@ -31,7 +31,7 @@ Gli snapshot sono salvati fuori dal repository in `%USERPROFILE%\Desktop\onlyrag
 | 7B cold-2 | 0/7 | blocked | 2/4 | 23432 | 4624/17 | 11596/879 | 5212.1 |
 | 7B warm-2 | 0/7 | blocked | 3/8 | 33089 | 4123/38 | 24371/1158 | 5212.1 |
 
-Tutte le run hanno usato `num_ctx=16384`, zero CPU offload e il digest registrato. Le etichette warm identificano il secondo processo, ma la prima generazione ha comunque pagato il caricamento; le generazioni successive mostrano 12-57 ms complessivi di load. La tabella separa quindi il caricamento osservato dall'inferenza, senza presumere una cache calda.
+Tutte le run hanno usato `num_ctx=16384`, hanno osservato zero CPU offload e il digest registrato. Le etichette warm identificano il secondo processo, ma la prima generazione ha comunque pagato il caricamento; le generazioni successive mostrano 12-57 ms complessivi di load. La tabella separa quindi il caricamento osservato dall'inferenza, senza presumere una cache calda.
 
 La suite live preesistente, eseguita con `npm run test:live`, ha superato 4 casi su 10: budget exhaustion, ERESOLVE, workspace pre-seeded e un caso di downgrade. Sono falliti full task, il secondo contratto downgrade, tre recuperi TypeScript e uninstallable dependency. Il probe intervista successivo ha fallito allo stesso modo su 1.5B e 3B: zero domande per una scelta esplicita; il 7B non è stato eseguito dopo due fallimenti consecutivi.
 
@@ -63,12 +63,19 @@ Il 10 settembre 2026, `qwen3-coder:30b` (digest `06c1097e...e90bca`, `num_ctx=16
 
 La run cold ha alternato `dir` valido con `ls -la` non portabile e poi ha richiesto un file assente; la warm ha fallito `npm create vite` e ha ripetuto la lettura di `src/main.jsx` assente. Entrambe hanno esposto residui e chiuso tramite circuit breaker, senza promuovere milestone né dichiarare successo.
 
-Questo scenario misura il risultato applicativo, ma non prova che ogni chiamata usi `message.tool_calls` strutturato né esercita annullamento e chiusura applicativa. Il workhorse non è quindi qualificato per native-only e il fallback testuale con la continuazione `/api/generate` resta attivo. Il residuo CAS-30 richiede un probe live delimitato per questi tre contratti prima di qualsiasi rimozione.
+Questo scenario misura il risultato applicativo, ma non prova che ogni chiamata usi `message.tool_calls` strutturato né esercita annullamento e chiusura applicativa.
 
-### Preflight native-only del 10 settembre 2026
+### Qualifica CAS-29 e CAS-30 del 10 settembre 2026
 
-Non sono state avviate nuove prove CAS-29 cold/warm su questo host. Il preflight ha osservato Ollama `0.33.3` con il tag installato `qwen3-coder:30b`: digest del manifest `06c1097efce0`, blob del modello `1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a`, dimensione indicata `18 GB`, `30.5B` parametri, quantizzazione `Q4_K_M` e capability `tools`. `ollama ps` non riportava modelli attivi.
+Il preflight ha osservato Ollama `0.33.3` con il tag installato `qwen3-coder:30b`: digest completo `06c1097efce0431c2045fe7b2e5108366e43bee1b4603a7aded8f21689e90bca`, blob `1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a`, dimensione indicata `18 GB`, `30.5B` parametri, quantizzazione `Q4_K_M` e capability `tools`. Prima della prova `ollama ps` non riportava modelli attivi. La GPU NVIDIA GeForce RTX 2070 aveva `8192 MiB` totali e `6724 MiB` liberi; la RAM fisica era `31.89 GiB`, di cui `21.75 GiB` liberi; l'unita `D:` aveva `326.42 GiB` liberi.
 
-La GPU NVIDIA GeForce RTX 2070 aveva `8192 MiB` totali e `6724 MiB` liberi. La RAM fisica era `31.89 GiB`, di cui `21.75 GiB` liberi; l'unita `D:` aveva `326.42 GiB` liberi. I `6724 MiB` di VRAM libera sono inferiori alla dimensione indicata del modello da `18 GB`: avviarlo violerebbe il vincolo di qualificazione senza CPU offload e di assenza di VRAM thrashing. Per questo non sono state esercitate le chiamate `message.tool_calls`, l'annullamento o la chiusura applicativa Windows e il fallback resta attivo.
+CPU offload e la maggiore latenza sono ammessi per privilegiare la correttezza. Con una richiesta `/api/chat` una tantum, `num_ctx=4096`, `num_predict=128`, temperatura `0` e schema `read_file`, entrambe le run hanno restituito esclusivamente `message.tool_calls[0].function.name = "read_file"` e `arguments.filePath = "package.json"`:
 
-Il preflight potra essere ripetuto su un host con almeno `18 GB` di VRAM libera, seguito dalla conferma telemetrica che il modello resta residente senza CPU offload al contesto scelto. Solo allora sono ammesse una prova cold e una warm native-only, con evidenza riproducibile dei tre contratti.
+| Run | Esito tool strutturato | Tempo parete | Durata totale/load | Token prompt/output | Telemetria `/api/ps` |
+| :--- | :--- | ---: | ---: | ---: | :--- |
+| cold | `read_file(package.json)` | 30.751 s | 29259.780 / 26026.430 ms | 297 / 23 | 19190975034 B totale, 6393618758 B GPU, contesto 4096 |
+| warm | `read_file(package.json)` | 1.670 s | 1557.606 / 3.623 ms | 297 / 23 | 19190975034 B totale, 6393618758 B GPU, contesto 4096 |
+
+La telemetria conferma offload CPU implicito (`12797356276 B` non residenti in GPU) e non ha prodotto CUDA OOM. Una richiesta `/api/chat` streaming separata, con `num_ctx=4096` e `num_predict=2048`, ha emesso un primo chunk di `130` byte; il client ha quindi segnalato il token di annullamento e rilasciato la risposta streaming. Il percorso di chiusura Windows e' stato esercitato dal comando repository `npm run test:smoke`: il processo Electron isolato ha inizializzato il bundle e gli handler IPC, ha invocato `app.quit()` in modalita smoke e ha restituito `[PASS]`.
+
+CAS-29 e CAS-30 sono qualificati su questi contratti riproducibili. Il fallback testuale e la continuazione `/api/generate` restano implementati per compatibilita con altri modelli che non popolano `tool_calls`; nessuna protezione contro CUDA OOM, timeout, anomalie, loop o eviction e' stata disabilitata.

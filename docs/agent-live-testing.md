@@ -64,3 +64,11 @@ Il 10 settembre 2026, `qwen3-coder:30b` (digest `06c1097e...e90bca`, `num_ctx=16
 La run cold ha alternato `dir` valido con `ls -la` non portabile e poi ha richiesto un file assente; la warm ha fallito `npm create vite` e ha ripetuto la lettura di `src/main.jsx` assente. Entrambe hanno esposto residui e chiuso tramite circuit breaker, senza promuovere milestone né dichiarare successo.
 
 Questo scenario misura il risultato applicativo, ma non prova che ogni chiamata usi `message.tool_calls` strutturato né esercita annullamento e chiusura applicativa. Il workhorse non è quindi qualificato per native-only e il fallback testuale con la continuazione `/api/generate` resta attivo. Il residuo CAS-30 richiede un probe live delimitato per questi tre contratti prima di qualsiasi rimozione.
+
+### Preflight native-only del 10 settembre 2026
+
+Non sono state avviate nuove prove CAS-29 cold/warm su questo host. Il preflight ha osservato Ollama `0.33.3` con il tag installato `qwen3-coder:30b`: digest del manifest `06c1097efce0`, blob del modello `1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a`, dimensione indicata `18 GB`, `30.5B` parametri, quantizzazione `Q4_K_M` e capability `tools`. `ollama ps` non riportava modelli attivi.
+
+La GPU NVIDIA GeForce RTX 2070 aveva `8192 MiB` totali e `6724 MiB` liberi. La RAM fisica era `31.89 GiB`, di cui `21.75 GiB` liberi; l'unita `D:` aveva `326.42 GiB` liberi. I `6724 MiB` di VRAM libera sono inferiori alla dimensione indicata del modello da `18 GB`: avviarlo violerebbe il vincolo di qualificazione senza CPU offload e di assenza di VRAM thrashing. Per questo non sono state esercitate le chiamate `message.tool_calls`, l'annullamento o la chiusura applicativa Windows e il fallback resta attivo.
+
+Il preflight potra essere ripetuto su un host con almeno `18 GB` di VRAM libera, seguito dalla conferma telemetrica che il modello resta residente senza CPU offload al contesto scelto. Solo allora sono ammesse una prova cold e una warm native-only, con evidenza riproducibile dei tre contratti.

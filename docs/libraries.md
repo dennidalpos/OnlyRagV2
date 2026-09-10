@@ -17,11 +17,23 @@ OnlyRag V2 privilegia librerie standard collaudate per parsing crittografico/sin
 | **Queue di Concorrenza** | `p-queue` | Limita la concorrenza delle richieste concorrenti asincrone verso Ollama e il file system. |
 | **HTML to Markdown** | `turndown` + `cheerio` | Conversione fedele e sanificata del web fetch in Markdown per il contesto dell'agente. |
 | **Vector DB** | `lancedb` (Python) | Database vettoriale embedded serverless basato su Apache Arrow, senza necessità di server esterni o Docker. |
-| **PDF Extraction & OCR** | `PyMuPDF (fitz)` + `RapidOCR` | PyMuPDF offre estrazione nativa istantanea (<5ms/pagina). RapidOCR gestisce OCR locale via ONNX Runtime su CPU/GPU. |
+| **PDF Extraction & OCR** | `PyMuPDF (fitz)` + `RapidOCR` + `onnxruntime-gpu` | PyMuPDF offre estrazione nativa istantanea (<5ms/pagina). RapidOCR seleziona CUDA su GPU NVIDIA compatibili e usa CPU come fallback. |
 
 ---
 
-## 2. Sintesi dell'Audit Dipendenze e Sicurezza
+## 2. Runtime OCR GPU
+
+Il setup installa `onnxruntime-gpu[cuda,cudnn]` come unico runtime ONNX, includendo le DLL CUDA e
+cuDNN necessarie al sidecar. Il pacchetto include `CPUExecutionProvider`, quindi l'applicazione
+mantiene il fallback CPU su hardware non CUDA o quando l'inizializzazione CUDA fallisce.
+`rapidocr-onnxruntime` dichiara separatamente il pacchetto CPU con lo stesso modulo Python:
+`scripts/setup_dev_environment.ps1` lo sostituisce dopo la risoluzione delle dipendenze. Non
+installare le due varianti manualmente nello stesso ambiente. Le DLL GPU aggiungono circa 1.1 GB
+al payload del sidecar prima della compressione dell'installer.
+
+---
+
+## 3. Sintesi dell'Audit Dipendenze e Sicurezza
 
 1. **Zero Dipendenze Circolari**: Il grafo delle dipendenze di `src/` ed `electron/` è verificato a 0 cicli tramite `dpdm` e `skott` (`npm run audit:cycles`).
 2. **Isolamento da Vulnerabilità Note**:

@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_dynamic_libs
 
 datas = [
@@ -20,10 +21,24 @@ for pkg in ['lancedb', 'pymupdf', 'fastapi', 'uvicorn', 'pydantic', 'docx', 'rap
     except Exception as exc:
         raise RuntimeError(f"Failed to collect PyInstaller assets for {pkg}") from exc
 
-# onnxruntime's optional quantization helpers import the separate `onnx` package. The sidecar
-# only runs inference, so collect the runtime data and DLLs without traversing those helpers.
+# onnxruntime-gpu exposes its Python package as `onnxruntime`. Collect its provider DLLs without
+# traversing optional quantization helpers that require the separate `onnx` package.
 datas += collect_data_files('onnxruntime')
 binaries += collect_dynamic_libs('onnxruntime')
+
+# CUDA provider dependencies are data-only namespace packages, so collect their runtime DLLs
+# explicitly instead of relying on PyInstaller import discovery.
+site_packages = os.path.join(sys.prefix, 'Lib', 'site-packages')
+for relative_dir in [
+    os.path.join('nvidia', 'cu13', 'bin', 'x86_64'),
+    os.path.join('nvidia', 'cudnn', 'bin'),
+]:
+    source_dir = os.path.join(site_packages, relative_dir)
+    if not os.path.isdir(source_dir):
+        raise RuntimeError(f"Missing bundled CUDA runtime directory: {source_dir}")
+    for name in os.listdir(source_dir):
+        if name.lower().endswith('.dll'):
+            binaries.append((os.path.join(source_dir, name), relative_dir))
 
 sidecar_script = os.path.abspath(os.path.join(SPECPATH, 'sidecar', 'main.py'))
 
@@ -73,4 +88,3 @@ coll = COLLECT(
     upx_exclude=[],
     name='sidecar',
 )
-

@@ -68,6 +68,11 @@ try {
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Aggiornamento di pip fallito.' }
     & $venvPython -m pip install -r (Join-Path $rootDir 'sidecar/requirements-dev.txt')
     if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione delle dipendenze Python fallita.' }
+    # RapidOCR declares the CPU wheel, so replace it with the GPU wheel after resolution.
+    & $venvPython -m pip uninstall --yes onnxruntime
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Rimozione del runtime ONNX CPU fallita.' }
+    & $venvPython -m pip install --upgrade --force-reinstall --constraint (Join-Path $rootDir 'sidecar/constraints.txt') 'onnxruntime-gpu[cuda,cudnn]==1.29.0'
+    if ($LASTEXITCODE -ne 0) { Stop-WithMessage 'Installazione del runtime ONNX GPU fallita.' }
     Write-Host "[PASS] Ambiente pronto in $rootDir" -ForegroundColor Green
     exit 0
 } catch {

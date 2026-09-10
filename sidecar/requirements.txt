@@ -12,10 +12,9 @@ pandas>=2.0.0
 python-docx>=1.1.0
 pillow>=10.0.0
 puremagic>=1.30
-# rapidocr-onnxruntime ships with CPU-only onnxruntime by default. For CUDA GPU-accelerated OCR,
-# swap it: `pip uninstall onnxruntime && pip install onnxruntime-gpu` (the two packages conflict
-# and cannot both be installed) -- sidecar/infrastructure/ocr.py detects and uses CUDA automatically
-# once onnxruntime-gpu is present.
+# Installed by setup_dev_environment.ps1 after RapidOCR's CPU dependency is removed.
+# onnxruntime-gpu includes CPU fallback; the two distributions cannot coexist.
+onnxruntime-gpu[cuda,cudnn]==1.29.0
 rapidocr-onnxruntime>=1.4.0
 wordfreq>=3.1.0
 symspellpy>=6.7.7

@@ -87,6 +87,10 @@ try {
         if (-not (Test-Path -LiteralPath $venvPyInstaller)) {
             throw "[ERRORE] PyInstaller non trovato in $venvPyInstaller. Eseguire npm run setup:dev."
         }
+        & $venvPython -c "import importlib.metadata as metadata; metadata.version('onnxruntime-gpu')"
+        if ($LASTEXITCODE -ne 0) {
+            throw "[ERRORE] onnxruntime-gpu non installato. Eseguire npm run setup:dev prima del packaging."
+        }
         # --distpath must point to sidecar_dist (not PyInstaller's default ./dist), which is what
         # package.json's electron-builder extraResources actually reads from. Without this flag,
         # PyInstaller wrote to ./dist/sidecar, colliding with -- and getting wiped by -- the

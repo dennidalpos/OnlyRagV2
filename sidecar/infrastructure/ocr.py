@@ -1,6 +1,7 @@
 import os
 import base64
 import subprocess
+import sys
 from typing import Dict, Any, Optional, List, Tuple
 from sidecar.config import httpx_client, logger
 from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
@@ -8,6 +9,24 @@ from sidecar.domain.word_segmenter import normalize_ocr_token_spacing
 _GPU_INFO_CACHE: Optional[Dict[str, Any]] = None
 _RAPIDOCR_ENGINE: Any = None
 _INSTALLED_OLLAMA_MODELS_CACHE: Optional[set] = None
+_CUDA_DLL_PATH_CONFIGURED = False
+
+
+def _configure_cuda_dll_path() -> None:
+    """Makes bundled CUDA and cuDNN DLLs available before ONNX Runtime loads its CUDA provider."""
+    global _CUDA_DLL_PATH_CONFIGURED
+    if _CUDA_DLL_PATH_CONFIGURED or os.name != "nt":
+        return
+
+    runtime_root = getattr(sys, "_MEIPASS", os.path.join(sys.prefix, "Lib", "site-packages"))
+    dll_dirs = [
+        os.path.join(runtime_root, "nvidia", "cu13", "bin", "x86_64"),
+        os.path.join(runtime_root, "nvidia", "cudnn", "bin"),
+    ]
+    available_dirs = [path for path in dll_dirs if os.path.isdir(path)]
+    if available_dirs:
+        os.environ["PATH"] = os.pathsep.join([*available_dirs, os.environ.get("PATH", "")])
+    _CUDA_DLL_PATH_CONFIGURED = True
 
 
 def _get_installed_ollama_model_names(ollama_url: str) -> Optional[set]:
@@ -171,6 +190,7 @@ def _rapidocr_cuda_available() -> bool:
     RapidOCR runs on onnxruntime, so this is the accurate signal for its GPU path -- a CUDA GPU
     detected via PyTorch elsewhere doesn't guarantee onnxruntime-gpu is the installed variant."""
     try:
+        _configure_cuda_dll_path()
         import onnxruntime as ort
         return "CUDAExecutionProvider" in ort.get_available_providers()
     except ImportError:
@@ -508,6 +528,7 @@ def detect_gpu_acceleration() -> Dict[str, Any]:
         pass
 
     try:
+        _configure_cuda_dll_path()
         import onnxruntime as ort
         if "CUDAExecutionProvider" in ort.get_available_providers():
             info["has_cuda"] = True

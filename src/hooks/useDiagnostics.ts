@@ -17,7 +17,7 @@ export function useDiagnostics(
   const runDiagnosticsScan = useCallback(async () => {
     setIsScanning(true)
     try {
-      const data = await apiService.runDiagnostics()
+      const data = await apiService.runDiagnostics(settings.ollamaHost)
       if (data) {
         setDiagnostics(data)
         
@@ -44,7 +44,7 @@ export function useDiagnostics(
     } finally {
       setIsScanning(false)
     }
-  }, [settings.defaultModel, onUpdateSettings])
+  }, [settings.defaultModel, settings.ollamaHost, onUpdateSettings])
 
   useEffect(() => {
     runDiagnosticsScan()

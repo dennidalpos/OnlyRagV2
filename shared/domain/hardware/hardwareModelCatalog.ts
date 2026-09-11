@@ -32,7 +32,7 @@ export const COMPACT_CODING_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '1.1 GB',
     description: 'Ultra-fast code completion with minimal memory footprint & rapid token response',
-    recommendedForProfiles: ['legacy', 'entry', 'midrange'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'qwen2.5-coder:1.5b-instruct-q8_0',
@@ -48,7 +48,7 @@ export const COMPACT_CODING_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '1.9 GB',
     description: 'Compact high-accuracy code assistant for rapid editing & small refactors',
-    recommendedForProfiles: ['highend', 'extreme'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'qwen2.5-coder:3b-instruct-q4_k_m',
@@ -142,7 +142,7 @@ export const WORKHORSE_CODING_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '4.7 GB',
     description: 'State-of-the-art coding workhorse with high JSON precision & tool calling support',
-    recommendedForProfiles: ['midrange', 'highend'],
+    recommendedForProfiles: ['highend'],
   },
   {
     modelName: 'qwen2.5-coder:7b-instruct-q4_k_m',
@@ -174,7 +174,7 @@ export const WORKHORSE_CODING_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen',
     sizeBytesApprox: '2.6 GB',
     description: 'Current-generation 4B with native tool calling — best accuracy per GB on minimum hardware',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['midrange'],
   },
   {
     modelName: 'qwen3:8b',
@@ -206,6 +206,14 @@ export const WORKHORSE_CODING_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-coder',
     sizeBytesApprox: '8.9 GB',
     description: 'Quantized 14B coding model for high-end GPUs',
+    recommendedForProfiles: [],
+  },
+  {
+    modelName: 'gpt-oss:20b',
+    displayName: 'GPT-OSS (20B)',
+    family: 'gpt-oss',
+    sizeBytesApprox: '13.5 GB',
+    description: 'Open-weight reasoning model with native tool use for 24GB-class workstations',
     recommendedForProfiles: [],
   },
   {
@@ -611,7 +619,7 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'llama',
     sizeBytesApprox: '2.0 GB',
     description: 'Fast responsive conversational assistant for low-spec, 8GB GPUs or CPU systems',
-    recommendedForProfiles: ['legacy', 'entry', 'midrange'],
+    recommendedForProfiles: ['legacy', 'entry'],
   },
   {
     modelName: 'llama3.2:1b',
@@ -627,7 +635,7 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'llama',
     sizeBytesApprox: '4.9 GB',
     description: 'Meta 8B balanced conversational assistant for 12GB+ GPUs and multi-document RAG',
-    recommendedForProfiles: ['highend', 'extreme'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'qwen3:4b',
@@ -635,7 +643,7 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen',
     sizeBytesApprox: '2.6 GB',
     description: 'Current-generation compact assistant with strong multilingual factual recall',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['midrange'],
   },
   {
     modelName: 'qwen3:8b',
@@ -643,7 +651,7 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen',
     sizeBytesApprox: '5.2 GB',
     description: 'Current-generation 8B conversational model for grounded multi-document RAG',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['highend'],
   },
   {
     modelName: 'granite3.3:2b',
@@ -660,6 +668,14 @@ export const CHAT_TIER_CATALOG: RawModelCatalogEntry[] = [
     sizeBytesApprox: '4.7 GB',
     description: 'High-intelligence multilingual conversational model with strong factual recall',
     recommendedForProfiles: [],
+  },
+  {
+    modelName: 'qwen3:14b',
+    displayName: 'Qwen 3 (14B)',
+    family: 'qwen',
+    sizeBytesApprox: '9.3 GB',
+    description: 'High-capacity conversational model for multi-document RAG on 24GB-class workstations',
+    recommendedForProfiles: ['extreme'],
   },
   {
     modelName: 'mistral:7b',
@@ -775,7 +791,7 @@ export const TRANSLATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'cohere',
     sizeBytesApprox: '5.1 GB',
     description: 'Cohere highly-aligned multilingual translation and cross-lingual model',
-    recommendedForProfiles: ['extreme'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'gemma3:4b',
@@ -815,7 +831,7 @@ export const TRANSLATION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen',
     sizeBytesApprox: '9.3 GB',
     description: 'Current-generation 14B translator with strong multilingual layout preservation',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['extreme'],
   },
   {
     modelName: 'gemma3:27b',
@@ -835,7 +851,7 @@ export const VISION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'moondream',
     sizeBytesApprox: '1.7 GB',
     description: 'Compact fast vision model with minimal footprint for CPU, 4GB and 8GB GPU hardware',
-    recommendedForProfiles: ['legacy', 'entry', 'midrange'],
+    recommendedForProfiles: ['legacy', 'entry'],
   },
   {
     modelName: 'llava:7b',
@@ -843,7 +859,7 @@ export const VISION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'llava',
     sizeBytesApprox: '4.5 GB',
     description: 'Standard vision-language assistant model for general image & OCR inspection on 12GB+ GPUs',
-    recommendedForProfiles: ['highend'],
+    recommendedForProfiles: [],
   },
   {
     modelName: 'llama3.2-vision:11b',
@@ -859,7 +875,7 @@ export const VISION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-vl',
     sizeBytesApprox: '3.2 GB',
     description: 'Compact current-generation vision model with strong document and table OCR accuracy',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['midrange'],
   },
   {
     modelName: 'qwen2.5vl:7b',
@@ -867,7 +883,7 @@ export const VISION_TIER_CATALOG: RawModelCatalogEntry[] = [
     family: 'qwen-vl',
     sizeBytesApprox: '6.0 GB',
     description: 'Current-generation vision model for dense page layout, chart and handwriting extraction',
-    recommendedForProfiles: [],
+    recommendedForProfiles: ['highend'],
   },
   {
     modelName: 'gemma3:4b',
@@ -1105,4 +1121,48 @@ export function buildCodingCatalogForWizard(): RawModelCatalogEntry[] {
     merged.push(entry)
   }
   return merged
+}
+
+export interface HardwareWizardModelSuite {
+  coding: string
+  chat: string
+  translation: string
+  vision: string
+  embedding: string
+}
+
+export type HardwareWizardModelOptions = Record<keyof HardwareWizardModelSuite | 'medical' | 'legal', string[]>
+
+function requiredRecommendation(
+  catalog: readonly RawModelCatalogEntry[],
+  profile: HardwareProfileTier,
+  module: keyof HardwareWizardModelSuite
+): string {
+  const model = catalog.find((entry) => entry.recommendedForProfiles.includes(profile))?.modelName
+  if (!model) throw new Error(`Missing ${module} recommendation for ${profile} hardware`)
+  return model
+}
+
+/** Returns the one-click core suite for a detected hardware profile. */
+export function buildHardwareWizardModelSuite(profile: HardwareProfileTier): HardwareWizardModelSuite {
+  return {
+    coding: requiredRecommendation(buildCodingCatalogForWizard(), profile, 'coding'),
+    chat: requiredRecommendation(CHAT_TIER_CATALOG, profile, 'chat'),
+    translation: requiredRecommendation(TRANSLATION_TIER_CATALOG, profile, 'translation'),
+    vision: requiredRecommendation(VISION_TIER_CATALOG, profile, 'vision'),
+    embedding: requiredRecommendation(EMBEDDING_TIER_CATALOG, profile, 'embedding'),
+  }
+}
+
+/** Returns the catalog choices used by the wizard; installed custom tags are added by the UI. */
+export function buildHardwareWizardModelOptions(): HardwareWizardModelOptions {
+  return {
+    coding: buildCodingCatalogForWizard().map((entry) => entry.modelName),
+    chat: CHAT_TIER_CATALOG.map((entry) => entry.modelName),
+    translation: TRANSLATION_TIER_CATALOG.map((entry) => entry.modelName),
+    vision: VISION_TIER_CATALOG.map((entry) => entry.modelName),
+    embedding: EMBEDDING_TIER_CATALOG.map((entry) => entry.modelName),
+    medical: MEDICAL_TIER_CATALOG.map((entry) => entry.modelName),
+    legal: LEGAL_TIER_CATALOG.map((entry) => entry.modelName),
+  }
 }

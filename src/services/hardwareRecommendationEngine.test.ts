@@ -244,13 +244,13 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recLaw?.modelName).toBe('llama3.2:3b')
   })
 
-  it('should recommend entry profile for budget GPU with 4GB-6GB VRAM preserving safety headroom', () => {
-    const diag = createMockDiagnostics(true, 6144, 16, 'NVIDIA GeForce RTX 3050 Laptop')
+  it('should keep every entry recommendation compatible at its 4GB VRAM boundary', () => {
+    const diag = createMockDiagnostics(true, 4096, 16, 'NVIDIA GeForce RTX 3050 Laptop')
     const recs = analyzeHardwareAndRecommend(diag)
 
     expect(recs.profileTier).toBe('entry')
     expect(recs.profileName).toContain('Entry-Level GPU')
-    expect(recs.safeVramBudgetGB).toBe(3.0)
+    expect(recs.safeVramBudgetGB).toBe(1.5)
 
     const recCoding = recs.codingModels.find((m) => m.isRecommended)
     expect(recCoding?.modelName).toBe('qwen2.5-coder:3b')
@@ -260,6 +260,15 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
 
     const recChat = recs.chatTierModels.find((m) => m.isRecommended)
     expect(recChat?.modelName).toBe('llama3.2:3b')
+
+    const coreRecommendations = [
+      recCoding,
+      recChat,
+      recs.translationTierModels.find((m) => m.isRecommended),
+      recVision,
+      recs.embeddingTierModels.find((m) => m.isRecommended),
+    ]
+    expect(coreRecommendations.every((model) => model?.isHardwareCompatible)).toBe(true)
   })
 
   it('should recommend midrange profile for dedicated GPU with 8GB VRAM with coding workhorse models', () => {
@@ -271,13 +280,13 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recs.safeVramBudgetGB).toBe(4.5)
 
     const recCoding = recs.codingModels.find((m) => m.isRecommended)
-    expect(recCoding?.modelName).toBe('qwen2.5-coder:7b')
+    expect(recCoding?.modelName).toBe('qwen3:4b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
-    expect(recVision?.modelName).toBe('moondream:latest')
+    expect(recVision?.modelName).toBe('qwen2.5vl:3b')
 
     const recChat = recs.chatTierModels.find((m) => m.isRecommended)
-    expect(recChat?.modelName).toBe('llama3.2:3b')
+    expect(recChat?.modelName).toBe('qwen3:4b')
 
     const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
     expect(recTrans?.modelName).toBe('qwen2.5:3b')
@@ -292,22 +301,22 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recLaw?.modelName).toBe('llama3.2:3b')
   })
 
-  it('should recommend highend profile for high-end GPU with >= 12GB VRAM', () => {
-    const diag = createMockDiagnostics(true, 16384, 32, 'NVIDIA GeForce RTX 4080')
+  it('should recommend highend profile safely from its 12GB VRAM boundary', () => {
+    const diag = createMockDiagnostics(true, 12288, 32, 'NVIDIA GeForce RTX 4070')
     const recs = analyzeHardwareAndRecommend(diag)
 
     expect(recs.profileTier).toBe('highend')
     expect(recs.profileName).toContain('High-End Performance GPU')
-    expect(recs.safeVramBudgetGB).toBe(10.5)
+    expect(recs.safeVramBudgetGB).toBe(7.5)
 
     const recCoding = recs.codingModels.find((m) => m.isRecommended)
     expect(recCoding?.modelName).toBe('qwen2.5-coder:7b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
-    expect(recVision?.modelName).toBe('llava:7b')
+    expect(recVision?.modelName).toBe('qwen2.5vl:7b')
 
     const recChat = recs.chatTierModels.find((m) => m.isRecommended)
-    expect(recChat?.modelName).toBe('llama3.1:8b')
+    expect(recChat?.modelName).toBe('qwen3:8b')
 
     const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
     expect(recTrans?.modelName).toBe('qwen2.5:7b')
@@ -316,22 +325,25 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     expect(recEmbed?.modelName).toBe('bge-m3:latest')
   })
 
-  it('should recommend extreme profile for 24GB+ workstations', () => {
-    const diag = createMockDiagnostics(true, 24576, 64, 'NVIDIA GeForce RTX 4090')
+  it('should recommend extreme profile safely from its 20GB VRAM boundary', () => {
+    const diag = createMockDiagnostics(true, 20480, 64, 'NVIDIA GeForce RTX 4000 Ada')
     const recs = analyzeHardwareAndRecommend(diag)
 
     expect(recs.profileTier).toBe('extreme')
     expect(recs.profileName).toContain('Extreme Workstation')
-    expect(recs.safeVramBudgetGB).toBe(16.5)
+    expect(recs.safeVramBudgetGB).toBe(13.5)
 
     const recCoding = recs.codingModels.find((m) => m.isRecommended)
     expect(recCoding?.modelName).toBe('qwen2.5-coder:14b')
+
+    const recChat = recs.chatTierModels.find((m) => m.isRecommended)
+    expect(recChat?.modelName).toBe('qwen3:14b')
 
     const recVision = recs.visionTierModels.find((m) => m.isRecommended)
     expect(recVision?.modelName).toBe('llama3.2-vision:11b')
 
     const recTrans = recs.translationTierModels.find((m) => m.isRecommended)
-    expect(recTrans?.modelName).toBe('aya-expanse:8b')
+    expect(recTrans?.modelName).toBe('qwen3:14b')
 
     const recMed = recs.medicalTierModels.find((m) => m.isRecommended)
     expect(recMed?.modelName).toBe('adrienbrault/biomistral-7b:Q4_K_M')

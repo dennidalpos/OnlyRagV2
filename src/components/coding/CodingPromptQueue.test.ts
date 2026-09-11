@@ -12,15 +12,15 @@ describe('Coding Agent Prompt Queue & Active Model Extraction Unit Tests', () =>
     const log2 = 'Escalating to heavy tier [qwen2.5-coder:14b] — triggering VRAM eviction first.'
     expect(getStepModelName(log2, 'qwen2.5-coder:7b')).toBe('qwen2.5-coder:14b')
 
-    // 3. Fallback notice
-    const log3 = 'Initiating fallback to [llama3.2:3b] ctx:4096'
-    expect(getStepModelName(log3, 'qwen2.5-coder:7b')).toBe('llama3.2:3b')
+    // 3. Primary model notice
+    const log3 = 'Primary model [qwen2.5-coder:7b] ctx:4096'
+    expect(getStepModelName(log3, 'qwen2.5-coder:7b')).toBe('qwen2.5-coder:7b')
 
     // 4. Complexity Escalated notice
     const log4 = '⚡ Complexity Escalated: deepseek-r1:7b-qwen-distill-q4_k_m'
     expect(getStepModelName(log4, 'qwen2.5-coder:7b')).toBe('deepseek-r1:7b-qwen-distill-q4_k_m')
 
-    // 5. Default fallback when no model in log message
+    // 5. Default model when no model is in the log message
     const log5 = 'Successfully wrote file src/app.ts'
     expect(getStepModelName(log5, 'qwen2.5-coder:7b')).toBe('qwen2.5-coder:7b')
   })

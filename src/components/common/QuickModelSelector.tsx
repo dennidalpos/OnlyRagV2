@@ -2,40 +2,25 @@ import React, { useState, useRef, useEffect } from 'react'
 import {
   ChevronDown,
   Check,
-  ShieldAlert,
   Sparkles,
   Loader2,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
-import {
-  type ModelIntent,
-  filterModelsByIntent,
-  isModelForIntent,
-} from '../../services/modelIntentClassifier'
+import { buildOllamaModelOptions } from '../../services/ollamaModelOptions'
 
 export interface QuickModelSelectorProps {
   /** Currently active model name for this functional feature */
   currentModel: string
-  /** Fallback model name (optional) */
-  fallbackModel?: string
   /** List of all installed model tags in local Ollama instance */
   installedModels?: string[]
-  /** Curated preset model options for this specific feature */
-  presetOptions?: string[]
-  /** Functional intent to filter compatible models (e.g. 'vision', 'coding', 'chat', 'translation') */
-  intent?: ModelIntent
   /** Callback triggered when user selects a new active model */
   onSelectModel: (modelName: string) => void
-  /** Optional callback to configure or change fallback model */
-  onSelectFallbackModel?: (fallbackModelName?: string) => void
   /** Module icon component or visual theme */
   icon?: React.ElementType
   /** Feature label for accessibility and tooltips (e.g. 'Coding', 'Chat', 'Translation') */
   featureLabel: string
-  /** Visual variant styling */
-  variant?: 'cyan' | 'purple' | 'sky' | 'emerald' | 'amber'
   /** Optional extra CSS classes */
   className?: string
   /** Disable interaction */
@@ -44,15 +29,10 @@ export interface QuickModelSelectorProps {
 
 export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
   currentModel,
-  fallbackModel,
   installedModels = [],
-  presetOptions = [],
-  intent,
   onSelectModel,
-  onSelectFallbackModel,
   icon: IconComponent = Sparkles,
   featureLabel,
-  variant = 'cyan',
   className = '',
   disabled = false,
 }) => {
@@ -86,35 +66,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
     }
   }, [isOpen])
 
-  // Filter installed models and build candidate list by intent if specified
-  const filteredInstalledModels = intent
-    ? installedModels.filter((m) => isModelForIntent(m, intent))
-    : installedModels
-
-  const allCandidateModels = intent
-    ? filterModelsByIntent(installedModels, intent, {
-        includeCurrent: currentModel,
-        includeFallback: fallbackModel,
-        presetOptions,
-      })
-    : Array.from(
-        new Set([
-          currentModel,
-          ...(fallbackModel ? [fallbackModel] : []),
-          ...presetOptions,
-          ...installedModels,
-        ].filter((m): m is string => Boolean(m && typeof m === 'string' && m.trim().length > 0)))
-      )
-
-  const variantStyles = {
-    cyan: 'bg-cyan-950/60 border-cyan-500/40 text-cyan-200 hover:bg-cyan-900/60 hover:border-cyan-500/60',
-    purple: 'bg-purple-950/60 border-purple-500/40 text-purple-200 hover:bg-purple-900/60 hover:border-purple-500/60',
-    sky: 'bg-sky-950/60 border-sky-500/40 text-sky-200 hover:bg-sky-900/60 hover:border-sky-500/60',
-    emerald: 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200 hover:bg-emerald-900/60 hover:border-emerald-500/60',
-    amber: 'bg-amber-950/60 border-amber-500/40 text-amber-200 hover:bg-amber-900/60 hover:border-amber-500/60',
-  }
-
-  const activeStyle = variantStyles[variant] || variantStyles.cyan
+  const allCandidateModels = buildOllamaModelOptions(installedModels, currentModel)
 
   return (
     <div className={`relative inline-block text-left ${className}`} ref={dropdownRef}>
@@ -125,12 +77,12 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        aria-label={`${featureLabel}: ${currentModel}${fallbackModel ? ` (Fallback: ${fallbackModel})` : ''}`}
-        title={`${featureLabel}: ${currentModel}${isCurrentModelUpdating ? ` • (${t('settings.updating')})` : ''}${fallbackModel ? ` • Fallback: ${fallbackModel}` : ''}`}
+        aria-label={`${featureLabel}: ${currentModel || 'Seleziona'}`}
+        title={`${featureLabel}: ${currentModel || 'Seleziona'}${isCurrentModelUpdating ? ` • (${t('settings.updating')})` : ''}`}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-mono font-semibold border transition-all focus-ring shadow-sm ${
           isCurrentModelUpdating
             ? 'bg-amber-950/70 border-amber-500/60 text-amber-200 ring-1 ring-amber-500/50 animate-pulse'
-            : activeStyle
+            : 'bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-slate-500'
         } ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-95'
         }`}
@@ -154,12 +106,6 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
           title={isCurrentModelUpdating ? t('settings.updating') : isInstalled ? t('common.ready') : t('common.download')}
         />
 
-        {fallbackModel && (
-          <span className="text-[9px] px-1 py-0.2 rounded bg-slate-900/80 text-slate-300 font-sans border border-slate-700/60 hidden md:inline">
-            🛡️ {fallbackModel.split(':')[0]}
-          </span>
-        )}
-
         <ChevronDown className={`w-3 h-3 transition-transform text-current opacity-70 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
@@ -174,7 +120,7 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
           <div className="px-3 py-1.5 text-[11px] font-sans text-slate-400 flex items-center justify-between">
             <span className="font-bold text-slate-200">{featureLabel}</span>
             <span className="text-[10px] text-slate-500 font-mono">
-              {filteredInstalledModels.length} {t('common.ready').toLowerCase()}
+              {installedModels.length} {t('common.ready').toLowerCase()}
             </span>
           </div>
 
@@ -183,7 +129,6 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
             {allCandidateModels.map((modelName) => {
               const installed = isOllamaModelInstalled(modelName, installedModels)
               const isSelected = modelName === currentModel
-              const isFallback = modelName === fallbackModel
               const isOptionUpdating = downloadProgress.isDownloading && downloadProgress.modelName === modelName
 
               return (
@@ -219,11 +164,6 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {isFallback && (
-                      <span className="text-[9px] font-sans px-1 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">
-                        Fallback
-                      </span>
-                    )}
                     {isOptionUpdating ? (
                       <span className="text-[9px] font-sans px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-700/60">
                         {downloadProgress.percent}%
@@ -245,30 +185,6 @@ export const QuickModelSelector: React.FC<QuickModelSelectorProps> = ({
             })}
           </div>
 
-          {/* Fallback configuration footer if supported */}
-          {onSelectFallbackModel && (
-            <div className="px-3 py-2 bg-slate-900/40 space-y-1.5 font-sans">
-              <div className="flex items-center justify-between text-[11px] gap-2">
-                <span className="text-slate-400 flex items-center gap-1 shrink-0">
-                  <ShieldAlert className="w-3 h-3 text-amber-400" /> Fallback OOM:
-                </span>
-                <select
-                  value={fallbackModel || ''}
-                  onChange={(e) => onSelectFallbackModel(e.target.value || undefined)}
-                  className="bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[10px] text-slate-200 font-mono max-w-[130px] truncate focus-ring"
-                >
-                  <option value="">(Disattivato)</option>
-                  {allCandidateModels
-                    .filter((m) => m !== currentModel)
-                    .map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

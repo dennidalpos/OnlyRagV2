@@ -396,7 +396,7 @@ function buildModelEnricher(
  * Builds the single coding-model list from the four legacy tier catalogs.
  *
  * Only WORKHORSE_CODING_CATALOG carries a meaningful `recommendedForProfiles`: it is the workhorse
- * ladder (legacy/entry -> 3b, midrange/highend -> 7b, extreme -> 14b). The other catalogs tagged
+ * ladder (legacy/entry -> 3b, midrange -> 4b, highend -> 7b, extreme -> 14b). The other catalogs tagged
  * profiles RELATIVE to the tier they filled — FAST listed qwen2.5-coder:3b as the pick for
  * 'highend'/'extreme' because it was the *fast* choice on a big machine, not the model that
  * machine should code with. Carrying those tags into one list made a 3b the default on a 24GB

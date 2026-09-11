@@ -1,62 +1,30 @@
-# Electron Main Process — OnlyRag V2
+# Electron Main
 
-Il processo principale di Electron implementa rigorosamente il pattern **Clean Architecture a 4 Livelli** all'interno di [`electron/core/`](../electron/core/), garantendo totale disaccoppiamento tra logica di presentazione IPC, casi d'uso applicativi, regole di business pure e adapter di infrastruttura.
+Il processo Main è organizzato in quattro layer sotto [`electron/core/`](../electron/core/).
 
----
+| Layer | Directory | Ruolo |
+| --- | --- | --- |
+| Presentation | `electron/core/presentation/` | Registra gli handler IPC e valida gli argomenti. |
+| Application | `electron/core/application/` | Coordina casi d'uso, task, agent, Sidecar e Ollama. |
+| Domain | `electron/core/domain/` e `shared/domain/` | Regole pure, contratti e algoritmi. |
+| Infrastructure | `electron/core/infrastructure/` | HTTP, filesystem, PowerShell/PTY e processi. |
 
-## 1. Struttura dei Layer
+## Avvio
 
-```
-Presentation Layer (electron/core/presentation/)
-       │
-       ▼
-Application Layer (electron/core/application/)
-       │
-       ▼
-Domain Layer (electron/core/domain/ & shared/domain/)
-       │
-       ▼
-Infrastructure Layer (electron/core/infrastructure/)
-```
+[`electron/main.ts`](../electron/main.ts):
 
-### 1.1. Presentation Layer (`electron/core/presentation/`)
-* **Responsabilità**: Registrazione dei canali `ipcMain.handle`, validazione degli argomenti in ingresso, gestione della sicurezza IPC e serializzazione delle risposte verso il Renderer.
-* **Moduli Chiave**: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`workspaceIpc.ts`](../electron/core/presentation/workspaceIpc.ts), [`sidecarIpc.ts`](../electron/core/presentation/sidecarIpc.ts), [`ollamaIpc.ts`](../electron/core/presentation/ollamaIpc.ts), [`diagnosticsIpc.ts`](../electron/core/presentation/diagnosticsIpc.ts), [`systemIpc.ts`](../electron/core/presentation/systemIpc.ts).
-* Per l'elenco completo dei 96 canali registrati, consultare [`api-ipc.md`](./api-ipc.md).
+1. imposta il nome app e protegge la singola istanza;
+2. crea una `BrowserWindow` con `nodeIntegration: false`, `contextIsolation: true` e `sandbox: true`;
+3. registra gli handler IPC;
+4. avvia il Sidecar fuori dalla modalità smoke;
+5. su `before-quit` annulla task, pulisce residui e arresta il Sidecar.
 
-### 1.2. Application Layer (`electron/core/application/`)
-* **Responsabilità**: Orchestrazione dei casi d'uso ad alto livello senza dettagli tecnologici diretti:
-  * [`agentOrchestratorAppService.ts`](../electron/core/application/agentOrchestratorAppService.ts): Gestisce il ciclo di vita completo del Coding Agent Studio, loop guards, emissione eventi e coordinamento dei tool.
-  * [`agentOrchestratorTurnDispatch.ts`](../electron/core/application/agentOrchestratorTurnDispatch.ts): Separa raccolta del contesto e singola proposta LLM nel ciclo governato dall'applicazione.
-  * [`agentToolExecutorService.ts`](../electron/core/application/agentToolExecutorService.ts): Esecuzione sicura dei tool atomici (`write_file`, `replace_chunk`, `run_command`, `git_commit`, `grep_search`).
-  * [`projectPlanningFacts.ts`](../electron/core/application/projectPlanningFacts.ts): Aggrega discovery, repo-map, verifiche e decisioni per intervista e planner senza cache tra workspace.
-  * [`interviewValidation.ts`](../shared/domain/agent/interviewValidation.ts): Valida lingua, corrispondenza e provenienza delle decisioni prima dell'arricchimento del piano.
-  * [`ollamaAppService.ts`](../electron/core/application/ollamaAppService.ts) & [`ollamaModelUpdateAppService.ts`](../electron/core/application/ollamaModelUpdateAppService.ts): Gestione download, aggiornamenti, benchmark ed eviction dei modelli.
-  * [`projectRegistryAppService.ts`](../electron/core/application/projectRegistryAppService.ts): Gestione persistente delle cartelle progetto e metadati `.onlyrag/`.
+Adapter principali:
 
-### 1.3. Domain Layer (`electron/core/domain/` e `shared/domain/`)
-* **Responsabilità**: Logica pura di business indipendente da qualsiasi framework o I/O.
-* **Componenti Puri Condivisi**: La logica condivisa tra Main e Renderer risiede in [`shared/domain/`](../shared/domain/) (es. `verificationCommandSafety.ts`, `milestoneDeliverableResolver.ts`, `hardwareProfileTiers.ts`, `contextWindowCalculator.ts`).
-* **Componenti Dominio Main**: [`agentExecutionPhase.ts`](../electron/core/domain/agent/agentExecutionPhase.ts), [`turnToolPolicy.ts`](../electron/core/domain/agent/turnToolPolicy.ts), [`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts), [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts), [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts), [`episodicMemoryCompactor.ts`](../electron/core/domain/agent/episodicMemoryCompactor.ts), [`ollamaStructuredResponse.ts`](../electron/core/domain/agent/ollamaStructuredResponse.ts), [`toolParser.ts`](../electron/core/domain/agent/toolParser.ts).
+- [`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts): `/api/tags`, `/api/ps`, chat/generazione, pull ed eviction.
+- [`sidecarHttpClient.ts`](../electron/core/infrastructure/http/sidecarHttpClient.ts): HTTP e NDJSON verso `:8000`.
+- [`persistentPowerShellSession.ts`](../electron/core/infrastructure/process/persistentPowerShellSession.ts): comandi persistenti con output e exit code.
+- [`sidecarProcessManager.ts`](../electron/core/infrastructure/process/sidecarProcessManager.ts): lifecycle e reclaim della porta.
+- [`diagnostics.ts`](../electron/diagnostics.ts) e [`logRedactor.ts`](../electron/logRedactor.ts): log e redazione.
 
-### 1.4. Infrastructure Layer (`electron/core/infrastructure/`)
-* **Responsabilità**: Implementazione concreta dell'I/O (chiamate HTTP, processi di sistema, file system):
-  * [`sidecarHttpClient.ts`](../electron/core/infrastructure/http/sidecarHttpClient.ts): Client HTTP centralizzato verso FastAPI `:8000`.
-  * [`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts): Client HTTP unificato verso Ollama `:11434`, incluse risposte strutturate `/api/chat`, eviction e query `/api/tags`/`/api/ps`.
-  * [`persistentPowerShellSession.ts`](../electron/core/infrastructure/process/persistentPowerShellSession.ts): Sessione PowerShell persistente con capture degli stream stdout/stderr, codici di uscita ed isolamento ambiente.
-  * [`sidecarProcessManager.ts`](../electron/core/infrastructure/process/sidecarProcessManager.ts): Gestione del ciclo di vita del processo Python (avvio, monitoraggio PID, reclaim della porta orfana `:8000`).
-
----
-
-## 2. Regole di Isolamento Architetturale
-
-1. **Zero Import Incrociati**: `src/` (Renderer) non importa MAI codice da `electron/`. `electron/` non importa MAI codice da `src/`.
-2. **Ponte Unico `shared/`**: Tutti i tipi, le interfacce contrattuali e la logica pura condivisa transitano unicamente da [`shared/types/`](../shared/types/) e [`shared/domain/`](../shared/domain/).
-3. **Verifica Continua**: Rispettata con zero cicli architetturali verificati via `npm run audit:cycles` (dpdm e skott).
-
----
-
-## 3. Diagnostica, Logging e Redaction
-
-- **Logger Unificato** ([`diagnostics.ts`](../electron/diagnostics.ts)): Gestisce il buffer di log in memoria e la persistenza rotativa su file `.log` in `logs/`.
-- **Log Redactor** ([`logRedactor.ts`](../electron/logRedactor.ts)): Sanifica automaticamente i log prima della scrittura su disco, mascherando URL sensibili, token e percorsi assoluti dell'utente per garantire privacy totale.
+I contratti IPC sono in [`api-ipc.md`](./api-ipc.md); le dipendenze tra layer sono controllate da `npm run audit:cycles`.

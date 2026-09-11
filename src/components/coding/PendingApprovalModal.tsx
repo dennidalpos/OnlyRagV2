@@ -18,7 +18,7 @@ interface PendingApproval {
 
 interface PendingApprovalModalProps {
   pendingApproval: PendingApproval | null
-  /** Called with no args for a full accept (or a non-file-mutation action); with the approved hunk ids for a partial accept. */
+  /** Accepts all, or the selected hunk indices for a partial approval. */
   onApprove: (approvedHunkIndices?: number[]) => void
   onReject: () => void
 }

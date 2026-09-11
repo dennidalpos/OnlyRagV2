@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { logger } from '../../../diagnostics'
 
-/** Thin, unvalidated filesystem primitives (existence checks, raw writes) for callers that already hold a resolved path. */
+/** Unvalidated filesystem primitives for callers with resolved paths. */
 export class DocumentIoRepository {
   exists(targetPath: string): boolean {
     return fs.existsSync(targetPath)

@@ -155,11 +155,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
 
   const loopTarget = parsedTool.parameters?.filePath || parsedTool.parameters?.command || parsedTool.parameters?.url
 
-  // The cases where "find something else to do" is the wrong advice, all decided in one place
-  // (planDirectiveArbiter.ts) so this channel and the plan block can never point the model at
-  // two different next actions in the same turn. There IS a single legal move in each of them
-  // — close the session, install what is missing, or run the project's own check — and the
-  // loop guard's advisory text would talk the model out of it.
+  // Keep loop advice aligned with the single directive selected by the arbiter.
   const planDirective = resolvePlanDirectiveForTurn(
     ctx.workspacePath,
     ctx.goalPlanner,

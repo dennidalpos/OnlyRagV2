@@ -8,7 +8,7 @@ describe('resolveModelContextLength', () => {
   })
 
   it('keeps the minimum context floor when a bad preference is supplied', () => {
-    expect(resolveModelContextLength('model', { model: 1024 }, 8192)).toBe(4096)
+    expect(resolveModelContextLength('model', { model: 1024 }, 8192)).toBe(2048)
   })
 
   it('allows a manual value above the hardware default up to the model maximum', () => {
@@ -20,6 +20,12 @@ describe('resolveModelContextLength', () => {
   })
 
   it('exposes powers of two and the exact model maximum', () => {
-    expect(getModelContextChoices(24576)).toEqual([4096, 8192, 16384, 24576])
+    expect(getModelContextChoices(24576)).toEqual([2048, 4096, 8192, 16384, 24576])
+  })
+
+  it('honours a real 2K model context without raising it to the generic floor', () => {
+    expect(resolveModelContextLength('small-model', undefined, 8192, 2048)).toBe(2048)
+    expect(resolveModelContextLength('small-model', { 'small-model': 4096 }, 8192, 2048)).toBe(2048)
+    expect(getModelContextChoices(2048)).toEqual([2048])
   })
 })

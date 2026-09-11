@@ -6,9 +6,9 @@ import { sidecarAppService } from '../application/sidecarAppService'
 export function registerDiagnosticsIpcHandlers() {
   ipcMain.handle('diagnostics:get-http-metrics', () => diagnosticsAppService.getHttpMetrics())
 
-  ipcMain.handle('diagnostics:run', async () => {
+  ipcMain.handle('diagnostics:run', async (_, host?: string) => {
     const sidecarState = await sidecarAppService.checkHealth()
-    return await runFullDiagnostics(sidecarState)
+    return await runFullDiagnostics(sidecarState, host)
   })
 
   ipcMain.handle('diagnostics:get-logs', async () => {

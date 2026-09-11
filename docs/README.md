@@ -1,40 +1,36 @@
-# OnlyRag V2 — Indice della Documentazione
+# Documentazione OnlyRag V2
 
-Questa directory costituisce l'unica fonte di verità (*source of truth*) tecnica e architetturale del repository OnlyRag V2. La documentazione è strutturata in modo modulare per ambiti di competenza verticali, sintetici e pratici.
+Documentazione tecnica breve, verificata contro il codice. I contratti prevalgono sulle descrizioni:
 
----
+- IPC: [`../electron/preload.ts`](../electron/preload.ts), handler in [`../electron/core/presentation/`](../electron/core/presentation/) e tipi in [`../shared/types/index.ts`](../shared/types/index.ts).
+- REST: [`../sidecar/main.py`](../sidecar/main.py), schemi in [`../sidecar/schemas.py`](../sidecar/schemas.py) e OpenAPI in [`../sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json).
+- Comandi: [`../package.json`](../package.json).
 
-## 1. Mappa dei Documenti per Ambito
+## Ambiti
 
-| Ambito | Documento Canonico | Descrizione |
-| :--- | :--- | :--- |
-| **Architettura Generale** | [`architecture.md`](./architecture.md) | Topologia multi-processo, Clean Architecture a 4 layer, Resource Coordinator e RAG flow. |
-| **Autonomous Coding Agent** | [`agent.md`](./agent.md) | Tool calling loop, circuit breakers, loop detector, authority milestone e compattazione memoria. |
-| **Qualifica Live Agent** | [`agent-live-testing.md`](./agent-live-testing.md) | Metodo, metriche CAS-23, limiti supportati e residui delle prove Ollama reali. |
-| **Razionali ed Evidenze** | [`code-rationales.md`](./code-rationales.md) | Diario delle evidenze empiriche, lezioni storiche delle live session e psicologia degli SLM compatti. |
-| **Pipeline RAG & Sidecar** | [`rag-sidecar.md`](./rag-sidecar.md) | Python FastAPI Sidecar, LanceDB embedded, OCR/Vision (RapidOCR vs LLM) e traduzione in-place. |
-| **Electron Main Process** | [`electron-main.md`](./electron-main.md) | Struttura dei 4 layer Main, isolamento con `shared/`, gestione processi (PowerShell, sidecar :8000). |
-| **Frontend React 19** | [`frontend.md`](./frontend.md) | Architettura Renderer, Zustand stores, core hooks, Monaco Editor e virtualizzazione timeline. |
-| **Contratti IPC** | [`api-ipc.md`](./api-ipc.md) | Riferimento verificato e completo di tutti i 96 canali IPC Main-Renderer. |
-| **REST API Sidecar** | [`api-rest.md`](./api-rest.md) | Riferimento degli endpoint REST del FastAPI Sidecar (`http://127.0.0.1:8000`). |
-| **Operazioni & Quality Gates** | [`operations.md`](./operations.md) | Prerequisiti ambiente, setup, catalogo comandi verificati, script PowerShell e packaging NSIS. |
-| **Dipendenze & Librerie** | [`libraries.md`](./libraries.md) | Dipendenze esterne vs implementazioni di dominio pure, audit licenze e sicurezza. |
-| **Backlog di Sviluppo** | [`../PROJECT_STATUS.json`](../PROJECT_STATUS.json) | Backlog canonico delle attività completate e pianificate. |
+| Ambito | Documento |
+| --- | --- |
+| Architettura e confini | [`architecture.md`](./architecture.md) |
+| Electron Main e processi | [`electron-main.md`](./electron-main.md) |
+| Renderer React | [`frontend.md`](./frontend.md) |
+| Coding Agent | [`agent.md`](./agent.md) |
+| IPC | [`api-ipc.md`](./api-ipc.md) |
+| REST Sidecar | [`api-rest.md`](./api-rest.md) |
+| RAG, OCR e traduzione | [`rag-sidecar.md`](./rag-sidecar.md) |
+| Setup, test e release | [`operations.md`](./operations.md) |
+| Dipendenze | [`libraries.md`](./libraries.md) |
+| Decisioni non ovvie | [`decisions.md`](./decisions.md) |
+| Verifica e limiti noti | [`verification.md`](./verification.md) |
+| Backlog | [`../PROJECT_STATUS.json`](../PROJECT_STATUS.json) |
 
----
+## Regole
 
-## 2. Regole di Manutenzione e Vincoli Contrattuali
+- Non duplicare payload o versioni qui: aggiornare prima codice, tipi o OpenAPI.
+- Ogni link locale e comando `npm run` documentato deve passare `npm run docs:check`.
+- Aggiornare la pagina dell'ambito interessato; evitare di riaprire diari storici o note duplicate.
 
-- **Specifiche OpenAPI Sidecar**: Il contratto OpenAPI machine-readable è versionato in [`../sidecar/contracts/openapi-2.3.0.json`](../sidecar/contracts/openapi-2.3.0.json). Si rigenera con `npm run generate:openapi` e si audita con `npm run test:sidecar`.
-- **Integrità dei Comandi e Link**: Ogni comando documentato deve esistere in [`../package.json`](../package.json). Il comando `npm run docs:check` valida automaticamente l'assenza di broken link e la validità dei comandi `npm run`.
-- **Riferimento Contratti**: [`api-ipc.md`](./api-ipc.md) e [`api-rest.md`](./api-rest.md) governano i contratti di interfaccia. Gli altri documenti descrivono il comportamento senza definire payload concorrenti.
+## Lettura rapida
 
----
-
-## 3. Percorsi di Lettura Consigliati
-
-- **Nuovo Contributore**: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md) → [`agent.md`](./agent.md).
-- **Integrazione API & IPC**: [`api-ipc.md`](./api-ipc.md) → [`api-rest.md`](./api-rest.md).
-- **Coding Agent Maintainer**: [`agent.md`](./agent.md) → [`agent-live-testing.md`](./agent-live-testing.md) → [`code-rationales.md`](./code-rationales.md).
-- **RAG & Search Specialist**: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).
-- **Quality & Release Engineer**: [`operations.md`](./operations.md) → [`libraries.md`](./libraries.md).
+- Nuovo contributore: [`operations.md`](./operations.md) → [`architecture.md`](./architecture.md).
+- Coding Agent: [`agent.md`](./agent.md) → [`api-ipc.md`](./api-ipc.md) → [`verification.md`](./verification.md).
+- Sidecar: [`rag-sidecar.md`](./rag-sidecar.md) → [`api-rest.md`](./api-rest.md).

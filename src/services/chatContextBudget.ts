@@ -181,5 +181,5 @@ export function resolveChatContextBudget(
   const isMinimal = declaredProfile === 'Auto' && isMinimalHardwareHost(facts)
   const budget = isMinimal ? MINIMAL_HOST_BUDGET : TIER_BUDGETS[profileTier]
 
-  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(4096, Math.floor(maxNumCtxOverride)) : budget.maxNumCtx }
+  return { profileTier, isMinimal, ...budget, maxNumCtx: maxNumCtxOverride ? Math.max(2048, Math.floor(maxNumCtxOverride)) : budget.maxNumCtx }
 }

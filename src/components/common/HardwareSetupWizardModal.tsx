@@ -21,8 +21,10 @@ import { WizardStepHardware } from '../wizard/WizardStepHardware'
 import { WizardStepRecommendedModels } from '../wizard/WizardStepRecommendedModels'
 import { WizardStepSummaryAndDownload } from '../wizard/WizardStepSummaryAndDownload'
 import { logger } from '../../lib/logger'
-import { selectWizardCodingSet } from '../../services/codingModelMatrix'
-import { buildCodingCatalogForWizard } from '../../../shared/domain/hardware/hardwareModelCatalog'
+import {
+  buildHardwareWizardModelOptions,
+  buildHardwareWizardModelSuite,
+} from '../../../shared/domain/hardware/hardwareModelCatalog'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -53,49 +55,17 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
 
   const downloadedModels = diagnostics?.ollama.models ?? []
 
-  const recCoding =
-    recommendations.codingModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.codingModels[0]?.modelName ||
-    'qwen2.5-coder:7b'
-  const recChat =
-    recommendations.chatTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.chatTierModels[0]?.modelName ||
-    'llama3.1:8b'
-  const recTrans =
-    recommendations.translationTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.translationTierModels[0]?.modelName ||
-    'qwen2.5:7b'
-  const recVision =
-    recommendations.visionTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.visionTierModels[0]?.modelName ||
-    'llama3.2-vision:11b'
-  const recEmbedding =
-    recommendations.embeddingTierModels.find((m) => m.isRecommended)?.modelName ||
-    recommendations.embeddingTierModels[0]?.modelName ||
-    'nomic-embed-text'
-
-  const verifiedCodingSet = selectWizardCodingSet(
-    buildCodingCatalogForWizard(),
-    recommendations.profileTier
-  ).map((entry) => entry.modelName)
+  const recommendedSuite = buildHardwareWizardModelSuite(recommendations.profileTier)
+  const wizardModelOptions = buildHardwareWizardModelOptions()
 
   const [selectedCoding, setSelectedCoding] = useState<string>(
-    settings.codingModel || settings.defaultModel || recCoding
-  )
-  const [selectedCodingFallback, setSelectedCodingFallback] = useState<string | undefined>(
-    settings.codingFallbackModel
+    settings.codingModel || settings.defaultModel || recommendedSuite.coding
   )
   const [selectedChat, setSelectedChat] = useState<string>(
-    settings.chatModel || recChat
-  )
-  const [selectedChatFallback, setSelectedChatFallback] = useState<string | undefined>(
-    settings.chatFallbackModel
+    settings.chatModel || recommendedSuite.chat
   )
   const [selectedTranslation, setSelectedTranslation] = useState<string>(
-    settings.translationModel || recTrans
-  )
-  const [selectedTranslationFallback, setSelectedTranslationFallback] = useState<string | undefined>(
-    settings.translationFallbackModel
+    settings.translationModel || recommendedSuite.translation
   )
   const [selectedMedical, setSelectedMedical] = useState<string>(
     settings.medicalModel || ''
@@ -104,10 +74,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     settings.legalModel || ''
   )
   const [selectedVision, setSelectedVision] = useState<string>(
-    settings.visionModel || recVision
+    settings.visionModel || recommendedSuite.vision
   )
   const [selectedEmbedding, setSelectedEmbedding] = useState<string>(
-    settings.embeddingModel || recEmbedding
+    settings.embeddingModel || recommendedSuite.embedding
   )
 
   const [ocrEngine, setOcrEngine] = useState<'native_cuda' | 'vision_model'>(
@@ -141,11 +111,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           settings.codingModel || settings.defaultModel
         )
       }
-      setSelectedCodingFallback(settings.codingFallbackModel)
       if (settings.chatModel) setSelectedChat(settings.chatModel)
-      setSelectedChatFallback(settings.chatFallbackModel)
       if (settings.translationModel) setSelectedTranslation(settings.translationModel)
-      setSelectedTranslationFallback(settings.translationFallbackModel)
       setSelectedMedical(settings.medicalModel || '')
       setSelectedLegal(settings.legalModel || '')
       if (settings.visionModel) setSelectedVision(settings.visionModel)
@@ -165,11 +132,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     onUpdateSettings({
       defaultModel: selectedCoding || settings.defaultModel,
       codingModel: selectedCoding || settings.codingModel,
-      codingFallbackModel: selectedCodingFallback,
       chatModel: selectedChat || settings.chatModel,
-      chatFallbackModel: selectedChatFallback,
       translationModel: selectedTranslation || settings.translationModel,
-      translationFallbackModel: selectedTranslationFallback,
       medicalModel: selectedMedical || settings.medicalModel,
       legalModel: selectedLegal || settings.legalModel,
       visionModel: selectedVision || settings.visionModel,
@@ -182,11 +146,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }, [
     onUpdateSettings,
     selectedCoding,
-    selectedCodingFallback,
     selectedChat,
-    selectedChatFallback,
     selectedTranslation,
-    selectedTranslationFallback,
     selectedMedical,
     selectedLegal,
     selectedVision,
@@ -241,11 +202,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const uniqueSelectedModels = Array.from(
     new Set([
       selectedCoding,
-      ...(selectedCodingFallback ? [selectedCodingFallback] : []),
       selectedChat,
-      ...(selectedChatFallback ? [selectedChatFallback] : []),
       selectedTranslation,
-      ...(selectedTranslationFallback ? [selectedTranslationFallback] : []),
       selectedMedical,
       selectedLegal,
       selectedVision,
@@ -412,23 +370,23 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   }
 
   const handleAutoApplyRecommended = () => {
-    setSelectedCoding(recCoding)
-    setSelectedChat(recChat)
-    setSelectedTranslation(recTrans)
-    setSelectedVision(recVision)
-    setSelectedEmbedding(recEmbedding)
+    setSelectedCoding(recommendedSuite.coding)
+    setSelectedChat(recommendedSuite.chat)
+    setSelectedTranslation(recommendedSuite.translation)
+    setSelectedVision(recommendedSuite.vision)
+    setSelectedEmbedding(recommendedSuite.embedding)
     setOcrEngine('native_cuda')
     setPullErrorDetail(null)
     setFailedModelIndex(null)
     setSkippedModels([])
     setDiskCheck(null)
     onUpdateSettings({
-      defaultModel: recCoding,
-      codingModel: recCoding,
-      chatModel: recChat,
-      translationModel: recTrans,
-      visionModel: recVision,
-      embeddingModel: recEmbedding,
+      defaultModel: recommendedSuite.coding,
+      codingModel: recommendedSuite.coding,
+      chatModel: recommendedSuite.chat,
+      translationModel: recommendedSuite.translation,
+      visionModel: recommendedSuite.vision,
+      embeddingModel: recommendedSuite.embedding,
       ocrEngine: 'native_cuda',
       enableSoundEffects,
       hasCompletedInitialSetup: true,
@@ -440,11 +398,8 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     onUpdateSettings({
       defaultModel: selectedCoding,
       codingModel: selectedCoding,
-      codingFallbackModel: selectedCodingFallback,
       chatModel: selectedChat,
-      chatFallbackModel: selectedChatFallback,
       translationModel: selectedTranslation,
-      translationFallbackModel: selectedTranslationFallback,
       medicalModel: selectedMedical,
       legalModel: selectedLegal,
       visionModel: selectedVision,
@@ -479,7 +434,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               </h2>
               <p className="text-xs text-slate-400">
                 {step === 1 && 'Scansione profilo hardware e stato del runtime Ollama'}
-                {step === 2 && 'Selezione della suite di modelli raccomandata (Workhorse & Fallback)'}
+                {step === 2 && 'Selezione della suite di modelli raccomandata'}
                 {step === 3 && 'Riepilogo finale e download batch dei modelli mancanti'}
               </p>
             </div>
@@ -503,7 +458,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
           <nav aria-label="Wizard Steps" className="grid grid-cols-3 gap-2">
             {[
               { id: 1, label: '1. Scansione Hardware', icon: Cpu, desc: 'Rilevamento GPU e RAM' },
-              { id: 2, label: '2. Modelli Consigliati', icon: Sparkles, desc: 'Suite Workhorse & Fallback' },
+              { id: 2, label: '2. Modelli Consigliati', icon: Sparkles, desc: 'Suite hardware consigliata' },
               { id: 3, label: '3. Download & Avvio', icon: Download, desc: 'Riepilogo e Setup' },
             ].map((st) => {
               const isCurrent = step === st.id
@@ -562,59 +517,30 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
             <WizardStepRecommendedModels
               downloadedModels={downloadedModels}
               getModelFit={getModelFit}
+              recommendedModels={recommendedSuite}
+              modelOptions={wizardModelOptions}
               selectedCoding={selectedCoding}
-              selectedCodingFallback={selectedCodingFallback}
               onChangeCoding={setSelectedCoding}
-              onChangeCodingFallback={setSelectedCodingFallback}
-              verifiedCodingSet={verifiedCodingSet}
-              onApplyVerifiedSet={() => {
-                if (verifiedCodingSet[0]) setSelectedCoding(verifiedCodingSet[0])
-                if (verifiedCodingSet[1]) setSelectedCodingFallback(verifiedCodingSet[1])
-              }}
-              codingPresetOptions={[
-                'qwen2.5-coder:7b',
-                'qwen3:8b',
-                'qwen2.5-coder:14b',
-                'qwen3:14b',
-                'gpt-oss:20b',
-                'codestral:22b',
-                'qwen2.5-coder:32b',
-                'deepseek-coder:6.7b',
-                'llama3.1:8b',
-              ]}
               selectedChat={selectedChat}
-              selectedChatFallback={selectedChatFallback}
               onChangeChat={setSelectedChat}
-              onChangeChatFallback={setSelectedChatFallback}
-              chatPresetOptions={['llama3.1:8b', 'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b']}
               selectedTranslation={selectedTranslation}
-              selectedTranslationFallback={selectedTranslationFallback}
               onChangeTranslation={setSelectedTranslation}
-              onChangeTranslationFallback={setSelectedTranslationFallback}
-              translationPresetOptions={['qwen2.5:7b', 'llama3.1:8b', 'aya-expanse:8b', 'gemma2:2b', 'gemma2:9b']}
               selectedVision={selectedVision}
               onChangeVision={setSelectedVision}
-              visionPresetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b']}
               selectedEmbedding={selectedEmbedding}
               onChangeEmbedding={setSelectedEmbedding}
-              embeddingPresetOptions={['nomic-embed-text', 'bge-m3', 'bge-large', 'all-minilm']}
               selectedMedical={selectedMedical}
               onChangeMedical={(m) => setSelectedMedical(m || '')}
-              medicalPresetOptions={['adrienbrault/biomistral-7b:Q4_K_M', 'meditron:7b']}
               selectedLegal={selectedLegal}
               onChangeLegal={(m) => setSelectedLegal(m || '')}
-              legalPresetOptions={['llama3.1:8b', 'mistral:7b', 'command-r:35b']}
             />
           )}
 
           {step === 3 && (
             <WizardStepSummaryAndDownload
               selectedCoding={selectedCoding}
-              selectedCodingFallback={selectedCodingFallback}
               selectedChat={selectedChat}
-              selectedChatFallback={selectedChatFallback}
               selectedTranslation={selectedTranslation}
-              selectedTranslationFallback={selectedTranslationFallback}
               selectedMedical={selectedMedical}
               selectedLegal={selectedLegal}
               selectedVision={selectedVision}

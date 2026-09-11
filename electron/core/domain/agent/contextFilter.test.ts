@@ -66,7 +66,7 @@ describe('contextFilter domain logic & AppSec protection', () => {
     expect(relativeEscape.safePath).toBeNull()
     expect(relativeEscape.error).toContain('Directory Traversal Blocked')
 
-    // Explicit absolute user directories outside workspace are allowed when no workspaceRoot constraint is given (e.g. Standalone exploration)
+    // Absolute paths are allowed without a workspace constraint.
     const userDocPath = validatePathSafety('C:\\Users\\Utente\\Il mio Drive\\document.pdf', null)
     expect(userDocPath.safePath).not.toBeNull()
     expect(userDocPath.error).toBeUndefined()

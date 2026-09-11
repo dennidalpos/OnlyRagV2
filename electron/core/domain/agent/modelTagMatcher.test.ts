@@ -120,6 +120,7 @@ describe('ModelTagMatcher Domain Unit Tests', () => {
       expect(isOllamaModelInstalled('qwen2.5-coder:14b', installed)).toBe(false)
       expect(isOllamaModelInstalled('llama3.1:8b', installed)).toBe(false)
       expect(isOllamaModelInstalled('mistral:7b', installed)).toBe(false)
+      expect(isOllamaModelInstalled('qwen3:4b', ['qwen3-vl:4b'])).toBe(false)
     })
   })
 })

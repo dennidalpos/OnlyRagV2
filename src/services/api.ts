@@ -17,10 +17,10 @@ import { logger } from '../lib/logger'
  * Provides safe wrappers around Electron IPC API with automated telemetry logging.
  */
 export const apiService = {
-  async runDiagnostics(): Promise<DiagnosticsData | null> {
+  async runDiagnostics(host?: string): Promise<DiagnosticsData | null> {
     if (!window.electronAPI) return null
     try {
-      return await window.electronAPI.runDiagnostics()
+      return await window.electronAPI.runDiagnostics(host)
     } catch (err: any) {
       logger.error('ApiService:Diagnostics', `Failed to run system diagnostics: ${err.message}`)
       return null

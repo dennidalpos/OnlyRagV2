@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentPlan, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
 
 const api: IElectronAPI = {
-  runDiagnostics: () => ipcRenderer.invoke('diagnostics:run'),
+  runDiagnostics: (host?: string) => ipcRenderer.invoke('diagnostics:run', host),
   getLogs: () => ipcRenderer.invoke('diagnostics:get-logs'),
   clearLogs: () => ipcRenderer.invoke('diagnostics:clear-logs'),
   getLogFilePath: () => ipcRenderer.invoke('diagnostics:get-log-filepath'),

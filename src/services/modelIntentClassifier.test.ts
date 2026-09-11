@@ -9,7 +9,6 @@ import {
   isLegalModel,
   isModelForIntent,
   getModelIntents,
-  filterModelsByIntent,
   normalizeModelNameForIntent,
 } from './modelIntentClassifier'
 
@@ -155,62 +154,6 @@ describe('modelIntentClassifier Unit Tests', () => {
       expect(isModelForIntent('llama3.1:8b', 'chat')).toBe(true)
       expect(isModelForIntent('meditron:7b', 'medical')).toBe(true)
       expect(isModelForIntent('command-r:35b', 'legal')).toBe(true)
-    })
-  })
-
-  describe('filterModelsByIntent', () => {
-    const installedOllamaModels = [
-      'qwen2.5-coder:7b',
-      'llama3.2-vision:11b',
-      'nomic-embed-text:latest',
-      'bge-m3:latest',
-      'mistral:7b',
-      'adrienbrault/biomistral-7b:Q4_K_M',
-      'moondream:latest',
-      'deepseek-r1:8b',
-    ]
-
-    it('should filter Vision OCR list to only vision models and presets', () => {
-      const visionList = filterModelsByIntent(installedOllamaModels, 'vision', {
-        includeCurrent: 'llama3.2-vision:11b',
-        presetOptions: ['llama3.2-vision:11b', 'minicpm-v:8b', 'llava:7b'],
-      })
-
-      expect(visionList).toContain('llama3.2-vision:11b')
-      expect(visionList).toContain('moondream:latest')
-      expect(visionList).toContain('minicpm-v:8b')
-      expect(visionList).toContain('llava:7b')
-
-      // Text models and embeddings MUST be excluded
-      expect(visionList).not.toContain('qwen2.5-coder:7b')
-      expect(visionList).not.toContain('nomic-embed-text:latest')
-      expect(visionList).not.toContain('bge-m3:latest')
-      expect(visionList).not.toContain('mistral:7b')
-      expect(visionList).not.toContain('deepseek-r1:8b')
-    })
-
-    it('should filter Embedding list to only embedding models and presets', () => {
-      const embeddingList = filterModelsByIntent(installedOllamaModels, 'embedding', {
-        includeCurrent: 'nomic-embed-text',
-        presetOptions: ['nomic-embed-text', 'bge-m3'],
-      })
-
-      expect(embeddingList).toContain('nomic-embed-text:latest')
-      expect(embeddingList).toContain('bge-m3:latest')
-      expect(embeddingList).toContain('nomic-embed-text')
-
-      expect(embeddingList).not.toContain('qwen2.5-coder:7b')
-      expect(embeddingList).not.toContain('llama3.2-vision:11b')
-      expect(embeddingList).not.toContain('mistral:7b')
-    })
-
-    it('should always preserve custom current model even if unclassified', () => {
-      const customModel = 'custom-user-finetune:v1'
-      const list = filterModelsByIntent(installedOllamaModels, 'coding', {
-        includeCurrent: customModel,
-      })
-
-      expect(list).toContain(customModel)
     })
   })
 

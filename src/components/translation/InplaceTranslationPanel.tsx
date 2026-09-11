@@ -12,21 +12,23 @@ import {
   X,
   FileText,
 } from 'lucide-react'
-import { AppSettings } from '../../types'
+import { AppSettings, DiagnosticsData } from '../../types'
 import { useInplaceTranslation, LANGUAGES } from '../../hooks/useTranslation'
 import { useTranslation } from '../../i18n'
 
 interface InplaceTranslationPanelProps {
   settings?: AppSettings
+  diagnostics?: DiagnosticsData | null
   onUpdateSettings?: (newSettings: Partial<AppSettings>) => void
 }
 
 export const InplaceTranslationPanel: React.FC<InplaceTranslationPanelProps> = ({
   settings,
+  diagnostics,
   onUpdateSettings,
 }) => {
   const { t } = useTranslation()
-  const inp = useInplaceTranslation(settings)
+  const inp = useInplaceTranslation(settings, diagnostics)
 
   const isFormValid =
     Boolean(inp.selectedDoc) &&

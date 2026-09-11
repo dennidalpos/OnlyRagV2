@@ -17,17 +17,17 @@ export type ToolCallRejectionSink = (rejection: ToolCallRejection) => void
 function sanitizeAndParseJson(raw: string): any {
   if (!raw || !raw.trim()) return null
 
-  // 1. Direct parse attempt for clean JSON
+  // Fast path for valid JSON.
   try {
     return JSON.parse(raw)
   } catch (_) {
-    // Fallback parsing strategy using jsonrepair for LLM outputs
+    // Try repair for model output.
   }
 
   try {
     let clean = raw.trim()
 
-    // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>, including unclosed tags at text boundaries)
+    // Remove reasoning blocks before extraction.
     clean = clean.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '').trim()
 
     // 2. Normalize Windows file paths with single backslashes (e.g. "filePath": "C:\Users\test" -> "C:\\Users\\test")
@@ -36,7 +36,7 @@ function sanitizeAndParseJson(raw: string): any {
       return `${keyPart}"${fixedSlashes}"`
     })
 
-    // 3. Battle-tested jsonrepair repairs unescaped newlines, trailing commas, single quotes, template strings, missing braces
+    // Repair common model JSON errors.
     const repaired = jsonrepair(clean)
     return JSON.parse(repaired)
   } catch (err: any) {
@@ -47,20 +47,7 @@ function sanitizeAndParseJson(raw: string): any {
   }
 }
 
-/**
- * Returns the single JSON object starting at `startIdx`, ending at its matching brace.
- *
- * The raw-JSON scan below used to take everything from the first brace to the LAST brace in
- * the response, which is one object only when the model emitted one. A model that emits
- * several in a row — qwen2.5-coder:7b did exactly this at step 86 of
- * coding_agent_audit.log session-1787497654743-4enx, three `{"name":..,"arguments":..}`
- * objects separated by blank lines — produced a span that is not valid JSON at all, so the
- * whole turn was recorded as "no tool call" and the session gave up two steps later.
- *
- * Quoted spans and escapes are tracked so a brace inside file content (`function App() {`,
- * which is the common case for write_file) does not close the object early. Returns null on
- * a truncated object, leaving the caller to fall back to its greedy span.
- */
+/** Returns the balanced JSON object starting at `startIdx`, or null if truncated. */
 function sliceBalancedObject(text: string, startIdx: number): string | null {
   let depth = 0
   let inString = false
@@ -96,14 +83,13 @@ function sliceBalancedObject(text: string, startIdx: number): string | null {
 function extractToolCallFromText(cleanText: string, onRejection?: ToolCallRejectionSink): AgentToolCall | null {
   if (!cleanText || typeof cleanText !== 'string') return null
 
-  // 1. Check for JSON block enclosed in ```json ... ```, <tool_call>...</tool_call>, or generic ``` ... ```
+  // Prefer fenced and tagged tool-call blocks.
   const toolCallMatch =
     cleanText.match(/<tool_call>([\s\S]*?)<\/tool_call>/i) ||
     cleanText.match(/```json\s*([\s\S]*?)\s*```/i) ||
     cleanText.match(/```\s*([\s\S]*?)\s*```/i)
 
-  // Candidates are tried in order until one yields a valid tool call, so a response holding
-  // several JSON objects still executes its first one instead of counting as no call at all.
+  // Try the first candidate that validates.
   const candidates: string[] = []
   let jsonStr = toolCallMatch ? toolCallMatch[1].trim() : ''
 
@@ -298,8 +284,7 @@ function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
 export function parseAgentToolCall(text: string, onRejection?: ToolCallRejectionSink): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 
-  // 1. Strip reasoning blocks (<think>...</think>, <thought>...</thought>, including unclosed tags at text boundaries) to prevent
-  // accidental capture of sample tool calls generated in model reasoning traces
+  // Ignore tool-call examples inside reasoning traces.
   const cleanText = text
     .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
     .replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '')

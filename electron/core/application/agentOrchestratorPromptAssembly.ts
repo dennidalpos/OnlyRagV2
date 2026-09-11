@@ -210,10 +210,7 @@ export function buildCurrentOperationContext(
 }
 
 export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: ModelSelection, compiledHistoryBlock: string) {
-  // One decision, arbitrated in planDirectiveArbiter.ts, for the channel that reaches the
-  // model on every single turn. The states it selects between are the ones in which the plan
-  // block's standing directives assert something false — and the one in which they assert
-  // nothing at all, leaving `write_file` as the only action the model is ever pointed at.
+  // Use one arbiter decision for both the plan and tool policy.
   const directive = resolvePlanDirectiveForTurn(
     ctx.workspacePath,
     ctx.goalPlanner,
@@ -228,27 +225,14 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
     .filter(Boolean)
     .join('\n\n')
 
-  // The same decision, spent twice. `directive.kind` was computed on every turn and discarded;
-  // it already answers which of the optional blocks below this turn can use. See
-  // turnContextPolicy.ts — the plan block above and the tool history are never candidates.
+  // Apply the directive to the optional context blocks.
   const policy = resolveTurnContextPolicy(directive.kind)
   const omitted = omittedBlockNames(policy)
   if (omitted.length > 0) {
     ctx.emitLog('info', `🎯 Context policy [${directive.kind}]: ${policy.rationale} — omitting ${omitted.join(', ')}.`)
   }
 
-  // A directive that orders "rewrite this file so it stops importing X" is only executable by a
-  // model that can see the file. In session live-full-task of 2026-08-25T12:11 the model called
-  // `read_file` zero times in fifty steps, and no prompt in that session carried a pinned-files
-  // or active-file block: the live probe is headless, so it pins nothing and has no editor. The
-  // model rewrote the file from nothing and produced a 208-byte stub — a blind rewrite deletes
-  // the file's content instead of removing one import from it, which puts the problem straight
-  // back for the next turn.
-  //
-  // The arbiter names the files (rewriteTargets) but is pure domain and cannot read them. This
-  // is the same principle as every other injection in this codebase: the system holds an
-  // objective datum the model cannot deduce, so it hands the datum over rather than issuing an
-  // instruction that assumes the model already has it (blueprint §6.2.1).
+  // Rewrite directives expose the target file; version conflicts require a fresh read.
   const requiredReadPath = ctx.responseInterpreterState.pendingVersionConflictReadPath
   const turnFiles = requiredReadPath
     ? { targets: [requiredReadPath], reason: 'the file whose previous edit used a stale version' }
@@ -276,8 +260,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       ? ctx.skillsBlock
       : await skillAppService.getContextSkillsBlock(ctx.skillMatchContext, ctx.workspacePath, 3, ctx.skillMatchingOptions)
 
-  // The debt tracker rides the attached-context channel, so it follows the same flag. Nothing is
-  // lost by withholding it: SESSION_TRACKER.md is on disk and is re-read on the next focus turn.
+  // SESSION_TRACKER.md is persisted and re-read on the next focus turn.
   let debtTrackerBlock = ''
   if (ctx.workspacePath && policy.includeAttachedRag) {
     try {

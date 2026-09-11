@@ -6,7 +6,7 @@ export interface GitStatusAndDiffResult {
   diffText: string
 }
 
-/** Thin git CLI wrapper: argv-array execFileSync for commit (injection-safe commit message), execSync for read-only inspection commands. */
+/** Git CLI wrapper with argv-based commits and read-only inspection commands. */
 export class GitCliRepository {
   commit(cwd: string, message: string): string {
     execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15000 })

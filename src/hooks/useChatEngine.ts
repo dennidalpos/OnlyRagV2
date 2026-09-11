@@ -11,6 +11,7 @@ import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
+import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -58,17 +59,20 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
   // detected host instead of a single hardcoded budget — see chatContextBudget.ts.
   const hardwareFacts = useMemo(() => extractHardwareFacts(diagnostics), [diagnostics])
   const hardwareDefault = useMemo(() => resolveMaxContextTokens('Auto', hardwareFacts), [hardwareFacts])
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
+  const selectedModel = settings.chatModel || settings.defaultModel || 'llama3.2'
   const contextBudget = useMemo(
     () => resolveChatContextBudget(
       hardwareFacts,
       'Auto',
       resolveModelContextLength(
-        settings.chatModel || settings.defaultModel || 'llama3.2',
+        selectedModel,
         settings.modelContextLengths,
-        hardwareDefault
+        hardwareDefault,
+        modelMetrics[selectedModel]?.contextLength
       )
     ),
-    [hardwareFacts, hardwareDefault, settings.chatModel, settings.defaultModel, settings.modelContextLengths]
+    [hardwareFacts, hardwareDefault, modelMetrics, selectedModel, settings.modelContextLengths]
   )
   const budgetRef = useRef(contextBudget)
   budgetRef.current = contextBudget

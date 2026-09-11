@@ -7,8 +7,8 @@
 
 import { AgentActionLog } from '../../types'
 
-export function getStepModelName(message?: string, fallbackModelName?: string): string {
-  if (!message) return fallbackModelName || 'LLM'
+export function getStepModelName(message?: string, defaultModelName?: string): string {
+  if (!message) return defaultModelName || 'LLM'
 
   const consultingMatch = message.match(/Consulting LLM \(([^)]+)\)/i)
   if (consultingMatch && consultingMatch[1]) {
@@ -21,7 +21,6 @@ export function getStepModelName(message?: string, fallbackModelName?: string): 
   }
 
   const bracketMatch =
-    message.match(/fallback to \[([^\]]+)\]/i) ||
     message.match(/Escalating to heavy tier \[([^\]]+)\]/i) ||
     message.match(/Primary model \[([^\]]+)\]/i) ||
     message.match(/Intermediate model \[([^\]]+)\]/i)
@@ -30,7 +29,7 @@ export function getStepModelName(message?: string, fallbackModelName?: string): 
     return bracketMatch[1].trim()
   }
 
-  return fallbackModelName || 'LLM'
+  return defaultModelName || 'LLM'
 }
 
 export function getBadgeLang(filename?: string): { label: string; color: string } {

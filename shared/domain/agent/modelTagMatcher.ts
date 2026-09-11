@@ -155,5 +155,13 @@ export function findMatchingInstalledModel(target: string, available: string[]):
  * Accurately determines if a target Ollama model tag is installed locally.
  */
 export function isOllamaModelInstalled(targetModel: string, downloadedModels: string[]): boolean {
-  return findMatchingInstalledModel(targetModel, downloadedModels) !== null
+  const target = parseModelTagComponents(targetModel)
+  if (!target.normalized) return false
+
+  return downloadedModels.some((downloadedModel) => {
+    const installed = parseModelTagComponents(downloadedModel)
+    if (!installed.normalized || installed.baseName !== target.baseName) return false
+    if (!target.tag || target.tag === 'latest' || !installed.tag || installed.tag === 'latest') return true
+    return isTagCompatible(target.tag, installed.tag)
+  })
 }

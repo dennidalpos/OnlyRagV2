@@ -10,16 +10,7 @@ function delay(ms: number): Promise<void> {
 
 const RETRY_ERRORS = new Set(['EPERM', 'EBUSY', 'EACCES'])
 
-/**
- * Windows-resilient atomic file write.
- *
- * Guarantees:
- * 1. Writes to a unique temp sibling file first (`.tmp-<pid>-<time>-<rand>`).
- * 2. Queues concurrent writes to the same destination path strictly in serial.
- * 3. Retries rename operations up to 5 times with exponential backoff on transient Windows locks (EPERM / EBUSY / EACCES).
- * 4. Falls back to copyFile + unlink if rename is disallowed by the OS.
- * 5. Cleans up temporary files in all execution paths.
- */
+/** Atomically writes a file with per-path serialization and Windows lock retries. */
 export async function safeAtomicWrite(filePath: string, content: string | Buffer): Promise<boolean> {
   const normalizedPath = path.resolve(filePath)
   const previousOp = fileWriteQueues.get(normalizedPath) || Promise.resolve()

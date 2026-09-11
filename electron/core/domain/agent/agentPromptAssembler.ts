@@ -21,37 +21,22 @@ export interface PromptAssemblerInput {
   projectContextMapStr?: string
   settings: AppSettings
   runtimeOpts: OllamaRuntimeOptions
-  /** When true, omits the prose tool schema block — the model receives it via native tool-calling instead (see AGT2). */
+  /** Omits the prose schema when native tool calling is active. */
   toolCallingCapable?: boolean
   /** Application-selected tools for this proposal. */
   availableToolNames?: readonly SupportedToolName[]
 }
 
 export interface AssembledPrompt {
-  /** Full prompt text (stableSection + historyBlock + turnSuffix), for logging, num_ctx sizing, and as the default wire payload. */
+  /** Full prompt used for logging, sizing and transport. */
   prompt: string
-  /**
-   * Everything except tool-history and per-turn status: system prompt, plan, pinned/active
-   * files, skills, RAG/repo-map background. Identical across turns whenever none of these
-   * inputs changed — used by agentOrchestratorAppService.ts to detect when it's safe to
-   * reuse Ollama's `context` continuation instead of resending the full prompt (see AGT1).
-   */
+  /** Stable prompt prefix excluding tool history and per-turn status. */
   stableSection: string
-  /**
-   * Tool-execution history block. Grows turn over turn as new steps complete; positioned
-   * last (after stableSection) precisely so that new content is appended at the tail rather
-   * than inserted mid-prompt — a prerequisite for detecting an append-only delta.
-   */
+  /** Tool history appended after the stable prompt prefix. */
   historyBlock: string
-  /** Small always-resend per-turn text (recovery hint + step counter) — never part of the cached prefix. */
+  /** Per-turn recovery hint and step counter. */
   turnSuffix: string
-  /**
-   * The individual, still-disjoint pieces that were concatenated into `stableSection`.
-   * HeuristicContextCompactor must be fed THESE, never `stableSection` itself: passing the
-   * joined section as its `systemPrompt` while also passing the same pieces separately counts
-   * every byte twice, which both trips the watermark spuriously and drives the compactor's
-   * `remaining` budget negative — silently zeroing the history allocation.
-   */
+  /** Disjoint pieces used to build and compact `stableSection`. */
   segments: {
     baseSystemPrompt: string
     planSection: string

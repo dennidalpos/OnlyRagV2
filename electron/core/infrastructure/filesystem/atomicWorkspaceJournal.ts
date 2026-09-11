@@ -21,14 +21,10 @@ export class AtomicWorkspaceJournal {
   private backupMap = new Map<string, FileBackupEntry>()
   /** Pre-step snapshots accumulated since the last endStep() call. */
   private currentStepBackup = new Map<string, FileBackupEntry>()
-  /** Snapshot of the most recently ENDED step, ready for rollbackLastStep(). Null once rolled back or after a session-wide reset. */
+  /** Last completed step snapshot, if available for rollback. */
   private lastStepBackup: Map<string, FileBackupEntry> | null = null
 
-  /**
-   * Records initial state of target file prior to any mutating operation, both against the
-   * session-wide baseline (if not already tracked this session) and the current step's
-   * baseline (if not already tracked this step).
-   */
+  /** Records the file in the session and current-step baselines. */
   public recordBeforeModification(filePath: string): void {
     if (!filePath || typeof filePath !== 'string') return
     const resolved = path.resolve(filePath)

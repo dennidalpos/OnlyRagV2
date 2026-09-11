@@ -37,7 +37,7 @@ export class AgentToolFileRepository {
     fs.renameSync(srcPath, dstPath)
   }
 
-  /** Depth-bounded directory tree scan, formatted as `[DIR]`/`[FILE]` lines relative to rootPath. Assumes rootPath exists. */
+  /** Depth-bounded tree formatted as `[DIR]`/`[FILE]` relative paths. */
   listRecursive(rootPath: string, maxDepth: number, ignoreDirs: Set<string>): string[] {
     const discovered: string[] = []
     const walk = (currentDir: string, depth: number) => {
@@ -59,7 +59,7 @@ export class AgentToolFileRepository {
     return discovered
   }
 
-  /** Stat + binary sniff (first 1KB, null-byte heuristic) + line count for a text file. Null if the path does not exist. */
+  /** Returns file stats, text/binary detection and line count; null when absent. */
   getFileInfo(absolutePath: string): FileInfoResult | null {
     if (!fs.existsSync(absolutePath)) return null
     const stats = fs.statSync(absolutePath)

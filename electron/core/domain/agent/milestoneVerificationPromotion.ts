@@ -1,8 +1,4 @@
-/**
- * Milestone Verification Promotion.
- * Decides which milestones a passing verification command has actually proven based on disk deliverables.
- * Prevents false verification on mere file presence without passing verification (see docs/code-rationales.md).
- */
+/** Promotes only milestones with matching proof and satisfied deliverables. */
 
 import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
@@ -49,11 +45,7 @@ export function awaitingVerificationNote(evidencePath: string): string {
   return `Artifact present: "${evidencePath}" and every file this milestone names are on disk. ${AWAITING_VERIFICATION_MARKER}; presence alone proves neither compilation nor behavior.`
 }
 
-/**
- * Directive emitted when only part of a milestone's deliverables are present on disk.
- * Explicitly names missing files to direct the model to the next action rather than re-writing existing files.
- * Detailed live-run failure mode analysis preserved in docs/code-rationales.md.
- */
+/** Names missing deliverables so the model does not rewrite completed files. */
 export function partialDeliveryDirective(
   milestoneId: string,
   writtenPath: string,

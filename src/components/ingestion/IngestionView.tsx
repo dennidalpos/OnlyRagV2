@@ -266,24 +266,15 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(({ setting
           {settings?.ocrEngine === 'vision_model' && (
             <>
               <QuickModelSelector
-                currentModel={settings?.visionModel || 'llama3.2-vision:11b'}
-                fallbackModel={settings?.visionFallbackModel}
+                currentModel={settings?.visionModel || ''}
                 installedModels={diagnostics?.ollama?.models || []}
-                presetOptions={['llama3.2-vision:11b', 'llama3.2-vision:latest', 'minicpm-v:8b', 'llava:7b', 'llava:13b', 'moondream:latest']}
-                intent="vision"
                 onSelectModel={(newModel) => {
                   onUpdateSettings?.({
                     visionModel: newModel,
                   })
                 }}
-                onSelectFallbackModel={(fallback) => {
-                  onUpdateSettings?.({
-                    visionFallbackModel: fallback,
-                  })
-                }}
                 icon={Eye}
                 featureLabel="Vision & OCR"
-                variant="amber"
               />
 
               <button

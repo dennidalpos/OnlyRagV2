@@ -77,24 +77,15 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(({ set
         <div className="flex items-center gap-2.5">
           {/* Quick Translation Model Selector */}
           <QuickModelSelector
-            currentModel={settings?.translationModel || settings?.defaultModel || 'llama3.2'}
-            fallbackModel={settings?.translationFallbackModel}
+            currentModel={settings?.translationModel || settings?.defaultModel || ''}
             installedModels={diagnostics?.ollama?.models || []}
-            presetOptions={['qwen2.5:7b', 'llama3.1:8b', 'llama3.2:3b', 'mistral:7b', 'gemma2:9b']}
-            intent="translation"
             onSelectModel={(newModel) => {
               onUpdateSettings?.({
                 translationModel: newModel,
               })
             }}
-            onSelectFallbackModel={(fallback) => {
-              onUpdateSettings?.({
-                translationFallbackModel: fallback,
-              })
-            }}
             icon={Languages}
             featureLabel="Traduzione Documenti"
-            variant="sky"
           />
 
           {/* System Prompt Customization Trigger */}
@@ -190,7 +181,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(({ set
       </div>
 
       {activeTool === 'inplace' ? (
-        <InplaceTranslationPanel settings={settings} onUpdateSettings={onUpdateSettings} />
+        <InplaceTranslationPanel settings={settings} diagnostics={diagnostics} onUpdateSettings={onUpdateSettings} />
       ) : (
         <>
           {/* Active Translation Progress Bar Banner */}

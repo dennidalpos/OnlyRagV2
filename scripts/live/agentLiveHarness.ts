@@ -228,10 +228,8 @@ export function readFinalMilestones(workspacePath: string, sessionId: string): P
  * What a run actually delivered: milestone evidence and the application-owned completion
  * status, plus the context needed to read a red run.
  *
- * Everything here comes from the persisted session state above and from the summary the loop
- * returned. Nothing parses logs/coding_agent_audit.log: that file is append-only and shared
- * between runs (docs/agent-live-testing.md §2), so per-run assertions built on it would be
- * reading someone else's session.
+ * Everything comes from persisted session state and the loop summary. The audit log is append-only
+ * and shared between runs, so it is not used for per-run assertions.
  */
 export interface LiveRunMetrics {
   stepsUsed: number

@@ -15,7 +15,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   hasCompletedInitialSetup: false,
 }
 
-export const MIN_MODEL_CONTEXT_LENGTH = 4096
+export const MIN_MODEL_CONTEXT_LENGTH = 2048
 
 export function sanitizeModelContextLengths(raw: unknown): Record<string, number> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
@@ -98,14 +98,8 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     'medicalModel',
     'legalModel',
     'codingModel',
-    'codingFallbackModel',
     'visionModel',
-    'visionFallbackModel',
     'embeddingModel',
-    'chatFallbackModel',
-    'translationFallbackModel',
-    'medicalFallbackModel',
-    'legalFallbackModel',
     'customWorkspacePath',
     'translationOutputFolder',
   ]

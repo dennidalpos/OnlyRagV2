@@ -42,7 +42,7 @@ describe('agentLogMessageUtils Unit Tests', () => {
       expect(getStepModelName('Escalating to heavy tier [qwen2.5-coder:14b]')).toBe('qwen2.5-coder:14b')
     })
 
-    it('should return fallbackModelName when no model is recognized', () => {
+    it('should return the default model when no model is recognized', () => {
       expect(getStepModelName('Ordinary info message', 'default-model')).toBe('default-model')
       expect(getStepModelName('', 'default-model')).toBe('default-model')
     })

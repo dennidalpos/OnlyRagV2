@@ -27,7 +27,7 @@ export interface DiagnosticsData {
     url: string
     modelsCount: number
     models: string[]
-    /** Per-model metadata from /api/tags' `details` field (parameter_size, quantization_level, ...), when available. */
+    /** Optional metadata from `/api/tags`. */
     modelDetails?: Record<string, RunningModelDetails>
     error?: string
   }
@@ -203,15 +203,8 @@ export interface AppSettings {
   medicalModel?: string
   legalModel?: string
   codingModel?: string
-  /** Optional fallback model for auto-healing on OOM or critical crashes during coding agent execution */
-  codingFallbackModel?: string
   visionModel?: string
-  visionFallbackModel?: string
   embeddingModel?: string
-  chatFallbackModel?: string
-  translationFallbackModel?: string
-  medicalFallbackModel?: string
-  legalFallbackModel?: string
   allowTerminalExecution?: boolean
   allowFileModifications?: boolean
   /** Agent capability policy. Undefined preserves the legacy unrestricted mode until configured. */
@@ -223,7 +216,7 @@ export interface AppSettings {
   ollamaMode?: 'local' | 'remote'
   customWorkspacePath?: string
   noWorkspaceMode?: boolean
-  /** Default folder for the translation module's exported documents; unset falls back to the interactive save dialog. */
+  /** Default translation export folder; unset uses the save dialog. */
   translationOutputFolder?: string
   /**
    * User-edited system prompts, keyed by prompt node id ('coding:master', 'chat', ...).
@@ -528,7 +521,7 @@ export interface PromptHistoryIndexPayload {
 }
 
 export interface IElectronAPI {
-  runDiagnostics: () => Promise<DiagnosticsData>
+  runDiagnostics: (host?: string) => Promise<DiagnosticsData>
   getLogs: () => Promise<LogEntry[]>
   clearLogs: () => Promise<boolean>
   getLogFilePath: () => Promise<string>

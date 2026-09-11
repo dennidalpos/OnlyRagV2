@@ -113,7 +113,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(updated.maxToolCallSteps).toBe(0)
   })
 
-  it('sanitizes per-model context preferences with a 4096-token floor', () => {
+  it('sanitizes per-model context preferences with a 2048-token floor', () => {
     const sanitized = sanitizeAppSettings({
       modelContextLengths: {
         ' qwen2.5-coder:7b ': 8192.9,
@@ -121,7 +121,7 @@ describe('AppSettingsDomain Unit Tests', () => {
         invalid: Number.NaN,
       },
     })
-    expect(sanitized.modelContextLengths).toEqual({ 'qwen2.5-coder:7b': 8192 })
+    expect(sanitized.modelContextLengths).toEqual({ 'qwen2.5-coder:7b': 8192, tooSmall: 2048 })
   })
 
   it('preserves verifyBeforeFinish, enablePrePlanInterview and bounds-checks agentSessionTimeoutMinutes', () => {

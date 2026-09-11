@@ -8,6 +8,9 @@ import { useTranslation as useI18n } from '../i18n'
 import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from '../services/globalTaskLock'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
+import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
+import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 
 export const LANGUAGES = [
   'English',
@@ -86,6 +89,8 @@ export function extractPageMarkdown(fullMarkdown: string, pageNumber: number): s
 
 export function useDocumentTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
   const { t } = useI18n()
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [sourceLang, setSourceLang] = useState('Italian')
@@ -218,6 +223,12 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
       let accumulatedResults = ''
 
       const modelToUse = settings?.translationModel || settings?.defaultModel || 'llama3.2'
+      const modelContext = resolveModelContextLength(
+        modelToUse,
+        settings?.modelContextLengths,
+        hardwareDefault,
+        modelMetrics[modelToUse]?.contextLength
+      )
 
       // The language pair goes in as template variables. It used to be appended as a second
       // "Strict Directives" block that restated markdown preservation and the no-preamble rule
@@ -247,7 +258,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
             // Live token streaming into Monaco editor
             const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
             setTranslatedMarkdown(livePreview)
-          })
+          }, { num_ctx: modelContext })
         }
 
         if (abortTranslationRef.current) break
@@ -334,8 +345,10 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   }
 }
 
-export function useInplaceTranslation(settings?: AppSettings) {
+export function useInplaceTranslation(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
   const { t } = useI18n()
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
+  const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
   const [sourceLang, setSourceLang] = useState('Italian')
   const [targetLang, setTargetLang] = useState('English')
@@ -431,7 +444,12 @@ export function useInplaceTranslation(settings?: AppSettings) {
         modelToUse,
         false,
         targetDir,
-        modelToUse ? resolveModelContextLength(modelToUse, settings?.modelContextLengths, 4096) : undefined
+        modelToUse ? resolveModelContextLength(
+          modelToUse,
+          settings?.modelContextLengths,
+          hardwareDefault,
+          modelMetrics[modelToUse]?.contextLength
+        ) : undefined
       )
 
       if (res.success && res.data) {

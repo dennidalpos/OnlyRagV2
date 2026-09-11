@@ -8,11 +8,11 @@
 - **Hard Constraints**: Strict process isolation (Renderer/Main share only via `shared/`). CPU offload and the resulting latency are acceptable when required for response correctness; retain safeguards against CUDA OOM, timeouts, anomalies, loops, and unsafe eviction.
 
 ## 2. Verified Commands
-Executed and verified in session. Date: 2026-09-09.
+Commands were verified on 2026-09-09; refreshed results are dated in the relevant row.
 
 | Workflow | Command | Shell / Cwd | Notes / Examples |
 | :--- | :--- | :--- | :--- |
-| **Fast Verification** | `npm run test:fast` | pwsh / root | 228 files, 1892 tests |
+| **Fast Verification** | `npm run test:fast` | pwsh / root | 231 files, 1867 tests (2026-09-11) |
 | **Static Quality** | `npm run quality:static` | pwsh / root | Biome lint all; format-check newly added files |
 | **Full Verification** | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` | pwsh / root | Fail-fast on dependency cycles; known dead-code finding W2.07 |
 | **Single Target** | `npx vitest run <path>` | pwsh / root | Vitest target |

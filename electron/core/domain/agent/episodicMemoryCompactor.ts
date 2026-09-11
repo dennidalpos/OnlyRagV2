@@ -202,19 +202,7 @@ export class EpisodicMemoryCompactor {
     return [...this.episodes]
   }
 
-  /**
-   * The output of the most recent FAILED run of a command, or null when there is none.
-   *
-   * Exists so a plan-block directive can carry the diagnostic itself instead of pointing at it.
-   * verificationAttemptTracker used to say "do what that directive says", meaning one sitting in
-   * the tool history: measured 2026-08-25T20:24, the model could not follow the indirection and
-   * spent steps 34 to 50 reissuing a blocked `write_file` on src/index.html, seventeen turns to
-   * the ceiling. The two channels have different lifetimes, so a cross-reference between them is
-   * a pointer that can dangle.
-   *
-   * Loose matching on the command, for the reason isVerificationFailing matches loosely: the
-   * model does not always spell it identically.
-   */
+  /** Returns the latest failed output for a matching tool and command. */
   public lastFailureOutputFor(tool: string, commandNeedle: string): string | null {
     const needle = (commandNeedle || '').trim().toLowerCase()
     if (!needle) return null

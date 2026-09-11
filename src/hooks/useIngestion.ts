@@ -10,6 +10,7 @@ import { resolveNodeTemplate } from '../constants/promptConfig'
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
+import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 
 /**
  * The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR.
@@ -68,6 +69,7 @@ export function getTotalLines(content: string): number {
 
 export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
   const { t } = useI18n()
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
   const [selectedDoc, setSelectedDoc] = useState<IngestedDocument | null>(null)
@@ -420,7 +422,12 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
         visionPrompt,
         false,
         undefined,
-        resolveModelContextLength(visionModelName, settings?.modelContextLengths, hardwareDefault)
+        resolveModelContextLength(
+          visionModelName,
+          settings?.modelContextLengths,
+          hardwareDefault,
+          modelMetrics[visionModelName]?.contextLength
+        )
       )
 
       if (isCancelledRef.current) return

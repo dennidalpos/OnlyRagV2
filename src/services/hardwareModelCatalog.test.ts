@@ -5,6 +5,7 @@ import {
   COMPACT_CODING_CATALOG,
   WORKHORSE_CODING_CATALOG,
   LARGE_CODING_CATALOG,
+  buildHardwareWizardModelSuite,
 } from '../../shared/domain/hardware/hardwareModelCatalog'
 
 describe('hardwareModelCatalog', () => {
@@ -39,5 +40,43 @@ describe('hardwareModelCatalog', () => {
       const curated = WORKHORSE_CODING_CATALOG.filter((e) => e.recommendedForProfiles.includes(profile))
       expect(curated.length, `no workhorse model curated for '${profile}'`).toBeGreaterThanOrEqual(1)
     }
+  })
+
+  it('should provide one complete core suite for every hardware profile', () => {
+    expect(buildHardwareWizardModelSuite('legacy')).toEqual({
+      coding: 'qwen2.5-coder:3b',
+      chat: 'llama3.2:3b',
+      translation: 'qwen2.5:1.5b',
+      vision: 'moondream:latest',
+      embedding: 'nomic-embed-text:latest',
+    })
+    expect(buildHardwareWizardModelSuite('entry')).toEqual({
+      coding: 'qwen2.5-coder:3b',
+      chat: 'llama3.2:3b',
+      translation: 'qwen2.5:1.5b',
+      vision: 'moondream:latest',
+      embedding: 'nomic-embed-text:latest',
+    })
+    expect(buildHardwareWizardModelSuite('midrange')).toEqual({
+      coding: 'qwen3:4b',
+      chat: 'qwen3:4b',
+      translation: 'qwen2.5:3b',
+      vision: 'qwen2.5vl:3b',
+      embedding: 'nomic-embed-text:latest',
+    })
+    expect(buildHardwareWizardModelSuite('highend')).toEqual({
+      coding: 'qwen2.5-coder:7b',
+      chat: 'qwen3:8b',
+      translation: 'qwen2.5:7b',
+      vision: 'qwen2.5vl:7b',
+      embedding: 'bge-m3:latest',
+    })
+    expect(buildHardwareWizardModelSuite('extreme')).toEqual({
+      coding: 'qwen2.5-coder:14b',
+      chat: 'qwen3:14b',
+      translation: 'qwen3:14b',
+      vision: 'llama3.2-vision:11b',
+      embedding: 'bge-m3:latest',
+    })
   })
 })

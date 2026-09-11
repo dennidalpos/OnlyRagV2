@@ -1,28 +1,4 @@
-/**
- * Plan Directive Arbiter.
- *
- * Decides the ONE directive the plan block carries this turn.
- *
- * The surveillance grew to roughly fifteen guards that all write into the same prompt, and
- * none of them decided what the model should read *now*: whoever appended last won. Three
- * contradictions surfaced in a single session — the closure directive under "advance to the
- * next unfinished step"; "no command can prove it" on a milestone that declared a verification
- * command; focus directive 2 promising that writing files would close a milestone that named
- * none. Each was fixed by replacing instead of appending, one at a time. This module is the
- * point that does the deciding once, so a fourth case has somewhere to be resolved instead of
- * somewhere to be discovered.
- *
- * It also supplies the state that was missing entirely. `hasVerifiedBuild` is raised only by
- * `run_command` / `run_tests`, or by application-owned closure running the verification itself.
- * Historically, that check was trapped behind a finish gate while focus directive 4 forbade
- * `finish` until every milestone was verified, which only a passing verification could achieve.
- * In three live runs of fifty steps
- * the model therefore never ran a single command: `write_file` was the only legal move it had.
- * `verification_due` names the project's own command as the next action, in the channel that
- * repeats every turn, before the model is looping rather than after.
- *
- * Pure domain: the caller supplies every fact from disk.
- */
+/** Selects one plan directive per turn from caller-supplied workspace facts. */
 
 import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
@@ -203,7 +179,6 @@ export function buildUndeclaredDependencyDirective(undeclared: readonly Undeclar
 /**
  * Directive emitted when a package install repeatedly fails (e.g. invalid name or unresolvable conflict).
  * Instructs model to rewrite the importing file using `write_file` on a single deterministic target.
- * Detailed live-run failure mode analysis preserved in docs/code-rationales.md.
  */
 export function buildUninstallablePackageDirective(undeclared: readonly UndeclaredDependency[]): string {
   // Pin one deterministic target until resolved to prevent target oscillation across turns.

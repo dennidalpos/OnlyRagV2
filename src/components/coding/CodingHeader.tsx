@@ -71,36 +71,17 @@ export const CodingHeader: React.FC<CodingHeaderProps> = ({
 
       {/* Right: Quick Model Selector, System Prompt, Skills & Toolchain Popover */}
       <div className="flex items-center gap-2.5 text-xs">
-        {/* Quick Coding Model Selector with Fallback */}
+        {/* Quick Coding Model Selector */}
         <QuickModelSelector
-          currentModel={activeModel || settings?.codingModel || 'qwen2.5-coder:7b'}
-          fallbackModel={settings?.codingFallbackModel}
+          currentModel={activeModel || settings?.codingModel || ''}
           installedModels={installedModels}
-          presetOptions={[
-            'qwen2.5-coder:7b',
-            'qwen3:8b',
-            'qwen2.5-coder:14b',
-            'qwen3:14b',
-            'gpt-oss:20b',
-            'codestral:22b',
-            'qwen2.5-coder:32b',
-            'deepseek-coder:6.7b',
-            'llama3.1:8b',
-          ]}
-          intent="coding"
           onSelectModel={(newModel) => {
             onUpdateSettings?.({
               codingModel: newModel,
             })
           }}
-          onSelectFallbackModel={(fallback) => {
-            onUpdateSettings?.({
-              codingFallbackModel: fallback,
-            })
-          }}
           icon={Code}
           featureLabel="AI Coding Agent"
-          variant="cyan"
         />
 
         {/* System Prompt Customization Trigger */}

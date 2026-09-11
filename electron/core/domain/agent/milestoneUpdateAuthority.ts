@@ -1,8 +1,4 @@
-/**
- * Milestone Update Authority.
- * Evidence on disk outranks model self-report: prevents models from marking milestones
- * failed or demoting verified ones when deliverables exist on disk (see docs/code-rationales.md).
- */
+/** Evidence on disk outranks model self-report when updating milestones. */
 
 import type { MilestoneDeliverableStatus } from '../../../../shared/domain/agent/milestoneDeliverableResolver'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'

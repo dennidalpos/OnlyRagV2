@@ -5,7 +5,7 @@ import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../
 
 export interface ApprovalResponse {
   approved: boolean
-  /** Indices (into groupDiffIntoHunks' result) of the hunks the user approved, for a partial (not all-or-nothing) file-mutation approval. */
+  /** Approved hunk indices for partial file-mutation approval. */
   approvedHunkIndices?: number[]
 }
 

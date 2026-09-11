@@ -5,11 +5,8 @@ import { getModelApproxSize } from '../../services/hardwareRecommendationEngine'
 
 export interface WizardStepSummaryAndDownloadProps {
   selectedCoding: string
-  selectedCodingFallback?: string
   selectedChat: string
-  selectedChatFallback?: string
   selectedTranslation: string
-  selectedTranslationFallback?: string
   selectedMedical?: string
   selectedLegal?: string
   selectedVision: string
@@ -31,11 +28,8 @@ export interface WizardStepSummaryAndDownloadProps {
 
 export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownloadProps> = ({
   selectedCoding,
-  selectedCodingFallback,
   selectedChat,
-  selectedChatFallback,
   selectedTranslation,
-  selectedTranslationFallback,
   selectedMedical,
   selectedLegal,
   selectedVision,
@@ -69,13 +63,6 @@ export const WizardStepSummaryAndDownload: React.FC<WizardStepSummaryAndDownload
             <span className="text-cyan-300 font-medium">💻 Coding Workhorse:</span>
             <span className="font-mono text-slate-200 font-semibold">{selectedCoding || t('common.none')}</span>
           </div>
-
-          {selectedCodingFallback && (
-            <div className="p-2 rounded-lg bg-slate-900 border border-amber-900/40 flex justify-between items-center">
-              <span className="text-amber-300 font-medium">🛡️ Coding Fallback:</span>
-              <span className="font-mono text-amber-200 font-semibold">{selectedCodingFallback}</span>
-            </div>
-          )}
 
           <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex justify-between items-center">
             <span className="text-purple-300 font-medium">💬 RAG Chat:</span>

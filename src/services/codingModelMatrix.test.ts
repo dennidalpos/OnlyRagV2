@@ -4,13 +4,7 @@ import {
   declaresToolCalling,
   findVerificationEvidence,
   resolveVerificationStatus,
-  selectWizardCodingSet,
 } from './codingModelMatrix'
-import type { HardwareProfileTier } from '../../shared/domain/hardware/hardwareProfileTiers'
-
-function entry(modelName: string, profiles: HardwareProfileTier[]) {
-  return { modelName, recommendedForProfiles: profiles }
-}
 
 describe('resolveVerificationStatus', () => {
   it('marks a model the app has actually been run against as verified', () => {
@@ -84,37 +78,5 @@ describe('declaresToolCalling', () => {
     expect(declaresToolCalling(['completion', 'tools'])).toBe(true)
     expect(declaresToolCalling(['completion'])).toBe(false)
     expect(declaresToolCalling(undefined)).toBe(false)
-  })
-})
-
-describe('selectWizardCodingSet', () => {
-  const catalog = [
-    entry('deepseek-coder:6.7b', ['midrange']),
-    entry('qwen2.5-coder:7b', ['midrange', 'highend']),
-    entry('qwen2.5-coder:3b', ['legacy', 'entry']),
-    entry('qwen3-coder:30b', []),
-  ]
-
-  it('returns only what fits the tier', () => {
-    expect(selectWizardCodingSet(catalog, 'entry').map((e) => e.modelName)).toEqual(['qwen2.5-coder:3b'])
-  })
-
-  it('puts the verified model first, so one click installs the tested one', () => {
-    expect(selectWizardCodingSet(catalog, 'midrange').map((e) => e.modelName)).toEqual([
-      'qwen2.5-coder:7b',
-      'deepseek-coder:6.7b',
-    ])
-  })
-
-  // A wizard that installs a model too large for the machine has done real harm; "nothing fits"
-  // is an answer the UI can act on.
-  it('returns nothing rather than a model that does not fit', () => {
-    expect(selectWizardCodingSet([entry('qwen3-coder:30b', ['extreme'])], 'legacy')).toEqual([])
-  })
-
-  it('does not mutate the catalog it was given', () => {
-    const original = catalog.map((e) => e.modelName)
-    selectWizardCodingSet(catalog, 'midrange')
-    expect(catalog.map((e) => e.modelName)).toEqual(original)
   })
 })

@@ -35,9 +35,10 @@ import { useTranslation, Language } from '../../i18n'
 import { apiService } from '../../services/api'
 import { compareContextAllocation } from '../../services/contextAllocation'
 import { ModelContextControl } from './ModelContextControl'
-import { extractHardwareFacts } from '../../services/hardwareRecommendationEngine'
+import { extractHardwareFacts, isOllamaModelInstalled } from '../../services/hardwareRecommendationEngine'
 import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { resolveOllamaRuntimeMemory } from '../../../shared/domain/hardware/ollamaRuntimeMemory'
+import { buildOllamaModelOptions, getOllamaModelIdentity } from '../../services/ollamaModelOptions'
 
 interface SettingsViewProps {
   diagnostics: DiagnosticsData | null
@@ -76,20 +77,34 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   const modelUsage = React.useMemo(() => {
     const usage = new Map<string, string[]>()
     const labels: Record<string, string> = {
-      codingModel: 'Coding', codingFallbackModel: 'Coding fallback',
-      chatModel: 'Chat/RAG', chatFallbackModel: 'Chat fallback',
-      translationModel: 'Traduzione', translationFallbackModel: 'Traduzione fallback',
+      codingModel: 'Coding',
+      chatModel: 'Chat/RAG',
+      translationModel: 'Traduzione',
       visionModel: 'Vision/OCR', embeddingModel: 'Embedding',
-      medicalModel: 'Medical', medicalFallbackModel: 'Medical fallback',
-      legalModel: 'Legal', legalFallbackModel: 'Legal fallback',
+      medicalModel: 'Medical', legalModel: 'Legal',
     }
     for (const [key, label] of Object.entries(labels)) {
       const value = settings[key as keyof AppSettings]
       if (typeof value !== 'string' || !value) continue
-      usage.set(value, [...(usage.get(value) || []), label])
+      const identity = getOllamaModelIdentity(value)
+      usage.set(identity, [...(usage.get(identity) || []), label])
     }
     return usage
   }, [settings])
+
+  const configuredModels = React.useMemo(() => [
+    settings.defaultModel,
+    settings.codingModel,
+    settings.chatModel,
+    settings.translationModel,
+    settings.visionModel,
+    settings.embeddingModel,
+    settings.medicalModel,
+    settings.legalModel,
+  ].filter((model): model is string => Boolean(model?.trim())), [settings])
+  const installedModels = diagnostics?.ollama.models || []
+  const configuredMissingModels = configuredModels.filter((model) => !isOllamaModelInstalled(model, installedModels))
+  const displayedModels = buildOllamaModelOptions(installedModels, undefined, configuredMissingModels)
 
   useEffect(() => {
     let cancelled = false
@@ -449,10 +464,11 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
               </div>
             </div>
 
-            {diagnostics?.ollama.models && diagnostics.ollama.models.length > 0 ? (
+            {displayedModels.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {diagnostics.ollama.models.map((modelName) => {
+                {displayedModels.map((modelName) => {
                   const m = modelMetrics[modelName]
+                  const isInstalled = isOllamaModelInstalled(modelName, installedModels)
                   const runningInfo = runningModels.find((r) => r.name === modelName || r.model === modelName)
                   const isRunning = Boolean(runningInfo)
                   const hasUpdate = Boolean(updateAvailableMap[modelName])
@@ -460,7 +476,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                   const memory = resolveOllamaRuntimeMemory(runningInfo?.size, runningInfo?.size_vram)
                   const requestedContext = settings.modelContextLengths?.[modelName]
                   const contextStatus = compareContextAllocation(requestedContext, runningInfo?.context_length)
-                  const usedByModules = modelUsage.get(modelName) || []
+                  const usedByModules = modelUsage.get(getOllamaModelIdentity(modelName)) || []
 
                   return (
                     <div
@@ -470,6 +486,8 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                           ? 'bg-amber-950/20 border-amber-500/50 shadow-md shadow-amber-950/30 ring-1 ring-amber-500/40'
                           : isRunning
                           ? 'bg-cyan-950/30 border-cyan-500/50 shadow-md shadow-cyan-950/30 ring-1 ring-cyan-500/30'
+                          : !isInstalled
+                          ? 'bg-amber-950/20 border-amber-500/50 shadow-md shadow-amber-950/20 ring-1 ring-amber-500/20'
                           : usedByModules.length > 0
                           ? 'bg-emerald-950/20 border-emerald-500/50 shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/20'
                           : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
@@ -488,6 +506,10 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                           ) : isRunning ? (
                             <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shrink-0 flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> In Memoria
+                            </span>
+                          ) : !isInstalled ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono text-amber-300 bg-amber-950/60 border border-amber-700/60 shrink-0">
+                              Non installato
                             </span>
                           ) : usedByModules.length > 0 ? (
                             <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shrink-0">
@@ -534,7 +556,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                       </div>
 
                       {/* Update Available Badge & Action */}
-                      {hasUpdate && !isUpdatingThis && (
+                      {hasUpdate && isInstalled && !isUpdatingThis && (
                         <div className="flex items-center justify-between p-2 rounded-lg bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs">
                           <div className="flex items-center gap-1.5 font-semibold text-[11px]">
                             <ArrowUpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -623,16 +645,20 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
                           >
                             <PowerOff className="w-3 h-3" /> Scarica RAM
                           </button>
-                        ) : (
+                        ) : isInstalled ? (
                           <span className="text-[10px] text-slate-400 font-mono">Modello pronto</span>
+                        ) : (
+                          <span className="text-[10px] text-amber-300 font-mono">Usa il campo sopra per scaricarlo</span>
                         )}
 
-                        <InlineDestructiveConfirm
-                          itemLabel={modelName}
-                          iconClassName="w-4 h-4"
-                          actionLabel={t('settings.deleteModel')}
-                          onConfirm={() => s.handleDeleteModel(modelName)}
-                        />
+                        {isInstalled && (
+                          <InlineDestructiveConfirm
+                            itemLabel={modelName}
+                            iconClassName="w-4 h-4"
+                            actionLabel={t('settings.deleteModel')}
+                            onConfirm={() => s.handleDeleteModel(modelName)}
+                          />
+                        )}
                       </div>
                     </div>
                   )

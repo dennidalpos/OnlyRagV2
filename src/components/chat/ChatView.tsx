@@ -130,26 +130,17 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({ settings, diagnos
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Quick Chat Model Selector with Fallback */}
+          {/* Quick Chat Model Selector */}
           <QuickModelSelector
-            currentModel={settings.chatModel || settings.defaultModel || 'llama3.2'}
-            fallbackModel={settings.chatFallbackModel}
+            currentModel={settings.chatModel || settings.defaultModel || ''}
             installedModels={diagnostics?.ollama?.models || []}
-            presetOptions={['llama3.2:3b', 'llama3.1:8b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:9b', 'phi3.5:3.8b']}
-            intent="chat"
             onSelectModel={(newModel) => {
               onUpdateSettings?.({
                 chatModel: newModel,
               })
             }}
-            onSelectFallbackModel={(fallback) => {
-              onUpdateSettings?.({
-                chatFallbackModel: fallback,
-              })
-            }}
             icon={MessageSquare}
             featureLabel="RAG Chat"
-            variant="purple"
           />
 
           {/* System Prompt Button */}

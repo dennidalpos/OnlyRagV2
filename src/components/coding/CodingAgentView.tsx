@@ -23,6 +23,7 @@ import { SlmDiagnosticsPanel } from './SlmDiagnosticsPanel'
 import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
 import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
 import type { AgentMode } from '../../types'
+import { logger } from '../../lib/logger'
 
 export type { AgentMode }
 
@@ -104,9 +105,12 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
   }
 
   const handleGeneratePlanFromPrompt = async () => {
-    if (!c.agentPrompt.trim()) return
+    const prompt = c.agentPrompt.trim()
+    if (!prompt) return
     setActiveRightTab('plan')
-    await planApproval.startPlanFlow(c.agentPrompt, undefined, c.currentStep)
+    c.addActionLog('info', 'Plan generation requested.', undefined, { category: 'plan_generation' })
+    logger.info('CodingAgentView', `Plan generation requested (prompt length: ${prompt.length}).`)
+    await planApproval.startPlanFlow(prompt, undefined, c.currentStep)
   }
 
   useEffect(() => {

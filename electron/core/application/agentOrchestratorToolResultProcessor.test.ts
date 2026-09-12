@@ -49,6 +49,21 @@ describe('file version recovery', () => {
     expect(recoveryState.versionedReadEvidence.filePath).toBe('src/App.tsx')
   })
 
+  it('does not require an impossible read before creating an absent file', () => {
+    const recoveryState: any = { pendingVersionConflictReadPath: 'src/Old.tsx' }
+    expect(updateVersionConflictRecovery({
+      toolRes: {
+        outcome: 'rejected',
+        outputForHistory: '[FILE VERSION CONFLICT: tailwind.config.js]\nExpected: sha256:stale\nCurrent: missing\nNo content was written.',
+        logMessage: 'Conflict',
+      },
+      parsedTool: { tool: 'write_file', parameters: { filePath: 'tailwind.config.js' } },
+      recoveryState,
+    })).toEqual({ changed: true })
+    expect(recoveryState.pendingVersionConflictReadPath).toBeUndefined()
+    expect(recoveryState.versionedReadEvidence).toBeUndefined()
+  })
+
   it('applies read evidence once and still rejects an external modification', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-version-recovery-'))
     try {

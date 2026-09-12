@@ -1,3 +1,37 @@
 {
-  "todos": []
+  "todos": [
+    "[P0] Prevent ingestion cancellation and lifecycle cleanup from deleting source documents; separate sourcePath from temporaryResiduePath and cover cancel, quit, and crash paths.",
+    "[P0] Give every Agent Coding command and event immutable runId, conversationId, planRevisionId, and workspaceId values; keep project or session switches from consuming another run's output.",
+    "[P0] Prevent stale editor buffers from overwriting Agent Coding changes; emit file-version events and require expected hashes with explicit reload, merge, or overwrite resolution.",
+    "[P0] Restrict Agent Coding commits to run-owned paths and show the exact staged diff; remove git add -A from the commit flow and define commit as a rollback boundary.",
+    "[P0] Make Agent Coding cancellation and rollback transactional across direct file tools, commands, package managers, generators, downloads, and Git, preferably through a disposable worktree per run.",
+    "[P0] Treat workspace paths as opaque names, preserve valid spaces, and enforce realpath containment that rejects symlink and junction escapes before mutations.",
+    "[P1] Implement task-scoped ingestion cancellation across Renderer, Main, and sidecar with task IDs, cancellation tokens, and transactional cleanup.",
+    "[P1] Make the Ollama host explicit and immutable for every pull, delete, and generation request; handle HTTPS deliberately and test concurrent hosts.",
+    "[P1] Replace singleton Ollama stream cancellation with operation-scoped IDs and expose queued generation state.",
+    "[P1] Preserve Ollama generation failures across IPC; prevent chat and translation from reporting or exporting false success.",
+    "[P1] Make sidecar health fail closed on malformed responses, probe errors, timeouts, and process exit.",
+    "[P1] Fix unknown-model context fallback so hardware capacity is not clamped to 2048 tokens and restore the failing context-ceiling tests.",
+    "[P1] Align AgentLogCategory with the plan_generation event or reuse an existing category to restore type checking.",
+    "[P1] Return the Agent Coding run ID and queue position when accepting work; cancel one run by ID instead of falling back to cancelAll.",
+    "[P1] Separate conversation history from per-run execution state; resume only matching interrupted runs and reset step, recovery, and milestone budgets for new prompts.",
+    "[P1] Persist Agent Coding logs and prompt queues atomically per conversation; remove reliance on asynchronous beforeunload writes and stale renderer state.",
+    "[P1] Replace the ignored contextFiles payload with one validated activeFile contract containing path, content, and version hash across Renderer, IPC, and prompt assembly.",
+    "[P1] Make plan generation and interview runs cancellable, block duplicate starts, and expose their queued, running, cancelling, and failed states.",
+    "[P1] Propagate one run AbortSignal through model streaming, tools, final verification, timeout handling, and the persistent shell; suppress events after terminal completion and recreate killed shells safely.",
+    "[P1] Add an Agent Coding preflight for Ollama reachability, exact installed model, model qualification, context capacity, workspace writability, toolchain availability, and workspace trust.",
+    "[P1] Default Agent Coding to a finite safe capability profile and expose file, terminal, network, and step-budget controls in onboarding and per-run review.",
+    "[P1] Replace regex-only command blocking with structured command validation or PowerShell AST inspection, workspace confinement, and mandatory approval for destructive operations.",
+    "[P1] Bind execution and progress events to the approved planRevisionId so running an older plan cannot update the latest revision.",
+    "[P1] Collapse mutation and network gates into one contextual approval with one consent ID so Ask mode never prompts twice for the same action.",
+    "[P1] Make standalone Agent Coding use a visible first-class scratch workspace with reveal, export, persistence, and cleanup controls.",
+    "[P1] Add Electron end-to-end scenarios for project and session switching, queued prompts, cancellation in every phase, crash resume, dirty Git, stale editor saves, missing models, standalone artifacts, spaced paths, and symlink escapes.",
+    "[P1] Simplify Agent Coding into read-only Ask, default Guided review, and trusted local Auto modes; make planning an automatic stage for complex work and use one primary action.",
+    "[P2] Respect document deletion failures before mutating renderer state and surface an actionable error.",
+    "[P2] Preserve the actual imported file type across ingest, update, and list responses so DOCX translation eligibility stays consistent.",
+    "[P2] Show remote Ollama recovery actions in remote mode instead of offering local installation or launch.",
+    "[P2] Replace the estimated Agent Coding context meter with the backend prompt budget breakdown and make Compact reduce backend context without deleting the visible audit timeline.",
+    "[P2] Default Agent Coding debug logs to metadata only; require opt-in for prompt and source payloads and add retention and clear controls.",
+    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back."
+  ]
 }

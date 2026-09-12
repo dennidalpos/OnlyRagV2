@@ -46,5 +46,8 @@ export function compactMutationDiff(current: string, proposed: string, limit = 1
 
 export function versionConflictFeedback(filePath: string, expected: string | undefined, actual: string, diff?: string): string {
   const detail = diff ? `\nCurrent vs proposed diff:\n${diff}` : ''
+  if (actual === 'missing') {
+    return `[FILE VERSION CONFLICT: ${filePath}]\nExpected: ${expected || 'a version from read_file'}\nCurrent: missing\nThe file is absent. Do not require a read of it; if creation is still intended, call write_file without expectedContentHash.${detail}\nNo content was written.`
+  }
   return `[FILE VERSION CONFLICT: ${filePath}]\nExpected: ${expected || 'a version from read_file'}\nCurrent: ${actual}${detail}\nRead the file again and generate a fresh, uniquely-targeted edit. No content was written.`
 }

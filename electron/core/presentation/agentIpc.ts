@@ -7,6 +7,7 @@ import { sidecarAppService } from '../application/sidecarAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
+import { logger } from '../../diagnostics'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AgentPlan, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
@@ -47,6 +48,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
   ipcMain.handle(
     'agent:plan-interview',
     async (_, prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+      logger.log('INFO', 'AgentPlanIpc', `Interview requested (prompt length: ${prompt.length}, model: ${model || 'default'}).`)
       return agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions)
     }
   )
@@ -69,6 +71,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
   ipcMain.handle(
     'agent:plan-generate',
     async (_, prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+      logger.log('INFO', 'AgentPlanIpc', `Generation requested (prompt length: ${prompt.length}, model: ${model || 'default'}).`)
       return planGenerationAppService.generatePlanText({ prompt, model, settings, previousPlan, workspacePath, previousDecisions })
     }
   )

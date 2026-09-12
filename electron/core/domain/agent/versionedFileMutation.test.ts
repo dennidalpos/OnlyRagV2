@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyUniqueReplacements, compactMutationDiff } from './versionedFileMutation'
+import { applyUniqueReplacements, compactMutationDiff, versionConflictFeedback } from './versionedFileMutation'
 
 describe('versionedFileMutation', () => {
   it('applies exact unique replacements and preserves CRLF', () => {
@@ -14,5 +14,12 @@ describe('versionedFileMutation', () => {
 
   it('formats a bounded current-to-proposed diff', () => {
     expect(compactMutationDiff('old\n', 'new\n')).toBe('- old\n+ new')
+  })
+
+  it('tells the agent to create an absent file without a fabricated version', () => {
+    expect(versionConflictFeedback('tailwind.config.js', 'sha256:stale', 'missing')).toContain(
+      'call write_file without expectedContentHash'
+    )
+    expect(versionConflictFeedback('tailwind.config.js', 'sha256:stale', 'missing')).not.toContain('Read the file again')
   })
 })

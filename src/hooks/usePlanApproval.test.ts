@@ -465,6 +465,21 @@ describe('usePlanApproval interview and error flow', () => {
     expect(currentHook.currentPlan?.objective).toBe('Complete the requested task')
   })
 
+  it('generates a plan after development strict-mode effect replay', async () => {
+    const agentPlanGenerate = vi.fn().mockResolvedValue(planResult([
+      { id: 'm-1', title: 'Correggi il piano', filePaths: ['src/plan.ts'], status: 'pending' },
+    ]))
+    installElectronApi({ agentPlanGenerate })
+
+    await act(async () => root.render(React.createElement(React.StrictMode, null, React.createElement(Harness))))
+    await act(async () => {
+      await currentHook.startPlanFlow('Correggi il piano in src/plan.ts')
+    })
+
+    expect(agentPlanGenerate).toHaveBeenCalledOnce()
+    expect(currentHook.currentPlan).toMatchObject({ status: 'ready' })
+  })
+
   it('ignores an interview response that arrives after the session changes', async () => {
     let resolveInterview!: (value: InterviewAnalysisResult) => void
     const agentPlanGenerate = vi.fn()

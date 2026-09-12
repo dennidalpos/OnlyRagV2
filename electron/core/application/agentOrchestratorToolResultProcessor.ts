@@ -38,8 +38,14 @@ export function updateVersionConflictRecovery(ctx: Pick<ToolResultProcessingCont
   const conflict = ctx.toolRes.outputForHistory.match(/\[FILE VERSION CONFLICT:\s*([^\]\r\n]+)\]/)
   if (ctx.toolRes.outcome !== 'success' && conflict) {
     const conflictPath = conflict[1].trim()
-    ctx.recoveryState.pendingVersionConflictReadPath = conflictPath
     ctx.recoveryState.versionedReadEvidence = undefined
+    const missingNewFile = ctx.parsedTool.tool === 'write_file'
+      && /\nCurrent:\s*missing(?:\r?\n|$)/i.test(ctx.toolRes.outputForHistory)
+    if (missingNewFile) {
+      ctx.recoveryState.pendingVersionConflictReadPath = undefined
+      return { changed: true }
+    }
+    ctx.recoveryState.pendingVersionConflictReadPath = conflictPath
     return { changed: true, conflictPath }
   }
   if (ctx.toolRes.outcome === 'success' && ctx.parsedTool.tool === 'read_file') {

@@ -128,9 +128,12 @@ export function usePlanApproval({
     setInterviewQuestions([])
   }, [activeSessionId, workspacePath])
 
-  useEffect(() => () => {
-    mountedRef.current = false
-    flowTokenRef.current += 1
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      flowTokenRef.current += 1
+    }
   }, [])
 
   const generatePlan = useCallback(
@@ -142,7 +145,10 @@ export function usePlanApproval({
       inheritedScope?: PlanFlowScope
     ): Promise<AgentPlan | null> => {
       const scope = inheritedScope || beginFlowScope()
-      if (!isFlowCurrent(scope)) return null
+      if (!isFlowCurrent(scope)) {
+        logger.warn('usePlanApproval', 'Plan generation skipped because its flow was invalidated.')
+        return null
+      }
       setIsGeneratingPlan(true)
 
       const planId = `plan_${Date.now()}_${scope.token}`
@@ -182,6 +188,7 @@ export function usePlanApproval({
 
         if (window.electronAPI?.agentPlanGenerate && settings) {
           try {
+            logger.info('usePlanApproval', `Dispatching plan generation (prompt length: ${prompt.length}).`)
             const genRes = await window.electronAPI.agentPlanGenerate(
               prompt,
               modelToUse,
@@ -409,6 +416,7 @@ export function usePlanApproval({
   const startPlanFlow = useCallback(
     async (prompt: string, targetModel?: string, currentStep: number = 0): Promise<AgentPlan | null> => {
       const scope = beginFlowScope()
+      logger.info('usePlanApproval', `Plan flow started (prompt length: ${prompt.length}).`)
       updateCurrentSessionPlans((prev) => prev.map((plan) =>
         plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan
       ))

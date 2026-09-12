@@ -7,6 +7,8 @@ import type { GuestOsInfo } from '../domain/workspace/workspaceTypes'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
+import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
 
 export class WorkspaceAppService {
   private repo = new FileSystemRepository()
@@ -25,8 +27,11 @@ export class WorkspaceAppService {
     return this.repo.readFile(filePath, startLine, endLine)
   }
 
-  writeFile(filePath: string, content: string) {
-    return this.repo.writeFile(filePath, content)
+  writeFile(filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) {
+    const pathCheck = workspaceRoot ? validateWorkspaceRealpath(filePath, workspaceRoot) : { safePath: filePath }
+    if (!pathCheck.safePath) return { success: false, error: pathCheck.error }
+    const result = this.repo.writeFileVersioned(pathCheck.safePath, content, expectedContentHash, () => {})
+    return result.success ? { ...result, contentHash: contentVersion(content) } : result
   }
 
   async deleteFile(filePath: string) {
@@ -105,14 +110,15 @@ export class WorkspaceAppService {
     return policy.allowed ? null : policy.reason
   }
 
-  gitCommit(workspaceRoot: string | undefined, commitMessage: string) {
+  gitCommit(workspaceRoot: string | undefined, commitMessage: string, filePaths: readonly string[]) {
     const cwd = workspaceRoot || process.cwd()
     const trimmedMessage = (commitMessage || '').trim()
     if (!trimmedMessage) {
       return { success: false, output: 'Git Commit Error: commitMessage parameter is required.', error: 'Git Commit Error: commitMessage parameter is required.' }
     }
     try {
-      const stdout = gitCliRepository.commit(cwd, trimmedMessage)
+      const preview = gitCliRepository.previewCommit(cwd, filePaths)
+      const stdout = gitCliRepository.commit(cwd, trimmedMessage, preview.paths, preview.diffHash)
       return {
         success: true,
         output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,

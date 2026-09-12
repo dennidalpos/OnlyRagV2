@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { AgentCompletionStatus, AppSettings } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../shared/types'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
@@ -55,6 +55,7 @@ export interface ToolResultProcessingContext {
   }
   isSessionActive: () => boolean
   targetWindow: BrowserWindow | null
+  runIdentity: Readonly<AgentRunIdentity>
   emitLog: EmitLog
   emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
   persistCurrentState: () => Promise<void>

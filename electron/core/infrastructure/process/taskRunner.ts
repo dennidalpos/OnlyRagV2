@@ -9,9 +9,15 @@ import { logger } from '../../../diagnostics'
 export interface ActiveTask {
   id: string
   type: 'ingestion' | 'ollama_stream' | 'export' | 'terminal_command'
-  filePath?: string
+  sourcePath?: string
+  temporaryResiduePath?: string
   destroy: () => void
   createdAt: number
+}
+
+export interface ActiveTaskPaths {
+  sourcePath?: string
+  temporaryResiduePath?: string
 }
 
 export function normalizePowerShellCommand(command: string): string {
@@ -50,12 +56,12 @@ export class TaskRunner {
     id: string,
     type: 'ingestion' | 'ollama_stream' | 'export' | 'terminal_command',
     destroyFn: () => void,
-    filePath?: string
+    paths: ActiveTaskPaths = {}
   ): string {
     const task: ActiveTask = {
       id,
       type,
-      filePath,
+      ...paths,
       destroy: destroyFn,
       createdAt: Date.now(),
     }
@@ -82,15 +88,7 @@ export class TaskRunner {
       logger.log('INFO', 'TaskRunner', `Cancelling task [${task.type}]: ${id}`)
       task.destroy()
       this.activeTasksMap.delete(id)
-
-      if (task.filePath && fs.existsSync(task.filePath)) {
-        try {
-          fs.unlinkSync(task.filePath)
-          logger.log('INFO', 'TaskRunner', `Cleaned partial file residue: ${task.filePath}`)
-        } catch (err: any) {
-          logger.log('WARN', 'TaskRunner', `Could not delete partial file residue: ${err.message}`)
-        }
-      }
+      this.cleanupTemporaryResidue(task)
 
       return { success: true, message: `Task ${id} cancelled successfully and residues cleaned.` }
     } catch (err: any) {
@@ -104,17 +102,24 @@ export class TaskRunner {
     for (const [id, task] of this.activeTasksMap.entries()) {
       try {
         task.destroy()
-        if (task.filePath && fs.existsSync(task.filePath)) {
-          try {
-            fs.unlinkSync(task.filePath)
-          } catch (unlinkErr: any) {
-            logger.log('WARN', 'TaskRunner', `Failed unlinking partial residue for ${id}: ${unlinkErr.message}`)
-          }
-        }
       } catch (destroyErr: any) {
         logger.log('WARN', 'TaskRunner', `Failed destroying task ${id}: ${destroyErr.message}`)
+      } finally {
+        this.cleanupTemporaryResidue(task)
+        this.activeTasksMap.delete(id)
       }
-      this.activeTasksMap.delete(id)
+    }
+  }
+
+  private cleanupTemporaryResidue(task: ActiveTask): void {
+    const residuePath = task.temporaryResiduePath
+    if (!residuePath || !fs.existsSync(residuePath)) return
+
+    try {
+      fs.unlinkSync(residuePath)
+      logger.log('INFO', 'TaskRunner', `Cleaned temporary residue: ${residuePath}`)
+    } catch (err: any) {
+      logger.log('WARN', 'TaskRunner', `Failed unlinking temporary residue for ${task.id}: ${err.message}`)
     }
   }
 

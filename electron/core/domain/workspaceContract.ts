@@ -21,6 +21,8 @@ export const workspaceReadFilePayloadSchema = z.object({
 export const workspaceWriteFilePayloadSchema = z.object({
   filePath: nonBlankPath,
   content: z.string().max(10_000_000),
+  expectedContentHash: z.string().regex(/^sha256:[a-f0-9]{64}$/i).optional(),
+  workspaceRoot: nonBlankPath.optional(),
 }).strict()
 
 export const workspaceReplaceChunkPayloadSchema = z.object({
@@ -60,6 +62,7 @@ export const workspaceDownloadFilePayloadSchema = z.object({
 export const workspaceGitCommitPayloadSchema = z.object({
   commitMessage: nonBlankText,
   workspaceRoot: nonBlankPath.optional(),
+  filePaths: z.array(nonBlankPath).min(1),
 }).strict()
 
 export const workspaceExecutePowerShellPayloadSchema = z.object({

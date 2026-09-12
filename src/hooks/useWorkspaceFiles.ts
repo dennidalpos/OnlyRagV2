@@ -13,6 +13,14 @@ export interface UseWorkspaceFilesOptions {
   onPathPurged: (isInsideDeletedPath: (filePath: string) => boolean) => void
 }
 
+export interface EditorSaveConflict {
+  filePath: string
+  fileName: string
+  localContent: string
+  diskContent: string
+  diskContentHash: string
+}
+
 /**
  * File tree, open tabs, Monaco editor buffer and pinned context files of the active
  * workspace. Deletions performed by the agent are purged from every reference here, so
@@ -25,6 +33,8 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
   const [editorContent, setEditorContent] = useState<string>(EMPTY_EDITOR_PLACEHOLDER)
   const [originalContent, setOriginalContent] = useState<string>('')
   const [isSaved, setIsSaved] = useState<boolean>(true)
+  const [loadedContentHash, setLoadedContentHash] = useState<string | undefined>()
+  const [saveConflict, setSaveConflict] = useState<EditorSaveConflict | null>(null)
   const [pinnedFiles, setPinnedFiles] = useState<Map<string, WorkspaceFile>>(new Map())
   const latestRequestedPathRef = useRef<string | null>(null)
 
@@ -37,6 +47,8 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     setEditorContent(EMPTY_EDITOR_PLACEHOLDER)
     setOriginalContent('')
     setIsSaved(true)
+    setLoadedContentHash(undefined)
+    setSaveConflict(null)
     setPinnedFiles(new Map())
   }, [])
 
@@ -72,9 +84,13 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         setEditorContent(res.content)
         setOriginalContent(res.content)
         setIsSaved(true)
+        setLoadedContentHash(res.contentHash)
+        setSaveConflict(null)
       } else if (res.error) {
         setEditorContent(`// Errore durante la lettura del file: ${res.error}`)
-        setOriginalContent('')
+          setOriginalContent('')
+          setLoadedContentHash(undefined)
+          setSaveConflict(null)
       }
     } catch (err: any) {
       if (latestRequestedPathRef.current !== requestedPath) return
@@ -106,13 +122,67 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
   const handleSaveFile = useCallback(async () => {
     if (!selectedFile || !window.electronAPI) return
-    const res = await window.electronAPI.writeWorkspaceFile(selectedFile.path, editorContent)
+    const res = await window.electronAPI.writeWorkspaceFile(selectedFile.path, editorContent, loadedContentHash, workspacePath || undefined)
     if (res.success) {
       setOriginalContent(editorContent)
       setIsSaved(true)
+      setLoadedContentHash(res.contentHash)
+      setSaveConflict(null)
       onFileNotice(`Saved changes to ${selectedFile.name}`)
+    } else if (res.conflict && res.currentContentHash && res.currentContent !== undefined) {
+      setSaveConflict({
+        filePath: selectedFile.path,
+        fileName: selectedFile.name,
+        localContent: editorContent,
+        diskContent: res.currentContent,
+        diskContentHash: res.currentContentHash,
+      })
     }
-  }, [selectedFile, editorContent, onFileNotice])
+  }, [selectedFile, editorContent, loadedContentHash, onFileNotice, workspacePath])
+
+  const handleReloadConflict = useCallback(() => {
+    if (!saveConflict) return
+    setEditorContent(saveConflict.diskContent)
+    setOriginalContent(saveConflict.diskContent)
+    setLoadedContentHash(saveConflict.diskContentHash)
+    setIsSaved(true)
+    setSaveConflict(null)
+    onFileNotice(`Reloaded ${saveConflict.fileName} from disk`)
+  }, [onFileNotice, saveConflict])
+
+  const handleMergeConflict = useCallback(() => {
+    if (!saveConflict) return
+    setEditorContent(`<<<<<<< EDITOR\n${saveConflict.localContent}\n=======\n${saveConflict.diskContent}\n>>>>>>> DISK`)
+    setOriginalContent(saveConflict.diskContent)
+    setLoadedContentHash(saveConflict.diskContentHash)
+    setIsSaved(false)
+    setSaveConflict(null)
+    onFileNotice(`Prepared manual merge for ${saveConflict.fileName}`)
+  }, [onFileNotice, saveConflict])
+
+  const handleOverwriteConflict = useCallback(async () => {
+    if (!saveConflict || !window.electronAPI) return
+    const res = await window.electronAPI.writeWorkspaceFile(
+      saveConflict.filePath,
+      saveConflict.localContent,
+      saveConflict.diskContentHash,
+      workspacePath || undefined,
+    )
+    if (res.success) {
+      setEditorContent(saveConflict.localContent)
+      setOriginalContent(saveConflict.localContent)
+      setLoadedContentHash(res.contentHash)
+      setIsSaved(true)
+      setSaveConflict(null)
+      onFileNotice(`Overwrote ${saveConflict.fileName} after conflict confirmation`)
+    } else if (res.conflict && res.currentContentHash && res.currentContent !== undefined) {
+      setSaveConflict((current) => current ? {
+        ...current,
+        diskContent: res.currentContent!,
+        diskContentHash: res.currentContentHash!,
+      } : current)
+    }
+  }, [onFileNotice, saveConflict, workspacePath])
 
   const handleTogglePinFile = useCallback(
     (file: WorkspaceFile) => {
@@ -153,6 +223,8 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
             setSelectedFile(null)
             setEditorContent('')
             setOriginalContent('')
+            setLoadedContentHash(undefined)
+            setSaveConflict(null)
           }
         }
         return remaining
@@ -190,6 +262,35 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     }
   }, [workspacePath, loadWorkspaceFiles])
 
+  useEffect(() => {
+    const api = window.electronAPI
+    if (!api?.onWorkspaceFileVersionChanged) return
+    return api.onWorkspaceFileVersionChanged(async (event) => {
+      if (!selectedFile || event.filePath.replace(/\\/g, '/').toLowerCase() !== selectedFile.path.replace(/\\/g, '/').toLowerCase()) return
+      if (event.deleted) {
+        purgeFileReferences(event.filePath)
+        return
+      }
+      if (!event.contentHash || event.contentHash === loadedContentHash) return
+
+      const result = await api.readWorkspaceFile(event.filePath)
+      if (!result.success || result.content === undefined || !result.contentHash) return
+      if (isSaved) {
+        setEditorContent(result.content)
+        setOriginalContent(result.content)
+        setLoadedContentHash(result.contentHash)
+      } else {
+        setSaveConflict({
+          filePath: event.filePath,
+          fileName: selectedFile.name,
+          localContent: editorContent,
+          diskContent: result.content,
+          diskContentHash: result.contentHash,
+        })
+      }
+    })
+  }, [editorContent, isSaved, loadedContentHash, purgeFileReferences, selectedFile])
+
   return {
     files,
     openFiles,
@@ -199,6 +300,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     setEditorContent,
     originalContent,
     isSaved,
+    saveConflict,
     setIsSaved,
     pinnedFiles,
     setPinnedFiles,
@@ -206,6 +308,9 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     handleOpenFile,
     handleCloseFile,
     handleSaveFile,
+    handleReloadConflict,
+    handleMergeConflict,
+    handleOverwriteConflict,
     handleTogglePinFile,
     purgeFileReferences,
     resetWorkspaceFiles,

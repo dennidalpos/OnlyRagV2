@@ -92,7 +92,9 @@ describe('Wave 6 deterministic safety fixtures', () => {
     const destroy = vi.fn()
     const runner = new TaskRunner()
 
-    runner.registerActiveTask('wave6-session', 'terminal_command', destroy, partialFile)
+    runner.registerActiveTask('wave6-session', 'terminal_command', destroy, {
+      temporaryResiduePath: partialFile,
+    })
     const result = runner.cancelTask('wave6-session')
 
     expect(result).toEqual({ success: true, message: 'Task wave6-session cancelled successfully and residues cleaned.' })

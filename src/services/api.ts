@@ -197,11 +197,11 @@ export const apiService = {
     }
   },
 
-  async writeWorkspaceFile(filePath: string, content: string): Promise<{ success: boolean; error?: string }> {
+  async writeWorkspaceFile(filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string): Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Workspace', `Writing file content to ${filePath}`)
-      return await window.electronAPI.writeWorkspaceFile(filePath, content)
+      return await window.electronAPI.writeWorkspaceFile(filePath, content, expectedContentHash, workspaceRoot)
     } catch (err: any) {
       logger.error('ApiService:Workspace', `Failed writing file ${filePath}: ${err.message}`)
       return { success: false, error: err.message }

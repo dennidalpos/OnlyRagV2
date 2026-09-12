@@ -49,12 +49,12 @@ async function dispatchToLlm(
     previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
     onTokenChunk: (chunk) => {
       if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-        ctx.session.targetWindow.webContents.send('agent:stream-token', { step: ctx.stepCount, chunk })
+        ctx.session.targetWindow.webContents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
       }
     },
     onThoughtChunk: (chunk) => {
       if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-        ctx.session.targetWindow.webContents.send('agent:stream-thought', { step: ctx.stepCount, chunk })
+        ctx.session.targetWindow.webContents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
       }
     },
     isCancelled: () => !ctx.isSessionActive(),

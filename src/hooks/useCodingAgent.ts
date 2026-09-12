@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentActionLog, AgentPlan, PlanMilestone, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode, AgentDoneResult } from '../types'
+import { AgentActionLog, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode, AgentDoneResult, AgentRunIdentity } from '../types'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useSessionHistory } from './useSessionHistory'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
@@ -14,6 +14,7 @@ import { acquireGlobalTaskLock, releaseGlobalTaskLock, peekGlobalTaskLock } from
 import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
 import { normalizeError } from '../lib/errors/errorNormalizer'
+import { createAgentRunIdentity, matchesAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
 
 export type { QueuedPrompt }
 
@@ -34,6 +35,13 @@ export function useCodingAgent(settings?: AppSettings) {
   const [agentPrompt, setAgentPrompt] = useState<string>('')
   const [actionLogs, setActionLogs] = useState<AgentActionLog[]>([])
   const [isExecuting, setIsExecuting] = useState<boolean>(false)
+  const [activeRunIdentity, setActiveRunIdentity] = useState<Readonly<AgentRunIdentity> | null>(null)
+  const activeRunIdentityRef = useRef<Readonly<AgentRunIdentity> | null>(null)
+
+  const updateActiveRunIdentity = useCallback((identity: Readonly<AgentRunIdentity> | null) => {
+    activeRunIdentityRef.current = identity
+    setActiveRunIdentity(identity)
+  }, [])
 
   const addActionLog = useCallback(
     (type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
@@ -162,12 +170,16 @@ export function useCodingAgent(settings?: AppSettings) {
     setEditorContent,
     originalContent,
     isSaved,
+    saveConflict,
     setIsSaved,
     pinnedFiles,
     loadWorkspaceFiles,
     handleOpenFile,
     handleCloseFile,
     handleSaveFile,
+    handleReloadConflict,
+    handleMergeConflict,
+    handleOverwriteConflict,
     handleTogglePinFile,
     purgeFileReferences,
     setPinnedFiles,
@@ -314,7 +326,8 @@ export function useCodingAgent(settings?: AppSettings) {
       }
     }
 
-    const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog) => {
+    const unsubLog = window.electronAPI.onAgentLog?.((log: AgentActionLog & AgentRunIdentity) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, log)) return
       setActionLogs((prev) => [...prev, log])
 
       if (log.modelName) {
@@ -381,19 +394,22 @@ export function useCodingAgent(settings?: AppSettings) {
       purgeFileReferences(data.filePath)
     })
 
-    const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data: { step: number; chunk: string }) => {
+    const unsubStreamToken = window.electronAPI.onAgentStreamToken?.((data) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
       if (data.chunk) {
         appendToStreamBuffer(data.chunk)
       }
     })
 
-    const unsubStreamThought = window.electronAPI.onAgentStreamThought?.((data: { step: number; chunk: string }) => {
+    const unsubStreamThought = window.electronAPI.onAgentStreamThought?.((data) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
       if (data.chunk) {
         appendToStreamBuffer(data.chunk)
       }
     })
 
-    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data: { step: number; maxSteps?: number; maxStepsLabel?: string; statusText?: string; milestones?: PlanMilestone[] }) => {
+    const unsubStep = window.electronAPI.onAgentStepUpdate?.((data) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
       currentStepRef.current = data.step
       setCurrentStep(data.step)
       clearStreamBuffer()
@@ -418,24 +434,29 @@ export function useCodingAgent(settings?: AppSettings) {
     })
 
     const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, req)) return
       setPendingApproval(req)
       if (req) {
         soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
       }
     })
 
-    const unsubSkills = window.electronAPI.onAgentSkillsMatched?.((data: { skills: string[] }) => {
+    const unsubSkills = window.electronAPI.onAgentSkillsMatched?.((data) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
       setActiveSkills(data.skills || [])
     })
 
-    const unsubChangeMetrics = window.electronAPI.onAgentChangeMetrics?.((data: AgentChangeMetrics) => {
+    const unsubChangeMetrics = window.electronAPI.onAgentChangeMetrics?.((data) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
       if (data) {
         changeMetricsRef.current = data
         setChangeMetrics(data)
       }
     })
 
-    const unsubDone = window.electronAPI.onAgentDone?.((res: AgentDoneResult) => {
+    const unsubDone = window.electronAPI.onAgentDone?.((res: AgentDoneResult & AgentRunIdentity) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, res)) return
+      updateActiveRunIdentity(null)
       soundEffectsService.play(res?.success === false ? 'error' : 'completion', settings?.enableSoundEffects !== false)
       setCurrentLiveModel(null)
       closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
@@ -475,13 +496,15 @@ export function useCodingAgent(settings?: AppSettings) {
       unsubChangeMetrics?.()
       unsubDone?.()
     }
-  }, [dequeueNextPrompt, appendTerminalLogs, purgeFileReferences, setPendingApproval, settings?.enableSoundEffects])
+  }, [dequeueNextPrompt, appendTerminalLogs, purgeFileReferences, setPendingApproval, settings?.enableSoundEffects, updateActiveRunIdentity])
 
   const handleCancelAgent = () => {
+    const identity = activeRunIdentityRef.current
+    updateActiveRunIdentity(null)
     setIsExecuting(false)
     setCurrentLiveModel(null)
     if (window.electronAPI) {
-      if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
+      if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
     closeRunningExecutedPrompt('cancelled')
@@ -489,8 +512,10 @@ export function useCodingAgent(settings?: AppSettings) {
   }
 
   const resetSessionViewState = () => {
+    const identity = activeRunIdentityRef.current
+    updateActiveRunIdentity(null)
     if (isExecuting && window.electronAPI) {
-      if (window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask()
+      if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
       if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
     runningExecutedPromptRef.current = null
@@ -604,7 +629,7 @@ export function useCodingAgent(settings?: AppSettings) {
     })
   }
 
-  const executeTask = async (taskPrompt: string, overrideMode?: AgentMode) => {
+  const executeTask = async (taskPrompt: string, overrideMode?: AgentMode, planRevisionId?: string) => {
     if (!taskPrompt.trim() || !window.electronAPI) return
 
     const busyModule = peekGlobalTaskLock()
@@ -623,6 +648,17 @@ export function useCodingAgent(settings?: AppSettings) {
 
     const effectiveMode = overrideMode || agentMode
     const runSessionId = activeSessionId || activeSession?.id || ''
+    if (!runSessionId) {
+      setIsExecuting(false)
+      addActionLog('info', 'Impossibile avviare: conversazione attiva non disponibile.')
+      return
+    }
+    const identity = createAgentRunIdentity({
+      conversationId: runSessionId,
+      planRevisionId,
+      workspacePath: isStandaloneMode ? null : workspacePath,
+    })
+    updateActiveRunIdentity(identity)
     if (runSessionId) {
       runningExecutedPromptRef.current = {
         sessionId: runSessionId,
@@ -673,6 +709,7 @@ export function useCodingAgent(settings?: AppSettings) {
       const initialUserTask = initialLog ? initialLog.message.replace(/^User Prompt:\s*/, '') : taskPrompt
 
       const res = await window.electronAPI.startAgentTask({
+        identity,
         sessionId: runSessionId,
         userTask: taskPrompt,
         initialUserTask,
@@ -687,12 +724,14 @@ export function useCodingAgent(settings?: AppSettings) {
       })
 
       if (!res?.success) {
+        if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
         const normalized = normalizeError(res?.error || 'Errore sconosciuto', 'Coding Agent')
         closeRunningExecutedPrompt('failed', normalized.message)
         setIsExecuting(false)
         addActionLog('info', `Errore avvio task: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
       }
     } catch (err: unknown) {
+      if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
       const normalized = normalizeError(err, 'Coding Agent')
       closeRunningExecutedPrompt('failed', normalized.message)
       setIsExecuting(false)
@@ -700,7 +739,7 @@ export function useCodingAgent(settings?: AppSettings) {
     }
   }
 
-  const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode) => {
+  const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode, planRevisionId?: string) => {
     const text = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
     if (!text.trim()) return
 
@@ -712,7 +751,7 @@ export function useCodingAgent(settings?: AppSettings) {
     }
 
     if (!isOverride) setAgentPrompt('')
-    await executeTask(text, overrideMode)
+    await executeTask(text, overrideMode, planRevisionId)
   }
 
   const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])
@@ -723,7 +762,7 @@ export function useCodingAgent(settings?: AppSettings) {
     clearPendingApproval()
     const partialNote = approvedHunkIndices ? ` (${approvedHunkIndices.length} hunk selezionati)` : ''
     addActionLog('tool_call', `User approved ${current.type}: ${current.target}${partialNote}`)
-    await window.electronAPI.respondToAgentApproval(current.sessionId, true, approvedHunkIndices)
+    await window.electronAPI.respondToAgentApproval(current, true, approvedHunkIndices)
     if (FILE_MUTATION_APPROVAL_TYPES.has(current.type) && selectedFile && selectedFile.path === current.target) {
       setTimeout(() => handleOpenFile(selectedFile), 400)
     }
@@ -734,7 +773,7 @@ export function useCodingAgent(settings?: AppSettings) {
     const current = pendingApproval
     clearPendingApproval()
     addActionLog('info', `User rejected ${current.type}: ${current.target}`)
-    await window.electronAPI?.respondToAgentApproval?.(current.sessionId, false)
+    await window.electronAPI?.respondToAgentApproval?.(current, false)
   }
 
   const compactContext = useCallback(() => {
@@ -787,6 +826,7 @@ export function useCodingAgent(settings?: AppSettings) {
     setEditorContent,
     originalContent,
     isSaved,
+    saveConflict,
     setIsSaved,
     ingestedDocs,
     attachedDocIds,
@@ -805,6 +845,7 @@ export function useCodingAgent(settings?: AppSettings) {
     movePromptInQueue,
     actionLogs,
     isExecuting,
+    activeRunIdentity,
     currentLiveModel,
     currentStep,
     maxSteps,
@@ -823,6 +864,9 @@ export function useCodingAgent(settings?: AppSettings) {
     handleOpenFile,
     handleCloseFile,
     handleSaveFile,
+    handleReloadConflict,
+    handleMergeConflict,
+    handleOverwriteConflict,
     handleRunTerminalCommand,
     handleClearTerminal,
     navigateHistory,

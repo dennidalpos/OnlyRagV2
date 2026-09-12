@@ -104,6 +104,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
   const emitLog: AgentSessionBootstrap['emitLog'] = (type, message, detail, meta) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
       session.targetWindow.webContents.send('agent:log', {
+        ...session.identity,
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         timestamp: new Date().toISOString(),
         type,
@@ -120,7 +121,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
 
   const emitDone = (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:done', { success, summary, completionStatus })
+      session.targetWindow.webContents.send('agent:done', { ...session.identity, success, summary, completionStatus })
     }
   }
 

@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
 import { logger } from '../lib/logger'
+import type { AgentRunIdentity } from '../types'
 
-export interface PendingApprovalRequest {
+export interface PendingApprovalRequest extends AgentRunIdentity {
   sessionId: string
   type: 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file' | 'download_file' | 'terminal_cmd' | 'git_commit'
   target: string
@@ -20,7 +21,7 @@ export function useAgentApprovals() {
       const current = pendingApproval
       setPendingApproval(null)
       try {
-        await window.electronAPI.respondToAgentApproval(current.sessionId, approved, approvedHunks)
+        await window.electronAPI.respondToAgentApproval(current, approved, approvedHunks)
       } catch (err: any) {
         logger.error('useAgentApprovals', `Failed responding to agent approval: ${err?.message}`)
       }

@@ -157,6 +157,13 @@ export interface ArtifactSaveInput {
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
+export interface AgentRunIdentity {
+  runId: string
+  conversationId: string
+  planRevisionId: string
+  workspaceId: string
+}
+
 export type AgentLogCategory =
   | 'user_prompt'
   | 'agent_thought'
@@ -171,7 +178,7 @@ export type AgentLogCategory =
   | 'system_alert'
   | 'generic_info'
 
-export interface AgentActionLog {
+export interface AgentActionLog extends Partial<AgentRunIdentity> {
   id: string
   timestamp: string
   type: 'info' | 'tool_call' | 'terminal' | 'approval_request'
@@ -347,7 +354,7 @@ export interface CodingSession {
 }
 
 /** Hub skill the router wants to install while autoInstallHubSkills is set to 'prompt'. */
-export interface SkillInstallApprovalRequest {
+export interface SkillInstallApprovalRequest extends AgentRunIdentity {
   requestId: string
   skillName: string
   skillDescription: string
@@ -556,15 +563,15 @@ export interface IElectronAPI {
   cleanTempResiduals: () => Promise<{ success: boolean; cleanedCount: number; bytesFreed: number }>
   listWorkspaceFiles: (dirPath?: string) => Promise<WorkspaceFile[]>
   getProjectMap: (dirPath: string) => Promise<ProjectMapItem[]>
-  readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => Promise<{ success: boolean; content?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
-  writeWorkspaceFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>
+  readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
+  writeWorkspaceFile: (filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) => Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }>
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) => Promise<{ success: boolean; error?: string }>
   multiReplaceWorkspaceFileChunks: (filePath: string, replacements: AgentToolReplacementChunk[]) => Promise<{ success: boolean; replacedCount?: number; error?: string }>
   grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => Promise<GrepSearchResult[]>
   searchWeb: (query: string, maxResults?: number) => Promise<{ success: boolean; results: { title: string; url: string; snippet: string }[]; error?: string }>
   fetchWebContent: (url: string, maxChars?: number) => Promise<{ success: boolean; content?: string; title?: string; error?: string }>
   downloadFile: (url: string, targetFilePath: string) => Promise<{ success: boolean; downloadedBytes?: number; error?: string }>
-  gitCommit: (commitMessage: string, workspaceRoot?: string) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitCommit: (commitMessage: string, workspaceRoot: string | undefined, filePaths: string[]) => Promise<{ success: boolean; output?: string; error?: string }>
   getGitStatusAndDiff?: (workspaceRoot?: string) => Promise<{ isGitRepo: boolean; statusLines: string[]; diffText: string }>
   initGitRepository?: (workspaceRoot?: string) => Promise<{ success: boolean; message: string }>
   inspectGuestOsEnvironment: () => Promise<GuestOsInfo>
@@ -585,9 +592,9 @@ export interface IElectronAPI {
   openExternalUrl?: (url: string) => Promise<boolean>
   openPath?: (targetPath: string) => Promise<boolean>
   startAgentTask: (payload: any) => Promise<AgentDoneResult & { error?: string }>
-  cancelAgentTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
+  cancelAgentTask: (identity?: AgentRunIdentity) => Promise<{ success: boolean; message?: string }>
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
-  respondToAgentApproval?: (sessionId: string, approved: boolean, approvedHunkIndices?: number[]) => Promise<boolean>
+  respondToAgentApproval?: (identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) => Promise<boolean>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
   /** Session history CRUD backed by the filesystem store (see sessionHistoryRepository). */
   listCodingSessions?: (workspacePath?: string | null) => Promise<CodingSession[]>
@@ -613,19 +620,20 @@ export interface IElectronAPI {
   indexPromptHistory?: (payload: PromptHistoryIndexPayload) => Promise<{ success: boolean }>
   /** Semantic search across every indexed project's prompt history. */
   searchPromptHistory?: (query: string, topK?: number, projectPaths?: string[]) => Promise<PromptHistorySearchResult[]>
-  onAgentLog: (callback: (log: AgentActionLog) => void) => () => void
-  onAgentStepUpdate?: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => () => void
-  onAgentStreamToken?: (callback: (data: { step: number; chunk: string }) => void) => () => void
-  onAgentStreamThought?: (callback: (data: { step: number; chunk: string }) => void) => () => void
-  onAgentDone: (callback: (res: AgentDoneResult) => void) => () => void
-  onAgentApprovalRequest: (callback: (req: any) => void) => () => void
-  onAgentSkillsMatched?: (callback: (data: { skills: string[] }) => void) => () => void
+  onAgentLog: (callback: (log: AgentActionLog & AgentRunIdentity) => void) => () => void
+  onAgentStepUpdate?: (callback: (data: AgentRunIdentity & { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => () => void
+  onAgentStreamToken?: (callback: (data: AgentRunIdentity & { step: number; chunk: string }) => void) => () => void
+  onAgentStreamThought?: (callback: (data: AgentRunIdentity & { step: number; chunk: string }) => void) => () => void
+  onAgentDone: (callback: (res: AgentDoneResult & AgentRunIdentity) => void) => () => void
+  onAgentApprovalRequest: (callback: (req: AgentRunIdentity & { sessionId: string; type: string; target: string }) => void) => () => void
+  onAgentSkillsMatched?: (callback: (data: AgentRunIdentity & { skills: string[] }) => void) => () => void
   /** Skill Hub 'prompt' policy: subscribe to the auto-install confirmation requests. */
   onAgentSkillInstallRequest?: (callback: (req: SkillInstallApprovalRequest) => void) => () => void
   /** Skill Hub 'prompt' policy: answer a pending auto-install confirmation request. */
-  respondAgentSkillInstall?: (requestId: string, approved: boolean) => void
-  onAgentChangeMetrics?: (callback: (data: AgentChangeMetrics) => void) => () => void
+  respondAgentSkillInstall?: (requestId: string, approved: boolean, identity: AgentRunIdentity) => void
+  onAgentChangeMetrics?: (callback: (data: AgentChangeMetrics & AgentRunIdentity) => void) => () => void
   onWorkspaceFileDeleted?: (callback: (data: { filePath: string }) => void) => () => void
+  onWorkspaceFileVersionChanged?: (callback: (data: AgentRunIdentity & { filePath: string; contentHash?: string; deleted?: boolean }) => void) => () => void
   onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
   onTranslateProgress?: (callback: (data: TranslateProgressPayload) => void) => () => void

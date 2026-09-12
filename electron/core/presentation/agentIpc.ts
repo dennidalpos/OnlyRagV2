@@ -9,19 +9,19 @@ import { agentInterviewAppService } from '../application/agentInterviewAppServic
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import { logger } from '../../diagnostics'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentPlan, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
+import type { AgentPlan, AgentRunIdentity, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
   ipcMain.handle('agent:start-task', async (_, payload: AgentTaskPayload) => {
     return taskQueueAppService.scheduleAgentTask(payload, winGetter)
   })
 
-  ipcMain.handle('agent:cancel-task', async (_, taskId?: string) => {
-    return taskQueueAppService.cancelTask(taskId)
+  ipcMain.handle('agent:cancel-task', async (_, identity?: AgentRunIdentity) => {
+    return taskQueueAppService.cancelTask(identity)
   })
 
-  ipcMain.handle('agent:approval-response', async (_, sessionId: string, approved: boolean, approvedHunkIndices?: number[]) => {
-    return respondToApproval(sessionId, approved, approvedHunkIndices)
+  ipcMain.handle('agent:approval-response', async (_, identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) => {
+    return respondToApproval(identity, approved, approvedHunkIndices)
   })
 
   ipcMain.handle('agent:get-queue-status', async () => {

@@ -321,15 +321,16 @@ function reportNestedProjectDirs(ctx: ToolResultProcessingContext, createdDirs: 
  * by a command and later by write_file stays a single entry. Line counts stay at zero: the
  * scan attributes files by mtime and never reads their contents, so it has no diff to report.
  */
-export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, commandFailed = false) {
-  if (ctx.parsedTool.tool !== 'run_command' || !ctx.workspacePath) return
+export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, commandFailed = false): string[] {
+  if (ctx.parsedTool.tool !== 'run_command' || !ctx.workspacePath) return []
 
   const scan = scanCommandTouchedFiles(ctx.workspacePath, ctx.toolStartedAtMs)
+  const touchedPaths = scan.files.map((relativePath) => path.join(ctx.workspacePath!, relativePath))
   reportNestedProjectDirs(ctx, scan.createdTopLevelDirs, commandFailed)
 
   // A failed command's leftovers are debris, not deliverables: they must never count as file
   // mutations, and above all must never advance a milestone. Reporting them is the whole job.
-  if (commandFailed || scan.files.length === 0) return
+  if (commandFailed || scan.files.length === 0) return touchedPaths
 
   let newlyTracked = 0
   for (const relativePath of scan.files) {
@@ -351,6 +352,7 @@ export function recordCommandTouchedFiles(ctx: ToolResultProcessingContext, comm
   // A scaffolder or codegen step can perfectly well deliver the active milestone's file,
   // so the whole set it touched counts as candidate evidence.
   advanceActiveMilestoneOnMutation(ctx, scan.files)
+  return touchedPaths
 }
 
 /**

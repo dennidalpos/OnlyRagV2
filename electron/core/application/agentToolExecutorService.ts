@@ -47,6 +47,7 @@ import {
   resolveCommandTimeoutMs,
 } from '../domain/agent/tools/execution/commandPolicy'
 import { toolExecutionResultSchema, type ClassifiedToolExecutionResult, type ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
+import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
 export type { ClassifiedToolExecutionResult, ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 
 export class AgentToolExecutorService {
@@ -129,7 +130,9 @@ export class AgentToolExecutorService {
     this.diagnosticsToolService = new DiagnosticsToolService()
     this.gitToolService = new GitToolService({
       run: (directory, command, timeoutMs) => gitCliRepository.run(directory, command, timeoutMs),
-      commit: (directory, message) => gitCliRepository.commit(directory, message),
+      previewCommit: (directory, paths) => gitCliRepository.previewCommit(directory, paths),
+      commit: (directory, message, paths, expectedDiffHash) => gitCliRepository.commit(directory, message, paths, expectedDiffHash),
+      markCommitBoundary: () => { this.journal.commit() },
     })
   }
 
@@ -204,8 +207,42 @@ export class AgentToolExecutorService {
    * calls once the user approves a git_commit tool call -- see the Always-Confirm Gate in
    * agentOrchestratorAppService.ts.
    */
-  public performGitCommit(cwd: string, commitMessage: string): { success: boolean; output: string; logMessage: string } {
-    return this.gitToolService.commit(cwd, commitMessage)
+  public previewGitCommit(cwd: string, observedPaths: readonly string[] = []) {
+    return this.gitToolService.previewCommit(cwd, [...this.journal.trackedPaths, ...observedPaths])
+  }
+
+  private mutationPathBlock(parsedTool: AgentToolCall, workspacePath: string | null | undefined): ToolExecutionResult | null {
+    const fields = ({
+      write_file: ['filePath'],
+      replace_file_content: ['filePath'],
+      multi_replace_file_content: ['filePath'],
+      delete_file: ['filePath'],
+      create_directory: ['dirPath', 'filePath'],
+      copy_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
+      move_file: ['sourcePath', 'filePath', 'targetPath', 'destination'],
+      download_file: ['filePath'],
+    } as Record<string, string[]>)[parsedTool.tool]
+    if (!fields) return null
+
+    const root = workspacePath || process.cwd()
+    for (const field of fields) {
+      const value = parsedTool.parameters[field]
+      if (typeof value !== 'string' || !value) continue
+      const check = validateWorkspaceRealpath(value, root)
+      if (!check.safePath) {
+        return {
+          outcome: 'rejected',
+          outputForHistory: `Security Violation: ${check.error}`,
+          logMessage: `${parsedTool.tool} rejected: ${check.error}`,
+          isTerminal: true,
+        }
+      }
+    }
+    return null
+  }
+
+  public performGitCommit(cwd: string, commitMessage: string, paths: readonly string[], expectedDiffHash: string): { success: boolean; output: string; logMessage: string } {
+    return this.gitToolService.commit(cwd, commitMessage, paths, expectedDiffHash)
   }
 
   /**
@@ -412,6 +449,9 @@ export class AgentToolExecutorService {
         isTerminal: true,
       }
     }
+
+    const mutationPathBlock = this.mutationPathBlock(parsedTool, workspacePath)
+    if (mutationPathBlock) return mutationPathBlock
 
     const policyBlock = await this.policyBlock(parsedTool, workspacePath, settings, policyConsent, policySessionId)
     if (policyBlock) return policyBlock

@@ -1,8 +1,9 @@
-import type { AgentCompletionStatus, AppSettings } from '../../../../shared/types'
+import type { AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
 export interface AgentTaskPayload {
+  identity?: AgentRunIdentity
   userTask: string
   initialUserTask?: string
   agentMode: AgentMode

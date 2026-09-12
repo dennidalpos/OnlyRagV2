@@ -5,6 +5,7 @@ import os from 'node:os'
 import { workspaceAppService } from './workspaceAppService'
 import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsRepository'
 import { webClient } from '../infrastructure/http/webClient'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
 describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () => {
   let tmpDir: string
@@ -70,5 +71,40 @@ describe('WorkspaceAppService File Deletion & Reference Purge Unit Tests', () =>
     const res = await workspaceAppService.deleteFile(missingPath)
     expect(res.success).toBe(false)
     expect(res.error).toBe('File does not exist')
+  })
+
+  it('rejects a stale editor save and permits an explicit compare-and-swap overwrite', async () => {
+    const filePath = path.join(tmpDir, 'editor.txt')
+    fs.writeFileSync(filePath, 'loaded', 'utf-8')
+    const loadedHash = contentVersion('loaded')
+    fs.writeFileSync(filePath, 'agent change', 'utf-8')
+
+    const conflict = workspaceAppService.writeFile(filePath, 'editor change', loadedHash)
+    expect(conflict).toMatchObject({
+      success: false,
+      conflict: true,
+      currentContent: 'agent change',
+      currentContentHash: contentVersion('agent change'),
+    })
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('agent change')
+
+    const overwrite = workspaceAppService.writeFile(filePath, 'editor change', conflict.currentContentHash)
+    expect(overwrite).toMatchObject({ success: true, contentHash: contentVersion('editor change') })
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('editor change')
+  })
+
+  it('rejects editor writes through a junction outside the selected workspace', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-editor-outside-'))
+    try {
+      const link = path.join(tmpDir, 'escape')
+      fs.symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir')
+
+      const result = workspaceAppService.writeFile(path.join(link, 'leak.txt'), 'blocked', undefined, tmpDir)
+
+      expect(result).toMatchObject({ success: false, error: expect.stringContaining('Symlink or junction escape blocked') })
+      expect(fs.existsSync(path.join(outside, 'leak.txt'))).toBe(false)
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
   })
 })

@@ -19,6 +19,8 @@ Il processo Main è organizzato in quattro layer sotto [`electron/core/`](../ele
 4. avvia il Sidecar fuori dalla modalità smoke;
 5. su `before-quit` annulla task, pulisce residui e arresta il Sidecar.
 
+`TaskRunner` distingue i documenti sorgente dai residui temporanei registrati: annullamento, quit e crash preservano sempre i sorgenti e possono eliminare solo `temporaryResiduePath`.
+
 Adapter principali:
 
 - [`ollamaHttpClient.ts`](../electron/core/infrastructure/http/ollamaHttpClient.ts): `/api/tags`, `/api/ps`, chat/generazione, pull ed eviction.

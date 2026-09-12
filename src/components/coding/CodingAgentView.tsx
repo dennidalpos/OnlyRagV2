@@ -54,7 +54,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
     onPersistPlan: c.persistActiveSessionPlan,
     onPlanApproved: (approvedPlan) => {
       c.setAgentMode('agent')
-      void c.handleAgentExecute(approvedPlan.prompt, 'agent')
+      void c.handleAgentExecute(approvedPlan.prompt, 'agent', `${approvedPlan.id}:v${approvedPlan.version}`)
     },
   })
 
@@ -83,7 +83,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
     activeRequest: activeSkillInstallRequest,
     approveInstall: approveSkillInstall,
     rejectInstall: rejectSkillInstall,
-  } = useSkillInstallApproval(settings)
+  } = useSkillInstallApproval(settings, c.activeRunIdentity)
 
   const activeModelName = (c.isExecuting && c.currentLiveModel)
     ? c.currentLiveModel
@@ -108,7 +108,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
     const prompt = c.agentPrompt.trim()
     if (!prompt) return
     setActiveRightTab('plan')
-    c.addActionLog('info', 'Plan generation requested.', undefined, { category: 'plan_generation' })
+    c.addActionLog('info', 'Plan generation requested.', undefined, { category: 'generic_info' })
     logger.info('CodingAgentView', `Plan generation requested (prompt length: ${prompt.length}).`)
     await planApproval.startPlanFlow(prompt, undefined, c.currentStep)
   }
@@ -263,6 +263,17 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
             planIsReady={planApproval.currentPlan?.status === 'ready'}
             planIsInProgress={planApproval.isGeneratingPlan}
           />
+
+          {c.saveConflict && (
+            <div className="flex items-center justify-between gap-3 border-b border-amber-600/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-100">
+              <span className="truncate">Il file {c.saveConflict.fileName} è cambiato su disco. Scegli come risolvere prima di salvare.</span>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" onClick={c.handleReloadConflict} className="rounded border border-slate-600 px-2 py-1 hover:bg-slate-800">Ricarica</button>
+                <button type="button" onClick={c.handleMergeConflict} className="rounded border border-cyan-700 px-2 py-1 hover:bg-cyan-950">Unisci</button>
+                <button type="button" onClick={c.handleOverwriteConflict} className="rounded border border-rose-700 px-2 py-1 hover:bg-rose-950">Sovrascrivi</button>
+              </div>
+            </div>
+          )}
 
           {/* Active View Container */}
           <div className="flex-1 w-full h-full overflow-hidden relative flex flex-col">

@@ -4,6 +4,9 @@ import { TaskQueueDomain, TaskQueueItem } from '../domain/tasks/taskQueueDomain'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask } from './agentOrchestratorAppService'
 import type { AgentTaskPayload, AgentTaskResult } from '../domain/agent/agentTypes'
 import { logger } from '../../diagnostics'
+import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import type { AgentRunIdentity } from '../../../shared/types'
 
 export interface QueuedAgentTask {
   id: string
@@ -43,11 +46,26 @@ export class TaskQueueAppService {
     payload: AgentTaskPayload,
     winGetter: () => BrowserWindow | null
   ): Promise<AgentTaskResult> {
-    const taskId = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    if (payload.identity?.conversationId && payload.sessionId && payload.identity.conversationId !== payload.sessionId) {
+      return { success: false, summary: 'Agent run identity mismatch', error: 'conversationId does not match sessionId' }
+    }
+
+    const conversationId = payload.identity?.conversationId || payload.sessionId || `conversation-${Date.now()}`
+    const identity = createAgentRunIdentity({
+      ...payload.identity,
+      conversationId,
+      workspacePath: payload.workspacePath,
+    })
+    const taskId = identity.runId
+    const taskPayload: AgentTaskPayload = { ...payload, sessionId: conversationId, identity }
+
+    if (this.queue.findTask(taskId)) {
+      return { success: false, summary: 'Agent run already exists', error: `Duplicate runId: ${taskId}` }
+    }
 
     const taskData: QueuedAgentTask = {
       id: taskId,
-      payload,
+      payload: taskPayload,
       winGetter,
       resolve: () => {},
       reject: () => {},
@@ -63,6 +81,7 @@ export class TaskQueueAppService {
       logger.log('INFO', 'TaskQueueAppService', `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`)
       if (win && !win.isDestroyed()) {
         win.webContents.send('agent:log', {
+          ...identity,
           id: `${Date.now()}-queued`,
           timestamp: new Date().toISOString(),
           type: 'info',
@@ -85,8 +104,13 @@ export class TaskQueueAppService {
     return { success: true, summary: 'Task scheduled successfully' }
   }
 
-  public cancelTask(taskId?: string): { success: boolean; message: string } {
-    if (taskId) {
+  public cancelTask(target?: AgentRunIdentity | string): { success: boolean; message: string } {
+    if (target) {
+      const taskId = typeof target === 'string' ? target : target.runId
+      const queued = this.queue.findTask(taskId)
+      if (typeof target !== 'string' && queued && !matchesAgentRunIdentity(queued.payload.payload.identity, target)) {
+        return { success: false, message: `Task ${taskId} identity mismatch.` }
+      }
       const res = this.queue.cancel(taskId)
       cancelActiveAgentTask(taskId)
       return {

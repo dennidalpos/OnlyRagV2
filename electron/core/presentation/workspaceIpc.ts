@@ -31,9 +31,9 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.readFile(payload.filePath, payload.startLine, payload.endLine)
   })
 
-  ipcMain.handle('workspace:write-file', async (_event: unknown, filePath: string, content: string) => {
-    const payload = workspaceWriteFilePayloadSchema.parse({ filePath, content })
-    return workspaceAppService.writeFile(payload.filePath, payload.content)
+  ipcMain.handle('workspace:write-file', async (_event: unknown, filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) => {
+    const payload = workspaceWriteFilePayloadSchema.parse({ filePath, content, expectedContentHash, workspaceRoot })
+    return workspaceAppService.writeFile(payload.filePath, payload.content, payload.expectedContentHash, payload.workspaceRoot)
   })
 
   ipcMain.handle('workspace:replace-chunk', async (_event: unknown, filePath: string, targetContent: string, replacementContent: string) => {
@@ -70,9 +70,9 @@ export function registerWorkspaceIpcHandlers() {
     return workspaceAppService.downloadFile(payload.url, payload.targetFilePath, payload.workspaceRoot)
   })
 
-  ipcMain.handle('workspace:git-commit', async (_event: unknown, commitMessage: string, workspaceRoot?: string) => {
-    const payload = workspaceGitCommitPayloadSchema.parse({ commitMessage, workspaceRoot })
-    return workspaceAppService.gitCommit(payload.workspaceRoot, payload.commitMessage)
+  ipcMain.handle('workspace:git-commit', async (_event: unknown, commitMessage: string, workspaceRoot: string | undefined, filePaths: string[]) => {
+    const payload = workspaceGitCommitPayloadSchema.parse({ commitMessage, workspaceRoot, filePaths })
+    return workspaceAppService.gitCommit(payload.workspaceRoot, payload.commitMessage, payload.filePaths)
   })
 
   ipcMain.handle('workspace:get-git-status-and-diff', async (_event: unknown, workspaceRoot?: string) => {

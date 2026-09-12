@@ -143,55 +143,6 @@ export function isIgnoredPath(name: string, isDirectory: boolean = false): boole
 }
 
 /**
- * Strips shell command chaining characters (;, &&, ||, \n) and CLI prefixes from path strings.
- * Prevents command pollution from creating directories named after shell commands.
- */
-export function stripShellCommandChaining(rawPath: string): string {
-  if (!rawPath || typeof rawPath !== 'string') return rawPath
-  let pathOnly = rawPath.trim()
-
-  if (/;|\&\&|\|\||\n/.test(pathOnly)) {
-    pathOnly = pathOnly.split(/;|\&\&|\|\||\n/)[0].trim()
-  }
-
-  const cliIndex = pathOnly.search(/\b(?:cd|npx|npm|pip|node|git|yarn|pnpm)\s+/i)
-  if (cliIndex > 0) {
-    pathOnly = pathOnly.substring(0, cliIndex).trim()
-  } else if (cliIndex === 0) {
-    const match = pathOnly.match(/^cd\s+["']?([^"';&\n]+)["']?/i)
-    if (match && match[1]) {
-      pathOnly = match[1].trim()
-    }
-  }
-
-  return pathOnly.trim()
-}
-
-/**
- * Sanitizes file path segments by converting space-containing file and directory names into clean kebab-case.
- * e.g. "src/my component/App Header.tsx" -> "src/my-component/App-Header.tsx"
- */
-export function sanitizeFilePathSpaces(filePath: string): string {
-  if (!filePath || typeof filePath !== 'string') return filePath
-  const stripped = stripShellCommandChaining(filePath)
-  const normalized = stripped.replace(/\\/g, '/')
-  const isAbsolute = path.isAbsolute(normalized) || /^[a-zA-Z]:\//.test(normalized)
-
-  const parts = normalized.split('/')
-  const sanitizedParts = parts.map((part, index) => {
-    // Preserve Windows drive letters like "D:" or root slashes
-    if (index === 0 && /^[a-zA-Z]:$/.test(part)) return part
-    if (!part.trim()) return part
-
-    // Replace multiple spaces with a single dash in file and directory names
-    return part.trim().replace(/\s+/g, '-')
-  })
-
-  const clean = sanitizedParts.join('/')
-  return isAbsolute ? path.normalize(clean) : clean
-}
-
-/**
  * Checks if a target path is inside a protected Windows system directory (e.g. Program Files, SystemRoot).
  */
 export function isProtectedSystemDirectory(targetPath?: string | null): boolean {
@@ -210,7 +161,7 @@ export function isProtectedSystemDirectory(targetPath?: string | null): boolean 
 }
 
 /**
- * Validates path safety, directory traversal prevention, credential blocking, and file name space sanitization.
+ * Validates lexical path safety without rewriting opaque file or directory names.
  */
 export function validatePathSafety(filePath?: string | null, workspaceRoot?: string | null): { safePath: string | null; error?: string } {
   if (!filePath || typeof filePath !== 'string' || !filePath.trim()) {
@@ -222,9 +173,6 @@ export function validatePathSafety(filePath?: string | null, workspaceRoot?: str
     if (!cleanPath) {
       return { safePath: null, error: 'Empty or invalid file path' }
     }
-
-    // Automatically sanitize spaces in file/directory path segments
-    cleanPath = sanitizeFilePathSpaces(cleanPath)
 
     const resolvedRoot = workspaceRoot && workspaceRoot.trim() ? path.resolve(workspaceRoot.trim()) : null
 

@@ -154,4 +154,9 @@ export class AtomicWorkspaceJournal {
   public get trackedCount(): number {
     return this.backupMap.size
   }
+
+  /** Absolute paths mutated since the last commit or rollback boundary. */
+  public get trackedPaths(): string[] {
+    return Array.from(this.backupMap.keys())
+  }
 }

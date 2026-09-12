@@ -30,6 +30,7 @@ export interface ToolGateContext {
   capabilityPolicyMode?: 'offline-strict' | 'local-only' | 'network-approved'
   allowedToolsForTurn?: readonly SupportedToolName[]
   requiredReadPath?: string
+  runOwnedPaths?: readonly string[]
 }
 
 export type ToolGateResult =
@@ -53,21 +54,36 @@ const MUTATING_TOOLS_REQUIRING_ASK_APPROVAL = [
  * only approval-gated in ASK mode below). PLAN mode never reaches this point for any tool
  * (handled by the caller's early return), so no special-casing is needed for it here.
  */
-async function gateGitCommit(ctx: ToolGateContext): Promise<boolean> {
+async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null> {
   const { parsedTool, episodicCompactor, emitLog, requestApproval, stepCount } = ctx
+  let preview
+  try {
+    preview = agentToolExecutorService.previewGitCommit(ctx.workspacePath || process.cwd(), ctx.runOwnedPaths)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: message }, message)
+    emitLog('info', `Git commit bloccato: ${message}`)
+    return null
+  }
+  const commitParameters = {
+    ...parsedTool.parameters,
+    commitPaths: preview.paths,
+    commitDiff: preview.diffText,
+    commitDiffHash: preview.diffHash,
+  }
   const approval = await requestApproval({
     type: 'git_commit',
     target: parsedTool.parameters.commitMessage || 'Git Commit',
     contentOrCmd: parsedTool.parameters.commitMessage || '',
-    parameters: parsedTool.parameters,
+    parameters: commitParameters,
   })
   if (!approval.approved) {
     const feedback = `[USER DENIED] L'utente ha rifiutato il git_commit proposto. Non ripetere questo esatto commit; proponi un'alternativa o chiedi chiarimenti.`
     episodicCompactor.recordStep({ step: stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'User denied git_commit approval' }, feedback)
     emitLog('info', `🚫 git_commit rifiutato dall'utente.`)
-    return false
+    return null
   }
-  return true
+  return { ...parsedTool, parameters: commitParameters }
 }
 
 function approvalTypeForTool(tool: string): string {
@@ -191,7 +207,9 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
   if (policyConsent) approvalGranted = true
 
   if (ctx.parsedTool.tool === 'git_commit') {
-    if (!(await gateGitCommit(ctx))) return { outcome: 'denied' }
+    const approvedCommit = await gateGitCommit(ctx)
+    if (!approvedCommit) return { outcome: 'denied' }
+    toolCallForExecution = approvedCommit
     approvalGranted = true
   }
 

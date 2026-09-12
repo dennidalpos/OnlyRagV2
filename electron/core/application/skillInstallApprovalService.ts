@@ -1,5 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { logger } from '../../diagnostics'
+import type { AgentRunIdentity } from '../../../shared/types'
+import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 
 export const SKILL_INSTALL_REQUEST_CHANNEL = 'agent:skill-install-request'
 export const SKILL_INSTALL_RESPONSE_CHANNEL = 'agent:skill-install-response'
@@ -22,23 +24,27 @@ const APPROVAL_TIMEOUT_MS = 120_000
  * A request nobody answers resolves as denied, so the agent loop can never deadlock.
  */
 export class SkillInstallApprovalService {
-  private readonly pendingRequests = new Map<string, (approved: boolean) => void>()
+  private readonly pendingRequests = new Map<string, {
+    identity: Readonly<AgentRunIdentity>
+    resolve: (approved: boolean) => void
+  }>()
   private isListenerRegistered = false
 
   private ensureResponseListener(): void {
     if (this.isListenerRegistered) return
-    ipcMain.on(SKILL_INSTALL_RESPONSE_CHANNEL, (_event, payload: { requestId?: string; approved?: boolean }) => {
-      const resolver = payload?.requestId ? this.pendingRequests.get(payload.requestId) : undefined
-      if (!resolver || !payload?.requestId) return
+    ipcMain.on(SKILL_INSTALL_RESPONSE_CHANNEL, (_event, payload: Partial<AgentRunIdentity> & { requestId?: string; approved?: boolean }) => {
+      const pending = payload?.requestId ? this.pendingRequests.get(payload.requestId) : undefined
+      if (!pending || !payload?.requestId || !matchesAgentRunIdentity(pending.identity, payload)) return
       this.pendingRequests.delete(payload.requestId)
-      resolver(payload.approved === true)
+      pending.resolve(payload.approved === true)
     })
     this.isListenerRegistered = true
   }
 
   public async requestApproval(
     targetWindow: BrowserWindow | null,
-    candidate: SkillInstallCandidate
+    candidate: SkillInstallCandidate,
+    identity: Readonly<AgentRunIdentity>
   ): Promise<boolean> {
     if (!targetWindow || targetWindow.isDestroyed()) return false
     this.ensureResponseListener()
@@ -52,13 +58,16 @@ export class SkillInstallApprovalService {
         resolve(false)
       }, APPROVAL_TIMEOUT_MS)
 
-      this.pendingRequests.set(requestId, (approved: boolean) => {
-        clearTimeout(timeoutHandle)
-        logger.log('INFO', 'SkillInstallApproval', `User ${approved ? 'approved' : 'denied'} the install of hub skill '${candidate.skillName}'.`)
-        resolve(approved)
+      this.pendingRequests.set(requestId, {
+        identity,
+        resolve: (approved: boolean) => {
+          clearTimeout(timeoutHandle)
+          logger.log('INFO', 'SkillInstallApproval', `User ${approved ? 'approved' : 'denied'} the install of hub skill '${candidate.skillName}'.`)
+          resolve(approved)
+        },
       })
 
-      targetWindow.webContents.send(SKILL_INSTALL_REQUEST_CHANNEL, { requestId, ...candidate })
+      targetWindow.webContents.send(SKILL_INSTALL_REQUEST_CHANNEL, { ...identity, requestId, ...candidate })
     })
   }
 }

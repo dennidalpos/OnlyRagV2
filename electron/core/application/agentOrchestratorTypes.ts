@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
-import type { AgentCompletionStatus, AgentVerificationEvidence } from '../../../shared/types'
+import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 
 export interface ApprovalResponse {
@@ -11,6 +11,7 @@ export interface ApprovalResponse {
 
 export interface AgentSession {
   id: string
+  identity: Readonly<AgentRunIdentity>
   isCancelled: boolean
   targetWindow: BrowserWindow | null
   activeCancelHandle?: (() => void) | null

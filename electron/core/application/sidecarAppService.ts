@@ -109,7 +109,7 @@ export class SidecarAppService {
             () => {
               if (cancelRequest) cancelRequest()
             },
-            resolvedPath
+            { sourcePath: resolvedPath }
           )
         }
       )

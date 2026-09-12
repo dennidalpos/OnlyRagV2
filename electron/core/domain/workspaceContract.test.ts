@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   workspaceExecutePowerShellPayloadSchema,
+  workspaceGitCommitPayloadSchema,
   workspaceListFilesPayloadSchema,
   workspaceReadFilePayloadSchema,
   workspaceSearchWebPayloadSchema,
@@ -20,11 +21,20 @@ describe('workspace IPC contracts', () => {
     expect(() => workspaceReadFilePayloadSchema.parse({ filePath: ' ', startLine: 1 })).toThrow()
     expect(() => workspaceReadFilePayloadSchema.parse({ filePath: 'a.ts', startLine: 0 })).toThrow()
     expect(() => workspaceListFilesPayloadSchema.parse({ targetPath: 'src', extra: true })).toThrow()
+    expect(() => workspaceWriteFilePayloadSchema.parse({ filePath: 'a.ts', content: 'x', expectedContentHash: 'stale' })).toThrow()
   })
 
   it('bounds essential web and shell inputs', () => {
     expect(workspaceSearchWebPayloadSchema.parse({ query: 'react', maxResults: 8 })).toEqual({ query: 'react', maxResults: 8 })
     expect(() => workspaceSearchWebPayloadSchema.parse({ query: ' ' })).toThrow()
     expect(() => workspaceExecutePowerShellPayloadSchema.parse({ command: 'Get-ChildItem', timeoutMs: 900_001 })).toThrow()
+  })
+
+  it('requires explicit commit paths', () => {
+    expect(workspaceGitCommitPayloadSchema.parse({ commitMessage: 'Update app', filePaths: ['src/App.tsx'] })).toEqual({
+      commitMessage: 'Update app',
+      filePaths: ['src/App.tsx'],
+    })
+    expect(() => workspaceGitCommitPayloadSchema.parse({ commitMessage: 'Update app', filePaths: [] })).toThrow()
   })
 })

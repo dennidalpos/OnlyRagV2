@@ -221,9 +221,13 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
                   <div className="text-emerald-300">{pendingApproval.target}</div>
                 </div>
               ) : pendingApproval.type === 'git_commit' ? (
-                <div>
+                <div className="space-y-2">
                   <div className="text-amber-400 text-[10px] uppercase font-bold">Commit Message:</div>
                   <div className="text-slate-200 whitespace-pre-wrap">{pendingApproval.contentOrCmd}</div>
+                  <div className="text-cyan-400 text-[10px] uppercase font-bold">Run-owned staged diff:</div>
+                  <pre className="max-h-72 overflow-auto whitespace-pre text-[10px] text-slate-300">
+                    {String(pendingApproval.parameters?.commitDiff || 'No diff available.')}
+                  </pre>
                 </div>
               ) : (
                 pendingApproval.contentOrCmd

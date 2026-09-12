@@ -1,11 +1,14 @@
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import { validatePathSafety } from '../domain/agent/contextFilter'
 import { executeGitDiff, executeGitStatus, performGitCommit, type GitCommitResult, type GitRun } from '../domain/agent/tools/git/gitCommitTool'
+import type { GitCommitPreview } from '../infrastructure/process/gitCliRepository'
 import type { ToolExecutionResult } from '../domain/agent/tools/toolExecutionContracts'
 
 interface GitToolDependencies {
   run: GitRun
-  commit(cwd: string, message: string): string
+  previewCommit(cwd: string, paths: readonly string[]): GitCommitPreview
+  commit(cwd: string, message: string, paths: readonly string[], expectedDiffHash: string): string
+  markCommitBoundary(): void
 }
 
 /** Application service for Git tool operations. */
@@ -24,11 +27,18 @@ export class GitToolService {
   }
 
   executeCommit(parameters: AgentToolCall['parameters'], workspacePath: string | null | undefined): ToolExecutionResult {
-    const result = this.commit(workspacePath || process.cwd(), parameters.commitMessage || '')
+    const paths = Array.isArray(parameters.commitPaths) ? parameters.commitPaths.filter((value): value is string => typeof value === 'string') : []
+    const result = this.commit(workspacePath || process.cwd(), parameters.commitMessage || '', paths, String(parameters.commitDiffHash || ''))
     return { outcome: result.success ? 'success' : 'failure', outputForHistory: result.output, logMessage: result.logMessage }
   }
 
-  commit(cwd: string, commitMessage: string): GitCommitResult {
-    return performGitCommit(cwd, commitMessage, this.dependencies.commit)
+  previewCommit(cwd: string, paths: readonly string[]): GitCommitPreview {
+    return this.dependencies.previewCommit(cwd, paths)
+  }
+
+  commit(cwd: string, commitMessage: string, paths: readonly string[], expectedDiffHash: string): GitCommitResult {
+    const result = performGitCommit(cwd, commitMessage, paths, expectedDiffHash, this.dependencies.commit)
+    if (result.success) this.dependencies.markCommitBoundary()
+    return result
   }
 }

@@ -13,7 +13,14 @@ vi.mock('electron', async (importOriginal) => ({
   },
 }))
 
-vi.mock('../application/taskQueueAppService', () => ({ taskQueueAppService: {} }))
+vi.mock('../application/taskQueueAppService', () => ({
+  taskQueueAppService: {
+    scheduleAgentTask: vi.fn(),
+    cancelTask: vi.fn(),
+    getQueueStatus: vi.fn(),
+  },
+}))
+vi.mock('../application/agentOrchestratorAppService', () => ({ respondToApproval: vi.fn() }))
 vi.mock('../domain/agent/toolParser', () => ({ parseAgentToolCall: vi.fn() }))
 vi.mock('../application/sidecarAppService', () => ({ sidecarAppService: {} }))
 vi.mock('../application/planGenerationAppService', () => ({
@@ -33,8 +40,10 @@ vi.mock('../application/agentSessionStateAppService', () => ({
 }))
 
 import { agentSessionStateAppService } from '../application/agentSessionStateAppService'
+import { respondToApproval } from '../application/agentOrchestratorAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
+import { taskQueueAppService } from '../application/taskQueueAppService'
 import { registerAgentIpcHandlers } from './agentIpc'
 
 describe('agent IPC session-state facade', () => {
@@ -58,6 +67,24 @@ describe('agent IPC session-state facade', () => {
       stepCount: 4,
     })
     expect(agentSessionStateAppService.loadSessionState).toHaveBeenCalledWith('session-1', '/repo')
+  })
+
+  it('forwards the complete immutable identity for run commands', async () => {
+    const identity = {
+      runId: 'run-1',
+      conversationId: 'conversation-1',
+      planRevisionId: 'plan-1:v2',
+      workspaceId: 'workspace-1',
+    }
+    const payload = { identity, sessionId: identity.conversationId, userTask: 'Inspect', agentMode: 'ask' }
+
+    await handlers.get('agent:start-task')?.({}, payload)
+    await handlers.get('agent:cancel-task')?.({}, identity)
+    await handlers.get('agent:approval-response')?.({}, identity, true, [0])
+
+    expect(taskQueueAppService.scheduleAgentTask).toHaveBeenCalledWith(payload, expect.any(Function))
+    expect(taskQueueAppService.cancelTask).toHaveBeenCalledWith(identity)
+    expect(respondToApproval).toHaveBeenCalledWith(identity, true, [0])
   })
 
   it('returns null when no persisted session state exists and forwards plan seeding', async () => {

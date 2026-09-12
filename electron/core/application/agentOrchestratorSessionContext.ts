@@ -149,7 +149,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
     autoInstallMinScore: settings.autoInstallMinScore,
     onConfirmInstall: (candidate: SkillInstallCandidate) => {
       emitLog('info', `🧩 Skill Hub: richiesta conferma installazione '${candidate.skillName}' da ${candidate.hubName} (score ${candidate.score.toFixed(1)})`)
-      return skillInstallApprovalService.requestApproval(session.targetWindow, candidate)
+      return skillInstallApprovalService.requestApproval(session.targetWindow, candidate, session.identity)
     },
   }
 
@@ -158,7 +158,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   if (matchedSkills.length > 0) {
     const skillNames = matchedSkills.map((s) => s.name)
     if (session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:skills-matched', { skills: skillNames })
+      session.targetWindow.webContents.send('agent:skills-matched', { ...session.identity, skills: skillNames })
     }
     emitLog('info', `✨ Skill Router: Attivate ${matchedSkills.length} skill [${skillNames.join(', ')}]`)
     if (settings.enableCodingAgentDebugLog) {

@@ -10,7 +10,7 @@ export interface GitCommandError {
   stderr?: { toString(): string }
 }
 
-export type GitCommit = (cwd: string, message: string) => string
+export type GitCommit = (cwd: string, message: string, paths: readonly string[], expectedDiffHash: string) => string
 
 export type GitRun = (cwd: string, command: string, timeoutMs: number) => string
 
@@ -55,7 +55,13 @@ export function executeGitDiff(
 }
 
 /** Validates and translates the git commit operation while delegating execution to infrastructure. */
-export function performGitCommit(cwd: string, commitMessage: string, commit: GitCommit): GitCommitResult {
+export function performGitCommit(
+  cwd: string,
+  commitMessage: string,
+  paths: readonly string[],
+  expectedDiffHash: string,
+  commit: GitCommit,
+): GitCommitResult {
   const trimmedMessage = (commitMessage || '').trim()
   if (!trimmedMessage) {
     return {
@@ -66,7 +72,7 @@ export function performGitCommit(cwd: string, commitMessage: string, commit: Git
   }
 
   try {
-    const stdout = commit(cwd, trimmedMessage)
+    const stdout = commit(cwd, trimmedMessage, paths, expectedDiffHash)
     return {
       success: true,
       output: `[GIT COMMIT: ${cwd}]\n${stdout.trim()}\n[END GIT COMMIT]`,

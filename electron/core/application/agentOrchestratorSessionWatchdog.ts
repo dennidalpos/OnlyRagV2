@@ -92,7 +92,11 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
         return
       }
       session.pendingApprovalResolve = resolve
-      session.targetWindow.webContents.send('agent:approval-request', { sessionId: session.id, ...approvalPayload })
+      session.targetWindow.webContents.send('agent:approval-request', {
+        ...session.identity,
+        sessionId: session.id,
+        ...approvalPayload,
+      })
     })
   }
 

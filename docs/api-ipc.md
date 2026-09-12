@@ -26,6 +26,12 @@ Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`wor
 
 ## Eventi Renderer
 
-Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:document-deleted`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:chunk`, `ollama:pull-progress`, `workspace:file-deleted`.
+Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:document-deleted`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:chunk`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`.
+
+I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run includono l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Risposte di annullamento e approvazione vengono accettate solo per la stessa identità.
+
+`workspace:git-commit` richiede un elenco non vuoto di `filePaths`. Nel flusso Agent Coding la richiesta `git_commit` include anche `commitDiff` e i soli `commitPaths` attribuiti alla run.
+
+`workspace:write-file` riceve anche `workspaceRoot`: il salvataggio editor applica lo stesso controllo realpath delle mutazioni Agent Coding.
 
 L'unico `send` Renderer→Main è `agent:skill-install-response`. I listener restituiscono una funzione di unsubscribe.

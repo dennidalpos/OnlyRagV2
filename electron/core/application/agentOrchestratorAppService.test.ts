@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { execFileSync } from 'node:child_process'
 import type { BrowserWindow } from 'electron'
 import { runAgentOrchestratorLoop, cancelActiveAgentTask, respondToApproval } from './agentOrchestratorAppService'
 import { AgentStreamTransport } from '../infrastructure/http/agentStreamTransport'
@@ -140,6 +141,44 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       'utf-8'
     ))
     expect(saved.executionPhase).toBe('outcome')
+  })
+
+  it('scopes every emitted Agent Coding event to one immutable run identity', async () => {
+    vi.mocked(AgentStreamTransport.streamCompletion)
+      .mockResolvedValueOnce('```json\n{"tool":"write_file","parameters":{"filePath":"identity.ts","content":"export const identity = true"}}\n```')
+      .mockResolvedValueOnce('```json\n{"tool":"finish","parameters":{"summary":"Done"}}\n```')
+    const mockWin = createMockWindow()
+    const identity = {
+      runId: 'run-identity-1',
+      conversationId: 'conversation-identity-1',
+      planRevisionId: 'plan-identity:v3',
+      workspaceId: 'workspace:identity-test',
+    }
+
+    await runAgentOrchestratorLoop({
+      identity,
+      sessionId: identity.conversationId,
+      userTask: 'Create identity.ts',
+      agentMode: 'agent',
+      workspacePath: tempDir,
+      settings: { ...buildDefaultAgentSettings(), verifyBeforeFinish: false },
+    }, mockWin.window)
+
+    const agentEvents = mockWin.send.mock.calls
+      .filter(([channel]) => String(channel).startsWith('agent:'))
+      .map(([, payload]) => payload)
+    expect(agentEvents.length).toBeGreaterThan(0)
+    expect(agentEvents.every((payload) => (
+      payload.runId === identity.runId
+      && payload.conversationId === identity.conversationId
+      && payload.planRevisionId === identity.planRevisionId
+      && payload.workspaceId === identity.workspaceId
+    ))).toBe(true)
+    expect(mockWin.send).toHaveBeenCalledWith('workspace:file-version', expect.objectContaining({
+      ...identity,
+      filePath: path.join(tempDir, 'identity.ts'),
+      deleted: false,
+    }))
   })
 
   it('stops after the corrective attempt repeats the same execution failure', async () => {
@@ -479,6 +518,15 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     const mockWin = createMockWindow()
     const sessionId = 'test-agent-commit-approval-session'
+    const ownedPath = path.join(tempDir, 'owned.txt')
+    execFileSync('git', ['init'], { cwd: tempDir })
+    execFileSync('git', ['config', 'user.email', 'test@onlyrag.local'], { cwd: tempDir })
+    execFileSync('git', ['config', 'user.name', 'OnlyRag Test'], { cwd: tempDir })
+    fs.writeFileSync(ownedPath, 'before')
+    execFileSync('git', ['add', '--', 'owned.txt'], { cwd: tempDir })
+    execFileSync('git', ['commit', '-m', 'baseline'], { cwd: tempDir })
+    agentToolExecutorService.getJournal().recordBeforeModification(ownedPath)
+    fs.writeFileSync(ownedPath, 'after')
 
     const resultPromise = runAgentOrchestratorLoop(
       { sessionId, userTask: 'Commit the changes', agentMode: 'agent', workspacePath: tempDir },
@@ -488,7 +536,11 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     await vi.waitFor(() => {
       expect(mockWin.send).toHaveBeenCalledWith(
         'agent:approval-request',
-        expect.objectContaining({ sessionId, type: 'git_commit' })
+        expect.objectContaining({
+          sessionId,
+          type: 'git_commit',
+          parameters: expect.objectContaining({ commitPaths: ['owned.txt'], commitDiff: expect.stringContaining('+after') }),
+        })
       )
     })
 

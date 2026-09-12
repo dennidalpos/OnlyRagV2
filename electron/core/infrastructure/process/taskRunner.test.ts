@@ -24,34 +24,50 @@ describe('TaskRunner Unit & Reliability Tests', () => {
     expect(destroyMock).not.toHaveBeenCalled()
   })
 
-  it('should cancel active task and clean up file residue safely', () => {
+  it('should cancel an active task and clean only its temporary residue', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-taskrunner-test-'))
+    const sourceFile = path.join(tempDir, 'source.pdf')
     const tempFile = path.join(tempDir, 'partial.tmp')
+    fs.writeFileSync(sourceFile, 'source document', 'utf-8')
     fs.writeFileSync(tempFile, 'partial residue data', 'utf-8')
 
     const destroyMock = vi.fn()
-    runner.registerActiveTask('task-to-cancel', 'ingestion', destroyMock, tempFile)
+    runner.registerActiveTask('task-to-cancel', 'ingestion', destroyMock, {
+      sourcePath: sourceFile,
+      temporaryResiduePath: tempFile,
+    })
 
     const cancelRes = runner.cancelTask('task-to-cancel')
     expect(cancelRes.success).toBe(true)
     expect(destroyMock).toHaveBeenCalledOnce()
+    expect(fs.existsSync(sourceFile)).toBe(true)
     expect(fs.existsSync(tempFile)).toBe(false)
 
-    // Cleanup temp dir
-    try {
-      fs.rmdirSync(tempDir)
-    } catch {}
+    fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('should cancel all active tasks on cancelAllTasks', () => {
+  it('should preserve sources during lifecycle cancellation and clean temporary residues', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-taskrunner-lifecycle-test-'))
+    const sourceFile = path.join(tempDir, 'source.docx')
+    const tempFile = path.join(tempDir, 'partial.tmp')
+    fs.writeFileSync(sourceFile, 'source document', 'utf-8')
+    fs.writeFileSync(tempFile, 'partial residue data', 'utf-8')
+
     const d1 = vi.fn()
     const d2 = vi.fn()
-    runner.registerActiveTask('t1', 'ollama_stream', d1)
+    runner.registerActiveTask('t1', 'ingestion', d1, {
+      sourcePath: sourceFile,
+      temporaryResiduePath: tempFile,
+    })
     runner.registerActiveTask('t2', 'export', d2)
 
     runner.cancelAllTasks()
     expect(d1).toHaveBeenCalledOnce()
     expect(d2).toHaveBeenCalledOnce()
+    expect(fs.existsSync(sourceFile)).toBe(true)
+    expect(fs.existsSync(tempFile)).toBe(false)
+
+    fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
   it('should normalize compound && commands to valid PowerShell conditional syntax', () => {

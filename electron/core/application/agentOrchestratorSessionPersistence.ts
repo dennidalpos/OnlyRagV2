@@ -129,6 +129,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
   const emitStepUpdate = (statusText?: string) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
       session.targetWindow.webContents.send('agent:step-update', {
+        ...session.identity,
         step: stepCountBox.value,
         maxSteps: MAX_STEPS === Infinity ? 999 : MAX_STEPS,
         maxStepsLabel,

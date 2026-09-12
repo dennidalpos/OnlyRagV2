@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import type { AgentToolCall, AgentLogEntry } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import {
@@ -9,6 +11,7 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles, trackVerification } from './agentOrchestratorCircuitBreakerAndVerification'
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
+import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -122,11 +125,48 @@ function emitChangeMetrics(ctx: ToolResultProcessingContext) {
   }
   if (ctx.isSessionActive() && ctx.targetWindow && !ctx.targetWindow.isDestroyed()) {
     ctx.targetWindow.webContents.send('agent:change-metrics', {
+      ...ctx.runIdentity,
       filesTouched: ctx.sessionChangedFiles.size,
       additions: totalAdditions,
       deletions: totalDeletions,
     })
   }
+}
+
+function emitWorkspaceFileVersions(ctx: ToolResultProcessingContext, filePaths: Array<string | undefined>): void {
+  if (!ctx.isSessionActive() || !ctx.targetWindow || ctx.targetWindow.isDestroyed()) return
+
+  for (const filePath of new Set(filePaths.filter((value): value is string => Boolean(value)))) {
+    try {
+      const exists = fs.existsSync(filePath)
+      if (exists && !fs.statSync(filePath).isFile()) continue
+      const contentHash = exists ? contentVersion(fs.readFileSync(filePath, 'utf-8')) : undefined
+      ctx.targetWindow.webContents.send('workspace:file-version', {
+        ...ctx.runIdentity,
+        filePath,
+        contentHash,
+        deleted: !exists,
+      })
+    } catch {
+      // An explicit reload retries discovery.
+    }
+  }
+}
+
+function resolvedMutationPaths(ctx: ToolResultProcessingContext, isToolFailure: boolean): string[] {
+  if (isToolFailure || !ctx.workspacePath) return []
+  const resolve = (value: unknown) => typeof value === 'string'
+    ? (path.isAbsolute(value) ? value : path.resolve(ctx.workspacePath!, value))
+    : undefined
+  const parameters = ctx.parsedTool.parameters
+  if (ctx.parsedTool.tool === 'copy_file') return [resolve(parameters.targetPath || parameters.destination)].filter((value): value is string => Boolean(value))
+  if (ctx.parsedTool.tool === 'move_file') {
+    return [
+      resolve(parameters.sourcePath || parameters.filePath),
+      resolve(parameters.targetPath || parameters.destination),
+    ].filter((value): value is string => Boolean(value))
+  }
+  return []
 }
 
 /**
@@ -211,7 +251,12 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   }
   // Runs on failure too: a generator that aborts halfway still leaves directories behind,
   // and that leftover is precisely what the agent needs to be told about.
-  recordCommandTouchedFiles(ctx, isToolFailure)
+  const commandTouchedPaths = recordCommandTouchedFiles(ctx, isToolFailure)
+  emitWorkspaceFileVersions(ctx, [
+    toolRes.changeStats?.filePath,
+    ...commandTouchedPaths,
+    ...resolvedMutationPaths(ctx, isToolFailure),
+  ])
   trackVerification(ctx, isToolFailure)
 
   const toolName = parsedTool.tool

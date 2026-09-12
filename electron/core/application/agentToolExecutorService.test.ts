@@ -1163,6 +1163,26 @@ async def async_handler():
     expect(res.logMessage).toContain('[SECURITY BLOCK]')
   })
 
+  it('blocks file mutations through a workspace junction that resolves outside', async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-outside-'))
+    try {
+      const link = path.join(tempDir, 'escape')
+      fs.symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir')
+
+      const res = await agentToolExecutorService.executeTool(
+        { tool: 'write_file', parameters: { filePath: path.join('escape', 'leak.txt'), content: 'blocked' } },
+        tempDir,
+        settings,
+      )
+
+      expect(res.outcome).toBe('rejected')
+      expect(res.outputForHistory).toContain('Symlink or junction escape blocked')
+      expect(fs.existsSync(path.join(outside, 'leak.txt'))).toBe(false)
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
   it('should execute git_status and git_diff without errors', async () => {
     const statusRes = await agentToolExecutorService.executeTool(
       {
@@ -1190,11 +1210,13 @@ async def async_handler():
     execSync('git config user.email "test@onlyrag.local"', { cwd: tempDir })
     execSync('git config user.name "OnlyRag Test"', { cwd: tempDir })
     fs.writeFileSync(path.join(tempDir, 'file.txt'), 'hello')
+    fs.writeFileSync(path.join(tempDir, 'unrelated.txt'), 'leave me uncommitted')
+    const preview = agentToolExecutorService.previewGitCommit(tempDir, [path.join(tempDir, 'file.txt')])
 
     const res = await agentToolExecutorService.executeTool(
       {
         tool: 'git_commit',
-        parameters: { commitMessage: 'Add file.txt' },
+        parameters: { commitMessage: 'Add file.txt', commitPaths: preview.paths, commitDiffHash: preview.diffHash },
       },
       tempDir,
       settings
@@ -1204,6 +1226,7 @@ async def async_handler():
     expect(res.logMessage).toContain('Git Commit created')
     const log = execSync('git log --oneline -1', { cwd: tempDir, encoding: 'utf-8' })
     expect(log).toContain('Add file.txt')
+    expect(execSync('git status --short', { cwd: tempDir, encoding: 'utf-8' })).toContain('?? unrelated.txt')
   }, 15000)
 
   it('should return an error when git_commit is called without a commitMessage', async () => {
@@ -1225,8 +1248,9 @@ async def async_handler():
     execSync('git config user.email "test@onlyrag.local"', { cwd: tempDir })
     execSync('git config user.name "OnlyRag Test"', { cwd: tempDir })
     fs.writeFileSync(path.join(tempDir, 'direct.txt'), 'hello')
+    const preview = agentToolExecutorService.previewGitCommit(tempDir, [path.join(tempDir, 'direct.txt')])
 
-    const res = agentToolExecutorService.performGitCommit(tempDir, 'Add direct.txt')
+    const res = agentToolExecutorService.performGitCommit(tempDir, 'Add direct.txt', preview.paths, preview.diffHash)
 
     expect(res.success).toBe(true)
     expect(res.output).toContain('[GIT COMMIT:')
@@ -1236,7 +1260,7 @@ async def async_handler():
   }, 15000)
 
   it('performGitCommit returns success: false with no commitMessage, without touching git', () => {
-    const res = agentToolExecutorService.performGitCommit(tempDir, '')
+    const res = agentToolExecutorService.performGitCommit(tempDir, '', [], '')
     expect(res.success).toBe(false)
     expect(res.logMessage).toContain('missing commit message')
   })

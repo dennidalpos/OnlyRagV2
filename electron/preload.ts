@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentPlan, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
+import type { AgentChangeMetrics, AgentPlan, AgentRunIdentity, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
 
 const api: IElectronAPI = {
   runDiagnostics: (host?: string) => ipcRenderer.invoke('diagnostics:run', host),
@@ -41,7 +41,8 @@ const api: IElectronAPI = {
   listWorkspaceFiles: (dirPath?: string) => ipcRenderer.invoke('workspace:list-files', dirPath),
   getProjectMap: (dirPath: string) => ipcRenderer.invoke('workspace:get-project-map', dirPath),
   readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => ipcRenderer.invoke('workspace:read-file', filePath, startLine, endLine),
-  writeWorkspaceFile: (filePath: string, content: string) => ipcRenderer.invoke('workspace:write-file', filePath, content),
+  writeWorkspaceFile: (filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) =>
+    ipcRenderer.invoke('workspace:write-file', filePath, content, expectedContentHash, workspaceRoot),
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) =>
     ipcRenderer.invoke('workspace:replace-chunk', filePath, targetContent, replacementContent),
   multiReplaceWorkspaceFileChunks: (filePath: string, replacements: any[]) =>
@@ -51,7 +52,8 @@ const api: IElectronAPI = {
   searchWeb: (query: string, maxResults?: number) => ipcRenderer.invoke('workspace:search-web', query, maxResults),
   fetchWebContent: (url: string, maxChars?: number) => ipcRenderer.invoke('workspace:fetch-web', url, maxChars),
   downloadFile: (url: string, targetFilePath: string) => ipcRenderer.invoke('workspace:download-file', url, targetFilePath),
-  gitCommit: (commitMessage: string, workspaceRoot?: string) => ipcRenderer.invoke('workspace:git-commit', commitMessage, workspaceRoot),
+  gitCommit: (commitMessage: string, workspaceRoot: string | undefined, filePaths: string[]) =>
+    ipcRenderer.invoke('workspace:git-commit', commitMessage, workspaceRoot, filePaths),
   getGitStatusAndDiff: (workspaceRoot?: string) => ipcRenderer.invoke('workspace:get-git-status-and-diff', workspaceRoot),
   initGitRepository: (workspaceRoot?: string) => ipcRenderer.invoke('workspace:init-git', workspaceRoot),
   inspectGuestOsEnvironment: () => ipcRenderer.invoke('workspace:inspect-guest-os'),
@@ -69,9 +71,9 @@ const api: IElectronAPI = {
   openExternalUrl: (url: string) => ipcRenderer.invoke('system:open-external', url),
   openPath: (targetPath: string) => ipcRenderer.invoke('system:open-path', targetPath),
   startAgentTask: (payload: any) => ipcRenderer.invoke('agent:start-task', payload),
-  cancelAgentTask: (taskId?: string) => ipcRenderer.invoke('agent:cancel-task', taskId),
-  respondToAgentApproval: (sessionId: string, approved: boolean, approvedHunkIndices?: number[]) =>
-    ipcRenderer.invoke('agent:approval-response', sessionId, approved, approvedHunkIndices),
+  cancelAgentTask: (identity?: AgentRunIdentity) => ipcRenderer.invoke('agent:cancel-task', identity),
+  respondToAgentApproval: (identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) =>
+    ipcRenderer.invoke('agent:approval-response', identity, approved, approvedHunkIndices),
   getAgentQueueStatus: () => ipcRenderer.invoke('agent:get-queue-status'),
   /** Session history CRUD (filesystem store, single source of truth). */
   listCodingSessions: (workspacePath?: string | null) => ipcRenderer.invoke('sessions:list', workspacePath),
@@ -99,13 +101,13 @@ const api: IElectronAPI = {
     ipcRenderer.on('agent:log', subscription)
     return () => ipcRenderer.removeListener('agent:log', subscription)
   },
-  onAgentStepUpdate: (callback: (data: { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string }) => void) => {
+  onAgentStepUpdate: (callback: (data: AgentRunIdentity & { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('agent:step-update', subscription)
     return () => ipcRenderer.removeListener('agent:step-update', subscription)
   },
   /** Aggregate size of the file changes applied so far in the active agent session. */
-  onAgentChangeMetrics: (callback: (data: { filesTouched: number; additions: number; deletions: number }) => void) => {
+  onAgentChangeMetrics: (callback: (data: AgentChangeMetrics & AgentRunIdentity) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('agent:change-metrics', subscription)
     return () => ipcRenderer.removeListener('agent:change-metrics', subscription)
@@ -137,10 +139,10 @@ const api: IElectronAPI = {
     return () => ipcRenderer.removeListener('agent:skill-install-request', subscription)
   },
   /** Skill Hub 'prompt' policy: user's answer to a pending install request. */
-  respondAgentSkillInstall: (requestId: string, approved: boolean) => {
-    ipcRenderer.send('agent:skill-install-response', { requestId, approved })
+  respondAgentSkillInstall: (requestId: string, approved: boolean, identity: AgentRunIdentity) => {
+    ipcRenderer.send('agent:skill-install-response', { ...identity, requestId, approved })
   },
-  onAgentSkillsMatched: (callback: (data: { skills: string[] }) => void) => {
+  onAgentSkillsMatched: (callback: (data: AgentRunIdentity & { skills: string[] }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('agent:skills-matched', subscription)
     return () => ipcRenderer.removeListener('agent:skills-matched', subscription)
@@ -149,6 +151,11 @@ const api: IElectronAPI = {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('workspace:file-deleted', subscription)
     return () => ipcRenderer.removeListener('workspace:file-deleted', subscription)
+  },
+  onWorkspaceFileVersionChanged: (callback: (data: AgentRunIdentity & { filePath: string; contentHash?: string; deleted?: boolean }) => void) => {
+    const subscription = (_: any, data: AgentRunIdentity & { filePath: string; contentHash?: string; deleted?: boolean }) => callback(data)
+    ipcRenderer.on('workspace:file-version', subscription)
+    return () => ipcRenderer.removeListener('workspace:file-version', subscription)
   },
   onIngestDocumentDeleted: (callback: (data: { docId: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)

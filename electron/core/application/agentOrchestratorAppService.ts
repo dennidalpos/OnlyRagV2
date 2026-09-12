@@ -12,6 +12,9 @@ import { agentToolExecutorService } from './agentToolExecutorService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentSession } from './agentOrchestratorTypes'
+import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
+import type { AgentRunIdentity } from '../../../shared/types'
 
 export type { AgentSession }
 
@@ -60,12 +63,14 @@ function cleanupSession(session: AgentSession) {
   }
   if (session.targetWindow && !session.targetWindow.isDestroyed()) {
     session.targetWindow.webContents.send('agent:log', {
+      ...session.identity,
       id: `${Date.now()}-cancelled`,
       timestamp: new Date().toISOString(),
       type: 'info',
       message: "Task interrotto dall'utente.",
     })
     session.targetWindow.webContents.send('agent:done', {
+      ...session.identity,
       success: false,
       summary: "Task interrotto dall'utente.",
       completionStatus: 'cancelled',
@@ -73,13 +78,13 @@ function cleanupSession(session: AgentSession) {
   }
 }
 
-export function cancelActiveAgentTask(targetSessionId?: string) {
-  if (targetSessionId) {
-    const session = activeAgentSessions.get(targetSessionId)
+export function cancelActiveAgentTask(targetRunId?: string) {
+  if (targetRunId) {
+    const session = activeAgentSessions.get(targetRunId)
     if (session) {
       cleanupSession(session)
-      activeAgentSessions.delete(targetSessionId)
-      logger.log('INFO', 'AgentOrchestratorApp', `Agent session ${targetSessionId} cancelled by user.`)
+      activeAgentSessions.delete(targetRunId)
+      logger.log('INFO', 'AgentOrchestratorApp', `Agent run ${targetRunId} cancelled by user.`)
     }
   } else {
     for (const [id, session] of activeAgentSessions.entries()) {
@@ -96,8 +101,10 @@ export function cancelActiveAgentTask(targetSessionId?: string) {
  * cancellation or the session timeout already resolved it), so the renderer can tell a
  * genuine hand-off from a stale response.
  */
-export function respondToApproval(targetSessionId: string, approved: boolean, approvedHunkIndices?: number[]): boolean {
-  const session = activeAgentSessions.get(targetSessionId)
+export function respondToApproval(target: AgentRunIdentity | string, approved: boolean, approvedHunkIndices?: number[]): boolean {
+  const targetRunId = typeof target === 'string' ? target : target.runId
+  const session = activeAgentSessions.get(targetRunId)
+  if (typeof target !== 'string' && session && !matchesAgentRunIdentity(session.identity, target)) return false
   if (!session || !session.pendingApprovalResolve) return false
   const resolve = session.pendingApprovalResolve
   session.pendingApprovalResolve = undefined
@@ -114,19 +121,28 @@ export async function runAgentOrchestratorLoop(
     return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required', completionStatus: 'blocked' }
   }
 
-  const sessionId = payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  const conversationId = payload.identity?.conversationId || payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  const identity = createAgentRunIdentity({
+    ...payload.identity,
+    runId: payload.identity?.runId || customSessionId || conversationId,
+    conversationId,
+    workspacePath: payload.workspacePath,
+  })
+  const sessionId = identity.conversationId
+  const runId = identity.runId
   const session: AgentSession = {
-    id: sessionId,
+    id: runId,
+    identity,
     isCancelled: false,
     targetWindow: win,
     activeCancelHandle: null,
     activeChildProcess: null,
   }
-  activeAgentSessions.set(sessionId, session)
+  activeAgentSessions.set(runId, session)
 
   // Compares by identity, not just by key presence: if a later run registers under the same
   // reused sessionId, this run must recognise that it is no longer the owner and stand down.
-  const isSessionActive = () => activeAgentSessions.get(sessionId) === session && !session.isCancelled
+  const isSessionActive = () => activeAgentSessions.get(runId) === session && !session.isCancelled
 
   // One-shot session setup: task/workspace/settings resolution, model warm-up, skill
   // matching, state restore, and the persist/watchdog closures the turn loop shares below.
@@ -136,7 +152,7 @@ export async function runAgentOrchestratorLoop(
     session,
     sessionId,
     isSessionActive,
-    deregisterSession: () => activeAgentSessions.delete(sessionId),
+    deregisterSession: () => activeAgentSessions.delete(runId),
   })
   const {
     userTask,
@@ -377,6 +393,7 @@ export async function runAgentOrchestratorLoop(
       capabilityPolicyMode: settings.capabilityPolicyMode,
       allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
       requiredReadPath: preparedTurn.toolPolicy.requiredReadPath,
+      runOwnedPaths: Array.from(sessionChangedFiles.keys()),
     })
     if (gateResult.outcome === 'denied') {
       setExecutionPhase('collect_context')
@@ -457,6 +474,7 @@ export async function runAgentOrchestratorLoop(
       recoveryState: responseInterpreterState,
       isSessionActive,
       targetWindow: session.targetWindow,
+      runIdentity: identity,
       emitLog,
       emitDone,
       persistCurrentState,

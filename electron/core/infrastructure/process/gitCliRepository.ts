@@ -1,4 +1,8 @@
 import { execSync, execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 export interface GitStatusAndDiffResult {
   isGitRepo: boolean
@@ -6,11 +10,84 @@ export interface GitStatusAndDiffResult {
   diffText: string
 }
 
+export interface GitCommitPreview {
+  paths: string[]
+  diffText: string
+  diffHash: string
+}
+
 /** Git CLI wrapper with argv-based commits and read-only inspection commands. */
 export class GitCliRepository {
-  commit(cwd: string, message: string): string {
-    execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8', timeout: 15000 })
-    return execFileSync('git', ['commit', '-m', message], { cwd, encoding: 'utf-8', timeout: 15000 })
+  private normalizeOwnedPaths(cwd: string, ownedPaths: readonly string[]): string[] {
+    const root = path.resolve(cwd)
+    const seen = new Set<string>()
+    const relativePaths: string[] = []
+
+    for (const candidate of ownedPaths) {
+      const absolute = path.resolve(root, candidate)
+      const relative = path.relative(root, absolute)
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue
+      const normalized = relative.replace(/\\/g, '/')
+      const key = process.platform === 'win32' ? normalized.toLowerCase() : normalized
+      if (!seen.has(key)) {
+        seen.add(key)
+        relativePaths.push(normalized)
+      }
+    }
+    return relativePaths.sort()
+  }
+
+  previewCommit(cwd: string, ownedPaths: readonly string[]): GitCommitPreview {
+    const paths = this.normalizeOwnedPaths(cwd, ownedPaths)
+    if (paths.length === 0) throw new Error('No run-owned paths are available to commit.')
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-git-index-'))
+    const indexPath = path.join(tempDir, 'index')
+    const env = { ...process.env, GIT_INDEX_FILE: indexPath }
+    try {
+      try {
+        execFileSync('git', ['read-tree', 'HEAD'], { cwd, env, encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch {
+        execFileSync('git', ['read-tree', '--empty'], { cwd, env, encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
+      }
+      execFileSync('git', ['add', '--', ...paths], { cwd, env, encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
+      const diffText = execFileSync('git', ['diff', '--cached', '--binary', '--no-ext-diff', '--', ...paths], {
+        cwd,
+        env,
+        encoding: 'utf-8',
+        timeout: 15000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+      if (!diffText.trim()) throw new Error('Run-owned paths contain no changes to commit.')
+      return { paths, diffText, diffHash: createHash('sha256').update(diffText).digest('hex') }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+  }
+
+  commit(cwd: string, message: string, ownedPaths: readonly string[], expectedDiffHash: string): string {
+    const preview = this.previewCommit(cwd, ownedPaths)
+    if (!expectedDiffHash || preview.diffHash !== expectedDiffHash) {
+      throw new Error('Run-owned changes changed after approval; review the updated diff before committing.')
+    }
+
+    execFileSync('git', ['add', '--', ...preview.paths], { cwd, encoding: 'utf-8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] })
+    const stagedDiff = execFileSync('git', ['diff', '--cached', '--binary', '--no-ext-diff', '--', ...preview.paths], {
+      cwd,
+      encoding: 'utf-8',
+      timeout: 15000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const stagedHash = createHash('sha256').update(stagedDiff).digest('hex')
+    if (stagedHash !== expectedDiffHash) {
+      throw new Error('Staged changes differ from the approved diff; commit aborted.')
+    }
+    return execFileSync('git', ['commit', '--only', '-m', message, '--', ...preview.paths], {
+      cwd,
+      encoding: 'utf-8',
+      timeout: 15000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
   }
 
   init(cwd: string): { success: boolean; message: string } {

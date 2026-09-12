@@ -109,6 +109,7 @@ export function useCodingAgent(settings?: AppSettings) {
     movePromptInQueue,
     dequeueNextPrompt,
     clearPromptQueue,
+    setPromptQueue,
   } = useAgentPromptQueue(handleQueueNotice)
 
   // Attached RAG documents
@@ -169,6 +170,7 @@ export function useCodingAgent(settings?: AppSettings) {
     editorContent,
     setEditorContent,
     originalContent,
+    loadedContentHash,
     isSaved,
     saveConflict,
     setIsSaved,
@@ -236,6 +238,7 @@ export function useCodingAgent(settings?: AppSettings) {
     clearSessions,
     purgeWorkspace,
     renameSession,
+    updateSessionContent,
     updateSessionPlans,
     persistSessionPlan,
     beginExecutedPrompt,
@@ -243,15 +246,23 @@ export function useCodingAgent(settings?: AppSettings) {
   } = useSessionHistory(workspacePath)
 
   const prevSessionIdRef = useRef<string>('')
+  const [contentSessionId, setContentSessionId] = useState<string>('')
   useEffect(() => {
     if (activeSessionId !== prevSessionIdRef.current) {
       prevSessionIdRef.current = activeSessionId
       setActionLogs(activeSession?.actionLogs || [])
+      setPromptQueue(activeSession?.promptQueue || [])
+      setContentSessionId(activeSessionId)
       setStreamingText('')
       clearPendingApproval()
       setCurrentStep(0)
     }
-  }, [activeSessionId, activeSession, clearPendingApproval])
+  }, [activeSessionId, activeSession, clearPendingApproval, setPromptQueue])
+
+  useEffect(() => {
+    if (!activeSessionId || contentSessionId !== activeSessionId) return
+    updateSessionContent(activeSessionId, { actionLogs, promptQueue })
+  }, [activeSessionId, actionLogs, contentSessionId, promptQueue, updateSessionContent])
 
   const completeExecutedPromptRef = useRef(completeExecutedPrompt)
   useEffect(() => {
@@ -505,7 +516,6 @@ export function useCodingAgent(settings?: AppSettings) {
     setCurrentLiveModel(null)
     if (window.electronAPI) {
       if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
-      if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
     closeRunningExecutedPrompt('cancelled')
     addActionLog('info', 'Esecuzione interrotta dall\'utente.')
@@ -516,7 +526,6 @@ export function useCodingAgent(settings?: AppSettings) {
     updateActiveRunIdentity(null)
     if (isExecuting && window.electronAPI) {
       if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
-      if (window.electronAPI.cancelOllamaStream) window.electronAPI.cancelOllamaStream()
     }
     runningExecutedPromptRef.current = null
     setIsExecuting(false)
@@ -668,17 +677,9 @@ export function useCodingAgent(settings?: AppSettings) {
 
     try {
       const activeModel = settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-      const contextFiles = Array.from(pinnedFiles.values()).map((f) => ({
-        path: f.path,
-        name: f.name,
-      }))
-
-      if (selectedFile && !pinnedFiles.has(selectedFile.path)) {
-        contextFiles.push({
-          path: selectedFile.path,
-          name: selectedFile.name,
-        })
-      }
+      const activeFile = selectedFile && loadedContentHash
+        ? { name: selectedFile.name, path: selectedFile.path, content: editorContent, versionHash: loadedContentHash }
+        : null
 
       const attachedDocs = ingestedDocs
         .filter((d) => attachedDocIds.has(d.id))
@@ -717,7 +718,7 @@ export function useCodingAgent(settings?: AppSettings) {
         workspacePath: isStandaloneMode ? null : workspacePath,
         isStandaloneMode,
         activeModel,
-        contextFiles,
+        activeFile,
         pinnedFiles: resolvedPinnedFiles,
         attachedDocs,
         settings,
@@ -729,6 +730,13 @@ export function useCodingAgent(settings?: AppSettings) {
         closeRunningExecutedPrompt('failed', normalized.message)
         setIsExecuting(false)
         addActionLog('info', `Errore avvio task: ${normalized.message}${normalized.remediation ? ` — ${normalized.remediation}` : ''}`)
+      } else if (res.runId !== identity.runId) {
+        if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)
+        closeRunningExecutedPrompt('failed', 'Identità run restituita da Main non valida.')
+        setIsExecuting(false)
+        addActionLog('info', 'Errore avvio task: l’identità restituita da Main non coincide con la richiesta.')
+      } else if ((res.queuePosition || 0) > 0) {
+        addActionLog('info', `Task accettato: run ${res.runId}, posizione coda ${res.queuePosition}.`)
       }
     } catch (err: unknown) {
       if (matchesAgentRunIdentity(activeRunIdentityRef.current, identity)) updateActiveRunIdentity(null)

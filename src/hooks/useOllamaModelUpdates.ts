@@ -139,7 +139,7 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
 
     try {
       logger.info('useOllamaModelUpdates', `Starting controlled update for model: ${modelName}`)
-      const res = await window.electronAPI.pullOllamaModel(modelName)
+      const res = await window.electronAPI.pullOllamaModel(modelName, ollamaHost)
       if (res.success) {
         clearModelUpdateAvailable(modelName)
         if (onRefreshDiagnostics) {
@@ -152,7 +152,7 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
     } catch (err: any) {
       return { success: false, error: err.message || 'Error updating model' }
     }
-  }, [onRefreshDiagnostics])
+  }, [ollamaHost, onRefreshDiagnostics])
 
   const isModelUpdating = useCallback((modelName?: string): boolean => {
     if (!modelName) return false

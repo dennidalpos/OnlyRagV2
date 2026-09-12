@@ -66,11 +66,13 @@ export class SidecarAppService {
     visionPrompt?: string,
     normalizeWithLlm?: boolean,
     normalizationModel?: string,
-    numCtx?: number
+    numCtx?: number,
+    taskId?: string
   ) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return { success: false, error: 'Invalid file path' }
     }
+    const effectiveTaskId = taskId || `ingest-${Date.now()}`
     logger.log(
       'INFO',
       'SidecarApp',
@@ -82,12 +84,12 @@ export class SidecarAppService {
         return { success: false, error: 'File does not exist on disk' }
       }
 
-      const taskId = `ingest-${Date.now()}`
       let cancelRequest: (() => void) | undefined
 
       const result = await sidecarHttpClient.ingestFileStream(
         {
           file_path: resolvedPath,
+          task_id: effectiveTaskId,
           vision_model: visionModel || undefined,
           vision_prompt: visionPrompt || undefined,
           normalize_with_llm: normalizeWithLlm || undefined,
@@ -97,14 +99,14 @@ export class SidecarAppService {
         (event) => {
           BrowserWindow.getAllWindows().forEach((win) => {
             if (!win.isDestroyed()) {
-              win.webContents.send('ingest:stream-progress', event)
+              win.webContents.send('ingest:stream-progress', { ...event, taskId: effectiveTaskId })
             }
           })
         },
         (cancelFn) => {
           cancelRequest = cancelFn
           taskRunner.registerActiveTask(
-            taskId,
+            effectiveTaskId,
             'ingestion',
             () => {
               if (cancelRequest) cancelRequest()
@@ -113,8 +115,6 @@ export class SidecarAppService {
           )
         }
       )
-
-      taskRunner.unregisterActiveTask(taskId)
 
       if (result.success && result.data) {
         const filename = path.basename(resolvedPath)
@@ -141,6 +141,8 @@ export class SidecarAppService {
     } catch (err: any) {
       logger.log('ERROR', 'SidecarApp', `Unexpected ingestion exception: ${err.message}`)
       return { success: false, error: err.message }
+    } finally {
+      taskRunner.unregisterActiveTask(effectiveTaskId)
     }
   }
 

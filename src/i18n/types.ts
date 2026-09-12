@@ -45,6 +45,8 @@ export interface TranslationSchema {
     reset: string
     active: string
     inactive: string
+    queued: string
+    running: string
     original: string
     modified: string
     custom: string

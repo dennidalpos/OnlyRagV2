@@ -448,6 +448,7 @@ export interface SkillSaveInput {
 }
 
 export interface IngestionStreamProgressPayload {
+  taskId: string
   type: 'progress' | 'done'
   percent: number
   step: string
@@ -527,6 +528,20 @@ export interface PromptHistoryIndexPayload {
   completedAt?: string
 }
 
+export interface OllamaGenerationStatus {
+  active: { id: string; label: string } | null
+  queued: { id: string; label: string }[]
+}
+
+export interface OllamaStreamChunkEvent {
+  operationId: string
+  chunk: string
+}
+
+export interface OllamaStreamDoneEvent {
+  operationId: string
+}
+
 export interface IElectronAPI {
   runDiagnostics: (host?: string) => Promise<DiagnosticsData>
   getLogs: () => Promise<LogEntry[]>
@@ -534,9 +549,9 @@ export interface IElectronAPI {
   getLogFilePath: () => Promise<string>
   openLogsFolder?: () => Promise<{ success: boolean; path?: string; error?: string }>
   logTelemetry: (level: LogLevel, category: string, message: string) => Promise<boolean>
-  pullOllamaModel: (modelName: string) => Promise<{ success: boolean; data?: string; error?: string }>
+  pullOllamaModel: (modelName: string, host?: string) => Promise<{ success: boolean; data?: string; error?: string }>
   cancelPullOllamaModel: () => Promise<{ success: boolean; error?: string }>
-  deleteOllamaModel: (modelName: string) => Promise<{ success: boolean; error?: string }>
+  deleteOllamaModel: (modelName: string, host?: string) => Promise<{ success: boolean; error?: string }>
   installOrLaunchOllama: () => Promise<{ success: boolean; message?: string; error?: string }>
   getSidecarStatus: () => Promise<{ status: string; engine?: string; version?: string; documentsCount?: number; chunksCount?: number }>
   restartSidecar: () => Promise<{ success: boolean; message?: string; error?: string }>
@@ -548,7 +563,8 @@ export interface IElectronAPI {
     visionPrompt?: string,
     normalizeWithLlm?: boolean,
     normalizationModel?: string,
-    numCtx?: number
+    numCtx?: number,
+    taskId?: string
   ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
@@ -557,8 +573,9 @@ export interface IElectronAPI {
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean }>
   searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => Promise<VectorSearchResult[]>
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => Promise<{ success: boolean; message?: string; error?: string }>
-  generateOllamaStream: (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any) => Promise<void>
-  cancelOllamaStream: () => Promise<void>
+  generateOllamaStream: (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any, host?: string, operationId?: string, onDone?: () => void) => Promise<{ success: boolean; error?: string }>
+  cancelOllamaStream: (operationId: string) => Promise<{ success: boolean }>
+  getOllamaGenerationStatus: () => Promise<OllamaGenerationStatus>
   cancelTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   cleanTempResiduals: () => Promise<{ success: boolean; cleanedCount: number; bytesFreed: number }>
   listWorkspaceFiles: (dirPath?: string) => Promise<WorkspaceFile[]>
@@ -591,8 +608,8 @@ export interface IElectronAPI {
   checkOllamaModelUpdates?: (host?: string) => Promise<Record<string, OllamaModelUpdateInfo>>
   openExternalUrl?: (url: string) => Promise<boolean>
   openPath?: (targetPath: string) => Promise<boolean>
-  startAgentTask: (payload: any) => Promise<AgentDoneResult & { error?: string }>
-  cancelAgentTask: (identity?: AgentRunIdentity) => Promise<{ success: boolean; message?: string }>
+  startAgentTask: (payload: any) => Promise<AgentDoneResult & { error?: string; runId?: string; queuePosition?: number }>
+  cancelAgentTask: (identity: AgentRunIdentity) => Promise<{ success: boolean; message?: string }>
   /** Answers a pending `agent:approval-request`, resuming the paused orchestrator step. */
   respondToAgentApproval?: (identity: AgentRunIdentity, approved: boolean, approvedHunkIndices?: number[]) => Promise<boolean>
   getAgentQueueStatus: () => Promise<TaskQueueStatus>
@@ -637,7 +654,7 @@ export interface IElectronAPI {
   onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
   onTranslateProgress?: (callback: (data: TranslateProgressPayload) => void) => () => void
-  benchmarkModel: (modelName: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
+  benchmarkModel: (modelName: string, host?: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
   listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>
   listHubSources: () => Promise<SkillHubSource[]>
   addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>
@@ -657,11 +674,12 @@ export interface IElectronAPI {
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
   agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
   /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
-  agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<InterviewAnalysisResult>
+  agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => Promise<InterviewAnalysisResult>
   /** Enriches prompt with user's confirmed interview answers. */
   agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>
   /** Plan Approval: draft a canonical structured plan via the backend. */
-  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => Promise<PlanGenerationResult>
+  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => Promise<PlanGenerationResult>
+  agentPlanCancel?: (identity: AgentRunIdentity) => Promise<{ success: boolean }>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */

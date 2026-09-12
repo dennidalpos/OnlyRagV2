@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { ollamaAppService } from '../application/ollamaAppService'
 
@@ -6,8 +7,8 @@ export function registerOllamaIpcHandlers() {
     return ollamaAppService.installOrLaunchOllama()
   })
 
-  ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
-    return ollamaAppService.pullModel(modelName, (progress) => {
+  ipcMain.handle('ollama:pull-model', async (event, modelName: string, host?: string) => {
+    return ollamaAppService.pullModel(modelName, host, (progress) => {
       if (!event.sender.isDestroyed()) {
         event.sender.send('ollama:pull-progress', { modelName, ...progress })
       }
@@ -18,27 +19,31 @@ export function registerOllamaIpcHandlers() {
     return ollamaAppService.cancelPullModel()
   })
 
-  ipcMain.handle('ollama:delete-model', async (_, modelName: string) => {
-    return ollamaAppService.deleteModel(modelName)
+  ipcMain.handle('ollama:delete-model', async (_, modelName: string, host?: string) => {
+    return ollamaAppService.deleteModel(modelName, host)
   })
 
-  ipcMain.handle('ollama:cancel-stream', async () => {
-    ollamaAppService.cancelStream()
-    return { success: true }
+  ipcMain.handle('ollama:cancel-stream', async (_, operationId: string) => {
+    return { success: ollamaAppService.cancelStream(operationId) }
   })
 
-  ipcMain.handle('ollama:generate-stream', async (event, model: string, prompt: string, options?: any) => {
+  ipcMain.handle('ollama:get-generation-status', () => ollamaAppService.getGenerationStatus())
+
+  ipcMain.handle('ollama:generate-stream', async (event, model: string, prompt: string, options?: any, host?: string, operationId?: string) => {
+    const streamId = operationId || randomUUID()
     return ollamaAppService.generateStream(
       model,
       prompt,
-      (chunk) => event.sender.send('ollama:chunk', chunk),
-      () => event.sender.send('ollama:done'),
-      options
+      (chunk) => event.sender.send('ollama:chunk', { operationId: streamId, chunk }),
+      () => event.sender.send('ollama:done', { operationId: streamId }),
+      options,
+      host,
+      streamId
     )
   })
 
-  ipcMain.handle('ollama:benchmark-model', async (_, modelName: string) => {
-    return ollamaAppService.benchmarkModel(modelName)
+  ipcMain.handle('ollama:benchmark-model', async (_, modelName: string, host?: string) => {
+    return ollamaAppService.benchmarkModel(modelName, host)
   })
 
   /**

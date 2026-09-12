@@ -5,7 +5,7 @@ import { logger } from '../../../diagnostics'
 import type { AgentMode } from '../../domain/agent/agentTypes'
 import type { EpisodicStepRecord } from '../../domain/agent/episodicMemoryCompactor'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
-import type { AgentCompletionStatus, AgentVerificationEvidence } from '../../../../shared/types'
+import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../../shared/types'
 import { SessionDebtTracker } from '../../domain/agent/sessionDebtTracker'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 import type { AgentExecutionPhase } from '../../domain/agent/agentExecutionPhase'
@@ -27,6 +27,8 @@ export type AgentSessionTerminationReason =
 
 export interface SavedAgentSessionState {
   sessionId: string
+  /** Execution state belongs to this run, never implicitly to the whole conversation. */
+  runIdentity?: AgentRunIdentity
   workspacePath: string | null
   agentMode: AgentMode
   stepCount: number
@@ -34,6 +36,9 @@ export interface SavedAgentSessionState {
   episodes: EpisodicStepRecord[]
   recentFullLogs: Array<{ step: number; tool: string; output: string }>
   planMilestones: PlanMilestone[]
+  /** Approved plan awaiting the next run; distinct from a run's mutable milestones. */
+  pendingPlanMilestones?: PlanMilestone[]
+  pendingPlanUserTask?: string
   userTask: string
   initialUserTask?: string
   updatedAt: string
@@ -205,12 +210,9 @@ export class AgentSessionStateRepository {
     const state: SavedAgentSessionState = existing
       ? {
           ...existing,
-          planMilestones,
-          ...(userTask !== undefined ? { userTask } : {}),
+          pendingPlanMilestones: planMilestones,
+          ...(userTask !== undefined ? { pendingPlanUserTask: userTask } : {}),
           updatedAt: new Date().toISOString(),
-          status: 'IN_PROGRESS',
-          terminationReason: undefined,
-          completionStatus: undefined,
         }
       : {
           sessionId,
@@ -221,6 +223,8 @@ export class AgentSessionStateRepository {
           episodes: [],
           recentFullLogs: [],
           planMilestones,
+          pendingPlanMilestones: planMilestones,
+          pendingPlanUserTask: userTask || '',
           userTask: userTask || '',
           updatedAt: new Date().toISOString(),
           status: 'IN_PROGRESS',

@@ -24,6 +24,7 @@ interface PlanPanelProps {
   isAnalyzingInterview?: boolean
   onConfirmInterview?: (answers: UserInterviewAnswer[]) => void
   onSkipInterview?: () => void
+  onCancelFlow?: () => void
   onRetry?: () => void
   onApprove: () => void
   onReject: () => void
@@ -45,6 +46,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   isAnalyzingInterview = false,
   onConfirmInterview,
   onSkipInterview,
+  onCancelFlow,
   onRetry,
   onApprove,
   onReject,
@@ -104,6 +106,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
             <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI sta valutando se ci sono trade-off architetturali da confermare prima di generare la checklist.
             </p>
+            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">Annulla</button>
           </div>
         ) : isInterviewActive && interviewQuestions.length > 0 ? (
           <PlanInterviewCard
@@ -119,6 +122,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
             <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI Agent sta analizzando il prompt per delineare la strategia di esecuzione passo-passo.
             </p>
+            <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">Annulla</button>
           </div>
         ) : !plan ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">

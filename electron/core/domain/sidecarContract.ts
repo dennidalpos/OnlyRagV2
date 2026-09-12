@@ -4,6 +4,7 @@ const nonBlank = z.string().trim().min(1)
 const boundedPath = nonBlank.max(4096)
 const modelName = nonBlank.max(200)
 const contextTokens = z.number().int().min(4096).max(131072)
+const taskId = nonBlank.max(200)
 
 export const sidecarIngestFilePayloadSchema = z.object({
   filePath: boundedPath,
@@ -12,6 +13,7 @@ export const sidecarIngestFilePayloadSchema = z.object({
   normalizeWithLlm: z.boolean().optional(),
   normalizationModel: modelName.optional(),
   numCtx: contextTokens.optional(),
+  taskId,
 }).strict()
 
 export const sidecarUpdateDocumentPayloadSchema = z.object({

@@ -1,6 +1,7 @@
 import { PromptCompiler } from '../../../../shared/domain/agent/promptCompiler'
 import type { OllamaRuntimeOptions } from './hardwareProfileResolver'
 import type { AppSettings } from '../../../../shared/types'
+import type { ActiveFileContext } from './agentTypes'
 import type { AgentMode, SupportedToolName } from './agentTypes'
 import { renderToolPromptCatalog } from './ollamaToolSchemaCatalog'
 
@@ -12,7 +13,7 @@ export interface PromptAssemblerInput {
   maxSteps: number
   workspacePath?: string | null
   isStandaloneMode?: boolean
-  activeFile?: { name: string; path: string; content: string } | null
+  activeFile?: ActiveFileContext | null
   pinnedFilesContextStr?: string
   skillsBlock?: string
   planBlock?: string
@@ -103,7 +104,7 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
 
   // Priority 2: Active File Snippet & Explicitly Pinned Workspace Code Files
   const activeFileBlock = activeFile
-    ? `Active File Open in Editor: ${activeFile.name}\nSnippet:\n${(activeFile.content || '').slice(0, 8000)}\n`
+    ? `Active File Open in Editor: ${activeFile.name} (${activeFile.path})\n[EDITOR VERSION: ${activeFile.versionHash}]\nSnippet:\n${activeFile.content.slice(0, 8000)}\n`
     : ''
   const pinnedBlock = pinnedFilesContextStr
     ? `EXPLICITLY REFERENCED (PINNED) WORKSPACE FILES:\n${pinnedFilesContextStr.slice(0, 16000)}\n`

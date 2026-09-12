@@ -25,9 +25,9 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.restartSidecar()
   })
 
-  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number) => {
-    const payload: SidecarIngestFilePayload = sidecarIngestFilePayloadSchema.parse({ filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx })
-    return sidecarAppService.ingestFile(payload.filePath, payload.visionModel, payload.visionPrompt, payload.normalizeWithLlm, payload.normalizationModel, payload.numCtx)
+  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string) => {
+    const payload: SidecarIngestFilePayload = sidecarIngestFilePayloadSchema.parse({ filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId })
+    return sidecarAppService.ingestFile(payload.filePath, payload.visionModel, payload.visionPrompt, payload.normalizeWithLlm, payload.normalizationModel, payload.numCtx, payload.taskId)
   })
 
   ipcMain.handle('ingest:update', async (_, docId: string, markdownContent: string) => {

@@ -187,6 +187,7 @@ def test_tasks_cancel_endpoint():
     data = response.json()
     assert data["status"] == "success"
     assert "test-123" in data["message"]
+    assert client.post("/tasks/cancel").status_code == 400
 
 def test_cleanup_temp_endpoint():
     response = client.post("/cleanup/temp")

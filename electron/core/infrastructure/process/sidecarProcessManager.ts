@@ -4,6 +4,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
 import { logger } from '../../../diagnostics'
+import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 import { decidePortReclaim, parseImageNameFromTasklist, parseListeningPidFromNetstat } from './orphanPortReclaim'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
@@ -43,47 +44,55 @@ export class SidecarProcessManager {
     return this.state
   }
 
-  checkSidecarHealth(): Promise<boolean> {
+  checkSidecarHealth(timeoutMs = 3000): Promise<boolean> {
     return new Promise((resolve) => {
-      const req = http.get(`${SIDECAR_BASE_URL}/health`, { agent: httpAgent, timeout: 3000 }, (res) => {
+      let settled = false
+      const finishOffline = (error: string) => {
+        if (settled) return
+        settled = true
+        this.state = { status: 'offline', error }
+        resolve(false)
+      }
+      const req = http.get(`${SIDECAR_BASE_URL}/health`, { agent: httpAgent, timeout: timeoutMs }, (res) => {
         let raw = ''
         res.on('data', (chunk) => {
           raw += chunk
         })
         res.on('end', () => {
-          if (res.statusCode === 200) {
-            try {
-              const data = JSON.parse(raw)
-              this.state = {
-                status: 'online',
-                engine: data.engine || 'FastAPI Python Sidecar + LanceDB OCR Engine',
-                version: data.version || '2.2.0',
-                endpoint: SIDECAR_BASE_URL,
-                documentsCount: data.documents_count || 0,
-                chunksCount: data.chunks_count || 0,
-                ocr: data.ocr,
-              }
-              resolve(true)
-            } catch (err: any) {
-              logger.log('WARN', 'Sidecar', `Non-standard JSON response from /health: ${err.message}`)
-              this.state = { status: 'online', engine: 'FastAPI + LanceDB', endpoint: SIDECAR_BASE_URL }
-              resolve(true)
+          if (res.statusCode !== 200) {
+            finishOffline(`HTTP ${res.statusCode || 'unknown'}`)
+            return
+          }
+          try {
+            const data = parseSidecarHealthResponse(JSON.parse(raw))
+            if (!data) {
+              finishOffline('Malformed /health response')
+              return
             }
-          } else {
-            this.state = { status: 'offline', error: `HTTP ${res.statusCode}` }
-            resolve(false)
+            if (settled) return
+            settled = true
+            this.state = {
+              status: 'online',
+              engine: data.engine,
+              version: data.version,
+              endpoint: SIDECAR_BASE_URL,
+              documentsCount: data.documents_count,
+              chunksCount: data.chunks_count,
+              ocr: data.ocr as { provider: string; host_has_gpu: boolean },
+            }
+            resolve(true)
+          } catch (err: any) {
+            logger.log('WARN', 'Sidecar', `Invalid JSON response from /health: ${err.message}`)
+            finishOffline('Malformed /health response')
           }
         })
       })
       req.on('error', (err) => {
-        if (this.state.status !== 'online') {
-          this.state = { status: 'offline', error: this.state.error || err.message }
-        }
-        resolve(false)
+        finishOffline(err.message)
       })
-      req.setTimeout(3000, () => {
+      req.setTimeout(timeoutMs, () => {
+        finishOffline(`Health probe timed out after ${timeoutMs}ms`)
         req.destroy()
-        resolve(false)
       })
     })
   }
@@ -375,10 +384,7 @@ export class SidecarProcessManager {
     sidecarProcess.on('close', (code) => {
       this.writeSidecarLog('WARN', `Python sidecar process exited with code ${code}`)
       logger.log('WARN', 'Sidecar', `Python sidecar process exited with code ${code}`)
-      sidecarProcess = null
-      if (this.state.status !== 'online') {
-        this.state = { status: 'offline', error: `Process exited with code ${code}` }
-      }
+      this.markProcessExited(code)
     })
 
     sidecarProcess.on('error', (err) => {
@@ -387,6 +393,11 @@ export class SidecarProcessManager {
       sidecarProcess = null
       this.state = { status: 'offline', error: err.message }
     })
+  }
+
+  private markProcessExited(code: number | null) {
+    sidecarProcess = null
+    this.state = { status: 'offline', error: `Process exited with code ${code}` }
   }
 
   stopPythonSidecar() {

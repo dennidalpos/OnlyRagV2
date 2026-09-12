@@ -14,11 +14,10 @@ export function resolveModelContextLength(
     ? Math.floor(trainedContext)
     : undefined
   // Known model limits win over the generic floor: Ollama must receive a value the model supports.
-  const modelMaximum = knownModelMaximum
-    ?? Math.max(MIN_MODEL_CONTEXT_LENGTH, preferred ?? MIN_MODEL_CONTEXT_LENGTH)
+  const modelMaximum = knownModelMaximum ?? hardwareValue
   const modelMinimum = knownModelMaximum
     ? Math.min(MIN_MODEL_CONTEXT_LENGTH, knownModelMaximum)
-    : Math.max(MIN_MODEL_CONTEXT_LENGTH, preferred ?? MIN_MODEL_CONTEXT_LENGTH)
+    : MIN_MODEL_CONTEXT_LENGTH
   const defaultValue = Math.min(hardwareValue, modelMaximum)
   return Math.max(modelMinimum, Math.min(preferred ?? defaultValue, modelMaximum))
 }

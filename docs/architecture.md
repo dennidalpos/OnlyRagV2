@@ -21,7 +21,7 @@ Renderer (src/) -> Preload (electron/preload.ts) -> IPC Main (electron/core/pres
 - Il codice condiviso passa solo da `shared/types/` e `shared/domain/`.
 - `electron/core/presentation/` registra e valida IPC; `application/` coordina i casi d'uso; `domain/` resta senza I/O; `infrastructure/` contiene HTTP, filesystem e processi.
 - `electron/preload.ts` espone l'unica API `window.electronAPI`; `nodeIntegration` è disabilitato e `contextIsolation`/sandbox sono attivi.
-- Il Sidecar espone HTTP su `127.0.0.1:8000`; Ollama usa il client Main e il proprio endpoint configurato.
+- Il Sidecar espone HTTP su `127.0.0.1:8000`; ogni operazione Ollama acquisisce l'endpoint configurato all'avvio e non condivide host mutabile. Il client supporta HTTP e HTTPS.
 
 ## Flussi principali
 
@@ -35,8 +35,8 @@ Per il coding agent il flusso è `plan/interview → plan → execution → veri
 ## Risorse e ciclo di vita
 
 - `taskQueueAppService` serializza i task agente.
-- `ollamaGenerationScheduler` serializza a una richiesta le generazioni Main e consente di annullare la coda senza pre-emptare la richiesta attiva.
+- `ollamaGenerationScheduler` serializza a una richiesta le generazioni Main, identifica ogni operazione e pubblica attiva/coda per annullamenti mirati.
 - `sidecarProcessManager` avvia, monitora e arresta il Sidecar; `orphanPortReclaim` gestisce residui autorizzati su `:8000`.
-- `atomicWorkspaceJournal` protegge le mutazioni accettate e abilita il rollback.
+- `DisposableAgentWorkspace` crea un worktree/copia temporanea per ogni run; il journal protegge i singoli step al suo interno. La pubblicazione nel workspace utente è esplicita e verifica il baseline prima di copiare i file.
 
 Verifiche: `npm run audit:cycles`, `npm run typecheck` e `npm run docs:check`.

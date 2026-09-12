@@ -6,17 +6,35 @@ import { agentSessionStateAppService } from '../application/agentSessionStateApp
 import { sidecarAppService } from '../application/sidecarAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
+import { ollamaAppService } from '../application/ollamaAppService'
 import { aiDebugBundleService } from '../application/aiDebugBundleService'
 import { logger } from '../../diagnostics'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AgentPlan, AgentRunIdentity, AppSettings, InterviewQuestion, UserInterviewAnswer } from '../../../shared/types'
+import { z } from 'zod'
+
+const activeFileContextSchema = z.object({
+  name: z.string().trim().min(1).max(260),
+  path: z.string().trim().min(1).max(4096),
+  content: z.string().max(120_000),
+  versionHash: z.string().regex(/^[a-f0-9]{64}$/i, 'Expected a SHA-256 content hash'),
+}).strict()
+
+/** Validates the only editor context accepted by an agent run. */
+export function parseAgentTaskPayload(input: unknown): AgentTaskPayload {
+  if (!input || typeof input !== 'object') throw new Error('Invalid agent task payload')
+  const { contextFiles: _discardedContextFiles, ...payload } = input as Record<string, unknown>
+  const result = z.object({ activeFile: activeFileContextSchema.nullable().optional() }).passthrough().safeParse(payload)
+  if (!result.success) throw new Error(`Invalid activeFile contract: ${result.error.issues[0]?.message || 'unknown validation error'}`)
+  return { ...payload, activeFile: result.data.activeFile ?? null } as AgentTaskPayload
+}
 
 export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) {
-  ipcMain.handle('agent:start-task', async (_, payload: AgentTaskPayload) => {
-    return taskQueueAppService.scheduleAgentTask(payload, winGetter)
+  ipcMain.handle('agent:start-task', async (_, payload: unknown) => {
+    return taskQueueAppService.scheduleAgentTask(parseAgentTaskPayload(payload), winGetter)
   })
 
-  ipcMain.handle('agent:cancel-task', async (_, identity?: AgentRunIdentity) => {
+  ipcMain.handle('agent:cancel-task', async (_, identity: AgentRunIdentity) => {
     return taskQueueAppService.cancelTask(identity)
   })
 
@@ -47,9 +65,11 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-interview',
-    async (_, prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+    async (_, prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => {
       logger.log('INFO', 'AgentPlanIpc', `Interview requested (prompt length: ${prompt.length}, model: ${model || 'default'}).`)
-      return agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions)
+      return identity?.runId
+        ? agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions, identity.runId)
+        : agentInterviewAppService.conductInterview(prompt, model, settings, workspacePath, previousDecisions)
     }
   )
 
@@ -70,11 +90,15 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
   ipcMain.handle(
     'agent:plan-generate',
-    async (_, prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[]) => {
+    async (_, prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => {
       logger.log('INFO', 'AgentPlanIpc', `Generation requested (prompt length: ${prompt.length}, model: ${model || 'default'}).`)
-      return planGenerationAppService.generatePlanText({ prompt, model, settings, previousPlan, workspacePath, previousDecisions })
+      return planGenerationAppService.generatePlanText({ prompt, model, settings, previousPlan, workspacePath, previousDecisions, operationId: identity?.runId })
     }
   )
+
+  ipcMain.handle('agent:plan-cancel', async (_, identity: AgentRunIdentity) => {
+    return { success: Boolean(identity?.runId) && ollamaAppService.cancelStructuredGeneration(identity.runId) }
+  })
 
   /**
    * Exposes the backend's persisted plan milestone state (GoalDecompositionPlanner's

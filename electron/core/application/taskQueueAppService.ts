@@ -7,6 +7,7 @@ import { logger } from '../../diagnostics'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
+import { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 
 export interface QueuedAgentTask {
   id: string
@@ -76,6 +77,7 @@ export class TaskQueueAppService {
     const win = winGetter()
     const runningCount = this.queue.getRunningCount()
     const queuedCount = this.queue.getQueuedCount()
+    const queuePosition = runningCount >= this.queue.getMaxConcurrency() ? queuedCount : 0
 
     if (runningCount >= this.queue.getMaxConcurrency()) {
       logger.log('INFO', 'TaskQueueAppService', `Task ${taskId} queued (Active: ${runningCount}/${this.queue.getMaxConcurrency()} | Queue depth: ${queuedCount})`)
@@ -101,48 +103,52 @@ export class TaskQueueAppService {
       logger.log('ERROR', 'TaskQueueAppService', `Process queue error: ${err.message}`)
     })
 
-    return { success: true, summary: 'Task scheduled successfully' }
-  }
-
-  public cancelTask(target?: AgentRunIdentity | string): { success: boolean; message: string } {
-    if (target) {
-      const taskId = typeof target === 'string' ? target : target.runId
-      const queued = this.queue.findTask(taskId)
-      if (typeof target !== 'string' && queued && !matchesAgentRunIdentity(queued.payload.payload.identity, target)) {
-        return { success: false, message: `Task ${taskId} identity mismatch.` }
-      }
-      const res = this.queue.cancel(taskId)
-      cancelActiveAgentTask(taskId)
-      return {
-        success: res.cancelled,
-        message: res.cancelled ? `Task ${taskId} cancelled.` : `Task ${taskId} not found.`,
-      }
-    }
-
-    this.pQueue.clear()
-    const { cancelledCount } = this.queue.cancelAll()
-    cancelActiveAgentTask()
     return {
       success: true,
-      message: `All active and queued tasks cancelled (${cancelledCount} total).`,
+      summary: queuePosition > 0 ? `Task queued at position ${queuePosition}.` : 'Task accepted for execution.',
+      runId: taskId,
+      queuePosition,
+    }
+  }
+
+  public cancelTask(target: AgentRunIdentity | string): { success: boolean; message: string } {
+    const taskId = typeof target === 'string' ? target : target.runId
+    const queued = this.queue.findTask(taskId)
+    if (typeof target !== 'string' && queued && !matchesAgentRunIdentity(queued.payload.payload.identity, target)) {
+      return { success: false, message: `Task ${taskId} identity mismatch.` }
+    }
+    const res = this.queue.cancel(taskId)
+    cancelActiveAgentTask(taskId)
+    return {
+      success: res.cancelled,
+      message: res.cancelled ? `Task ${taskId} cancelled.` : `Task ${taskId} not found.`,
     }
   }
 
   private async executeTaskItem(item: TaskQueueItem<QueuedAgentTask>): Promise<void> {
     const { id, payload } = item
     const { payload: taskPayload, winGetter, resolve } = payload
+    let transaction: DisposableAgentWorkspace | undefined
 
     logger.log('INFO', 'TaskQueueAppService', `Starting task execution [${id}] with model '${taskPayload.activeModel || taskPayload.settings?.codingModel || 'default'}'`)
 
     try {
       const win = winGetter()
-      const result = await runAgentOrchestratorLoop(taskPayload, win, id)
+      transaction = taskPayload.workspacePath && !taskPayload.isStandaloneMode
+        ? DisposableAgentWorkspace.create(taskPayload.workspacePath, id)
+        : undefined
+      const executionPayload = transaction
+        ? { ...taskPayload, workspacePath: transaction.workspacePath }
+        : taskPayload
+      const result = await runAgentOrchestratorLoop(executionPayload, win, id, transaction)
       this.queue.markCompleted(id)
       resolve(result)
     } catch (err: any) {
       this.queue.markFailed(id, err.message)
       logger.log('ERROR', 'TaskQueueAppService', `Task execution [${id}] failed: ${err.message}`)
       resolve({ success: false, summary: `Execution error: ${err.message}`, error: err.message })
+    } finally {
+      transaction?.dispose()
     }
   }
 }

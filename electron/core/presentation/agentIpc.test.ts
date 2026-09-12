@@ -44,7 +44,7 @@ import { respondToApproval } from '../application/agentOrchestratorAppService'
 import { planGenerationAppService } from '../application/planGenerationAppService'
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { taskQueueAppService } from '../application/taskQueueAppService'
-import { registerAgentIpcHandlers } from './agentIpc'
+import { parseAgentTaskPayload, registerAgentIpcHandlers } from './agentIpc'
 
 describe('agent IPC session-state facade', () => {
   beforeEach(() => {
@@ -82,9 +82,27 @@ describe('agent IPC session-state facade', () => {
     await handlers.get('agent:cancel-task')?.({}, identity)
     await handlers.get('agent:approval-response')?.({}, identity, true, [0])
 
-    expect(taskQueueAppService.scheduleAgentTask).toHaveBeenCalledWith(payload, expect.any(Function))
+    expect(taskQueueAppService.scheduleAgentTask).toHaveBeenCalledWith({ ...payload, activeFile: null }, expect.any(Function))
     expect(taskQueueAppService.cancelTask).toHaveBeenCalledWith(identity)
     expect(respondToApproval).toHaveBeenCalledWith(identity, true, [0])
+  })
+
+  it('accepts exactly one versioned active-file context and discards legacy contextFiles', () => {
+    const payload = parseAgentTaskPayload({
+      userTask: 'Inspect the editor file',
+      agentMode: 'ask',
+      activeFile: {
+        name: 'app.ts',
+        path: 'D:/repo/app.ts',
+        content: 'export const app = true',
+        versionHash: 'a'.repeat(64),
+      },
+      contextFiles: [{ path: 'ignored.ts' }],
+    })
+
+    expect(payload.activeFile).toMatchObject({ path: 'D:/repo/app.ts', versionHash: 'a'.repeat(64) })
+    expect(payload).not.toHaveProperty('contextFiles')
+    expect(() => parseAgentTaskPayload({ userTask: 'Inspect', agentMode: 'ask', activeFile: { path: 'app.ts', content: '', versionHash: 'bad' } })).toThrow('Invalid activeFile contract')
   })
 
   it('returns null when no persisted session state exists and forwards plan seeding', async () => {

@@ -11,6 +11,7 @@ import { resolveModelContextLength } from '../../shared/domain/settings/modelCon
 import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
+import { useOllamaGenerationState } from './useOllamaGenerationState'
 
 export const LANGUAGES = [
   'English',
@@ -97,6 +98,9 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   const [targetLang, setTargetLang] = useState('English')
   const [translatedMarkdown, setTranslatedMarkdown] = useState('')
   const [isTranslating, setIsTranslating] = useState(false)
+  const [isTranslationComplete, setIsTranslationComplete] = useState(false)
+  const { generationState, trackOperation } = useOllamaGenerationState()
+  const activeStreamIdRef = useRef<string | null>(null)
 
   // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion
   // module can block starting their own task while a translation is mid-flight (see
@@ -184,15 +188,18 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
 
   const handleStopTranslation = useCallback(async () => {
     abortTranslationRef.current = true
-    if (window.electronAPI?.cancelOllamaStream) {
+    const operationId = activeStreamIdRef.current
+    if (operationId && window.electronAPI?.cancelOllamaStream) {
       try {
-        await window.electronAPI.cancelOllamaStream()
+        await window.electronAPI.cancelOllamaStream(operationId)
       } catch (err: any) {
         logger.warn('useTranslation', `Error cancelling Ollama stream: ${err.message}`)
       }
     }
+    activeStreamIdRef.current = null
+    trackOperation(null)
     setIsTranslating(false)
-  }, [])
+  }, [trackOperation])
 
   const handleStartTranslation = async () => {
     if (!selectedDoc) return
@@ -209,6 +216,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
 
     abortTranslationRef.current = false
     setIsTranslating(true)
+    setIsTranslationComplete(false)
     setTranslatedMarkdown('')
     setCurrentChunkIndex(0)
 
@@ -252,31 +260,44 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
 
         let currentChunkTranslation = ''
         if (window.electronAPI?.generateOllamaStream) {
-          await window.electronAPI.generateOllamaStream(modelToUse, prompt, (c) => {
-            if (abortTranslationRef.current) return
-            currentChunkTranslation += c
-            // Live token streaming into Monaco editor
-            const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
-            setTranslatedMarkdown(livePreview)
-          }, { num_ctx: modelContext })
+          const operationId = crypto.randomUUID()
+          activeStreamIdRef.current = operationId
+          trackOperation(operationId)
+          try {
+            const result = await window.electronAPI.generateOllamaStream(modelToUse, prompt, (c) => {
+              if (abortTranslationRef.current) return
+              currentChunkTranslation += c
+              const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
+              setTranslatedMarkdown(livePreview)
+            }, { num_ctx: modelContext }, settings?.ollamaHost, operationId)
+            if (!result.success) throw new Error(result.error || 'Ollama translation failed.')
+            if (!currentChunkTranslation.trim()) throw new Error('Ollama returned an empty translation.')
+          } finally {
+            if (activeStreamIdRef.current === operationId) activeStreamIdRef.current = null
+            trackOperation(null)
+          }
+        } else {
+          throw new Error('Local Ollama API offline or window.electronAPI unattached.')
         }
 
         if (abortTranslationRef.current) break
 
-        accumulatedResults += (accumulatedResults ? '\n\n' : '') + (currentChunkTranslation || chunk)
+        accumulatedResults += (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
         setTranslatedMarkdown(accumulatedResults)
       }
+      if (!abortTranslationRef.current) setIsTranslationComplete(true)
     } catch (err: unknown) {
       const normalized = normalizeError(err, 'Translation')
       logger.error('TranslationView', `Error translating document: ${normalized.message}`)
       setTranslationError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
     } finally {
+      trackOperation(null)
       setIsTranslating(false)
     }
   }
 
   const handleExportTranslation = async (format: 'pdf' | 'docx' | 'md' = 'pdf') => {
-    if (!translatedMarkdown.trim()) return
+    if (!isTranslationComplete || !translatedMarkdown.trim()) return
     setExportMessage(t('translation.exportPreparing', { format: format.toUpperCase() }))
     try {
       const res = await apiService.exportDocument(translatedMarkdown, format, settings?.translationOutputFolder)
@@ -295,10 +316,11 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
 
   const handleResetTranslation = () => {
     abortTranslationRef.current = true
-    if (isTranslating && window.electronAPI?.cancelOllamaStream) {
-      window.electronAPI.cancelOllamaStream().catch(() => {})
+    if (activeStreamIdRef.current && window.electronAPI?.cancelOllamaStream) {
+      window.electronAPI.cancelOllamaStream(activeStreamIdRef.current).catch(() => {})
     }
     setIsTranslating(false)
+    setIsTranslationComplete(false)
     setTranslatedMarkdown('')
     setCurrentChunkIndex(0)
     setTotalChunks(0)
@@ -320,6 +342,8 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
     translatedMarkdown,
     setTranslatedMarkdown,
     isTranslating,
+    isTranslationComplete,
+    generationState,
     currentChunkIndex,
     totalChunks,
     exportMessage,

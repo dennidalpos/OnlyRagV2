@@ -34,4 +34,14 @@ I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run incl
 
 `workspace:write-file` riceve anche `workspaceRoot`: il salvataggio editor applica lo stesso controllo realpath delle mutazioni Agent Coding.
 
+Le run Agent Coding non ricevono il path utente: Main sostituisce il workspace con un worktree/copia temporanea e chiede il consenso `publish_workspace` prima di riportare le modifiche. Non viene aggiunto un canale IPC: il consenso usa `agent:approval-response` con la stessa identità immutabile della run.
+
+`agent:start-task` restituisce `runId` e `queuePosition`; `agent:cancel-task` richiede quell'identità e non annulla altre run.
+
+`ingest:file` riceve un `taskId` generato dal Renderer. Il progresso porta lo stesso ID e `task:cancel` annulla solo quella ingestion.
+
+Le operazioni `ollama:pull-model`, `ollama:delete-model`, `ollama:generate-stream` e `ollama:benchmark-model` ricevono l'host configurato; Main ne fissa protocollo e destinazione per l'intera richiesta, anche con host concorrenti. Ogni stream ha un `operationId`: accompagna gli eventi `ollama:chunk` e `ollama:done`, isola i listener Renderer, consente a `ollama:cancel-stream` di annullare solo quella richiesta e permette alla UI di mostrare lo stato attivo/in coda letto da `ollama:get-generation-status`.
+
+`ollama:generate-stream` restituisce l'esito `{ success, error? }`: errori HTTP, di trasporto o timeout non diventano chunk testuali. Chat e Traduzione accettano come completata solo una risposta riuscita e non vuota; l'export della traduzione resta disabilitato per risultati parziali o falliti.
+
 L'unico `send` Renderer→Main è `agent:skill-install-response`. I listener restituiscono una funzione di unsubscribe.

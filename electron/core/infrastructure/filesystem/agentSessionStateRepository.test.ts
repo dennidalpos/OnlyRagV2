@@ -202,9 +202,9 @@ describe('AgentSessionStateRepository Unit Tests', () => {
 
     const loaded = await agentSessionStateRepository.loadSessionState('plan-seed-new-session', tempDir)
     expect(loaded).not.toBeNull()
-    expect(loaded?.planMilestones).toHaveLength(1)
-    expect(loaded?.planMilestones[0].title).toBe('Design schema')
-    expect(loaded?.userTask).toBe('Build the login flow')
+    expect(loaded?.pendingPlanMilestones).toHaveLength(1)
+    expect(loaded?.pendingPlanMilestones?.[0].title).toBe('Design schema')
+    expect(loaded?.pendingPlanUserTask).toBe('Build the login flow')
     expect(loaded?.stepCount).toBe(0)
   })
 
@@ -245,7 +245,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(fs.existsSync(path.join(legacyOnlyragDir, 'sessions', '.agent_state_legacy-migrated-session.json'))).toBe(true)
   })
 
-  it('should merge seeded milestones into an existing session state without discarding other fields', async () => {
+  it('should keep an approved plan separate from an existing run state', async () => {
     const existing: SavedAgentSessionState = {
       sessionId: 'plan-seed-existing-session',
       workspacePath: tempDir,
@@ -272,14 +272,13 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(seeded).toBe(true)
 
     const loaded = await agentSessionStateRepository.loadSessionState('plan-seed-existing-session', tempDir)
-    expect(loaded?.planMilestones).toHaveLength(1)
-    expect(loaded?.planMilestones[0].title).toBe('New approved milestone')
-    // Other fields (step count, episodes) must survive the seed merge.
+    expect(loaded?.pendingPlanMilestones).toHaveLength(1)
+    expect(loaded?.pendingPlanMilestones?.[0].title).toBe('New approved milestone')
     expect(loaded?.stepCount).toBe(7)
     expect(loaded?.episodes).toHaveLength(1)
-    expect(loaded?.userTask).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
-    expect(loaded?.status).toBe('IN_PROGRESS')
-    expect(loaded?.terminationReason).toBeUndefined()
-    expect(loaded?.completionStatus).toBeUndefined()
+    expect(loaded?.pendingPlanUserTask).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
+    expect(loaded?.status).toBe('FAILED')
+    expect(loaded?.terminationReason).toBe('model_silence')
+    expect(loaded?.completionStatus).toBe('unverifiable')
   })
 })

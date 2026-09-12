@@ -46,7 +46,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       stepCount: 2,
       maxSteps: 50,
       workspacePath: 'D:/project',
-      activeFile: { name: 'calc.ts', path: 'D:/project/calc.ts', content: 'export function calculateTotal() {}' },
+      activeFile: { name: 'calc.ts', path: 'D:/project/calc.ts', content: 'export function calculateTotal() {}', versionHash: 'a'.repeat(64) },
       pinnedFilesContextStr: '[EXPLICIT REFERENCED FILE: helper.ts]\n```\nconst tax = 0.22;\n```',
       toolOutputHistory: ['Ran command: npm test'],
       settings: defaultSettings,

@@ -32,7 +32,17 @@ describe('SidecarHttpClient Unit Tests', () => {
         path: '/health',
         handler: (_req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ status: 'online', version: '2.3.0' }))
+          res.end(JSON.stringify({
+            status: 'online',
+            engine: 'FastAPI + LanceDB',
+            version: '2.3.0',
+            vector_db: 'LanceDB Embedded',
+            gpu: {},
+            ocr: {},
+            documents_count: 2,
+            chunks_count: 5,
+            python_version: '3.13',
+          }))
         },
       },
       {
@@ -112,6 +122,7 @@ describe('SidecarHttpClient Unit Tests', () => {
     const status = await client.getStatus()
     expect(status.status).toBe('online')
     expect(status.version).toBe('2.3.0')
+    expect(status.documentsCount).toBe(2)
   })
 
   it('lists documents from /documents', async () => {
@@ -140,7 +151,7 @@ describe('SidecarHttpClient Unit Tests', () => {
   it('handles streaming ingest via /ingest-path-stream', async () => {
     const events: any[] = []
     const res = await client.ingestFileStream(
-      { file_path: 'doc.txt' },
+      { file_path: 'doc.txt', task_id: 'ingest-test-1' },
       (ev) => events.push(ev)
     )
     expect(events.length).toBeGreaterThanOrEqual(1)
@@ -175,5 +186,48 @@ describe('SidecarHttpClient Unit Tests', () => {
 
     const del = await deadClient.deleteDocument('doc-x')
     expect(del.success).toBe(false)
+  })
+})
+
+describe('SidecarHttpClient health failures', () => {
+  const servers: http.Server[] = []
+
+  afterAll(() => servers.forEach((server) => server.close()))
+
+  it('fails closed for malformed payloads and non-success HTTP responses', async () => {
+    const malformed = await createMockServer([{
+      method: 'GET',
+      path: '/health',
+      handler: (_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end('{"status":"online"}')
+      },
+    }])
+    const unavailable = await createMockServer([{
+      method: 'GET',
+      path: '/health',
+      handler: (_req, res) => {
+        res.writeHead(503, { 'Content-Type': 'application/json' })
+        res.end('{"status":"online"}')
+      },
+    }])
+    servers.push(malformed.server, unavailable.server)
+
+    await expect(new SidecarHttpClient(malformed.baseUrl).getStatus()).resolves.toMatchObject({ status: 'offline' })
+    await expect(new SidecarHttpClient(unavailable.baseUrl).getStatus()).resolves.toEqual({ status: 'offline', error: 'HTTP 503' })
+  })
+
+  it('fails closed when the health probe times out', async () => {
+    const stalled = await createMockServer([{
+      method: 'GET',
+      path: '/health',
+      handler: () => {},
+    }])
+    servers.push(stalled.server)
+
+    await expect(new SidecarHttpClient(stalled.baseUrl).getStatus(25)).resolves.toEqual({
+      status: 'offline',
+      error: 'Health probe timed out after 25ms',
+    })
   })
 })

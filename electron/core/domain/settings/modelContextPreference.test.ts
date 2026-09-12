@@ -19,6 +19,10 @@ describe('resolveModelContextLength', () => {
     expect(resolveModelContextLength('model', undefined, 16384, 32768)).toBe(16384)
   })
 
+  it('keeps the hardware capacity when the model limit is unknown', () => {
+    expect(resolveModelContextLength('custom-model', undefined, 16384)).toBe(16384)
+  })
+
   it('exposes powers of two and the exact model maximum', () => {
     expect(getModelContextChoices(24576)).toEqual([2048, 4096, 8192, 16384, 24576])
   })

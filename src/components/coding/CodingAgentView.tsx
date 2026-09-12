@@ -328,6 +328,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
                 isAnalyzingInterview={planApproval.isAnalyzingInterview}
                 onConfirmInterview={planApproval.confirmInterviewAnswers}
                 onSkipInterview={planApproval.skipInterviewWithRecommended}
+                onCancelFlow={planApproval.cancelPlanFlow}
                 onRetry={planApproval.retryCurrentPlan}
                 onApprove={planApproval.handleApprovePlan}
                 onReject={planApproval.handleRejectPlan}

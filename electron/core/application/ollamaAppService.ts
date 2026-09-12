@@ -15,7 +15,7 @@ export class OllamaAppService {
     return ollamaInstallerRepository.installOrLaunch()
   }
 
-  async pullModel(modelName: string, onProgress?: (progress: { status: string; completed?: number; total?: number }) => void): Promise<{ success: boolean; data?: string; error?: string }> {
+  async pullModel(modelName: string, host?: string, onProgress?: (progress: { status: string; completed?: number; total?: number }) => void): Promise<{ success: boolean; data?: string; error?: string }> {
     if (!ollamaModelUpdateAppService.acquireUpdateLock(modelName)) {
       return {
         success: false,
@@ -23,7 +23,7 @@ export class OllamaAppService {
       }
     }
     try {
-      return await ollamaHttpClient.pullModel(modelName, undefined, onProgress)
+      return await ollamaHttpClient.pullModel(modelName, host, onProgress)
     } finally {
       ollamaModelUpdateAppService.releaseUpdateLock(modelName)
     }
@@ -35,8 +35,8 @@ export class OllamaAppService {
     return { success: true }
   }
 
-  deleteModel(modelName: string) {
-    return ollamaHttpClient.deleteModel(modelName)
+  deleteModel(modelName: string, host?: string) {
+    return ollamaHttpClient.deleteModel(modelName, host)
   }
 
   generateStream(
@@ -44,13 +44,19 @@ export class OllamaAppService {
     prompt: string,
     onChunk: (chunk: string) => void,
     onDone: () => void,
-    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number }
+    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number },
+    host?: string,
+    operationId?: string
   ) {
-    return ollamaHttpClient.generateStream(model, prompt, onChunk, onDone, customOptions)
+    return ollamaHttpClient.generateStream(model, prompt, onChunk, onDone, customOptions, host, operationId)
   }
 
   generateStructured(request: OllamaStructuredRequest): Promise<OllamaStructuredResponse> {
     return ollamaHttpClient.generateStructured(request)
+  }
+
+  cancelStructuredGeneration(operationId: string): boolean {
+    return ollamaHttpClient.cancelStructuredGeneration(operationId)
   }
 
   async getInstalledModels(host?: string): Promise<string[]> {
@@ -82,8 +88,12 @@ export class OllamaAppService {
     return ollamaHttpClient.preloadModel(modelName, host)
   }
 
-  cancelStream() {
-    ollamaHttpClient.cancelStream()
+  cancelStream(operationId: string) {
+    return ollamaHttpClient.cancelStream(operationId)
+  }
+
+  getGenerationStatus() {
+    return ollamaHttpClient.getGenerationStatus()
   }
 
   getRunningModels(host?: string) {
@@ -116,8 +126,8 @@ export class OllamaAppService {
     }
   }
 
-  benchmarkModel(modelName: string) {
-    return ollamaHttpClient.benchmarkModel(modelName)
+  benchmarkModel(modelName: string, host?: string) {
+    return ollamaHttpClient.benchmarkModel(modelName, host)
   }
 }
 

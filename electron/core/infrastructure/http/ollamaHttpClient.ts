@@ -1,4 +1,5 @@
 import http from 'node:http'
+import https from 'node:https'
 import { logger } from '../../../diagnostics'
 import type { RunningModelInfo, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
@@ -8,6 +9,7 @@ import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
 export type { OllamaModelMetrics }
 
 export interface OllamaStructuredRequest {
+  operationId?: string
   model: string
   systemPrompt: string
   userContent: string
@@ -30,7 +32,8 @@ export type OllamaStructuredResponse =
   | { status: 'transport_error'; content: string; error: string }
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
-type OllamaUrl = { hostname: string; port: number | string; path: string }
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 })
+type OllamaUrl = { protocol: 'http:' | 'https:'; hostname: string; port: number | string; path: string }
 
 export interface RawOllamaTagModel {
   name?: string
@@ -50,7 +53,6 @@ export interface RawOllamaTagModel {
 }
 
 export class OllamaHttpClient {
-  private pendingStreamCancel: (() => void) | null = null
   private activePullReq: http.ClientRequest | null = null
   private baseHost: string = 'http://127.0.0.1:11434'
 
@@ -64,8 +66,7 @@ export class OllamaHttpClient {
   }
 
   getRunningModels(customHost?: string): Promise<{ success: boolean; models: RunningModelInfo[]; error?: string }> {
-    if (customHost) this.setBaseHost(customHost)
-    const urlOpts = this.resolveUrl('/api/ps')
+    const urlOpts = this.resolveUrl('/api/ps', customHost)
 
     const startedAt = Date.now()
     let recorded = false
@@ -76,7 +77,7 @@ export class OllamaHttpClient {
     }
 
     return new Promise((resolve) => {
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -146,8 +147,7 @@ export class OllamaHttpClient {
    * Returns an empty array (never throws/rejects) on any network, timeout, HTTP or JSON error.
    */
   private fetchRawModelTags(customHost?: string): Promise<RawOllamaTagModel[]> {
-    if (customHost) this.setBaseHost(customHost)
-    const urlOpts = this.resolveUrl('/api/tags')
+    const urlOpts = this.resolveUrl('/api/tags', customHost)
     const startedAt = Date.now()
     let recorded = false
     const record = (status: number, errorType: Parameters<typeof httpMetrics.record>[2]) => {
@@ -157,7 +157,7 @@ export class OllamaHttpClient {
     }
 
     return new Promise((resolve) => {
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -242,7 +242,7 @@ export class OllamaHttpClient {
     // enrich the tag facts before returning them to the renderer.
     await Promise.all(
       Object.keys(map).map(async (name) => {
-        const contextLength = await this.getModelContextLength(name)
+        const contextLength = await this.getModelContextLength(name, customHost)
         if (contextLength !== undefined) map[name].contextLength = contextLength
       })
     )
@@ -250,11 +250,11 @@ export class OllamaHttpClient {
     return map
   }
 
-  private getModelContextLength(modelName: string): Promise<number | undefined> {
-    const urlOpts = this.resolveUrl('/api/show')
+  private getModelContextLength(modelName: string, customHost?: string): Promise<number | undefined> {
+    const urlOpts = this.resolveUrl('/api/show', customHost)
     const postData = JSON.stringify({ model: modelName })
     return new Promise((resolve) => {
-      const req = http.request({
+      const req = this.request(urlOpts, {
         hostname: urlOpts.hostname,
         port: urlOpts.port,
         path: urlOpts.path,
@@ -327,12 +327,11 @@ export class OllamaHttpClient {
   }
 
   unloadModel(modelName: string, customHost?: string): Promise<{ success: boolean; error?: string }> {
-    if (customHost) this.setBaseHost(customHost)
     if (!modelName || !modelName.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid model name' })
     }
     const cleanModel = modelName.trim()
-    const urlOpts = this.resolveUrl('/api/generate')
+    const urlOpts = this.resolveUrl('/api/generate', customHost)
     logger.log('INFO', 'OllamaClient', `Requesting immediate model eviction (keep_alive: 0) for: ${cleanModel}`)
 
     return ollamaGenerationScheduler.schedule('unload', (setActiveCancel) =>
@@ -348,7 +347,7 @@ export class OllamaHttpClient {
         keep_alive: 0,
       })
 
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -393,12 +392,11 @@ export class OllamaHttpClient {
    * Always resolves — a failed warm-up is a missed optimisation, never a session error.
    */
   preloadModel(modelName: string, customHost?: string, keepAlive: string = '30m'): Promise<{ success: boolean; error?: string }> {
-    if (customHost) this.setBaseHost(customHost)
     if (!modelName || !modelName.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid model name' })
     }
     const cleanModel = modelName.trim()
-    const urlOpts = this.resolveUrl('/api/generate')
+    const urlOpts = this.resolveUrl('/api/generate', customHost)
 
     return ollamaGenerationScheduler.schedule('preload', (setActiveCancel) =>
       this.preloadModelNow(cleanModel, keepAlive, urlOpts, setActiveCancel)
@@ -413,7 +411,7 @@ export class OllamaHttpClient {
         keep_alive: keepAlive,
       })
 
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -450,16 +448,19 @@ export class OllamaHttpClient {
     })
   }
 
-  private resolveUrl(apiPath: string): { hostname: string; port: number | string; path: string } {
+  private resolveUrl(apiPath: string, host?: string): OllamaUrl {
     try {
-      const u = new URL(apiPath, this.baseHost)
+      const u = new URL(apiPath, host || this.baseHost)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Unsupported protocol')
       return {
+        protocol: u.protocol,
         hostname: u.hostname,
         port: u.port || (u.protocol === 'https:' ? 443 : 11434),
         path: u.pathname,
       }
     } catch {
       return {
+        protocol: 'http:',
         hostname: '127.0.0.1',
         port: 11434,
         path: apiPath,
@@ -467,16 +468,17 @@ export class OllamaHttpClient {
     }
   }
 
-  cancelStream() {
-    if (this.pendingStreamCancel) {
-      logger.log('INFO', 'OllamaClient', 'User requested cancellation of active Ollama stream.')
-      try {
-        this.pendingStreamCancel()
-      } catch (err: any) {
-        logger.log('WARN', 'OllamaClient', `Error destroying active Ollama stream: ${err.message}`)
-      }
-      this.pendingStreamCancel = null
-    }
+  private request(url: OllamaUrl, options: http.RequestOptions, listener: (response: http.IncomingMessage) => void): http.ClientRequest {
+    const transport = url.protocol === 'https:' ? https : http
+    return transport.request({ ...options, agent: url.protocol === 'https:' ? httpsAgent : httpAgent }, listener)
+  }
+
+  cancelStream(operationId: string): boolean {
+    return ollamaGenerationScheduler.cancel(operationId)
+  }
+
+  getGenerationStatus() {
+    return ollamaGenerationScheduler.getStatus()
   }
 
   cancelPull() {
@@ -496,21 +498,20 @@ export class OllamaHttpClient {
     customHost?: string,
     onProgress?: (progress: { status: string; completed?: number; total?: number }) => void
   ): Promise<{ success: boolean; data?: string; error?: string }> {
-    if (customHost) this.setBaseHost(customHost)
     if (!modelName || typeof modelName !== 'string' || !modelName.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid or empty model name' })
     }
     const cleanModelName = modelName.trim()
     logger.log('INFO', 'OllamaClient', `Requesting pull for model: ${cleanModelName}`)
 
-    const urlOpts = this.resolveUrl('/api/pull')
+    const urlOpts = this.resolveUrl('/api/pull', customHost)
     return new Promise((resolve) => {
       const postData = JSON.stringify({
         model: cleanModelName,
         name: cleanModelName,
         stream: true,
       })
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -603,15 +604,15 @@ export class OllamaHttpClient {
     })
   }
 
-  deleteModel(modelName: string): Promise<{ success: boolean; error?: string }> {
+  deleteModel(modelName: string, customHost?: string): Promise<{ success: boolean; error?: string }> {
     if (!modelName || typeof modelName !== 'string') {
       return Promise.resolve({ success: false, error: 'Invalid model name' })
     }
     logger.log('INFO', 'OllamaClient', `Requesting delete for model: ${modelName}`)
-    const urlOpts = this.resolveUrl('/api/delete')
+    const urlOpts = this.resolveUrl('/api/delete', customHost)
     return new Promise((resolve) => {
       const postData = JSON.stringify({ name: modelName.trim() })
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -642,18 +643,18 @@ export class OllamaHttpClient {
     prompt: string,
     onChunk: (chunk: string) => void,
     onDone: () => void,
-    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string }
+    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string },
+    customHost?: string,
+    operationId?: string
   ): Promise<{ success: boolean; error?: string }> {
     if (typeof prompt !== 'string') return Promise.resolve({ success: false, error: 'Invalid prompt' })
-    const urlOpts = this.resolveUrl('/api/generate')
+    const urlOpts = this.resolveUrl('/api/generate', customHost)
 
-    const scheduled = ollamaGenerationScheduler.schedule('stream', (setActiveCancel) =>
-      this.generateStreamNow(model, prompt, onChunk, onDone, customOptions, urlOpts, setActiveCancel)
-    )
-    this.pendingStreamCancel = scheduled.cancel
-    return scheduled.promise.finally(() => {
-      if (this.pendingStreamCancel === scheduled.cancel) this.pendingStreamCancel = null
-    })
+    return ollamaGenerationScheduler.schedule(
+      'stream',
+      (setActiveCancel) => this.generateStreamNow(model, prompt, onChunk, onDone, customOptions, urlOpts, setActiveCancel),
+      operationId
+    ).promise
   }
 
   private generateStreamNow(
@@ -679,7 +680,7 @@ export class OllamaHttpClient {
           ...(customOptions?.num_thread ? { num_thread: customOptions.num_thread } : {}),
         },
       })
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -697,14 +698,13 @@ export class OllamaHttpClient {
             res.on('data', (chunk) => { errBody += chunk.toString() })
             res.on('end', () => {
               const msg = res.statusCode === 404 ? `Model '${model}' not pulled in Ollama.` : `Ollama HTTP Error ${res.statusCode}: ${errBody.slice(0, 200)}`
-              onChunk(`\n[${msg}]`)
-              onDone()
               resolve({ success: false, error: msg })
             })
             return
           }
 
           let buffer = ''
+          let completed = false
           res.on('data', (chunk) => {
             buffer = consumeNdjsonChunk(
               buffer,
@@ -713,6 +713,7 @@ export class OllamaHttpClient {
                 if (parsed.response) {
                   onChunk(parsed.response)
                 }
+                if (parsed.done === true) completed = true
               },
               (jsonErr) => {
                 logger.log('WARN', 'OllamaClient', `Partial JSON stream chunk skipped: ${jsonErr.message}`)
@@ -720,6 +721,10 @@ export class OllamaHttpClient {
             )
           })
           res.on('end', () => {
+            if (!completed) {
+              resolve({ success: false, error: 'Ollama stream ended before completion.' })
+              return
+            }
             onDone()
             resolve({ success: true })
           })
@@ -730,15 +735,11 @@ export class OllamaHttpClient {
 
       req.on('error', (err: any) => {
         const errMsg = err.code === 'ECONNREFUSED' ? 'Ollama service is not running locally (http://127.0.0.1:11434).' : err.message
-        onChunk(`\n[Ollama Connection Error: ${errMsg}]`)
-        onDone()
         resolve({ success: false, error: errMsg })
       })
 
       req.setTimeout(600000, () => {
         req.destroy()
-        onChunk('\n[Generation Timed Out (600s limit)]')
-        onDone()
         resolve({ success: false, error: 'Generation timeout' })
       })
 
@@ -751,12 +752,15 @@ export class OllamaHttpClient {
     if (!request.model.trim() || !request.systemPrompt.trim()) {
       return Promise.resolve({ status: 'transport_error', content: '', error: 'Invalid structured generation request' })
     }
-    if (request.host) this.setBaseHost(request.host)
-    const urlOpts = this.resolveUrl('/api/chat')
+    const urlOpts = this.resolveUrl('/api/chat', request.host)
 
     return ollamaGenerationScheduler.schedule('structured', (setActiveCancel) =>
-      this.generateStructuredNow(request, urlOpts, setActiveCancel)
+      this.generateStructuredNow(request, urlOpts, setActiveCancel), request.operationId
     ).promise
+  }
+
+  cancelStructuredGeneration(operationId: string): boolean {
+    return ollamaGenerationScheduler.cancel(operationId)
   }
 
   private generateStructuredNow(
@@ -797,7 +801,7 @@ export class OllamaHttpClient {
         )
         resolve(result)
       }
-      const req = http.request({
+      const req = this.request(urlOpts, {
         hostname: urlOpts.hostname,
         port: urlOpts.port,
         path: urlOpts.path,
@@ -845,7 +849,7 @@ export class OllamaHttpClient {
     })
   }
 
-  benchmarkModel(modelName: string): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
+  benchmarkModel(modelName: string, customHost?: string): Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }> {
     if (!modelName || typeof modelName !== 'string') {
       return Promise.resolve({ success: false, tokensPerSec: 0, evalCount: 0, evalDurationMs: 0, error: 'Invalid model name' })
     }
@@ -855,12 +859,12 @@ export class OllamaHttpClient {
     logger.log('INFO', 'OllamaClient', `Starting performance benchmark for model: ${modelName} (isEmbedding: ${isLikelyEmbedding})`)
 
     if (isLikelyEmbedding) {
-      const urlOpts = this.resolveUrl('/api/embeddings')
+      const urlOpts = this.resolveUrl('/api/embeddings', customHost)
       return ollamaGenerationScheduler.schedule('benchmark', () => this.benchmarkEmbeddingModel(modelName.trim(), urlOpts)).promise
     }
 
-    const urlOpts = this.resolveUrl('/api/generate')
-    const embeddingUrlOpts = this.resolveUrl('/api/embeddings')
+    const urlOpts = this.resolveUrl('/api/generate', customHost)
+    const embeddingUrlOpts = this.resolveUrl('/api/embeddings', customHost)
     return ollamaGenerationScheduler.schedule('benchmark', (setActiveCancel) =>
       this.benchmarkGenerationModel(modelName, urlOpts, embeddingUrlOpts, setActiveCancel)
     ).promise
@@ -881,7 +885,7 @@ export class OllamaHttpClient {
         options: { num_predict: 50 },
       })
 
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
@@ -958,7 +962,7 @@ export class OllamaHttpClient {
         prompt: 'Benchmark semantic retrieval text for embedding generation throughput and vector latency testing.',
       })
 
-      const req = http.request(
+      const req = this.request(urlOpts,
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,

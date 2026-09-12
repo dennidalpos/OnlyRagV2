@@ -307,7 +307,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       setPullProgressPercent(0)
 
       try {
-        const res = await window.electronAPI.pullOllamaModel(modelToPull)
+        const res = await window.electronAPI.pullOllamaModel(modelToPull, settings.ollamaHost)
         if (isCancelledRef.current) {
           hasError = true
           break

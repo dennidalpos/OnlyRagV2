@@ -19,7 +19,7 @@ export function useSettingsManager(
     setIsPulling(true)
     setPullMessage(`Pulling ${pullModelInput}...`)
     try {
-      const res = await window.electronAPI.pullOllamaModel(pullModelInput.trim())
+      const res = await window.electronAPI.pullOllamaModel(pullModelInput.trim(), settings.ollamaHost)
       if (res.success) {
         setPullMessage(`Successfully pulled ${pullModelInput}`)
         setPullModelInput('')
@@ -42,7 +42,7 @@ export function useSettingsManager(
    */
   const handleDeleteModel = async (modelName: string) => {
     if (!window.electronAPI) return
-    const res = await window.electronAPI.deleteOllamaModel(modelName)
+    const res = await window.electronAPI.deleteOllamaModel(modelName, settings.ollamaHost)
     if (res.success) {
       setPullMessage(`Deleted ${modelName}`)
       onRefreshDiagnostics()

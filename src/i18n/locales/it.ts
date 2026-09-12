@@ -45,6 +45,8 @@ export const it: TranslationSchema = {
     reset: 'Ripristina',
     active: 'Attivo',
     inactive: 'Inattivo',
+    queued: 'In coda',
+    running: 'In esecuzione',
     original: 'Originale',
     modified: 'Modificato',
     custom: 'Personalizzato',

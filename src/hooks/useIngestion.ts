@@ -26,6 +26,7 @@ export function resolveVisionOcrPrompt(settings?: AppSettings): string | undefin
 }
 
 export interface IngestionProgressState {
+  taskId?: string
   active: boolean
   fileName: string
   step: string
@@ -100,7 +101,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     percent: 0,
   })
 
-  const isCancelledRef = useRef<boolean>(false)
+  const activeTaskIdRef = useRef<string | null>(null)
 
   const handleDocUpdateCallback = useCallback((docs: IngestedDocument[]) => {
     setSelectedDoc((prev) => {
@@ -135,10 +136,12 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
   })
 
   const handleCancelIngestion = async () => {
-    isCancelledRef.current = true
+    const taskId = activeTaskIdRef.current
+    if (!taskId) return
     if (window.electronAPI?.cancelTask) {
-      await window.electronAPI.cancelTask()
+      await window.electronAPI.cancelTask(taskId)
     }
+    activeTaskIdRef.current = null
     setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
     setIsUploading(false)
     setUploadError('Ingestion cancelled by user. Temporary files and partial task data cleaned.')
@@ -149,7 +152,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (!window.electronAPI?.onIngestStreamProgress) return
 
     const unsubscribe = window.electronAPI.onIngestStreamProgress((payload) => {
-      if (isCancelledRef.current) return
+      if (payload.taskId !== activeTaskIdRef.current) return
       if (payload.type === 'progress') {
         setIngestionProgress((prev) => ({
           ...prev,
@@ -356,7 +359,8 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       return
     }
 
-    isCancelledRef.current = false
+    const taskId = crypto.randomUUID()
+    activeTaskIdRef.current = taskId
     setIsUploading(true)
     setUploadError(null)
 
@@ -399,6 +403,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
     setIngestionProgress({
       active: true,
+      taskId,
       fileName: baseName,
       fileCategory: detectedCategory,
       pipeline: initialPipeline,
@@ -409,7 +414,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     })
 
     try {
-      if (isCancelledRef.current) return
+      if (activeTaskIdRef.current !== taskId) return
       setIngestionProgress((p) => ({
         ...p,
         step: `Estrazione Layout & OCR in corso (${ocrTech})...`,
@@ -427,10 +432,11 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
           settings?.modelContextLengths,
           hardwareDefault,
           modelMetrics[visionModelName]?.contextLength
-        )
+        ),
+        taskId
       )
 
-      if (isCancelledRef.current) return
+      if (activeTaskIdRef.current !== taskId) return
 
       if (!res.success) {
         setUploadError(res.error || 'Ingestion failed: unknown error from sidecar engine')
@@ -448,6 +454,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
       notifyDocumentsChanged()
       await fetchDocuments()
+      if (activeTaskIdRef.current !== taskId) return
       if (res.data) {
         handleSelectDoc(res.data)
       }
@@ -464,13 +471,16 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
       })
       setTimeout(() => setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 }), 2000)
     } catch (err: any) {
-      if (!isCancelledRef.current) {
+      if (activeTaskIdRef.current === taskId) {
         const normalized = normalizeError(err, 'Ingestion')
         setUploadError(normalized.remediation ? `${normalized.message} — ${normalized.remediation}` : normalized.message)
         setIngestionProgress({ active: false, fileName: '', step: '', percent: 0 })
       }
     } finally {
-      setIsUploading(false)
+      if (activeTaskIdRef.current === taskId) {
+        activeTaskIdRef.current = null
+        setIsUploading(false)
+      }
     }
   }
 

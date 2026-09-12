@@ -299,6 +299,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
     editorContent,
     setEditorContent,
     originalContent,
+    loadedContentHash,
     isSaved,
     saveConflict,
     setIsSaved,

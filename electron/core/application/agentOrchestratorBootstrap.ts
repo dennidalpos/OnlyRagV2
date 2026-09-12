@@ -130,6 +130,7 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
   const state = await initializeSessionState({
     payload,
     sessionId,
+    runIdentity: session.identity,
     workspacePath: context.workspacePath,
     agentMode: context.agentMode,
     userTask: context.userTask,

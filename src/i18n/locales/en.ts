@@ -45,6 +45,8 @@ export const en: TranslationSchema = {
     reset: 'Reset',
     active: 'Active',
     inactive: 'Inactive',
+    queued: 'Queued',
+    running: 'Running',
     original: 'Original',
     modified: 'Modified',
     custom: 'Custom',

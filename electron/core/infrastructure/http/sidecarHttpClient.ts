@@ -10,9 +10,11 @@
 import http from 'node:http'
 import { logger } from '../../../diagnostics'
 import type { SlmLogDiagnosticReport } from '../../../../shared/types'
+import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
 
 export interface SidecarIngestStreamPayload {
   file_path: string
+  task_id: string
   vision_model?: string
   vision_prompt?: string
   normalize_with_llm?: boolean
@@ -83,40 +85,74 @@ export class SidecarHttpClient {
     }
   }
 
+  private notifyTaskCancellation(taskId: string): void {
+    const urlOpts = this.resolveUrl(`/tasks/cancel?task_id=${encodeURIComponent(taskId)}`)
+    const req = http.request({
+      hostname: urlOpts.hostname,
+      port: urlOpts.port,
+      path: urlOpts.path,
+      method: 'POST',
+      agent: this.httpAgent,
+      headers: { 'Content-Length': 0 },
+    })
+    req.on('error', (err) => logger.log('WARN', 'SidecarClient', `Cancellation relay failed: ${err.message}`))
+    req.end()
+  }
+
   /**
    * Health / Status probe of the sidecar process.
    */
-  getStatus(): Promise<{ status: string; [key: string]: any }> {
+  getStatus(timeoutMs = 3000): Promise<{ status: string; [key: string]: any }> {
     const urlOpts = this.resolveUrl('/health')
     return new Promise((resolve) => {
+      let settled = false
+      const finish = (status: { status: string; [key: string]: any }) => {
+        if (settled) return
+        settled = true
+        resolve(status)
+      }
       const req = http.get(
         {
           hostname: urlOpts.hostname,
           port: urlOpts.port,
           path: urlOpts.path,
           agent: this.httpAgent,
-          timeout: 3000,
+          timeout: timeoutMs,
         },
         (res) => {
           let raw = ''
           res.on('data', (chunk) => { raw += chunk })
           res.on('end', () => {
+            if (res.statusCode !== 200) {
+              finish({ status: 'offline', error: `HTTP ${res.statusCode || 'unknown'}` })
+              return
+            }
             try {
-              const data = JSON.parse(raw)
-              resolve(data)
+              const data = parseSidecarHealthResponse(JSON.parse(raw))
+              if (!data) {
+                finish({ status: 'offline', error: 'Malformed /health response' })
+                return
+              }
+              finish({
+                status: data.status,
+                engine: data.engine,
+                version: data.version,
+                documentsCount: data.documents_count,
+                chunksCount: data.chunks_count,
+              })
             } catch (err: any) {
               logger.log('WARN', 'SidecarClient', `Failed to parse /health JSON response: ${err.message}`)
-              resolve({ status: 'offline' })
+              finish({ status: 'offline', error: 'Malformed /health response' })
             }
           })
         }
       )
-      req.on('error', () => {
-        resolve({ status: 'offline' })
+      req.on('error', (err) => {
+        finish({ status: 'offline', error: err.message })
       })
-      req.setTimeout(3000, () => {
+      req.setTimeout(timeoutMs, () => {
+        finish({ status: 'offline', error: `Health probe timed out after ${timeoutMs}ms` })
         req.destroy()
-        resolve({ status: 'offline' })
       })
     })
   }
@@ -212,6 +248,7 @@ export class SidecarHttpClient {
       if (onCancelRegister) {
         onCancelRegister(() => {
           try {
+            this.notifyTaskCancellation(payload.task_id)
             req.destroy()
           } catch (cancelErr: any) {
             logger.log('WARN', 'SidecarClient', `Task cancel error: ${cancelErr.message}`)

@@ -15,6 +15,7 @@ import type { AgentSession } from './agentOrchestratorTypes'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
+import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 
 export type { AgentSession }
 
@@ -60,6 +61,11 @@ function cleanupSession(session: AgentSession) {
     agentToolExecutorService.rollbackJournal()
   } catch (err: any) {
     logger.log('WARN', 'AgentOrchestrator', `Failed rolling back journal during cleanup: ${err?.message}`)
+  }
+  try {
+    session.workspaceTransaction?.dispose()
+  } catch (err: any) {
+    logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${err?.message}`)
   }
   if (session.targetWindow && !session.targetWindow.isDestroyed()) {
     session.targetWindow.webContents.send('agent:log', {
@@ -115,7 +121,8 @@ export function respondToApproval(target: AgentRunIdentity | string, approved: b
 export async function runAgentOrchestratorLoop(
   payload: AgentTaskPayload,
   win: BrowserWindow | null,
-  customSessionId?: string
+  customSessionId?: string,
+  workspaceTransaction?: DisposableAgentWorkspace,
 ): Promise<AgentTaskResult> {
   if (!payload.userTask || !payload.userTask.trim()) {
     return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required', completionStatus: 'blocked' }
@@ -137,6 +144,7 @@ export async function runAgentOrchestratorLoop(
     targetWindow: win,
     activeCancelHandle: null,
     activeChildProcess: null,
+    workspaceTransaction,
   }
   activeAgentSessions.set(runId, session)
 
@@ -254,6 +262,8 @@ export async function runAgentOrchestratorLoop(
       generationTelemetry: session.ollamaGenerationTelemetry,
       lastVerification: session.lastVerification,
       recordVerificationEvidence: (evidence) => { session.lastVerification = evidence },
+      requestApproval,
+      workspaceTransaction,
     }, request)
 
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
@@ -394,6 +404,7 @@ export async function runAgentOrchestratorLoop(
       allowedToolsForTurn: preparedTurn.toolPolicy.allowedTools,
       requiredReadPath: preparedTurn.toolPolicy.requiredReadPath,
       runOwnedPaths: Array.from(sessionChangedFiles.keys()),
+      isIsolatedWorkspace: Boolean(workspaceTransaction),
     })
     if (gateResult.outcome === 'denied') {
       setExecutionPhase('collect_context')

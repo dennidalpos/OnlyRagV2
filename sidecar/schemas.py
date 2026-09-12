@@ -81,6 +81,7 @@ class VocabStatusResponse(BaseModel):
 
 class IngestPathRequest(StrictRequest):
     file_path: str = Field(..., min_length=1, max_length=4096, pattern=NON_BLANK)
+    task_id: Optional[str] = Field(default=None, min_length=1, max_length=200, pattern=NON_BLANK)
     vision_model: Optional[str] = MODEL_NAME
     vision_prompt: Optional[str] = Field(default=None, min_length=1, max_length=20000, pattern=NON_BLANK)
     normalize_with_llm: Optional[bool] = False

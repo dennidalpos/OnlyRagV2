@@ -840,6 +840,11 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({ settings, diagnos
                     )}
 
                     {/* Active Model Pill */}
+                    {c.isGenerating && c.generationState && (
+                      <span className="px-2 py-0.5 rounded-xl border border-sky-500/30 bg-sky-950/50 text-[10px] font-semibold text-sky-300" role="status">
+                        {t(`common.${c.generationState}`)}
+                      </span>
+                    )}
                     <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-mono text-slate-300">
                       <Sparkles className="w-3 h-3 text-cyan-400" />
                       <span className="truncate max-w-[90px]">{settings.chatModel || settings.defaultModel || 'llama3.2'}</span>

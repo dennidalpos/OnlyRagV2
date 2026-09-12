@@ -178,6 +178,7 @@ describe('usePlanApproval interview and error flow', () => {
       undefined,
       '/repo',
       [expect.objectContaining({ selectedOption: 'React Router', provenance: 'accepted_recommendation' })],
+      expect.objectContaining({ conversationId: 'session-1', planRevisionId: expect.stringMatching(/^planning:/) }),
     )
     expect(currentHook.currentPlan).toMatchObject({
       status: 'ready',
@@ -461,8 +462,8 @@ describe('usePlanApproval interview and error flow', () => {
       await first
     })
 
-    expect(currentHook.currentPlan?.prompt).toBe('Nuovo')
-    expect(currentHook.currentPlan?.objective).toBe('Complete the requested task')
+    expect(currentHook.currentPlan?.prompt).toBe('Vecchio')
+    expect(currentHook.currentPlan?.status).toBe('ready')
   })
 
   it('generates a plan after development strict-mode effect replay', async () => {

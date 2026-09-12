@@ -192,6 +192,12 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(({ set
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
                   <span className="font-semibold">{tr.selectedDoc?.filename || t('common.document')}</span>
                   <span className="text-slate-400">•</span>
+                  {tr.generationState && (
+                    <>
+                      <span className="text-amber-300 font-semibold">{t(`common.${tr.generationState}`)}</span>
+                      <span className="text-slate-400">•</span>
+                    </>
+                  )}
                   <span className="text-sky-300 font-mono">
                     Chunk {tr.currentChunkIndex}/{tr.totalChunks} ({tr.sourceLang} &rarr; {tr.targetLang})
                   </span>
@@ -370,7 +376,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(({ set
             </button>
           </div>
 
-          {tr.translatedMarkdown && (
+          {tr.isTranslationComplete && tr.translatedMarkdown && (
             <div className="flex items-center gap-1.5 bg-slate-950 rounded-xl border border-slate-800 p-0.5 shadow-sm">
               <button
                 type="button"

@@ -13,7 +13,6 @@ import { logger } from '../lib/logger'
 
 const LEGACY_SESSIONS_STORAGE_KEY = 'onlyrag_coding_sessions_v2'
 const MIGRATION_FLAG_KEY = 'onlyrag_sessions_migrated_to_filesystem_v1'
-const PERSIST_DEBOUNCE_MS = 800
 
 export interface ExecutedPromptResult {
   outcome: ExecutedPromptOutcome
@@ -74,7 +73,7 @@ async function migrateLegacySessions(): Promise<void> {
 /**
  * Owns the coding session history of the active workspace. The filesystem store behind
  * the `sessions:*` IPC channels is the single source of truth: this hook mirrors it in
- * memory and writes back debounced.
+ * memory and persists each meaningful change through a serialized IPC write.
  */
 export function useSessionHistory(workspacePath: string | null) {
   const [sessions, setSessions] = useState<CodingSession[]>([])
@@ -82,8 +81,7 @@ export function useSessionHistory(workspacePath: string | null) {
   const [activeSessionId, setActiveSessionId] = useState<string>('')
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true)
 
-  const pendingWritesRef = useRef<Map<string, CodingSession>>(new Map())
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistenceChainsRef = useRef<Map<string, Promise<void>>>(new Map())
   /**
    * Bootstrap session created for an empty workspace store, kept per workspace so a
    * repeated load (React StrictMode double-invoke, or a workspace revisited before the
@@ -96,50 +94,45 @@ export function useSessionHistory(workspacePath: string | null) {
   }, [sessions])
 
   const flushPendingWrites = useCallback(async () => {
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current)
-      persistTimerRef.current = null
-    }
-    const pending = Array.from(pendingWritesRef.current.values()).filter(hasPersistableContent)
-    pendingWritesRef.current.clear()
-    if (pending.length === 0 || !window.electronAPI?.saveCodingSession) return
-
-    for (const session of pending) {
-      try {
-        const saved = await window.electronAPI.saveCodingSession(session)
-        // The main process derives the session title from the first executed prompt:
-        // adopt it so the sidebar shows exactly what is stored on disk.
-        if (saved && saved.title !== session.title) {
-          setSessions((prev) => prev.map((s) => (s.id === saved.id ? { ...s, title: saved.title } : s)))
-        }
-      } catch (err: any) {
-        logger.warn('useSessionHistory', `Could not persist session ${session.id}: ${err?.message}`)
-      }
-    }
+    await Promise.all(Array.from(persistenceChainsRef.current.values()))
   }, [])
 
   const schedulePersist = useCallback(
-    (session: CodingSession) => {
-      pendingWritesRef.current.set(session.id, session)
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
-      persistTimerRef.current = setTimeout(() => {
-        void flushPendingWrites()
-      }, PERSIST_DEBOUNCE_MS)
+    (session: CodingSession): Promise<CodingSession | null> => {
+      const saveCodingSession = window.electronAPI?.saveCodingSession
+      if (!hasPersistableContent(session) || !saveCodingSession) return Promise.resolve(null)
+
+      const previous = persistenceChainsRef.current.get(session.id) || Promise.resolve()
+      const save = previous.then(async () => {
+        try {
+          const saved = await saveCodingSession(session)
+          if (saved && saved.title !== session.title) {
+            const current = sessionsRef.current
+            sessionsRef.current = current.map((item) => item.id === saved.id ? { ...item, title: saved.title } : item)
+            setSessions(sessionsRef.current)
+          }
+          return saved
+        } catch (err: any) {
+          logger.warn('useSessionHistory', `Could not persist session ${session.id}: ${err?.message}`)
+          return null
+        }
+      })
+      persistenceChainsRef.current.set(session.id, save.then(() => undefined))
+      return save
     },
-    [flushPendingWrites]
+    []
   )
 
   const mutateSession = useCallback(
     (sessionId: string, mutator: (session: CodingSession) => CodingSession) => {
       if (!sessionId) return
-      setSessions((prev) =>
-        prev.map((session) => {
-          if (session.id !== sessionId) return session
-          const next = { ...mutator(session), updatedAt: new Date().toISOString() }
-          schedulePersist(next)
-          return next
-        })
-      )
+      const current = sessionsRef.current
+      const session = current.find((item) => item.id === sessionId)
+      if (!session) return
+      const next = { ...mutator(session), updatedAt: new Date().toISOString() }
+      sessionsRef.current = current.map((item) => item.id === sessionId ? next : item)
+      setSessions(sessionsRef.current)
+      void schedulePersist(next)
     },
     [schedulePersist]
   )
@@ -167,10 +160,12 @@ export function useSessionHistory(workspacePath: string | null) {
         const workspaceKey = workspacePath || ''
         const fresh = bootstrapSessionsRef.current.get(workspaceKey) || createEmptySession(workspacePath)
         bootstrapSessionsRef.current.set(workspaceKey, fresh)
+        sessionsRef.current = [fresh]
         setSessions([fresh])
         setActiveSessionId(fresh.id)
         schedulePersist(fresh)
       } else {
+        sessionsRef.current = stored
         setSessions(stored)
         setActiveSessionId(stored[0].id)
       }
@@ -183,24 +178,13 @@ export function useSessionHistory(workspacePath: string | null) {
     }
   }, [workspacePath, flushPendingWrites, schedulePersist])
 
-  // Never lose the last edits when the view unmounts or the window closes.
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      void flushPendingWrites()
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      void flushPendingWrites()
-    }
-  }, [flushPendingWrites])
-
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0] || null
 
   const createSession = useCallback((): CodingSession => {
     const fresh = createEmptySession(workspacePath)
     bootstrapSessionsRef.current.set(workspacePath || '', fresh)
-    setSessions((prev) => [fresh, ...prev])
+    sessionsRef.current = [fresh, ...sessionsRef.current]
+    setSessions(sessionsRef.current)
     setActiveSessionId(fresh.id)
     schedulePersist(fresh)
     return fresh
@@ -208,28 +192,19 @@ export function useSessionHistory(workspacePath: string | null) {
 
   const switchSession = useCallback(
     (sessionId: string): CodingSession | null => {
-      const target = sessions.find((s) => s.id === sessionId)
+      const target = sessionsRef.current.find((s) => s.id === sessionId)
       if (!target) return null
       void flushPendingWrites()
       setActiveSessionId(target.id)
       return target
     },
-    [sessions, flushPendingWrites]
+    [flushPendingWrites]
   )
 
   /** Deletes a session and returns the session that became active, when it changed. */
   const deleteSession = useCallback(
     async (sessionId: string): Promise<CodingSession | null> => {
-      pendingWritesRef.current.delete(sessionId)
-      // The debounce timer is shared across every session's scheduled write (schedulePersist),
-      // so removing this one entry from the map is not enough on its own: if it was the only
-      // write pending, the timer is still armed and would fire a no-op flush later. Disarming
-      // it here (instead of only ever inside schedulePersist) closes that window outright
-      // rather than relying on flushPendingWrites filtering an already-deleted id.
-      if (pendingWritesRef.current.size === 0 && persistTimerRef.current) {
-        clearTimeout(persistTimerRef.current)
-        persistTimerRef.current = null
-      }
+      await flushPendingWrites()
       if (window.electronAPI?.deleteCodingSession) {
         try {
           await window.electronAPI.deleteCodingSession(sessionId, workspacePath)
@@ -238,16 +213,18 @@ export function useSessionHistory(workspacePath: string | null) {
         }
       }
 
-      const remaining = sessions.filter((s) => s.id !== sessionId)
+      const remaining = sessionsRef.current.filter((s) => s.id !== sessionId)
       if (remaining.length === 0) {
         const fresh = createEmptySession(workspacePath)
         bootstrapSessionsRef.current.set(workspacePath || '', fresh)
+        sessionsRef.current = [fresh]
         setSessions([fresh])
         setActiveSessionId(fresh.id)
         schedulePersist(fresh)
         return fresh
       }
 
+      sessionsRef.current = remaining
       setSessions(remaining)
       if (sessionId === activeSessionId) {
         setActiveSessionId(remaining[0].id)
@@ -255,16 +232,12 @@ export function useSessionHistory(workspacePath: string | null) {
       }
       return null
     },
-    [sessions, activeSessionId, workspacePath, schedulePersist]
+    [activeSessionId, workspacePath, schedulePersist, flushPendingWrites]
   )
 
   /** Deletes the whole history of the active workspace and starts from a clean session. */
   const clearSessions = useCallback(async (): Promise<CodingSession> => {
-    pendingWritesRef.current.clear()
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current)
-      persistTimerRef.current = null
-    }
+    await flushPendingWrites()
     if (window.electronAPI?.clearCodingSessions) {
       try {
         await window.electronAPI.clearCodingSessions(workspacePath)
@@ -274,29 +247,19 @@ export function useSessionHistory(workspacePath: string | null) {
     }
     const fresh = createEmptySession(workspacePath)
     bootstrapSessionsRef.current.set(workspacePath || '', fresh)
+    sessionsRef.current = [fresh]
     setSessions([fresh])
     setActiveSessionId(fresh.id)
     return fresh
-  }, [workspacePath])
+  }, [workspacePath, flushPendingWrites])
 
   const purgeWorkspace = useCallback(
     (targetWorkspacePath: string | null) => {
       const targetKey = targetWorkspacePath || ''
       bootstrapSessionsRef.current.delete(targetKey)
 
-      // Drop pending writes for this workspace so they don't persist back to disk
-      for (const [id, session] of pendingWritesRef.current.entries()) {
-        if ((session.workspacePath || '') === targetKey) {
-          pendingWritesRef.current.delete(id)
-        }
-      }
-
-      if (pendingWritesRef.current.size === 0 && persistTimerRef.current) {
-        clearTimeout(persistTimerRef.current)
-        persistTimerRef.current = null
-      }
-
       if (workspacePath === targetWorkspacePath) {
+        sessionsRef.current = []
         setSessions([])
         setActiveSessionId('')
       }
@@ -355,21 +318,8 @@ export function useSessionHistory(workspacePath: string | null) {
     sessionsRef.current = sessionsRef.current.map((candidate) => candidate.id === sessionId ? next : candidate)
     setSessions(sessionsRef.current)
 
-    // An older debounced snapshot must never overwrite this approval after the immediate save.
-    pendingWritesRef.current.delete(sessionId)
-    if (pendingWritesRef.current.size === 0 && persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current)
-      persistTimerRef.current = null
-    }
-
-    try {
-      const saved = await window.electronAPI.saveCodingSession(next)
-      return saved !== null
-    } catch (err: any) {
-      logger.warn('useSessionHistory', `Could not persist approved plan ${plan.id}: ${err?.message}`)
-      return false
-    }
-  }, [])
+    return (await schedulePersist(next)) !== null
+  }, [schedulePersist])
 
   /** Records a prompt run as started; the returned id identifies it on completion. */
   const beginExecutedPrompt = useCallback(

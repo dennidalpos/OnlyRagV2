@@ -20,6 +20,9 @@ import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudg
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
 import { redactSecrets } from '../../logRedactor'
+import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
+import type { ApprovalResponse } from './agentOrchestratorTypes'
+import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
 
 export interface ApplicationClosureContext {
   workspacePath: string | null
@@ -45,6 +48,8 @@ export interface ApplicationClosureContext {
   generationTelemetry?: readonly OllamaGenerationTelemetry[]
   lastVerification?: AgentVerificationEvidence
   recordVerificationEvidence?: (evidence: AgentVerificationEvidence) => void
+  requestApproval?: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
+  workspaceTransaction?: DisposableAgentWorkspace
 }
 
 function toVerificationEvidence(run: VerificationRunResult): AgentVerificationEvidence {
@@ -165,6 +170,34 @@ function renderClosureSummary(
   return lines.join('\n')
 }
 
+async function offerPublishedWorkspaceCommit(
+  transaction: DisposableAgentWorkspace,
+  changedPaths: readonly string[],
+  requestApproval: NonNullable<ApplicationClosureContext['requestApproval']>,
+  emitLog: EmitLog,
+): Promise<void> {
+  if (!gitCliRepository.getStatusAndDiff(transaction.sourcePath).isGitRepo) return
+  try {
+    const preview = gitCliRepository.previewCommit(transaction.sourcePath, changedPaths)
+    const message = 'Agent Coding: publish reviewed changes'
+    const approval = await requestApproval({
+      type: 'git_commit',
+      target: message,
+      contentOrCmd: message,
+      parameters: { commitPaths: preview.paths, commitDiff: preview.diffText, commitDiffHash: preview.diffHash },
+    })
+    if (!approval.approved) {
+      emitLog('info', 'Commit delle modifiche pubblicate rifiutato; i file restano nel workspace.')
+      return
+    }
+    gitCliRepository.commit(transaction.sourcePath, message, preview.paths, preview.diffHash)
+    emitLog('info', `Commit creato per ${preview.paths.length} path pubblicati.`, undefined, { category: 'file_mutation' })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    emitLog('info', `Commit delle modifiche pubblicate non creato: ${message}`, undefined, { category: 'system_alert' })
+  }
+}
+
 /**
  * Single application-owned terminal gate for agent runs. The model may suggest that work is
  * finished, go silent, exhaust its budget or lose transport; none of those events decides the
@@ -264,6 +297,32 @@ export async function closeAgentRunFromEvidence(
     }
   }
 
+  const transaction = ctx.workspaceTransaction
+  if (transaction && status !== 'blocked' && ctx.requestApproval) {
+    const preview = transaction.preview()
+    if (preview.changedPaths.length > 0) {
+      const approval = await ctx.requestApproval({
+        type: 'publish_workspace',
+        target: transaction.sourcePath,
+        contentOrCmd: `${preview.changedPaths.length} path(s): ${preview.changedPaths.slice(0, 20).join(', ')}`,
+        parameters: { ...preview, sourcePath: transaction.sourcePath },
+      })
+      if (!approval.approved) {
+        status = 'blocked'
+        evidence = 'La pubblicazione delle modifiche dal workspace isolato è stata rifiutata.'
+      } else {
+        const publication = transaction.publish()
+        if (!publication.success) {
+          status = 'blocked'
+          evidence = `Pubblicazione bloccata: ${publication.error || 'errore sconosciuto'}`
+        } else {
+          ctx.emitLog('info', `Workspace pubblicato: ${publication.changedPaths.length} path(s).`, undefined, { category: 'file_mutation' })
+          await offerPublishedWorkspaceCommit(transaction, publication.changedPaths, ctx.requestApproval, ctx.emitLog)
+        }
+      }
+    }
+  }
+
   const tracker = ctx.buildSessionTracker()
   const summary = renderClosureSummary(status, request, tracker, evidence)
   if (!ctx.lastVerification && status === 'unverifiable') {
@@ -293,6 +352,11 @@ export async function closeAgentRunFromEvidence(
   await ctx.persistCurrentState(terminationReasonFor(request.trigger, status), status)
   if (ctx.workspacePath) {
     await agentSessionStateRepository.saveSessionTrackerMarkdown(ctx.workspacePath, ctx.buildSessionTracker(summary))
+  }
+  try {
+    transaction?.dispose()
+  } catch {
+    // The source workspace has either been published or left untouched.
   }
   ctx.finalizeSession()
   return { outcome: 'closed', result: { success, summary, completionStatus: status } }

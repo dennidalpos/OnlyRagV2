@@ -2,6 +2,13 @@ import type { AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../..
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
+export interface ActiveFileContext {
+  name: string
+  path: string
+  content: string
+  versionHash: string
+}
+
 export interface AgentTaskPayload {
   identity?: AgentRunIdentity
   userTask: string
@@ -13,7 +20,7 @@ export interface AgentTaskPayload {
   activeModel?: string
   pinnedFiles?: { name: string; path: string; content: string }[]
   attachedDocs?: { id: string; filename: string; extractedMarkdown: string }[]
-  activeFile?: { name: string; path: string; content: string } | null
+  activeFile?: ActiveFileContext | null
   settings?: AppSettings
 }
 
@@ -56,6 +63,8 @@ export interface AgentTaskResult {
   summary: string
   error?: string
   completionStatus?: AgentCompletionStatus
+  runId?: string
+  queuePosition?: number
 }
 
 export interface AgentToolReplacementChunk {

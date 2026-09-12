@@ -49,4 +49,22 @@ describe('OllamaGenerationScheduler', () => {
     gate.resolve('active')
     await expect(active.promise).resolves.toBe('active')
   })
+
+  it('reports queue identities and cancels only the selected operation', async () => {
+    const scheduler = new OllamaGenerationScheduler()
+    const gate = deferred<string>()
+    const first = scheduler.schedule('stream', async () => gate.promise, 'stream-1')
+    const second = scheduler.schedule('stream', async () => 'second', 'stream-2')
+
+    await Promise.resolve()
+    expect(scheduler.getStatus()).toEqual({
+      active: { id: 'stream-1', label: 'stream' },
+      queued: [{ id: 'stream-2', label: 'stream' }],
+    })
+    expect(scheduler.cancel('stream-2')).toBe(true)
+    await expect(second.promise).rejects.toBeInstanceOf(OllamaGenerationCancelledError)
+    expect(scheduler.cancel('missing')).toBe(false)
+    gate.resolve('first')
+    await expect(first.promise).resolves.toBe('first')
+  })
 })

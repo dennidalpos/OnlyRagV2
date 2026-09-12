@@ -90,6 +90,16 @@ describe('SessionHistoryRepository Unit Tests', () => {
     expect(listed[0].title).toBe('Seconda')
   })
 
+  it('serializes concurrent conversation saves without dropping either snapshot', async () => {
+    await Promise.all([
+      sessionHistoryRepository.saveSession(buildSession('session-concurrent-a', tempDir, { title: 'First' })),
+      sessionHistoryRepository.saveSession(buildSession('session-concurrent-b', tempDir, { title: 'Second' })),
+    ])
+
+    const listed = await sessionHistoryRepository.listSessions(tempDir)
+    expect(listed.map((session) => session.id)).toEqual(expect.arrayContaining(['session-concurrent-a', 'session-concurrent-b']))
+  })
+
   it('should merge legacy sessions without overwriting the ones already on disk', async () => {
     await sessionHistoryRepository.saveSession(buildSession('session-3', tempDir, { title: 'Su disco' }))
 

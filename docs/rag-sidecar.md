@@ -1,6 +1,7 @@
 # RAG, OCR e traduzione
 
 Il Main usa [`sidecarHttpClient.ts`](../electron/core/infrastructure/http/sidecarHttpClient.ts) per parlare con il FastAPI Sidecar. Il Sidecar coordina estrazione, embedding, LanceDB, ricerca, OCR ed export.
+Lo stato è `online` solo con HTTP 200 e un payload `/health` completo: risposta malformata, errore, timeout o uscita del processo impostano `offline`.
 
 ## Ingestion
 
@@ -8,6 +9,7 @@ Il Main usa [`sidecarHttpClient.ts`](../electron/core/infrastructure/http/sideca
 - PDF: estrazione nativa; OCR locale RapidOCR quando serve; Vision Ollama come percorso configurabile.
 - I chunk ricevono intestazioni contestuali e vengono indicizzati in LanceDB.
 - Se l'embedding Ollama fallisce, il vettore deterministico CPU marca il documento `indexed_fallback`.
+- Ogni stream ha un `task_id`: l'annullamento è cooperativo ai confini sicuri e pulisce i record LanceDB parziali.
 
 Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py), [`sidecar/services/ingest_service.py`](../sidecar/services/ingest_service.py), [`sidecar/infrastructure/embeddings.py`](../sidecar/infrastructure/embeddings.py).
 

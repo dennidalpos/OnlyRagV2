@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 import type { ObservedToolCallingProtocol } from '../../../shared/domain/agent/ollamaToolCallingCapability'
 import type { AgentCompletionStatus, AgentRunIdentity, AgentVerificationEvidence } from '../../../shared/types'
 import type { OllamaGenerationTelemetry, OllamaSessionRuntimeProfile } from '../domain/agent/ollamaSessionRuntime'
+import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
 
 export interface ApprovalResponse {
   approved: boolean
@@ -49,4 +50,6 @@ export interface AgentSession {
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
   /** Last project check, including an explicit unavailable state. */
   lastVerification?: AgentVerificationEvidence
+  /** Isolated workspace owned by this run; discarded after cancellation or completion. */
+  workspaceTransaction?: DisposableAgentWorkspace
 }

@@ -80,12 +80,13 @@ export const apiService = {
     visionPrompt?: string,
     normalizeWithLlm?: boolean,
     normalizationModel?: string,
-    numCtx?: number
+    numCtx?: number,
+    taskId?: string
   ): Promise<{ success: boolean; data?: IngestedDocument; error?: string }> {
     if (!window.electronAPI) return { success: false, error: 'Electron API unavailable' }
     try {
       logger.info('ApiService:Ingestion', `Initiating ingestion for file: ${filePath} (normalizeWithLlm=${normalizeWithLlm}, normalizationModel=${normalizationModel})`)
-      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx)
+      const res = await window.electronAPI.ingestFile(filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId)
       if (!res.success) {
         logger.warn('ApiService:Ingestion', `Ingestion warning/error: ${res.error}`)
       } else {

@@ -62,7 +62,8 @@ export class AgentInterviewAppService {
     model: string | undefined,
     settings: AppSettings,
     workspacePath?: string | null,
-    previousDecisions: readonly UserInterviewAnswer[] = []
+    previousDecisions: readonly UserInterviewAnswer[] = [],
+    operationId?: string
   ): Promise<InterviewAnalysisResult> {
     const modelToUse = model || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
     const cachedGpu = getCachedGpuInfo()
@@ -80,6 +81,7 @@ export class AgentInterviewAppService {
     try {
       const { facts } = collectProjectPlanningFacts(workspacePath, prompt, previousDecisions)
       const response = await generateStructuredWithRecovery({
+        operationId,
         model: modelToUse,
         systemPrompt: INTERVIEW_SYSTEM_PROMPT,
         userContent: JSON.stringify({ request: prompt, projectFacts: facts }),

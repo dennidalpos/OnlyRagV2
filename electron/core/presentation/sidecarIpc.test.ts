@@ -39,7 +39,7 @@ describe('sidecar IPC facade', () => {
 
   it('validates ingest payloads before forwarding normalized values', async () => {
     const handler = handlers.get('ingest:file')
-    await handler?.({}, 'D:/docs/report.pdf', 'vision-model', 'Describe the page', true, 'normalizer', 8192)
+    await handler?.({}, 'D:/docs/report.pdf', 'vision-model', 'Describe the page', true, 'normalizer', 8192, 'ingest-test-1')
 
     expect(sidecarAppService.ingestFile).toHaveBeenCalledWith(
       'D:/docs/report.pdf',
@@ -47,7 +47,8 @@ describe('sidecar IPC facade', () => {
       'Describe the page',
       true,
       'normalizer',
-      8192
+      8192,
+      'ingest-test-1'
     )
     await expect(handler?.({}, ' ')).rejects.toThrow()
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)

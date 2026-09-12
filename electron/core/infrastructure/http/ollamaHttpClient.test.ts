@@ -199,3 +199,121 @@ describe('OllamaHttpClient — structured chat responses', () => {
     expect(await client.generateStructured(request())).toMatchObject({ status: 'incomplete' })
   })
 })
+
+describe('OllamaHttpClient — immutable request hosts', () => {
+  let first: http.Server
+  let second: http.Server
+  let firstHost: string
+  let secondHost: string
+  const received: string[] = []
+
+  beforeEach(async () => {
+    received.length = 0
+    const create = (name: string) => createMockOllamaServer([
+      {
+        method: 'POST',
+        path: '/api/pull',
+        handler: (_req, res) => {
+          received.push(`${name}:pull`)
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end('{"status":"success"}\n')
+        },
+      },
+      {
+        method: 'DELETE',
+        path: '/api/delete',
+        handler: (_req, res) => {
+          received.push(`${name}:delete`)
+          res.writeHead(200)
+          res.end()
+        },
+      },
+      {
+        method: 'POST',
+        path: '/api/generate',
+        handler: (_req, res) => {
+          received.push(`${name}:generate`)
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end('{"response":"ok"}\n{"done":true}\n')
+        },
+      },
+    ])
+    const [left, right] = await Promise.all([create('first'), create('second')])
+    first = left.server
+    second = right.server
+    firstHost = left.baseUrl
+    secondHost = right.baseUrl
+  })
+
+  afterEach(() => {
+    first.close()
+    second.close()
+  })
+
+  it('keeps concurrent pull, delete, and generation requests on their supplied hosts', async () => {
+    const client = new OllamaHttpClient()
+    const [pull, deleted] = await Promise.all([
+      client.pullModel('model-a', firstHost),
+      client.deleteModel('model-b', secondHost),
+    ])
+    const generated = await client.generateStream('model-c', 'hello', () => {}, () => {}, undefined, secondHost)
+
+    expect(pull.success).toBe(true)
+    expect(deleted.success).toBe(true)
+    expect(generated.success).toBe(true)
+    expect(received).toEqual(expect.arrayContaining(['first:pull', 'second:delete', 'second:generate']))
+  })
+
+  it('retains HTTPS as an explicit transport choice', () => {
+    const client = new OllamaHttpClient()
+    expect((client as any).resolveUrl('/api/tags', 'https://ollama.example.test')).toMatchObject({
+      protocol: 'https:',
+      hostname: 'ollama.example.test',
+      port: 443,
+    })
+  })
+})
+
+describe('OllamaHttpClient — stream failures', () => {
+  let server: http.Server
+
+  afterEach(() => server.close())
+
+  it('returns HTTP failures without emitting error text or completion', async () => {
+    const mock = await createMockOllamaServer([{
+      method: 'POST',
+      path: '/api/generate',
+      handler: (_req, res) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end('{"error":"failed"}')
+      },
+    }])
+    server = mock.server
+    const chunks: string[] = []
+    let done = false
+
+    const result = await new OllamaHttpClient().generateStream('model', 'prompt', (chunk) => chunks.push(chunk), () => { done = true }, undefined, mock.baseUrl)
+
+    expect(result).toMatchObject({ success: false })
+    expect(chunks).toEqual([])
+    expect(done).toBe(false)
+  })
+
+  it('rejects a partial stream that lacks the terminal done event', async () => {
+    const mock = await createMockOllamaServer([{
+      method: 'POST',
+      path: '/api/generate',
+      handler: (_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+        res.end('{"response":"partial"}\n')
+      },
+    }])
+    server = mock.server
+    const chunks: string[] = []
+
+    const result = await new OllamaHttpClient().generateStream('model', 'prompt', (chunk) => chunks.push(chunk), () => {}, undefined, mock.baseUrl)
+
+    expect(result).toEqual({ success: false, error: 'Ollama stream ended before completion.' })
+    expect(chunks).toEqual(['partial'])
+  })
+})

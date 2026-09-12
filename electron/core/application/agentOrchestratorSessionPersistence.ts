@@ -93,6 +93,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
 
     await agentSessionStateRepository.saveSessionState({
       sessionId,
+      runIdentity: session.identity,
       workspacePath,
       agentMode,
       stepCount: stepCountBox.value,

@@ -31,6 +31,7 @@ export interface ToolGateContext {
   allowedToolsForTurn?: readonly SupportedToolName[]
   requiredReadPath?: string
   runOwnedPaths?: readonly string[]
+  isIsolatedWorkspace?: boolean
 }
 
 export type ToolGateResult =
@@ -84,6 +85,23 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null
     return null
   }
   return { ...parsedTool, parameters: commitParameters }
+}
+
+/** System-level installers outlive a disposable workspace and are never rollbackable. */
+async function gateExternalToolInstall(ctx: ToolGateContext): Promise<{ requested: boolean; granted: boolean; consentId: string } | 'denied' | undefined> {
+  if (ctx.parsedTool.tool !== 'ensure_tool') return undefined
+  const toolName = String(ctx.parsedTool.parameters.toolName || '')
+  const approval = await ctx.requestApproval({
+    type: 'terminal_cmd',
+    target: toolName || 'Development tool',
+    contentOrCmd: buildInstallCommand(toolName) || 'Installation command unavailable',
+    parameters: ctx.parsedTool.parameters,
+  })
+  if (approval.approved) return { requested: true, granted: true, consentId: `consent-${Date.now()}-${ctx.stepCount}` }
+  const feedback = `[USER DENIED] The user declined the external installation of ${toolName || 'the requested development tool'}.`
+  ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'ensure_tool', status: 'BLOCKED', summary: 'User denied external tool installation' }, feedback)
+  ctx.emitLog('info', 'Installazione esterna rifiutata dall’utente.')
+  return 'denied'
 }
 
 function approvalTypeForTool(tool: string): string {
@@ -202,7 +220,15 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
 
   let approvalGranted = false
   let toolCallForExecution: AgentToolCall = ctx.parsedTool
-  const policyConsent = await gateNetworkApproved(ctx)
+  if (ctx.isIsolatedWorkspace && ctx.parsedTool.tool === 'git_commit') {
+    const feedback = '[ISOLATED WORKSPACE] Git commits are disabled during an isolated run. Publish the reviewed workspace changes first, then commit them from the user workspace.'
+    ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'Git commit deferred until workspace publication' }, feedback)
+    ctx.emitLog('info', 'Git commit rinviato: pubblica prima le modifiche isolate.')
+    return { outcome: 'denied' }
+  }
+  const externalInstallConsent = await gateExternalToolInstall(ctx)
+  if (externalInstallConsent === 'denied') return { outcome: 'denied' }
+  const policyConsent = externalInstallConsent || await gateNetworkApproved(ctx)
   if (policyConsent === 'denied') return { outcome: 'denied' }
   if (policyConsent) approvalGranted = true
 
@@ -213,7 +239,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     approvalGranted = true
   }
 
-  if (ctx.agentMode === 'ask') {
+  if (ctx.agentMode === 'ask' && ctx.parsedTool.tool !== 'ensure_tool') {
     const askResult = await gateAskModeMutation(ctx)
     if (askResult === 'denied') return { outcome: 'denied' }
     if (askResult !== 'not-mutating') {

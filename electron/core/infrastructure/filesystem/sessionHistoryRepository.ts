@@ -21,6 +21,20 @@ interface SessionHistoryStore {
  * This is the only persistence for session history — the renderer keeps no copy.
  */
 export class SessionHistoryRepository {
+  private mutationTail: Promise<void> = Promise.resolve()
+
+  private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTail
+    let release: (() => void) | undefined
+    this.mutationTail = new Promise<void>((resolve) => { release = resolve })
+    await previous.catch(() => undefined)
+    try {
+      return await operation()
+    } finally {
+      release?.()
+    }
+  }
+
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
       const stateDir = path.join(workspacePath, '.onlyrag', 'sessions')
@@ -121,9 +135,11 @@ export class SessionHistoryRepository {
   public async saveSession(session: CodingSession): Promise<CodingSession | null> {
     const normalized = normalizeSession(session)
     if (!normalized) return null
-    const sessions = await this.readStore(normalized.workspacePath)
-    const saved = await this.writeStore(normalized.workspacePath, upsertSession(sessions, normalized))
-    return saved ? normalized : null
+    return this.runExclusive(async () => {
+      const sessions = await this.readStore(normalized.workspacePath)
+      const saved = await this.writeStore(normalized.workspacePath, upsertSession(sessions, normalized))
+      return saved ? normalized : null
+    })
   }
 
   /**
@@ -132,43 +148,47 @@ export class SessionHistoryRepository {
    * found here" no longer reads as success, so a genuine failure is never masked as one.
    */
   public async deleteSession(sessionId: string, workspacePath?: string | null): Promise<boolean> {
-    let removedAny = false
-    for (const dir of this.getCandidateStorageDirs(workspacePath)) {
-      const sessions = await this.readStoreAtDir(dir)
-      if (sessions.length === 0) continue
-      const remaining = sessions.filter((session) => session.id !== sessionId)
-      if (remaining.length === sessions.length) continue
-      const wrote = await this.writeStoreAtDir(dir, remaining)
-      removedAny = removedAny || wrote
-    }
-    return removedAny
+    return this.runExclusive(async () => {
+      let removedAny = false
+      for (const dir of this.getCandidateStorageDirs(workspacePath)) {
+        const sessions = await this.readStoreAtDir(dir)
+        if (sessions.length === 0) continue
+        const remaining = sessions.filter((session) => session.id !== sessionId)
+        if (remaining.length === sessions.length) continue
+        const wrote = await this.writeStoreAtDir(dir, remaining)
+        removedAny = removedAny || wrote
+      }
+      return removedAny
+    })
   }
 
   public async clearSessions(workspacePath?: string | null): Promise<boolean> {
-    const normalizedTarget = workspacePath ? path.normalize(workspacePath).toLowerCase() : null
+    return this.runExclusive(async () => {
+      const normalizedTarget = workspacePath ? path.normalize(workspacePath).toLowerCase() : null
 
-    if (workspacePath && fs.existsSync(workspacePath)) {
-      const workspaceDir = path.join(workspacePath, '.onlyrag', 'sessions')
-      if (fs.existsSync(workspaceDir)) {
-        await this.writeStoreAtDir(workspaceDir, [])
-      }
-    }
-
-    const fallbackDir = path.join(os.homedir(), '.onlyrag_v2', 'sessions')
-    if (fs.existsSync(fallbackDir)) {
-      const fallbackSessions = await this.readStoreAtDir(fallbackDir)
-      if (fallbackSessions.length > 0) {
-        const remaining = normalizedTarget
-          ? fallbackSessions.filter((session) => (session.workspacePath ? path.normalize(session.workspacePath).toLowerCase() : null) !== normalizedTarget)
-          : fallbackSessions.filter((session) => !!session.workspacePath && session.workspacePath.trim().length > 0)
-
-        if (remaining.length !== fallbackSessions.length) {
-          await this.writeStoreAtDir(fallbackDir, remaining)
+      if (workspacePath && fs.existsSync(workspacePath)) {
+        const workspaceDir = path.join(workspacePath, '.onlyrag', 'sessions')
+        if (fs.existsSync(workspaceDir)) {
+          await this.writeStoreAtDir(workspaceDir, [])
         }
       }
-    }
 
-    return true
+      const fallbackDir = path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+      if (fs.existsSync(fallbackDir)) {
+        const fallbackSessions = await this.readStoreAtDir(fallbackDir)
+        if (fallbackSessions.length > 0) {
+          const remaining = normalizedTarget
+            ? fallbackSessions.filter((session) => (session.workspacePath ? path.normalize(session.workspacePath).toLowerCase() : null) !== normalizedTarget)
+            : fallbackSessions.filter((session) => !!session.workspacePath && session.workspacePath.trim().length > 0)
+
+          if (remaining.length !== fallbackSessions.length) {
+            await this.writeStoreAtDir(fallbackDir, remaining)
+          }
+        }
+      }
+
+      return true
+    })
   }
 
   /**
@@ -176,12 +196,14 @@ export class SessionHistoryRepository {
    * session already stored on disk (the filesystem store always wins).
    */
   public async mergeSessions(workspacePath: string | null, incoming: CodingSession[]): Promise<number> {
-    const existing = await this.readStore(workspacePath)
-    const existingIds = new Set(existing.map((session) => session.id))
-    const newcomers = incoming.filter((session) => !existingIds.has(session.id))
-    if (newcomers.length === 0) return 0
-    const saved = await this.writeStore(workspacePath, sortSessionsByRecency([...existing, ...newcomers]))
-    return saved ? newcomers.length : 0
+    return this.runExclusive(async () => {
+      const existing = await this.readStore(workspacePath)
+      const existingIds = new Set(existing.map((session) => session.id))
+      const newcomers = incoming.filter((session) => !existingIds.has(session.id))
+      if (newcomers.length === 0) return 0
+      const saved = await this.writeStore(workspacePath, sortSessionsByRecency([...existing, ...newcomers]))
+      return saved ? newcomers.length : 0
+    })
   }
 }
 

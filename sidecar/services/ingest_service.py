@@ -23,6 +23,16 @@ from sidecar.domain.ingestion import (
     PDF_PAGE_RENDER_CONCURRENCY
 )
 from sidecar.domain.router import classify_file_type, analyze_pdf_page_structure, DocumentCategory, PageRoutingStrategy
+from sidecar.services.task_cancellation import TaskCancelled, raise_if_cancelled, register_task, unregister_task
+
+
+def _cleanup_partial_ingestion(doc_id: str) -> None:
+    for table_name, predicate in ((DOCS_TABLE_NAME, f'id = "{doc_id}"'), (CHUNKS_TABLE_NAME, f'doc_id = "{doc_id}"')):
+        try:
+            if table_name in get_existing_tables():
+                lance_db.open_table(table_name).delete(predicate)
+        except Exception as err:
+            logger.warning(f"Could not clean cancelled ingestion {doc_id} from {table_name}: {err}")
 
 def process_and_index_document(
     filename: str,
@@ -142,6 +152,7 @@ def process_and_index_document_generator(
     max_excel_rows_per_sheet: Optional[int] = None,
     max_excel_sheets: Optional[int] = None,
     max_sheets: Optional[int] = None,
+    task_id: Optional[str] = None,
     **kwargs: Any
 ) -> Generator[str, None, None]:
     """
@@ -153,7 +164,10 @@ def process_and_index_document_generator(
     # Progress labels must name the engine the pages actually went through, not a fixed one.
     ocr_engine_label = "Vision LLM OCR" if is_vision_ocr_requested(vision_prompt) else "OCR Layout"
 
+    if task_id:
+        register_task(task_id)
     try:
+        raise_if_cancelled(task_id)
         if not persisted_path or not os.path.exists(persisted_path):
             if content:
                 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -210,6 +224,7 @@ def process_and_index_document_generator(
                     work_items: List[Dict[str, Any]] = []
                     page_render_meta: Dict[int, Dict[str, Any]] = {}
                     for page_idx in range(num_pages):
+                        raise_if_cancelled(task_id)
                         page_num = page_idx + 1
                         page = pdf_doc.load_page(page_idx)
 
@@ -237,6 +252,7 @@ def process_and_index_document_generator(
                     render_concurrency = min(PDF_PAGE_RENDER_CONCURRENCY, max(1, len(work_items)))
                     with ThreadPoolExecutor(max_workers=render_concurrency) as executor:
                         for result_page_num, page_content in executor.map(render_prepared_pdf_page, work_items):
+                            raise_if_cancelled(task_id)
                             meta = page_render_meta[result_page_num]
                             if meta["used_ocr"]:
                                 step_msg = f"Pagina {result_page_num}/{num_pages}: {ocr_engine_label} completato."
@@ -261,11 +277,14 @@ def process_and_index_document_generator(
 
                 paginated_sections = [f"## Page {p_idx}\n\n{p_text}" for p_idx, p_text in page_blocks]
                 full_markdown = f"# {filename}\n\n" + "\n\n".join(paginated_sections)
+            except TaskCancelled:
+                raise
             except Exception as pdf_err:
                 logger.warning(f"PyMuPDF streaming parse error: {pdf_err}")
                 full_markdown = f"# {filename}\n\n## Page 1\n\n[Error reading PDF pages]"
 
         else:
+            raise_if_cancelled(task_id)
             # Non-PDF files (DOCX, Image, Tabular, Text)
             yield json.dumps({
                 "type": "progress",
@@ -285,6 +304,8 @@ def process_and_index_document_generator(
                 max_sheets=effective_max_sheets
             )
 
+        raise_if_cancelled(task_id)
+
         full_markdown = sanitize_extracted_text(full_markdown)
 
         yield json.dumps({
@@ -303,6 +324,8 @@ def process_and_index_document_generator(
 
         chunk_records: List[Dict[str, Any]] = []
         vectors, used_fallback_embeddings = generate_embeddings_with_status([item[1] for item in raw_chunks])
+
+        raise_if_cancelled(task_id)
 
         for c_idx, (item, vec) in enumerate(zip(raw_chunks, vectors)):
             idx, text, sec_header = item
@@ -330,7 +353,14 @@ def process_and_index_document_generator(
         doc_status = "indexed_fallback" if used_fallback_embeddings else "indexed"
 
         if chunk_records:
+            raise_if_cancelled(task_id)
             ctbl = append_records(CHUNKS_TABLE_NAME, chunk_records)
+
+            try:
+                raise_if_cancelled(task_id)
+            except TaskCancelled:
+                _cleanup_partial_ingestion(doc_id)
+                raise
 
             yield json.dumps({
                 "type": "progress",
@@ -359,7 +389,13 @@ def process_and_index_document_generator(
             "used_fallback_embeddings": used_fallback_embeddings
         }]
 
+        raise_if_cancelled(task_id)
         append_records(DOCS_TABLE_NAME, doc_record)
+        try:
+            raise_if_cancelled(task_id)
+        except TaskCancelled:
+            _cleanup_partial_ingestion(doc_id)
+            raise
 
         logger.info(f"Ingested {filename} (streaming) into LanceDB: {num_pages} pages, {len(chunk_records)} chunks indexed (status={doc_status}).")
 
@@ -385,6 +421,9 @@ def process_and_index_document_generator(
             "data": final_payload
         }) + "\n"
 
+    except TaskCancelled:
+        _cleanup_partial_ingestion(doc_id)
+        yield json.dumps({"type": "cancelled", "task_id": task_id, "fileName": filename}) + "\n"
     except Exception as exc:
         import traceback
         err_msg = f"Errore durante l'ingestione: {str(exc)}"
@@ -395,6 +434,8 @@ def process_and_index_document_generator(
             "error": str(exc),
             "fileName": filename
         }) + "\n"
+    finally:
+        unregister_task(task_id)
 
 def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestResponse:
     """

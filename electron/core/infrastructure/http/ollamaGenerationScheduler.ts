@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 export class OllamaGenerationCancelledError extends Error {
   constructor(message: string = 'Ollama generation cancelled before execution.') {
     super(message)
@@ -6,6 +8,7 @@ export class OllamaGenerationCancelledError extends Error {
 }
 
 interface GenerationJob<T> {
+  id: string
   label: string
   run: (setActiveCancel: (cancel: () => void) => void) => Promise<T>
   resolve: (value: T) => void
@@ -15,6 +18,7 @@ interface GenerationJob<T> {
 }
 
 export interface ScheduledGeneration<T> {
+  id: string
   promise: Promise<T>
   cancel: () => void
 }
@@ -26,11 +30,12 @@ export class OllamaGenerationScheduler {
 
   schedule<T>(
     label: string,
-    run: (setActiveCancel: (cancel: () => void) => void) => Promise<T>
+    run: (setActiveCancel: (cancel: () => void) => void) => Promise<T>,
+    id: string = randomUUID()
   ): ScheduledGeneration<T> {
     let job!: GenerationJob<T>
     const promise = new Promise<T>((resolve, reject) => {
-      job = { label, run, resolve, reject, cancelled: false }
+      job = { id, label, run, resolve, reject, cancelled: false }
     })
 
     const cancel = () => {
@@ -47,13 +52,26 @@ export class OllamaGenerationScheduler {
 
     this.queue.push(job as GenerationJob<unknown>)
     void this.drain()
-    return { promise, cancel }
+    return { id, promise, cancel }
   }
 
-  getStatus(): { activeLabel: string | null; queuedLabels: string[] } {
+  cancel(id: string): boolean {
+    const job = this.active?.id === id ? this.active : this.queue.find((item) => item.id === id)
+    if (!job || job.cancelled) return false
+    job.cancelled = true
+    if (this.active === job) {
+      job.activeCancel?.()
+    } else {
+      this.queue = this.queue.filter((item) => item !== job)
+      job.reject(new OllamaGenerationCancelledError())
+    }
+    return true
+  }
+
+  getStatus(): { active: { id: string; label: string } | null; queued: { id: string; label: string }[] } {
     return {
-      activeLabel: this.active?.label || null,
-      queuedLabels: this.queue.map((job) => job.label),
+      active: this.active ? { id: this.active.id, label: this.active.label } : null,
+      queued: this.queue.map((job) => ({ id: job.id, label: job.label })),
     }
   }
 

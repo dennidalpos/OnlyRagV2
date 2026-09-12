@@ -36,6 +36,7 @@ Carry each pending prior intervention through sourceInterventionId or list it in
 Use the request language.`
 
 export interface PlanGenerationRequest {
+  operationId?: string
   prompt: string
   model?: string
   settings: AppSettings
@@ -184,6 +185,7 @@ export class PlanGenerationAppService {
     let generationError: string | undefined
     try {
       const response = await generateStructuredWithRecovery({
+        operationId: req.operationId,
         model,
         systemPrompt: PLAN_SYSTEM_PROMPT,
         userContent,

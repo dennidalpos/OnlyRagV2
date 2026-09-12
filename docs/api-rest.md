@@ -18,7 +18,8 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 
 ## Note operative
 
-- `/ingest` usa multipart upload; gli endpoint `ingest-path` ricevono JSON e possono emettere NDJSON.
+- `/ingest` usa multipart upload; gli endpoint `ingest-path` ricevono JSON e possono emettere NDJSON. Lo stream riceve `task_id`; `POST /tasks/cancel` lo richiede e arresta solo quel task.
+- L'annullamento controlla i confini tra estrazione, embedding e scrittura LanceDB; eventuali chunk o record già avviati vengono rimossi prima della risposta `cancelled`.
 - Ingestion e re-indicizzazione usano embedding Ollama; in caso di errore possono registrare `status: indexed_fallback`.
 - La ricerca combina embedding, matching lessicale e RRF; il reranking usa FlashRank quando disponibile e un fallback locale altrimenti.
 - Il Sidecar gestisce LanceDB, OCR RapidOCR/Vision, traduzione PDF/DOCX, export e storico semantico.

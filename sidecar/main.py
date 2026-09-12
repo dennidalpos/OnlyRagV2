@@ -37,6 +37,7 @@ from sidecar.services.ingest_service import (
     update_and_reindex_document,
     render_document_page_preview
 )
+from sidecar.services.task_cancellation import cancel_task
 from sidecar.domain.translator import (
     translate_document_inplace,
     translate_document_stream_generator,
@@ -165,6 +166,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
         return StreamingResponse(
             process_and_index_document_generator(
                 filename, b"", resolved_path,
+                task_id=req.task_id,
                 vision_model=req.vision_model, vision_prompt=req.vision_prompt,
                 normalize_with_llm=bool(req.normalize_with_llm),
                 normalization_model=req.normalization_model,
@@ -297,8 +299,11 @@ async def export_document(req: ExportRequest):
 
 @app.post("/tasks/cancel", response_model=TaskCancelResponse)
 async def cancel_sidecar_task(task_id: Optional[str] = Query(None)):
-    logger.info(f"Received cancellation notice for task: {task_id or 'all'}")
-    return {"status": "success", "message": f"Task {task_id or 'all'} marked cancelled"}
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id is required")
+    cancel_task(task_id)
+    logger.info(f"Cancellation requested for task: {task_id}")
+    return {"status": "success", "message": f"Cancellation requested for task {task_id}"}
 
 @app.post("/cleanup/temp", response_model=CleanupResponse)
 async def cleanup_sidecar_temp():

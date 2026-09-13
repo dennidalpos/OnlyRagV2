@@ -41,11 +41,11 @@ export async function executeRunTestsTool(
     detectionNote = ` (auto-detected: ${detected.source})`
   }
 
-  const secCheck = checkCommandSecurity(execCmd)
-  if (!secCheck.isAllowed) {
+  const secCheck = checkCommandSecurity(execCmd, workspacePath)
+  if (!secCheck.isAllowed || secCheck.requiresApproval) {
     return {
       outcome: 'rejected',
-      outputForHistory: `[SECURITY GUARDRAIL BLOCK]\nCommand: "${execCmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason}`,
+      outputForHistory: `[SECURITY GUARDRAIL BLOCK]\nCommand: "${execCmd}"\nExecution FORBIDDEN by Security Policy: ${secCheck.blockedReason || 'Test commands must be read-only.'}`,
       logMessage: `[SECURITY BLOCK] Forbidden test command: "${execCmd}"`,
       isTerminal: true,
     }

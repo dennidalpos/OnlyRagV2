@@ -111,8 +111,8 @@ describe('agent IPC session-state facade', () => {
     const milestones = [{ id: 'm-1', title: 'Build app', status: 'pending' as const }]
 
     await expect(handlers.get('agent:get-plan-state')?.({}, 'missing', null)).resolves.toBeNull()
-    await expect(handlers.get('agent:plan-seed')?.({}, 'session-1', '/repo', milestones, 'Build app')).resolves.toBe(true)
-    expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Build app')
+    await expect(handlers.get('agent:plan-seed')?.({}, 'session-1', '/repo', milestones, 'Build app', 'plan-1:v1')).resolves.toBe(true)
+    expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Build app', 'plan-1:v1')
   })
 
   it('forwards workspace context and prior decisions to interview and planning', async () => {

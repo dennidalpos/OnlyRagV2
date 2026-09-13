@@ -138,7 +138,7 @@ export class TaskQueueAppService {
         ? DisposableAgentWorkspace.create(taskPayload.workspacePath, id)
         : undefined
       const executionPayload = transaction
-        ? { ...taskPayload, workspacePath: transaction.workspacePath }
+        ? { ...taskPayload, sourceWorkspacePath: taskPayload.workspacePath, workspacePath: transaction.workspacePath }
         : taskPayload
       const result = await runAgentOrchestratorLoop(executionPayload, win, id, transaction)
       this.queue.markCompleted(id)

@@ -16,6 +16,9 @@ import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIde
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
 import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
+import { evaluateAgentCodingPreflight } from './agentCodingPreflight'
+import { workspaceAppService } from './workspaceAppService'
+import { ollamaAppService } from './ollamaAppService'
 
 export type { AgentSession }
 
@@ -242,6 +245,37 @@ export async function runAgentOrchestratorLoop(
     return { success: false, summary: errorMsg, completionStatus: 'blocked' }
   }
 
+  const [ollamaConnection, guestOsInfo] = await Promise.all([
+    ollamaAppService.testConnection(settings.ollamaHost),
+    workspaceAppService.inspectGuestOsEnvironment(),
+  ])
+  const preflight = evaluateAgentCodingPreflight({
+    codingModel,
+    availableModels,
+    modelMetrics,
+    ollamaReachable: ollamaConnection.success,
+    ollamaError: ollamaConnection.error,
+    workspacePath,
+    sourceWorkspacePath: payload.sourceWorkspacePath,
+    isStandaloneMode,
+    toolchain: guestOsInfo.tools,
+  })
+  for (const check of preflight.checks) {
+    emitLog('info', `${check.passed ? '✓' : check.blocking ? '✗' : '!' } Preflight ${check.id}: ${check.detail}`)
+  }
+  if (!preflight.ready) {
+    const failures = preflight.checks.filter((check) => check.blocking && !check.passed).map((check) => check.id).join(', ')
+    const errorMsg = `Agent Coding preflight blocked: ${failures}.`
+    emitDone(false, errorMsg, 'blocked')
+    await persistCurrentState('runtime_validation', 'blocked')
+    clearSessionTimeout()
+    setExecutionPhase('outcome')
+    finalizeSession()
+    return { success: false, summary: errorMsg, completionStatus: 'blocked' }
+  }
+
+  void ollamaAppService.preloadModel(codingModel, settings.ollamaHost).catch(() => {})
+
   const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
     closeAgentRunFromEvidence({
       workspacePath,
@@ -456,6 +490,7 @@ export async function runAgentOrchestratorLoop(
       gateResult.policyConsent,
       sessionId,
       preparedTurn.toolPolicy.allowedTools,
+      gateResult.commandApprovalGranted,
     )
     agentToolExecutorService.endJournalStep()
 

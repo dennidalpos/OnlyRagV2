@@ -11,9 +11,10 @@ export class AgentSessionStateAppService {
     sessionId: string,
     workspacePath: string | null,
     planMilestones: PlanMilestone[],
-    userTask?: string
+    userTask?: string,
+    planRevisionId?: string
   ): Promise<boolean> {
-    return agentSessionStateRepository.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask)
+    return agentSessionStateRepository.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask, planRevisionId)
   }
 }
 

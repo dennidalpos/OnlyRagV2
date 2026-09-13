@@ -20,6 +20,7 @@ import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTagMatcher'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { validateRestoredOllamaRuntime } from '../domain/agent/ollamaSessionRuntime'
+import { applyAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -87,7 +88,9 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const agentMode = payload.agentMode || 'plan'
   const workspacePath = resolveWorkspacePath(payload)
   const isStandaloneMode = Boolean(payload.isStandaloneMode)
-  const settings = payload.settings || buildDefaultAgentSettings()
+  const settings = payload.capabilityProfile
+    ? applyAgentCapabilityProfile(payload.settings || buildDefaultAgentSettings(), payload.capabilityProfile)
+    : payload.settings || buildDefaultAgentSettings()
 
   const attachedContext = buildAttachedContextBlock(payload)
   const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
@@ -132,8 +135,6 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
       workspacePath
     )
   }
-
-  void ollamaAppService.preloadModel(codingModel, settings.ollamaHost).catch(() => {})
 
   const skillMatchContext = {
     userTask,

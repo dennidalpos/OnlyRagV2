@@ -77,7 +77,7 @@ export function selectSavedRunState(
     return { executionState: savedState, planSeed: [] }
   }
 
-  if (savedState.pendingPlanMilestones?.length) {
+  if (savedState.pendingPlanMilestones?.length && savedState.pendingPlanRevisionId === runIdentity.planRevisionId) {
     return {
       executionState: null,
       planSeed: savedState.pendingPlanMilestones,

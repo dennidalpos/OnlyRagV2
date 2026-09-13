@@ -267,7 +267,8 @@ describe('AgentSessionStateRepository Unit Tests', () => {
       'plan-seed-existing-session',
       tempDir,
       [{ id: 'm-1', title: 'New approved milestone', status: 'pending' }],
-      'Original task\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: React Router'
+      'Original task\n\n[INTERVIEW DECISIONS]\n- [ACCEPTED RECOMMENDATION] Router: React Router',
+      'plan-new:v2',
     )
     expect(seeded).toBe(true)
 
@@ -277,6 +278,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loaded?.stepCount).toBe(7)
     expect(loaded?.episodes).toHaveLength(1)
     expect(loaded?.pendingPlanUserTask).toContain('[ACCEPTED RECOMMENDATION] Router: React Router')
+    expect(loaded?.pendingPlanRevisionId).toBe('plan-new:v2')
     expect(loaded?.status).toBe('FAILED')
     expect(loaded?.terminationReason).toBe('model_silence')
     expect(loaded?.completionStatus).toBe('unverifiable')

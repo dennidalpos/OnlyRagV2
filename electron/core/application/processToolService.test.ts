@@ -31,6 +31,14 @@ describe('ProcessToolService run_command', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
+  it('requires a gate approval before spawning a confined mutation', async () => {
+    const execute = vi.fn()
+    const result = await createService(execute).executeRunCommand('Set-Content -Path src\\state.txt -Value ready', 'C:\\workspace', undefined, undefined, undefined, undefined)
+
+    expect((result as { outputForHistory: string }).outputForHistory).toContain('[SECURITY APPROVAL REQUIRED]')
+    expect(execute).not.toHaveBeenCalled()
+  })
+
   it('passes the resolved timeout and AbortSignal to the persistent shell', async () => {
     const signal = new AbortController().signal
     const execute = vi.fn(async () => ({ stdout: 'ok', stderr: '', code: 0 }))

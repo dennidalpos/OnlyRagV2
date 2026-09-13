@@ -256,6 +256,14 @@ export interface AppSettings {
   modelContextLengths?: Record<string, number>
 }
 
+/** Per-run Agent Coding permissions, persisted with a reviewed plan. */
+export interface AgentCapabilityProfile {
+  allowFileModifications: boolean
+  allowTerminalExecution: boolean
+  capabilityPolicyMode: 'offline-strict' | 'local-only' | 'network-approved'
+  maxToolCallSteps: number
+}
+
 /** Aggregate size of the file changes an agent session has applied so far. */
 export interface AgentChangeMetrics {
   filesTouched: number
@@ -690,9 +698,9 @@ export interface IElectronAPI {
   agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => Promise<PlanGenerationResult>
   agentPlanCancel?: (identity: AgentRunIdentity) => Promise<{ success: boolean }>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
-  agentGetPlanState?: (sessionId: string, workspacePath?: string | null) => Promise<AgentPlanState | null>
+  agentGetPlanState?: (sessionId: string, workspacePath?: string | null, planRevisionId?: string) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
-  agentPlanSeed?: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string) => Promise<boolean>
+  agentPlanSeed?: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string, planRevisionId?: string) => Promise<boolean>
   /** Generates a self-contained AI-optimized debug diagnostic bundle in Markdown. */
   exportAiDebugBundle?: (options: {
     sessionId: string
@@ -781,6 +789,8 @@ export interface AgentPlan {
   milestones: PlanMilestone[]
   /** Recoverable reason why this exact revision could not be persisted or seeded for execution. */
   approvalError?: string
+  /** Capability snapshot reviewed for this plan's execution. */
+  capabilityProfile?: AgentCapabilityProfile
 }
 
 export interface PlanMilestone {
@@ -832,6 +842,7 @@ export interface AgentPlanState {
   planMilestones: PlanMilestone[]
   status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   stepCount: number
+  planRevisionId?: string
 }
 
 export interface RunningModelDetails {

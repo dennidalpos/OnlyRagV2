@@ -44,6 +44,60 @@ describe('runToolGates network-approved policy', () => {
     })
     if (result.outcome === 'allowed') expect(result.policyConsent?.consentId).toMatch(/^consent-/)
   })
+
+  it('combines Ask-mode mutation and network approval into one consent', async () => {
+    const requestApproval = vi.fn().mockResolvedValue({ approved: true })
+    const result = await runToolGates({
+      parsedTool: { tool: 'download_file', parameters: { url: 'https://example.test/data.txt', filePath: 'data.txt' } },
+      agentMode: 'ask',
+      fsmMode: { isToolAllowed: vi.fn(() => false) } as any,
+      workspacePath: 'C:\\workspace',
+      stepCount: 5,
+      episodicCompactor: { recordStep: vi.fn() } as any,
+      emitLog: vi.fn(),
+      requestApproval,
+      capabilityPolicyMode: 'network-approved',
+    })
+
+    expect(requestApproval).toHaveBeenCalledOnce()
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ reasons: expect.arrayContaining(['network access', 'Ask mode']) }))
+    expect(result).toMatchObject({ outcome: 'allowed', policyConsent: { requested: true, granted: true } })
+  })
+})
+
+describe('runToolGates structured command safety', () => {
+  const base = {
+    agentMode: 'agent' as const,
+    fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
+    workspacePath: 'C:\\workspace',
+    stepCount: 6,
+    episodicCompactor: { recordStep: vi.fn() } as any,
+    emitLog: vi.fn(),
+  }
+
+  it('asks once before executing a confined command mutation', async () => {
+    const requestApproval = vi.fn().mockResolvedValue({ approved: true })
+    const result = await runToolGates({
+      ...base,
+      requestApproval,
+      parsedTool: { tool: 'run_command', parameters: { command: 'Set-Content -Path src\\state.txt -Value ready' } },
+    })
+
+    expect(requestApproval).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({ outcome: 'allowed', commandApprovalGranted: true })
+  })
+
+  it('rejects an out-of-workspace command before approval', async () => {
+    const requestApproval = vi.fn()
+    const result = await runToolGates({
+      ...base,
+      requestApproval,
+      parsedTool: { tool: 'run_command', parameters: { command: 'Remove-Item -Recurse -Force C:\\' } },
+    })
+
+    expect(result).toEqual({ outcome: 'denied' })
+    expect(requestApproval).not.toHaveBeenCalled()
+  })
 })
 
 describe('runToolGates version refresh', () => {

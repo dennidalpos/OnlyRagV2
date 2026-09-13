@@ -54,7 +54,7 @@ export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ set
     onPersistPlan: c.persistActiveSessionPlan,
     onPlanApproved: (approvedPlan) => {
       c.setAgentMode('agent')
-      void c.handleAgentExecute(approvedPlan.prompt, 'agent', `${approvedPlan.id}:v${approvedPlan.version}`)
+      void c.handleAgentExecute(approvedPlan.prompt, 'agent', `${approvedPlan.id}:v${approvedPlan.version}`, approvedPlan.capabilityProfile)
     },
   })
 

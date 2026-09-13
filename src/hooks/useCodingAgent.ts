@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentActionLog, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode, AgentDoneResult, AgentRunIdentity } from '../types'
+import { AgentActionLog, AgentCapabilityProfile, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode, AgentDoneResult, AgentRunIdentity } from '../types'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useSessionHistory } from './useSessionHistory'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
@@ -15,6 +15,7 @@ import { soundEffectsService } from '../services/soundEffectsService'
 import { logger } from '../lib/logger'
 import { normalizeError } from '../lib/errors/errorNormalizer'
 import { createAgentRunIdentity, matchesAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
+import { resolveAgentCapabilityProfile } from '../../shared/domain/agent/agentCapabilityProfile'
 
 export type { QueuedPrompt }
 
@@ -28,6 +29,7 @@ export type CodingAgentTab = 'editor' | 'terminal' | 'git_diff' | 'grep_search' 
  */
 export function useCodingAgent(settings?: AppSettings) {
   const [agentMode, setAgentModeState] = useState<AgentMode>('ask')
+  const [capabilityProfile, setCapabilityProfile] = useState<AgentCapabilityProfile>(() => resolveAgentCapabilityProfile(settings))
   const [activeTab, setActiveTab] = useState<CodingAgentTab>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
 
@@ -63,6 +65,10 @@ export function useCodingAgent(settings?: AppSettings) {
   const setAgentMode = useCallback((newMode: AgentMode) => {
     setAgentModeState(newMode)
   }, [])
+
+  useEffect(() => {
+    if (!isExecuting) setCapabilityProfile(resolveAgentCapabilityProfile(settings))
+  }, [isExecuting, settings])
 
   useEffect(() => {
     if (isExecuting) {
@@ -432,11 +438,11 @@ export function useCodingAgent(settings?: AppSettings) {
       else if (data?.maxSteps !== undefined) setMaxSteps(data.maxSteps)
       if (data?.milestones && data.milestones.length > 0) {
         updateActiveSessionPlans((prev) => {
-          if (prev.length === 0) return prev
+          const revisionIndex = prev.findIndex((plan) => `${plan.id}:v${plan.version}` === data.planRevisionId)
+          if (revisionIndex < 0) return prev
           const copy = [...prev]
-          const lastIdx = copy.length - 1
-          copy[lastIdx] = {
-            ...copy[lastIdx],
+          copy[revisionIndex] = {
+            ...copy[revisionIndex],
             milestones: data.milestones!,
           }
           return copy
@@ -638,7 +644,7 @@ export function useCodingAgent(settings?: AppSettings) {
     })
   }
 
-  const executeTask = async (taskPrompt: string, overrideMode?: AgentMode, planRevisionId?: string) => {
+  const executeTask = async (taskPrompt: string, overrideMode?: AgentMode, planRevisionId?: string, runProfile: AgentCapabilityProfile = capabilityProfile) => {
     if (!taskPrompt.trim() || !window.electronAPI) return
 
     const busyModule = peekGlobalTaskLock()
@@ -721,6 +727,7 @@ export function useCodingAgent(settings?: AppSettings) {
         activeFile,
         pinnedFiles: resolvedPinnedFiles,
         attachedDocs,
+        capabilityProfile: resolveAgentCapabilityProfile(runProfile),
         settings,
       })
 
@@ -747,7 +754,7 @@ export function useCodingAgent(settings?: AppSettings) {
     }
   }
 
-  const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode, planRevisionId?: string) => {
+  const handleAgentExecute = async (overridePrompt?: string, overrideMode?: AgentMode, planRevisionId?: string, runProfile?: AgentCapabilityProfile) => {
     const text = typeof overridePrompt === 'string' ? overridePrompt : agentPrompt
     if (!text.trim()) return
 
@@ -759,7 +766,7 @@ export function useCodingAgent(settings?: AppSettings) {
     }
 
     if (!isOverride) setAgentPrompt('')
-    await executeTask(text, overrideMode, planRevisionId)
+    await executeTask(text, overrideMode, planRevisionId, runProfile)
   }
 
   const FILE_MUTATION_APPROVAL_TYPES = new Set(['write_file', 'replace_chunk', 'multi_replace', 'delete_file'])

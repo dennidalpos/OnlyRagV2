@@ -93,11 +93,21 @@ describe('selectSavedRunState', () => {
       runIdentity,
       pendingPlanMilestones: [{ id: 'm-2', title: 'Approved plan', status: 'pending' }],
       pendingPlanUserTask: 'Use the approved plan',
+      pendingPlanRevisionId: 'plan-2',
     })
     const selection = selectSavedRunState(state, { ...runIdentity, runId: 'run-2', planRevisionId: 'plan-2' })
 
     expect(selection.executionState).toBeNull()
     expect(selection.planSeed).toEqual([{ id: 'm-2', title: 'Approved plan', status: 'pending' }])
     expect(selection.initialUserTask).toBe('Use the approved plan')
+  })
+
+  it('does not seed a newer revision into an older run', () => {
+    const state = savedState({
+      pendingPlanMilestones: [{ id: 'm-2', title: 'New revision', status: 'pending' }],
+      pendingPlanRevisionId: 'plan-2',
+    })
+
+    expect(selectSavedRunState(state, { ...runIdentity, runId: 'run-2' }).planSeed).toEqual([])
   })
 })

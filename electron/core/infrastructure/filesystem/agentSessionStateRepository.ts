@@ -39,6 +39,8 @@ export interface SavedAgentSessionState {
   /** Approved plan awaiting the next run; distinct from a run's mutable milestones. */
   pendingPlanMilestones?: PlanMilestone[]
   pendingPlanUserTask?: string
+  /** Revision that owns the pending plan seed. */
+  pendingPlanRevisionId?: string
   userTask: string
   initialUserTask?: string
   updatedAt: string
@@ -204,7 +206,8 @@ export class AgentSessionStateRepository {
     sessionId: string,
     workspacePath: string | null,
     planMilestones: PlanMilestone[],
-    userTask?: string
+    userTask?: string,
+    planRevisionId?: string,
   ): Promise<boolean> {
     const existing = await this.loadSessionState(sessionId, workspacePath)
     const state: SavedAgentSessionState = existing
@@ -212,6 +215,7 @@ export class AgentSessionStateRepository {
           ...existing,
           pendingPlanMilestones: planMilestones,
           ...(userTask !== undefined ? { pendingPlanUserTask: userTask } : {}),
+          ...(planRevisionId !== undefined ? { pendingPlanRevisionId: planRevisionId } : {}),
           updatedAt: new Date().toISOString(),
         }
       : {
@@ -225,6 +229,7 @@ export class AgentSessionStateRepository {
           planMilestones,
           pendingPlanMilestones: planMilestones,
           pendingPlanUserTask: userTask || '',
+          pendingPlanRevisionId: planRevisionId,
           userTask: userTask || '',
           updatedAt: new Date().toISOString(),
           status: 'IN_PROGRESS',

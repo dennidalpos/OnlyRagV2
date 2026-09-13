@@ -10,8 +10,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoInstallHubSkills: 'disabled',
   autoInstallMinScore: 8.0,
   enableSkillRouter: false,
-  maxToolCallSteps: 0,
-  enableCodingAgentDebugLog: true,
+  allowFileModifications: false,
+  allowTerminalExecution: false,
+  capabilityPolicyMode: 'offline-strict',
+  maxToolCallSteps: 25,
+  enableCodingAgentDebugLog: false,
   hasCompletedInitialSetup: false,
 }
 
@@ -73,7 +76,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
   const capabilityPolicyMode =
     typeof raw.capabilityPolicyMode === 'string' && VALID_CAPABILITY_POLICY_MODES.has(raw.capabilityPolicyMode)
       ? (raw.capabilityPolicyMode as NonNullable<AppSettings['capabilityPolicyMode']>)
-      : undefined
+      : defaults.capabilityPolicyMode
 
   const sanitized: AppSettings = {
     defaultModel: typeof raw.defaultModel === 'string' ? raw.defaultModel.trim() : defaults.defaultModel,

@@ -1,10 +1,5 @@
 {
   "todos": [
-    "[P1] Add an Agent Coding preflight for Ollama reachability, exact installed model, model qualification, context capacity, workspace writability, toolchain availability, and workspace trust.",
-    "[P1] Default Agent Coding to a finite safe capability profile and expose file, terminal, network, and step-budget controls in onboarding and per-run review.",
-    "[P1] Replace regex-only command blocking with structured command validation or PowerShell AST inspection, workspace confinement, and mandatory approval for destructive operations.",
-    "[P1] Bind execution and progress events to the approved planRevisionId so running an older plan cannot update the latest revision.",
-    "[P1] Collapse mutation and network gates into one contextual approval with one consent ID so Ask mode never prompts twice for the same action.",
     "[P1] Make standalone Agent Coding use a visible first-class scratch workspace with reveal, export, persistence, and cleanup controls.",
     "[P1] Add Electron end-to-end scenarios for project and session switching, queued prompts, cancellation in every phase, crash resume, dirty Git, stale editor saves, missing models, standalone artifacts, spaced paths, and symlink escapes.",
     "[P1] Simplify Agent Coding into read-only Ask, default Guided review, and trusted local Auto modes; make planning an automatic stage for complex work and use one primary action.",

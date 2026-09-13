@@ -32,8 +32,21 @@ vi.mock('./ollamaAppService', () => ({
     getInstalledModels: vi.fn().mockResolvedValue(['llama3.2:3b', 'qwen2.5-coder:7b', 'deepseek-r1:8b']),
     // Session setup reads capabilities and the trained context_length from the same /api/tags
     // record; an empty map means "Ollama told us nothing", which is the default here.
-    getModelMetrics: vi.fn().mockResolvedValue({}),
+    getModelMetrics: vi.fn().mockResolvedValue({
+      'llama3.2:3b': { capabilities: ['completion', 'tools'], contextLength: 8192 },
+      'qwen2.5-coder:7b': { capabilities: ['completion', 'tools'], contextLength: 32768 },
+      'deepseek-r1:8b': { capabilities: ['completion', 'tools'], contextLength: 32768 },
+    }),
+    testConnection: vi.fn().mockResolvedValue({ success: true, modelsCount: 3 }),
     preloadModel: vi.fn().mockResolvedValue({ success: true }),
+  },
+}))
+
+vi.mock('./workspaceAppService', () => ({
+  workspaceAppService: {
+    inspectGuestOsEnvironment: vi.fn().mockResolvedValue({
+      tools: { git: true, node: true, npm: true, python: true, ollama: true },
+    }),
   },
 }))
 

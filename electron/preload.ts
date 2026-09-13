@@ -215,11 +215,11 @@ const api: IElectronAPI = {
     ipcRenderer.invoke('agent:plan-generate', prompt, model, settings, previousPlan, workspacePath, previousDecisions, identity),
   agentPlanCancel: (identity: AgentRunIdentity) => ipcRenderer.invoke('agent:plan-cancel', identity),
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
-  agentGetPlanState: (sessionId: string, workspacePath?: string | null) =>
-    ipcRenderer.invoke('agent:get-plan-state', sessionId, workspacePath),
+  agentGetPlanState: (sessionId: string, workspacePath?: string | null, planRevisionId?: string) =>
+    ipcRenderer.invoke('agent:get-plan-state', sessionId, workspacePath, planRevisionId),
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
-  agentPlanSeed: (sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string) =>
-    ipcRenderer.invoke('agent:plan-seed', sessionId, workspacePath, planMilestones, userTask),
+  agentPlanSeed: (sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string, planRevisionId?: string) =>
+    ipcRenderer.invoke('agent:plan-seed', sessionId, workspacePath, planMilestones, userTask, planRevisionId),
   /** AI Debug Diagnostic Bundle: compile zero-noise high-density report for external AI analysis. */
   exportAiDebugBundle: (options: {
     sessionId: string

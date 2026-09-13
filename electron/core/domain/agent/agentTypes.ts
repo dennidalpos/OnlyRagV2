@@ -1,4 +1,4 @@
-import type { AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
+import type { AgentCapabilityProfile, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
 
 export type AgentMode = 'plan' | 'ask' | 'agent'
 
@@ -16,6 +16,10 @@ export interface AgentTaskPayload {
   agentMode: AgentMode
   sessionId?: string
   workspacePath?: string | null
+  /** Original user-selected root when the task runs in an isolated workspace copy. */
+  sourceWorkspacePath?: string | null
+  /** User-reviewed runtime constraints for this execution only. */
+  capabilityProfile?: AgentCapabilityProfile
   isStandaloneMode?: boolean
   activeModel?: string
   pinnedFiles?: { name: string; path: string; content: string }[]

@@ -10,6 +10,7 @@ import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewP
 import { validateInterviewAnswers } from '../../shared/domain/agent/interviewValidation'
 import { createAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
+import { resolveAgentCapabilityProfile } from '../../shared/domain/agent/agentCapabilityProfile'
 
 export type { AgentPlan } from '../types'
 
@@ -195,6 +196,7 @@ export function usePlanApproval({
         status: 'generating',
         createdAt: new Date().toISOString(),
         baseStepOffset: currentStep,
+        capabilityProfile: resolveAgentCapabilityProfile(settings),
       }
 
       updateCurrentSessionPlans((prev) => [...prev, initialPlan])
@@ -273,6 +275,7 @@ export function usePlanApproval({
           createdAt: new Date().toISOString(),
           baseStepOffset: currentStep,
           milestones: generatedPlan!.milestones,
+          capabilityProfile: resolveAgentCapabilityProfile(settings),
         }
 
         updateCurrentSessionPlans((prev) => {
@@ -305,6 +308,7 @@ export function usePlanApproval({
           baseStepOffset: currentStep,
           errorPhase: 'planning',
           errorMessage: err?.message || 'Errore inatteso durante la pianificazione',
+          capabilityProfile: resolveAgentCapabilityProfile(settings),
         }
         updateCurrentSessionPlans((prev) => {
           const copy = [...prev]
@@ -370,7 +374,8 @@ export function usePlanApproval({
           activeSessionId,
           workspacePath ?? null,
           approved.milestones!,
-          approved.prompt
+          approved.prompt,
+          `${approved.id}:v${approved.version}`,
         )
       } catch (err: any) {
         logger.warn('usePlanApproval', `agentPlanSeed IPC failed: ${err?.message}`)

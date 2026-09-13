@@ -192,7 +192,7 @@ describe('usePlanApproval interview and error flow', () => {
 
     const effectivePrompt = expect.stringContaining('[ACCEPTED RECOMMENDATION] Router: React Router')
     expect(onPersistPlan).toHaveBeenCalledWith(expect.objectContaining({ status: 'approved', milestones: expect.any(Array) }))
-    expect(agentPlanSeed).toHaveBeenCalledWith('session-1', '/repo', expect.any(Array), effectivePrompt)
+    expect(agentPlanSeed).toHaveBeenCalledWith('session-1', '/repo', expect.any(Array), effectivePrompt, expect.stringMatching(/^plan_.*:v1$/))
     expect(onPlanApproved).toHaveBeenCalledWith(expect.objectContaining({ prompt: effectivePrompt, status: 'approved' }))
   })
 
@@ -430,7 +430,7 @@ describe('usePlanApproval interview and error flow', () => {
     })
 
     expect(onPersistPlan).toHaveBeenCalledWith(expect.objectContaining({ id: 'plan-reopen', status: 'approved' }))
-    expect(agentPlanSeed).toHaveBeenCalledWith('session-1', '/repo', initialPlans[0].milestones, 'Riprendi il task')
+    expect(agentPlanSeed).toHaveBeenCalledWith('session-1', '/repo', initialPlans[0].milestones, 'Riprendi il task', 'plan-reopen:v1')
     expect(onPlanApproved).toHaveBeenCalledWith(expect.objectContaining({ id: 'plan-reopen' }))
   })
 

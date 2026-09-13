@@ -16,7 +16,10 @@ plan/interview -> plan -> collect_context -> propose_action -> apply_action
 - Contesto: `projectPlanningFacts.ts`, `planPromptWindow.ts` e `episodicMemoryCompactor.ts` limitano fatti, file e cronologia al lavoro corrente.
 - Workspace: ogni run con progetto usa un worktree temporaneo (o una copia temporanea fuori da Git). File tool, comandi, generatori, download e package manager operano solo lì.
 - Runtime: modello, endpoint, digest, opzioni e metriche vengono salvati nel checkpoint e rivalidati al resume. Senza un limite di contesto verificato, `num_ctx` conserva la capacità hardware invece di cadere a 2048.
+- Preflight: prima di ogni turn Agent Coding verifica raggiungibilità Ollama, tag del modello risolto esattamente, tool calling, contesto minimo di 4096 token, scrivibilità e confinamento del workspace. La toolchain è riportata come avviso, senza bloccare progetti che non usano gli strumenti mancanti.
+- Profilo di capacità: ogni piano conserva il profilo revisionato della run. Il default è finito (25 step), senza modifiche file o terminale e con rete bloccata; il wizard iniziale e la revisione piano permettono di abilitare file, terminale, rete locale/con approvazione e un budget tra 5 e 100 step.
 - Identità run: comandi ed eventi di esecuzione trasportano sempre `runId`, `conversationId`, `planRevisionId` e `workspaceId`; il Renderer accetta solo eventi che coincidono con la run attiva.
+- Revisione piano: il seed e gli aggiornamenti milestone sono associati al solo `planRevisionId` approvato; una revisione diversa non può riprendere né aggiornare il piano visualizzato.
 - Annullamento: una `AbortSignal` per run arresta streaming, web/tool, shell persistente, verifiche di milestone e verifica finale. Timeout e annullamento utente usano lo stesso segnale; nessun evento successivo alla chiusura viene inoltrato al Renderer.
 - Ripresa: cronologia della conversazione e checkpoint esecutivo sono distinti. Si ripristinano step, recovery e milestone solo per la stessa run `IN_PROGRESS`; un nuovo prompt usa eventualmente il piano approvato come seme e azzera i budget.
 - Cronologia: log e coda prompt sono scritti subito per conversazione tramite IPC serializzato e store atomico; la chiusura della finestra non è un percorso di persistenza.
@@ -36,6 +39,8 @@ plan/interview -> plan -> collect_context -> propose_action -> apply_action
 - Prima della chiusura, l'app richiede il consenso per pubblicare le differenze del workspace temporaneo. Pubblica solo i path il cui contenuto sorgente coincide ancora con il baseline; annullamento, rifiuto o conflitto lasciano intatto il workspace utente e rimuovono quello temporaneo.
 - `ensure_tool` installa fuori dal workspace e richiede sempre consenso esplicito. Dopo la pubblicazione, Git ricalcola il diff nel workspace utente e chiede un secondo consenso prima del commit.
 - I path dei tool sono nomi opachi: gli spazi restano invariati. Prima delle mutazioni, il Main risolve l'antenato esistente e blocca symlink o junction che escono dal workspace.
+- [`structuredCommandSafety.ts`](../electron/core/domain/agent/structuredCommandSafety.ts): separa le pipeline PowerShell senza eseguire espansioni dinamiche; le mutazioni sono confinate al workspace e richiedono un consenso esplicito prima dello spawn.
+- Il gate contestuale riunisce mutazione, rete e installazioni nella stessa richiesta: un’azione riceve un solo consenso, riusato come autorizzazione di rete monouso quando serve.
 - [`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts): una milestone diventa completa solo con deliverable reali e verifiche riuscite.
 - [`verificationCommandSafety.ts`](../shared/domain/agent/verificationCommandSafety.ts): filtra comandi non sicuri.
 

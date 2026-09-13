@@ -5,6 +5,7 @@ import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryComp
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { buildInstallCommand } from '../domain/agent/devToolchain'
 import { shellCommandHasEgress } from '../domain/agent/offlineStrictPolicy'
+import { checkCommandSecurity } from '../domain/agent/commandSecurity'
 import type { ApprovalResponse } from './agentOrchestratorTypes'
 import path from 'node:path'
 
@@ -36,7 +37,7 @@ export interface ToolGateContext {
 
 export type ToolGateResult =
   | { outcome: 'denied' }
-  | { outcome: 'allowed'; toolCallForExecution: AgentToolCall; policyConsent?: { requested: boolean; granted: boolean; consentId: string } }
+  | { outcome: 'allowed'; toolCallForExecution: AgentToolCall; policyConsent?: { requested: boolean; granted: boolean; consentId: string }; commandApprovalGranted?: boolean }
 
 const MUTATING_TOOLS_REQUIRING_ASK_APPROVAL = [
   'run_command',
@@ -87,23 +88,6 @@ async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null
   return { ...parsedTool, parameters: commitParameters }
 }
 
-/** System-level installers outlive a disposable workspace and are never rollbackable. */
-async function gateExternalToolInstall(ctx: ToolGateContext): Promise<{ requested: boolean; granted: boolean; consentId: string } | 'denied' | undefined> {
-  if (ctx.parsedTool.tool !== 'ensure_tool') return undefined
-  const toolName = String(ctx.parsedTool.parameters.toolName || '')
-  const approval = await ctx.requestApproval({
-    type: 'terminal_cmd',
-    target: toolName || 'Development tool',
-    contentOrCmd: buildInstallCommand(toolName) || 'Installation command unavailable',
-    parameters: ctx.parsedTool.parameters,
-  })
-  if (approval.approved) return { requested: true, granted: true, consentId: `consent-${Date.now()}-${ctx.stepCount}` }
-  const feedback = `[USER DENIED] The user declined the external installation of ${toolName || 'the requested development tool'}.`
-  ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'ensure_tool', status: 'BLOCKED', summary: 'User denied external tool installation' }, feedback)
-  ctx.emitLog('info', 'Installazione esterna rifiutata dall’utente.')
-  return 'denied'
-}
-
 function approvalTypeForTool(tool: string): string {
   if (tool === 'run_command' || tool === 'ensure_tool') return 'terminal_cmd'
   if (tool === 'download_file') return 'download_file'
@@ -119,63 +103,62 @@ function requiresNetworkConsent(tool: AgentToolCall): boolean {
   return tool.tool === 'run_command' && shellCommandHasEgress(String(tool.parameters.command || ''))
 }
 
-async function gateNetworkApproved(ctx: ToolGateContext): Promise<{ requested: boolean; granted: boolean; consentId: string } | 'denied' | undefined> {
-  if (ctx.capabilityPolicyMode !== 'network-approved' || !requiresNetworkConsent(ctx.parsedTool)) return undefined
-
-  const target = ctx.parsedTool.parameters.url || ctx.parsedTool.parameters.command || ctx.parsedTool.parameters.query || ctx.parsedTool.parameters.toolName || 'Network operation'
-  const approval = await ctx.requestApproval({
-    type: approvalTypeForTool(ctx.parsedTool.tool),
-    target,
-    contentOrCmd: target,
-    parameters: ctx.parsedTool.parameters,
-  })
-  if (!approval.approved) {
-    const feedback = `[USER DENIED] L'utente ha rifiutato l'accesso di rete richiesto da ${ctx.parsedTool.tool}. Non ripetere la stessa operazione senza un nuovo consenso.`
-    ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: 'User denied network consent' }, feedback)
-    ctx.emitLog('info', `🚫 Accesso di rete rifiutato dall'utente: ${ctx.parsedTool.tool}`)
-    return 'denied'
-  }
-  return { requested: true, granted: true, consentId: `consent-${Date.now()}-${ctx.stepCount}` }
+type ContextualConsent = {
+  toolCallForExecution: AgentToolCall
+  commandApprovalGranted: boolean
+  policyConsent?: { requested: boolean; granted: boolean; consentId: string }
 }
 
-/**
- * ASK Mode Human-Approval Gate: mutating tools are submitted for explicit user approval
- * instead of being executed or flatly denied. Must run BEFORE the FSM Tool Permission Gate:
- * ASK mode's allowedTools set deliberately excludes mutating tools (see agentRuntimeMode.ts),
- * so if this check ran after the FSM gate it would never be reached (FSM would already have
- * denied the call), silently breaking the approval UI despite the prompt/UI contract promising
- * it (promptPresets.ts: "modifying actions ... are submitted for user approval").
- */
-async function gateAskModeMutation(ctx: ToolGateContext): Promise<{ toolCallForExecution: AgentToolCall } | 'denied' | 'not-mutating'> {
-  const { parsedTool, episodicCompactor, emitLog, requestApproval, stepCount, workspacePath } = ctx
-  if (!MUTATING_TOOLS_REQUIRING_ASK_APPROVAL.includes(parsedTool.tool)) return 'not-mutating'
+/** Collects every approval reason for one action and asks exactly once. */
+async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualConsent | 'denied' | undefined> {
+  let toolCall = ctx.parsedTool
+  let commandApprovalGranted = false
+  if (toolCall.tool === 'run_command') {
+    const security = checkCommandSecurity(String(toolCall.parameters.command || ''), ctx.workspacePath)
+    if (!security.isAllowed) {
+      const feedback = `[COMMAND SAFETY DENIED] ${security.blockedReason || 'Command rejected.'}`
+      ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'run_command', status: 'BLOCKED', summary: feedback }, feedback)
+      ctx.emitLog('info', `🔒 Comando bloccato: ${security.blockedReason || 'non sicuro'}`)
+      return 'denied'
+    }
+    commandApprovalGranted = Boolean(security.requiresApproval)
+    toolCall = { ...toolCall, parameters: { ...toolCall.parameters, command: security.sanitizedCommand } }
+  }
 
-  const approvalTarget = parsedTool.parameters.filePath || parsedTool.parameters.command || parsedTool.parameters.url || 'Target Action'
-  const approval = await requestApproval({
-    // ensure_tool is surfaced as the literal winget command it would run: approving a
-    // system-level install should show exactly what is about to be executed, and it
-    // reuses the existing terminal approval path end to end.
-    type: approvalTypeForTool(parsedTool.tool),
-    target: approvalTarget,
-    contentOrCmd:
-      (parsedTool.tool === 'ensure_tool' ? buildInstallCommand(String(parsedTool.parameters.toolName || '')) : undefined) ||
-      parsedTool.parameters.command ||
-      parsedTool.parameters.url ||
-      parsedTool.parameters.targetContent ||
-      parsedTool.parameters.content ||
-      '',
-    replacement: parsedTool.parameters.replacementContent,
-    replacements: parsedTool.parameters.replacements,
-    parameters: parsedTool.parameters,
+  const requiresNetwork = ctx.capabilityPolicyMode === 'network-approved' && requiresNetworkConsent(toolCall)
+  const requiresInstall = toolCall.tool === 'ensure_tool'
+  const requiresAsk = ctx.agentMode === 'ask' && MUTATING_TOOLS_REQUIRING_ASK_APPROVAL.includes(toolCall.tool)
+  if (!commandApprovalGranted && !requiresNetwork && !requiresInstall && !requiresAsk) return undefined
+
+  const toolName = String(toolCall.parameters.toolName || '')
+  const target = toolCall.parameters.filePath || toolCall.parameters.command || toolCall.parameters.url || toolCall.parameters.query || toolName || 'Target Action'
+  const contentOrCmd =
+    (requiresInstall ? buildInstallCommand(toolName) : undefined) ||
+    toolCall.parameters.command ||
+    toolCall.parameters.url ||
+    toolCall.parameters.targetContent ||
+    toolCall.parameters.content ||
+    ''
+  const approval = await ctx.requestApproval({
+    type: approvalTypeForTool(toolCall.tool),
+    target,
+    contentOrCmd,
+    replacement: toolCall.parameters.replacementContent,
+    replacements: toolCall.parameters.replacements,
+    parameters: toolCall.parameters,
+    reasons: [commandApprovalGranted && 'workspace mutation', requiresNetwork && 'network access', requiresInstall && 'external installation', requiresAsk && 'Ask mode'].filter(Boolean),
   })
   if (!approval.approved) {
-    const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${parsedTool.tool} su "${approvalTarget}"). Non ripetere questa esatta azione; proponi un'alternativa o chiedi chiarimenti.`
-    episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: 'User denied approval' }, feedback)
-    emitLog('info', `🚫 Azione rifiutata dall'utente: ${parsedTool.tool}`)
+    const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${toolCall.tool} su "${target}").`
+    ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: toolCall.tool, status: 'BLOCKED', summary: 'User denied contextual approval' }, feedback)
+    ctx.emitLog('info', `🚫 Azione rifiutata dall'utente: ${toolCall.tool}`)
     return 'denied'
   }
-  const toolCallForExecution = agentToolExecutorService.reconcileHunkApproval(parsedTool, approval.approvedHunkIndices, workspacePath)
-  return { toolCallForExecution }
+  return {
+    toolCallForExecution: agentToolExecutorService.reconcileHunkApproval(toolCall, approval.approvedHunkIndices, ctx.workspacePath),
+    commandApprovalGranted,
+    policyConsent: requiresNetwork ? { requested: true, granted: true, consentId: `consent-${Date.now()}-${ctx.stepCount}` } : undefined,
+  }
 }
 
 function denyFsm(ctx: ToolGateContext) {
@@ -220,17 +203,22 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
 
   let approvalGranted = false
   let toolCallForExecution: AgentToolCall = ctx.parsedTool
+  let policyConsent: { requested: boolean; granted: boolean; consentId: string } | undefined
+  let commandApprovalGranted = false
   if (ctx.isIsolatedWorkspace && ctx.parsedTool.tool === 'git_commit') {
     const feedback = '[ISOLATED WORKSPACE] Git commits are disabled during an isolated run. Publish the reviewed workspace changes first, then commit them from the user workspace.'
     ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'Git commit deferred until workspace publication' }, feedback)
     ctx.emitLog('info', 'Git commit rinviato: pubblica prima le modifiche isolate.')
     return { outcome: 'denied' }
   }
-  const externalInstallConsent = await gateExternalToolInstall(ctx)
-  if (externalInstallConsent === 'denied') return { outcome: 'denied' }
-  const policyConsent = externalInstallConsent || await gateNetworkApproved(ctx)
-  if (policyConsent === 'denied') return { outcome: 'denied' }
-  if (policyConsent) approvalGranted = true
+  const contextualConsent = await gateContextualConsent(ctx)
+  if (contextualConsent === 'denied') return { outcome: 'denied' }
+  if (contextualConsent) {
+    approvalGranted = true
+    toolCallForExecution = contextualConsent.toolCallForExecution
+    policyConsent = contextualConsent.policyConsent
+    commandApprovalGranted = contextualConsent.commandApprovalGranted
+  }
 
   if (ctx.parsedTool.tool === 'git_commit') {
     const approvedCommit = await gateGitCommit(ctx)
@@ -239,19 +227,10 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
     approvalGranted = true
   }
 
-  if (ctx.agentMode === 'ask' && ctx.parsedTool.tool !== 'ensure_tool') {
-    const askResult = await gateAskModeMutation(ctx)
-    if (askResult === 'denied') return { outcome: 'denied' }
-    if (askResult !== 'not-mutating') {
-      approvalGranted = true
-      toolCallForExecution = askResult.toolCallForExecution
-    }
-  }
-
   if (!approvalGranted && !ctx.fsmMode.isToolAllowed(ctx.parsedTool.tool)) {
     denyFsm(ctx)
     return { outcome: 'denied' }
   }
 
-  return { outcome: 'allowed', toolCallForExecution, policyConsent }
+  return { outcome: 'allowed', toolCallForExecution, policyConsent, commandApprovalGranted }
 }

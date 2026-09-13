@@ -72,14 +72,14 @@ export async function runProjectVerification(
   if (verifications.length === 0) return { hasVerificationCommand: false, status: 'unverifiable' }
 
   for (const verification of verifications) {
-    const security = checkCommandSecurity(verification.command)
-    if (!security.isAllowed) {
+    const security = checkCommandSecurity(verification.command, verification.projectRootPath)
+    if (!security.isAllowed || security.requiresApproval) {
       const result: VerificationRunResult = {
         hasVerificationCommand: true,
         passed: false,
         status: 'failed',
         command: verificationLabel,
-        failureDetail: `Verification command blocked for project ${verification.projectRelativePath}: ${security.blockedReason}`,
+        failureDetail: `Verification command blocked for project ${verification.projectRelativePath}: ${security.blockedReason || 'Verification commands must be read-only.'}`,
         evidenceLevel,
       }
       return { ...result, status: classifyProjectVerification(result) }

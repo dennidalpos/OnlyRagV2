@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Check, Pencil, Save, X } from 'lucide-react'
-import type { AgentPlan, PlanMilestone } from '../../types'
+import type { AgentCapabilityProfile, AgentPlan, PlanMilestone } from '../../types'
+import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
+import { AgentCapabilityProfileControls } from './AgentCapabilityProfileControls'
 
 interface PlanReviewCardProps {
   plan: AgentPlan
@@ -28,7 +30,7 @@ function pathIsAbsolute(filePath: string): boolean {
   return filePath.startsWith('/') || /^[A-Za-z]:\//.test(filePath)
 }
 
-export function preparePlanReviewRevision(plan: AgentPlan, objective: string, milestones: PlanMilestone[]): { revision?: AgentPlan; error?: string } {
+export function preparePlanReviewRevision(plan: AgentPlan, objective: string, milestones: PlanMilestone[], capabilityProfile: AgentCapabilityProfile = resolveAgentCapabilityProfile(plan.capabilityProfile)): { revision?: AgentPlan; error?: string } {
   const cleanObjective = objective.trim()
   if (!cleanObjective || milestones.some((milestone) => !milestone.title.trim())) {
     return { error: 'Risultato e interventi non possono essere vuoti.' }
@@ -46,6 +48,7 @@ export function preparePlanReviewRevision(plan: AgentPlan, objective: string, mi
         title: milestone.title.trim(),
         verificationCommand: milestone.verificationCommand?.trim() || undefined,
       })),
+      capabilityProfile: resolveAgentCapabilityProfile(capabilityProfile),
     },
   }
 }
@@ -56,6 +59,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
   const [objective, setObjective] = useState(plan.objective)
   const [milestones, setMilestones] = useState<PlanMilestone[]>(plan.milestones)
   const [filePathInputs, setFilePathInputs] = useState(() => plan.milestones.map((milestone) => (milestone.filePaths || []).join(', ')))
+  const [capabilityProfile, setCapabilityProfile] = useState(() => resolveAgentCapabilityProfile(plan.capabilityProfile))
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -63,6 +67,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
     setObjective(plan.objective)
     setMilestones(plan.milestones)
     setFilePathInputs(plan.milestones.map((milestone) => (milestone.filePaths || []).join(', ')))
+    setCapabilityProfile(resolveAgentCapabilityProfile(plan.capabilityProfile))
     setError('')
   }, [plan.id, plan.version])
 
@@ -73,6 +78,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
     setObjective(plan.objective)
     setMilestones(plan.milestones)
     setFilePathInputs(plan.milestones.map((milestone) => (milestone.filePaths || []).join(', ')))
+    setCapabilityProfile(resolveAgentCapabilityProfile(plan.capabilityProfile))
     setError('')
     setIsEditing(false)
   }
@@ -82,6 +88,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
       plan,
       objective,
       milestones.map((milestone, index) => ({ ...milestone, filePaths: parseFilePaths(filePathInputs[index] || '') })),
+      capabilityProfile,
     )
     if (!prepared.revision) {
       setError(prepared.error || 'Revisione non valida.')
@@ -111,7 +118,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
             disabled={disabled}
             className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-cyan-300 disabled:opacity-40 text-[10px] font-semibold flex items-center gap-1.5 focus-ring"
           >
-            <Pencil className="w-3 h-3" /> Modifica risultato, file e check
+            <Pencil className="w-3 h-3" /> Modifica risultato, file, check e permessi
           </button>
         )}
       </div>
@@ -194,6 +201,7 @@ export const PlanReviewCard: React.FC<PlanReviewCardProps> = ({ plan, disabled =
               </label>
             </div>
           ))}
+          <AgentCapabilityProfileControls profile={capabilityProfile} onChange={setCapabilityProfile} disabled={isSaving} />
           {error && (
             <p role="alert" className="text-[11px] text-rose-300">
               {error}

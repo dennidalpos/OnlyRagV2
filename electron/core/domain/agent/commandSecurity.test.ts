@@ -2,54 +2,51 @@ import { describe, it, expect } from 'vitest'
 import { checkCommandSecurity } from './commandSecurity'
 
 describe('commandSecurity Domain Unit Tests', () => {
-  it('should block destructive git reset --hard commands', () => {
+  const workspace = 'C:\\workspace'
+
+  it('requires approval for destructive git commands', () => {
     const res = checkCommandSecurity('git reset --hard HEAD')
-    expect(res.isAllowed).toBe(false)
-    expect(res.blockedReason).toContain('Destructive command pattern detected')
+    expect(res).toMatchObject({ isAllowed: true, requiresApproval: true })
   })
 
-  it('should block destructive git clean -fd commands', () => {
-    const res = checkCommandSecurity('git clean -fd')
-    expect(res.isAllowed).toBe(false)
-  })
-
-  it('should block force push commands', () => {
-    const res = checkCommandSecurity('git push origin main --force')
-    expect(res.isAllowed).toBe(false)
+  it('requires approval for destructive git clean and force push commands', () => {
+    const clean = checkCommandSecurity('git clean -fd')
+    const push = checkCommandSecurity('git push origin main --force')
+    expect(clean).toMatchObject({ isAllowed: true, requiresApproval: true })
+    expect(push).toMatchObject({ isAllowed: true, requiresApproval: true })
   })
 
   it('should block broad root deletion commands', () => {
-    const res = checkCommandSecurity('rm -rf /')
+    const res = checkCommandSecurity('rm -rf /', workspace)
     expect(res.isAllowed).toBe(false)
 
-    const res2 = checkCommandSecurity('rm -rf .')
+    const res2 = checkCommandSecurity('rm -rf .', workspace)
     expect(res2.isAllowed).toBe(false)
   })
 
-  it('should block destructive git restore and git checkout commands', () => {
+  it('requires approval for destructive git restore and checkout commands', () => {
     const res1 = checkCommandSecurity('git restore .')
-    expect(res1.isAllowed).toBe(false)
-    expect(res1.blockedReason).toContain('Destructive command pattern detected')
+    expect(res1).toMatchObject({ isAllowed: true, requiresApproval: true })
 
     const res2 = checkCommandSecurity('git checkout -- .')
-    expect(res2.isAllowed).toBe(false)
+    expect(res2).toMatchObject({ isAllowed: true, requiresApproval: true })
   })
 
   it('should translate harmless Unix commands to PowerShell equivalents', () => {
-    const res1 = checkCommandSecurity('rm -rf node_modules')
-    expect(res1.isAllowed).toBe(true)
+    const res1 = checkCommandSecurity('rm -rf node_modules', workspace)
+    expect(res1).toMatchObject({ isAllowed: true, requiresApproval: true })
     expect(res1.sanitizedCommand).toBe('Remove-Item -Recurse -Force "node_modules"')
 
-    const res2 = checkCommandSecurity('touch src/newFile.ts')
-    expect(res2.isAllowed).toBe(true)
+    const res2 = checkCommandSecurity('touch src/newFile.ts', workspace)
+    expect(res2).toMatchObject({ isAllowed: true, requiresApproval: true })
     expect(res2.sanitizedCommand).toContain('New-Item -ItemType File')
 
     const res3 = checkCommandSecurity('ls -la')
     expect(res3.isAllowed).toBe(true)
     expect(res3.sanitizedCommand).toBe('Get-ChildItem')
 
-    const res4 = checkCommandSecurity('mkdir -p src/components/test')
-    expect(res4.isAllowed).toBe(true)
+    const res4 = checkCommandSecurity('mkdir -p src/components/test', workspace)
+    expect(res4).toMatchObject({ isAllowed: true, requiresApproval: true })
     expect(res4.sanitizedCommand).toBe('New-Item -ItemType Directory -Force -Path "src/components/test"')
   })
 

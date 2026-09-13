@@ -106,10 +106,16 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    * so the frontend can reflect verified/in-progress/failed status instead of
    * guessing progress from step counts.
    */
-  ipcMain.handle('agent:get-plan-state', async (_, sessionId: string, workspacePath?: string | null) => {
+  ipcMain.handle('agent:get-plan-state', async (_, sessionId: string, workspacePath?: string | null, planRevisionId?: string) => {
     const state = await agentSessionStateAppService.loadSessionState(sessionId, workspacePath)
     if (!state) return null
-    return { planMilestones: state.planMilestones, status: state.status, stepCount: state.stepCount }
+    if (planRevisionId && state.runIdentity?.planRevisionId !== planRevisionId) return null
+    return {
+      planMilestones: state.planMilestones,
+      status: state.status,
+      stepCount: state.stepCount,
+      ...(state.runIdentity?.planRevisionId ? { planRevisionId: state.runIdentity.planRevisionId } : {}),
+    }
   })
 
   /**
@@ -119,8 +125,8 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
    */
     ipcMain.handle(
     'agent:plan-seed',
-    async (_, sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string) => {
-      return agentSessionStateAppService.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask)
+    async (_, sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string, planRevisionId?: string) => {
+      return agentSessionStateAppService.seedPlanMilestones(sessionId, workspacePath, planMilestones, userTask, planRevisionId)
     }
   )
 

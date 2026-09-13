@@ -9,7 +9,10 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.language).toBe('it')
     expect(defaults.autoInstallHubSkills).toBe('disabled')
     expect(defaults.enableSkillRouter).toBe(false)
-    expect(defaults.maxToolCallSteps).toBe(0)
+    expect(defaults.maxToolCallSteps).toBe(25)
+    expect(defaults.allowFileModifications).toBe(false)
+    expect(defaults.allowTerminalExecution).toBe(false)
+    expect(defaults.capabilityPolicyMode).toBe('offline-strict')
   })
 
   it('should sanitize empty or corrupted input to defaults', () => {
@@ -20,7 +23,7 @@ describe('AppSettingsDomain Unit Tests', () => {
 
   it('preserves a valid capability policy mode and drops invalid values', () => {
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'offline-strict' }).capabilityPolicyMode).toBe('offline-strict')
-    expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBeUndefined()
+    expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBe('offline-strict')
   })
 
   it('retires the legacy automatic skill-install mode to disabled', () => {
@@ -67,10 +70,10 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(customSteps.maxToolCallSteps).toBe(120)
 
     const invalidNegative = sanitizeAppSettings({ maxToolCallSteps: -5 })
-    expect(invalidNegative.maxToolCallSteps).toBe(0)
+    expect(invalidNegative.maxToolCallSteps).toBe(25)
 
     const invalidTooHigh = sanitizeAppSettings({ maxToolCallSteps: 9999 })
-    expect(invalidTooHigh.maxToolCallSteps).toBe(0)
+    expect(invalidTooHigh.maxToolCallSteps).toBe(25)
   })
 
   it('drops prompt override keys that do not name a prompt node', () => {

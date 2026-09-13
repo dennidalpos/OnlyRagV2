@@ -91,8 +91,11 @@ export const AppLayout: React.FC = () => {
       autoInstallHubSkills: 'disabled',
       autoInstallMinScore: 8.0,
       enableSkillRouter: false,
-      maxToolCallSteps: 0,
-      enableCodingAgentDebugLog: true,
+      allowFileModifications: false,
+      allowTerminalExecution: false,
+      capabilityPolicyMode: 'offline-strict',
+      maxToolCallSteps: 25,
+      enableCodingAgentDebugLog: false,
       hasCompletedInitialSetup: false,
     }
   })

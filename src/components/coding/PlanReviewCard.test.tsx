@@ -87,4 +87,20 @@ describe('PlanReviewCard', () => {
     expect(prepared.error).toContain('percorsi relativi')
     expect(prepared.revision).toBeUndefined()
   })
+
+  it('persists a bounded capability profile with the reviewed plan', () => {
+    const prepared = preparePlanReviewRevision(plan, plan.objective, plan.milestones, {
+      allowFileModifications: true,
+      allowTerminalExecution: true,
+      capabilityPolicyMode: 'network-approved',
+      maxToolCallSteps: 999,
+    })
+
+    expect(prepared.revision?.capabilityProfile).toEqual({
+      allowFileModifications: true,
+      allowTerminalExecution: true,
+      capabilityPolicyMode: 'network-approved',
+      maxToolCallSteps: 100,
+    })
+  })
 })

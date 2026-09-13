@@ -503,7 +503,7 @@ async def async_handler():
     expect(failRes.outputForHistory).toContain('[REPLACE FILE ERROR')
   })
 
-  it('should block destructive shell commands via command security guardrail', async () => {
+  it('requires approval before a destructive shell command can run', async () => {
     const res = await agentToolExecutorService.executeTool(
       {
         tool: 'run_command',
@@ -513,8 +513,8 @@ async def async_handler():
       settings
     )
 
-    expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
-    expect(res.logMessage).toContain('[SECURITY BLOCK]')
+    expect(res.outputForHistory).toContain('[SECURITY APPROVAL REQUIRED]')
+    expect(res.logMessage).toContain('[SECURITY APPROVAL REQUIRED]')
   })
 
   it('gives the model the failure reason even when the command also printed to stdout', async () => {
@@ -1004,7 +1004,7 @@ async def async_handler():
     )
 
     expect(res.outputForHistory).not.toContain('[TOOL_AS_SHELL_BLOCK]')
-    expect(res.outputForHistory).toContain('[SECURITY GUARDRAIL BLOCK]')
+    expect(res.outputForHistory).toContain('[SECURITY APPROVAL REQUIRED]')
   })
 
   it('should execute get_file_info and return correct file metadata', async () => {

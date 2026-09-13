@@ -382,11 +382,20 @@ export class ProcessToolService {
     signal: AbortSignal | undefined,
     onTerminalOutput: ((data: string) => void) | undefined,
     onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
+    securityApprovalGranted = false,
   ): Promise<RunCommandExecution | ToolExecutionResult> {
-    const security = checkCommandSecurity(command)
+    const security = checkCommandSecurity(command, workspacePath)
     if (!security.isAllowed) {
       const output = `[SECURITY GUARDRAIL BLOCK]\nCommand: "${command}"\nExecution FORBIDDEN by Security Policy: ${security.blockedReason}\nDirective: Refrain from executing dangerous commands.`
       return { outcome: 'rejected', outputForHistory: output, logMessage: `[SECURITY BLOCK] Forbidden command: "${command}"`, isTerminal: true }
+    }
+    if (security.requiresApproval && !securityApprovalGranted) {
+      return {
+        outcome: 'rejected',
+        outputForHistory: `[SECURITY APPROVAL REQUIRED]\nCommand: "${command}"\nExecution requires an explicit approval through the agent gate.`,
+        logMessage: `[SECURITY APPROVAL REQUIRED] Command: "${command}"`,
+        isTerminal: true,
+      }
     }
 
     let executableCommand = security.sanitizedCommand

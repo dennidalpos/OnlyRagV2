@@ -411,6 +411,7 @@ export class AgentToolExecutorService {
     policyConsent: CapabilityConsent = { requested: false, granted: false },
     policySessionId: string = 'agent-execution',
     allowedToolsForTurn?: readonly SupportedToolName[],
+    commandApprovalGranted = false,
   ): Promise<ClassifiedToolExecutionResult> {
     const result = await this.dispatchTool(
       parsedTool,
@@ -423,6 +424,7 @@ export class AgentToolExecutorService {
       policyConsent,
       policySessionId,
       allowedToolsForTurn,
+      commandApprovalGranted,
     )
     return toolExecutionResultSchema.parse(result)
   }
@@ -438,6 +440,7 @@ export class AgentToolExecutorService {
     policyConsent: CapabilityConsent = { requested: false, granted: false },
     policySessionId: string = 'agent-execution',
     allowedToolsForTurn?: readonly SupportedToolName[],
+    commandApprovalGranted = false,
   ): Promise<ToolExecutionResult> {
     const { tool, parameters } = parsedTool
 
@@ -557,6 +560,7 @@ export class AgentToolExecutorService {
           signal,
           onTerminalOutput,
           onProcessSpawned,
+          commandApprovalGranted,
         )
         if (!('result' in execution)) return execution
 

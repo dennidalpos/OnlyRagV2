@@ -32,14 +32,7 @@ export const VERIFIED_MODELS: VerifiedModelRecord[] = [
 
 const VERIFIED_BY_NAME = new Map(VERIFIED_MODELS.map((m) => [m.modelName, m]))
 
-/**
- * Models the agent loop cannot drive, whatever their coding ability.
- *
- * The agent is a tool-calling loop: every turn must produce a parseable tool call. Embedding
- * models have no chat surface at all, and pure fill-in-the-middle base models emit code
- * continuations rather than structured calls. Both are listed by FAMILY prefix, because the
- * failure is a property of the family and not of a particular tag.
- */
+/** Models the agent loop cannot drive, whatever their coding ability. */
 const UNSUPPORTED_FAMILY_PREFIXES = [
   'nomic-embed',
   'mxbai-embed',
@@ -53,14 +46,7 @@ export function declaresToolCalling(capabilities: readonly string[] | undefined)
   return Array.isArray(capabilities) && capabilities.includes('tools')
 }
 
-/**
- * Resolves the badge a model should carry.
- *
- * `capabilities` and `isCatalogued` come from different places on purpose: capabilities are
- * live facts read from the running Ollama and are absent for a model that is not installed
- * yet, while the catalog is static and answers for models the user has never pulled. A badge
- * has to render in both cases — before the download and after it.
- */
+/** Resolves the badge a model should carry. */
 export function resolveVerificationStatus(args: {
   modelName: string
   isCatalogued: boolean
@@ -73,9 +59,7 @@ export function resolveVerificationStatus(args: {
   if (UNSUPPORTED_FAMILY_PREFIXES.some((prefix) => name.startsWith(prefix))) return 'unsupported'
   if (VERIFIED_BY_NAME.has(args.modelName)) return 'verified'
 
-  // An installed model that reports no `tools` capability cannot drive the agent's native
-  // tool-calling path. It is not refused — the JSON-fenced fallback exists — but the user is
-  // told, because that fallback is measurably weaker on small models.
+  // An installed model that reports no `tools` capability cannot drive the agent's native tool-calling path.
   if (args.capabilities !== undefined && !declaresToolCalling(args.capabilities)) {
     return 'unsupported'
   }

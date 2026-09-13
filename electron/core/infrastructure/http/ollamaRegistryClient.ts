@@ -92,9 +92,7 @@ export class OllamaRegistryClient {
 
             try {
               const bodyBuffer = Buffer.concat(chunks)
-              // Ollama's /api/tags digest is the OCI manifest digest. Prefer the
-              // registry's authoritative Docker-Content-Digest header; hashing the
-              // response body is only a compatibility fallback for older/mock registries.
+              // Ollama's /api/tags digest is the OCI manifest digest.
               const headerDigest = res.headers?.['docker-content-digest']
               const digest = Array.isArray(headerDigest) ? headerDigest[0] : headerDigest
               const resolvedDigest = typeof digest === 'string' && digest.trim()

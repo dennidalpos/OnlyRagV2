@@ -1,20 +1,4 @@
-/**
- * Verification Gate Policy.
- *
- * Decides what happens when the agent calls `finish` on work no verification has passed on.
- *
- * The gate used to surface each violation at most once and then let `finish` through, so that
- * a model which ignored the first warning simply finished anyway: session-1787485700613-o3tx
- * ended COMPLETED, reporting "The application is now fully runnable", on a project with no
- * entrypoint and three undeclared dependencies. The gate now blocks, hands the failure back,
- * and lets the model correct and re-verify — for a bounded number of rounds, because a small
- * model that cannot fix the error would otherwise burn the whole step budget on it.
- *
- * When the rounds run out the session ends FAILED. That is the point: a session that could not
- * prove its own output must never be indistinguishable from one that did.
- *
- * Pure domain: running commands and scanning dependencies belongs to the caller.
- */
+
 
 /** Rounds of correct-and-re-verify allowed before the session is given up as failed. */
 export const MAX_VERIFICATION_FIX_CYCLES = 3

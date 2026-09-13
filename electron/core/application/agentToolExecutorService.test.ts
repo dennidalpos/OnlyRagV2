@@ -518,13 +518,7 @@ async def async_handler():
   })
 
   it('gives the model the failure reason even when the command also printed to stdout', async () => {
-    // The end-to-end shape of every failing `npm run build` in session-1787562597025-q8a5: a
-    // banner on stdout, the actual cause on stderr. The executor used to hand the model
-    // whichever single stream was non-empty, so the auto-healing block arrived carrying the
-    // banner and an exit code, under a directive to inspect a stack trace it had discarded.
-    // The markers live in a script file, never in the command string: the diagnostics block
-    // echoes the command back, so an inline `node -e "...CAUSE_LINE..."` would satisfy the
-    // assertion from the echo alone and pass against the very bug it is meant to catch.
+    // The end-to-end shape of every failing `npm run build` in session-1787562597025-q8a5: a banner on stdout, the actual cause on stderr.
     fs.writeFileSync(
       path.join(tempDir, 'fail.js'),
       "console.log('BANNER_LINE'); console.error('CAUSE_LINE'); process.exit(1);",
@@ -655,9 +649,7 @@ async def async_handler():
   })
 
   it('appends the version-conflict directive when an install fails on ERESOLVE', async () => {
-    // A script that reproduces npm's ERESOLVE report on stderr and exits 1, so the whole path
-    // is exercised: shell -> stream composition -> auto-healing block. The real failure this
-    // stands in for is `npm install @vitejs/plugin-react` against a pinned vite@4.
+    // A script that reproduces npm's ERESOLVE report on stderr and exits 1, so the whole path is exercised: shell -> stream composition -> auto-healing block.
     fs.writeFileSync(
       path.join(tempDir, 'eresolve.js'),
       [
@@ -688,15 +680,7 @@ async def async_handler():
     expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
   })
 
-  /**
-   * Measured 2026-08-25T19:16, session live-full-task, step 34. `npm run build` reported a TS2614
-   * carrying the compiler's own verbatim import fix, a TS2322, and two `Cannot find module` on
-   * './api' and './auth' — project files the plan had not written yet. The missing-dependency
-   * gate matched the raw text, fired on the relative specifiers, and by firing set
-   * `specificDirectiveFired`, which suppressed the compiler diagnostic entirely. The model was
-   * left with an order to install a package the text never named; it guessed `@mui/material`,
-   * the loop guard blocked it, and steps 35-50 were sixteen blocked repeats to the step ceiling.
-   */
+  /** Measured 2026-08-25T19:16, session live-full-task, step 34. */
   describe('missing dependency diagnostic', () => {
     function failingBuild(lines: string[]): string {
       return [
@@ -724,9 +708,7 @@ async def async_handler():
 
       // `packageOfSpecifier` already knows relative imports belong to no package; this gate now asks it.
       expect(res.outputForHistory).not.toContain('[MISSING DEPENDENCY DIAGNOSTIC]')
-      // And because the bogus dependency directive no longer fires, the compiler diagnostic is
-      // free to run — landing on the branch that names the file that is actually missing rather
-      // than the one that reports the error.
+      // And because the bogus dependency directive no longer fires, the compiler diagnostic is free to run — landing on the branch that names the file that is actually missing rather than the one that reports the error.
       expect(res.outputForHistory).toContain('THE IMPORTED FILE DOES NOT EXIST')
       expect(res.outputForHistory).toContain('"write_file" on "src/services/api.ts"')
     })
@@ -795,9 +777,7 @@ async def async_handler():
     })
 
     it('lets the install run when the package is declared but node_modules is empty', async () => {
-      // The regression that cost session-1787562597025-q8a5 its build: the agent had authored
-      // package.json itself, so every dependency read as "already installed" while nothing was
-      // on disk, and the guard cancelled the only npm install of the run.
+      // The regression that cost session-1787562597025-q8a5 its build: the agent had authored package.json itself, so every dependency read as "already installed" while nothing was on disk, and the guard cancelled the only npm install of the run.
       fs.writeFileSync(
         path.join(tempDir, 'package.json'),
         JSON.stringify({ name: 'x', dependencies: { react: '^18.0.0' } }),
@@ -817,11 +797,7 @@ async def async_handler():
 
   describe('install downgrade guard', () => {
     it('refuses the install that pinned the tree to react@16 in the run of 2026-08-25T12:11', async () => {
-      // versionRealityDirective only ever saw `write_file` on package.json, so this command --
-      // which rewrites the same file -- succeeded three times unchallenged (steps 21, 30, 31)
-      // and left `react@"^16.14.0" from the root project`. Every later install of a package
-      // built for react@18 then failed on ERESOLVE, and at step 49 the model deleted
-      // @mui/material believing the name was invented.
+      // versionRealityDirective only ever saw `write_file` on package.json, so this command -- which rewrites the same file -- succeeded three times unchallenged (steps 21, 30, 31) and left `react@"^16.14.0" from the root project`.
       fs.writeFileSync(
         path.join(tempDir, 'package.json'),
         JSON.stringify({ name: 'x', dependencies: { react: '^18.2.0' } }),
@@ -1284,9 +1260,7 @@ async def async_handler():
   })
 
   describe('no-op write', () => {
-    // A rewrite that changed nothing used to answer "Successfully wrote file X" and count as a
-    // file mutation, which cleared the verified-build flag and sent the model back to re-run a
-    // build it had never broken. See redundantWriteDetector.ts.
+    // A rewrite that changed nothing used to answer "Successfully wrote file X" and count as a file mutation, which cleared the verified-build flag and sent the model back to re-run a build it had never broken.
     it('does not touch the disk and reports the write as a no-op when the content is already there', async () => {
       const filePath = path.join(tempDir, 'stable.ts')
       const body = 'export const a = 1\n'

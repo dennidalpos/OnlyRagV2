@@ -5,10 +5,7 @@ import { logger } from '../lib/logger'
 import { nextRetryDelayMs, shouldReportFailure, DEFAULT_RETRY_POLICY } from '../lib/pollingRetryPolicy'
 import { createSingleFlight } from '../lib/singleFlight'
 
-// Every mounted consumer of this hook keeps its own copy of the list and its own callbacks,
-// but they all read the same backend collection -- and a single documents-changed or focus
-// event reaches all of them at once. Sharing the in-flight request turns that fan-out back into
-// one IPC round-trip; the per-instance state each consumer needs is unaffected.
+// Every mounted consumer of this hook keeps its own copy of the list and its own callbacks, but they all read the same backend collection -- and a single documents-changed or focus event reaches all of them at once.
 const fetchDocumentsShared = createSingleFlight(() => apiService.getIngestedDocuments())
 
 export const DOCUMENTS_CHANGED_EVENT = 'onlyrag:documents-changed'

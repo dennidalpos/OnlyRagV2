@@ -52,11 +52,7 @@ export interface TurnDispatchContext {
   responseInterpreterState: ResponseInterpreterState
   goalPlanner: GoalDecompositionPlanner
   fsmMode: AgentRuntimeModeFsm
-  /**
-   * A real verification has passed and no file has been written since. Read by the plan block,
-   * which stops demanding more work once the project is provably done — see
-   * postVerificationClosure.ts.
-   */
+  /** A real verification has passed and no file has been written since. */
   hasVerifiedBuild: boolean
   session: AgentSession
   /** Frozen per-session Ollama context window. */
@@ -98,11 +94,6 @@ export interface ModelSelection {
   targetModelToolCallingCapable: boolean
   targetModelToolCallingProbe: boolean
   runtimeOpts: OllamaRuntimeOptions
-  /**
-   * The largest `num_ctx` Ollama will honour for `targetModel`: its trained `context_length`,
-   * as reported on `/api/tags`. Null when Ollama reported none, in which case nothing caps the
-   * hardware profile's own sizing. `runtimeOpts` is already clamped to this — the field is kept
-   * so diagnostics can explain the initial clamp.
-   */
+  /** The largest `num_ctx` Ollama will honour for `targetModel`: its trained `context_length`, as reported on `/api/tags`. */
   contextCeiling: number | null
 }

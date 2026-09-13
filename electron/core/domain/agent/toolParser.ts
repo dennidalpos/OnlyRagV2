@@ -103,12 +103,7 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
   }
 
   if (!jsonStr) {
-    // Try finding raw JSON object containing "tool"/'tool' (prompt-engineered format)
-    // or "name"+"arguments" together (native tool-calling / OpenAI function-call
-    // format, e.g. Ollama /api/chat models that echo their call as
-    // {"name": ..., "arguments": ...} text instead of populating message.tool_calls).
-    // "name" alone is NOT sufficient — it's a common key in incidental JSON content
-    // (e.g. package.json's "name" field shown inside a diff block) that isn't a tool call.
+    // Try finding raw JSON object containing "tool"/'tool' (prompt-engineered format) or "name"+"arguments" together (native tool-calling / OpenAI function-call format, e.g.
     const lowerText = cleanText.toLowerCase()
     const hasNativeCallShape = /"name"|'name'/.test(lowerText) && /"arguments"|'arguments'/.test(lowerText)
     const toolIdx = ['"tool"', "'tool'", ...(hasNativeCallShape ? ['"name"', "'name'"] : [])]
@@ -117,9 +112,7 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
     if (toolIdx !== -1) {
       const firstBrace = cleanText.lastIndexOf('{', toolIdx)
       if (firstBrace !== -1) {
-        // The balanced object first: it is the only candidate that is correct when the model
-        // emitted more than one call. The greedy span stays as the fallback for a truncated
-        // object, where there is no matching brace to find.
+        // The balanced object first: it is the only candidate that is correct when the model emitted more than one call.
         const balanced = sliceBalancedObject(cleanText, firstBrace)
         if (balanced) candidates.push(balanced)
         const lastBrace = cleanText.lastIndexOf('}')
@@ -133,9 +126,7 @@ function extractToolCallFromText(cleanText: string, onRejection?: ToolCallReject
 
   for (const candidate of candidates) {
     const parsed = sanitizeAndParseJson(candidate)
-    // Accept both the prompt-engineered "tool" key and the native / OpenAI-style
-    // "name" key (used by tool-calling-capable models that echo their function
-    // call as JSON text instead of populating the API's structured tool_calls).
+    // Accept both the prompt-engineered "tool" key and the native / OpenAI-style "name" key (used by tool-calling-capable models that echo their function call as JSON text instead of populating the API's structured tool_calls).
     const rawToolName = parsed?.tool ?? (parsed?.arguments && typeof parsed?.name === 'string' ? parsed.name : undefined)
     if (!parsed || typeof rawToolName !== 'string') continue
 
@@ -274,13 +265,7 @@ function parseDiffCodeBlockFallback(rawText: string): AgentToolCall | null {
   return null
 }
 
-/**
- * Parses the model's turn into a tool call, or null when none survives validation.
- *
- * `onRejection` is how the caller learns WHY. Without it a refused call is indistinguishable
- * from a turn that contained no tool call at all, and the model was told only that "mandatory
- * input parameters were missing or malformed" — see buildToolSchemaCorrectionDirective.
- */
+/** Parses the model's turn into a tool call, or null when none survives validation. */
 export function parseAgentToolCall(text: string, onRejection?: ToolCallRejectionSink): AgentToolCall | null {
   if (!text || typeof text !== 'string') return null
 

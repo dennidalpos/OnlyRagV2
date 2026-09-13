@@ -3,11 +3,7 @@ import { SkillInstallApprovalRequest, AppSettings, AgentRunIdentity } from '../t
 import { soundEffectsService } from '../services/soundEffectsService'
 import { matchesAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
 
-/**
- * Pending hub skill install confirmations raised by the agent loop when the
- * `autoInstallHubSkills` policy is set to 'prompt'. Requests are queued so a second
- * one never silently replaces a request the user has not answered yet.
- */
+/** Pending hub skill install confirmations raised by the agent loop when the `autoInstallHubSkills` policy is set to 'prompt'. */
 export function useSkillInstallApproval(settings?: AppSettings, activeRunIdentity?: Readonly<AgentRunIdentity> | null) {
   const [pendingRequests, setPendingRequests] = useState<SkillInstallApprovalRequest[]>([])
 

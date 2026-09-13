@@ -21,11 +21,7 @@ export interface EditorSaveConflict {
   diskContentHash: string
 }
 
-/**
- * File tree, open tabs, Monaco editor buffer and pinned context files of the active
- * workspace. Deletions performed by the agent are purged from every reference here, so
- * the UI never points at a path that no longer exists.
- */
+/** File tree, open tabs, Monaco editor buffer and pinned context files of the active workspace. */
 export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotice, onPathPurged }: UseWorkspaceFilesOptions) {
   const [files, setFiles] = useState<WorkspaceFile[]>([])
   const [openFiles, setOpenFiles] = useState<WorkspaceFile[]>([])

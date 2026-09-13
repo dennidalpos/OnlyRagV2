@@ -57,12 +57,7 @@ export const apiService = {
     }
   },
 
-  /**
-   * Resolves null when the document list could NOT be retrieved (sidecar unreachable, timeout,
-   * unparseable reply). Callers must not treat that as an empty library: useIngestedDocuments
-   * prunes the user's active selection against this result, and flattening a failure to []
-   * silently deselected every attachment they had chosen.
-   */
+  /** Resolves null when the document list could NOT be retrieved (sidecar unreachable, timeout, unparseable reply). */
   async getIngestedDocuments(): Promise<IngestedDocument[] | null> {
     if (!window.electronAPI) return null
     try {

@@ -1,38 +1,4 @@
-/**
- * Post-Verification Closure.
- *
- * Answers one question the system could previously not ask: *the build is green — is this
- * session allowed to end?*
- *
- * Everything needed for the answer already existed and was never combined. `hasVerifiedBuild`
- * says a real verification passed and nothing has been written since (it is cleared by every
- * mutation — see invalidateVerifiedBuild). `selectMilestonesProvenByVerification` has already
- * promoted every milestone that green build could speak for. So the milestones still open
- * after a pass are exactly two kinds, and they call for opposite responses:
- *
- *  - `unsatisfied` — the milestone names files that are missing or hold placeholder content.
- *    Real work is left. The session must NOT close, whatever the build says about the rest.
- *  - `not_applicable` — the milestone names no artefact at all ("ensure buttons have a 44x44
- *    touch target", "run the application"). No build can ever prove or disprove it, so it can
- *    never reach `verified` through verification, and it is precisely what deadlocks the plan.
- *
- * That deadlock is the churn's standing cause. The plan block's active-milestone directive 4
- * reads "Do NOT invoke finish until all operational checklist milestones are completed and
- * verified" — an instruction that, with an unprovable milestone open, forbids finishing
- * forever. The model has a green build, a milestone it believes is done, no legal way to close
- * it, and one action left that always succeeds: run the build again. It is the same shape the
- * loop guard's own header warns about — a prohibition with no exit — and no amount of
- * additional discouragement can resolve it, because the model's problem is not that it wants
- * to repeat the build, it is that nothing else is permitted.
- *
- * This module supplies the exit: name the unprovable milestones and tell the model to close
- * them with `update_plan` on its own judgement, then finish. Judgement is the only instrument
- * that applies — `milestoneUpdateAuthority` already lets a milestone naming no artefact be
- * closed by its own command, and the Definition of Done gate still runs the project's real
- * verification before `finish` is honoured, so nothing here weakens what is actually checked.
- *
- * Pure domain: the caller supplies each milestone's deliverable status.
- */
+
 
 import { isCompletionMilestoneTitle } from '../../../../shared/domain/agent/planAndSolveGraph'
 import type { PlanMilestone } from '../../../../shared/domain/agent/planAndSolveGraph'
@@ -59,14 +25,7 @@ export interface ClosureInput {
   deliverableStatusOf: (milestone: PlanMilestone) => MilestoneDeliverableStatus
 }
 
-/**
- * Milestones that still hold the plan open.
- *
- * `failed` entries are excluded for the same reason every other consumer excludes them: the
- * loop guard abandoned them deliberately, the plan block already orders them reported as
- * incomplete, and counting them here would make closure unreachable for exactly the sessions
- * that most need to close. The completion milestone is excluded because the finish tool owns it.
- */
+/** Milestones that still hold the plan open. */
 function selectOpenMilestones(milestones: readonly PlanMilestone[]) {
   return milestones.filter(
     (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
@@ -92,16 +51,7 @@ export function assessPostVerificationClosure(input: ClosureInput): ClosureAsses
   return { state: 'close_unprovable_then_finish', unprovable }
 }
 
-/**
- * The directive that replaces the blanket "do not finish" prohibition once closure is legal.
- *
- * Written as a single imperative sequence with no alternatives to weigh. A directive that
- * offers a model a choice invites it to delegate that choice — the ERESOLVE work established
- * that the hard way, when a two-option "pick one and run it now" made the model call `ask` in
- * AGENT mode, where nobody can answer.
- *
- * Returns null when the session is not closable, so the caller's ordinary path is untouched.
- */
+/** The directive that replaces the blanket "do not finish" prohibition once closure is legal. */
 export function buildClosureDirective(assessment: ClosureAssessment): string | null {
   if (assessment.state === 'not_closable') return null
 

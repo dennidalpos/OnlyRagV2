@@ -8,11 +8,7 @@ export function deriveNameFromPath(projectPath: string): string {
   return path.basename(trimmed) || trimmed || 'Workspace'
 }
 
-/**
- * Registers a project: creates it (both timestamps = now) if unseen, or -- when it already
- * exists -- preserves `addedAt` and only bumps `lastOpenedAt`. Reselecting a known project
- * must never make it look freshly added.
- */
+/** Registers a project: creates it (both timestamps = now) if unseen, or -- when it already exists -- preserves `addedAt` and only bumps `lastOpenedAt`. */
 export function upsertProject(projects: WorkspaceProject[], projectPath: string, name?: string): WorkspaceProject[] {
   if (!projectPath || !projectPath.trim()) return projects
   const normalizedPath = projectPath.trim()

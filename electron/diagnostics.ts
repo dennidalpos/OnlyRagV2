@@ -293,9 +293,7 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
   const modelSet = new Set<string>()
   const modelDetails: Record<string, { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }> = {}
 
-  // 1. Ingest models from /api/tags (also captures per-model `details` — parameter_size,
-  // quantization_level — used by hardwareRecommendationEngine.estimateModelWeightGB for
-  // accurate VRAM/disk footprint estimates instead of relying solely on the static table)
+  // 1.
   if (tagsRes.status === 'fulfilled' && tagsRes.value?.models && Array.isArray(tagsRes.value.models)) {
     for (const m of tagsRes.value.models) {
       const name = m.name || m.model
@@ -343,13 +341,7 @@ let cachedGpuTimestamp = 0
 let lastGpuSignature: string | null = null
 const GPU_CACHE_TTL_MS = 30000 // 30 seconds TTL cache for GPU process execution
 
-/**
- * Synchronous access to the last GPU snapshot captured by detectNvidiaGpu(), regardless
- * of TTL freshness. VRAM capacity doesn't change at runtime, so a slightly stale reading
- * is still correct for hardware-tier decisions — unlike detectNvidiaGpu() itself, this
- * never shells out, so callers on the hot agent-loop path (see HardwareProfileResolver)
- * can use it without an async round-trip or spawning nvidia-smi per step.
- */
+/** Synchronous access to the last GPU snapshot captured by detectNvidiaGpu(), regardless of TTL freshness. */
 export function getCachedGpuInfo(): DiagnosticsData['gpu'] | null {
   return cachedGpuResult
 }

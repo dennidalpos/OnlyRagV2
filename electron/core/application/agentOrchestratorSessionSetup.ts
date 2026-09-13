@@ -6,12 +6,7 @@ import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
 
-/**
- * Resolves the effective workspace directory for a run:
- * 1. If a valid user workspace path is provided, validates safety and creates if missing.
- * 2. If running standalone or no workspace is specified, allocates an isolated temporary
- *    per-session scratch directory in %TEMP%/onlyrag_sessions/<sessionId>.
- */
+/** Resolves the effective workspace directory for a run: 1. */
 export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspacePath' | 'isStandaloneMode' | 'sessionId'>): string | null {
   const rawPath = payload.workspacePath ? payload.workspacePath.trim() : null
   if (rawPath && !isProtectedSystemDirectory(rawPath)) {

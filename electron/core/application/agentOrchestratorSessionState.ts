@@ -126,11 +126,7 @@ export function revalidateRestoredMilestones(
   })
 }
 
-/**
- * Instantiates the loop-scoped state machines/guards/counters for a run and restores them
- * from any saved session state (resumed sessions carry stepCount, episodic memory and plan
- * milestones forward instead of starting cold).
- */
+/** Instantiates the loop-scoped state machines/guards/counters for a run and restores them from any saved session state (resumed sessions carry stepCount, episodic memory and plan milestones forward instead of starting cold). */
 export async function initializeSessionState(params: SessionStateParams): Promise<SessionState> {
   const { payload, sessionId, runIdentity, workspacePath, agentMode, userTask, settings, emitLog } = params
 

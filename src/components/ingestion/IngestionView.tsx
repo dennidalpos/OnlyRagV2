@@ -186,10 +186,7 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(({ setting
     }
   }
 
-  // Mouse-wheel page turning in single-page mode: continuing to scroll past the top/bottom
-  // edge of the current page (like a PDF viewer) advances to the prev/next page instead of
-  // doing nothing. The cooldown prevents one continuous wheel gesture from skipping several
-  // pages, since a single scroll motion fires many wheel events in quick succession.
+  // Mouse-wheel page turning in single-page mode: continuing to scroll past the top/bottom edge of the current page (like a PDF viewer) advances to the prev/next page instead of doing nothing.
   const wheelPageCooldownRef = useRef<number>(0)
   const handlePreviewWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (ing.viewMode !== 'page') return

@@ -1,40 +1,11 @@
-/**
- * Plan Compilation.
- *
- * Structured interventions pass through the same ordered compilation before execution.
- *
- * The order is load-bearing:
- *  1. normalise    — fold acceptance criteria into the deliverables they qualify, so every
- *                    surviving entry is something that can be shown done or not done.
- *  2. ensure runnable  — append the project's own check as a milestone no write can close.
- *  3. ensure scaffold — prepend only files required by the accepted greenfield stack.
- *
- * The canonical plan is never capped or merged. Turn prompts select a bounded view while
- * persistence and verification retain every intervention identity and command.
- */
+
 
 import { isCompletionMilestoneTitle, type PlanMilestone } from './planAndSolveGraph'
 import { normalizePlanFalsifiability } from './planFalsifiabilityNormalizer'
 import { extractDeliverablePaths } from './milestoneDeliverableResolver'
 import type { AgentPlan } from '../../types'
 
-/**
- * Appends the milestone a file-shaped plan can never contain: the project's own check passing.
- *
- * Ten of fifteen milestones in the observed plans say "create the file X", and a plan of that
- * shape reaches 100% by writing files. Measured on 2026-08-25: 14/15 verified, `tsc` green over
- * every file, and `vite build` emitting no JavaScript at all — every deliverable present, the
- * application dead. Nothing in the plan could contradict that, because nothing in the plan was
- * about the application working.
- *
- * Appended only when the project actually declares a check, and citing that command verbatim.
- * Inventing one would be the fabricated verification this codebase keeps removing, and the
- * planner prompt already forbids the model from doing exactly that.
- *
- * The entry names no file on purpose, so no write can close it: it closes when `update_plan`
- * runs its command and the command exits 0, or when a passing verification promotes it. It
- * carries a command, so the unprovable-milestone directive correctly leaves it alone.
- */
+/** Appends the milestone a file-shaped plan can never contain: the project's own check passing. */
 export function ensureRunnableMilestone(
   milestones: PlanMilestone[],
   verificationCommand?: string | null
@@ -102,21 +73,13 @@ export function compilePlanMilestones(
   verificationCommand?: string | null,
   workspace?: WorkspaceScaffoldFacts | null
 ): PlanMilestone[] {
-  // Closing the session is application control flow, never executable user work. Old persisted
-  // plans are still recognised by isCompletionMilestoneTitle, but new canonical revisions drop
-  // the synthetic “invoke finish” entry before normalisation and display.
+  // Closing the session is application control flow, never executable user work.
   const operationalMilestones = milestones.filter((milestone) => !isCompletionMilestoneTitle(milestone))
   const compiled = ensureRunnableMilestone(normalizePlanFalsifiability(operationalMilestones), verificationCommand)
   return ensureScaffoldMilestones(compiled, workspace)
 }
 
-/**
- * Renders the canonical executable milestones shown in Plan review.
- *
- * The model response is only source material. Compilation can add project entry requirements,
- * attach the real verification command and consolidate criteria, so displaying the raw response
- * would let the user approve a different plan from the one the agent receives.
- */
+/** Renders the canonical executable milestones shown in Plan review. */
 export function renderPlanMilestones(milestones: readonly PlanMilestone[]): string {
   return milestones
     .map((milestone) => {

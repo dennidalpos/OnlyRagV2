@@ -11,12 +11,7 @@ import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transa
 import type { ToolExecutionResult } from './agentToolExecutorService'
 import type { ToolResultProcessingContext, ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
 
-/**
- * `hasVerifiedBuild` was monotonic: any passing build kept vouching for files written long
- * afterwards, so the Definition of Done gate let a session finish on stale evidence. These
- * tests pin both halves of the replacement — a later write invalidates the build, and a build
- * that writes its own artefacts still ends the step verified.
- */
+/** `hasVerifiedBuild` was monotonic: any passing build kept vouching for files written long afterwards, so the Definition of Done gate let a session finish on stale evidence. */
 
 let tempDir: string
 

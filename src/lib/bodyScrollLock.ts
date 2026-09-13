@@ -1,15 +1,4 @@
-/**
- * Reference-counted freeze of background scrolling.
- *
- * Scrollbars are painted by the browser outside every stacking context, so a `fixed inset-0`
- * overlay never covers one: with a modal open the underlying scrollbar stayed visible AND the
- * content behind stayed scrollable. No modal in the app locked scroll, which is why the
- * project-removal dialog in Coding showed the panel's scrollbar straight through it.
- *
- * The counting is what makes this non-trivial and worth its own module: modals stack (the
- * skill hub opens the skill editor, which opens the custom-hub guide), and the first one to
- * close must not restore scrolling while another is still open.
- */
+
 
 let activeLockCount = 0
 let restoreOverflow: string | null = null

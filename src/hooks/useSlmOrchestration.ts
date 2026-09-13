@@ -1,17 +1,4 @@
-/**
- * src/hooks/useSlmOrchestration.ts
- *
- * Presentation Layer Hook — SLM Agent Studio Log Diagnostics
- *
- * Wraps window.electronAPI.agentLogsAnalyze() behind a clean React hook
- * interface with loading, error, and result state.
- *
- * Design decisions:
- *  - `lastReport` is preserved across calls so the UI can render the last
- *    known state without requiring re-fetch.
- *  - Errors are surfaced as typed `error: string | null`, never thrown,
- *    to keep the UI in full control of error presentation.
- */
+
 
 import { useState, useCallback, useRef } from 'react'
 import type { SlmLogDiagnosticReport } from '../types'

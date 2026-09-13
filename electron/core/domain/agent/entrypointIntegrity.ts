@@ -1,21 +1,4 @@
-/**
- * Entrypoint Integrity.
- *
- * Answers the one question no compiler will ever answer: does the page that starts the
- * application actually load the application?
- *
- * A typecheck reads every file the project declares and says whether the code is correct. It
- * cannot say whether anything is wired to run. Measured on 2026-08-25: `npx tsc --noEmit`
- * passed cleanly over the whole workspace and the plan reached 14/15 verified, while
- * `vite build` reported `2 modules transformed` and emitted a 0.25 kB `index.html` and no
- * JavaScript at all — because that `index.html` carried no `<script>` tag pointing at
- * `src/main.tsx`. Every component was type-correct and none of them was ever loaded.
- *
- * The file is not malformed, which is exactly why nothing catches it: it is valid HTML that
- * happens to reference nothing. A person sees it in a second; the toolchain never does.
- *
- * Pure domain: the caller supplies the HTML and whether a module entry exists on disk.
- */
+
 
 /** Entry files a bundler-based web project is expected to boot from, in preference order. */
 export const CONVENTIONAL_ENTRY_PATHS = [
@@ -32,11 +15,7 @@ export const CONVENTIONAL_ENTRY_PATHS = [
 /** `<script ... src="..."></script>`, with the src captured. Attribute order is not assumed. */
 const SCRIPT_SRC_PATTERN = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi
 
-/**
- * Every local script the page loads. Absolute URLs are ignored: a CDN tag is not this
- * project's entry, and treating it as one would silence the check for exactly the pages that
- * load a framework from elsewhere and their own code from nowhere.
- */
+/** Every local script the page loads. */
 export function extractLocalScriptSources(html: string): string[] {
   const found: string[] = []
   for (const match of (html || '').matchAll(SCRIPT_SRC_PATTERN)) {
@@ -54,14 +33,7 @@ export interface EntrypointVerdict {
   expectedEntry?: string
 }
 
-/**
- * Whether the HTML entry page loads the project's own code.
- *
- * Reports a problem only when BOTH halves are certain: the project has a conventional module
- * entry on disk, and the page references no local script at all. A page that loads some other
- * local script is left alone — the project may boot in a way this rule does not model, and a
- * false accusation here would send the model rewriting a file that was already correct.
- */
+/** Whether the HTML entry page loads the project's own code. */
 export function checkHtmlEntrypoint(html: string, entryPathsOnDisk: readonly string[]): EntrypointVerdict {
   const entry = CONVENTIONAL_ENTRY_PATHS.find((candidate) => entryPathsOnDisk.includes(candidate))
   if (!entry) return { ok: true }
@@ -69,14 +41,7 @@ export function checkHtmlEntrypoint(html: string, entryPathsOnDisk: readonly str
   return { ok: false, expectedEntry: entry }
 }
 
-/**
- * What the model is told when the page loads nothing.
- *
- * Names the exact tag, because "wire up the entrypoint" is the kind of instruction a small
- * model answers by rewriting the whole file into something else. It also states the reason the
- * check passed anyway — otherwise the model has just been told its verified project is broken,
- * with no way to reconcile the two.
- */
+/** What the model is told when the page loads nothing. */
 export function buildEntrypointDirective(htmlPath: string, expectedEntry: string): string {
   return [
     `[THE PAGE LOADS NOTHING — "${htmlPath}" DOES NOT REFERENCE THE APPLICATION]`,

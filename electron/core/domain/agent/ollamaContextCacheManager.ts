@@ -1,13 +1,4 @@
-/**
- * Decides whether an agent loop turn can reuse Ollama's `context` continuation
- * (POST /api/generate) instead of resending the full rebuilt prompt (AGT1).
- *
- * Ollama's `context` token array only produces a correct continuation when the
- * new request's prompt is an exact tail-append of what was previously sent to
- * that same model. Reuse is therefore gated on three exact-match conditions —
- * same model, unchanged stable section, and an append-only history — with a
- * safe fallback (full resend, no context) whenever any of them fails.
- */
+
 
 export interface OllamaContextBaseline {
   model: string

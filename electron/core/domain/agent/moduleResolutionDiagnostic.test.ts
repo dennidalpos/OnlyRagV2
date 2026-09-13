@@ -82,9 +82,7 @@ describe('buildModuleResolutionDirective', () => {
 
 describe('the directive names one value', () => {
   it('never offers "node", which TypeScript 7 removed', () => {
-    // Run 12 of 2026-08-25: the version directive moved the project to typescript@^7.0.2, the
-    // model took the "node" fallback this directive used to offer, and the build died on
-    // TS5108 "Option 'moduleResolution=node10' has been removed".
+    // Run 12 of 2026-08-25: the version directive moved the project to typescript@^7.0.2, the model took the "node" fallback this directive used to offer, and the build died on TS5108 "Option 'moduleResolution=node10' has been removed".
     const directive = buildModuleResolutionDirective("Cannot find module 'react'", ['react'])
 
     expect(directive).toContain('"moduleResolution": "bundler"')

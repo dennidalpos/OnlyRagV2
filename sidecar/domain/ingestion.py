@@ -25,10 +25,7 @@ from sidecar.domain.router import (
     PageRoutingStrategy
 )
 
-# Bounded concurrency for the OCR/Vision rendering phase of PDF page extraction. Kept small and
-# shared for both the local RapidOCR tier and the Ollama Vision fallback: RapidOCR could safely
-# take more, but a batch may include several pages that fall back to the single shared local
-# Ollama daemon, and overloading it risks the VRAM thrashing the rest of the architecture avoids.
+# Bounded concurrency for the OCR/Vision rendering phase of PDF page extraction.
 PDF_PAGE_RENDER_CONCURRENCY = 3
 
 _FIGURE_VISION_PROMPT = (

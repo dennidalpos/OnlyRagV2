@@ -1,11 +1,4 @@
-/**
- * Live scenario — recovery from a local named/default export mismatch.
- *
- * The compiler prints the exact replacement import for TS2614. The module's default export is
- * the intended contract, so a passing build requires the model to rewrite only the importer.
- *
- *   npx vitest run --config vitest.live.config.mts -t "TS2614"
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

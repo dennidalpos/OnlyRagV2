@@ -1,14 +1,4 @@
-/**
- * electron/core/domain/agent/pendingChangeProjection.ts
- *
- * Domain Layer — Projects what a pending file-mutating tool call WOULD write, without
- * touching the filesystem. Feeding the result to diffEngine.computeLineDiff against the
- * file's current content is what lets the approval UI show a real before/after diff
- * instead of just echoing the replacement text back at the user.
- *
- * The semantics deliberately mirror agentToolExecutorService's own handlers: a single
- * replacement substitutes the first occurrence, multi-replace applies its chunks in order.
- */
+
 
 export type PendingMutationType = 'write_file' | 'replace_chunk' | 'multi_replace' | 'delete_file'
 

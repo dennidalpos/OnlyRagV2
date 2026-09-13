@@ -66,9 +66,7 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
     })
   }, [])
 
-  // Only the messages actually near the viewport are mounted: a long-running session can
-  // accumulate hundreds of entries, and every one of them was previously kept in the DOM for
-  // the life of the session. Item heights vary a lot (a one-line badge vs expanded output).
+  // Only the messages actually near the viewport are mounted: a long-running session can accumulate hundreds of entries, and every one of them was previously kept in the DOM for the life of the session.
   const rowVirtualizer = useVirtualizer({
     count: actionLogs.length,
     getScrollElement: () => scrollContainerRef.current,

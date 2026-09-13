@@ -1,21 +1,4 @@
-/**
- * electron/core/domain/agent/diffEngine.ts
- *
- * Domain Layer — Diff parsing and computation.
- *
- * Two independent entry points, both pure and dependency-free:
- *
- *  1. `parseUnifiedDiff` turns the textual output of `git diff` into a structured,
- *     per-file / per-hunk model with add and delete counts, so the UI can render it
- *     line by line (red / green, hunk headers, per-file +/- badges) instead of dumping
- *     it into a monochrome <pre>.
- *  2. `computeLineDiff` produces the same line model from a raw before/after pair,
- *     for changes that never touch git — an agent's pending write_file or
- *     replace_file_content shown in the approval modal.
- *
- * Consumed by both processes (renderer panels and main-process metrics), mirroring
- * the existing cross-layer re-export convention in src/constants/promptPresets.ts.
- */
+
 
 import { diffLines } from 'diff'
 
@@ -79,12 +62,7 @@ function emptyFile(): DiffFileChange {
   }
 }
 
-/**
- * Parses unified diff text (`git diff`, `git diff --staged`, or any standard
- * `--- / +++ / @@` payload) into structured per-file changes.
- * Unknown or malformed sections are skipped rather than throwing: the input is
- * whatever a git binary happened to print, and a diff viewer must never crash on it.
- */
+/** Parses unified diff text (`git diff`, `git diff --staged`, or any standard `--- / +++ / @@` payload) into structured per-file changes. */
 export function parseUnifiedDiff(rawDiff: string): DiffFileChange[] {
   if (!rawDiff || typeof rawDiff !== 'string') return []
 
@@ -288,11 +266,7 @@ export interface DiffHunkGroup {
   lines: DiffLine[]
 }
 
-/**
- * Splits a flat computeLineDiff() result into independently approvable hunks: each maximal
- * run of consecutive add/del lines (context lines are never part of a hunk — they are
- * identical on both sides, so there is nothing to approve or reject about them).
- */
+/** Splits a flat computeLineDiff() result into independently approvable hunks: each maximal run of consecutive add/del lines (context lines are never part of a hunk — they are identical on both sides, so there is nothing to approve or reject about them). */
 export function groupDiffIntoHunks(lines: ReadonlyArray<DiffLine>): DiffHunkGroup[] {
   const hunks: DiffHunkGroup[] = []
   let current: DiffLine[] = []
@@ -312,12 +286,7 @@ export function groupDiffIntoHunks(lines: ReadonlyArray<DiffLine>): DiffHunkGrou
   return hunks
 }
 
-/**
- * Reconstructs the file content that results from applying only the approved hunks: context
- * lines are kept as-is, an approved hunk contributes its "after" side (its add lines), and a
- * rejected hunk contributes its "before" side (its del lines, i.e. no change). `hunks` MUST be
- * groupDiffIntoHunks(lines) for the same `lines` array — reconstruction walks both in lockstep.
- */
+/** Reconstructs the file content that results from applying only the approved hunks: context lines are kept as-is, an approved hunk contributes its "after" side (its add lines), and a rejected hunk contributes its "before" side (its del lines, i.e. */
 export function reconstructWithApprovedHunks(
   lines: ReadonlyArray<DiffLine>,
   hunks: ReadonlyArray<DiffHunkGroup>,
@@ -349,11 +318,7 @@ export function reconstructWithApprovedHunks(
   return out.join('\n')
 }
 
-/**
- * Collapses long runs of unchanged lines so a small edit in a large file doesn't render
- * thousands of untouched rows. Returns the kept lines with `gap` markers describing how
- * many lines were elided, in render order.
- */
+/** Collapses long runs of unchanged lines so a small edit in a large file doesn't render thousands of untouched rows. */
 export function collapseContext(
   lines: ReadonlyArray<DiffLine>,
   contextRadius: number = 3

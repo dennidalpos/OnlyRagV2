@@ -19,21 +19,10 @@ export type EmitLog = (
   meta?: Partial<AgentLogEntry>
 ) => void
 
-/**
- * Loop-scoped counters the response interpreter and its helpers read and advance across turns.
- * stagnationStreak is the single shared "how stuck is the model right now" counter: both the
- * write/edit loop detector and the ask auto-healing gate increment it, so a model that escapes
- * a blocked write loop by switching to "ask" doesn't get a fresh grace period -- it inherits
- * however stuck it already was.
- */
+/** Loop-scoped counters the response interpreter and its helpers read and advance across turns. */
 export interface ResponseInterpreterState {
   noToolStreak: number
-  /**
-   * Consecutive tool calls refused by parameter validation, reset by any call that parses.
-   * Counted apart from every other streak because these calls never reach the loop detector —
-   * validation rejects them first — so before this counter existed nothing on that path could
-   * escalate or terminate. See toolRejectionEscalation.ts.
-   */
+  /** Consecutive tool calls refused by parameter validation, reset by any call that parses. */
   schemaRejectionStreak: number
   /** Persistable bounded budget for equivalent invalid tool calls. */
   schemaRecoveryFailure?: RecoveryFailureState
@@ -44,17 +33,9 @@ export interface ResponseInterpreterState {
   /** Latest read hash, consumed by the next edit of that file. */
   versionedReadEvidence?: { filePath: string; contentHash: string }
   stagnationStreak: number
-  /**
-   * Consecutive loop blocks whose repeated action had actually SUCCEEDED before. Counted apart
-   * from stagnationStreak precisely so redundant-but-working calls never abandon a milestone
-   * as FAILED; bounded by REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS. See loopEscapePolicy.ts.
-   */
+  /** Consecutive loop blocks whose repeated action had actually SUCCEEDED before. */
   redundantSuccessStreak: number
-  /**
-   * Rounds of "verification failed, fix it and try again" already spent on this session.
-   * Bounded by MAX_VERIFICATION_FIX_CYCLES: a model that cannot fix the failure would otherwise
-   * spend the whole step budget rediscovering it. See verificationGatePolicy.ts.
-   */
+  /** Rounds of "verification failed, fix it and try again" already spent on this session. */
   verificationFixCycles: number
 }
 

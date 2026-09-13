@@ -14,11 +14,7 @@ interface DiffLinesViewProps {
   contextRadius?: number
 }
 
-/**
- * Renders a flat line diff: old/new line numbers, a +/- marker, and the line content,
- * green for additions and red for deletions. Shared by the git diff panel (one call per
- * hunk) and the pending-approval modal (one call for the whole before/after pair).
- */
+/** Renders a flat line diff: old/new line numbers, a +/- marker, and the line content, green for additions and red for deletions. */
 export const DiffLinesView: React.FC<DiffLinesViewProps> = ({ lines, collapse = false, contextRadius = 3 }) => {
   const entries = useMemo(
     () => (collapse ? collapseContext(lines, contextRadius) : lines.map((line) => ({ kind: 'line' as const, line }))),

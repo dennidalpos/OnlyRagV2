@@ -68,11 +68,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-orchestrator-test-'))
     vi.clearAllMocks()
-    // clearAllMocks resets call history but NOT the mockResolvedValueOnce queue, and every
-    // test here scripts a turn-by-turn sequence of LLM replies. A test that consumes fewer
-    // replies than it queued therefore leaked the remainder into the next test, which then
-    // ran against another test's script — the failures surfaced far from their cause and
-    // moved whenever the loop's step count changed. mockReset drains the queue too.
+    // clearAllMocks resets call history but NOT the mockResolvedValueOnce queue, and every test here scripts a turn-by-turn sequence of LLM replies.
     vi.mocked(AgentStreamTransport.streamCompletion).mockReset()
     vi.mocked(runProjectVerification).mockReset()
     vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
@@ -593,10 +589,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   it('never executes a verificationCommand that writes the workspace, even from a restored session', async () => {
-    // Plans parsed today drop such a command at ingestion, but a session persisted before that
-    // rule existed still carries it, and executing it is what rewrote src/App.tsx and
-    // src/pages/Tasks.tsx as UTF-16 garbage in session-1787497654743-4enx — after which the
-    // milestone was marked verified because the write had exited 0.
+    // Plans parsed today drop such a command at ingestion, but a session persisted before that rule existed still carries it, and executing it is what rewrote src/App.tsx and src/pages/Tasks.tsx as UTF-16 garbage in session-1787497654743-4enx — after which the miles
     const sessionId = 'plan-verify-unsafe-session'
     const sessionDir = path.join(tempDir, '.onlyrag', 'sessions')
     fs.mkdirSync(sessionDir, { recursive: true })
@@ -832,10 +825,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
 
     it('closes as unverifiable when the project offers no verification command', async () => {
       vi.mocked(runProjectVerification).mockResolvedValue({ hasVerificationCommand: false, status: 'unverifiable' })
-      // Three turns, because the missing-build reason is surfaced to the model once before
-      // finish is let through: the second finish is the one that closes the session. The
-      // earlier two-turn version of this test only passed because a session that ran out of
-      // scripted responses used to be reported as a success.
+      // Three turns, because the missing-build reason is surfaced to the model once before finish is let through: the second finish is the one that closes the session.
       scriptTurns(verificationWriteJson, verificationFinishJson, verificationFinishJson)
 
       const res = await runAgentOrchestratorLoop(
@@ -850,10 +840,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   })
 
   describe('a session whose model stops issuing tool calls', () => {
-    // session-1787497654743-4enx closed "Status: COMPLETED" at step 86 after three responses
-    // that did not parse as tool calls, with four milestones abandoned, four never started and
-    // finish never invoked — so the whole Definition of Done gate was skipped and the result
-    // was still reported as a success.
+    // session-1787497654743-4enx closed "Status: COMPLETED" at step 86 after three responses that did not parse as tool calls, with four milestones abandoned, four never started and finish never invoked — so the whole Definition of Done gate was skipped and the resu
     const prose = 'Everything looks complete to me, the application should work now.'
 
     it('closes the session as FAILED rather than COMPLETED', async () => {

@@ -1,27 +1,8 @@
-/**
- * Canonical system-prompt templates: ONE per feature module.
- *
- * This file used to hold a 3 x 28 matrix of per-model-family presets (84 hand-written
- * paraphrases of the same handful of directives). The paraphrases drifted: 7 of the 23 real chat
- * presets never mentioned the [INDEXED DOCUMENT CONTEXT (LanceDB)] block at all, and 9 of the 23
- * translation presets — including `generic`, the universal fallback — never asked the model to
- * preserve Markdown. Running `command-r` for chat meant the model was simply never told where the
- * documents were.
- *
- * What actually varies between Ollama models is not prose style, it is capability, and Ollama
- * reports capabilities itself (`/api/tags` -> ["completion","tools","vision"], see
- * ollamaHttpClient.ts). Adaptation therefore lives in Mustache sections keyed on capability flags,
- * not in a hand-maintained dictionary of model brands.
- */
+
 
 export type FeatureModule = 'coding' | 'chat' | 'translation' | 'images'
 
-/**
- * Tool schema block for the coding agent. Rendered as the `tools` partial and wrapped by the
- * master template in `{{^nativeToolCalling}}`, so it is dropped for models that declare the
- * native `tools` capability (AGT2: the structured schema already goes out via the `tools` API
- * parameter for those models, so repeating it in prose would double the cost for no benefit).
- */
+/** Tool schema block for the coding agent. */
 export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strictly as JSON block \`\`\`json { "tool": "tool_name", "parameters": { ... }, "explanation": "..." } \`\`\`):
 - read_file: { "filePath": "path/to/file", "startLine"?: 1, "endLine"?: 50 }
 - get_file_info: { "filePath": "path/to/file" }
@@ -53,14 +34,7 @@ export const CODING_TOOLS_BLOCK = `AVAILABLE AGENT TOOLS (Format response strict
 - ensure_tool: { "toolName": "node" | "npm" | "pnpm" | "git" | "python" | "ollama" } (installs the tool if missing; no other software can be installed)
 - finish: { "summary": "Comprehensive Markdown final report in user's language containing: 1) Implemented Features, 2) Modified/Created Files, 3) Verification Results, 4) Summary & Usage" }`
 
-/**
- * Behavioural rules for the coding agent, rendered as the `directives` partial.
- *
- * Deliberately terse. This block is resent verbatim on every single turn, so each directive costs
- * its tokens once per step: an earlier prose version ran 9.2k chars (~2050 tokens), which on an
- * 8192-token window burned a quarter of the context before any project content, and did not fit
- * the 4096-token profile at all.
- */
+/** Behavioural rules for the coding agent, rendered as the `directives` partial. */
 export const CODING_CORE_DIRECTIVES = `LANGUAGE: Write every explanation, thought and summary in the SAME language the user wrote in. Code and commands keep their own syntax.
 
 OUTPUT: Emit exactly ONE tool-call block per turn. Any thought before it: 1-2 sentences, no preamble.
@@ -81,11 +55,7 @@ EXECUTION RULES
 11b. VERIFY FOR REAL: before finishing you MUST run a build or typecheck via run_command (e.g. npm run build, npx tsc --noEmit, npm test) and it must succeed. Writing files is not verification. If the build reports a missing entrypoint, a missing dependency or a bad import, fix it and run it again.
 12. FINISH: once every milestone is verified, or as soon as the plan block states that no operational milestones remain — abandoned milestones are reported in the summary, never a reason to keep going or to ask a question. The "summary" parameter must contain the complete final report itself — implemented features, files created/modified, verification results, how to run it — never a placeholder like "compiling the report". Never finish as the first action or with 0 files modified.`
 
-/**
- * Coding master template. `{{> directives}}` and `{{> tools}}` are the two child nodes of the
- * coding branch in the configuration tree; the inverted section around the tool block is the
- * AGT2 capability gate.
- */
+/** Coding master template. */
 export const DEFAULT_CODING_PROMPT = `You are an expert AI Coding Agent. Operating in {{agentMode}} mode.
 USER INSTRUCTION: "{{userTask}}"
 WORKSPACE ROOT: {{workspacePath}}
@@ -95,17 +65,7 @@ CURRENT DATE: {{currentDate}}
 
 {{^nativeToolCalling}}{{> tools}}{{/nativeToolCalling}}`
 
-/**
- * RAG chat prompt.
- *
- * Teaches ONE branch: how to answer FROM the document context. It used to carry a second bullet
- * scripting the opposite case ("When NO documents are selected ... invite them to select a
- * document"). A small model cannot reliably pick the right branch: with llama3.2:3b and a
- * document actually attached, 4 questions out of 4 came back with that refusal script verbatim
- * while the citations panel was showing the two retrieved excerpts. The state-specific directive
- * now lives only in the dynamic block assembled per turn (useChatEngine.ts), which is the only
- * place that knows whether anything is attached.
- */
+/** RAG chat prompt. */
 export const DEFAULT_CHAT_PROMPT = `You are a helpful RAG (Retrieval-Augmented Generation) Assistant answering questions about the user's local document collection.
 
 GROUNDING & ATTACHMENT RULES:

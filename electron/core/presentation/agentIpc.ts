@@ -50,11 +50,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     return parseAgentToolCall(rawText)
   })
 
-  /**
-   * SLM Agent Studio: trigger log anomaly diagnostics analysis.
-   * Returns SlmLogDiagnosticReport with all detected anomalies
-   * (truncated JSON, VRAM thrashing, tool-calling loops).
-   */
+  /** SLM Agent Studio: trigger log anomaly diagnostics analysis. */
   ipcMain.handle('agent:logs-analyze', async (_, extraPaths?: string[]) => {
     return sidecarAppService.analyzeLogs(extraPaths)
   })
@@ -83,11 +79,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     }
   )
 
-  /**
-   * Plan Approval flow: draft a plan for the given prompt, routed through the
-   * hardware-profile Ollama runtime options and parsed via the canonical
-   * GoalDecompositionPlanner parser (replaces the renderer's raw fetch()).
-   */
+  /** Plan Approval flow: draft a plan for the given prompt, routed through the hardware-profile Ollama runtime options and parsed via the canonical GoalDecompositionPlanner parser (replaces the renderer's raw fetch()). */
   ipcMain.handle(
     'agent:plan-generate',
     async (_, prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => {
@@ -100,12 +92,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     return { success: Boolean(identity?.runId) && ollamaAppService.cancelStructuredGeneration(identity.runId) }
   })
 
-  /**
-   * Exposes the backend's persisted plan milestone state (GoalDecompositionPlanner's
-   * completion truth, written by agentOrchestratorAppService.persistCurrentState)
-   * so the frontend can reflect verified/in-progress/failed status instead of
-   * guessing progress from step counts.
-   */
+  /** Exposes the backend's persisted plan milestone state (GoalDecompositionPlanner's completion truth, written by agentOrchestratorAppService.persistCurrentState) so the frontend can reflect verified/in-progress/failed status instead of guessing progress from step */
   ipcMain.handle('agent:get-plan-state', async (_, sessionId: string, workspacePath?: string | null, planRevisionId?: string) => {
     const state = await agentSessionStateAppService.loadSessionState(sessionId, workspacePath)
     if (!state) return null
@@ -118,11 +105,7 @@ export function registerAgentIpcHandlers(winGetter: () => BrowserWindow | null) 
     }
   })
 
-  /**
-   * Seeds the approved plan's milestones into persisted session state before
-   * task execution starts, so runAgentOrchestratorLoop's restore-from-savedState
-   * path loads them into GoalDecompositionPlanner as its starting state.
-   */
+  /** Seeds the approved plan's milestones into persisted session state before task execution starts, so runAgentOrchestratorLoop's restore-from-savedState path loads them into GoalDecompositionPlanner as its starting state. */
     ipcMain.handle(
     'agent:plan-seed',
     async (_, sessionId: string, workspacePath: string | null, planMilestones: any[], userTask?: string, planRevisionId?: string) => {

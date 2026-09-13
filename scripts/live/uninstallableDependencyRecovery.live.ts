@@ -1,12 +1,4 @@
-/**
- * Live scenario — recovery after an install of an unavailable imported package fails.
- *
- * The first install is intentionally a bare package name, so registry version preflight does not
- * intercept it. Once npm reports the failure, the arbiter must order one `write_file` against the
- * importer instead of repeating the install or asking the model to edit several files.
- *
- *   npx vitest run --config vitest.live.config.mts -t "uninstallable dependency"
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

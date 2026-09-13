@@ -68,10 +68,7 @@ describe('findManifestDowngrades', () => {
   })
 
   it('applies to config-breaking packages too, unlike the stale-major report', () => {
-    // dependencyVersionReality.ts excludes typescript/tailwindcss/eslint from the "you are a
-    // major behind" report because ordering an UPGRADE there hands the model a config format it
-    // has never seen. Refusing a downgrade moves nothing, so that reasoning does not transfer:
-    // typescript@4 under a tsconfig written for 5 is exactly as destructive as react@16.
+    // dependencyVersionReality.ts excludes typescript/tailwindcss/eslint from the "you are a major behind" report because ordering an UPGRADE there hands the model a config format it has never seen.
     const found = findManifestDowngrades(requestedInstallVersions('npm i -D typescript@^4.7.3'), {
       typescript: '^5.9.2',
     })
@@ -167,9 +164,7 @@ describe('buildInstallDowngradeRefusal', () => {
   })
 
   it('carries one thing to do, and it is not "install a different version"', () => {
-    // §6.2.2: the model arrives here holding an ERESOLVE directive that ordered exactly the
-    // refused command. Re-stating the version would leave two live instructions; naming the
-    // requirer as the side that does not fit replaces the older one outright.
+    // §6.2.2: the model arrives here holding an ERESOLVE directive that ordered exactly the refused command.
     const refusal = buildInstallDowngradeRefusal(downgrade, '19.2.0')
     const imperatives = refusal.split('\n').filter((line) => /^\d\./.test(line))
     expect(imperatives).toHaveLength(2)

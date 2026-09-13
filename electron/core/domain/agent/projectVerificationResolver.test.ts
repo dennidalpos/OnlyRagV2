@@ -84,13 +84,7 @@ describe('isTerminatingScript', () => {
   })
 })
 
-/**
- * The failure this classification exists for, from the live run of 2026-08-24: `npm run build`
- * (a bare `vite build`) exited 0 reporting `2 modules transformed`, because the project's
- * `index.html` carried no script tag pointing at `src/main.tsx`. Nothing under `src/` was
- * reachable, nothing under `src/` was read — and that pass promoted thirteen milestones,
- * five of them naming files the check never opened.
- */
+/** The failure this classification exists for, from the live run of 2026-08-24: `npm run build` (a bare `vite build`) exited 0 reporting `2 modules transformed`, because the project's `index.html` carried no script tag pointing at `src/main.tsx`. */
 describe('verification coverage', () => {
   it('treats a bare bundler build as reachable-only', () => {
     expect(coverageOfScript('build', 'vite build')).toBe('entry-reachable')

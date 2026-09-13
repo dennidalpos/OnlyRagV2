@@ -165,11 +165,7 @@ def list_stored_documents() -> List[Dict[str, Any]]:
         except Exception:
             df = tbl.to_pandas()
             records = df.to_dict(orient="records")
-        # Documents ingested with fallback embeddings carry status "indexed_fallback"
-        # (see ingest_service.doc_status). Both statuses are indexed and searchable, so both
-        # are listed; only the real status distinguishes them, and the renderer already keys
-        # its degraded-quality badge off it. Filtering on "indexed" alone silently hid every
-        # fallback-embedded document from every module in the app.
+        # Documents ingested with fallback embeddings carry status "indexed_fallback" (see ingest_service.doc_status).
         listable_statuses = {"indexed", "indexed_fallback"}
         clean_records: List[Dict[str, Any]] = []
         for r in records:

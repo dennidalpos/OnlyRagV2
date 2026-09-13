@@ -1,20 +1,6 @@
 import type { HardwareProfileTier } from './hardwareProfileTiers'
 
-/**
- * Static model catalog entry, independent of any runtime hardware detection.
- * `recommendedForProfiles` replaces the old inline `isRecommended: profileTier === 'x'`
- * conditionals — the catalog itself no longer needs to know about `profileTier` at
- * all, so each tier below is plain data instead of a function body (see AGT6:
- * analyzeHardwareAndRecommend in hardwareRecommendationEngine.ts used to embed all
- * of this directly, ~700 lines in a single function).
- *
- * INVARIANT (enforced by hardwareRecommendationEngine.test.ts): a model may only be
- * listed in `recommendedForProfiles` for a profile whose safe VRAM/RAM budget can
- * actually host it — `assessModelHardwareCompatibility` must not return
- * `exceeds_vram` for that pairing. The wizard pre-selects these entries, so an
- * over-ambitious recommendation used to hand minimum-spec and even 24GB machines a
- * default model the engine itself flagged as an OOM risk.
- */
+/** Static model catalog entry, independent of any runtime hardware detection. */
 export interface RawModelCatalogEntry {
   modelName: string
   displayName: string
@@ -132,9 +118,7 @@ export const COMPACT_CODING_CATALOG: RawModelCatalogEntry[] = [
   },
 ]
 
-// 🔵 Workhorse coding models (3B - 30B). This is the curated ladder: `recommendedForProfiles`
-// here maps each hardware profile to its default coding model, and it is the ONLY catalog the
-// single-model recommendation reads (see buildCodingModelCatalog in hardwareRecommendationEngine.ts).
+// 🔵 Workhorse coding models (3B - 30B).
 export const WORKHORSE_CODING_CATALOG: RawModelCatalogEntry[] = [
   {
     modelName: 'qwen2.5-coder:7b',
@@ -1067,12 +1051,7 @@ export const LEGAL_TIER_CATALOG: RawModelCatalogEntry[] = [
   },
 ]
 
-/**
- * Parses the human-readable `sizeBytesApprox` label into GB. The catalog is deliberately
- * self-describing so this module stays dependency-free: importing `estimateModelWeightGB`
- * from hardwareRecommendationEngine.ts would create a cycle, since that module consumes
- * every catalog above. The engine test asserts the two never drift apart.
- */
+/** Parses the human-readable `sizeBytesApprox` label into GB. */
 export function parseCatalogSizeGB(sizeBytesApprox: string): number {
   const match = (sizeBytesApprox || '').trim().match(/^([\d.]+)\s*(GB|MB)$/i)
   if (!match) return Number.POSITIVE_INFINITY
@@ -1083,14 +1062,7 @@ export function parseCatalogSizeGB(sizeBytesApprox: string): number {
 
 
 
-/**
- * Every coding-capable model tag this app catalogs, as a lookup.
- *
- * The badge layer needs to answer one question per model — "is this a tag we know about, or
- * something the user pulled on their own?" — and needs to answer it for a model that is not
- * installed, so it cannot go to Ollama for it. See resolveVerificationStatus in
- * codingModelMatrix.ts, which turns this plus the live capabilities into the badge.
- */
+/** Every coding-capable model tag this app catalogs, as a lookup. */
 export const CODING_CATALOG_MODEL_NAMES: ReadonlySet<string> = new Set(
   [
     ...COMPACT_CODING_CATALOG,
@@ -1100,13 +1072,7 @@ export const CODING_CATALOG_MODEL_NAMES: ReadonlySet<string> = new Set(
   ].map((entry) => entry.modelName)
 )
 
-/**
- * The four coding catalogs merged, deduplicated, first-seen order preserved.
- *
- * The wizard needs the entries themselves (it reads `recommendedForProfiles`), not just their
- * names, and building the union at the call site is how the same list ends up assembled three
- * different ways in three different files.
- */
+/** The four coding catalogs merged, deduplicated, first-seen order preserved. */
 export function buildCodingCatalogForWizard(): RawModelCatalogEntry[] {
   const seen = new Set<string>()
   const merged: RawModelCatalogEntry[] = []

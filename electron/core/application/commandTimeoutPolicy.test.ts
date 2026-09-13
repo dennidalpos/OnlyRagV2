@@ -109,9 +109,7 @@ describe('redundant install detection', () => {
   })
 
   it('flags a request that pins an explicit version, so the redundant-install guard lets it through', () => {
-    // `npm install vite@^8.0.0` is a request to CHANGE the version. Comparing names alone made
-    // the guard answer "vite is already installed" and cancel the one command that resolves a
-    // peer conflict (observed in the ERESOLVE probe of 2026-08-24).
+    // `npm install vite@^8.0.0` is a request to CHANGE the version.
     expect(extractRequestedPackages('npm install vite@^8.0.0')).toEqual([
       { name: 'vite', hasExplicitVersion: true },
     ])

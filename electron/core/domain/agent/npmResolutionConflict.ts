@@ -1,28 +1,4 @@
-/**
- * npm Resolution Conflict (ERESOLVE).
- *
- * Turns npm's dependency-tree failure into the one thing the model needs and cannot infer:
- * which two versions are in conflict, and the concrete command that ends it.
- *
- * This is the first failure the agent hit once it could see errors at all. In two consecutive
- * live runs the model wrote a `package.json` pinning `vite@^4`, then — correctly prompted by
- * importDeclarationGate — ran `npm install @vitejs/plugin-react`, whose current major
- * peer-requires a far newer vite. npm answered with a precise, well-structured explanation:
- *
- *     npm error Found: vite@4.5.14
- *     npm error   dev vite@"^4.2.3" from the root project
- *     npm error Could not resolve dependency:
- *     npm error peer vite@"^8.0.0" from @vitejs/plugin-react@6.1.0
- *
- * and the generic auto-healing directive on top of it said "locate the failing file, syntax, or
- * command parameter" — none of which is the problem. The model re-ran the same install, failed
- * identically, and the milestone was abandoned. Nothing was wrong with a file.
- *
- * Everything the fix needs is already in that output, so it is parsed rather than guessed: the
- * version ranges in the directive below are copied verbatim from npm, never synthesised.
- *
- * Pure domain: text in, verdict out.
- */
+
 
 import { majorOf } from './dependencyVersionReality'
 
@@ -59,14 +35,7 @@ function stripNpmPrefixes(output: string): string[] {
     .map((line) => line.replace(NPM_PREFIX, '').trim())
 }
 
-/**
- * Extracts the conflict from a failed install's output, or null when the output is not an
- * ERESOLVE failure or is too incomplete to act on.
- *
- * Requires both halves — the version that is installed and the version that is demanded —
- * because a directive naming only one of them is no better than the generic message it
- * replaces.
- */
+/** Extracts the conflict from a failed install's output, or null when the output is not an ERESOLVE failure or is too incomplete to act on. */
 export function parseNpmResolutionConflict(output: string): NpmResolutionConflict | null {
   if (!output || !/ERESOLVE/i.test(output)) return null
 
@@ -113,38 +82,8 @@ function describeRequirer(conflict: NpmResolutionConflict): string {
   return version ? `${name}@${version}` : name
 }
 
-/**
- * What to tell the model when an install fails on a peer conflict.
- *
- * Written as one instruction with one fallback, never as a menu. An earlier draft laid out two
- * options and said "pick ONE and run it now"; in the live probe the model read it, understood
- * it, and then called `ask` to put the choice back to the user — quoting both options verbatim
- * in its question. In AGENT mode there is nobody to answer, so the session ended there. A
- * directive that offers a model a decision invites it to escalate the decision.
- *
- * Both escapes npm itself offers — `--force` and `--legacy-peer-deps` — install the tree anyway
- * and leave a project that fails when it runs. They are named only so the model recognises them
- * as the wrong move when it meets them in npm's own output, which is where it would otherwise
- * pick them up.
- *
- * The upgrade command carries the range exactly as npm printed it, unquoted: the model dropped
- * the version spec from a shell-quoted `pkg@"^8.0.0"` and ran a bare `npm install pkg`, which
- * changes nothing.
- */
-/**
- * The one range the command can actually carry, out of what npm printed.
- *
- * A peer requirement is often a list of alternatives — run 13 of 2026-08-25 hit
- * `eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7"` — and copying that into a command hands
- * the shell its own OR operator: `npm install eslint@^3` runs, then the shell tries to execute
- * `^4` as a program. That run ended with an empty `node_modules/.bin` and a build that could not
- * find `tsc`.
- *
- * Quoting would fix the shell and keep the ambiguity; one alternative removes both. The
- * alternative must not be below the version already in the tree: the measured React 18 case
- * turned a transitive React 16 peer into a root downgrade, which the executor then refused on
- * every turn while this directive kept ordering it.
- */
+/** What to tell the model when an install fails on a peer conflict. */
+/** The one range the command can actually carry, out of what npm printed. */
 export function installableRange(requiredRange: string, installedVersion?: string): string | null {
   const alternatives = (requiredRange || '')
     .split('||')

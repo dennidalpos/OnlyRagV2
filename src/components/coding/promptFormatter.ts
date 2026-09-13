@@ -1,17 +1,6 @@
-/**
- * src/components/coding/promptFormatter.ts
- *
- * Formats user prompts for clean and ordered visual display in the Planner modal/panel.
- * Strictly preserves all original words, tokens, and characters without altering,
- * removing, or substituting any content.
- */
 
-/**
- * Formats a user prompt string for readable and structured display in the UI.
- * - Preserves existing newlines and indentation.
- * - If single-line, intelligently inserts line breaks before inline numbered items,
- *   bullet points, step markers, or section headers without altering any words.
- */
+
+/** Formats a user prompt string for readable and structured display in the UI. */
 export function formatPromptForDisplay(rawPrompt: string | null | undefined): string {
   if (!rawPrompt) return ''
 

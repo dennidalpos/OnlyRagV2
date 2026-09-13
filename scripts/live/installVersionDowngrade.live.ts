@@ -1,11 +1,4 @@
-/**
- * Live scenario — pre-execution rejection of a dependency major downgrade.
- *
- * The manifest already declares Vite 5. The requested Vite 4 install must be blocked before
- * npm runs, so the test proves the command guard rather than a later recovery from a damaged tree.
- *
- *   npx vitest run --config vitest.live.config.mts -t "version downgrade"
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

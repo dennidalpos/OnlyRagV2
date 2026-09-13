@@ -67,13 +67,7 @@ export function sanitizePowerShellCommand(cmd: string): string {
   return clean
 }
 
-/**
- * Scans a chunk of shell output for a pattern indicating the process is blocked on interactive
- * input (a `[y/n]` confirmation, a password prompt, etc.). Returns the matched pattern, or null
- * if the chunk looks like normal output. Used by persistentPowerShellSession.ts to abort a
- * `run_command` invocation immediately instead of waiting out its full timeout — no human is
- * present to answer the prompt in the autonomous agent loop.
- */
+/** Scans a chunk of shell output for a pattern indicating the process is blocked on interactive input (a `[y/n]` confirmation, a password prompt, etc.). */
 export function detectInteractivePrompt(outputChunk: string): RegExp | null {
   for (const pattern of INTERACTIVE_PATTERNS) {
     if (pattern.test(outputChunk)) return pattern

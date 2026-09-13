@@ -41,30 +41,8 @@ export function majorOf(range: string): number | null {
   return match ? Number(match[1]) : null
 }
 
-/**
- * What the registry says about what the manifest declares.
- *
- * A package the registry could not be reached about is reported as neither: an unreachable
- * network must never present as "this package does not exist".
- */
-/**
- * Packages whose major bump rewrites the configuration, not just the version string.
- *
- * Reporting these backfires, and two runs measured it. Run 12 and run 18 of 2026-08-25 both
- * took `typescript` to 7 on this directive's advice and then died in `tsconfig.json`:
- * `TS5108 Option 'moduleResolution=node10' has been removed`, `TS5102 Option 'baseUrl' has been
- * removed`. The model writes the config it learned, which predates the compiler it was just
- * told to install, and no amount of retrying teaches it the new shape — run 18 rewrote
- * `tsconfig.json` seventeen times and finished 1/14.
- *
- * So the rule follows the evidence rather than the tidy principle: report a stale major only
- * where the fix really is the number. `tailwindcss` is here for the same reason — v4 replaced
- * the directive-and-config model wholesale — and `eslint` for flat config. Runtime libraries
- * stay reported, because there the version IS the whole change.
- *
- * This is a knowledge-cutoff problem, not a version problem, and it is the honest boundary of
- * what this directive can fix.
- */
+/** What the registry says about what the manifest declares. */
+/** Packages whose major bump rewrites the configuration, not just the version string. */
 const CONFIG_BREAKING_ON_MAJOR = new Set(['typescript', 'tailwindcss', 'eslint'])
 
 export function findVersionReality(declared: DeclaredDependency[], facts: RegistryFact[]): VersionRealityFindings {
@@ -94,19 +72,7 @@ export function findVersionReality(declared: DeclaredDependency[], facts: Regist
   return findings
 }
 
-/**
- * One instruction, and the non-existent package wins when both are present.
- *
- * Ordering matters for the reason §5.6 established: a message carries one instruction for now.
- * An invented package blocks every install in the same command, so it is dealt with first; the
- * stale versions are still declared afterwards and will be reported again.
- *
- * The second line of each directive says what NOT to do, never a second thing to do. The first
- * draft ended with *"Then install again, so node_modules matches"* — two imperatives in one
- * message, the exact defect this codebase has removed four times — and run 14 of 2026-08-25
- * shows the model doing the cheaper second one: `npm install` repeated until the loop guard
- * aborted the session at step 21, 0/12, with the manifest never rewritten.
- */
+/** One instruction, and the non-existent package wins when both are present. */
 export function buildVersionRealityDirective(findings: VersionRealityFindings): string | null {
   if (findings.nonexistent.length > 0) {
     const names = findings.nonexistent

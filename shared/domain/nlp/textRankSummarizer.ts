@@ -1,8 +1,4 @@
-/**
- * Standard Graph-Based NLP TextRank / LexRank Extractive Summarizer.
- * Implements Mihalcea & Tarau (2004) TextRank algorithm with PageRank power iteration
- * over sentence similarity graphs across IT, EN, ES, FR, DE.
- */
+
 
 export interface TextRankOptions {
   /** Target number of summary sentences to extract (default: 3) */

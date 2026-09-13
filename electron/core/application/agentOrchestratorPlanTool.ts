@@ -35,16 +35,7 @@ export interface UpdatePlanToolContext {
   signal?: AbortSignal
 }
 
-/**
- * Handles the orchestrator-level `update_plan` pseudo-tool: the model's explicit handle on
- * plan progression. A model declaring a milestone "verified" is just self-reported prose
- * unless the milestone carries a verificationCommand — when it does, this runs that command
- * for real (through the workspace's persistent shell) instead of trusting the claim, and lets
- * the actual exit code decide the status. Closes the loophole where a model marks its own
- * work verified with no check.
- *
- * Always resolves (never throws); the caller's loop should `continue` after awaiting this.
- */
+/** Handles the orchestrator-level `update_plan` pseudo-tool: the model's explicit handle on plan progression. */
 export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<void> {
   const { parsedTool, goalPlanner, workspacePath, emitLog, emitStepUpdate, episodicCompactor, persistCurrentState, settings, sessionId, stepCount, maxStepsLabel } = ctx
 
@@ -70,9 +61,7 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
 
     if (nextStatus === 'verified' && targetMilestone?.verificationCommand) {
       const verifyCmd = targetMilestone.verificationCommand
-      // Re-checked here and not only at plan ingestion: a plan can arrive from a restored
-      // session or from the user editing the checklist in the UI, and executing a mutating
-      // "verification" is what rewrote the agent's own source in session-1787497654743-4enx.
+      // Re-checked here and not only at plan ingestion: a plan can arrive from a restored session or from the user editing the checklist in the UI, and executing a mutating "verification" is what rewrote the agent's own source in session-1787497654743-4enx.
       const safety = checkVerificationCommandSafety(verifyCmd)
       const secCheck = safety.isSafe ? checkCommandSecurity(verifyCmd, workspacePath) : null
 
@@ -96,9 +85,7 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
         )
         const passed = verifyRes.code === 0 && !verifyRes.timedOut
         effectiveStatus = passed ? 'verified' : 'failed'
-        // Both streams, not whichever is non-empty: a failed verification writes its banner to
-        // stdout and its reason to stderr, and selecting one hands the model a note that says
-        // the milestone failed without saying why.
+        // Both streams, not whichever is non-empty: a failed verification writes its banner to stdout and its reason to stderr, and selecting one hands the model a note that says the milestone failed without saying why.
         const outputTail = DiagnosticOutputReducer.composeCommandOutput(verifyRes.stdout, verifyRes.stderr, verifyRes.code).slice(-1500)
         effectiveNotes = passed
           ? promotionNote(verifyCmd)
@@ -109,10 +96,7 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       }
     }
 
-    // A refused proof is its own answer, handled before the status machinery: the milestone
-    // keeps the status it had, so routing this through resolveMilestoneUpdate would come back
-    // as a "no-op" rejection and the model would never learn that its declared verification
-    // is the problem. The note goes on the milestone so the plan says so too.
+    // A refused proof is its own answer, handled before the status machinery: the milestone keeps the status it had, so routing this through resolveMilestoneUpdate would come back as a "no-op" rejection and the model would never learn that its declared verification
     if (refusedVerification && targetMilestone) {
       updateFailed = true
       goalPlanner.updateMilestone(targetMilestone.id, targetMilestone.status, refusedVerification.note)
@@ -122,8 +106,6 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
       planLog = `🚫 Verifica rifiutata senza eseguirla: ${refusedVerification.command}`
     } else {
       // Evidence on disk outranks the model's self-report: see milestoneUpdateAuthority.ts.
-      // Checked after the verificationCommand run above, so a command that genuinely failed can
-      // still record a failure, and before the write, so a rejected update never lands.
       const probe = workspacePath ? createWorkspaceDeliverableProbe(workspacePath) : null
       const authorityVerdict = targetMilestone
         ? resolveMilestoneUpdate({

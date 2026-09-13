@@ -45,9 +45,7 @@ describe('parseImageNameFromTasklist', () => {
   })
 
   it('treats the "no tasks are running" notice as no process, in any locale', () => {
-    // Verified against the real tool on this machine: an Italian Windows answers
-    // "Informazioni: nessuna attività...", so matching the English "INFO:" would miss it.
-    // Neither form is quoted, which is what the parser actually keys on.
+    // Verified against the real tool on this machine: an Italian Windows answers "Informazioni: nessuna attività...", so matching the English "INFO:" would miss it.
     expect(parseImageNameFromTasklist('INFO: No tasks are running which match the specified criteria.')).toBeNull()
     expect(parseImageNameFromTasklist('Informazioni: nessuna attività in esecuzione corrispondente ai\ncriteri specificati.')).toBeNull()
   })

@@ -1,25 +1,4 @@
-/**
- * Live scenario — recovery from an npm peer-version conflict.
- *
- * A focused probe rather than a whole task, because the conflict has to be unavoidable to
- * prove anything. Two earlier attempts failed to test what they meant to: given a manifest
- * that merely *declared* a conflicting pair, the model rewrote package.json and the conflict
- * disappeared before npm ever saw it.
- *
- * So vite@4 is really installed first, and the task names an explicit plugin version that
- * peer-requires a much newer vite. Now no rewrite of the manifest can dodge it.
- *
- * What to look for in logs/coding_agent_audit.log:
- *   - `[DEPENDENCY VERSION CONFLICT — ERESOLVE]` appears (npmResolutionConflict.ts fired)
- *   - the NEXT command the model runs is the upgrade the directive named
- *   - no `--force` / `--legacy-peer-deps` among the executed commands
- * and in this file's own output: VITE_INSTALLED moved off 4.5.14, PLUGIN_INSTALLED is present.
- *
- * Before the directive existed the model called `ask` here and the session ended; with a
- * two-option "pick one" wording it did the same. See buildNpmResolutionDirective.
- *
- *   npx vitest run --config vitest.live.config.mts -t "eresolve"
- */
+
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'

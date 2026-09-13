@@ -88,13 +88,7 @@ describe('promotionNote', () => {
   })
 })
 
-/**
- * live-full-task, 2026-08-24: milestone m-6 was "Configure Tailwind CSS in `postcss.config.js`
- * and `tailwind.config.js`". The model wrote `postcss.config.js` at step 19 and rewrote that
- * same file at steps 20, 21, 22, 23, 25, 27, 28 and 29. `tailwind.config.js` was never written
- * in the whole fifty-step run. The system knew which file was missing at every one of those
- * steps and never said so.
- */
+/** live-full-task, 2026-08-24: milestone m-6 was "Configure Tailwind CSS in `postcss.config.js` and `tailwind.config.js`". */
 describe('partialDeliveryDirective', () => {
   it('names the missing file, not just the fact that something is missing', () => {
     const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
@@ -115,19 +109,7 @@ describe('partialDeliveryDirective', () => {
     expect(directive).toContain('"postcss.config.js" is on disk with real content')
   })
 
-  /**
-   * This text is a tool result, so it is replayed in the history block for as long as it
-   * survives trimming, while the plan block is rebuilt from live state every turn. In session
-   * live-full-task of 2026-08-25T12:11 the old wording forbade rewriting
-   * "src/pages/DashboardPage.tsx" and threatened a block, while the active plan block ordered
-   * exactly that rewrite because the file imported a package that does not exist. The model
-   * did not touch the file for the whole window the forbidding text survived, and rewrote it
-   * fifteen steps after it aged out.
-   *
-   * So: state what was measured, and nothing else. The probe establishes that a file exists
-   * with non-placeholder content — not that its content is correct — and whether a rewrite is
-   * blocked belongs to the loop detector, not to this milestone.
-   */
+  /** This text is a tool result, so it is replayed in the history block for as long as it survives trimming, while the plan block is rebuilt from live state every turn. */
   it('claims neither that the delivered file is correct nor that a rewrite will be blocked', () => {
     const directive = partialDeliveryDirective('m-6', 'postcss.config.js', ['tailwind.config.js'])
     expect(directive).not.toContain('already correct')
@@ -149,14 +131,7 @@ describe('partialDeliveryDirective', () => {
   })
 })
 
-/**
- * The half of the churn the no-op detector and the partial-delivery directive both miss: a
- * REAL rewrite of a milestone that was already complete. Live run of 2026-08-24, `src/main.tsx`
- * written at step 25 and rewritten at 27, 28, 34 and 37 with different content every time —
- * 617, 379, 368, 262 and 529 characters, the shortest of them a literal
- * `// TODO: Implement main application logic` over working code. The model was told
- * `Successfully wrote file` each time and nothing else.
- */
+/** The half of the churn the no-op detector and the partial-delivery directive both miss: a REAL rewrite of a milestone that was already complete. */
 describe('redeliveredMilestoneDirective', () => {
   it('says the milestone was already complete and that the rewrite moved nothing', () => {
     const directive = redeliveredMilestoneDirective('m-5', 'src/main.tsx', null)

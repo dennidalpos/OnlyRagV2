@@ -49,13 +49,7 @@ const MUTATING_TOOLS_REQUIRING_ASK_APPROVAL = [
   'ensure_tool',
 ]
 
-/**
- * Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action
- * than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of
- * agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mode and are
- * only approval-gated in ASK mode below). PLAN mode never reaches this point for any tool
- * (handled by the caller's early return), so no special-casing is needed for it here.
- */
+/** Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mo */
 async function gateGitCommit(ctx: ToolGateContext): Promise<AgentToolCall | null> {
   const { parsedTool, episodicCompactor, emitLog, requestApproval, stepCount } = ctx
   let preview
@@ -169,12 +163,7 @@ function denyFsm(ctx: ToolGateContext) {
   emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
 }
 
-/**
- * Runs, in order: the always-on git_commit approval gate, the ASK-mode mutating-tool approval
- * gate, then the FSM tool-permission gate (skipped for a tool just explicitly approved by
- * either gate above). Mirrors the exact gate ordering from the original inline loop body —
- * see the gate doc-comments above for why each one must run where it does.
- */
+/** Runs, in order: the always-on git_commit approval gate, the ASK-mode mutating-tool approval gate, then the FSM tool-permission gate (skipped for a tool just explicitly approved by either gate above). */
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
   if (ctx.allowedToolsForTurn && !ctx.allowedToolsForTurn.includes(ctx.parsedTool.tool)) {
     const allowed = ctx.allowedToolsForTurn.join(', ') || 'none'

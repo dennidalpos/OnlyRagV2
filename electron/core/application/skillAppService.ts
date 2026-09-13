@@ -109,13 +109,7 @@ export class SkillAppService {
     return this.listHubSkillsBySource('official-core', workspaceRoot, forceRefresh)
   }
 
-  /**
-   * Every skill offered by EVERY configured hub source, deduplicated by name with the
-   * first source in the user's ordering winning. Used by the auto-discovery path in
-   * getMatchedSkills: restricting that search to 'official-core' meant hubs the user had
-   * deliberately added were never considered for auto-install.
-   * A source that fails to fetch is skipped, never fatal to the others.
-   */
+  /** Every skill offered by EVERY configured hub source, deduplicated by name with the first source in the user's ordering winning. */
   async listHubSkillsAcrossSources(workspaceRoot?: string | null, forceRefresh = false): Promise<HubSkillItem[]> {
     const sources = await customHubRepository.listSources()
     if (sources.length === 0) return []
@@ -333,11 +327,7 @@ export class SkillAppService {
     return skillRepository.deleteSkill(skillId, workspaceRoot)
   }
 
-  /**
-   * Decides whether an auto-discovered hub skill may be installed. In 'prompt' mode the
-   * decision belongs to the user: without a confirmation channel the install is skipped
-   * rather than silently performed as if the mode were 'auto'.
-   */
+  /** Decides whether an auto-discovered hub skill may be installed. */
   private async confirmHubInstall(
     hubMatch: { item: HubSkillItem; score: number },
     autoInstallMode: 'disabled' | 'prompt',

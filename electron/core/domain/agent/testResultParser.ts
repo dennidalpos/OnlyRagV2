@@ -1,11 +1,4 @@
-/**
- * Parses raw test-runner stdout/stderr into a structured pass/fail result,
- * instead of the agent having to interpret raw terminal text through
- * heuristics in DiagnosticOutputReducer (see run_tests / AGT8). Recognizes
- * the summary line formats of the most common JS and Python test runners;
- * falls back to a generic exit-code-only result when none match, so an
- * unrecognized runner never silently reports a wrong pass/fail count.
- */
+
 
 export type TestFramework = 'vitest' | 'jest' | 'pytest' | 'mocha' | 'unknown'
 
@@ -68,11 +61,7 @@ function matchMocha(output: string): TestRunResult | null {
   return buildResult('mocha', passed, failed, passed + failed)
 }
 
-/**
- * Parses combined stdout/stderr from a test command into a structured result.
- * Tries each known framework's summary format in turn; if none match, falls
- * back to reporting success purely from the process exit code.
- */
+/** Parses combined stdout/stderr from a test command into a structured result. */
 export function parseTestRunOutput(rawOutput: string, exitCode: number): TestRunResult {
   const matched = matchVitest(rawOutput) || matchJest(rawOutput) || matchPytest(rawOutput) || matchMocha(rawOutput)
   if (matched) return matched

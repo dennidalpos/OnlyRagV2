@@ -1,28 +1,4 @@
-/**
- * Shared plumbing for live agent runs.
- *
- * A live run drives `runAgentOrchestratorLoop` exactly as the renderer does, but with no
- * Electron window and no UI: the orchestrator accepts `win: null`, and every repository that
- * needs `app.getPath('userData')` already falls back to `<cwd>/userdata_dev` outside Electron.
- * That makes the whole agent loop observable from a terminal and suitable for regression
- * verification of the agent guards.
- *
- * Three things are easy to get wrong here, and each one silently produces a run that proves
- * nothing:
- *
- *  1. Settings are NOT loaded from disk by the orchestrator. `buildDefaultAgentSettings()` is
- *     used whenever the payload carries none, and its default model is `llama3.2` — which is
- *     not an installed tag, so every turn 404s and the session burns its whole step budget
- *     doing nothing. `loadRealSettings()` below reads the same file the app uses.
- *  2. A plan does not appear by itself, and the UI's flow is FOUR steps, not two:
- *     `agent:plan-interview` -> `agent:plan-enrich-prompt` -> `agent:plan-generate` ->
- *     `agent:plan-seed`, and only then the agent runs against the same sessionId. A run
- *     without that sequence executes with no plan at all; a run that skips only the first two
- *     steps executes against a prompt no user would have submitted (see seedGeneratedPlan).
- *  3. Anything under `electron/**` matching `*.test.ts` is collected by the normal suite. Live
- *     scenarios therefore live here, are named `*.live.ts`, and run under
- *     vitest.live.config.mts.
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -37,11 +13,7 @@ import { codingAgentLogger } from '../../electron/core/infrastructure/logging/co
 
 const LIVE_RUN_SNAPSHOT_ROOT = path.join(os.homedir(), 'Desktop', 'onlyrag_live_snapshots')
 
-/**
- * Copies both audit-log generations before a later run or workspace cleanup can remove them.
- * The destination is deliberately outside the repository and app log directories: clean_workspace.ps1
- * may remove either source, but must not erase the evidence produced by an earlier live run.
- */
+/** Copies both audit-log generations before a later run or workspace cleanup can remove them. */
 export function snapshotLiveAuditLogs(args: {
   sessionId: string
   label: string
@@ -90,13 +62,7 @@ export function resetWorkspace(workspacePath: string): void {
   }
 }
 
-/**
- * How the harness answers the clarification interview, since no human is present.
- *
- * `recommended` takes the option the model itself marked as the best default, which is what a
- * user clicking through the wizard most often does. `skip` bypasses the interview entirely and
- * reproduces the OLD harness behaviour — kept only so a scenario can isolate the difference.
- */
+/** How the harness answers the clarification interview, since no human is present. */
 export type InterviewPolicy = 'recommended' | 'skip'
 
 export interface SeededPlan {
@@ -107,21 +73,7 @@ export interface SeededPlan {
   answers: UserInterviewAnswer[]
 }
 
-/**
- * Reproduces the UI's plan flow END TO END, which is four steps and not two.
- *
- * The renderer calls `agent:plan-interview`, `agent:plan-enrich-prompt`, `agent:plan-generate`
- * and `agent:plan-seed`, in that order. This harness used to call only the third and fourth,
- * so the planner received the RAW prompt and every live run measured a flow no user executes.
- *
- * It matters for what the runs then show. In the observed sessions the model invented its own
- * router, its own postcss setup and its own folder layout, and several of the rewrite loops
- * started exactly there — those are the choices the interview exists to settle before a single
- * milestone is drafted.
- *
- * The interview is genuinely optional: the same deterministic policy used by the renderer
- * skips model inference when the request contains no unresolved choice.
- */
+/** Reproduces the UI's plan flow END TO END, which is four steps and not two. */
 export async function seedGeneratedPlan(args: {
   sessionId: string
   workspacePath: string
@@ -162,9 +114,7 @@ export async function seedGeneratedPlan(args: {
     throw new Error(`Plan generation failed: ${plan.error || 'unknown error'}`)
   }
 
-  // The ENRICHED prompt is seeded as the session's task, not the original: the orchestrator
-  // replays it every turn, and a plan drafted against decisions the agent never sees would
-  // have it re-deciding them mid-run.
+  // The ENRICHED prompt is seeded as the session's task, not the original: the orchestrator replays it every turn, and a plan drafted against decisions the agent never sees would have it re-deciding them mid-run.
   await agentSessionStateRepository.seedPlanMilestones(
     args.sessionId,
     args.workspacePath,
@@ -191,15 +141,7 @@ export function listWorkspaceFiles(workspacePath: string): string[] {
   return out.sort()
 }
 
-/**
- * The state the orchestrator itself persisted for this run.
- *
- * Written by `persistCurrentState()` in agentOrchestratorSessionPersistence.ts — on the first
- * step, every fifth step, after every mutating tool call, and unconditionally on every exit
- * path — so the file on disk always describes the run that just ended. It is the only
- * observation channel a scenario needs: step budget, tool trajectory and plan state are all
- * projections of it, and reading it costs nothing.
- */
+/** The state the orchestrator itself persisted for this run. */
 function readSessionState(workspacePath: string, sessionId: string): Partial<SavedAgentSessionState> {
   const statePath = path.join(workspacePath, '.onlyrag', 'sessions', `.agent_state_${sessionId}.json`)
   if (!fs.existsSync(statePath)) return {}
@@ -217,20 +159,8 @@ export function readFinalMilestones(workspacePath: string, sessionId: string): P
   return readSessionState(workspacePath, sessionId).planMilestones || []
 }
 
-/**
- * The orchestrator's own end-of-loop summaries, returned ONLY when the model never closed
- * the session itself (agentOrchestratorAppService.ts, end of `runAgentOrchestratorLoop`).
- * `handleFinishTool` returns the model's report instead — or `Task completed successfully.`
- * when the call carried none — so these two literals separate "the loop ran out" from
- * "the agent said it was done".
- */
-/**
- * What a run actually delivered: milestone evidence and the application-owned completion
- * status, plus the context needed to read a red run.
- *
- * Everything comes from persisted session state and the loop summary. The audit log is append-only
- * and shared between runs, so it is not used for per-run assertions.
- */
+/** The orchestrator's own end-of-loop summaries, returned ONLY when the model never closed the session itself (agentOrchestratorAppService.ts, end of `runAgentOrchestratorLoop`). */
+/** What a run actually delivered: milestone evidence and the application-owned completion status, plus the context needed to read a red run. */
 export interface LiveRunMetrics {
   stepsUsed: number
   maxSteps: number
@@ -288,14 +218,7 @@ export function readRunMetrics(args: {
   }
 }
 
-/**
- * One-line-per-fact dump, so a scenario's console output is diffable between runs.
- *
- * Returns the metrics it printed. A scenario asserts on THIS object rather than reading the
- * state file a second time, so the numbers a failure is judged on are the same ones the dump
- * above it shows — and the dump is printed before any assertion runs, so a red run still says
- * how red it is.
- */
+/** One-line-per-fact dump, so a scenario's console output is diffable between runs. */
 export function reportRun(args: {
   label: string
   workspacePath: string

@@ -6,20 +6,7 @@ import {
   type ModelVerificationStatus,
 } from '../../services/codingModelMatrix'
 
-/**
- * The badges for one model.
- *
- * The settings panel used to show a model's tag and nothing else, so choosing between
- * `qwen2.5-coder:7b` and `deepseek-coder:6.7b` meant knowing the difference already. Every
- * number rendered here is READ, never estimated: capabilities, context length, parameter size
- * and quantization all come from Ollama's own `/api/tags`, and a field Ollama does not report
- * is simply not drawn. There is no placeholder and no plausible-looking default — a made-up
- * context length would be worse than an absent one, because the user would act on it.
- *
- * The verification badge is the one that carries a promise, so it is the one held to evidence:
- * `verified` renders only for a model listed in codingModelMatrix.ts with a live run recorded
- * behind it, and the tooltip shows that run, its date and what it failed to do.
- */
+/** The badges for one model. */
 
 interface ModelBadgeStripProps {
   modelName: string

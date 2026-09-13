@@ -1,10 +1,4 @@
-/**
- * src/services/soundEffectsService.ts
- *
- * Lightweight, zero-dependency audio feedback service built on the Web Audio API.
- * Synthesizes non-intrusive sound cues for agent execution events (errors, interactive prompts, completions).
- * Runs completely offline and requires 0 asset downloads.
- */
+
 
 export type SoundEffectType = 'error' | 'interactive' | 'completion' | 'step'
 

@@ -267,10 +267,7 @@ describe('AgentActionLoopDetector Unit Tests', () => {
     })
 
     describe('rewriting one file with different content each time', () => {
-      // The file-edit thrashing rule fires on the TARGET, not the fingerprint, so every one of
-      // these calls is a fresh signature. classifyRepeatOutcome answered 'unknown', the
-      // redundant-success exemption never applied, and m-3 and m-4 of
-      // session-1787497654743-4enx were abandoned as FAILED over writes that had all landed.
+      // The file-edit thrashing rule fires on the TARGET, not the fingerprint, so every one of these calls is a fresh signature.
       const editCall = (content: string): AgentToolCall => ({
         tool: 'write_file',
         parameters: { filePath: 'src/styles/globals.css', content },

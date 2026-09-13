@@ -27,13 +27,7 @@ function forbiddenFragments(line: string): string[] {
   return fragments
 }
 
-/**
- * Checks generated source against literal, explicit prohibitions in the active skill block.
- *
- * This intentionally does not infer rules from prose. Only backticked fragments following
- * DO NOT / MUST NOT / NEVER are enforceable; recommendations and inactive skills remain prompt
- * guidance. Documentation files may quote legacy examples and are outside generated-code scope.
- */
+/** Checks generated source against literal, explicit prohibitions in the active skill block. */
 export function validateSkillAdherence(
   filePath: string,
   generatedContent: string,

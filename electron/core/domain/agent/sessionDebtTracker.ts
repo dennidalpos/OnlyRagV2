@@ -18,19 +18,7 @@ function listSection(heading: string, items: readonly string[]): string[] {
   return ['', heading, ...shown]
 }
 
-/**
- * The report a user gets when a session is stopped by a guard rather than by the model's own
- * `finish` call.
- *
- * These paths used to surface the guard's internal `suggestedAction` — the sentence written to
- * steer the MODEL — as the session's final summary. In coding_agent_audit.log
- * session-1787562597025-q8a5 the user's whole account of a 45-step run was "Forcing execution
- * pause. Proceed immediately to applying file changes or call finish tool.": an instruction
- * addressed to someone else, naming no milestone, no file and no cause.
- *
- * Everything here is already known at the moment of the stop. Not producing it was the only
- * thing missing.
- */
+/** The report a user gets when a session is stopped by a guard rather than by the model's own `finish` call. */
 export function compileSessionStopSummary(report: SessionStopReport): string {
   const lines: string[] = [
     `⛔ Sessione interrotta automaticamente al passo ${report.stepCount}.`,
@@ -121,10 +109,7 @@ export class SessionDebtTracker {
     if (this.data.unresolvedIssues.length > 0) {
       this.data.unresolvedIssues.forEach((issue) => lines.push(`- [!] **BLOCKER/DEBT:** ${issue}`))
     } else if (this.data.nextSteps.length > 0) {
-      // "None reported (all verified)" used to print whenever no milestone carried the `failed`
-      // status — which is not the same thing as being done. In session-1787562597025-q8a5 the
-      // tracker made that claim over a failed run with fourteen of fifteen milestones still
-      // open, because none of them had been explicitly marked failed. Open work is debt.
+      // "None reported (all verified)" used to print whenever no milestone carried the `failed` status — which is not the same thing as being done.
       lines.push(
         `- [!] No explicit blocker was recorded, but ${this.data.nextSteps.length} milestone(s) are still open — see section 4.`
       )
@@ -147,10 +132,7 @@ export class SessionDebtTracker {
   }
 
   public compilePromptBlock(): string {
-    // Gate on what this block actually renders. summaryText used to count as content, but
-    // nothing below prints it -- and parseTrackerMarkdown sets it to the whole file, so any
-    // tracker on disk produced a bare "### PERSISTENT SESSION TRACKER" heading with nothing
-    // under it in every single turn's prompt (see coding_agent_audit.log, every step).
+    // Gate on what this block actually renders.
     if (this.data.completedTasks.length === 0 && this.data.unresolvedIssues.length === 0) {
       return ''
     }
@@ -169,10 +151,7 @@ export class SessionDebtTracker {
       this.data.completedTasks.forEach((task) => lines.push(`- [x] ${task}`))
     }
 
-    // nextSteps is deliberately NOT rendered here. It is the list of still-pending milestones,
-    // which the prompt already carries verbatim in the STRUCTURED EXECUTION PLAN block - echoing
-    // it a second time cost ~1.5k chars per turn to tell the model something it had just read.
-    // It stays in the persisted SESSION_TRACKER.md (compileTrackerMarkdown) for session resume.
+    // nextSteps is deliberately NOT rendered here.
 
     return lines.join('\n')
   }

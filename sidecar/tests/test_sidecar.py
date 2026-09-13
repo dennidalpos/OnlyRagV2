@@ -606,10 +606,7 @@ def test_reciprocal_rank_fusion_k60():
 
     rrf = reciprocal_rank_fusion(dense_ranks, sparse_ranks, k=60)
 
-    # chunk_1: 1/(60+1) + 1/(60+2) = 1/61 + 1/62 = 0.016393 + 0.016129 = 0.032522
-    # chunk_2: 1/(60+2) + 1/(60+1) = 0.032522
-    # chunk_3: 1/(60+3) = 1/63 = 0.015873
-    # chunk_4: 1/(60+3) = 1/63 = 0.015873
+    # chunk_1: 1/(60+1) + 1/(60+2) = 1/61 + 1/62 = 0.016393 + 0.016129 = 0.032522 chunk_2: 1/(60+2) + 1/(60+1) = 0.032522 chunk_3: 1/(60+3) = 1/63 = 0.015873 chunk_4: 1/(60+3) = 1/63 = 0.015873
     assert pytest.approx(rrf["chunk_1"], rel=1e-3) == (1/61 + 1/62)
     assert pytest.approx(rrf["chunk_2"], rel=1e-3) == (1/61 + 1/62)
     assert pytest.approx(rrf["chunk_3"], rel=1e-3) == (1/63)

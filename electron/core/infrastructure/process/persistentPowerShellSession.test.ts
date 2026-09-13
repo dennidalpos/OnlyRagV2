@@ -47,11 +47,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
   it('returns the failure reason on stderr alongside the banner the command wrote to stdout', async () => {
     session = new PersistentPowerShellSession(process.cwd())
 
-    // Pins the contract the executor now depends on: BOTH streams come back populated. This
-    // session already honoured it — the reason every failing `npm run build` in
-    // session-1787562597025-q8a5 reached the model as a bare exit code was the caller
-    // selecting one stream (`stdout || stderr`), not the shell dropping the other. Locking it
-    // here keeps that fix from being undone one layer down.
+    // Pins the contract the executor now depends on: BOTH streams come back populated.
     const res = await session.execute('Write-Output "BANNER_ON_STDOUT"; Write-Error "REASON_ON_STDERR"')
 
     expect(res.stdout).toContain('BANNER_ON_STDOUT')
@@ -63,9 +59,7 @@ describe('PersistentPowerShellSession Unit Tests', () => {
     session = new PersistentPowerShellSession(process.cwd())
 
     const startedAt = Date.now()
-    // Emits a recognizable interactive-prompt pattern, then would hang on Start-Sleep if the
-    // guard did not abort first — a large timeoutMs proves the abort is prompt-triggered, not
-    // a coincidental timeout.
+    // Emits a recognizable interactive-prompt pattern, then would hang on Start-Sleep if the guard did not abort first — a large timeoutMs proves the abort is prompt-triggered, not a coincidental timeout.
     const res = await session.execute(
       'Write-Output "Overwrite existing file? [y/n]"; Start-Sleep -Seconds 30',
       undefined,

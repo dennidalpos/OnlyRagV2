@@ -1,8 +1,4 @@
-/**
- * Canonical Model Tag Matcher for Local Ollama Installations.
- * Single source of truth for matching model names, tags, quantization variants,
- * and namespace prefixes across Complexity Routing, Recommendations, and UI indicators.
- */
+
 
 export interface ModelTagComponents {
   raw: string
@@ -67,15 +63,7 @@ export function isTagCompatible(targetTag: string, installedTag: string): boolea
   )
 }
 
-/**
- * Finds the exact or best-matching installed model from the list of available Ollama models.
- * Prioritizes:
- * 1. Exact match (case-insensitive)
- * 2. :latest tag equivalence
- * 3. Namespace-stripped match (e.g. adrienbrault/biomistral-7b:q4_k_m -> biomistral-7b:q4_k_m)
- * 4. Exact base model with compatible quantization/tag match
- * 5. Prefix/longest base match (preventing substring shadowing where 'qwen' shadowed 'qwen2.5-coder')
- */
+/** Finds the exact or best-matching installed model from the list of available Ollama models. */
 export function findMatchingInstalledModel(target: string, available: string[]): string | null {
   if (!target || !available || available.length === 0) return null
 

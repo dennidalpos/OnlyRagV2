@@ -36,9 +36,7 @@ export function selectModelForTurn(ctx: TurnDispatchContext): ModelSelection {
   const candidateCoding = ctx.codingModel || ctx.settings.codingModel || ctx.settings.defaultModel || 'qwen2.5-coder:7b'
   const targetModel = findMatchingInstalledModel(candidateCoding, ctx.availableModels) || candidateCoding
 
-  // Native tool-calling routing: when the primary model is detected as tool-calling capable
-  // (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool
-  // catalog instead of relying solely on the prompt-engineered JSON convention.
+  // Native tool-calling routing: when the primary model is detected as tool-calling capable (see ollamaToolCallingCapability.ts), route via POST /api/chat with the structured tool catalog instead of relying solely on the prompt-engineered JSON convention.
   const route = resolveToolCallingRoute(
     targetModel,
     ctx.modelCapabilities,
@@ -149,12 +147,7 @@ export function readTurnFileContext(
   return `CURRENT ON-DISK CONTENT OF THE FILE(S) THIS TURN IS ABOUT — EDIT THIS, DO NOT REPLACE IT WITH A SHORTER FILE:\n${blocks.join('\n\n')}\n`
 }
 
-/**
- * The files this turn is about: the ones the active directive orders rewritten, or — on an
- * ordinary progress turn — the deliverables the active milestone names, which are the files the
- * model is about to write. Only those already on disk produce anything; a milestone whose files
- * do not exist yet has nothing to hand over and needs none.
- */
+/** The files this turn is about: the ones the active directive orders rewritten, or — on an ordinary progress turn — the deliverables the active milestone names, which are the files the model is about to write. */
 export function resolveTurnFileTargets(
   ctx: TurnDispatchContext,
   directive: PlanDirectiveDecision
@@ -315,14 +308,7 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
   })
   const basePrompt = assembled.prompt
 
-  // Feed the compactor the assembler's DISJOINT segments. Passing `assembled.stableSection`
-  // as `systemPrompt` (as this once did) duplicated the plan, pinned/active files, skills, RAG
-  // and repo-map bytes — they are already inside stableSection — so the compactor measured the
-  // prompt at roughly double its real size. That tripped the 75% watermark on prompts that
-  // actually fit, and made `remaining = budget - immutableSize` negative, which floored
-  // historyAlloc at 0 and replaced the entire tool history with "...[compacted]". With no
-  // history the prompt was byte-identical every turn, so the model deterministically re-emitted
-  // its first tool call forever (see coding_agent_audit.log session-1787441347002-hu1s).
+  // Feed the compactor the assembler's DISJOINT segments.
   const seg = assembled.segments
   const compactionResult = HeuristicContextCompactor.compile(
     {
@@ -359,12 +345,7 @@ export function freezeContextWindow(
   }
 }
 
-/**
- * AGT1: reuse Ollama's `context` continuation instead of resending the full prompt whenever
- * this turn's stable section + history are a byte-exact continuation of the prior turn's on
- * the SAME model (see ollamaContextCacheManager.ts). Native tool-calling turns never qualify
- * (the /api/chat path doesn't populate `context`).
- */
+/** AGT1: reuse Ollama's `context` continuation instead of resending the full prompt whenever this turn's stable section + history are a byte-exact continuation of the prior turn's on the SAME model (see ollamaContextCacheManager.ts). */
 export function decideContextReuse(
   ctx: TurnDispatchContext,
   selection: ModelSelection,

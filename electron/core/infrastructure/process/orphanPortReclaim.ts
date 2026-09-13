@@ -1,32 +1,9 @@
-/**
- * Orphan Port Reclaim — pure parsing and policy for "who is holding the sidecar's port?".
- *
- * The app quits, `before-quit` does not always fire (after the user session of 13:45-13:52
- * the Python sidecar, PID 13664, was still listening on :8000 with Electron already gone and
- * app.log carrying no 'before-quit' line at all), and the next launch finds a healthy /health
- * endpoint it did not start. Adopting that process looks harmless and is not: it is not a child
- * of the current Electron process, so `stopPythonSidecar` can never terminate it — the orphan
- * outlives every future session too — and after an update the app would serve requests from the
- * previous build's binary.
- *
- * Kept free of `electron`, `fs` and `child_process` on purpose: the decision of whether a
- * process may be killed is the part that must be verifiable in tests, and the callers that
- * shell out to netstat/tasklist are the part that cannot be.
- */
 
-/**
- * Executable names a reclaim may terminate. Deliberately a closed list: the reclaim runs
- * against whatever happens to hold port 8000, and terminating an unrelated process that merely
- * answers /health would be far worse than leaving an orphan behind.
- */
+
+/** Executable names a reclaim may terminate. */
 const RECLAIMABLE_IMAGES = new Set(['sidecar.exe', 'python.exe', 'pythonw.exe', 'python3.exe', 'python'])
 
-/**
- * Extracts the PID of the process LISTENING on `port` from `netstat -ano` output.
- *
- * Only LISTENING rows count: an established outbound connection to the same port number
- * belongs to a client, and killing the client would be the opposite of the intent.
- */
+/** Extracts the PID of the process LISTENING on `port` from `netstat -ano` output. */
 export function parseListeningPidFromNetstat(output: string, port: number): number | null {
   if (!output) return null
 
@@ -59,9 +36,7 @@ export function parseImageNameFromTasklist(output: string): string | null {
   const firstRow = output.split(/\r?\n/).find((line) => line.trim().length > 0)
   if (!firstRow) return null
 
-  // tasklist reports a missing PID on stdout with exit code 0, and that notice is LOCALISED
-  // ("INFO: No tasks..." / "Informazioni: nessuna attività..."), so its text cannot be matched.
-  // The quoted first field is the locale-independent signal: the notice carries no quotes.
+  // tasklist reports a missing PID on stdout with exit code 0, and that notice is LOCALISED ("INFO: No tasks..." / "Informazioni: nessuna attività..."), so its text cannot be matched.
   const match = firstRow.trim().match(/^"([^"]+)"/)
   const imageName = match ? match[1].trim() : null
 
@@ -78,13 +53,7 @@ export type ReclaimDecision =
   | { action: 'kill'; pid: number }
   | { action: 'skip'; reason: string }
 
-/**
- * Decides what to do with the process found holding the sidecar's port.
- *
- * `ownPid` is passed in and always refused: the reclaim runs inside the very process that is
- * about to spawn the sidecar, and a lookup that somehow resolved to it would otherwise make
- * the app kill itself.
- */
+/** Decides what to do with the process found holding the sidecar's port. */
 export function decidePortReclaim(params: {
   pid: number | null
   imageName: string | null

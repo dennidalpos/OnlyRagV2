@@ -1,14 +1,4 @@
-/**
- * Runs the project's own verification and reports whether it passes.
- *
- * The command is resolved from the workspace manifest, never taken from the model: a plan that
- * says "Run `npm run build`" is a claim, not a capability, and in session-1787485700613-o3tx
- * three such milestones existed while no build ever ran.
- *
- * Dependencies are scanned before the command runs. A missing import fails the build anyway,
- * but with a message a small model routinely misreads ("Cannot find module") — naming the
- * undeclared packages and the files importing them turns it into something correctable.
- */
+
 
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { checkCommandSecurity } from '../domain/agent/commandSecurity'

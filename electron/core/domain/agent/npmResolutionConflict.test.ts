@@ -118,9 +118,7 @@ describe('npmResolutionDirectiveFor', () => {
 
 describe('installableRange', () => {
   it('picks the highest alternative, so the shell never sees an OR operator', () => {
-    // Run 13 of 2026-08-25 ran `npm install eslint@^3 || ^4 || ... || ^9.7`: the shell executed
-    // the first install and then tried to run `^4` as a program. node_modules/.bin ended empty
-    // and the build could not find tsc.
+    // Run 13 of 2026-08-25 ran `npm install eslint@^3 || ^4 || ...
     expect(installableRange('^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7')).toBe('^9.7')
   })
 

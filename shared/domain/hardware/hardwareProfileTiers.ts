@@ -1,28 +1,11 @@
-/**
- * Single source of truth for host hardware classification.
- *
- * Before this module the same "how big is this machine" question was answered by four
- * independent threshold ladders that had already drifted apart:
- *   - hardwareRecommendationEngine.classifyHardwareTier   (raw VRAM GB: 4 / 8 / 12 / 20)
- *   - hardwareRecommendationEngine.getRecommendedOllamaEnvVars (raw VRAM GB: 4 / 8 / 12 / 24)
- * A 24GB workstation was therefore `extreme` for the model matrix but `highend` for the
- * Ollama OS parameters, and a 6GB laptop GPU was `entry` for recommendations but `Low`
- * for the agent runtime options.
- *
- * Everything here is pure data + arithmetic with zero imports, so it can be consumed
- * from the renderer, the Electron domain layer, and tests alike.
- */
+
 
 export type HardwareProfileTier = 'legacy' | 'entry' | 'midrange' | 'highend' | 'extreme'
 
 /** Internal compatibility profiles used only by the recommendation/runtime calculation. */
 export type DeclaredHardwareProfile = 'Low' | 'Medium' | 'High' | 'Auto'
 
-/**
- * Analytical VRAM budgeting constants:
- * - SAFETY_MARGIN: 25% reserve for dynamic KV Cache growth, token context expansion, background tasks.
- * - OVERHEAD_OS_GB: 1.5 GB fixed reserve for Windows Desktop Window Manager (DWM.exe) and display buffers.
- */
+/** Analytical VRAM budgeting constants: - SAFETY_MARGIN: 25% reserve for dynamic KV Cache growth, token context expansion, background tasks. */
 export const VRAM_SAFETY_MARGIN = 0.25
 export const VRAM_OVERHEAD_OS_GB = 1.5
 
@@ -81,13 +64,7 @@ export function resolveEffectiveTier(
   return classifyHardwareProfileTier(facts)
 }
 
-/**
- * True for hosts that must be treated as *minimum* hardware rather than merely GPU-less:
- * no usable accelerator AND either little system RAM or few cores. On such machines every
- * extra KB of prompt is paid twice — once in prompt-eval wall clock, once in the RAM the
- * KV cache steals from the OS — so context budgets, `num_ctx`, Ollama parallelism and
- * model keep-alive all collapse to their smallest safe values.
- */
+/** True for hosts that must be treated as *minimum* hardware rather than merely GPU-less: no usable accelerator AND either little system RAM or few cores. */
 export function isMinimalHardwareHost(facts: HardwareFacts): boolean {
   const tier = classifyHardwareProfileTier(facts)
   if (tier !== 'legacy') return false
@@ -107,11 +84,7 @@ export function calculateUsableSystemRamGB(systemRamGB: number): number {
   return Math.max(SYSTEM_RAM_MIN_BUDGET_GB, Math.round(systemRamGB * SYSTEM_RAM_USABLE_RATIO * 100) / 100)
 }
 
-/**
- * Resolves optimal context tokens (num_ctx) based on declared profile, hardware facts, and system RAM offloading.
- * Implements RAM-aware context scaling (up to 32K for >=24GB RAM, 16K for >=16GB RAM) to exploit Ollama's
- * transparent KV-cache offloading without hardcoded UI approximations.
- */
+/** Resolves optimal context tokens (num_ctx) based on declared profile, hardware facts, and system RAM offloading. */
 export function resolveMaxContextTokens(
   declared: DeclaredHardwareProfile = 'Auto',
   facts: HardwareFacts = {}

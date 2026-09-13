@@ -1,18 +1,4 @@
-/**
- * src/components/coding/SlmDiagnosticsPanel.tsx
- *
- * Presentation Layer — SLM Agent Studio Diagnostics Panel
- *
- * Displays anomaly diagnostic reports from the sidecar log analyzer.
- * Calls agentLogsAnalyze() via the useSlmOrchestration hook; the report body
- * itself (stat cards, severity breakdown, anomaly list, scanned files) lives
- * in SlmDiagnosticsReport, this file only owns the header and loading/error/
- * empty states.
- *
- * Zero business logic: all data fetching is delegated to the hook.
- * Follows OnlyRag V2 panel design conventions (dark theme,
- * rounded-2xl cards, lucide-react icons, font-mono telemetry rows).
- */
+
 
 import React, { useCallback, useEffect } from 'react'
 import { AlertCircle, RefreshCw, ScanLine, Loader2 } from 'lucide-react'

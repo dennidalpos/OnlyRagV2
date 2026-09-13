@@ -1,8 +1,4 @@
-/**
- * Centralized Monaco Editor Theme and Options Configuration for OnlyRag V2.
- * Provides unified theme registration ('onlyrag-dark') and standard editor settings
- * across Coding Studio, Document Translation, and Document Ingestion markdown preview.
- */
+
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
 

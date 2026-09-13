@@ -10,12 +10,7 @@ interface CachedProgram {
 const MAX_CACHED_WORKSPACES = 8
 const TYPECHECKED_SOURCE = /\.(?:[cm]?ts|tsx|jsx?)$/i
 
-/**
- * Reuses TypeScript's previous Program for successive writes in one workspace. The live agent
- * rewrites source files far more often than it runs the project gate, so reporting only the
- * touched file's diagnostics catches the error while the write that introduced it is still the
- * latest tool result, without replaying unrelated project debt on every step.
- */
+/** Reuses TypeScript's previous Program for successive writes in one workspace. */
 export class WorkspaceIncrementalTypecheck {
   private readonly cache = new Map<string, CachedProgram>()
 

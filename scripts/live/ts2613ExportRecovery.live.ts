@@ -1,12 +1,4 @@
-/**
- * Live scenario — recovery from a default import against a named local export.
- *
- * TS2613 is the inverse of the TS2614 probe: the compiler prints the complete named import
- * that fixes the importer, while the exported module is held constant. The scenario observes
- * whether the real local model follows that verbatim suggestion.
- *
- *   npx vitest run --config vitest.live.config.mts -t "TS2613"
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

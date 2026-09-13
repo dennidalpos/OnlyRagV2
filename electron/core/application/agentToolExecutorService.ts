@@ -199,14 +199,7 @@ export class AgentToolExecutorService {
     return this.journal.commit()
   }
 
-  /**
-   * Stages and commits all changes in `cwd` via execFileSync (argv array, no shell) -- safe
-   * against injection via the commit message without needing to escape it for a shell string.
-   * Shared by the git_commit tool-call case below and by the workspace:git-commit IPC handler
-   * (workspaceAppService.gitCommit), which is what the Coding Agent Studio approval flow actually
-   * calls once the user approves a git_commit tool call -- see the Always-Confirm Gate in
-   * agentOrchestratorAppService.ts.
-   */
+  /** Stages and commits all changes in `cwd` via execFileSync (argv array, no shell) -- safe against injection via the commit message without needing to escape it for a shell string. */
   public previewGitCommit(cwd: string, observedPaths: readonly string[] = []) {
     return this.gitToolService.previewCommit(cwd, [...this.journal.trackedPaths, ...observedPaths])
   }
@@ -265,17 +258,7 @@ export class AgentToolExecutorService {
     return { filePath, additions, deletions }
   }
 
-  /**
-   * Appended to a successful write when the file imports a package the project never declared.
-   *
-   * The write is NOT undone: the code is usually most of the way right and throwing it away
-   * costs the model the turn that produced it. What it gets instead is the fact, immediately,
-   * instead of a "Cannot find module" thirty steps later — or, as in
-   * session-1787562597025-q8a5, never (see importDeclarationGate.ts).
-   *
-   * Returns '' whenever the gate has no confident opinion, so the ordinary write result is
-   * untouched in every normal case.
-   */
+  /** Appended to a successful write when the file imports a package the project never declared. */
   private importIntegrityDirective(filePath: string | undefined, content: string, workspacePath: string | null | undefined): string {
     if (!workspacePath) return ''
     const declared = agentToolFileRepository.readDeclaredPackages(workspacePath)
@@ -286,35 +269,8 @@ export class AgentToolExecutorService {
     return `\n\n${verdict.directive}`
   }
 
-  /**
-   * The first install target the npm registry does not know, if any.
-   *
-   * Only explicit targets are considered: a bare `npm install` names none and legitimately
-   * reinstalls from the lockfile. A registry that cannot be reached answers "exists", so a
-   * dropped connection never turns into a refused install.
-   */
-  /**
-   * The first install target that would take a declared dependency backwards past a major,
-   * if any.
-   *
-   * Deliberately placed next to `firstNonexistentInstallTarget`, and called from the same spot:
-   * both answer "is what this command names real for this project", one against the registry and
-   * one against the manifest, and the registry facts the message quotes are already in the
-   * client's per-session cache by the time this runs.
-   *
-   * This is the check `versionRealityDirective` cannot perform. That one is gated on
-   * `write_file` of `package.json`, so `npm install react@^16.8.0` — which rewrites the same
-   * file — walked past it three times in the `live-full-task` run of 2026-08-25T12:11 and pinned
-   * the tree to `react@16.14.0`. See installVersionDowngrade.ts for the cascade that followed.
-   *
-   * Before execution rather than after, and the choice is not a preference. After the fact the
-   * only evidence left is a diff of `package.json`, which costs a snapshot on every command and
-   * still arrives too late: the manifest and `node_modules` are already repinned, and undoing
-   * that needs a second install, i.e. a second imperative in the same message — the defect
-   * §6.2.2 exists to prevent. Beforehand the command names `pkg@version` itself, so the verdict
-   * is read straight off the text with nothing inferred, and refusing leaves the project exactly
-   * as it was.
-   */
+  /** The first install target the npm registry does not know, if any. */
+  /** The first install target that would take a declared dependency backwards past a major, if any. */
   /** Registry-backed preflight for stale first installs and ranges that publish no version. */
   /**
    * Validates freshly written package.json against npm registry to detect nonexistent or invalid package versions.
@@ -352,18 +308,7 @@ export class AgentToolExecutorService {
     return directive
   }
 
-  /**
-   * When the user approved only a subset of hunks in the PendingApprovalModal (instead of the
-   * whole proposal), rewrites the tool call into an equivalent write_file carrying just the
-   * approved hunks' effect, computed against the file's current on-disk content — the same
-   * projection (pendingChangeProjection.ts) and diff (diffEngine.ts) the modal itself used to
-   * show the preview, so what gets written matches exactly what the user reviewed.
-   *
-   * Returns parsedTool unchanged when approvedHunkIndices is absent (the ordinary
-   * all-or-nothing path), the tool isn't a file mutation, or every hunk was approved — a full
-   * accept keeps the original tool's own semantics (e.g. delete_file stays a real delete
-   * instead of becoming a write_file with empty content).
-   */
+  /** When the user approved only a subset of hunks in the PendingApprovalModal (instead of the whole proposal), rewrites the tool call into an equivalent write_file carrying just the approved hunks' effect, computed against the file's current on-disk content — the */
   public reconcileHunkApproval(
     parsedTool: AgentToolCall,
     approvedHunkIndices: number[] | undefined,
@@ -566,12 +511,7 @@ export class AgentToolExecutorService {
 
         const { result: res, rawOutput, isCancelled, isFailure } = execution
 
-          // Failure is decided by the process's own exit status, not by scanning its output
-          // for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and
-          // passing test suites, sending successful commands into the auto-healing loop.
-          // (persistentPowerShellSession combines $LASTEXITCODE with $? so pure-PowerShell
-          // failures are reported too.) Cancellation is kept: an interactive generator that
-          // aborts can still exit 0.
+          // Failure is decided by the process's own exit status, not by scanning its output for words like "Error:" or "FAIL" — those matched grep hits, verbose build logs and passing test suites, sending successful commands into the auto-healing loop.
           if (isFailure) {
             const commonFailureDirectives = this.processToolService.buildCommonFailureDirectives(
               cmd,
@@ -581,9 +521,7 @@ export class AgentToolExecutorService {
               isCancelled,
               (workspace, fileName) => documentIoRepository.exists(path.join(workspace, fileName)),
             )
-            // A peer-version conflict, parsed from npm's own report. Placed before the
-            // missing-dependency branch because ERESOLVE output also mentions unresolved
-            // packages, and "install the missing dependency" is the advice that just failed.
+            // A peer-version conflict, parsed from npm's own report.
             const failureDiagnostics = await this.processToolService.classifyFailureDiagnostics(rawOutput, workspacePath)
             const { resolutionConflictDirective, versionNotFoundDirective, moduleResolutionDirective, missingDepDirective } = failureDiagnostics
             // ETARGET: a version that was never published. Its sibling ERESOLVE has been handled

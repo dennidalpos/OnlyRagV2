@@ -4,11 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { scanUndeclaredImports } from './undeclaredImportScanner'
 
-/**
- * The case this scanner was written for, reproduced from the live run of 2026-08-24:
- * `vite.config.ts` imports `@vitejs/plugin-react`, `package.json` declares only `react` and
- * `vite`, and every `npm run build` of that session died on "Cannot find module".
- */
+/** The case this scanner was written for, reproduced from the live run of 2026-08-24: `vite.config.ts` imports `@vitejs/plugin-react`, `package.json` declares only `react` and `vite`, and every `npm run build` of that session died on "Cannot find module". */
 
 let workspace: string
 

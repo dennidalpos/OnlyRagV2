@@ -8,14 +8,7 @@ import { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSo
 import { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
 import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
 
-/**
- * live-full-task, 2026-08-24. Milestone m-6 was "Configure Tailwind CSS in `postcss.config.js`
- * and `tailwind.config.js`". The model wrote `postcss.config.js` at step 19 and then rewrote
- * that same file at steps 20, 21, 22, 23, 25, 27, 28 and 29 — byte-identical, every one
- * blocked by the loop guard. `tailwind.config.js` was never written in the entire fifty-step
- * run. `advanceActiveMilestoneOnMutation` computed "unsatisfied" at every one of those steps
- * and told the model nothing.
- */
+/** live-full-task, 2026-08-24. */
 
 let tempDir: string
 let recordedDirectives: string[]
@@ -70,9 +63,7 @@ describe('partial delivery — the model is told which file it still owes', () =
     const directive = recordedDirectives.find((d) => d.includes('STILL MISSING'))
     expect(directive).toBeDefined()
     expect(directive).toContain('"tailwind.config.js"')
-    // Steers away from the delivered file without certifying it or threatening a block: that
-    // wording outlived its turn in the history block and contradicted a later live directive.
-    // See milestoneVerificationPromotion.ts.
+    // Steers away from the delivered file without certifying it or threatening a block: that wording outlived its turn in the history block and contradicted a later live directive.
     expect(directive).toContain('rather than the file you have already delivered')
   })
 
@@ -85,7 +76,7 @@ describe('partial delivery — the model is told which file it still owes', () =
     expect(recordedDirectives.filter((d) => d.includes('STILL MISSING'))).toEqual([])
   })
 
-  // The write must still be credited: it landed, and the milestone moves to in_progress.
+  // Credit the delivered file by advancing the milestone.
   it('does not undo the progress the write earned', async () => {
     fs.writeFileSync(path.join(tempDir, 'postcss.config.js'), 'module.exports = {}\n')
     const planner = plannerWith([{ ...tailwindMilestone[0], status: 'pending' }])
@@ -104,8 +95,7 @@ describe('partial delivery — the model is told which file it still owes', () =
     expect(recordedDirectives.filter((d) => d.includes('STILL MISSING'))).toEqual([])
   })
 
-  // The file that landed is itself the unsatisfied one. Listing it back as owed would
-  // contradict the "Successfully wrote file" the model just read.
+  // Do not call a just-written placeholder missing.
   it('does not report the file just written as missing when it holds a placeholder', async () => {
     fs.writeFileSync(path.join(tempDir, 'postcss.config.js'), '// TODO\n')
     fs.writeFileSync(path.join(tempDir, 'tailwind.config.js'), 'module.exports = { content: ["./src/**/*.tsx"] }\n')
@@ -115,7 +105,7 @@ describe('partial delivery — the model is told which file it still owes', () =
     expect(recordedDirectives.filter((d) => d.includes('STILL MISSING'))).toEqual([])
   })
 
-  // Command scans report absolute paths; the deliverables come out of the title relative.
+  // Command evidence is absolute; deliverables are relative.
   it('matches an absolute evidence path against the relative deliverable', async () => {
     fs.writeFileSync(path.join(tempDir, 'postcss.config.js'), 'module.exports = {}\n')
 

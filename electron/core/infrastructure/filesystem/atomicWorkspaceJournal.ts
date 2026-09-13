@@ -62,12 +62,7 @@ export class AtomicWorkspaceJournal {
     }
   }
 
-  /**
-   * Marks the end of the current agent step: whatever was snapshotted since the previous
-   * endStep() call becomes the undoable "last step" (even if empty, meaning that step touched
-   * no files), and a fresh step baseline starts accumulating. Callers invoke this once per
-   * loop iteration, right after that iteration's tool call finishes.
-   */
+  /** Marks the end of the current agent step: whatever was snapshotted since the previous endStep() call becomes the undoable "last step" (even if empty, meaning that step touched no files), and a fresh step baseline starts accumulating. */
   public endStep(): void {
     this.lastStepBackup = this.currentStepBackup
     this.currentStepBackup = new Map()
@@ -117,12 +112,7 @@ export class AtomicWorkspaceJournal {
     return result
   }
 
-  /**
-   * Restores only the files touched during the most recently ended step, leaving every
-   * earlier step's changes (and the rest of the session) untouched. A no-op (0 restored,
-   * no errors) when the last step touched no files, or there is no ended step to undo yet.
-   * Consumes the last-step snapshot: a second call without an intervening endStep() is a no-op.
-   */
+  /** Restores only the files touched during the most recently ended step, leaving every earlier step's changes (and the rest of the session) untouched. */
   public rollbackLastStep(): RollbackResult {
     if (!this.lastStepBackup || this.lastStepBackup.size === 0) {
       return { restoredCount: 0, errors: [] }

@@ -87,9 +87,7 @@ describe('chatContextCompactor Unit Tests', () => {
     })
 
     it('should never exceed the caller budget, even when the turns cannot be summarized', () => {
-      // Structureless text (logs, tables, code) gives TextRankSummarizer nothing to cut, and the
-      // recent-turn loop always keeps the last 4 turns. Without the final clamp the block stayed
-      // at full size and pushed the document context out of the window anyway.
+      // Structureless text (logs, tables, code) gives TextRankSummarizer nothing to cut, and the recent-turn loop always keeps the last 4 turns.
       const turns = buildLongConversation()
       for (const availableChars of [8000, 2000, 500, 0]) {
         const res = compactChatHistory(turns, sampleBudget, true, availableChars)

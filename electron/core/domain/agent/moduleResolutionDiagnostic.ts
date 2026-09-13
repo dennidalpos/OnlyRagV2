@@ -1,33 +1,4 @@
-/**
- * Module Resolution Diagnostic.
- *
- * `Cannot find module 'react-router-dom'` has two completely different causes, and until now
- * this agent read every one of them as the same thing.
- *
- * Measured on 2026-08-25, runs 6 and 7 of the `fullTask` probe, identical both times: the
- * `tsconfig.json` the model writes carries `"module": "ESNext"` and no `moduleResolution`, so
- * TypeScript falls back to `classic`, which never looks inside `node_modules`. `tsc` then
- * reports `TS2792 Cannot find module` for packages that are **installed and present on disk**.
- * The missing-dependency branch fires, the agent installs them again, and the same error comes
- * back: run 7 spent five `npm install @mui/material` and four `npm install react-router-dom
- * @mui/material` on packages that were already there, and closed at 0/14.
- *
- * The two cases are distinguishable without heuristics, because the answer is on disk: if the
- * package is in `node_modules`, the dependency is not missing and installing it again cannot
- * change anything. The compiler even names the remedy itself — `TS2792` prints "Did you mean to
- * set the 'moduleResolution' option" — and the fix is an edit to `tsconfig.json`, not an install.
- *
- * One value is named, not two. The first draft offered `"bundler"` with `"node"` as a fallback
- * "if the project targets CommonJS", and run 12 of 2026-08-25 shows why that was wrong twice
- * over: a directive that offers a choice invites the model to make the wrong one (§5.3), and the
- * fallback itself became invalid — `node`/`node10` was removed in TypeScript 7, which is exactly
- * where `dependencyVersionReality` now moves projects. The delivered manifest carried
- * `typescript@^7.0.2` and the build died on `TS5108: Option 'moduleResolution=node10' has been
- * removed`. `bundler` is correct for every Vite project this agent builds and valid in both 5
- * and 7.
- *
- * Pure domain: whether a package is installed is injected by the caller.
- */
+
 
 /** `Cannot find module 'x'` / `Cannot find module "x"`, in tsc and bundler phrasing alike. */
 const CANNOT_FIND_MODULE = /cannot find module\s+['"`]([^'"`]+)['"`]/gi
@@ -57,14 +28,7 @@ export function unresolvedPackages(output: string): string[] {
   return [...found]
 }
 
-/**
- * Decides which of the two causes the output describes.
- *
- * `compiler_resolution` requires that **every** package named is already installed: one genuinely
- * absent package makes installing the right next action, and the resolution problem — if there is
- * one — will still be there to diagnose on the next run. Doubt resolves towards installing,
- * because that is the cheap and reversible move.
- */
+/** Decides which of the two causes the output describes. */
 export function classifyModuleDiagnostic(
   output: string,
   isPackageInstalled: (pkg: string) => boolean
@@ -75,14 +39,7 @@ export function classifyModuleDiagnostic(
   return 'compiler_resolution'
 }
 
-/**
- * One instruction: fix the config that cannot see `node_modules`.
- *
- * It names the setting and the value rather than saying "configure module resolution", for the
- * same reason `entrypointIntegrity` hands over the exact script tag: an instruction a model has
- * to translate into a concrete edit is one it can get wrong, and this one it had already got
- * wrong twice by reinstalling instead.
- */
+/** One instruction: fix the config that cannot see `node_modules`. */
 export function buildModuleResolutionDirective(output: string, packages: string[]): string {
   const named = packages.slice(0, 4).join(', ')
   const compilerSaidSo = RESOLUTION_HINT.test(output || '')

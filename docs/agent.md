@@ -9,39 +9,24 @@ plan/interview -> plan -> collect_context -> propose_action -> apply_action
 
 ## Contratti operativi
 
-- Intervista e piano: `/api/chat` non streaming con `format` JSON Schema da [`ollamaStructuredResponse.ts`](../electron/core/domain/agent/ollamaStructuredResponse.ts).
-- Loop: `/api/chat` con `tools`; il fallback testuale resta per modelli senza `tool_calls` nativi.
-- Policy: [`turnToolPolicy.ts`](../electron/core/domain/agent/turnToolPolicy.ts) limita i tool per turno; gate ed executor ricontrollano la stessa allowlist.
-- Piano: `AgentPlan` strutturato (`formatVersion: 2`); il Markdown è una vista, non la fonte di esecuzione.
-- Contesto: `projectPlanningFacts.ts`, `planPromptWindow.ts` e `episodicMemoryCompactor.ts` limitano fatti, file e cronologia al lavoro corrente.
-- Workspace: ogni run con progetto usa un worktree temporaneo (o una copia temporanea fuori da Git). File tool, comandi, generatori, download e package manager operano solo lì.
-- Runtime: modello, endpoint, digest, opzioni e metriche vengono salvati nel checkpoint e rivalidati al resume. Senza un limite di contesto verificato, `num_ctx` conserva la capacità hardware invece di cadere a 2048.
-- Preflight: prima di ogni turn Agent Coding verifica raggiungibilità Ollama, tag del modello risolto esattamente, tool calling, contesto minimo di 4096 token, scrivibilità e confinamento del workspace. La toolchain è riportata come avviso, senza bloccare progetti che non usano gli strumenti mancanti.
-- Profilo di capacità: ogni piano conserva il profilo revisionato della run. Il default è finito (25 step), senza modifiche file o terminale e con rete bloccata; il wizard iniziale e la revisione piano permettono di abilitare file, terminale, rete locale/con approvazione e un budget tra 5 e 100 step.
-- Identità run: comandi ed eventi di esecuzione trasportano sempre `runId`, `conversationId`, `planRevisionId` e `workspaceId`; il Renderer accetta solo eventi che coincidono con la run attiva.
-- Revisione piano: il seed e gli aggiornamenti milestone sono associati al solo `planRevisionId` approvato; una revisione diversa non può riprendere né aggiornare il piano visualizzato.
-- Annullamento: una `AbortSignal` per run arresta streaming, web/tool, shell persistente, verifiche di milestone e verifica finale. Timeout e annullamento utente usano lo stesso segnale; nessun evento successivo alla chiusura viene inoltrato al Renderer.
-- Ripresa: cronologia della conversazione e checkpoint esecutivo sono distinti. Si ripristinano step, recovery e milestone solo per la stessa run `IN_PROGRESS`; un nuovo prompt usa eventualmente il piano approvato come seme e azzera i budget.
-- Cronologia: log e coda prompt sono scritti subito per conversazione tramite IPC serializzato e store atomico; la chiusura della finestra non è un percorso di persistenza.
-- File attivo: il solo contesto editor trasmesso alla run è `activeFile` (`path`, `content`, `versionHash` SHA-256); l'IPC valida il contratto e scarta il legacy `contextFiles`.
-- Piano e intervista: ogni flusso usa una `AgentRunIdentity` propria; una seconda richiesta resta bloccata finché la prima non termina o viene annullata tramite il suo `runId` nello scheduler Ollama. Il pannello mostra lo stato autorevole `queued`, `running`, `cancelling` o `failed` della sua operazione.
-- Coda: l'accettazione restituisce `runId` e `queuePosition`; l'annullamento richiede sempre l'identità della singola run.
-- Timeline: gli eventi usano le categorie tipizzate di `AgentLogCategory`; la richiesta di generazione piano è informativa (`generic_info`).
+- Intervista e piano usano `/api/chat` non streaming con JSON Schema; il loop usa tool nativi o il fallback testuale.
+- `AgentPlan` strutturato (`formatVersion: 2`) è eseguibile; il Markdown è solo una vista.
+- La policy limita i tool per turno e gate/executor ricontrollano la stessa allowlist.
+- Una run di progetto lavora in un worktree o copia temporanea. File, shell, download e package manager non ricevono il path utente.
+- Prima dell'esecuzione vengono controllati Ollama, tag esatto, tool calling, contesto minimo, scrivibilità e confinamento. Toolchain assente è un avviso.
+- Runtime e checkpoint sono legati alla run; `num_ctx` conserva il limite hardware quando il modello non ne dichiara uno verificato.
+- Comandi ed eventi portano `{ runId, conversationId, planRevisionId, workspaceId }`; il Renderer accetta solo la run attiva.
+- Timeout e annullamento condividono una `AbortSignal`; la chiusura blocca eventi successivi.
+- Cronologia e checkpoint sono distinti. Si riprende solo la stessa run `IN_PROGRESS`; un nuovo prompt riparte con budget nuovi.
+- Il contesto editor è il solo `activeFile` (`path`, `content`, `versionHash`); `contextFiles` è rifiutato.
+- Coda e stati Ollama sono autorevoli: `queued`, `running`, `cancelling`, `failed`.
 
 ## Guardrail
 
-- [`planDirectiveArbiter.ts`](../electron/core/domain/agent/planDirectiveArbiter.ts): una direttiva operativa alla volta.
-- [`loopDetector.ts`](../electron/core/domain/agent/loopDetector.ts): blocca ripetizioni e oscillazioni.
-- [`compilerDiagnosticDirective.ts`](../electron/core/domain/agent/compilerDiagnosticDirective.ts): isola il primo errore utile.
-- [`versionedFileMutation.ts`](../electron/core/domain/agent/versionedFileMutation.ts) e [`fileSystemRepository.ts`](../electron/core/infrastructure/filesystem/fileSystemRepository.ts): gli edit su file esistenti richiedono la versione letta e sono atomici.
-- L'editor conserva l'hash letto e salva con compare-and-swap. Se una run modifica il file aperto, `workspace:file-version` forza una scelta esplicita tra ricarica, merge manuale e sovrascrittura confermata.
-- Fuori dalle run isolate, il commit include solo i path approvati; il diff viene ricontrollato prima del commit.
-- Prima della chiusura, l'app richiede il consenso per pubblicare le differenze del workspace temporaneo. Pubblica solo i path il cui contenuto sorgente coincide ancora con il baseline; annullamento, rifiuto o conflitto lasciano intatto il workspace utente e rimuovono quello temporaneo.
-- `ensure_tool` installa fuori dal workspace e richiede sempre consenso esplicito. Dopo la pubblicazione, Git ricalcola il diff nel workspace utente e chiede un secondo consenso prima del commit.
-- I path dei tool sono nomi opachi: gli spazi restano invariati. Prima delle mutazioni, il Main risolve l'antenato esistente e blocca symlink o junction che escono dal workspace.
-- [`structuredCommandSafety.ts`](../electron/core/domain/agent/structuredCommandSafety.ts): separa le pipeline PowerShell senza eseguire espansioni dinamiche; le mutazioni sono confinate al workspace e richiedono un consenso esplicito prima dello spawn.
-- Il gate contestuale riunisce mutazione, rete e installazioni nella stessa richiesta: un’azione riceve un solo consenso, riusato come autorizzazione di rete monouso quando serve.
-- [`milestoneUpdateAuthority.ts`](../electron/core/domain/agent/milestoneUpdateAuthority.ts): una milestone diventa completa solo con deliverable reali e verifiche riuscite.
-- [`verificationCommandSafety.ts`](../shared/domain/agent/verificationCommandSafety.ts): filtra comandi non sicuri.
+- Una direttiva operativa alla volta previene cicli; i diagnostici privilegiano il primo errore correggibile.
+- Le scritture esistenti usano versione letta e compare-and-swap. Le modifiche concorrenti richiedono ricarica, merge o sovrascrittura esplicita.
+- Pubblicazione e commit richiedono consenso. Si pubblicano solo path ancora uguali al baseline e il commit include solo path approvati.
+- Installazioni, shell e rete sono confinate e autorizzate; symlink/junction fuori workspace e comandi non sicuri sono bloccati.
+- Una milestone richiede deliverable ed evidenza coerenti; un esito incerto non viene ritentato automaticamente.
 
 Gli esiti tool sono strutturati (`success`, `failure`, `rejected`, `blocked`); errori incerti non vengono ripetuti automaticamente. La prova comportamentale corrente è descritta in [`verification.md`](./verification.md).

@@ -6,11 +6,7 @@ import { useTranslation } from '../i18n'
 
 export const ALL_SKILL_SOURCES = '__all__'
 
-/**
- * All state and API-calling handlers behind SkillHubModal: loading installed/marketplace
- * skills, switching hub sources, and every install/save/reset/delete/add-hub action. Kept
- * separate from the modal's JSX so the component stays a pure composition/view layer.
- */
+/** All state and API-calling handlers behind SkillHubModal: loading installed/marketplace skills, switching hub sources, and every install/save/reset/delete/add-hub action. */
 export function useSkillHubModal(isOpen: boolean, workspacePath: string | null, onClose: () => void) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'installed' | 'hub'>('installed')

@@ -1,19 +1,4 @@
-/**
- * electron/core/domain/agent/devToolchain.ts
- *
- * Domain Layer — Development toolchain inventory and installation policy.
- *
- * Two responsibilities, both pure:
- *  1. Describe which developer tools the agent may reason about and install, and how to
- *     probe each one's version.
- *  2. Turn that into a compact text inventory a small model can actually use, and into
- *     the exact install command for the host package manager.
- *
- * The allow-list is deliberately closed. Installing software on the host is outside the
- * workspace and outside the reach of the workspace journal's rollback, so the agent may
- * only ever install these specific, well-known toolchain packages — never an arbitrary
- * package name it produced itself.
- */
+
 
 export interface DevToolDefinition {
   id: string
@@ -84,11 +69,7 @@ export function resolveInstallTarget(rawName: string): DevToolDefinition | null 
   return tool
 }
 
-/**
- * winget invocation for an allow-listed tool. Fully non-interactive: winget otherwise
- * prompts for agreements and would hang the agent's shell session forever.
- * Returns null when the tool is not allow-listed or has no package of its own.
- */
+/** winget invocation for an allow-listed tool. */
 export function buildInstallCommand(rawName: string): string | null {
   const target = resolveInstallTarget(rawName)
   if (!target || !target.wingetId) return null
@@ -103,11 +84,7 @@ export function extractVersion(rawOutput: string): string {
   return match ? match[0] : text.split(/\r?\n/)[0].slice(0, 40)
 }
 
-/**
- * Compact, one-line-per-tool inventory. Written for a small model's benefit: fixed shape,
- * no prose, missing tools called out explicitly so the model can act on them rather than
- * having to infer absence from a tool's omission.
- */
+/** Compact, one-line-per-tool inventory. */
 export function formatToolchainInventory(statuses: ReadonlyArray<DevToolStatus>): string {
   if (statuses.length === 0) return 'Toolchain: no tools probed.'
 

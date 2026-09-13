@@ -87,11 +87,7 @@ describe('buildDiagnosticFixDirective', () => {
   })
 })
 
-/**
- * The error that ran from step 16 to step 49 of the live run of 2026-08-24, unchanged, while
- * the directive kept ordering a rewrite of the file it names. No edit to `src/App.tsx` could
- * fix it: the remedy is installing `@types/react`, and TypeScript printed the command itself.
- */
+/** The error that ran from step 16 to step 49 of the live run of 2026-08-24, unchanged, while the directive kept ordering a rewrite of the file it names. */
 const TS7016_OUTPUT = [
   "src/App.tsx(2,19): error TS7016: Could not find a declaration file for module 'react'. 'node_modules/react/index.js' implicitly has an 'any' type.",
   "  Try `npm i --save-dev @types/react` if it exists or add a new declaration (.d.ts) file containing `declare module 'react';`",
@@ -140,11 +136,7 @@ describe('buildDiagnosticFixDirective — when the compiler named the remedy', (
   })
 })
 
-/**
- * The bottleneck blueprint §5.6i names: the model writes a default import against a named
- * export, or a named import against a default one. Both messages are the shapes `tsc` prints,
- * and both end with the statement that fixes the file.
- */
+/** The bottleneck blueprint §5.6i names: the model writes a default import against a named export, or a named import against a default one. */
 const TS2613_OUTPUT =
   'src/main.tsx(2,8): error TS2613: Module \'"C:/w/src/App"\' has no default export. Did you mean to use \'import { App } from "C:/w/src/App"\' instead?'
 const TS2614_OUTPUT =
@@ -292,9 +284,7 @@ describe('buildDeferredDiagnosticNote', () => {
 })
 
 describe('diagnostics inside node_modules', () => {
-  // Run 10 of 2026-08-25 pinned typescript@^4.7.3, which then could not parse the @types/node
-  // npm had installed. Every error pointed into a dependency; no edit in the workspace could
-  // have fixed any of them.
+  // Run 10 of 2026-08-25 pinned typescript@^4.7.3, which then could not parse the @types/node npm had installed.
   const IN_DEPS = [
     'node_modules/@types/node/ffi.d.ts(277,43): error TS1109: Expression expected.',
     'node_modules/@types/node/ffi.d.ts(285,30): error TS1005: \',\' expected.',
@@ -320,16 +310,7 @@ describe('diagnostics inside node_modules', () => {
   })
 })
 
-/**
- * Measured 2026-08-25T19:44, session live-full-task, step 21. `src/services/index.ts` imported
- * './api' and './auth', neither of which existed. The directive ordered `write_file` on
- * `src/services/index.ts` — the file that reports the error, not the file that is missing.
- * Rewriting the importer cannot create the module, so the same two errors came back and the run
- * ended 0/14 with a .js twin of every .tsx file in the workspace.
- *
- * verificationAttemptTracker.ts already records this exact assumption being made three times in
- * one day: that every compiler error is fixed by editing the file it points at.
- */
+/** Measured 2026-08-25T19:44, session live-full-task, step 21. */
 describe('missing relative module', () => {
   const OUTPUT = [
     "src/services/index.ts(2,15): error TS2307: Cannot find module './api' or its corresponding type declarations.",
@@ -368,12 +349,7 @@ describe('missing relative module', () => {
   })
 })
 
-/**
- * The measured case, 2026-08-25T19:59 steps 42-43: `@headlessui/react` exports neither `Card` nor
- * `List`. The generic branch ordered the importing file rewritten and said nothing about what the
- * package does export, so the model rewrote it with the identical import — it had no second
- * candidate and no way to obtain one.
- */
+/** The measured case, 2026-08-25T19:59 steps 42-43: `@headlessui/react` exports neither `Card` nor `List`. */
 describe('missing export member', () => {
   const OUTPUT = [
     `src/components/TaskCard.tsx(3,10): error TS2305: Module '"@headlessui/react"' has no exported member 'Card'.`,
@@ -427,11 +403,7 @@ describe('missing export member', () => {
   })
 })
 
-/**
- * The caller needs the path as a path, to read that file off disk and hand its current content to
- * the model. Nine live runs show it never reads one itself: 2026-08-25T20:52 ended with 30
- * write_file calls against 11 distinct files, 19 of them rewrites, and zero reads.
- */
+/** The caller needs the path as a path, to read that file off disk and hand its current content to the model. */
 describe('diagnosticFixTargetFile', () => {
   it('names the imported local module for an export mismatch', () => {
     const out = `src/main.tsx(2,8): error TS2613: Module '"./App"' has no default export. Did you mean to use 'import { App } from "./App"' instead?`

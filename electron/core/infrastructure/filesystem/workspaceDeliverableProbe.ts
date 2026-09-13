@@ -1,12 +1,4 @@
-/**
- * Infrastructure adapter for the domain's `DeliverableProbe` port
- * (see domain/agent/milestoneDeliverableResolver.ts).
- *
- * Answers "does this workspace-relative path exist, and is what it holds a real deliverable
- * or a placeholder?". `statSync` settles existence and size; the body is read back only when
- * the file is small enough to plausibly be a stub, so probing a plan with dozens of entries
- * still costs nothing measurable on real implementation files.
- */
+
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -66,11 +58,7 @@ function buildBasenameIndex(root: string): Map<string, string> {
   return index
 }
 
-/**
- * Builds a probe rooted at `workspacePath`. Any candidate that resolves outside the
- * workspace is reported missing rather than probed: milestone titles are model-authored
- * text, so a path token in one is untrusted input like any other.
- */
+/** Builds a probe rooted at `workspacePath`. */
 function buildWorkspaceDeliverableProbe(workspacePath: string, includeHash: boolean): DeliverableProbe {
   const root = path.resolve(workspacePath)
   let basenameIndex: Map<string, string> | null = null

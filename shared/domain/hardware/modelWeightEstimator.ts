@@ -80,11 +80,7 @@ export const QUANT_BYTES_PER_PARAM: Record<string, number> = {
 const BYTES_PER_GIB = 1024 ** 3
 const PARAMS_PER_BILLION = 1_000_000_000
 
-/**
- * Computes a model's weight in GB directly from Ollama-reported metadata
- * (parameter_size e.g. "7.6B", quantization_level e.g. "Q4_K_M"), instead of
- * the static lookup table. Returns null when the metadata is missing or unparseable.
- */
+/** Computes a model's weight in GB directly from Ollama-reported metadata (parameter_size e.g. */
 export function estimateWeightFromMetadata(details: RunningModelDetails): number | null {
   if (!details.parameter_size) return null
   const paramMatch = details.parameter_size.match(/^([\d.]+)\s*([BMK])$/i)

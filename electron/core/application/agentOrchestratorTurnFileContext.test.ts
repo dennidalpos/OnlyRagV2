@@ -13,13 +13,7 @@ import { buildCurrentOperationContext, readTurnFileContext, resolveTurnFileTarge
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
 import type { PlanDirectiveDecision } from '../domain/agent/planDirectiveArbiter'
 
-/**
- * The measurement behind this file: across four independent full-task runs in
- * logs/coding_agent_audit.log the model issued 74 `write_file` calls and called `read_file`
- * exactly zero times — and `replace_file_content` zero times as well. The coding prompt already
- * instructs it to read before acting (rule 7). Telling it again is the move blueprint §6.2.1
- * rules out; supplying the file is the move it prescribes.
- */
+/** The measurement behind this file: across four independent full-task runs in logs/coding_agent_audit.log the model issued 74 `write_file` calls and called `read_file` exactly zero times — and `replace_file_content` zero times as well. */
 
 let tempDir: string
 

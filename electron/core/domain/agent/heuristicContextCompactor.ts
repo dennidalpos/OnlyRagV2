@@ -27,11 +27,7 @@ export interface CompactionResult {
   finalChars: number
 }
 
-/**
- * Zero-cost heuristic context compactor triggered at a configurable watermark.
- * Uses deterministic truncation and DiagnosticOutputReducer to reduce prompt size
- * without invoking any additional LLM inference calls.
- */
+/** Zero-cost heuristic context compactor triggered at a configurable watermark. */
 export class HeuristicContextCompactor {
   private static readonly WATERMARK_RATIO = 0.75
 
@@ -59,10 +55,7 @@ export class HeuristicContextCompactor {
     // Tier 1 (immutable): system prompt + active plan
     const immutableSize = (segments.systemPrompt || '').length + (segments.activePlanBlock || '').length
 
-    // Tool history is what makes the agent stateful: without it the prompt is byte-identical
-    // every turn and the model deterministically repeats its last action. So it is reserved
-    // BEFORE the optional tiers bid for space, and never floored to zero — an oversized
-    // immutable tier must eat into pinned/active/skills/RAG, never into the trajectory.
+    // Tool history is what makes the agent stateful: without it the prompt is byte-identical every turn and the model deterministically repeats its last action.
     const historyFloor = Math.min(
       segments.historyBlock.length,
       Math.max(0, Math.floor(hardwareMaxContextChars * 0.20))
@@ -138,9 +131,7 @@ export class HeuristicContextCompactor {
 
     const tableStr = tableLines.join('\n')
 
-    // Cap retained [TERMINAL AUTO-HEALING DIAGNOSTICS LOG] blocks to the 2 most
-    // recent occurrences before distillation, so repeated build/test failure
-    // diagnostics don't crowd out newer turn context once the watermark is hit.
+    // Cap retained [TERMINAL AUTO-HEALING DIAGNOSTICS LOG] blocks to the 2 most recent occurrences before distillation, so repeated build/test failure diagnostics don't crowd out newer turn context once the watermark is hit.
     const { text: cappedRawOutput } = AutoHealingLogCapper.capBlocks(rawOutputBuffer.join('\n'), 2)
 
     const distilledRaw = DiagnosticOutputReducer.distillTerminalOutput(

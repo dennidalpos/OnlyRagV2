@@ -5,12 +5,7 @@ export const USER_PROMPT_LOG_PREFIX = 'User Prompt: '
 
 const MAX_TITLE_LENGTH = 48
 
-/**
- * Converts a persisted timestamp to ISO 8601. Legacy records were written with
- * `toLocaleTimeString` ("14:32"), which `new Date(...)` cannot parse and which
- * rendered as "Invalid Date" in the history UI; those values are unrecoverable
- * and fall back to the supplied reference date.
- */
+/** Converts a persisted timestamp to ISO 8601. */
 export function toIsoTimestamp(value: unknown, fallback: string): string {
   if (typeof value === 'string' && value.length > 0) {
     const parsed = Date.parse(value)
@@ -26,11 +21,7 @@ export function deriveSessionTitle(prompt: string): string {
   return clean.length > MAX_TITLE_LENGTH ? `${clean.slice(0, MAX_TITLE_LENGTH)}...` : clean
 }
 
-/**
- * Rebuilds ExecutedPrompt records from an action log. Used only to migrate legacy
- * sessions, which persisted prompts exclusively as "User Prompt: ..." log lines and
- * therefore carry no per-prompt outcome or change metrics.
- */
+/** Rebuilds ExecutedPrompt records from an action log. */
 export function extractExecutedPromptsFromLogs(
   sessionId: string,
   logs: AgentActionLog[],
@@ -104,12 +95,7 @@ function normalizeExecutedPrompt(raw: any, sessionId: string, fallbackTimestamp:
   }
 }
 
-/**
- * Normalizes any persisted or migrated record into a valid CodingSession:
- * ISO 8601 timestamps, an always-present executedPrompts list (rebuilt from the
- * action log when the record predates the entity) and a title derived from the
- * first executed prompt when the user never renamed the session.
- */
+/** Normalizes any persisted or migrated record into a valid CodingSession: ISO 8601 timestamps, an always-present executedPrompts list (rebuilt from the action log when the record predates the entity) and a title derived from the first executed prompt when the us */
 export function normalizeSession(raw: any): CodingSession | null {
   if (!raw || typeof raw.id !== 'string' || !raw.id) return null
 

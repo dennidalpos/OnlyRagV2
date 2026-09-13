@@ -34,12 +34,7 @@ export function useSettingsManager(
     }
   }
 
-  /**
-   * Confirmation belongs to the UI, not here: the caller asks in place (see
-   * InlineDestructiveConfirm), so this used to raise a SECOND, native prompt on top of the
-   * one the user had already answered. Failures report through the same `pullMessage` channel
-   * as every other model operation rather than a blocking `alert` with an untranslated string.
-   */
+  /** Confirmation belongs to the UI, not here: the caller asks in place (see InlineDestructiveConfirm), so this used to raise a SECOND, native prompt on top of the one the user had already answered. */
   const handleDeleteModel = async (modelName: string) => {
     if (!window.electronAPI) return
     const res = await window.electronAPI.deleteOllamaModel(modelName, settings.ollamaHost)

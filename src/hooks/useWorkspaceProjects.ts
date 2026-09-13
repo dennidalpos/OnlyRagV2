@@ -10,11 +10,7 @@ function deriveNameFromPath(pathStr: string): string {
   return pathStr.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Workspace'
 }
 
-/**
- * One-shot import of the project list previously kept in localStorage. Runs once per
- * installation: the legacy key is dropped only after the main process confirms the
- * import, so a failed migration is retried on the next launch instead of losing data.
- */
+/** One-shot import of the project list previously kept in localStorage. */
 async function migrateLegacyProjects(): Promise<void> {
   if (localStorage.getItem(MIGRATION_FLAG_KEY) === 'done') return
   const raw = localStorage.getItem(LEGACY_PROJECTS_STORAGE_KEY)
@@ -35,14 +31,7 @@ async function migrateLegacyProjects(): Promise<void> {
   }
 }
 
-/**
- * Saved project folders and the workspace root the Coding Agent Studio is attached to,
- * including standalone (no-workspace) mode. The project list itself is owned by the main
- * process (see projectRegistryRepository), so it's available to every window and survives
- * independently of any single renderer's localStorage; this hook mirrors it in memory.
- * File tree and editor state live in `useWorkspaceFiles`, which reloads itself from the
- * values returned here.
- */
+/** Saved project folders and the workspace root the Coding Agent Studio is attached to, including standalone (no-workspace) mode. */
 export function useWorkspaceProjects(settings?: AppSettings) {
   const [projects, setProjects] = useState<WorkspaceProject[]>([])
   const [workspacePath, setWorkspacePath] = useState<string | null>(

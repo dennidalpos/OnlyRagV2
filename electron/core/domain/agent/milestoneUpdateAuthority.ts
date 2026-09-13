@@ -36,14 +36,7 @@ export interface MilestoneUpdateRequest {
   unsatisfiedDeliverables?: readonly string[]
 }
 
-/**
- * Rules for milestone progression:
- * - Refuses no-op updates to save round-trips.
- * - Prevents demoting verified milestones.
- * - Rejects `failed` if deliverables exist with real content on disk.
- * - Rejects `verified` if deliverables are missing, empty, or placeholders.
- * - Replaces notes entirely on valid status change.
- */
+/** Rules for milestone progression: - Refuses no-op updates to save round-trips. */
 export function resolveMilestoneUpdate(req: MilestoneUpdateRequest): MilestoneUpdateVerdict {
   const { current, requestedStatus, requestedNotes, deliverableStatus, unsatisfiedDeliverables } = req
 

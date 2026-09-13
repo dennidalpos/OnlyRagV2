@@ -1,19 +1,4 @@
-/**
- * electron/core/application/sidecarAppService.test.ts
- *
- * Integration tests for SidecarAppService — the Application Layer
- * HTTP bridge between Electron main process and the Python sidecar SLM endpoint.
- *
- * Tests verify the full roundtrip behaviour of:
- *   - analyzeLogs()  → POST /agent/logs/analyze (IPC channel: agent:logs-analyze)
- *
- * Strategy: spawn a lightweight Node.js HTTP server on an ephemeral port
- * that simulates the sidecar responses, then hit it with the same raw
- * request shape the service sends.
- *
- * No real Ollama, no real Python process, no Electron IPC machinery required.
- * All network I/O uses the real Node.js http module (same as production code).
- */
+
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import http from 'node:http'

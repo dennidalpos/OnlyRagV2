@@ -6,11 +6,7 @@ import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHi
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { sidecarAppService } from './sidecarAppService'
 
-/**
- * Use cases for the coding session history. Owns the full lifecycle of a session:
- * the history record itself, the agent runtime state file used to resume it, and
- * its entries in the audit log, so deleting a session never leaves residues behind.
- */
+/** Use cases for the coding session history. */
 export class SessionHistoryAppService {
   async listSessions(workspacePath?: string | null): Promise<CodingSession[]> {
     return sessionHistoryRepository.listSessions(workspacePath)
@@ -45,12 +41,7 @@ export class SessionHistoryAppService {
     return cleared
   }
 
-  /**
-   * One-shot import of the sessions the renderer used to persist in localStorage
-   * ('onlyrag_coding_sessions_v2'). Records are grouped by their own workspacePath
-   * so each project store receives its own history, and existing on-disk sessions
-   * are never overwritten. Returns how many records were actually imported.
-   */
+  /** One-shot import of the sessions the renderer used to persist in localStorage ('onlyrag_coding_sessions_v2'). */
   async migrateLegacySessions(rawSessions: unknown): Promise<{ migrated: number }> {
     if (!Array.isArray(rawSessions) || rawSessions.length === 0) return { migrated: 0 }
 

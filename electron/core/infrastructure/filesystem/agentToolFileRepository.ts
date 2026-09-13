@@ -110,13 +110,7 @@ export class AgentToolFileRepository {
     return ['pytest.ini', 'pyproject.toml', 'setup.cfg'].some((f) => fs.existsSync(path.join(cwd, f)))
   }
 
-  /**
-   * What the workspace declares it can import: every dependency name in package.json, plus the
-   * bare prefixes that resolve through tsconfig `compilerOptions.paths` (`@/*` -> `@/`).
-   *
-   * Returns null when there is no readable package.json — a workspace too early to judge an
-   * import against, which the caller must treat as "no opinion" rather than "nothing declared".
-   */
+  /** What the workspace declares it can import: every dependency name in package.json, plus the bare prefixes that resolve through tsconfig `compilerOptions.paths` (`@/*` -> `@/`). */
   readDeclaredPackages(cwd: string): { names: Set<string>; aliasPrefixes: string[] } | null {
     const pkgJsonPath = path.join(cwd, 'package.json')
     if (!fs.existsSync(pkgJsonPath)) return null
@@ -154,18 +148,7 @@ export class AgentToolFileRepository {
     return { names, aliasPrefixes }
   }
 
-  /**
-   * Of the given package names, those with no directory under `<cwd>/node_modules`.
-   *
-   * A name in package.json is a declaration, not an installation, and the two diverge in the
-   * exact situation an agent creates: it authors package.json with write_file, so every
-   * dependency is "declared" while node_modules has never existed. In
-   * session-1787562597025-q8a5 the redundant-install guard read that declaration, told the
-   * model the packages were "already installed", and cancelled the one `npm install` of the
-   * session — after which every `npm run build` failed for the rest of the run.
-   *
-   * A scoped name maps to nested directories (`@scope/pkg` -> `node_modules/@scope/pkg`).
-   */
+  /** Of the given package names, those with no directory under `<cwd>/node_modules`. */
   missingFromNodeModules(cwd: string, packageNames: string[]): string[] {
     const modulesRoot = path.join(cwd, 'node_modules')
     if (!fs.existsSync(modulesRoot)) return [...packageNames]

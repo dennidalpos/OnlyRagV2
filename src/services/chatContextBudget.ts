@@ -7,22 +7,7 @@ import {
   type HardwareProfileTier,
 } from '../../shared/domain/hardware/hardwareProfileTiers'
 
-/**
- * Hardware-aware context budgeting for the RAG chat turn.
- *
- * useChatEngine.ts previously hardcoded a single budget for every machine
- * (VECTOR_CONTEXT_CHAR_BUDGET = 4000, CONTEXT_CHAR_BUDGET = 5500, last 6 turns, 1500 chars
- * per selected document) and, more expensively, called `generateOllamaStream` with no
- * options at all — so every chat request fell through to the transport default of
- * `num_ctx: 16384`. On a CPU-only 8GB host that allocates a KV cache several times larger
- * than the turn needs, out of the same RAM the OS is using, and pays for it again in
- * prompt-eval wall clock on every single message.
- *
- * The budgets below shrink the retrieval context, the replayed history and the per-document
- * preview together, so the four never combine into a prompt the host cannot evaluate
- * quickly. `maxNumCtx` is the resolved model preference; prompt compaction operates inside it
- * and never changes the value sent to Ollama.
- */
+/** Hardware-aware context budgeting for the RAG chat turn. */
 export interface ChatContextBudget {
   /** Detected (or declared) host tier this budget was derived from. */
   profileTier: HardwareProfileTier
@@ -46,27 +31,11 @@ export interface ChatContextBudget {
   keepAlive: string
 }
 
-/**
- * Tokens held back for the answer, and the chars-per-token ratio used to translate the token
- * window into the char budgets everything else is expressed in. 3.5 is the conservative side of
- * what Italian/English prose plus markdown actually measures, so the estimate errs on the side of
- * a prompt that is smaller than the window rather than larger.
- */
+/** Tokens held back for the answer, and the chars-per-token ratio used to translate the token window into the char budgets everything else is expressed in. */
 const GENERATION_RESERVE_TOKENS = 1024
 const CHARS_PER_TOKEN = 3.5
 
-/**
- * Total chars the assembled prompt may occupy on a host, once the answer's own token reserve is
- * held back.
- *
- * The per-segment budgets above (retrieval, document previews, history) were each sized on their
- * own, with no budget for the assembled turn: history alone used to be allowed `maxNumCtx * 2.0` chars
- * — 16384 on midrange, against 5500 for the selected documents. Summed with the system prompt and
- * the document context that filled almost the entire window, leaving the ANSWER with what was
- * left over: ~1245 tokens on midrange, 346 on a minimal host, and 61 on legacy. Nothing enforced
- * the prompt is now compacted to the available prompt budget, while the selected `num_ctx`
- * remains unchanged.
- */
+/** Total chars the assembled prompt may occupy on a host, once the answer's own token reserve is held back. */
 export function resolvePromptCharBudget(maxNumCtx: number): number {
   const usableTokens = Math.max(512, maxNumCtx - GENERATION_RESERVE_TOKENS)
   return Math.floor(usableTokens * CHARS_PER_TOKEN)
@@ -140,11 +109,7 @@ const TIER_BUDGETS: Record<HardwareProfileTier, TierBudget> = {
   },
 }
 
-/**
- * Minimum hardware gets its own floor rather than sharing `legacy`: a 32-core CPU-only
- * workstation and a 4-core 8GB laptop are both `legacy`, but only the latter needs the
- * history and retrieval context cut this far back to stay responsive.
- */
+/** Minimum hardware gets its own floor rather than sharing `legacy`: a 32-core CPU-only workstation and a 4-core 8GB laptop are both `legacy`, but only the latter needs the history and retrieval context cut this far back to stay responsive. */
 const MINIMAL_HOST_BUDGET: TierBudget = {
   vectorContextChars: 1800,
   totalContextChars: 2500,
@@ -162,11 +127,7 @@ export function resolveChatThreadCount(cpuCount?: number): number | undefined {
   return Math.max(1, cpuCount - 1)
 }
 
-/**
- * Resolves the chat context budget for a host. An explicit `Low`/`Medium`/`High` profile
- * overrides detection (matching how the agent runtime options treat the same setting);
- * `Auto` classifies from the detected GPU/RAM/CPU facts.
- */
+/** Resolves the chat context budget for a host. */
 export function resolveChatContextBudget(
   facts: HardwareFacts = {},
   declaredProfile: DeclaredHardwareProfile = 'Auto',

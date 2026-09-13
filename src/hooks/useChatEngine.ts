@@ -415,19 +415,14 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
         .map((d) => {
           const full = d.extractedMarkdown || ''
           const body = full.slice(0, budget.perDocumentPreviewChars)
-          // Say which of the two this actually is. The label used to read 'Full Document' and
-          // always ended in '...', so the model was told it held the complete file while holding
-          // a truncated head - and then answered that the information was not in the document.
+          // Say which of the two this actually is.
           return body.length === full.length
             ? `[Full Document: ${d.filename}]\n${body}`
             : `[Document Excerpt (first ${body.length} of ${full.length} chars): ${d.filename}]\n${body}\n[...truncated]`
         })
         .join('\n\n---\n\n')
 
-      // Budget the two sources SEPARATELY instead of slicing their concatenation. The slice ran
-      // over `vectorContext + separator + directDocs` with the vector text first, so whenever
-      // retrieval alone reached totalContextChars the selected document's own text was cut off
-      // entirely - the user had attached a file the model then never saw.
+      // Budget the two sources SEPARATELY instead of slicing their concatenation.
       const boundedVectorContext = vectorContextText.slice(0, budget.vectorContextChars)
       const directDocsBudget = Math.max(0, budget.totalContextChars - boundedVectorContext.length)
       const boundedDirectDocs = directDocsText.slice(0, directDocsBudget)
@@ -450,11 +445,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
 
       const docContextBlock = boundedContext
         ? `[INDEXED DOCUMENT CONTEXT (LanceDB)]\n` +
-          // The last sentence is load-bearing. The chat presets used to carry their own bullet
-          // scripting the "nothing selected" reply, and llama3.2:3b reached for it even with the
-          // document sitting in this very block — 4 refusals out of 4, while the citations panel
-          // showed the retrieved excerpts. That bullet is gone from the presets: the only
-          // instruction the model now sees is the one matching the state it is actually in.
+          // The last sentence is load-bearing.
           `MANDATORY DIRECTIVE: The following excerpts constitute the actual parsed text of the user's selected documents and attachments. You have FULL access to this information. Always search, extract, and cite from this text to accurately answer any user question regarding files, documents, or attachments. A document IS selected and its text is right below: never answer that no document is attached, and never ask the user to select one.\n\n` +
           `${boundedContext}\n` +
           `[END DOCUMENT CONTEXT]`
@@ -469,14 +460,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
       ].filter(Boolean)
       const systemPromptWithContext = promptSections.join('\n\n')
 
-      // History is compacted LAST, against whatever the window has left once the system prompt
-      // and the selected document context have been placed. It used to be compacted FIRST,
-      // against a budget of its own (`maxNumCtx * 2.0` chars) that ignored the rest of the turn:
-      // on midrange that reserved 16384 chars for history against 5500 for the documents, and
-      // the assembled prompt then filled the window so completely that the answer was left
-      // ~1245 tokens to generate into on midrange and 61 on a legacy profile. Placing the
-      // attachment first and giving history the remainder inverts that priority: the user picked
-      // that document for this question.
+      // History is compacted LAST, against whatever the window has left once the system prompt and the selected document context have been placed.
       const turnSuffix = `User: ${userText}\nAssistant:`
       const historyBudgetChars = Math.max(
         0,

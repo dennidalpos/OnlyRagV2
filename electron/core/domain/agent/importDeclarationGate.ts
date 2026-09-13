@@ -1,29 +1,4 @@
-/**
- * Import Declaration Gate.
- *
- * Answers one question about a single file, the moment it is written: "does every package this
- * file imports actually exist in the project?"
- *
- * The project already has a dependency check — see dependencyIntegrityGate.ts — but it scans
- * the whole workspace with depcheck and runs inside the terminal application gate, so it only speaks when
- * the model calls `finish`. A session that never gets there never hears it. In
- * coding_agent_audit.log session-1787562597025-q8a5 the model wrote three components importing
- * `@tailwindcss/react`, `tailwind-react-components` and `@tailwindcss/components` — none of
- * which exist on npm — at steps 11, 13 and 17. The session died on the loop guard at step 45
- * without the gate ever running, and the three invented packages are still on disk.
- *
- * This gate is the cheap, immediate half: it parses only the file just written, so it costs
- * one AST walk the write already performs for syntax validation, and it can answer at step 11
- * instead of never.
- *
- * Deliberately narrow. It reports a specifier only when it is certain: a bare package name,
- * absent from the manifest, not a Node builtin, not covered by a tsconfig path alias. Anything
- * it cannot resolve confidently is left alone, because a false accusation sends a small model
- * rewriting working imports.
- *
- * Pure domain: the caller supplies the file's text, the declared package names and the alias
- * prefixes. Nothing here touches disk.
- */
+
 
 import ts from 'typescript'
 import { builtinModules } from 'node:module'
@@ -83,17 +58,7 @@ function isBareSpecifier(specifier: string): boolean {
   return !NODE_BUILTINS.has(packageNameOfSpecifier(specifier))
 }
 
-/**
- * Every bare module specifier the file imports, verbatim, in first-seen order and deduplicated.
- *
- * Verbatim rather than reduced to package names, because the alias check downstream has to see
- * the specifier the author wrote: `~/services/api` reduces to the package name `~`, which
- * matches no alias prefix and would be reported as a missing package.
- *
- * Covers `import`, `import type`, `export ... from`, `import()` and `require()` — a model
- * writing CommonJS is as capable of inventing a package as one writing ESM. Type-only imports
- * are included on purpose: a missing `@types` package still fails a typecheck.
- */
+/** Every bare module specifier the file imports, verbatim, in first-seen order and deduplicated. */
 export function extractBareImportSpecifiers(filePath: string, content: string): string[] {
   if (!SCANNABLE_EXTENSIONS.has(extensionOf(filePath))) return []
   if (!content || !content.trim()) return []
@@ -136,13 +101,7 @@ export function extractBareImportSpecifiers(filePath: string, content: string): 
   return found
 }
 
-/**
- * Judges one written file against the project's declarations.
- *
- * Returns `ok` for anything it cannot decide — an unscannable extension, an empty manifest,
- * a specifier behind an alias prefix — because the cost of a wrong accusation (a model
- * rewriting imports that worked) is higher than the cost of deferring to the build.
- */
+/** Judges one written file against the project's declarations. */
 export function evaluateFileImportIntegrity(
   filePath: string,
   content: string,

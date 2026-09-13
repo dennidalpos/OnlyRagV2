@@ -85,9 +85,7 @@ describe('HardwareProfileResolver Domain Unit Tests', () => {
   })
 
   it('should keep num_predict and maxContextChars inside the context window on every profile', () => {
-    // Regression: these three used to be hand-set per tier and drifted apart — the Medium
-    // profile shipped num_ctx 8192 with num_predict 6144 AND a 28000-char prompt budget, i.e.
-    // it promised the prompt ~3x more room than the window could hold alongside generation.
+    // Regression: these three used to be hand-set per tier and drifted apart — the Medium profile shipped num_ctx 8192 with num_predict 6144 AND a 28000-char prompt budget, i.e.
     for (const profile of ['Low', 'Medium', 'High'] as const) {
       const opts = HardwareProfileResolver.resolveOllamaOptions(profile, { cpuCount: 4 })
       const promptTokenBudget = Math.ceil(opts.maxContextChars / 3.6)

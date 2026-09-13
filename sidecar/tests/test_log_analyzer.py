@@ -70,9 +70,7 @@ class TestLogAnalyzerDetectors:
         assert any(r.severity == "CRITICAL" for r in records)
 
     def test_no_false_positive_on_ollama_env_var_configuration_line(self):
-        # Routine env-var configuration logging (TaskRunner) mentions "OLLAMA_" as an
-        # identifier prefix and "[Timeout: Ns]" as the command's own timeout budget —
-        # neither indicates an actual Ollama request timeout.
+        # Routine env-var configuration logging (TaskRunner) mentions "OLLAMA_" as an identifier prefix and "[Timeout: Ns]" as the command's own timeout budget — neither indicates an actual Ollama request timeout.
         lines = [
             "[INFO] [TaskRunner]: Executing PowerShell command: "
             "[System.Environment]::SetEnvironmentVariable('OLLAMA_FLASH_ATTENTION', '1', 'User'); "

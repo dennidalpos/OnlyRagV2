@@ -26,7 +26,7 @@ Documentazione tecnica breve, verificata contro il codice. I contratti prevalgon
 ## Regole
 
 - Non duplicare payload o versioni qui: aggiornare prima codice, tipi o OpenAPI.
-- Ogni link locale e comando `npm run` documentato deve passare `npm run docs:check`.
+- `npm run docs:check` controlla link locali e comandi `npm run` in `docs/`, `README.md` e `skills/`.
 - Aggiornare la pagina dell'ambito interessato; evitare di riaprire diari storici o note duplicate.
 
 ## Lettura rapida

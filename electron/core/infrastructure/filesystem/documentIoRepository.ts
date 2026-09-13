@@ -7,14 +7,7 @@ export class DocumentIoRepository {
     return fs.existsSync(targetPath)
   }
 
-  /**
-   * Writes to a `.tmp` sibling of `targetPath` first, then renames it into place — the same
-   * write-temp-then-swap discipline already used for PDF in-place translation
-   * (sidecar/domain/translator.py's `file_path + ".translating.tmp"` + `os.replace()`), so a
-   * write that fails partway (disk full, process killed) never leaves `targetPath` itself
-   * truncated or corrupted. The temp file lives next to the target, not in a separate OS temp
-   * directory, so the final `rename` stays on the same volume and is atomic.
-   */
+  /** Writes to a `.tmp` sibling of `targetPath` first, then renames it into place — the same write-temp-then-swap discipline already used for PDF in-place translation (sidecar/domain/translator.py's `file_path + ".translating.tmp"` + `os.replace()`), so a write tha */
   writeText(targetPath: string, content: string): { success: boolean; error?: string } {
     const tmpPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`
     try {

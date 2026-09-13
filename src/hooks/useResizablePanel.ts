@@ -1,10 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 
-/**
- * Drag-to-resize logic for a horizontally split panel (mouse drag on a divider, plus
- * arrow-key nudging for accessibility). Owns only the width/isResizing state and the
- * event wiring; supports optional localStorage persistence across reloads/sessions.
- */
+/** Drag-to-resize logic for a horizontally split panel (mouse drag on a divider, plus arrow-key nudging for accessibility). */
 export function useResizablePanel(initialWidth: number, min: number, max: number, storageKey?: string) {
   const [width, setWidth] = useState<number>(() => {
     if (storageKey && typeof window !== 'undefined' && window.localStorage) {

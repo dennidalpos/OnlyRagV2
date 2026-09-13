@@ -12,14 +12,7 @@ import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwarePr
 import { resolveModelContextLength } from '../../shared/domain/settings/modelContextPreference'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 
-/**
- * The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR.
- *
- * The multimodal engine is opt-in (Impostazioni > Motore OCR): sending the template is exactly what
- * tells the sidecar to route page bitmaps through the vision model. The template is shipped raw
- * because three of its four variables (`currentPage`, `numPages`, `activePageContent`) are only
- * known inside the sidecar's page loop, which renders it there.
- */
+/** The `images:analysis` template that goes on the wire, or `undefined` to stay on local RapidOCR. */
 export function resolveVisionOcrPrompt(settings?: AppSettings): string | undefined {
   if (settings?.ocrEngine !== 'vision_model') return undefined
   return resolveNodeTemplate('images:analysis', settings).template || undefined
@@ -203,9 +196,7 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
     if (viewMode === 'page' && leftPaneRef.current) {
       leftPaneRef.current.scrollTop = 0
     } else if (viewMode === 'all' && leftPaneRef.current) {
-      // Match by data-page-number (set by every page card, image-backed or text-fallback alike)
-      // rather than a fixed id -- SourcePagePreview only renders a `rendered-page-N` id for the
-      // no-scanned-image fallback case, so an id lookup silently no-ops for image-backed pages.
+      // Match by data-page-number (set by every page card, image-backed or text-fallback alike) rather than a fixed id -- SourcePagePreview only renders a `rendered-page-N` id for the no-scanned-image fallback case, so an id lookup silently no-ops for image-backed pag
       const targetElem = leftPaneRef.current.querySelector<HTMLElement>(`[data-page-number="${targetPage}"]`)
       if (targetElem) {
         const offset = targetElem.offsetTop - leftPaneRef.current.offsetTop

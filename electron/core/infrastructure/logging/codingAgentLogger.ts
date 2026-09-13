@@ -12,19 +12,7 @@ export class CodingAgentLogger {
   private logFilePath: string
   private maxSizeBytes: number
   private maxRetainedFiles: number
-  /**
-   * Previous turn prompt of each live session, kept to elide the part the next one repeats.
-   *
-   * A turn prompt is a stable head (user instruction, execution rules) followed by the parts
-   * that move (plan state, trajectory, tool outputs). Writing the head out on every step made
-   * prompts 69% of a 734 KB audit log for a single 38-step session, burying the 11% that says
-   * what the agent actually did.
-   *
-   * The anchor is the PREVIOUS step, not the session's first prompt: consecutive prompts share
-   * far more than distant ones (the plan block is usually unchanged between adjacent steps),
-   * which measured -76% against -50% on that session. Entries stay reconstructable by reading
-   * the log forward, which is how a session log is read anyway.
-   */
+  /** Previous turn prompt of each live session, kept to elide the part the next one repeats. */
   private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
   private runMetricsBySession = new Map<string, AgentRunMetrics>()
 
@@ -254,9 +242,7 @@ ${prompt.slice(0, 15000)}
       return
     }
 
-    // Snap the boundary back to a line start: a raw character prefix cuts mid-token, so a
-    // delta would open with "2 with new trajectory" instead of the whole "PLAN: step 2 ..."
-    // line, and the reader cannot tell what changed without fetching the baseline.
+    // Snap the boundary back to a line start: a raw character prefix cuts mid-token, so a delta would open with "2 with new trajectory" instead of the whole "PLAN: step 2 ..." line, and the reader cannot tell what changed without fetching the baseline.
     const rawShared = CodingAgentLogger.commonPrefixLength(previous.prompt, prompt)
     const sharedChars = prompt.lastIndexOf('\n', Math.max(0, rawShared - 1)) + 1
 
@@ -331,14 +317,7 @@ ${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` :
     this.writeEntry(`[STEP ${step} - TOOL RESULT COMPLETED] ${tool}`, content)
   }
 
-  /**
-   * Records one milestone changing status, with what caused it.
-   *
-   * The audit log used to carry only full plan snapshots, one per step — 14% of the file,
-   * and still not enough to answer the question that actually matters when a plan closes
-   * something it should not have: which step changed this milestone, and why. Reconstructing
-   * that meant diffing consecutive snapshots by hand.
-   */
+  /** Records one milestone changing status, with what caused it. */
   public logMilestoneTransition(
     sessionId: string,
     step: number,

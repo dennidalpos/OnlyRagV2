@@ -147,9 +147,7 @@ export const AppLayout: React.FC = () => {
   }, [language, setLanguage])
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
-    // Applied before setSettings: React runs state updaters during the render phase, so
-    // updating another component's state (I18nProvider) from inside one is a render-phase
-    // update and React warns about it.
+    // Applied before setSettings: React runs state updaters during the render phase, so updating another component's state (I18nProvider) from inside one is a render-phase update and React warns about it.
     if (newSettings.language && newSettings.language !== language) {
       setLanguage(newSettings.language)
     }
@@ -157,11 +155,7 @@ export const AppLayout: React.FC = () => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings }
 
-      // Prompt overrides deliberately survive a model change. They used to be wiped here, because
-      // the old per-family keys meant a prompt tuned for one family leaked onto another. Prompts
-      // are now one per module and model-agnostic — adaptation happens through Ollama's reported
-      // capabilities — so there is nothing to resynchronize, and wiping would only destroy the
-      // user's edits. Resetting a prompt is an explicit action in the configuration modal.
+      // Prompt overrides deliberately survive a model change.
 
       queueMicrotask(() => {
         try {

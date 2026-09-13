@@ -11,16 +11,7 @@ import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver
 import type { TurnDispatchContext } from './agentOrchestratorTurnDispatchTypes'
 import type { AppSettings, OllamaModelMetrics } from '../../../shared/types'
 
-/**
- * Ollama clamps any requested `num_ctx` down to the model's trained `context_length`, then
- * truncates the HEAD of the prompt to fit — the system prompt and the plan block, measured
- * 2026-08-24 (see ollamaHttpClient.getModelMetrics).
- *
- * The clamp itself was never the damage. The damage was `maxContextChars` being derived from the
- * UNCLAMPED window: it told HeuristicContextCompactor there was room that did not exist, so the
- * compactor declined to act and handed Ollama a prompt guaranteed to lose its head. These tests
- * pin that both numbers now come from the window Ollama will actually honour.
- */
+/** Ollama clamps any requested `num_ctx` down to the model's trained `context_length`, then truncates the HEAD of the prompt to fit — the system prompt and the plan block, measured 2026-08-24 (see ollamaHttpClient.getModelMetrics). */
 
 const MODEL = 'qwen2.5-coder:7b'
 

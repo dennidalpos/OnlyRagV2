@@ -60,14 +60,7 @@ describe('createWorkspaceDeliverableProbe', () => {
   })
 })
 
-/**
- * The churn that dominated the live run of 2026-08-24, traced to this adapter. Milestone m-9
- * read "Add Tailwind directives to `globals.css`"; the file was written to
- * `src/styles/globals.css` at step 8 with exactly those directives; `update_plan` was refused
- * at step 17 with "Still missing: globals.css", whose directive says to write the missing file
- * — so the model rewrote the same 58 bytes at steps 18, 19, 35, 36 and 43, every one a no-op
- * and every one blocked as a loop.
- */
+/** The churn that dominated the live run of 2026-08-24, traced to this adapter. */
 describe('a deliverable named without a directory is a name, not a location', () => {
   it('finds the file the model actually wrote, in the directory it chose', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-probe-bare-'))

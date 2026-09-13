@@ -8,13 +8,7 @@ import {
   DEFAULT_IMAGE_ANALYSIS_PROMPT,
 } from './promptPresets'
 
-/**
- * The configuration tree: every system prompt the user can edit, and nothing else.
- *
- * Six leaf nodes, down from the 87 the per-family matrix implied. A node id doubles as its
- * override key in `AppSettings.customPromptOverrides`, so there is exactly one key per editable
- * text — no module-wide/family-keyed pair that can shadow one another.
- */
+/** The configuration tree: every system prompt the user can edit, and nothing else. */
 
 export type PromptNodeId =
   | 'coding:master'
@@ -49,17 +43,9 @@ export interface PromptNode {
    * Only child nodes have one.
    */
   partialName?: string
-  /**
-   * Partials the template must still reference. Dropping `{{> directives}}` from the coding
-   * master silently strips the anti-loop and DoD rules, so the validator treats it as an error
-   * rather than a preference.
-   */
+  /** Partials the template must still reference. */
   requiredPartials?: string[]
-  /**
-   * When the active model reports this capability, the node is omitted from the compiled prompt
-   * and its editor is read-only. `tools` is the AGT2 gate: the schema already goes out via the
-   * native `tools` API parameter, so sending it as prose too would double it.
-   */
+  /** When the active model reports this capability, the node is omitted from the compiled prompt and its editor is read-only. */
   omittedWhenCapability?: OllamaCapability
   /**
    * Set when nothing in the app currently sends this prompt to a model. Editing it is stored and

@@ -29,6 +29,17 @@ describe('documentation validation', () => {
     ])
   })
 
+  it('also validates explicitly supplied documentation sources', () => {
+    const readmePath = path.join(tempDir, 'README.md')
+    fs.writeFileSync(readmePath, '[Architecture](docs/architecture.md)')
+    fs.writeFileSync(path.join(tempDir, 'docs', 'architecture.md'), '# Architecture')
+    expect(validateDocumentation({
+      docsRoot: path.join(tempDir, 'docs'),
+      packageJsonPath: path.join(tempDir, 'package.json'),
+      additionalFiles: [readmePath],
+    })).toEqual({ filesChecked: 2, errors: [] })
+  })
+
   it('exits non-zero when the CLI finds a documentation error', () => {
     fs.writeFileSync(path.join(tempDir, 'docs', 'index.md'), '[Missing](missing.md)')
     expect(() => execFileSync(process.execPath, [path.resolve('scripts/validate_documentation.mjs'), path.join(tempDir, 'docs'), path.join(tempDir, 'package.json')], { stdio: 'pipe' })).toThrow()

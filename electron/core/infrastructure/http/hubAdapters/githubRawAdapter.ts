@@ -23,9 +23,7 @@ export class GitHubRawAdapter implements ISkillHubAdapter {
         return []
       }
 
-      // Only accept content that is genuinely a SKILL.md file with YAML frontmatter --
-      // a repo-root or webpage URL (HTML) can otherwise be misidentified as valid skill
-      // content just because it happens to contain a '# ' substring somewhere.
+      // Only accept content that is genuinely a SKILL.md file with YAML frontmatter -- a repo-root or webpage URL (HTML) can otherwise be misidentified as valid skill content just because it happens to contain a '# ' substring somewhere.
       if (res.content.trim().startsWith('---')) {
         const { metadata } = parseSkillFrontmatter(res.content)
         const name = metadata.name || 'imported-skill'

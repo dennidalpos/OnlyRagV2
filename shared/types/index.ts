@@ -225,11 +225,7 @@ export interface AppSettings {
   noWorkspaceMode?: boolean
   /** Default translation export folder; unset uses the save dialog. */
   translationOutputFolder?: string
-  /**
-   * User-edited system prompts, keyed by prompt node id ('coding:master', 'chat', ...).
-   * One key per editable node — see electron/core/domain/agent/promptHierarchyRegistry.ts.
-   * An override replaces the factory default until the user resets that node.
-   */
+  /** User-edited system prompts, keyed by prompt node id ('coding:master', 'chat', ...). */
   customPromptOverrides?: Record<string, string>
   // Concurrency & Task Queue Settings
   maxToolCallSteps?: number // Range: 10-200, 0 = unlimited, default unlimited
@@ -490,11 +486,7 @@ export interface PagePreviewData {
   mimeType: string
 }
 
-/**
- * The per-model facts Ollama reports on /api/tags. Mirrors OllamaModelMetrics in
- * electron/core/infrastructure/http/ollamaHttpClient.ts — every field optional, because the
- * payload varies by Ollama version and by how a model was imported.
- */
+/** The per-model facts Ollama reports on /api/tags. */
 export interface OllamaModelMetrics {
   capabilities: string[]
   /** Trained context length in tokens. Ollama clamps any larger num_ctx down to this. */

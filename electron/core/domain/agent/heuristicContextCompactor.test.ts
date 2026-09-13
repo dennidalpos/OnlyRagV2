@@ -76,9 +76,7 @@ describe('HeuristicContextCompactor', () => {
   })
 
   it('should never zero the history allocation when the immutable tier overflows the budget (regression: agent repeated its first tool call forever)', () => {
-    // Reproduces session-1787441347002-hu1s: an oversized immutable tier drove `remaining`
-    // negative, flooring historyAlloc at 0. The history vanished, every turn's prompt became
-    // byte-identical, and qwen2.5-coder:7b re-emitted the same `npm create vite` call 22 times.
+    // Reproduces session-1787441347002-hu1s: an oversized immutable tier drove `remaining` negative, flooring historyAlloc at 0.
     const history = [
       '### COMPLETE EXECUTION TRAJECTORY (Step History):',
       '| Step | Tool | Target | Status | Outcome Summary |',

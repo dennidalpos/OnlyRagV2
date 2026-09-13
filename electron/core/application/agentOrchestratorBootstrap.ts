@@ -37,12 +37,7 @@ export interface BootstrapParams {
   deregisterSession: () => void
 }
 
-/**
- * Everything runAgentOrchestratorLoop's turn loop needs after one-shot session setup:
- * resolved config/context strings, the loop-scoped state objects the turn-dispatch /
- * response-interpreter / tool-result-processor modules read and mutate in place, and the
- * closures (emitLog, persistCurrentState, requestApproval, finalizeSession, ...) that share that state by reference.
- */
+/** Everything runAgentOrchestratorLoop's turn loop needs after one-shot session setup: resolved config/context strings, the loop-scoped state objects the turn-dispatch / response-interpreter / tool-result-processor modules read and mutate in place, and the closur */
 export interface AgentSessionBootstrap {
   phaseController: AgentExecutionPhaseController
   userTask: string
@@ -91,13 +86,7 @@ export interface AgentSessionBootstrap {
   clearSessionTimeout: () => void
 }
 
-/**
- * One-shot per-session setup for runAgentOrchestratorLoop: resolves the task/workspace/
- * settings context, initializes the loop-scoped state machines and restores any saved
- * session, builds the persistence/reporting closures, and arms the session timeout
- * watchdog. See agentOrchestratorSessionContext/State/Persistence/Watchdog.ts for the four
- * steps this composes.
- */
+/** One-shot per-session setup for runAgentOrchestratorLoop: resolves the task/workspace/ settings context, initializes the loop-scoped state machines and restores any saved session, builds the persistence/reporting closures, and arms the session timeout watchdog. */
 export async function bootstrapAgentSession(params: BootstrapParams): Promise<AgentSessionBootstrap> {
   const { payload, session, sessionId, isSessionActive, deregisterSession } = params
 

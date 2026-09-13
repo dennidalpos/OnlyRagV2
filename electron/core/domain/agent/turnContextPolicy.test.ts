@@ -3,16 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { resolveTurnContextPolicy, omittedBlockNames, type TurnContextPolicy } from './turnContextPolicy'
 import type { PlanDirectiveKind } from './planDirectiveArbiter'
 
-/**
- * The prompt used to carry every optional block on every turn, sized by fixed shares of the
- * context budget. On a turn whose entire prescribed action is `npm install react`, the repo map,
- * the RAG corpus and the skill bodies were still assembled and sent — and the block that paid
- * for them, once HeuristicContextCompactor ran out of room, was the tool history.
- *
- * These tests pin the two properties that make that safe to stop doing: that a turn whose action
- * is a named command carries nothing extra, and that no policy can ever withhold the blocks the
- * agent cannot work without.
- */
+/** The prompt used to carry every optional block on every turn, sized by fixed shares of the context budget. */
 
 /** Every kind the arbiter can produce. Kept literal so a new kind fails the exhaustiveness test. */
 const ALL_KINDS: PlanDirectiveKind[] = [
@@ -86,9 +77,7 @@ describe('resolveTurnContextPolicy', () => {
   })
 
   it('never exposes a flag for the system prompt, the plan block or the tool history', () => {
-    // This is the invariant, and it is enforced structurally rather than by assertion: those
-    // three blocks have no field in TurnContextPolicy, so no policy value can suppress them.
-    // The test guards against a future field being added that would let one.
+    // This is the invariant, and it is enforced structurally rather than by assertion: those three blocks have no field in TurnContextPolicy, so no policy value can suppress them.
     const keys = Object.keys(resolveTurnContextPolicy('focus')) as (keyof TurnContextPolicy)[]
     expect(keys.sort()).toEqual([...OPTIONAL_FLAGS, 'rationale'].sort())
   })
@@ -106,17 +95,7 @@ describe('omittedBlockNames', () => {
   })
 })
 
-/**
- * The `codeFixOnly` states admit pinned files and the active file on the assumption that those
- * carry the code the directive is about. Session live-full-task of 2026-08-25T12:11 showed the
- * assumption does not hold where it matters most: a headless run pins nothing and has no editor,
- * so both blocks were absent from every prompt, the model called `read_file` zero times in fifty
- * steps, and it answered "rewrite src/pages/DashboardPage.tsx" with a 208-byte stub.
- *
- * The content is supplied by the assembler through the pinned channel (see readRewriteTargets in
- * agentOrchestratorPromptAssembly.ts), which is only reachable while these states keep
- * `includePinnedFiles` true. That is what this pins.
- */
+/** The `codeFixOnly` states admit pinned files and the active file on the assumption that those carry the code the directive is about. */
 describe('states that order a file rewrite keep the channel that carries the file', () => {
   it.each(['dependencies_uninstallable', 'verification_failing'] as const)(
     '%s admits pinned files, the channel the directive target is injected on',

@@ -98,9 +98,7 @@ describe('resolveMilestoneUpdate', () => {
 })
 
 describe('a milestone the loop guard abandoned', () => {
-  // m-6 of session-1787497654743-4enx was abandoned at step 41 with "stop working on it
-  // entirely" and reported VERIFIED at step 47. Abandonment exists to break a loop; letting
-  // the model write over it undoes the escape and puts the false progress back in the plan.
+  // m-6 of session-1787497654743-4enx was abandoned at step 41 with "stop working on it entirely" and reported VERIFIED at step 47.
   const abandoned = milestone('failed', abandonedMilestoneNote(2, 'src/styles/globals.css'))
 
   it('cannot be reopened as verified', () => {

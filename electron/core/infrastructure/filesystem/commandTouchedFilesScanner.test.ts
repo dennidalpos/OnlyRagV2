@@ -116,10 +116,7 @@ describe('scanCommandTouchedFiles — nested project directories', () => {
     fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true })
     fs.writeFileSync(path.join(tempDir, 'src', 'App.tsx'), 'export const App = () => null')
 
-    // "Pre-existing" means created before the command started, and creation time is what the
-    // scan reads — utimes cannot backdate it, so the command start is placed after instead.
-    // This is the case that must not regress: a directory's mtime moves whenever a child is
-    // written into it, so an mtime-based check would report `src` on every single command.
+    // "Pre-existing" means created before the command started, and creation time is what the scan reads — utimes cannot backdate it, so the command start is placed after instead.
     const startedAfterTheDirectoryExisted = Date.now() + 5000
 
     expect(scanCommandTouchedFiles(tempDir, startedAfterTheDirectoryExisted).createdTopLevelDirs).toEqual([])

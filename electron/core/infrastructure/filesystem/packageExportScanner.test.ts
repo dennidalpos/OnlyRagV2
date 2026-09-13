@@ -5,13 +5,7 @@ import path from 'node:path'
 
 import { readLocalModuleExports, readPackageExports, extractExportedNames } from './packageExportScanner'
 
-/**
- * Measured 2026-08-25T19:59, session live-full-task, steps 42-43. The build reported that
- * `@headlessui/react` exports neither `Card` nor `List`; the directive ordered TaskCard.tsx
- * rewritten; the model rewrote it with the identical import. It had no second candidate and no
- * way to obtain one: it never calls `read_file`, and the answer lives in a .d.ts under
- * node_modules. This reads it.
- */
+/** Measured 2026-08-25T19:59, session live-full-task, steps 42-43. */
 
 let tempDir: string
 

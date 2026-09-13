@@ -121,9 +121,7 @@ describe('buildVersionRealityDirective', () => {
 })
 
 describe('one instruction per message', () => {
-  // Run 14 of 2026-08-25: the directive ended with "Then install again", and the model ran
-  // `npm install` repeatedly until the loop guard aborted the session at step 21, 0/12, with
-  // package.json never rewritten. The re-install is a consequence, never a second action.
+  // Run 14 of 2026-08-25: the directive ended with "Then install again", and the model ran `npm install` repeatedly until the loop guard aborted the session at step 21, 0/12, with package.json never rewritten.
   it('never orders an install alongside the manifest rewrite', () => {
     const outdated = buildVersionRealityDirective({
       nonexistent: [],
@@ -145,9 +143,7 @@ describe('one instruction per message', () => {
 
 describe('packages whose major bump rewrites the configuration', () => {
   it('never pushes typescript, tailwindcss or eslint to a new major', () => {
-    // Runs 12 and 18 of 2026-08-25 took typescript to 7 on this directive's advice and then died
-    // in tsconfig.json (TS5108, TS5102): the model writes the config it learned, which predates
-    // the compiler it was just told to install. Run 18 rewrote tsconfig.json 17 times, 1/14.
+    // Runs 12 and 18 of 2026-08-25 took typescript to 7 on this directive's advice and then died in tsconfig.json (TS5108, TS5102): the model writes the config it learned, which predates the compiler it was just told to install.
     const findings = findVersionReality(
       [
         { name: 'typescript', range: '^5.0.0' },

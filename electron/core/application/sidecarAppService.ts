@@ -1,12 +1,4 @@
-/**
- * electron/core/application/sidecarAppService.ts
- *
- * Application Layer — Orchestrator for Python FastAPI Sidecar use cases.
- * Coordinates document ingestion, semantic search, prompt history indexing,
- * document translation, export compilation, and SLM log anomaly diagnostics.
- *
- * All network transport is delegated to SidecarHttpClient (Infrastructure layer).
- */
+
 
 import fs from 'node:fs'
 import path from 'node:path'

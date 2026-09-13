@@ -12,16 +12,7 @@ import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
 import type { ResponseInterpreterContext } from './agentOrchestratorResponseInterpreterTypes'
 
-/**
- * Blueprint §5.4 symptom A: in the ERESOLVE probe the model re-ran a `npm run build` that was
- * already green four times instead of closing. The guard told it the command had ALREADY
- * SUCCEEDED and it ran it again — not out of confusion, but because the plan block forbade
- * finishing while a milestone naming no artefact stayed open, and re-running the build was the
- * only permitted action left.
- *
- * These tests pin the exit: once the verification has passed and nothing is left that a
- * command could prove, the system says so and names the two calls that end the session.
- */
+/** Blueprint §5.4 symptom A: in the ERESOLVE probe the model re-ran a `npm run build` that was already green four times instead of closing. */
 
 let tempDir: string
 
@@ -39,12 +30,7 @@ function plannerWith(milestones: Array<{ id: string; title: string; status: 'pen
   return planner
 }
 
-/**
- * The two directives these tests were written against are now branches of one arbitrated
- * decision (planDirectiveArbiter.ts). The adapters keep each assertion asking the question it
- * was written to ask: "is THIS the directive the turn carries?" — which is stricter than the
- * old "is this directive non-null?", because the arbiter can only ever return one.
- */
+/** The two directives these tests were written against are now branches of one arbitrated decision (planDirectiveArbiter.ts). */
 function closureDirectiveOf(workspace: string | null, planner: GoalDecompositionPlanner, hasVerifiedBuild: boolean): string | null {
   const decision = resolvePlanDirectiveForTurn(workspace, planner, hasVerifiedBuild)
   return decision.kind === 'session_closure' ? decision.blockDirective : null
@@ -90,12 +76,7 @@ describe('the session-closure branch of the plan directive arbiter', () => {
   })
 })
 
-/**
- * The exact milestone from the live-full-task run of 2026-08-24. m-10 was "Create
- * `src/services` folder"; the model wrote `src/services/index.tsx` three times with three
- * different placeholder bodies trying to close it, because focus directive 2 said writing the
- * milestone's files was how closure happened.
- */
+/** The exact milestone from the live-full-task run of 2026-08-24. */
 describe('the unprovable-milestone branch of the plan directive arbiter', () => {
   it('fires on the folder milestone that caused the observed loop', () => {
     const planner = plannerWith([{ id: 'm-10', title: 'Create `src/services` folder', status: 'in_progress' }])
@@ -144,9 +125,7 @@ describe('the unprovable-milestone branch of the plan directive arbiter', () => 
     expect(unprovableDirectiveOf(null, planner)).toBeNull()
   })
 
-  // Observed on m-5 "Install Tailwind CSS" in the live run of 2026-08-24: the milestone names
-  // no file, but `update_plan` runs its declared command and promotes on the exit code, so
-  // "no command can prove it" was false and the directive was pushing the model off a real check.
+  // Observed on m-5 "Install Tailwind CSS" in the live run of 2026-08-24: the milestone names no file, but `update_plan` runs its declared command and promotes on the exit code, so "no command can prove it" was false and the directive was pushing the model off a r
   it('stays silent for a milestone that declares its own verification command', () => {
     const planner = new GoalDecompositionPlanner()
     planner.initializePlan([
@@ -233,12 +212,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
     expect(lastDirective).toContain('m-2: Ensure the layout is responsive on small screens')
   })
 
-  /**
-   * The live eresolve run of 2026-08-24 is the reason this is pinned. The closure directive
-   * fired at exactly the right step, third in a message whose earlier blocks said "move to the
-   * NEXT unfinished step of your active milestone" and "Advance to the next unfinished step
-   * instead". The model followed those and ran another command. One message, one instruction.
-   */
+  /** The live eresolve run of 2026-08-24 is the reason this is pinned. */
   it('carries no competing "go do more work" advice alongside the order to finish', async () => {
     ctx = makeContext(true)
 
@@ -253,8 +227,6 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
   })
 
   // The same text replaces the stagnation branch, which is reached by repeats that FAILED.
-  // The live run of 2026-08-24 put it on an `update_plan` rejected twice for having no plan,
-  // under a sentence claiming it "succeeded every time".
   it('does not claim the repeated call succeeded, since it also answers failing repeats', async () => {
     ctx = makeContext(true)
     const failingCall: AgentToolCall = { tool: 'update_plan', parameters: { milestoneId: 'm-2' } }
@@ -294,12 +266,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
   })
 })
 
-/**
- * Regression found by the live run of 2026-08-24, once the arbiter made the model actually run
- * commands: a repeated `npm run build` abandoned m-1 "Create `package.json`" as FAILED — a file
- * written correctly at step 1 and on disk the whole time. The escape must not punish a
- * milestone for an error that belongs to the build.
- */
+/** Regression found by the live run of 2026-08-24, once the arbiter made the model actually run commands: a repeated `npm run build` abandoned m-1 "Create `package.json`" as FAILED — a file written correctly at step 1 and on disk the whole time. */
 describe('a repeated command must not abandon a milestone that is already delivered', () => {
   function contextFor(planner: GoalDecompositionPlanner): ResponseInterpreterContext {
     return {
@@ -374,10 +341,7 @@ describe('a repeated command must not abandon a milestone that is already delive
   })
 
   it('leaves a delivered milestone alone when the loop is on a file it does not name', async () => {
-    // Run 9 of 2026-08-25 lost its last milestone here: m-1 `package.json` was written, correct
-    // and on disk, and it was marked FAILED because the model was looping on DashboardPage.tsx.
-    // The guard covered command loops only, so a loop on somebody else's file still cost a
-    // milestone its status — 12/13 instead of 13/13, with "fallita" in the report for work done.
+    // Run 9 of 2026-08-25 lost its last milestone here: m-1 `package.json` was written, correct and on disk, and it was marked FAILED because the model was looping on DashboardPage.tsx.
     writeWorkspaceFile('package.json', '{ "name": "app", "scripts": { "build": "vite build" } }\n')
     writeWorkspaceFile('src/pages/DashboardPage.tsx', 'export default function D() { return null }\n')
     const planner = plannerWith([{ id: 'm-1', title: 'The project declares its dependencies — `package.json`', status: 'in_progress' }])
@@ -391,17 +355,7 @@ describe('a repeated command must not abandon a milestone that is already delive
   })
 })
 
-/**
- * Measured 2026-08-25T19:59, session live-full-task. `verification_due` fired for the first time
- * in 250 recorded turns — the day's fixes had finally put every deliverable on disk — and
- * collided with the loop guard on its first appearance. Steps 44 to 50 were seven blocked
- * `npm run build`s delivered under a directive reading "EVERY DELIVERABLE IS ON DISK — VERIFY THE
- * PROJECT NOW": the guard blocked the call and then, as the single action that moves the plan,
- * ordered that same call. No move satisfies both, so the run died at the ceiling.
- *
- * Same shape as the install deadlock fixed earlier the same day — two subsystems, opposite
- * orders, neither aware of the other.
- */
+/** Measured 2026-08-25T19:59, session live-full-task. */
 describe('the loop guard yields when the arbitrated directive orders the blocked call', () => {
   const buildCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm run build' } }
 

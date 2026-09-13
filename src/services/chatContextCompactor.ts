@@ -140,11 +140,7 @@ export function compactChatHistory(
 
   const combined = [summarySection, recentSection].filter(Boolean).join('\n\n')
 
-  // Hard ceiling. Distillation is best-effort - TextRankSummarizer cannot shrink text with no
-  // sentence structure (logs, tables, code), and the recent-turn loop deliberately keeps the
-  // last 4 turns whatever their size - so without this clamp the block could still exceed the
-  // caller's budget and push the selected document out of the context window. Trim from the
-  // FRONT: the most recent turns are the ones the answer depends on.
+  // Hard ceiling.
   const bounded = combined.length > baseBudget
     ? `[...older conversation trimmed to fit the context window]\n\n${combined.slice(combined.length - baseBudget)}`
     : combined

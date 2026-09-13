@@ -199,12 +199,7 @@ async function offerPublishedWorkspaceCommit(
   }
 }
 
-/**
- * Single application-owned terminal gate for agent runs. The model may suggest that work is
- * finished, go silent, exhaust its budget or lose transport; none of those events decides the
- * outcome. This function checks current evidence, preserves partial work, persists the exact
- * reason and emits one explicit terminal status.
- */
+/** Single application-owned terminal gate for agent runs. */
 export async function closeAgentRunFromEvidence(
   ctx: ApplicationClosureContext,
   request: ApplicationClosureRequest

@@ -117,10 +117,7 @@ describe('chatContextBudget', () => {
 
   describe('prompt char budget vs token window (regression: selected attachment truncated away)', () => {
     it('should keep the whole assembled turn inside the token window on every profile', () => {
-      // The per-segment budgets were each sized on their own, with nothing budgeting the
-      // assembled turn: on midrange, history alone was allowed maxNumCtx * 2.0 = 16384 chars
-      // against 5500 for the selected documents. The turn then filled almost the whole window
-      // and the ANSWER got what was left — ~1245 tokens on midrange, 61 on legacy.
+      // The per-segment budgets were each sized on their own, with nothing budgeting the assembled turn: on midrange, history alone was allowed maxNumCtx * 2.0 = 16384 chars against 5500 for the selected documents.
       const hosts = [
         { hasNvidiaGpu: false, vramTotalMB: 0, totalRAMGB: 8, cpuCount: 4 },
         { hasNvidiaGpu: true, vramTotalMB: 8192, totalRAMGB: 32, cpuCount: 8 },

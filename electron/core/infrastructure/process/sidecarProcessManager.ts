@@ -9,9 +9,7 @@ import { decidePortReclaim, parseImageNameFromTasklist, parseListeningPidFromNet
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
-// In development the main process runs bundled as dist-electron/main.js, one level below the
-// repository root, so __dirname is <root>/dist-electron no matter where this module's source
-// lives. Every dev-only lookup below must climb from here, never from the source tree depth.
+// In development the main process runs bundled as dist-electron/main.js, one level below the repository root, so __dirname is <root>/dist-electron no matter where this module's source lives.
 const DEV_PROJECT_ROOT = path.join(__dirname, '..')
 
 const SIDECAR_PORT = 8000
@@ -178,11 +176,7 @@ export class SidecarProcessManager {
     return false
   }
 
-  /**
-   * Runs a command purely to read its stdout. Separate from execAsync, which only ever needed
-   * stderr, and never rejects: every failure mode here (tool missing, non-zero exit, timeout)
-   * means the same thing to the caller — the holder of the port could not be identified.
-   */
+  /** Runs a command purely to read its stdout. */
   private readCommandOutput(cmd: string, args: string[], timeoutMs = 5000): Promise<string> {
     return new Promise((resolve) => {
       let stdout = ''
@@ -217,14 +211,7 @@ export class SidecarProcessManager {
     })
   }
 
-  /**
-   * Terminates a sidecar left listening on the port by a previous session, so this run can own
-   * the process it talks to. See orphanPortReclaim.ts for why adopting the orphan instead is
-   * not the harmless choice it looks like.
-   *
-   * Returns true only when the port was actually freed: a caller that gets false is looking at
-   * a healthy endpoint it does not own, which is still better than no sidecar at all.
-   */
+  /** Terminates a sidecar left listening on the port by a previous session, so this run can own the process it talks to. */
   private async reclaimOrphanSidecarPort(): Promise<boolean> {
     if (process.platform !== 'win32') {
       logger.log('WARN', 'Sidecar', `Port ${SIDECAR_PORT} is held by a sidecar this session did not start; automatic reclaim is implemented for Windows only.`)
@@ -296,10 +283,7 @@ export class SidecarProcessManager {
     let exePath = ''
 
     if (isPackaged) {
-      // electron-builder's extraResources entry for sidecar_dist/sidecar has "to": "sidecar",
-      // so the compiled PyInstaller binary lands at resources/sidecar/sidecar.exe -- "sidecar_dist"
-      // is only the local build-time staging directory name (see build_package.ps1), it never
-      // exists inside the packaged app itself.
+      // electron-builder's extraResources entry for sidecar_dist/sidecar has "to": "sidecar", so the compiled PyInstaller binary lands at resources/sidecar/sidecar.exe -- "sidecar_dist" is only the local build-time staging directory name (see build_package.ps1), it ne
       exePath = path.join(process.resourcesPath, 'sidecar', 'sidecar.exe')
     }
 

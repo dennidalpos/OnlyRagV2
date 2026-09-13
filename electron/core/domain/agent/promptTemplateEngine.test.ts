@@ -17,9 +17,7 @@ describe('renderPromptTemplate', () => {
     expect(out).toBe('A RULE 1 B')
   })
 
-  // Mustache's standalone-tag rule: a partial alone on a line consumes that line. Worth pinning
-  // down, because it is what makes an omitted block disappear cleanly instead of leaving a blank
-  // line behind — the tool schema block relies on it.
+  // Mustache's standalone-tag rule: a partial alone on a line consumes that line.
   it('leaves no blank line when a standalone partial resolves to empty', () => {
     const template = 'HEAD\n{{> tools}}\nTAIL'
     expect(renderPromptTemplate(template, {}, { tools: '' })).toBe('HEAD\nTAIL')

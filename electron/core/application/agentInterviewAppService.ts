@@ -1,12 +1,4 @@
-/**
- * electron/core/application/agentInterviewAppService.ts
- *
- * Application Layer — Pre-Flight Clarification Interview Service
- *
- * Analyzes user prompts before plan generation to identify architectural,
- * styling, persistence, or library choices. Generates structured multiple-choice
- * questions with a recommended default and write-in support.
- */
+
 
 import os from 'node:os'
 import { CODING_MODEL_KEEP_ALIVE, HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'

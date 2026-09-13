@@ -1,8 +1,4 @@
-/**
- * Display formatting for the ISO 8601 timestamps persisted by the agent and by the
- * session history. Values that are not valid ISO strings (records written before the
- * ISO migration) are returned untouched instead of rendering as "Invalid Date".
- */
+
 
 function parseIso(isoTimestamp: string | undefined | null): Date | null {
   if (!isoTimestamp) return null

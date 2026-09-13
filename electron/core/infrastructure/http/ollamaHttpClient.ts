@@ -127,25 +127,8 @@ export class OllamaHttpClient {
     })
   }
 
-  /**
-   * Fetches /api/tags and keeps everything Ollama reports per installed model, not just the
-   * capabilities array.
-   *
-   * `getModelCapabilities` below reads the same endpoint and throws the rest away, which is why
-   * the settings panel could only ever show a model's name: `details.context_length`,
-   * `details.parameter_size` and `details.quantization_level` were fetched on every call and
-   * discarded. `context_length` in particular is the number the app most needs and least has —
-   * measured on 2026-08-24, Ollama silently clamps a requested `num_ctx` down to it and
-   * silently truncates the HEAD of any prompt that exceeds it.
-   *
-   * Returns an empty map (never a rejection) on any failure: metrics are for display and must
-   * not be able to break a settings screen.
-   */
-  /**
-   * Internal shared HTTP data path for /api/tags.
-   * Emits a single GET /api/tags request, records metrics, and parses the models array.
-   * Returns an empty array (never throws/rejects) on any network, timeout, HTTP or JSON error.
-   */
+  /** Fetches /api/tags and keeps everything Ollama reports per installed model, not just the capabilities array. */
+  /** Internal shared HTTP data path for /api/tags. */
   private fetchRawModelTags(customHost?: string): Promise<RawOllamaTagModel[]> {
     const urlOpts = this.resolveUrl('/api/tags', customHost)
     const startedAt = Date.now()
@@ -204,20 +187,7 @@ export class OllamaHttpClient {
     })
   }
 
-  /**
-   * Fetches /api/tags and keeps everything Ollama reports per installed model, not just the
-   * capabilities array.
-   *
-   * `getModelCapabilities` below reads the same endpoint and throws the rest away, which is why
-   * the settings panel could only ever show a model's name: `details.context_length`,
-   * `details.parameter_size` and `details.quantization_level` were fetched on every call and
-   * discarded. `context_length` in particular is the number the app most needs and least has —
-   * measured on 2026-08-24, Ollama silently clamps a requested `num_ctx` down to it and
-   * silently truncates the HEAD of any prompt that exceeds it.
-   *
-   * Returns an empty map (never a rejection) on any failure: metrics are for display and must
-   * not be able to break a settings screen.
-   */
+  /** Fetches /api/tags and keeps everything Ollama reports per installed model, not just the capabilities array. */
   async getModelMetrics(customHost?: string): Promise<Record<string, OllamaModelMetrics>> {
     const rawModels = await this.fetchRawModelTags(customHost)
     const map: Record<string, OllamaModelMetrics> = {}
@@ -238,8 +208,6 @@ export class OllamaHttpClient {
     }
 
     // `details.context_length` is not present in every Ollama version.
-    // `/api/show` exposes the model's trained context in model_info, so
-    // enrich the tag facts before returning them to the renderer.
     await Promise.all(
       Object.keys(map).map(async (name) => {
         const contextLength = await this.getModelContextLength(name, customHost)
@@ -307,13 +275,7 @@ export class OllamaHttpClient {
     return list
   }
 
-  /**
-   * Fetches /api/tags and extracts the `capabilities` array Ollama reports
-   * per installed model (e.g. ["completion", "tools"]) — the authoritative
-   * signal for native tool-calling support (see ollamaToolCallingCapability.ts).
-   * Returns an empty map (not a rejection) on any failure, so callers fall
-   * back to the family allow-list heuristic transparently.
-   */
+  /** Fetches /api/tags and extracts the `capabilities` array Ollama reports per installed model (e.g. */
   async getModelCapabilities(customHost?: string): Promise<Record<string, string[]>> {
     const rawModels = await this.fetchRawModelTags(customHost)
     const map: Record<string, string[]> = {}
@@ -384,13 +346,7 @@ export class OllamaHttpClient {
     })
   }
 
-  /**
-   * Loads a model into memory without generating anything (empty prompt + keep_alive),
-   * the mirror image of unloadModel above. Called at agent-session start so the cold
-   * load overlaps with prompt assembly (repo map scan, skill matching) instead of
-   * racing the first turn's 45s initial-response timeout in agentStreamTransport.ts.
-   * Always resolves — a failed warm-up is a missed optimisation, never a session error.
-   */
+  /** Loads a model into memory without generating anything (empty prompt + keep_alive), the mirror image of unloadModel above. */
   preloadModel(modelName: string, customHost?: string, keepAlive: string = '30m'): Promise<{ success: boolean; error?: string }> {
     if (!modelName || !modelName.trim()) {
       return Promise.resolve({ success: false, error: 'Invalid model name' })

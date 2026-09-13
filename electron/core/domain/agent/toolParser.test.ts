@@ -614,10 +614,7 @@ npm create vite@latest ./ -- --template react-ts
 })
 
 describe('parseAgentToolCall — several calls in one response', () => {
-  // Reproduces step 86 of coding_agent_audit.log session-1787497654743-4enx verbatim: three
-  // native-format calls separated by blank lines. The greedy first-brace-to-last-brace span
-  // covered all three, parsed as nothing, and the turn was recorded as "no tool call" —
-  // which, on an already exhausted noToolStreak, ended the session.
+  // Reproduces step 86 of coding_agent_audit.log session-1787497654743-4enx verbatim: three native-format calls separated by blank lines.
   const THREE_NATIVE_CALLS = `{"name": "write_file", "arguments": {"filePath": "src/components/Sidebar.tsx", "content": "import React from 'react';\n\nfunction Sidebar() {\n  return (\n    <nav className=\\"flex flex-col\\">\n      <button>Home</button>\n    </nav>\n  );\n}\n\nexport default Sidebar;"}}
 
 {"name": "write_file", "arguments": {"filePath": "src/components/TaskCard.tsx", "content": "import React from 'react';\n\nfunction TaskCard() {\n  return <div />;\n}\n\nexport default TaskCard;"}}

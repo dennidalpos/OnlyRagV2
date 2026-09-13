@@ -10,22 +10,7 @@ import {
 import type { PlanMilestone } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { ToolResultProcessingContext } from './agentOrchestratorToolResultTypes'
 
-/**
- * Reproduction of live-full-task, 2026-08-25T12:11 — the run behind the tracker entry
- * "nessuna milestone promossa a verified nonostante 16 file su disco".
- *
- * The titles and the file list below are transcribed from that session's own state file
- * (`<workspace>/.onlyrag/sessions/.agent_state_live-full-task.json`) and from its episode log.
- * The run ended 50/50 steps with all fourteen milestones `in_progress`, each holding
- * "Awaiting a passing verification command", and the audit log records for the whole session:
- * zero `-> VERIFIED` transitions, zero promotion lines, and zero `update_plan` refusals for
- * missing deliverables — the model asked for `verified` not once, so milestoneUpdateAuthority
- * refused nothing. All twelve of its `run_command` calls were `npm install`, and `finish` was
- * never invoked.
- *
- * These tests retain the workspace fixture while enforcing the corrected evidence boundary:
- * the application check covers milestones without a dedicated proof but cannot replace one.
- */
+/** Reproduction of live-full-task, 2026-08-25T12:11 — the run behind the tracker entry "nessuna milestone promossa a verified nonostante 16 file su disco". */
 
 const LIVE_MILESTONE_TITLES: readonly [string, string][] = [
   ['m-1', 'The project declares its dependencies and its build script — `package.json`'],

@@ -52,12 +52,7 @@ export interface SessionContext {
   /** Exact coding model pinned for this execution. */
   codingModel: string
   modelCapabilities: Record<string, string[]>
-  /**
-   * The per-model facts Ollama reports on `/api/tags`, keyed by model tag. `contextLength` is
-   * the one the turn dispatcher needs and the one nothing used to carry: Ollama clamps any
-   * larger `num_ctx` down to it and then truncates the HEAD of the prompt — the system prompt
-   * and the plan block — without saying so. Empty when the fetch failed.
-   */
+  /** The per-model facts Ollama reports on `/api/tags`, keyed by model tag. */
   modelMetrics: Record<string, OllamaModelMetrics>
   skillMatchContext: SkillMatchContext
   skillMatchingOptions: SkillMatchingOptions
@@ -75,12 +70,7 @@ async function scanProjectMap(workspacePath: string): Promise<string> {
   }
 }
 
-/**
- * Resolves the task/workspace/settings for a run, scans the project map, warms up the
- * first-turn model without waiting for it, and runs skill matching (including the
- * 'prompt' auto-install confirmation round trip, awaited here since it happens while this
- * step assembles the turn prompt).
- */
+/** Resolves the task/workspace/settings for a run, scans the project map, warms up the first-turn model without waiting for it, and runs skill matching (including the 'prompt' auto-install confirmation round trip, awaited here since it happens while this step ass */
 export async function resolveSessionContext(params: SessionContextParams): Promise<SessionContext> {
   const { payload, session, sessionId, emitLog } = params
 
@@ -106,12 +96,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   session.lastVerification = savedState?.lastVerification
   const requestedCodingModel = payload.activeModel || settings.codingModel || settings.defaultModel || 'qwen2.5-coder:7b'
   const codingModel = session.ollamaRuntimeProfile?.model || findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
-  // One `/api/tags` read, both facts. `getModelMetrics` returns the capabilities array AND the
-  // trained `context_length` in the same record; the older `getModelCapabilities` call fetched
-  // the identical payload and threw the context length away, so the turn dispatcher sized
-  // `num_ctx` from hardware alone and never learned the ceiling Ollama would clamp it to.
-  // Failures resolve to an empty map: capabilities then fall back to the family allow-list in
-  // ollamaToolCallingCapability.ts, and the context ceiling is simply unknown rather than wrong.
+  // One `/api/tags` read, both facts.
   const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)
   const modelCapabilities: Record<string, string[]> = Object.fromEntries(
     Object.entries(modelMetrics).map(([name, metrics]) => [name, metrics.capabilities])

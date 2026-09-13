@@ -1,18 +1,4 @@
-/**
- * Loop Escape Policy.
- *
- * The loop guard used to answer every repeated tool call the same way: send the model a
- * sterner paragraph of text and re-issue an otherwise identical prompt. A model that cannot
- * act on that paragraph therefore re-emits the same tool call, and the guard re-sends the
- * same paragraph — 20 times in a row in coding_agent_audit.log session-1787445915590-u395,
- * because the ACTIVE MILESTONE line kept demanding exactly the action being blocked.
- *
- * Advisory text is still the first response: a model capable of self-correcting deserves the
- * chance. What changes is what happens when that advice demonstrably fails — the session then
- * alters its own state (the active milestone moves on) so the next prompt asks for something
- * genuinely different. Escalation is paced so every structural escape is followed by one
- * advisory turn, giving the model a clean attempt at the new milestone before moving again.
- */
+
 
 export type LoopEscapeAction = 'advise' | 'force_milestone_advance' | 'abort'
 
@@ -29,11 +15,7 @@ export interface LoopEscapeContext {
   isUnlimitedSteps: boolean
 }
 
-/**
- * Maps the current consecutive-block streak onto the response the guard should take.
- * `stagnationStreak` is the shared "how stuck is the model right now" counter, reset to 0
- * by any successfully executed tool — so a streak of N means N advisories in a row failed.
- */
+/** Maps the current consecutive-block streak onto the response the guard should take. */
 export type RedundantSuccessAction = 'advise' | 'treat_as_stagnation'
 
 /**
@@ -42,17 +24,7 @@ export type RedundantSuccessAction = 'advise' | 'treat_as_stagnation'
  */
 export const REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS = 3
 
-/**
- * Repeating a successful command is not stagnation — the deliverable exists and the milestone
- * is achievable, so escalating it would mark work FAILED that actually happened (audit session
- * o3tx: `npm install` succeeded at steps 12 and 13, yet milestone m-12 was abandoned as FAILED
- * on the third attempt and reported as incomplete).
- *
- * The exemption is bounded rather than unconditional: it suppresses the escalation ladder, and
- * the ladder is the only thing that terminates a session which never breaks out. After
- * REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS advisories the repeat rejoins the normal stagnation path,
- * so the abort guarantee still holds — it is deferred, never removed.
- */
+/** Repeating a successful command is not stagnation — the deliverable exists and the milestone is achievable, so escalating it would mark work FAILED that actually happened (audit session o3tx: `npm install` succeeded at steps 12 and 13, yet milestone m-12 was ab */
 export function resolveRedundantSuccessAction(redundantSuccessStreak: number): RedundantSuccessAction {
   return redundantSuccessStreak > REDUNDANT_SUCCESS_ADVISORY_ATTEMPTS ? 'treat_as_stagnation' : 'advise'
 }

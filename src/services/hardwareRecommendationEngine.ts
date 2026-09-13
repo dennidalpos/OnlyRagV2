@@ -62,11 +62,7 @@ export interface HardwareRecommendations {
   gpuSummary: string
   ramSummary: string
   safeVramBudgetGB: number
-  /**
-   * Every coding-capable model in the built-in catalogs, deduplicated and hardware-assessed.
-   * Replaces the old fast/standard/deep_reasoning/heavy split: the coding module runs on one
-   * configured model, so there is one list to choose it from.
-   */
+  /** Every coding-capable model in the built-in catalogs, deduplicated and hardware-assessed. */
   codingModels: ModelRecommendation[]
   chatTierModels: ModelRecommendation[]
   translationTierModels: ModelRecommendation[]
@@ -124,11 +120,7 @@ export function getModelApproxSize(modelName: string, details?: RunningModelDeta
   return `${weightGB.toFixed(1)} GB`
 }
 
-/**
- * Calculates KV-Cache VRAM footprint in GB:
- * KV_Cache = 2 * n_layers * n_kv_heads * head_dim * context_tokens * bytes_per_elem
- * Using standard Q8 quantization (1 byte/elem) or FP16 (2 bytes/elem).
- */
+/** Calculates KV-Cache VRAM footprint in GB: KV_Cache = 2 * n_layers * n_kv_heads * head_dim * context_tokens * bytes_per_elem Using standard Q8 quantization (1 byte/elem) or FP16 (2 bytes/elem). */
 export function estimateKvCacheMemoryGB(contextTokens: number = 4096, isQuantizedQ8: boolean = true): number {
   const bytesPerElem = isQuantizedQ8 ? 1 : 2
   // Approximate standard 32 layers, 8 KV heads, 128 head dim
@@ -226,13 +218,7 @@ export interface ModelFitVerdict {
   footprintGB: number
 }
 
-/**
- * Builds a memoized per-model VRAM verdict lookup for the detected host.
- *
- * `analyzeHardwareAndRecommend` only assesses models present in the built-in catalogs, but the
- * Setup Wizard also offers hardcoded preset tags and whatever is already installed locally. This
- * lookup assesses any model name on demand so every selectable option can carry its footprint.
- */
+/** Builds a memoized per-model VRAM verdict lookup for the detected host. */
 export function buildModelFitLookup(
   diagnostics: DiagnosticsData | null
 ): (modelName: string) => ModelFitVerdict {
@@ -291,13 +277,7 @@ export function analyzeHardwareAndRecommend(
   }
 }
 
-/**
- * Detects the host hardware profile tier (legacy/entry/midrange/highend/extreme)
- * from GPU VRAM and system RAM, and derives the safe usable VRAM budget and
- * summary labels used throughout the recommendations (AGT6: extracted from
- * analyzeHardwareAndRecommend to keep it within the project's function-length
- * standard — see AGENTS.md §8).
- */
+/** Detects the host hardware profile tier (legacy/entry/midrange/highend/extreme) from GPU VRAM and system RAM, and derives the safe usable VRAM budget and summary labels used throughout the recommendations (AGT6: extracted from analyzeHardwareAndRecommend to kee */
 function resolveHardwareProfile(diagnostics: DiagnosticsData | null): {
   profileTier: HardwareProfileTier
   profileName: string
@@ -355,11 +335,7 @@ function formatProfileName(tier: HardwareProfileTier, vramGB: number, systemRamG
   }
 }
 
-/**
- * Builds the enrichment function that turns a static RawModelCatalogEntry into a
- * fully assessed ModelRecommendation for the current hardware (AGT6: extracted
- * from analyzeHardwareAndRecommend's inline `enrich` closure).
- */
+/** Builds the enrichment function that turns a static RawModelCatalogEntry into a fully assessed ModelRecommendation for the current hardware (AGT6: extracted from analyzeHardwareAndRecommend's inline `enrich` closure). */
 function buildModelEnricher(
   diagnostics: DiagnosticsData | null,
   vramTotalMB: number,
@@ -392,17 +368,7 @@ function buildModelEnricher(
   }
 }
 
-/**
- * Builds the single coding-model list from the four legacy tier catalogs.
- *
- * Only WORKHORSE_CODING_CATALOG carries a meaningful `recommendedForProfiles`: it is the workhorse
- * ladder (legacy/entry -> 3b, midrange -> 4b, highend -> 7b, extreme -> 14b). The other catalogs tagged
- * profiles RELATIVE to the tier they filled — FAST listed qwen2.5-coder:3b as the pick for
- * 'highend'/'extreme' because it was the *fast* choice on a big machine, not the model that
- * machine should code with. Carrying those tags into one list made a 3b the default on a 24GB
- * workstation, so they are dropped: models outside the ladder stay selectable but are never
- * auto-recommended.
- */
+/** Builds the single coding-model list from the four legacy tier catalogs. */
 function buildCodingModelCatalog(): RawModelCatalogEntry[] {
   const byName = new Map<string, RawModelCatalogEntry>()
   const order: string[] = []
@@ -421,11 +387,7 @@ function buildCodingModelCatalog(): RawModelCatalogEntry[] {
   return order.map((name) => byName.get(name) as RawModelCatalogEntry)
 }
 
-/**
- * Per-variable recommendation builders. Kept separate from the assembler below so each
- * variable's hardware reasoning stays readable and independently testable, and so the
- * assembler itself stays within the project's function-length standard (AGENTS.md 8).
- */
+/** Per-variable recommendation builders. */
 type EnvTranslator = (key: TranslationKey, params?: Record<string, string | number>) => string
 
 interface EnvTuningContext {
@@ -436,12 +398,7 @@ interface EnvTuningContext {
   systemRamGB: number
 }
 
-/**
- * Flash Attention and KV-cache quantization are a *pair*: Ollama only honours
- * OLLAMA_KV_CACHE_TYPE when flash attention is enabled. Emitting a cache type on a
- * CPU-only host (where flash attention is off) therefore wrote an inert variable into the
- * user's environment, so the cache type is now only produced for GPU hosts.
- */
+/** Flash Attention and KV-cache quantization are a *pair*: Ollama only honours OLLAMA_KV_CACHE_TYPE when flash attention is enabled. */
 function buildAttentionVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
   if (!ctx.hasGpu || ctx.profileTier === 'legacy') {
     return [
@@ -484,11 +441,7 @@ function buildAttentionVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvV
   ]
 }
 
-/**
- * Concurrency is bounded by BOTH the memory tier and the physical core count: on a CPU-only
- * host every parallel slot competes for the same cores, so extra parallelism is pure latency.
- * Roughly 4 cores are budgeted per concurrent inference slot.
- */
+/** Concurrency is bounded by BOTH the memory tier and the physical core count: on a CPU-only host every parallel slot competes for the same cores, so extra parallelism is pure latency. */
 function buildConcurrencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
   const tierParallel = !ctx.hasGpu || ctx.profileTier === 'legacy' || ctx.profileTier === 'entry'
     ? 1
@@ -533,11 +486,7 @@ function buildConcurrencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEn
   ]
 }
 
-/**
- * Residency and default context length. OLLAMA_CONTEXT_LENGTH is the server-side default
- * num_ctx used whenever a request omits it - left unset, a minimum-spec host silently
- * allocates a KV cache far larger than its RAM can absorb.
- */
+/** Residency and default context length. */
 function buildMemoryResidencyVars(ctx: EnvTuningContext, t: EnvTranslator): OllamaEnvVarRecommendation[] {
   const keepAlive = ctx.isMinimal || ctx.profileTier === 'legacy'
     ? { value: '5m', descKey: 'ollamaEnvParams.envKeepAliveLowDesc', ratKey: 'ollamaEnvParams.envKeepAliveLowRationale' }
@@ -598,14 +547,7 @@ function buildEnvScripts(
   return { powershellScript: psLines.join('\n'), bashScript: bashLines.join('\n') }
 }
 
-/**
- * Calculates optimal client OS environment variables and setup scripts for Ollama based on
- * the FULL detected hardware picture - GPU VRAM, physical core count and system RAM - not
- * VRAM alone: a 4-core / 8GB CPU-only laptop and a 32-core / 64GB CPU-only workstation both
- * classify as `legacy`, yet only the first must clamp concurrency, residency and default
- * context length. `t` defaults to an identity passthrough so non-UI callers (tests, scripts)
- * do not need an i18n context.
- */
+/** Calculates optimal client OS environment variables and setup scripts for Ollama based on the FULL detected hardware picture - GPU VRAM, physical core count and system RAM - not VRAM alone: a 4-core / 8GB CPU-only laptop and a 32-core / 64GB CPU-only workstatio */
 export function getRecommendedOllamaEnvVars(
   diagnostics: DiagnosticsData | null,
   t: EnvTranslator = (key) => key

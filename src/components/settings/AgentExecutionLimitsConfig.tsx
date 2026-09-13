@@ -10,11 +10,7 @@ interface AgentExecutionLimitsConfigProps {
 
 const QUEUE_STATUS_POLL_MS = 3000
 
-/**
- * Agent execution limits. Task concurrency is deliberately NOT configurable here:
- * the queue is fixed at one running task (see taskQueueAppService.ts), because the
- * tool executor owns a single workspace journal and shared persistent shells.
- */
+/** Agent execution limits. */
 export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProps> = ({
   settings,
   onUpdateSettings,

@@ -30,9 +30,7 @@ function cleanupSession(session: AgentSession) {
   session.completionStatus = 'cancelled'
   session.terminalSummary = "Task interrotto dall'utente."
   void session.persistCancellation?.()
-  // A step paused inside requestApproval() must not block forever just because the task was
-  // cancelled instead of answered: resolving false lets the awaited Promise settle, the
-  // paused `while` loop observe isCancelled on its next check, and exit cleanly.
+  // A step paused inside requestApproval() must not block forever just because the task was cancelled instead of answered: resolving false lets the awaited Promise settle, the paused `while` loop observe isCancelled on its next check, and exit cleanly.
   if (session.pendingApprovalResolve) {
     session.pendingApprovalResolve({ approved: false })
     session.pendingApprovalResolve = undefined
@@ -105,12 +103,7 @@ export function cancelActiveAgentTask(targetRunId?: string) {
   }
 }
 
-/**
- * Answers a step paused inside requestApproval(). Returns false if the session is no longer
- * active or isn't currently waiting on an approval (e.g. the response arrived after a
- * cancellation or the session timeout already resolved it), so the renderer can tell a
- * genuine hand-off from a stale response.
- */
+/** Answers a step paused inside requestApproval(). */
 export function respondToApproval(target: AgentRunIdentity | string, approved: boolean, approvedHunkIndices?: number[]): boolean {
   const targetRunId = typeof target === 'string' ? target : target.runId
   const session = activeAgentSessions.get(targetRunId)
@@ -157,9 +150,7 @@ export async function runAgentOrchestratorLoop(
   // reused sessionId, this run must recognise that it is no longer the owner and stand down.
   const isSessionActive = () => activeAgentSessions.get(runId) === session && !session.isCancelled
 
-  // One-shot session setup: task/workspace/settings resolution, model warm-up, skill
-  // matching, state restore, and the persist/watchdog closures the turn loop shares below.
-  // See agentOrchestratorBootstrap.ts for the exact composition.
+  // One-shot session setup: task/workspace/settings resolution, model warm-up, skill matching, state restore, and the persist/watchdog closures the turn loop shares below.
   const boot = await bootstrapAgentSession({
     payload,
     session,
@@ -310,16 +301,11 @@ export async function runAgentOrchestratorLoop(
     stepCountBox.value++
     setExecutionPhase('collect_context')
     // Periodic checkpoint: persisting on every single step is unnecessary I/O churn.
-    // The first step and every Nth step get a checkpoint; mutating tool calls also
-    // trigger an immediate persist (see hasFileMutations below). All session-ending
-    // exit paths (finish/cancel/error/timeout/circuit-breaker) persist unconditionally.
     if (stepCountBox.value === 1 || stepCountBox.value % PERSIST_EVERY_N_STEPS === 0) {
       await persistCurrentState()
     }
 
-    // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx,
-    // decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
-    // See agentOrchestratorTurnDispatch.ts for the exact step order rationale.
+    // Routes the turn to a model, assembles/compacts the prompt, freezes/grows num_ctx, decides Ollama context-cache reuse, and dispatches to the LLM with resilient fallback.
     const turnContext = {
       userTask,
       initialUserTask,
@@ -373,9 +359,7 @@ export async function runAgentOrchestratorLoop(
       targetModel,
     } = dispatchOutcome.data
 
-    // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with
-    // no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special
-    // cases. See agentOrchestratorResponseInterpreter.ts for the exact step order rationale.
+    // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special cases.
     const interpretation = await interpretTurnResponse({
       streamedOutput,
       agentMode,
@@ -424,9 +408,7 @@ export async function runAgentOrchestratorLoop(
       return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
     }
 
-    // Approval + FSM permission gates (git_commit always-confirm, ASK-mode mutating-tool
-    // approval, FSM tool-permission check) — see agentOrchestratorToolGates.ts for the
-    // exact gate ordering rationale.
+    // Approval + FSM permission gates (git_commit always-confirm, ASK-mode mutating-tool approval, FSM tool-permission check) — see agentOrchestratorToolGates.ts for the exact gate ordering rationale.
     setExecutionPhase('apply_action')
     const gateResult = await runToolGates({
       parsedTool,
@@ -452,9 +434,6 @@ export async function runAgentOrchestratorLoop(
     if (versionedEdit.consumed) await persistCurrentState()
 
     // Orchestrator-level pseudo-tool: the model's explicit handle on plan progression.
-    // Handled here rather than in agentToolExecutorService because the plan lives in this
-    // loop's GoalDecompositionPlanner, not on disk. Before this tool existed, milestone
-    // status could only ever be inferred heuristically from tool side effects.
     if ((parsedTool.tool as string) === 'update_plan') {
       setExecutionPhase('verify')
       await handleUpdatePlanTool({

@@ -116,12 +116,7 @@ export class PromptCompiler {
   }
 }
 
-/**
- * The prompt a module will actually send, given current settings.
- *
- * Model name is deliberately NOT a parameter: prompts no longer vary by model family. Callers that
- * need capability-driven adaptation pass `capabilities`.
- */
+/** The prompt a module will actually send, given current settings. */
 export function getEffectivePrompt(
   module: FeatureModule,
   settings?: AppSettings,

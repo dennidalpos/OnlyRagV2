@@ -1,9 +1,4 @@
-/**
- * src/components/coding/agentLogMessageUtils.ts
- *
- * Presentation / Utility Layer — Language badges, model tag resolution, and log categorization.
- * Directly consumes structured fields from AgentActionLog (zero brittle string-scraping).
- */
+
 
 import { AgentActionLog } from '../../types'
 

@@ -1,11 +1,4 @@
-/**
- * Infrastructure adapter around `depcheck`, feeding the domain's dependency integrity gate
- * (see domain/agent/dependencyIntegrityGate.ts).
- *
- * A library rather than a hand-rolled import scanner on purpose: resolving what a file imports
- * means parsing JSX, TSX, dynamic imports, `require`, and the config files of a dozen bundlers,
- * and a home-grown approximation of that would be wrong in exactly the cases that matter.
- */
+
 
 import path from 'node:path'
 import fs from 'node:fs'

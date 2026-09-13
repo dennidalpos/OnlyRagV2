@@ -6,9 +6,7 @@ interface RenderedPagePreviewProps {
   pageContent: string
 }
 
-// Always rendered nested inside SourcePagePreview's own page card, which already owns the
-// per-page id, data-page-number and zoom scale transform used for page navigation/sync -- this
-// component only renders the text-fallback content itself, it does not repeat that plumbing.
+// Always rendered nested inside SourcePagePreview's own page card, which already owns the per-page id, data-page-number and zoom scale transform used for page navigation/sync -- this component only renders the text-fallback content itself, it does not repeat tha
 export const RenderedPagePreview: React.FC<RenderedPagePreviewProps> = ({
   pageNumber,
   pageContent,

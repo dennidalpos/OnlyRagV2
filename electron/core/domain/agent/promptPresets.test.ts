@@ -9,16 +9,7 @@ import {
 } from '../../../../shared/domain/agent/promptPresets'
 import { ALL_PROMPT_NODES } from '../../../../shared/domain/agent/promptHierarchyRegistry'
 
-/**
- * The chat prompt is static: it is assembled into every chat turn regardless of whether a document
- * is attached. Any instruction about the "nothing selected" case therefore reaches the model even
- * when a document IS attached, and a small model cannot reliably pick the right branch —
- * llama3.2:3b answered "no document is selected, pick one from the left sidebar" to 3 of 5
- * questions while the retrieval had already returned two excerpts of the attached PDF.
- *
- * The state-specific directive belongs to the block useChatEngine assembles per turn, which is the
- * only place that knows the actual state.
- */
+/** The chat prompt is static: it is assembled into every chat turn regardless of whether a document is attached. */
 const ABSENCE_INSTRUCTION_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'no-documents branch', pattern: /when no documents?\b/i },
   { label: 'no-attachments branch', pattern: /no attachments? (are|is) (currently )?selected/i },
@@ -34,12 +25,7 @@ describe('chat prompt carries no "nothing is attached" branch', () => {
   }
 })
 
-/**
- * The per-family matrix these prompts replaced drifted apart: 7 of its 23 real chat presets never
- * named the document context block, and 9 of 23 translation presets — `generic` among them — never
- * asked for Markdown preservation. With one prompt per module that class of omission can only
- * happen once, so it is worth pinning down.
- */
+/** The per-family matrix these prompts replaced drifted apart: 7 of its 23 real chat presets never named the document context block, and 9 of 23 translation presets — `generic` among them — never asked for Markdown preservation. */
 describe('core directives survive in the consolidated prompts', () => {
   it('the chat prompt names the document context block and the temporal anchor', () => {
     expect(DEFAULT_CHAT_PROMPT).toContain('[INDEXED DOCUMENT CONTEXT (LanceDB)]')

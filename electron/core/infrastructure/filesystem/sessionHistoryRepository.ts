@@ -14,12 +14,7 @@ interface SessionHistoryStore {
   sessions: CodingSession[]
 }
 
-/**
- * Single filesystem store for the coding session history (sessions and their
- * ExecutedPrompt records). Workspace-scoped sessions live in the project's
- * `.onlyrag/sessions` folder; standalone sessions fall back to the user home store.
- * This is the only persistence for session history — the renderer keeps no copy.
- */
+/** Single filesystem store for the coding session history (sessions and their ExecutedPrompt records). */
 export class SessionHistoryRepository {
   private mutationTail: Promise<void> = Promise.resolve()
 
@@ -75,15 +70,7 @@ export class SessionHistoryRepository {
     }
   }
 
-  /**
-   * Every directory a session for this workspace could legitimately be stored in: the
-   * workspace-scoped `.onlyrag/sessions` folder (if the workspace still exists on disk) and the home
-   * fallback used for standalone sessions or workspaces that were unavailable at save time.
-   * Delete/clear-by-id must check every candidate, not just the one implied by the caller's
-   * *current* workspacePath -- a session saved standalone (or under a workspace that later
-   * became briefly inaccessible) would otherwise never be found, and would linger forever as
-   * an un-deletable ghost entry even though the UI reports the delete as successful.
-   */
+  /** Every directory a session for this workspace could legitimately be stored in: the workspace-scoped `.onlyrag/sessions` folder (if the workspace still exists on disk) and the home fallback used for standalone sessions or workspaces that were unavailable at save */
   private getCandidateStorageDirs(workspacePath?: string | null): string[] {
     const dirs: string[] = []
     if (workspacePath && fs.existsSync(workspacePath)) {
@@ -142,11 +129,7 @@ export class SessionHistoryRepository {
     })
   }
 
-  /**
-   * Returns true only if a matching session was actually found and removed from disk in at
-   * least one candidate store -- unlike the single-store lookup this used to be, a "not
-   * found here" no longer reads as success, so a genuine failure is never masked as one.
-   */
+  /** Returns true only if a matching session was actually found and removed from disk in at least one candidate store -- unlike the single-store lookup this used to be, a "not found here" no longer reads as success, so a genuine failure is never masked as one. */
   public async deleteSession(sessionId: string, workspacePath?: string | null): Promise<boolean> {
     return this.runExclusive(async () => {
       let removedAny = false

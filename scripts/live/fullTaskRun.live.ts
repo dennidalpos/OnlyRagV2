@@ -1,24 +1,4 @@
-/**
- * Live scenario — the whole task, end to end.
- *
- * The prompt is a trimmed version of the one that produced session-1787562597025-q8a5.
- * Re-running it is how a change to the agent loop gets judged against the failure it was meant
- * to fix.
- *
- * It asserts delivery, and it did not always. Until 2026-08-25 the only assertion here was
- * `expect(result).toBeTruthy()`, which the loop satisfies by returning at all: two runs that
- * burned the whole 50-step budget with 0 milestones verified (08:37 and 11:03,
- * both in logs/coding_agent_audit.log) still exited `npm run test:live` with code 0. A probe
- * that cannot go red is not evidence for the numbers the blueprint publishes from it, so the
- * the milestone ratio and application-owned completion status are asserted
- * below against the thresholds that document itself claims.
- *
- * A 7B model does vary run to run, and that variance is now visible instead of absorbed: read
- * the run-metrics block reportRun prints to see how far a red run fell short.
- *
- *   npm run test:live
- *   npx vitest run --config vitest.live.config.mts -t "full task"
- */
+
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
 import os from 'node:os'
@@ -31,23 +11,12 @@ const SAFE_RUN = `${MODEL}-${RUN_LABEL}`.replace(/[^a-z0-9_-]+/gi, '-')
 const WORKSPACE = path.join(os.homedir(), 'Desktop', `onlyrag_live_fulltask_${SAFE_RUN}`)
 const SESSION = `live-full-task-${SAFE_RUN}`
 
-/**
- * The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone
- * verificate (92%), chiusura raggiunta autonomamente, `npm run build` con exit code 0.
- *
- * These are deliberately not a "plausible" number picked so the probe would pass. The probe
- * asserts the encoded baseline: if it holds, the run is green; otherwise the agent regressed.
- * Move these constants only after recording a new, independently reviewed baseline.
- */
+/** The bar is the independently reviewed regression baseline for this scenario: 12/13 milestone verificate (92%), chiusura raggiunta autonomamente, `npm run build` con exit code 0. */
 const RUN9_VERIFIED_MILESTONES = 12
 const RUN9_TOTAL_MILESTONES = 13
 const MIN_VERIFIED_MILESTONE_RATIO = RUN9_VERIFIED_MILESTONES / RUN9_TOTAL_MILESTONES // 0.923
 
-/**
- * A plan is generated per run, so its size is not fixed and the bar above is a ratio. This
- * floor keeps that ratio meaningful: a run whose plan generation failed has 0 milestones, and
- * 0 verified out of 0 must read as a failure, never as a vacuous pass.
- */
+/** A plan is generated per run, so its size is not fixed and the bar above is a ratio. */
 const MIN_PLAN_MILESTONES = 1
 
 const USER_TASK = `# 1 - Project setup and mobile-first foundation
@@ -92,9 +61,7 @@ describe('live: full task run', () => {
       settings,
     })
 
-    // The interview is the first thing a user sees and the last thing this probe used to
-    // exercise. Printed in full: the choices it settles are the ones the model otherwise
-    // invents mid-run, and they are the readable difference between two runs of this scenario.
+    // The interview is the first thing a user sees and the last thing this probe used to exercise.
     console.log(`\nclarification interview: ${seeded.questions.length} question(s)`)
     for (const [i, q] of seeded.questions.entries()) {
       console.log(`  Q${i + 1} ${q.question}`)
@@ -116,9 +83,7 @@ describe('live: full task run', () => {
       null
     )
 
-    // Printed BEFORE the assertions on purpose: the first failing expect aborts the test, and
-    // the metrics block is what turns "red" into "50/50 steps, 0/13 verified, blocked,
-    // 4 commands run".
+    // Printed BEFORE the assertions on purpose: the first failing expect aborts the test, and the metrics block is what turns "red" into "50/50 steps, 0/13 verified, blocked, 4 commands run".
     const metrics = reportRun({
       label: `full task run ${MODEL} ${RUN_LABEL}`,
       workspacePath: WORKSPACE,
@@ -131,9 +96,7 @@ describe('live: full task run', () => {
       MIN_PLAN_MILESTONES
     )
 
-    // Milestone status is the agent's own record of what it proved, not the probe's guess:
-    // `verified` is only reachable through update_plan or through a verification command that
-    // actually passed (agentOrchestratorCircuitBreakerAndVerification.ts).
+    // Milestone status is the agent's own record of what it proved, not the probe's guess: `verified` is only reachable through update_plan or through a verification command that actually passed (agentOrchestratorCircuitBreakerAndVerification.ts).
     expect(
       metrics.verifiedRatio,
       `verified milestones ${metrics.verified}/${metrics.milestones.length} — blueprint §5.6h claims ${RUN9_VERIFIED_MILESTONES}/${RUN9_TOTAL_MILESTONES}`

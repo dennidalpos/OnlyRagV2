@@ -9,13 +9,7 @@ import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
 import type { ResponseInterpreterContext } from './agentOrchestratorResponseInterpreterTypes'
 
-/**
- * Regression cover for the loop guard's outcome awareness.
- *
- * Audit session o3tx: `npm install` SUCCEEDED at steps 12 and 13, the guard blocked the third
- * identical call, and milestone m-12 was marked FAILED and reported as abandoned — work that
- * had actually completed. The guard must tell the two cases apart.
- */
+/** Regression cover for the loop guard's outcome awareness. */
 describe('handleLoopDetection — successful vs failed repeats', () => {
   const installCall: AgentToolCall = { tool: 'run_command', parameters: { command: 'npm install' } }
 

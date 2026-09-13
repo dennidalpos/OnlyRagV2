@@ -33,9 +33,7 @@ describe('hardwareModelCatalog', () => {
   })
 
   it('should keep the workhorse ladder in WORKHORSE_CODING_CATALOG covering every hardware profile', () => {
-    // The single coding-model recommendation is derived exclusively from this catalog
-    // (see buildCodingModelCatalog in hardwareRecommendationEngine.ts), so a profile missing
-    // from the ladder would leave that hardware class with no recommended model at all.
+    // The single coding-model recommendation is derived exclusively from this catalog (see buildCodingModelCatalog in hardwareRecommendationEngine.ts), so a profile missing from the ladder would leave that hardware class with no recommended model at all.
     for (const profile of ['legacy', 'entry', 'midrange', 'highend', 'extreme'] as const) {
       const curated = WORKHORSE_CODING_CATALOG.filter((e) => e.recommendedForProfiles.includes(profile))
       expect(curated.length, `no workhorse model curated for '${profile}'`).toBeGreaterThanOrEqual(1)

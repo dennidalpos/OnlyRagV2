@@ -18,9 +18,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     )
     const pendingMilestonesCount = nonFinishPendingMilestones.length
 
-    // Critical Early-Finish Defense:
-    // If the model tries to finish immediately at step 1 or 2 with 0 file mutations and pending work milestones (>0),
-    // and has not executed any mutating tool, block it and force it to take action.
+    // Critical Early-Finish Defense: If the model tries to finish immediately at step 1 or 2 with 0 file mutations and pending work milestones (>0), and has not executed any mutating tool, block it and force it to take action.
     const isPrematureStart = ctx.stepCount <= 2 && !ctx.flags.hasFileMutations && pendingMilestonesCount > 0
     if (isPrematureStart && !ctx.surfacedDodReasons.has('premature_start')) {
       ctx.surfacedDodReasons.add('premature_start')
@@ -71,16 +69,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     : { outcome: 'return', result: closure.result }
 }
 
-/**
- * Moves the plan's focus off the milestone the model is stuck on and onto the next one,
- * returning the directive that tells the model what changed.
- *
- * The milestone is recorded as `failed`, not `verified`: the work genuinely did not happen,
- * and progress percentages, the session tracker and the Definition of Done gate must all keep
- * saying so. `getActiveMilestone` skips failed entries, so the very next prompt asks for a
- * different deliverable — which is the whole point, since re-issuing the same ACTIVE MILESTONE
- * line is what kept the model re-emitting the blocked tool call.
- */
+/** Moves the plan's focus off the milestone the model is stuck on and onto the next one, returning the directive that tells the model what changed. */
 function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: string | undefined): string | null {
   const stuckMilestone = ctx.goalPlanner.getActiveMilestone()
   if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone)) return null
@@ -108,27 +97,14 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
     : `\n\n[PLAN ADVANCED BY THE SYSTEM]\nMilestone "${stuckMilestone.id}: ${stuckMilestone.title}" has been marked FAILED and ABANDONED. No operational milestones remain: invoke the "finish" tool now with a full final report describing what was and was not completed.`
 }
 
-/**
- * True when an arbitrated directive names the exact call the loop guard blocked.
- *
- * Loose containment, for the same reason isVerificationFailing matches loosely: the model does
- * not always spell the command identically, and a project's check can be reached by more than
- * one spelling.
- */
+/** True when an arbitrated directive names the exact call the loop guard blocked. */
 function commandIsOrderedBy(blockDirective: string | null, loopTarget: string | undefined): boolean {
   if (!blockDirective || !loopTarget) return false
   const needle = loopTarget.trim().toLowerCase()
   return needle.length > 0 && blockDirective.toLowerCase().includes(needle)
 }
 
-/**
- * The sentence that introduces an arbitrated directive inside a loop intervention.
- *
- * Each kind gets its own, because the reason repeating is pointless differs: on a verified
- * project nothing further can be added, while on an unverified one the repeat is simply not
- * the action that moves the plan. A shared "stop repeating this" would be true in both and
- * informative in neither.
- */
+/** The sentence that introduces an arbitrated directive inside a loop intervention. */
 function loopPreambleFor(kind: PlanDirectiveKind, loopTarget: string | undefined, repeats: number): string {
   const target = loopTarget || 'this action'
   if (kind === 'session_closure') {
@@ -225,10 +201,7 @@ ${planDirective.blockDirective}`
   // own files, so the escape keeps full power exactly where the milestone is the problem.
   const loopIsUnrelatedToActiveMilestone = isActiveMilestoneDelivered(ctx.workspacePath, ctx.goalPlanner, loopTarget)
 
-  // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable
-  // exists. Escalating it would abandon a reachable milestone as FAILED (see
-  // resolveRedundantSuccessAction for the audit case). The exemption is bounded — past its
-  // advisory budget the repeat rejoins the stagnation ladder so the session still terminates.
+  // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable exists.
   ctx.state.redundantSuccessStreak = loopCheck.repeatOutcome === 'succeeding' ? ctx.state.redundantSuccessStreak + 1 : 0
   const isExemptRedundantSuccess =
     loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
@@ -270,21 +243,13 @@ ${planDirective.blockDirective}`
 
   ctx.state.stagnationStreak++
   const isCommand = parsedTool.tool === 'run_command'
-  // A build or test command is how the task gets verified at all, so the escape must never
-  // read as "stop running it". What is blocked is re-issuing it UNCHANGED, and the way out is
-  // to change something first: in session-1787562597025-q8a5 the model was told it was
-  // "FORBIDDEN from calling run_command on 'npm run build'" — the exact command the completion
-  // gate requires — and spent its remaining turns re-reading files instead of fixing them.
+  // A build or test command is how the task gets verified at all, so the escape must never read as "stop running it".
   const escapeDirective = isCommand
     ? `\n[CRITICAL ESCAPE STRATEGY]: Do not re-issue this command unchanged — nothing about the workspace has changed since it last ran. Read the error text in the diagnostics above, apply the fix it names with write_file or replace_file_content, and THEN run the command again. Running a build or test command after a real edit is always allowed and is how this task gets verified. If the command is a scaffolding generator that failed, write the files it would have produced directly instead.`
     : `\n[CRITICAL ESCAPE STRATEGY]: You MUST run a verification command via run_command or read a different file to break out of this loop.`
 
   const escapeAction = resolveLoopEscapeAction(ctx.state.stagnationStreak, {
-    // Never abandon a milestone as FAILED while the project is verified and closable: the
-    // remaining milestones are the unprovable ones the closure directive is asking the model
-    // to close, and marking them failed would put "fallita" in the final report for work that
-    // was done. The streak still climbs, so the abort guarantee at LOOP_ESCAPE_ABORT_STREAK
-    // is untouched — only the structural escape is withheld.
+    // Never abandon a milestone as FAILED while the project is verified and closable: the remaining milestones are the unprovable ones the closure directive is asking the model to close, and marking them failed would put "fallita" in the final report for work that w
     canAdvanceMilestone:
       !isClosure &&
       !loopIsUnrelatedToActiveMilestone &&

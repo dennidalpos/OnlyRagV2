@@ -50,9 +50,7 @@ export const PendingApprovalModal: React.FC<PendingApprovalModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [pendingApproval, onReject])
 
-  // Load the file as it exists on disk right now, so the modal shows the real before/after
-  // rather than only the replacement text. A file that does not exist yet reads as empty,
-  // which renders the proposal as a pure addition.
+  // Load the file as it exists on disk right now, so the modal shows the real before/after rather than only the replacement text.
   React.useEffect(() => {
     let cancelled = false
     if (!pendingApproval || !isFileMutation || !targetPath) {

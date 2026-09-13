@@ -84,9 +84,6 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   const currentDate = `${now.toISOString().split('T')[0]} (${formattedDate})`
 
   // Priority 1: Base System Prompt & User Goal Guidelines (Mandatory intact).
-  // Family-agnostic and tier-free — one configured coding model, one prompt.
-  // Deliberately excludes the per-turn step counter (see turnSuffix below) so this
-  // block stays byte-identical across turns whenever nothing else changed (AGT1).
   const { prompt: baseSystemPrompt } = PromptCompiler.compileCodingPrompt(
     {
       agentMode: agentMode.toUpperCase(),
@@ -114,17 +111,12 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   const skillsSection = skillsBlock ? `${skillsBlock}\n` : ''
 
   // Priority 3: Auxiliary Background Context (RAG docs & Repository Tree Map).
-  // Budgeted as a SHARE of the profile's context allowance rather than by fixed thresholds:
-  // the old `<= 16000 ? 2500 : 6000` step handed a 19k-char profile 16k of background context,
-  // leaving almost nothing for tool history — the one block the agent needs to make progress.
   const maxRAGChars = Math.floor(runtimeOpts.maxContextChars * 0.12)
   const maxMapChars = Math.floor(runtimeOpts.maxContextChars * 0.18)
   const attachedBlock = attachedContext ? `ATTACHED RAG DOCS CONTEXT:\n${attachedContext.slice(0, maxRAGChars)}\n` : ''
   const mapBlock = projectContextMapStr ? `FULL REPOSITORY WORKSPACE MAP (${workspacePath}):\n${projectContextMapStr.slice(0, maxMapChars)}\n` : ''
 
   // Priority 4: Tool Execution History (Episodic Trajectory & Recent Detailed Outputs).
-  // Positioned LAST (after all background context above) so it is the sole growing,
-  // append-only tail of the prompt — see AssembledPrompt.historyBlock.
   let historyBlock = ''
   let recoveryHint = ''
 
@@ -149,9 +141,7 @@ export function assembleTurnPrompt(input: PromptAssemblerInput): AssembledPrompt
   const turnStatusLine = `CURRENT TURN STATUS: Step ${stepCount}/${maxStepsLabel}.`
   const turnSuffix = [recoveryHint, turnStatusLine].filter((p) => Boolean(p && p.trim())).join('\n\n')
 
-  // Compaction over the hardware profile limit is handled exclusively by
-  // HeuristicContextCompactor.compile in the orchestrator loop (single
-  // point of truncation — see agentOrchestratorAppService.ts).
+  // Compaction over the hardware profile limit is handled exclusively by HeuristicContextCompactor.compile in the orchestrator loop (single point of truncation — see agentOrchestratorAppService.ts).
   const prompt = [stableSection, historyBlock, turnSuffix].filter((p) => Boolean(p && p.trim())).join('\n\n')
 
   return {

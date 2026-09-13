@@ -14,11 +14,7 @@ interface ProjectRegistryStore {
   projects: WorkspaceProject[]
 }
 
-/**
- * Single global (non-workspace-scoped) filesystem store for every project the user has ever
- * opened, so the main process -- not just the renderer's localStorage -- knows the full set
- * of known projects. Lives under Electron's userData dir, same root as skillRepository.ts.
- */
+/** Single global (non-workspace-scoped) filesystem store for every project the user has ever opened, so the main process -- not just the renderer's localStorage -- knows the full set of known projects. */
 export class ProjectRegistryRepository {
   private readonly stateFilePath?: string
 

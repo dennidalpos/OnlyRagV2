@@ -50,11 +50,7 @@ interface WorkspaceExplorerProps {
   width?: number
 }
 
-/**
- * Workspace Explorer.
- * Hierarchical Project -> Nested Chat/Session architecture without a separate history accordion.
- * Selecting any project or session immediately mounts and populates that project's files.
- */
+/** Workspace Explorer. */
 export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   projects,
   activeProjectPath,

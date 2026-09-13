@@ -1,19 +1,4 @@
-/**
- * electron/core/domain/agent/ollamaToolSchemaCatalog.ts
- *
- * Domain Layer — Native Tool-Calling Schema Catalog
- *
- * Structured JSON-Schema tool definitions for all coding-agent tools, in the
- * OpenAI-compatible `tools` array format Ollama's POST /api/chat endpoint
- * expects. Parameter names and requiredness are derived directly from the
- * actual handlers in agentToolExecutorService.ts, so native tool-calling
- * requests stay in sync with what the executor accepts.
- *
- * "ask" and "finish" are orchestrator-level pseudo-tools (handled before
- * agentToolExecutorService's switch) and are included here too, since a
- * native-tool-calling model needs them in its tool list the same way the
- * prompt-engineered system prompt lists them today.
- */
+
 
 export interface OllamaToolSchema {
   type: 'function'
@@ -186,20 +171,7 @@ function exampleValueFor(paramName: string, type: string): string {
   return `"<${paramName}>"`
 }
 
-/**
- * What to send back to a model whose tool call was rejected by parameter validation.
- *
- * The rejection feedback used to be one fixed sentence — "mandatory input parameters were
- * missing or malformed. Please ensure you provide valid JSON with all required parameters" —
- * which names no tool, no parameter and no shape. A 7B model reading it has been told that
- * something is wrong and nothing about what, so its next attempt is a guess, and the guess is
- * frequently the same call again.
- *
- * The contract is already declared, once, in this catalogue (it is what native tool-calling
- * models are handed). Rendering it back on a rejection costs nothing and turns the feedback
- * into something a small model can actually follow: which parameters are mandatory, which are
- * optional, and the exact JSON envelope to emit.
- */
+/** What to send back to a model whose tool call was rejected by parameter validation. */
 export function buildToolSchemaCorrectionDirective(toolName: string, errors: readonly string[] = []): string {
   const schema = findToolSchema(toolName)
   const why = errors.length > 0 ? errors.map((e) => `- ${e}`).join('\n') : '- The call was missing or malformed.'

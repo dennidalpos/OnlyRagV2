@@ -61,11 +61,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   })
 
   it('should cap the project map block per its own hardware-tiered budget, without applying a second full-prompt truncation pass', () => {
-    // AgentPromptAssembler no longer re-truncates the assembled prompt against
-    // maxContextChars — that watermark-based compaction is HeuristicContextCompactor's
-    // sole responsibility in the orchestrator loop (see agentOrchestratorAppService.ts).
-    // Here only the per-segment maxMapChars budget applies: a share (18%) of maxContextChars,
-    // so the background context scales with the window instead of a fixed step threshold.
+    // AgentPromptAssembler no longer re-truncates the assembled prompt against maxContextChars — that watermark-based compaction is HeuristicContextCompactor's sole responsibility in the orchestrator loop (see agentOrchestratorAppService.ts).
     const hugeMap = 'a'.repeat(25000)
     const { prompt } = assembleTurnPrompt({
       userTask: 'Optimize database queries',
@@ -212,11 +208,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
 
   describe('segments (compactor input contract)', () => {
     it('exposes stableSection as DISJOINT segments that rejoin to exactly stableSection', () => {
-      // The orchestrator must feed HeuristicContextCompactor these segments, never stableSection
-      // itself. Passing the joined section as `systemPrompt` while ALSO passing its own parts
-      // counted every byte twice: the compactor saw ~40k for a ~27k prompt, tripped its watermark
-      // on prompts that fit, and drove its budget negative — wiping the tool history so every
-      // turn's prompt was byte-identical and the model looped on its first tool call forever.
+      // The orchestrator must feed HeuristicContextCompactor these segments, never stableSection itself.
       const { stableSection, segments } = assembleTurnPrompt({
         userTask: 'Build a dashboard',
         agentMode: 'agent',

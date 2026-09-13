@@ -1,14 +1,7 @@
 import { collectTemplateTokens, TemplateSyntaxError } from './promptTemplateEngine'
 import { findPromptNode, type PromptNodeId } from './promptHierarchyRegistry'
 
-/**
- * Structural checks on a user-edited prompt template.
- *
- * Two of these guard real token costs rather than style: a partial referenced twice sends that
- * block twice on every turn (~1.000 tokens per step for the tool schema), and a master template
- * that lost `{{> directives}}` silently strips the agent's anti-loop and completion-gate rules
- * while still looking fine in the editor.
- */
+/** Structural checks on a user-edited prompt template. */
 
 export type PromptIssueSeverity = 'error' | 'warning'
 
@@ -75,8 +68,6 @@ export function validateNodeTemplate(nodeId: PromptNodeId, template: string): Pr
   }
 
   // Repeated variables are legitimate — the image prompt names {{currentPage}} twice on purpose.
-  // Only unknown ones are worth surfacing, and only as a warning: a variable this module never
-  // supplies renders as an empty string rather than breaking anything.
   const known = new Set(node.variables.map((v) => v.name))
   const contextual = new Set(['nativeToolCalling', 'nativeVision'])
   for (const token of tokens) {

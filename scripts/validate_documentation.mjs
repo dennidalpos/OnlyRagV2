@@ -24,11 +24,11 @@ function localLinkTarget(rawTarget) {
   return target
 }
 
-export function validateDocumentation({ docsRoot, packageJsonPath }) {
+export function validateDocumentation({ docsRoot, packageJsonPath, additionalRoots = [], additionalFiles = [] }) {
   const errors = []
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
   const scripts = new Set(Object.keys(packageJson.scripts ?? {}))
-  const files = markdownFiles(docsRoot)
+  const files = [...markdownFiles(docsRoot), ...additionalRoots.flatMap(markdownFiles), ...additionalFiles.filter((filePath) => filePath.endsWith('.md') && fs.existsSync(filePath))]
   const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g
   const npmRunPattern = /\bnpm\s+run\s+([A-Za-z0-9:_-]+)/g
 
@@ -50,9 +50,12 @@ export function validateDocumentation({ docsRoot, packageJsonPath }) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const usesDefaultDocsRoot = process.argv[2] === undefined
   const result = validateDocumentation({
     docsRoot: path.resolve(process.argv[2] ?? path.join(repositoryRoot, 'docs')),
     packageJsonPath: path.resolve(process.argv[3] ?? path.join(repositoryRoot, 'package.json')),
+    additionalRoots: usesDefaultDocsRoot ? [path.join(repositoryRoot, 'skills')] : [],
+    additionalFiles: usesDefaultDocsRoot ? [path.join(repositoryRoot, 'README.md')] : [],
   })
   if (result.errors.length > 0) {
     console.error(`Documentation validation failed with ${result.errors.length} error(s):`)

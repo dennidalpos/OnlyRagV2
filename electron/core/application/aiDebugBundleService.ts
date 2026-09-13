@@ -1,11 +1,4 @@
-/**
- * electron/core/application/aiDebugBundleService.ts
- *
- * Application Layer — AI Debug Diagnostic Bundle Generator.
- * Compiles a structured, zero-noise, high-density diagnostic markdown report
- * designed specifically to be analyzed by an AI assistant
- * to immediately identify root causes and generate concrete fixes.
- */
+
 
 import os from 'node:os'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
@@ -108,9 +101,7 @@ export class AiDebugBundleService {
         .join('\n\n')
     }
 
-    // Keep the complete chronological payload available to a log analyst. The
-    // trajectory above is intentionally compact, but it is not sufficient to
-    // diagnose prompt assembly, model output, or a tool's exact response.
+    // Keep the complete chronological payload available to a log analyst.
     const persistedAuditLog = codingAgentLogger.readSessionAuditLog(sessionId)
     const detailedLogSection = persistedAuditLog || (rawLogs.length > 0
       ? rawLogs.map((entry: any) => [

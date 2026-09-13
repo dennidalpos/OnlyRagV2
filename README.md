@@ -13,16 +13,7 @@ Local Windows desktop workspace for document ingestion, RAG chat, translation an
 
 ## Documentation
 
-The technical documentation is split by scope in [`docs/README.md`](./docs/README.md):
-
-- architecture and process boundaries;
-- Electron Main and React Renderer;
-- coding agent and IPC/REST contracts;
-- RAG, OCR and translation;
-- setup, tests, release and dependencies;
-- decisions, verification and known limits.
-
-Contracts are defined by code: [`electron/preload.ts`](./electron/preload.ts), [`shared/types/index.ts`](./shared/types/index.ts), [`sidecar/main.py`](./sidecar/main.py), [`sidecar/schemas.py`](./sidecar/schemas.py) and [`sidecar/contracts/openapi-2.3.0.json`](./sidecar/contracts/openapi-2.3.0.json).
+The concise technical guides are organized by scope in [`docs/README.md`](./docs/README.md). Code is authoritative for IPC ([`electron/preload.ts`](./electron/preload.ts)), REST ([`sidecar/main.py`](./sidecar/main.py)) and shared types ([`shared/types/index.ts`](./shared/types/index.ts)).
 
 ## Quick start
 
@@ -35,20 +26,7 @@ npm run setup:dev
 npm run dev
 ```
 
-## Useful commands
-
-| Purpose | Command |
-| --- | --- |
-| Development | `npm run dev` |
-| Build | `npm run build` |
-| Fast tests | `npm run test:fast` |
-| Sidecar tests | `npm run test:sidecar` |
-| Type check | `npm run typecheck` |
-| Static quality | `npm run quality:static` |
-| Documentation | `npm run docs:check` |
-| Windows installer | `npm run package:win` |
-
-The complete command catalog is in [`docs/operations.md`](./docs/operations.md).
+For development, verification, packaging and cleanup commands, use [`docs/operations.md`](./docs/operations.md).
 
 ## Repository map
 

@@ -1,11 +1,4 @@
-/**
- * electron/core/infrastructure/http/sidecarHttpClient.ts
- *
- * Infrastructure Layer — Dedicated HTTP transport client for the Python FastAPI Sidecar (:8000).
- *
- * Centralizes all low-level network I/O, keep-alive agent pooling, timeouts, SSE line-parsing,
- * and error formatting for communication with the sidecar engine.
- */
+
 
 import http from 'node:http'
 import { logger } from '../../../diagnostics'

@@ -21,26 +21,12 @@ export interface StreamSession {
   isCancelled: () => boolean
   signal?: AbortSignal
   onCancelHandle?: (abort: () => void) => void
-  /**
-   * When true (and toolCatalog is non-empty), routes through POST /api/chat
-   * with a `tools` array instead of the prompt-engineered POST /api/generate
-   * path (see ollamaToolCallingCapability.ts). Absent/false preserves the
-   * exact existing /api/generate behavior for every other caller.
-   */
+  /** When true (and toolCatalog is non-empty), routes through POST /api/chat with a `tools` array instead of the prompt-engineered POST /api/generate path (see ollamaToolCallingCapability.ts). */
   toolCallingCapable?: boolean
   toolCatalog?: OllamaToolSchema[]
-  /**
-   * Ollama `context` token array from a previous /api/generate response on the
-   * SAME model, to continue from instead of re-evaluating the full prompt
-   * (see ollamaContextCacheManager.ts / AGT1). Only meaningful for the
-   * /api/generate path — ignored by streamChatWithTools.
-   */
+  /** Ollama `context` token array from a previous /api/generate response on the SAME model, to continue from instead of re-evaluating the full prompt (see ollamaContextCacheManager.ts / AGT1). */
   previousContext?: number[]
-  /**
-   * Invoked with the `context` array from the final NDJSON line of a
-   * completed /api/generate response (present when `done: true`), and the
-   * model that produced it. Not invoked by streamChatWithTools.
-   */
+  /** Invoked with the `context` array from the final NDJSON line of a completed /api/generate response (present when `done: true`), and the model that produced it. */
   onContextReceived?: (context: number[], respondingModel: string) => void
   onToolProtocolObserved?: (protocol: ObservedToolCallingProtocol) => void
   onGenerationTelemetry?: (telemetry: OllamaStreamTelemetry) => void
@@ -65,13 +51,7 @@ function streamTelemetry(parsed: Record<string, unknown>, model: string, numCtx:
   }
 }
 
-/**
- * Serializes a native tool_calls[0] entry into the same {"name", "arguments"}
- * JSON text shape toolParser.ts already knows how to parse (see
- * extractToolCallFromText's rawToolName / "arguments" handling), so a native
- * tool-calling response and a prompt-engineered one both flow through the
- * exact same downstream parsing pipeline.
- */
+/** Serializes a native tool_calls[0] entry into the same {"name", "arguments"} JSON text shape toolParser.ts already knows how to parse (see extractToolCallFromText's rawToolName / "arguments" handling), so a native tool-calling response and a prompt-engineered o */
 function serializeNativeToolCall(name: string, args: Record<string, unknown>): string {
   return JSON.stringify({ name, arguments: args })
 }
@@ -280,21 +260,7 @@ export class AgentStreamTransport {
     })
   }
 
-  /**
-   * Native tool-calling path: POST /api/chat with a `tools` array, streamed
-   * (stream:true) and parsed incrementally like streamCompletion's /api/generate
-   * path (AGT7) — Ollama's tool_calls field only arrives on the final NDJSON
-   * line (done:true), but message.content deltas arrive incrementally on every
-   * line same as the prompt-engineered path, so onTokenChunk now fires live
-   * here too instead of the UI going silent until the whole response lands.
-   *
-   * Returns the SAME string contract as streamCompletion: either the
-   * serialized {"name","arguments"} tool call (when message.tool_calls is
-   * populated) or the model's raw text content (when it isn't — some
-   * "tools"-capable models, e.g. the qwen family, echo the call as JSON
-   * text in `content` instead of populating tool_calls). Either shape is
-   * parsed identically downstream by toolParser.ts.
-   */
+  /** Native tool-calling path: POST /api/chat with a `tools` array, streamed (stream:true) and parsed incrementally like streamCompletion's /api/generate path (AGT7) — Ollama's tool_calls field only arrives on the final NDJSON line (done:true), but message.content */
   private static async streamChatWithTools(session: StreamSession): Promise<string> {
     const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } = session
 

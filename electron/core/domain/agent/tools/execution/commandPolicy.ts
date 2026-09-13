@@ -19,11 +19,7 @@ export function isLongRunningCommand(command: string): boolean {
   )
 }
 
-/**
- * Detects a command that starts a dev/watch server or otherwise never exits on its own.
- * run_command waits synchronously for the process to exit, so these commands need an
- * explicit refusal instead of consuming the full timeout ceiling.
- */
+/** Detects a command that starts a dev/watch server or otherwise never exits on its own. */
 function isBlockingDevServerSubcommand(subcmd: string): boolean {
   const cmd = subcmd.trim().toLowerCase()
   if (!cmd) return false

@@ -63,11 +63,7 @@ describe('checkVerificationCommandSafety', () => {
   })
 
   it('refuses the interactive editor commands that stalled session-1787518626817-72a8', () => {
-    // The planner declared `nano <file>` as the verification for six of ten implementation
-    // milestones. It cannot be run non-interactively: without a TTY it hangs until the
-    // run_command timeout, and even with one its exit code only reports whether the editor
-    // closed, never whether the file is correct. Every milestone that carried it was
-    // eventually abandoned by the loop guard.
+    // The planner declared `nano <file>` as the verification for six of ten implementation milestones.
     for (const command of [
       'nano tailwind.config.js',
       'nano src/App.tsx',
@@ -83,10 +79,7 @@ describe('checkVerificationCommandSafety', () => {
   })
 
   it('refuses dev/watch servers that never exit, the same shape run_command already blocks at execution time', () => {
-    // The same session declared `npx tailwindcss ... --watch` as the verification for two
-    // milestones. run_command's BLOCKING_DEV_SERVER_BLOCK guard correctly refuses to execute
-    // it, but only once the model tries — by then the milestone already carries a "proof"
-    // that can never run to completion.
+    // The same session declared `npx tailwindcss ...
     for (const command of [
       'npx tailwindcss -i ./src/styles/globals.css -o ./dist/output.css --watch',
       'npm run dev',

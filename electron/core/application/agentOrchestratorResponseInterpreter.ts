@@ -21,11 +21,7 @@ async function handleMissingToolCall(
     streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
 
   if (hasToolCallAttempt) {
-    // This branch used to return `continue` without incrementing anything, and the loop
-    // detector never sees these calls because validation rejects them before it runs. The
-    // result was a path with no escalation and no terminating guarantee: thirty-three
-    // consecutive rejected `replace_file_content` calls in the live run of 2026-08-24, zero
-    // loop interventions in the whole audit log, and a session that ended only on its step cap.
+    // This branch used to return `continue` without incrementing anything, and the loop detector never sees these calls because validation rejects them before it runs.
     const rejected = rejections[rejections.length - 1]
     const toolLabel = rejected?.toolName || 'unparsed_tool'
     const signature = `${toolLabel}:${(rejected?.errors || ['unparsed']).join('|').toLowerCase()}`
@@ -82,8 +78,6 @@ async function handleMissingToolCall(
   )
 
   // If operational work remains, give prose-only output two chances to turn into an action.
-  // Once the plan is closed, the prose itself can be the final report and the application
-  // immediately evaluates evidence without demanding a ceremonial finish call.
   if (ctx.agentMode === 'agent' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.noToolStreak < 2) {
     ctx.state.noToolStreak++
     const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive while operational work is still open. Invoke one concrete tool for the current milestone. When the work is actually complete, provide the final report as prose: the application will run the final evidence gate and close the session.`
@@ -125,13 +119,7 @@ async function handleMissingToolCall(
     : { outcome: 'continue' }
 }
 
-/**
- * Interprets one turn's raw LLM output: plan extraction, tool-call parsing (with the
- * no-tool-call / malformed-call recovery paths), the finish/loop-detection/ask special
- * cases (see agentOrchestratorFinishAndLoopGuards.ts and agentOrchestratorAskAutoHealing.ts),
- * and finally the "about to execute" log line for whatever tool call survives all of the
- * above. Mirrors the exact step order from the original inline loop body.
- */
+/** Interprets one turn's raw LLM output: plan extraction, tool-call parsing (with the no-tool-call / malformed-call recovery paths), the finish/loop-detection/ask special cases (see agentOrchestratorFinishAndLoopGuards.ts and agentOrchestratorAskAutoHealing.ts), */
 export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Promise<ResponseInterpretationOutcome> {
   const rejections: ToolCallRejection[] = []
   const parsedTool = parseAgentToolCall(ctx.streamedOutput, (rejection) => rejections.push(rejection))
@@ -148,10 +136,7 @@ export async function interpretTurnResponse(ctx: ResponseInterpreterContext): Pr
   if (loopOutcome) return loopOutcome
 
   if (parsedTool.tool === 'ask') {
-    // Deliberately does NOT reset stagnationStreak first: "ask" isn't forward progress, so a
-    // model that just burned through a write-loop's stagnation budget and pivots to asking
-    // inherits that same streak instead of getting a fresh grace period (see
-    // agentOrchestratorAskAutoHealing.ts).
+    // Deliberately does NOT reset stagnationStreak first: "ask" isn't forward progress, so a model that just burned through a write-loop's stagnation budget and pivots to asking inherits that same streak instead of getting a fresh grace period (see agentOrchestrator
     const askOutcome = await handleAskTool({
       parsedTool,
       agentMode: ctx.agentMode,

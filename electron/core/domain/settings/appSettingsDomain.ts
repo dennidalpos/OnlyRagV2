@@ -145,9 +145,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     sanitized.agentSessionTimeoutMinutes = Math.floor(raw.agentSessionTimeoutMinutes)
   }
 
-  // Prompt overrides are keyed by prompt node id. Anything else is a leftover from the retired
-  // per-model-family scheme ('chat:qwen', 'vision', ...) and is dropped rather than migrated:
-  // those keys addressed prompts that no longer exist.
+  // Prompt overrides are keyed by prompt node id.
   if (raw.customPromptOverrides && typeof raw.customPromptOverrides === 'object') {
     const overrides: Record<string, string> = {}
     for (const [key, value] of Object.entries(raw.customPromptOverrides)) {

@@ -17,12 +17,7 @@ export interface SkillInstallCandidate {
 /** How long a pending request waits for the user before resolving as denied. */
 const APPROVAL_TIMEOUT_MS = 120_000
 
-/**
- * Request/response bridge for the hub skill auto-install confirmation. The decision is
- * needed while the main process assembles the turn prompt, so the renderer's answer is
- * awaited here instead of being fired and forgotten like the tool approval events.
- * A request nobody answers resolves as denied, so the agent loop can never deadlock.
- */
+/** Request/response bridge for the hub skill auto-install confirmation. */
 export class SkillInstallApprovalService {
   private readonly pendingRequests = new Map<string, {
     identity: Readonly<AgentRunIdentity>

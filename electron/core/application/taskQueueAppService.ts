@@ -17,12 +17,7 @@ export interface QueuedAgentTask {
   reject: (err: any) => void
 }
 
-/**
- * Agent tasks run strictly one at a time. Concurrency is not configurable: the tool
- * executor owns a single workspace journal and a shared pool of persistent shells, so a
- * second concurrent run would roll back the other run's writes on cancellation. Serial
- * execution is also the workspace rule (see AGENTS.md, "Strict Serial Execution").
- */
+/** Agent tasks run strictly one at a time. */
 const AGENT_TASK_CONCURRENCY = 1
 
 export class TaskQueueAppService {

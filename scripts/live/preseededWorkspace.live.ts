@@ -1,13 +1,4 @@
-/**
- * Live scenario — plan compilation against a project that already exists.
- *
- * The empty-workspace probe cannot prove that workspace inspection and the project's declared
- * check are reconciled. This fixture has a real manifest, source file and build script before
- * planning starts; the assertion therefore observes the same path a user with an existing
- * project takes.
- *
- *   npx vitest run --config vitest.live.config.mts -t "pre-seeded"
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

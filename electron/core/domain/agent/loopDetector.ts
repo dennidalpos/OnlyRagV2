@@ -1,22 +1,14 @@
 import crypto from 'node:crypto'
 import type { AgentToolCall } from './agentTypes'
 
-/**
- * How the previous invocations of a repeated action actually ended.
- * `unknown` covers actions the executor never reported an outcome for (the very first
- * repeat inside a single turn, or non-executing pseudo-tools).
- */
+/** How the previous invocations of a repeated action actually ended. */
 export type RepeatOutcomeKind = 'succeeding' | 'failing' | 'unknown'
 
 export interface LoopCheckResult {
   isLooping: boolean
   consecutiveDuplicateCount: number
   suggestedIntervention?: string
-  /**
-   * Only meaningful when `isLooping` is true. Repeating a command that KEEPS SUCCEEDING is a
-   * different failure from repeating one that keeps failing: the work is done, the model just
-   * isn't moving on. The caller must not punish it as stagnation — see handleLoopDetection.
-   */
+  /** Only meaningful when `isLooping` is true. */
   repeatOutcome?: RepeatOutcomeKind
 }
 
@@ -86,12 +78,7 @@ export class AgentActionLoopDetector {
     )
   }
 
-  /**
-   * Feeds the real execution outcome of a previously recorded tool call back into the detector.
-   * Without this the detector only ever sees INTENT, so it cannot tell a model hammering a
-   * broken command from one re-running a command that works — the two need opposite responses.
-   * Called by the orchestrator once the tool has actually run.
-   */
+  /** Feeds the real execution outcome of a previously recorded tool call back into the detector. */
   public recordOutcome(toolCall: AgentToolCall, succeeded: boolean): void {
     const signature = this.generateFingerprint(toolCall)
     this.outcomeBySignature.set(signature, accumulate(this.outcomeBySignature.get(signature), succeeded))
@@ -102,14 +89,7 @@ export class AgentActionLoopDetector {
     }
   }
 
-  /**
-   * Classifies a repeat by how its previous executions ended.
-   *
-   * The exact fingerprint answers first, because it is the precise question. When the
-   * parameters changed — the file-edit rule's whole reason to exist — the target's history is
-   * the honest fallback: "the last edit to this file worked" is exactly what the caller needs
-   * to know before deciding whether to punish the repeat as stagnation.
-   */
+  /** Classifies a repeat by how its previous executions ended. */
   public classifyRepeatOutcome(toolCall: AgentToolCall): RepeatOutcomeKind {
     const bySignature = this.outcomeBySignature.get(this.generateFingerprint(toolCall))
     if (bySignature) return bySignature.lastSucceeded ? 'succeeding' : 'failing'
@@ -132,11 +112,7 @@ export class AgentActionLoopDetector {
     const target = this.extractTarget(toolCall)
     this.targetHistory.push({ tool: toolCall.tool, target })
 
-    // 0.5 Shell-Command Tool-Keyword Loop Check:
-    // Detects when the model repeatedly passes a tool name as a shell command
-    // (e.g. `write_file "path" '...'`) across consecutive run_command calls.
-    // The fingerprint check (section 1) misses this when the JSON payload varies
-    // slightly between iterations. This check operates on the raw command string.
+    // 0.5 Shell-Command Tool-Keyword Loop Check: Detects when the model repeatedly passes a tool name as a shell command (e.g.
     const SHELL_TOOL_KEYWORDS = [
       'write_file', 'read_file', 'replace_file_content', 'multi_replace_file_content',
       'delete_file', 'list_dir', 'list_files_recursive', 'grep_search',
@@ -181,10 +157,7 @@ export class AgentActionLoopDetector {
       const repeatOutcome = this.classifyRepeatOutcome(toolCall)
       const record = this.outcomeBySignature.get(signature)
 
-      // A repeat whose previous runs SUCCEEDED needs the opposite advice: there is no error to
-      // investigate and no alternative approach to find — the action already did its job and
-      // its effect is on disk. Telling such a model to "investigate the error stack trace"
-      // sends it looking for a failure that never happened.
+      // A repeat whose previous runs SUCCEEDED needs the opposite advice: there is no error to investigate and no alternative approach to find — the action already did its job and its effect is on disk.
       const suggestedIntervention = repeatOutcome === 'succeeding'
         ? `[REDUNDANT ACTION: "${toolCall.tool}" ALREADY SUCCEEDED ${record?.successes || 1} TIME(S)]\nYou have re-issued the exact same "${toolCall.tool}" call ${duplicateCount} times. Every previous execution SUCCEEDED — nothing is broken and there is no error to fix.\nIts effect is ALREADY applied${target ? ` to "${target}"` : ''}: re-running it changes nothing and wastes a step.\nDirectives:\n1. Treat this action as DONE and move to the NEXT unfinished step of your active milestone.\n2. If the milestone's deliverable is already in place, run its verification command via run_command, then mark it with update_plan.\n3. If every milestone is complete and verified, invoke the "finish" tool with your final report.`
         : `[CRITICAL LOOP INTERVENTION: REPEATED ACTION DETECTED]\nYou have attempted the exact same "${toolCall.tool}" action ${duplicateCount} times without progressing.\nDO NOT repeat this tool call with the same parameters.\nDirectives:\n1. If a file edit or replace failed, read the file first to inspect exact lines and whitespace.\n2. If a command or build failed, investigate the error stack trace and try an alternative approach.\n3. If you are stuck or require human guidance, use the "ask" tool to explain the blocker.`
@@ -207,9 +180,7 @@ export class AgentActionLoopDetector {
       }
     }
 
-    // 2. File Edit Thrashing Check: >=4 edit-class operations on the same file within the last 6 actions.
-    // Gives the agent runway for legitimate multi-step edits (create, import patch, style patch)
-    // while catching infinite mutation loops.
+    // 2.
     if (target && ['replace_file_content', 'multi_replace_file_content', 'write_file'].includes(toolCall.tool)) {
       const recentTargets = this.targetHistory.slice(-6)
       const sameFileEdits = recentTargets.filter(
@@ -226,18 +197,13 @@ export class AgentActionLoopDetector {
           isLooping: true,
           consecutiveDuplicateCount: sameFileEdits,
           suggestedIntervention: `[CRITICAL FILE EDIT LOOP: ${sameFileEdits} EDITS ON ${target} WITHOUT VERIFICATION]\nYou have executed ${sameFileEdits} edit operations (write_file/replace_file_content/multi_replace_file_content) on "${target}" in a row, without verifying any of them.\nDO NOT edit "${target}" again in your next step.\nDirectives:\n1. Execute a build, test, or typecheck command via run_command (e.g. npm run build, npm test, npm run typecheck) to verify syntax and runtime integrity.\n2. If your implementation is complete and verified, invoke the finish tool immediately.${configDirectives}`,
-          // Edits that all landed are redundancy, not stagnation: the file exists and the
-          // milestone is reachable. Without this the caller cannot tell the two apart, and
-          // abandons a milestone whose work actually happened.
+          // Edits that all landed are redundancy, not stagnation: the file exists and the milestone is reachable.
           repeatOutcome: this.classifyRepeatOutcome(toolCall),
         }
       }
     }
 
-    // 3. Consecutive Read Loop Check: >=4 consecutive read/inspect calls on same target without action.
-    // Deliberately NOT given a repeatOutcome: a read that keeps succeeding has still produced
-    // nothing, so escalating it costs no work, whereas escalating a successful write throws
-    // away a deliverable that exists.
+    // 3.
     if (target && ['read_file', 'list_dir', 'grep_search', 'extract_code_symbols'].includes(toolCall.tool)) {
       const recentTargets = this.targetHistory.slice(-5)
       const consecutiveReads = recentTargets.filter(
@@ -291,14 +257,7 @@ export class AgentActionLoopDetector {
     return { isOscillating: false }
   }
 
-  /**
-   * Resets history for a specific target or all targets.
-   * Call this after an intervention is issued so that the model's next attempt
-   * to fix/modify the target file is evaluated cleanly against the new strategy.
-   *
-   * Outcome memory is deliberately kept: "this exact command succeeded" stays true after the
-   * plan moves on, and forgetting it would let the next repeat be misread as a failing loop.
-   */
+  /** Resets history for a specific target or all targets. */
   public resetTarget(target?: string): void {
     this.signatureHistory = []
     if (!target) {

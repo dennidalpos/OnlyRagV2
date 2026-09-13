@@ -1,9 +1,4 @@
-/**
- * Model Update Checker Domain Module
- *
- * Pure domain logic for resolving model tags against official Ollama registry targets
- * and evaluating SHA256 manifest digest differences.
- */
+
 
 export interface ParsedModelTarget {
   namespace: string
@@ -24,16 +19,7 @@ export function normalizeDigest(digest?: string | null): string {
   return trimmed
 }
 
-/**
- * Parses an Ollama model name/tag into registry components (namespace, model, tag).
- * Defaults namespace to 'library' and tag to 'latest' if omitted.
- *
- * Examples:
- * - 'qwen2.5-coder:7b' -> { namespace: 'library', model: 'qwen2.5-coder', tag: '7b' }
- * - 'llama3.2' -> { namespace: 'library', model: 'llama3.2', tag: 'latest' }
- * - 'author/custom:v1' -> { namespace: 'author', model: 'custom', tag: 'v1' }
- * - 'author/custom' -> { namespace: 'author', model: 'custom', tag: 'latest' }
- */
+/** Parses an Ollama model name/tag into registry components (namespace, model, tag). */
 export function parseModelTag(rawName: string): ParsedModelTarget {
   if (!rawName || typeof rawName !== 'string') {
     return { namespace: 'library', model: '', tag: 'latest' }

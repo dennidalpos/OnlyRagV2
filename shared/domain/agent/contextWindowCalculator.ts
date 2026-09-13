@@ -1,8 +1,4 @@
-/**
- * Context Window Calculator for Local Ollama LLM Inference.
- * Computes optimal dynamic num_ctx based on prompt character length and completion headroom.
- * Prevents allocating redundant KV-Cache in VRAM while avoiding truncation.
- */
+
 
 import { countTokens } from 'gpt-tokenizer'
 
@@ -47,9 +43,7 @@ export function calculateDynamicContextWindow(
     chosenBucket = bucket
   }
 
-  // When the hardware tier allows >= 8192 and the prompt already needs significant
-  // tokens, pre-allocate 8192 directly to prevent a 4096 -> 8192 KV-cache
-  // invalidation on turn 2 as episodic history grows.
+  // When the hardware tier allows >= 8192 and the prompt already needs significant tokens, pre-allocate 8192 directly to prevent a 4096 -> 8192 KV-cache invalidation on turn 2 as episodic history grows.
   if (hardwareMaxCtx && hardwareMaxCtx >= 8192 && totalRequiredTokens >= 3000) {
     chosenBucket = Math.max(chosenBucket, 8192)
   }

@@ -8,11 +8,7 @@ interface OcrEngineSelectorProps {
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
 }
 
-/**
- * Settings-page OCR engine picker. Mirrors the Wizard Step 5 card (same i18n
- * keys and options) so users who skip the wizard — or want to change it later —
- * aren't forced back into the wizard to switch native_cuda vs vision_model OCR.
- */
+/** Settings-page OCR engine picker. */
 export const OcrEngineSelector: React.FC<OcrEngineSelectorProps> = ({
   settings,
   onUpdateSettings,

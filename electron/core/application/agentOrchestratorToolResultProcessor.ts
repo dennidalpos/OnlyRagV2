@@ -169,12 +169,7 @@ function resolvedMutationPaths(ctx: ToolResultProcessingContext, isToolFailure: 
   return []
 }
 
-/**
- * Post-processes a tool execution result: change-metrics IPC, stagnation circuit breaker
- * (which may end the session), episodic recording, mutation/verification bookkeeping (see
- * agentOrchestratorCircuitBreakerAndVerification.ts), and the final tool-result log line.
- * Mirrors the exact step order from the original inline loop body.
- */
+/** Post-processes a tool execution result: change-metrics IPC, stagnation circuit breaker (which may end the session), episodic recording, mutation/verification bookkeeping (see agentOrchestratorCircuitBreakerAndVerification.ts), and the final tool-result log lin */
 export async function runToolResultProcessing(ctx: ToolResultProcessingContext): Promise<ToolResultProcessingOutcome> {
   const { toolRes, parsedTool } = ctx
   const isToolFailure = isToolExecutionFailure(toolRes)
@@ -186,9 +181,7 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
     ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) &&
     !toolRes.noOpMutation
 
-  // Closes the loop detector's feedback path: it records INTENT before the tool runs, and only
-  // this line tells it what actually happened. Without it every repeat looks like a failing
-  // one, and a command that keeps succeeding gets its milestone abandoned as FAILED.
+  // Closes the loop detector's feedback path: it records INTENT before the tool runs, and only this line tells it what actually happened.
   ctx.loopDetector.recordOutcome(parsedTool, !isToolFailure)
   if (versionRecovery.conflictPath) ctx.loopDetector.resetTarget(versionRecovery.conflictPath)
 

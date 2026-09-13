@@ -7,20 +7,9 @@ export interface OllamaRuntimeOptions {
   top_p: number
   repeat_penalty: number
   num_thread?: number
-  /**
-   * Hard cap on generated tokens per turn. A turn is exactly one tool-call JSON block, so
-   * anything beyond this is the model rambling — on CPU inference that runaway is the single
-   * largest source of wasted wall-clock time. Sized generously enough that a large write_file
-   * payload still fits (a truncated call fails to parse, costing a retry step).
-   */
+  /** Hard cap on generated tokens per turn. */
   num_predict: number
-  /**
-   * Stop sequences. These are the scaffolding markers of the prompt's own tool-history block
-   * (see agentPromptAssembler.ts / episodicMemoryCompactor.ts): small models routinely carry on
-   * past their tool call and hallucinate the next turn's tool results using this exact layout.
-   * Deliberately NOT the closing ``` fence — file content written through write_file frequently
-   * contains markdown code fences, and stopping there would corrupt every such write.
-   */
+  /** Stop sequences. */
   stop: string[]
   maxContextChars: number
 }
@@ -52,17 +41,9 @@ const OUTPUT_CAP_BY_PHASE: Record<GenerationPhase, number> = {
 
 export class HardwareProfileResolver {
 
-  /**
-   * Generation reserve, as a share of the context window. A turn is one tool call, so the only
-   * genuinely large completion is a write_file payload; GENERATION_RESERVE_RATIO keeps room for
-   * one without letting the reserve crowd out the prompt.
-   */
+  /** Generation reserve, as a share of the context window. */
   private static readonly GENERATION_RESERVE_RATIO = 0.35
-  /**
-   * Chars per BPE token for this prompt mix (English directives + markdown + code). Measured at
-   * ~4.08 on real audit-log prompts; 3.6 is the conservative side of that, so the char budget
-   * always under-estimates rather than over-estimates the token cost.
-   */
+  /** Chars per BPE token for this prompt mix (English directives + markdown + code). */
   private static readonly CHARS_PER_TOKEN = 3.6
 
   static deriveNumPredict(numCtx: number, phase: GenerationPhase = 'edit'): number {
@@ -72,23 +53,12 @@ export class HardwareProfileResolver {
     )
   }
 
-  /**
-   * The prompt-assembly char budget that actually fits `numCtx` once the generation reserve is
-   * held back. Everything upstream (HeuristicContextCompactor, the assembler's per-block caps)
-   * budgets in chars, so this is the single place where the token window is translated.
-   */
+  /** The prompt-assembly char budget that actually fits `numCtx` once the generation reserve is held back. */
   static deriveMaxContextChars(numCtx: number, phase: GenerationPhase = 'edit'): number {
     const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx, phase)
     return Math.floor(promptTokens * HardwareProfileResolver.CHARS_PER_TOKEN)
   }
-  /**
-   * Resolves optimal Ollama runtime options from user settings and hardware diagnostics.
-   * Classification (and the safe-VRAM formula behind it) is owned by hardwareProfileTiers.ts;
-   * this method only maps the resolved hardware tier onto runtime options.
-   *
-   * There is deliberately no complexity-tier parameter: every module, coding included, runs on
-   * one configured model, so a machine has exactly one runtime profile.
-   */
+  /** Resolves optimal Ollama runtime options from user settings and hardware diagnostics. */
   static resolveOllamaOptions(
     profile: DeclaredHardwareProfile = 'Auto',
     env?: HardwareEnvironment

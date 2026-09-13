@@ -33,11 +33,7 @@ function decision(request: CapabilityPolicyRequest, allowed: boolean, reason: st
   })
 }
 
-/**
- * Strict offline policy: no network-capable operation can reach an effectful adapter.
- * Local filesystem and local Git inspection remain available; shell is allowed only when
- * its command does not contain a known egress primitive.
- */
+/** Strict offline policy: no network-capable operation can reach an effectful adapter. */
 export function authorizeOfflineStrict(input: CapabilityPolicyRequest): CapabilityPolicyDecision {
   const request = capabilityPolicyRequestSchema.parse(input)
 

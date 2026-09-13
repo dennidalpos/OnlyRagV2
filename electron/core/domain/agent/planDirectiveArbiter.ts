@@ -30,34 +30,11 @@ export type PlanDirectiveKind =
 
 export interface PlanDirectiveDecision {
   kind: PlanDirectiveKind
-  /**
-   * Replaces the ENTIRE active-milestone focus block when present.
-   *
-   * Whole-block replacement, never an extra paragraph: the focus block's own directives
-   * ("achieve this milestone's goals", "do NOT invoke finish") contradict every decision above
-   * `focus`, and a message carrying two instructions is answered by the first one.
-   */
+  /** Replaces the ENTIRE active-milestone focus block when present. */
   blockDirective: string | null
   /** Replaces ONLY directive 2 inside the focus block; the rest of the block stands. */
   closureStepDirective: string | null
-  /**
-   * Workspace files this directive orders the model to REWRITE, when it names any.
-   *
-   * A directive that says "rewrite src/pages/DashboardPage.tsx so nothing imports X" is only
-   * executable by a model that can see that file. In session live-full-task of 2026-08-25T12:11
-   * the model executed `read_file` zero times in fifty steps, and no prompt in that session
-   * carried a pinned-files or active-file block — the live probe is headless and pins nothing.
-   * It rewrote the file anyway, from nothing, and the result was a 208-byte stub: a blind
-   * rewrite destroys the file instead of removing one import from it, which regenerates the
-   * problem on the next turn.
-   *
-   * The arbiter is pure domain and cannot read disk, so it publishes the paths and the prompt
-   * assembly layer supplies the content (agentOrchestratorPromptAssembly.ts). Blueprint §6.2.1:
-   * the system knows which file it is talking about, so it hands over the file rather than
-   * asking the model to remember it.
-   *
-   * Empty for directives that order a command rather than an edit.
-   */
+  /** Workspace files this directive orders the model to REWRITE, when it names any. */
   rewriteTargets?: readonly string[]
 }
 
@@ -85,19 +62,11 @@ export interface PlanDirectiveInput {
    * `missingDependencies` by definition: that one is about what IS declared.
    */
   undeclaredDependencies: readonly UndeclaredDependency[]
-  /**
-   * Packages this session already tried to install and failed on. Ordering the same install
-   * again is what turned a correct directive into a thirteen-step loop; see
-   * installCommandParser.ts.
-   */
+  /** Packages this session already tried to install and failed on. */
   packagesWithFailedInstall: readonly string[]
   /** The command the project itself offers to prove it works, or null when it offers none. */
   verificationCommand: { command: string; source: string } | null
-  /**
-   * The verification command has already run, failed, and nothing has been written since.
-   * `hasVerifiedBuild` cannot express this: it is false both before the first run and after a
-   * failure, and the right next action is opposite in the two. See verificationAttemptTracker.ts.
-   */
+  /** The verification command has already run, failed, and nothing has been written since. */
   verificationFailing: boolean
   /**
    * The diagnostic directive built from the last failing verification, ready to be carried by the
@@ -202,18 +171,7 @@ export function buildUninstallablePackageDirective(undeclared: readonly Undeclar
   ].join('\n')
 }
 
-/**
- * What the model is told when every deliverable it owes is on disk and nothing has proven it.
- *
- * This is the directive whose absence stalled every run. The plan block is the only channel
- * that reaches the model on every turn; until now it named nothing but file actions, and the
- * one text that ever named a command lived inside a loop-guard intervention — which arrives
- * only once the model is already spinning, and was ignored seven times out of seven.
- *
- * The command is the project's own, resolved from its manifest. A model is not a reliable
- * source of build commands: a plan that says "Run `npm run build`" for a project that declares
- * no such script is a claim, not a capability.
- */
+/** What the model is told when every deliverable it owes is on disk and nothing has proven it. */
 export function buildVerificationDueDirective(verification: { command: string; source: string }): string {
   return [
     `[EVERY DELIVERABLE IS ON DISK — VERIFY THE PROJECT NOW]`,
@@ -226,32 +184,7 @@ export function buildVerificationDueDirective(verification: { command: string; s
   ].join('\n')
 }
 
-/**
- * The single directive for this turn, chosen by declared priority.
- *
- * The order is the whole contract, so it is stated once, here:
- *
- *  1. `session_closure` — the verification passed and nothing has been written since. Any
- *     lower directive would put the model back to work on a project already proven, which is
- *     what produced four consecutive re-runs of a green build.
- *  2. `dependencies_undeclared` — the code imports what nobody declared, so no install list and
- *     no build can resolve it. Ahead of `dependencies_missing` because `npm install <pkg>`
- *     both declares and installs, settling the two at once for those packages. Splits into
- *     `dependencies_uninstallable` for names this session has already failed to install:
- *     re-ordering that command is a loop, and the file that imports the name is what changes.
- *  3. `dependencies_missing` — a precondition of every check. Ordered above the check itself
- *     so the model is never sent at a command that cannot succeed.
- *  4. `verification_due` / `verification_failing` — no open milestone is missing a file and nothing has been verified.
- *     Writing is exhausted; only a command can move the plan.
- *  5. `unprovable_milestone` — the active milestone names no artefact, so the standing promise
- *     that writing its files will close it is false. Replaces that one sentence, not the block.
- *  6. `focus` — everything else. There is real work left that a file action can deliver.
- *
- * `session_closure` and `verification_due` are mutually exclusive by construction
- * (`hasVerifiedBuild` gates them in opposite directions), and the order is stated anyway: an
- * arbiter whose correctness depends on two branches never both matching is one refactor away
- * from being wrong silently.
- */
+/** The single directive for this turn, chosen by declared priority. */
 export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDecision {
   const closure = assessPostVerificationClosure({
     hasVerifiedBuild: input.hasVerifiedBuild,
@@ -298,9 +231,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
     }
   }
 
-  // Ahead of the check, and of closure, because a green check on a page that loads nothing is
-  // the inflated number this whole ordering exists to stop producing: on 2026-08-25 `tsc`
-  // passed over every file and the plan read 14/15 while `vite build` emitted no JavaScript.
+  // Ahead of the check, and of closure, because a green check on a page that loads nothing is the inflated number this whole ordering exists to stop producing: on 2026-08-25 `tsc` passed over every file and the plan read 14/15 while `vite build` emitted no JavaScr
   if (!input.hasVerifiedBuild && input.disconnectedEntrypoint) {
     return {
       kind: 'entrypoint_disconnected',
@@ -313,10 +244,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
   }
 
   if (!input.hasVerifiedBuild && input.verificationCommand && isEveryDeliverableSatisfied(input)) {
-    // The check has run and failed, and nothing has changed since: ordering it again is
-    // ordering the model to re-read code it has already been told is wrong — and it was doing
-    // exactly that from the one channel that always wins, against a tool result telling it the
-    // opposite. See verificationAttemptTracker.ts for the measurement.
+    // The check has run and failed, and nothing has changed since: ordering it again is ordering the model to re-read code it has already been told is wrong — and it was doing exactly that from the one channel that always wins, against a tool result telling it the o
     if (input.verificationFailing) {
       return {
         kind: 'verification_failing',
@@ -353,17 +281,7 @@ export function resolvePlanDirective(input: PlanDirectiveInput): PlanDirectiveDe
   return FOCUS
 }
 
-/**
- * True when no open milestone is still owed a file.
- *
- * `not_applicable` counts as satisfied here and nowhere else in the codebase, and the reason is
- * specific to this question: a milestone naming no artefact cannot be advanced by writing, so
- * its presence never means "keep writing". It DOES still block session closure — that is
- * `assessPostVerificationClosure`'s judgement, made above and not repeated here.
- *
- * An empty plan is not "everything delivered": with no milestone there is nothing to attest,
- * and ordering a build would be a check on a workspace nobody has described.
- */
+/** True when no open milestone is still owed a file. */
 function isEveryDeliverableSatisfied(input: PlanDirectiveInput): boolean {
   const open = selectOpenMilestones(input.milestones)
   if (open.length === 0) return false

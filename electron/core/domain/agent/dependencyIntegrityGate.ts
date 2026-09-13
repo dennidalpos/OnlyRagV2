@@ -1,18 +1,4 @@
-/**
- * Dependency Integrity Gate.
- *
- * Turns a dependency scan into a verdict the agent loop can act on: a project that imports a
- * package it never declared does not build, however complete its files look on disk.
- *
- * This is the check that milestone closure by file existence cannot make. In
- * session-1787485700613-o3tx eleven milestones reached `verified` in 48 seconds because their
- * files were present, and the project imported three packages that were nowhere in
- * package.json — `react-router-dom`, `@vitejs/plugin-react` and `@mui/material`, the last one
- * a UI framework the task had not asked for at all.
- *
- * Pure domain: the scan itself is performed by the infrastructure adapter (depcheck), so the
- * rules for what counts as a defect and what the model is told to do about it stay testable.
- */
+
 
 /** Package name -> the files that import it. The shape depcheck reports. */
 export type MissingDependencyMap = Record<string, string[]>

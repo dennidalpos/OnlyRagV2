@@ -75,10 +75,7 @@ describe('normalizePlanFalsifiability', () => {
   })
 
   it('keeps the entry as its own milestone when the closing one is the only thing to fold into', () => {
-    // The incremental fallback plan has exactly this shape: one implementation step that names
-    // no file (the workspace is unknown when it is written) plus the closing milestone. Folding
-    // here would rewrite "write the final report and stop" into a step carrying implementation
-    // criteria, which is how the finish tool stops recognising it.
+    // The incremental fallback plan has exactly this shape: one implementation step that names no file (the workspace is unknown when it is written) plus the closing milestone.
     const result = normalizePlanFalsifiability(
       plan('Le modifiche richieste dal task sono implementate nei file del progetto', 'Riepilogo finale e arresto (invoke finish)')
     )
@@ -90,9 +87,7 @@ describe('normalizePlanFalsifiability', () => {
   })
 
   it('does not accept a bare directory as proof', () => {
-    // Four of the six plans generated live on 2026-08-25 opened with this exact shape, and in one
-    // run the model marked it verified by its own report at step 2: a directory has no extension,
-    // so nothing can check it, and not_applicable is closable by the model's judgement.
+    // Four of the six plans generated live on 2026-08-25 opened with this exact shape, and in one run the model marked it verified by its own report at step 2: a directory has no extension, so nothing can check it, and not_applicable is closable by the model's judge
     const directoryOnly = {
       id: 'm-1',
       title: 'The project has a clean architecture with a services folder — `src/services/`',

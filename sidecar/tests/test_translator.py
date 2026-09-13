@@ -330,9 +330,7 @@ def test_redact_and_reinsert_pdf_blocks_autofits_instead_of_clipping(tmp_path):
 
     reopened = pymupdf.open(out_path)
     try:
-        # get_text() joins wrapped lines with '\n' at the point insert_textbox broke them, so
-        # normalize whitespace before comparing -- the point being verified is that the full
-        # sentence survived (auto-fit), not that it landed on a single physical line.
+        # get_text() joins wrapped lines with '\n' at the point insert_textbox broke them, so normalize whitespace before comparing -- the point being verified is that the full sentence survived (auto-fit), not that it landed on a single physical line.
         page_text = " ".join(reopened[0].get_text().split())
     finally:
         reopened.close()
@@ -609,9 +607,7 @@ def test_redact_and_reinsert_pdf_blocks_renders_cyrillic_fallback(tmp_path):
 def test_translate_pdf_inplace_fine_end_to_end_japanese(tmp_path, monkeypatch):
     """Full pipeline end-to-end with a CJK target language: verifies the font-selection wiring
     from translate_pdf_inplace_fine all the way through to the saved file and reindexed markdown."""
-    # Short phrase, sized to comfortably fit the narrow bbox of the "Hello world" source text
-    # (this test verifies the font-selection wiring, not overflow/clipping behavior -- that's
-    # covered separately by test_translate_pdf_inplace_fine_clips_overflow_without_crashing).
+    # Short phrase, sized to comfortably fit the narrow bbox of the "Hello world" source text (this test verifies the font-selection wiring, not overflow/clipping behavior -- that's covered separately by test_translate_pdf_inplace_fine_clips_overflow_without_crashin
     japanese_text = "日本語"
     path = str(tmp_path / "jp_e2e.pdf")
     _make_pdf(path, text="Hello world")

@@ -8,12 +8,7 @@ function step(tool: string, target: string, status: TrajectoryStep['status']): T
 
 const BUILD = 'npm run build'
 
-/**
- * Measured on 2026-08-24, steps 26-34: the plan block ordered `npm run build` while the tool
- * result from that same command ordered `write_file on src/App.tsx` and forbade re-running it.
- * The model obeyed the plan block eight times — the channel that repeats every turn, and the
- * one this project built to be obeyed.
- */
+/** Measured on 2026-08-24, steps 26-34: the plan block ordered `npm run build` while the tool result from that same command ordered `write_file on src/App.tsx` and forbade re-running it. */
 describe('isVerificationFailing', () => {
   it('is true after the check failed with nothing written since', () => {
     expect(isVerificationFailing([step('run_command', BUILD, 'FAILURE')], BUILD)).toBe(true)
@@ -71,10 +66,7 @@ describe('buildVerificationFailingDirective', () => {
   })
 
   it('does NOT prescribe the fix, because it cannot know what the fix is', () => {
-    // The bug this replaced: it ordered `write_file` on "the first file the output names",
-    // assuming every compiler error is corrected by editing that file. Measured 2026-08-25,
-    // steps 40-48: the error was a missing `@types/react`, the tool result said so correctly
-    // four times, and this directive overrode it from the channel that always wins.
+    // The bug this replaced: it ordered `write_file` on "the first file the output names", assuming every compiler error is corrected by editing that file.
     const directive = buildVerificationFailingDirective(BUILD)
 
     expect(directive).not.toContain('MUST be "write_file"')
@@ -97,16 +89,7 @@ describe('buildVerificationFailingDirective', () => {
   })
 })
 
-/**
- * The directive used to point at a diagnostic instead of carrying it: "do what that directive
- * says", meaning one sitting in the tool history. Measured 2026-08-25T20:24, the model could not
- * follow the indirection — steps 34 to 50 were seventeen blocked reissues of a `write_file` on
- * src/index.html, to the ceiling, while this text told it to consult something elsewhere.
- *
- * The two channels have different lifetimes. The plan block is rebuilt from live state every
- * turn; the tool result it referred to lives in the history block and ages out of it. A pointer
- * across that boundary can dangle, and nothing tells the model when it has.
- */
+/** The directive used to point at a diagnostic instead of carrying it: "do what that directive says", meaning one sitting in the tool history. */
 describe('buildVerificationFailingDirective — carrying the diagnostic', () => {
   const BUILD_CMD = 'npm run build'
   const DIAGNOSTIC = [

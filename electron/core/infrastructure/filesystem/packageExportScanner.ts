@@ -1,25 +1,4 @@
-/**
- * electron/core/infrastructure/filesystem/packageExportScanner.ts
- *
- * Infrastructure Layer — what a package actually exports, read from its own type declarations.
- *
- * `TS2305: Module '"@headlessui/react"' has no exported member 'Card'` tells the model that the
- * name it invented is not there. It does not tell it which names ARE, and a 7B model has no way
- * to find out: it never calls `read_file` (0 calls across five live runs against 95 write_file),
- * and even if it did, it would have to know to look inside node_modules for a .d.ts.
- *
- * Measured 2026-08-25T19:59, session live-full-task, steps 42-43: the build reported that
- * `@headlessui/react` exports neither `Card` nor `List`; the directive ordered TaskCard.tsx
- * rewritten; the model rewrote it with the identical import. It was not ignoring the directive —
- * it had nothing to replace the names with.
- *
- * Blueprint §6.2.1: the answer is on disk, so the system reads it and hands it over.
- *
- * Deliberately regex-based rather than a TypeScript program. This feeds one sentence of a
- * directive: a name list that is nearly complete is worth far more than the seconds a real
- * type-checker pass would cost on every failing build, and a miss degrades to the directive
- * saying less, never to it saying something false.
- */
+
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -84,13 +63,7 @@ export function extractExportedNames(declarationSource: string): string[] {
   return found
 }
 
-/**
- * What `packageName` exports inside this workspace, or an empty array when it cannot be read.
- *
- * Empty is a normal answer — the package may be absent, untyped, or shaped in a way the patterns
- * miss — and callers must treat it as "say nothing about the exports" rather than as "it exports
- * nothing", which would be a claim the scanner has not earned.
- */
+/** What `packageName` exports inside this workspace, or an empty array when it cannot be read. */
 export function readPackageExports(workspacePath: string, packageName: string): string[] {
   if (!workspacePath || !packageName || packageName.startsWith('.')) return []
   try {

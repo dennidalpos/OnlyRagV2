@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AgentActionLog } from '../types'
 
-/**
- * Owns every ref/effect behind the action-log timeline's autoscroll behavior: tracking
- * explicit user scroll gestures (so autoscroll doesn't fight a user reading scrollback),
- * scrolling to bottom on new logs/streaming/execution-start, and the floating
- * "scroll to bottom" button's visibility.
- */
+/** Owns every ref/effect behind the action-log timeline's autoscroll behavior: tracking explicit user scroll gestures (so autoscroll doesn't fight a user reading scrollback), scrolling to bottom on new logs/streaming/execution-start, and the floating "scroll to b */
 export function useAgentTimelineScroll(
   actionLogs: AgentActionLog[],
   streamingText: string,

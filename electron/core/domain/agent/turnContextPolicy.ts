@@ -1,43 +1,8 @@
-/**
- * electron/core/domain/agent/turnContextPolicy.ts
- *
- * Domain Layer — Which context blocks this turn is allowed to carry.
- *
- * The orchestrator already arbitrates one thing per turn: WHAT to say, in
- * planDirectiveArbiter.ts. It never arbitrated the second half of the same question — WHAT TO
- * SHOW. Every optional block went out on every turn, sized by fixed shares of the context
- * budget (repo map 18%, RAG 12% in agentPromptAssembler.ts; pinned/active/skills at fixed
- * fractions of tier 2 in heuristicContextCompactor.ts). On a 7B at 8k that spends half the
- * window on background the active milestone frequently has no use for, and the block that pays
- * for it is the tool history — the only one carrying what has already been done.
- *
- * This module closes that gap without adding any inference. The directive kind the arbiter
- * already resolved IS the answer to "what does the model need in front of it right now": a turn
- * whose prescribed action is `npm install react` needs the directive and nothing else, and a
- * repository map cannot make that command more correct.
- *
- * ## What can never be dropped
- *
- * The system prompt, the plan block and the tool history are deliberately absent from
- * `TurnContextPolicy`. There is no flag for them, so no policy can suppress them. They are the
- * immutable head and the progress tail — precisely what Ollama destroys when it clamps num_ctx
- * and truncates from the front (see selectModelForTurn in agentOrchestratorPromptAssembly.ts).
- * Suppressing an optional block frees its allocation for the history; suppressing the history
- * would leave the model re-deriving its own past every turn.
- *
- * This is blueprint §6.2 principle 1 ("structure before directives") applied to context rather
- * than to instructions: when the system already knows the turn's action, it should not make the
- * model rediscover which of eight blocks was relevant to it.
- */
+
 
 import type { PlanDirectiveKind } from './planDirectiveArbiter'
 
-/**
- * The optional blocks, and whether this turn carries them.
- *
- * Every field is a block that costs context and is not always earned. Blocks that are always
- * earned are not represented here at all — see the module docstring.
- */
+/** The optional blocks, and whether this turn carries them. */
 export interface TurnContextPolicy {
   /** Compact semantic repo map. Costly: also a filesystem tree walk on every turn. */
   includeProjectMap: boolean
@@ -93,13 +58,7 @@ function codeFixOnly(rationale: string): TurnContextPolicy {
   }
 }
 
-/**
- * Resolves the blocks admitted this turn from the directive the arbiter already chose.
- *
- * Written as an exhaustive `switch` with no `default`: a new `PlanDirectiveKind` becomes a
- * compile error here rather than silently inheriting whatever the fallback happened to be. A
- * new directive state must state what its turn needs to see.
- */
+/** Resolves the blocks admitted this turn from the directive the arbiter already chose. */
 export function resolveTurnContextPolicy(kind: PlanDirectiveKind): TurnContextPolicy {
   switch (kind) {
     // The action is `finish`. The model needs the closure directive and the finish schema.

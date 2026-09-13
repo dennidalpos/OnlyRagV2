@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { detectRedundantWrite, buildRedundantWriteNotice } from './redundantWriteDetector'
 
-/**
- * The churn loop this closes: a write that changed nothing was reported as "Successfully wrote
- * file X" and counted as a file mutation, which cleared the verified-build flag and forced the
- * model to run its already-green build again. See redundantWriteDetector.ts.
- */
+/** The churn loop this closes: a write that changed nothing was reported as "Successfully wrote file X" and counted as a file mutation, which cleared the verified-build flag and forced the model to run its already-green build again. */
 describe('detectRedundantWrite', () => {
   it('reports a byte-identical rewrite as redundant', () => {
     const body = "export const a = 1\nexport const b = 2\n"
@@ -69,13 +65,7 @@ describe('buildRedundantWriteNotice', () => {
   })
 })
 
-/**
- * Live run of 2026-08-25: `src/services/TaskService.ts` was written with an empty body, created
- * at zero bytes, and every identical retry was answered "the deliverable exists and is correct"
- * — while the milestone probe reported the same file as missing-or-empty and `update_plan`
- * refused the milestone. Two system messages about one file, saying opposite things, for
- * eighteen blocked steps.
- */
+/** Live run of 2026-08-25: `src/services/TaskService.ts` was written with an empty body, created at zero bytes, and every identical retry was answered "the deliverable exists and is correct" — while the milestone probe reported the same file as missing-or-empty a */
 describe('an empty file is never "already up to date"', () => {
   it('flags the redundant write as empty', () => {
     expect(detectRedundantWrite(true, '', '')).toMatchObject({ isRedundant: true, isEmpty: true })

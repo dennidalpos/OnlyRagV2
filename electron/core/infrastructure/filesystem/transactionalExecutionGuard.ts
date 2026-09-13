@@ -21,12 +21,7 @@ export interface ExecutionGuardCheckResult {
   suggestedAction?: string
 }
 
-/**
- * Enterprise Execution Guard providing:
- * 1. Transactional workspace state snapshots with cryptographic SHA-256 tree hashing.
- * 2. Strict Definition of Done (DoD) verification gating before task completion.
- * 3. State-drift and oscillation detection based on actual workspace contents.
- */
+/** Enterprise Execution Guard providing: 1. */
 export class TransactionalExecutionGuard {
   private historySnapshots: FilesystemStateSnapshot[] = []
   private readonly workspaceRoot: string

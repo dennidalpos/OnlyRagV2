@@ -21,10 +21,7 @@ export interface AskToolContext {
   hasRecentToolFailure: boolean
   errorCountInHistory: number
   compiledHistoryBlock: string
-  /** Shared with the write/edit loop detector (see ResponseInterpreterState.stagnationStreak):
-   *  how many consecutive stuck-recovery interventions (loop blocks or lazy-ask redirects) have
-   *  already fired this streak, so a model can't dodge an exhausted write-loop budget by simply
-   *  switching to "ask". */
+  /** Shared with the write/edit loop detector (see ResponseInterpreterState.stagnationStreak): how many consecutive stuck-recovery interventions (loop blocks or lazy-ask redirects) have already fired this streak, so a model can't dodge an exhausted write-loop budge */
   stagnationStreak: number
   episodicCompactor: EpisodicMemoryCompactor
   emitLog: EmitLog
@@ -40,14 +37,7 @@ export type AskToolOutcome =
 
 const ASK_REDIRECT_LIMIT = 2
 
-/**
- * Proactive Auto-Healing Enforcement: in AGENT mode, a vague clarification request that
- * follows a tool/command failure (or a cancelled/interrupted terminal run) is intercepted up
- * to ASK_REDIRECT_LIMIT times against the shared stagnation streak, redirecting the model to
- * self-correct instead of stalling on the user. Otherwise the question is surfaced to the user
- * as the session's end-of-turn result -- marked as a failed outcome (not success) whenever it
- * was a stuck model giving up rather than a genuine, unprompted clarification request.
- */
+/** Proactive Auto-Healing Enforcement: in AGENT mode, a vague clarification request that follows a tool/command failure (or a cancelled/interrupted terminal run) is intercepted up to ASK_REDIRECT_LIMIT times against the shared stagnation streak, redirecting the m */
 export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome> {
   const { parsedTool } = ctx
   const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'

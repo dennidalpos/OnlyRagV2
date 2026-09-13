@@ -49,11 +49,7 @@ describe('resolveVerificationStatus', () => {
 })
 
 describe('VERIFIED_MODELS', () => {
-  /**
-   * The rule this file exists to enforce. A green tick shown to a user who cannot check it is
-   * exactly the kind of unearned claim the rest of this codebase keeps having to remove, so
-   * every entry has to carry the run behind it.
-   */
+  /** The rule this file exists to enforce. */
   it('records evidence for every entry: a date, the probes, and what the run showed', () => {
     expect(VERIFIED_MODELS.length).toBeGreaterThan(0)
     for (const record of VERIFIED_MODELS) {

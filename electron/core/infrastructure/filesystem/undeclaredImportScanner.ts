@@ -1,24 +1,4 @@
-/**
- * Undeclared Import Scanner.
- *
- * Answers, for the whole workspace and synchronously, the question `importDeclarationGate`
- * already answers for one file: which packages does the code on disk import that package.json
- * never declares?
- *
- * The answer existed and was delivered nowhere it could be acted on. The per-write gate says
- * it once, at the step that wrote the file, inside a tool result that also carries the write's
- * own outcome — in the live run of 2026-08-24 it said it 44 times and the model never acted.
- * `scanWorkspaceDependencies` (depcheck) says it properly, but runs only inside
- * `runProjectVerification`, i.e. at `finish`, which the sessions that need it never reach.
- *
- * Why not simply call depcheck every turn: it is asynchronous, spawns a full project analysis
- * and carries a 60-second timeout. Paying that on each of fifty steps is not a trade this loop
- * can make. This scanner is the cheap half — the same bounded AST walk `generateCompactRepoMap`
- * already performs on every turn — and it reuses `evaluateFileImportIntegrity` verbatim, so
- * "undeclared" means here exactly what it means at write time, with the same deliberate
- * narrowness: a bare specifier, absent from the manifest, not a Node builtin, not a tsconfig
- * alias. depcheck stays where it is, as the thorough check before the session closes.
- */
+
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -40,14 +20,7 @@ export interface UndeclaredImport {
   importedBy: string[]
 }
 
-/**
- * Every undeclared package the workspace imports, sorted by name.
- *
- * Returns an empty list — never a partial one presented as complete — when there is no
- * manifest. A readable manifest with no dependencies is still authoritative: an external import
- * in that project is undeclared, while a fresh workspace with no source imports naturally yields
- * nothing.
- */
+/** Every undeclared package the workspace imports, sorted by name. */
 export function scanUndeclaredImports(
   workspacePath: string | null | undefined,
   maxFiles = DEFAULT_MAX_FILES
@@ -91,9 +64,7 @@ export function scanUndeclaredImports(
 
       const relative = path.relative(workspacePath, full).replace(/\\/g, '/')
       for (const specifier of extractBareImportSpecifiers(relative, content)) {
-        // Alias prefixes are matched on the specifier as written, before it is reduced to a
-        // package name: `~/services/api` reduces to `~`, which matches no prefix and would be
-        // reported as a missing package.
+        // Alias prefixes are matched on the specifier as written, before it is reduced to a package name: `~/services/api` reduces to `~`, which matches no prefix and would be reported as a missing package.
         if (aliasPrefixes.some((prefix) => prefix && specifier.startsWith(prefix))) continue
         const pkg = packageNameOfSpecifier(specifier)
         if (declared.names.has(pkg)) continue

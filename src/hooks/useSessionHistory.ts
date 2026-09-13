@@ -45,11 +45,7 @@ function createEmptySession(workspacePath: string | null): CodingSession {
   }
 }
 
-/**
- * One-shot import of the sessions previously kept in localStorage. Runs once per
- * installation: the legacy key is dropped only after the main process confirms the
- * import, so a failed migration is retried on the next launch instead of losing data.
- */
+/** One-shot import of the sessions previously kept in localStorage. */
 async function migrateLegacySessions(): Promise<void> {
   if (localStorage.getItem(MIGRATION_FLAG_KEY) === 'done') return
   const raw = localStorage.getItem(LEGACY_SESSIONS_STORAGE_KEY)
@@ -70,11 +66,7 @@ async function migrateLegacySessions(): Promise<void> {
   }
 }
 
-/**
- * Owns the coding session history of the active workspace. The filesystem store behind
- * the `sessions:*` IPC channels is the single source of truth: this hook mirrors it in
- * memory and persists each meaningful change through a serialized IPC write.
- */
+/** Owns the coding session history of the active workspace. */
 export function useSessionHistory(workspacePath: string | null) {
   const [sessions, setSessions] = useState<CodingSession[]>([])
   const sessionsRef = useRef<CodingSession[]>([])
@@ -82,11 +74,7 @@ export function useSessionHistory(workspacePath: string | null) {
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(true)
 
   const persistenceChainsRef = useRef<Map<string, Promise<void>>>(new Map())
-  /**
-   * Bootstrap session created for an empty workspace store, kept per workspace so a
-   * repeated load (React StrictMode double-invoke, or a workspace revisited before the
-   * debounced write lands) reuses the same record instead of creating a duplicate.
-   */
+  /** Bootstrap session created for an empty workspace store, kept per workspace so a repeated load (React StrictMode double-invoke, or a workspace revisited before the debounced write lands) reuses the same record instead of creating a duplicate. */
   const bootstrapSessionsRef = useRef<Map<string, CodingSession>>(new Map())
 
   useEffect(() => {
@@ -295,11 +283,7 @@ export function useSessionHistory(workspacePath: string | null) {
     [mutateSession]
   )
 
-  /**
-   * Persists one exact plan revision synchronously with the approval flow. Debounced session
-   * writes are appropriate for timeline updates, but execution must not start while the approved
-   * request, interview decisions and milestones exist only in renderer memory.
-   */
+  /** Persists one exact plan revision synchronously with the approval flow. */
   const persistSessionPlan = useCallback(async (sessionId: string, plan: AgentPlan): Promise<boolean> => {
     const session = sessionsRef.current.find((candidate) => candidate.id === sessionId)
     if (!session || !window.electronAPI?.saveCodingSession) return false
@@ -364,9 +348,7 @@ export function useSessionHistory(workspacePath: string | null) {
             : item
         )
 
-        // Fire-and-forget: embeds and upserts the completed prompt into the semantic history
-        // index (see sidecarAppService.indexPromptHistory). Never awaited -- a failed or
-        // skipped index write only means this one prompt won't surface in cross-project search.
+        // Fire-and-forget: embeds and upserts the completed prompt into the semantic history index (see sidecarAppService.indexPromptHistory).
         const completed = executedPrompts.find((p) => p.id === executedPromptId)
         if (completed && completed.prompt.trim() && workspacePath && window.electronAPI?.indexPromptHistory) {
           window.electronAPI

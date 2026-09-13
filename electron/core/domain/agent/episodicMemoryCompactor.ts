@@ -56,11 +56,7 @@ export class EpisodicMemoryCompactor {
   }
 
   private expireWorkspaceStateOutputs(mutationTarget?: string): void {
-    // Full command/test output describes one workspace revision, and per-file output describes
-    // one file revision. A successful mutation makes those earlier details assertions about a
-    // state that no longer exists. The compact trajectory still records that each action ran;
-    // only its actionable body expires, preventing an old diagnostic from continuing to order
-    // edits after the disk changed. Unrelated file reads remain available.
+    // Full command/test output describes one workspace revision, and per-file output describes one file revision.
     const remainsCurrent = (log: EpisodicFullLog) => !isInvalidatedByMutation(log, mutationTarget)
     this.failureLogs = this.failureLogs.filter(remainsCurrent)
     this.recentFullLogs = this.recentFullLogs.filter(remainsCurrent)
@@ -165,9 +161,7 @@ export class EpisodicMemoryCompactor {
       return `#### [Step ${l.step} - Tool: ${l.tool}]\n\`\`\`\n${l.output}\n\`\`\``
     }).join('\n\n')
 
-    // "Last N Steps" stopped being true when repeated interventions on one target began
-    // collapsing into a single slot: the entries are the most recent DISTINCT actions, and may
-    // reach further back than N steps. The header says what the list is.
+    // "Last N Steps" stopped being true when repeated interventions on one target began collapsing into a single slot: the entries are the most recent DISTINCT actions, and may reach further back than N steps.
     const detailedSection = `\n\n### RECENT DETAILED TOOL OUTPUTS (${this.recentFullLogs.length} most recent distinct actions):\n${detailedOutputs}`
 
     const combined = `${trajectoryTable}${failureSection}${detailedSection}`

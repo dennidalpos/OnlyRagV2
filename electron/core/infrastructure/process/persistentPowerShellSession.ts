@@ -148,9 +148,7 @@ export class PersistentPowerShellSession {
           onOutputChunk(text)
         }
 
-        // Interactive-prompt guard: no human is present in the autonomous agent loop to answer
-        // a `[y/n]`/password-style prompt, so abort immediately instead of blocking here until
-        // the full timeout elapses (see shellStreamGuard.ts's detectInteractivePrompt).
+        // Interactive-prompt guard: no human is present in the autonomous agent loop to answer a `[y/n]`/password-style prompt, so abort immediately instead of blocking here until the full timeout elapses (see shellStreamGuard.ts's detectInteractivePrompt).
         const promptPattern = detectInteractivePrompt(text)
         if (promptPattern && !isSettled) {
           isSettled = true
@@ -159,10 +157,7 @@ export class PersistentPowerShellSession {
           try {
             this.proc?.stdin?.write('\x03') // Send SIGINT / Ctrl+C to abort the foreground command
           } catch {}
-          // The shell process may be left in an indeterminate state after an unanswered
-          // interactive prompt (e.g. still waiting on stdin) — recreate it so subsequent
-          // commands in this session aren't silently stuck too, same precaution as the
-          // timeout branch above.
+          // The shell process may be left in an indeterminate state after an unanswered interactive prompt (e.g.
           try {
             if (process.platform === 'win32' && this.proc?.pid) {
               spawn('taskkill', ['/pid', this.proc.pid.toString(), '/f', '/t'])
@@ -224,10 +219,6 @@ export class PersistentPowerShellSession {
       this.proc?.stderr?.on('data', onStderr)
 
       // Wrap command with delimiters and status capture.
-      // $LASTEXITCODE is reset first: it persists across commands in a long-lived session, so a
-      // native command that failed earlier would otherwise be re-reported against a later cmdlet
-      // that actually succeeded. $? is captured on the very next line (before any Write-Output
-      // can overwrite it) to catch pure-PowerShell failures, which never set $LASTEXITCODE.
       const normalized = normalizePowerShellCommand(command)
       const statusExpression = '$(if ($LASTEXITCODE -ne 0) { $LASTEXITCODE } elseif (-not $__onlyrag_ok) { 1 } else { 0 })'
       const wrappedPayload =
@@ -242,12 +233,7 @@ export class PersistentPowerShellSession {
     })
   }
 
-  /**
-   * Re-reads the machine and user PATH and applies it to BOTH this shell and the host
-   * process. A freshly installed tool is written to the registry PATH, which already-running
-   * processes never see — without this the very session that ran the installer would keep
-   * reporting the tool as missing. Best-effort: a failure leaves the old PATH in place.
-   */
+  /** Re-reads the machine and user PATH and applies it to BOTH this shell and the host process. */
   public refreshEnvironmentPath(): boolean {
     if (process.platform !== 'win32') return false
     try {

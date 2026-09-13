@@ -43,9 +43,7 @@ describe('extractRequestedPackages', () => {
 
 describe('packagesWithFailedInstall', () => {
   it('says nothing after a single failure, which is usually a version conflict', () => {
-    // The regression this threshold exists for: one failure was read as proof the name could
-    // not be installed, and the arbiter spent forty-five steps telling the model to delete
-    // `@vitejs/plugin-react` from vite.config.ts — a real package, failed once on ERESOLVE.
+    // The regression this threshold exists for: one failure was read as proof the name could not be installed, and the arbiter spent forty-five steps telling the model to delete `@vitejs/plugin-react` from vite.config.ts — a real package, failed once on ERESOLVE.
     expect(packagesWithFailedInstall([attempt('npm install @vitejs/plugin-react', 'FAILURE')])).toEqual([])
   })
 

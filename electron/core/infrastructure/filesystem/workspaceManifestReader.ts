@@ -1,12 +1,4 @@
-/**
- * Infrastructure adapter for the domain's `WorkspaceManifest` port
- * (see domain/agent/projectVerificationResolver.ts).
- *
- * Reads the workspace's own manifest so the verification commands come from the project rather
- * than from the model. A malformed package.json is reported as "no manifest" rather than
- * thrown: a project the agent has half-written is exactly the state this runs in, and the
- * caller's answer to "no manifest" — offer no build check — is already the safe one.
- */
+
 
 import fs from 'node:fs'
 import path from 'node:path'

@@ -34,12 +34,7 @@ export interface SessionPersistence {
   emitStepUpdate: (statusText?: string) => void
 }
 
-/**
- * Builds the checkpoint/reporting closures the turn loop calls every step: the compact
- * `.agent_state_*.json` snapshot, the SESSION_TRACKER.md projection, and the renderer's
- * step-progress event. All three read the same live goalPlanner/episodicCompactor/stepCountBox
- * so they stay consistent without re-deriving state.
- */
+/** Builds the checkpoint/reporting closures the turn loop calls every step: the compact `.agent_state_*.json` snapshot, the SESSION_TRACKER.md projection, and the renderer's step-progress event. */
 export function buildSessionPersistence(params: SessionPersistenceParams): SessionPersistence {
   const {
     sessionId,
@@ -64,9 +59,7 @@ export function buildSessionPersistence(params: SessionPersistenceParams): Sessi
     const milestones = goalPlanner.getMilestones()
     return new SessionDebtTracker({
       sessionId,
-      // The evidence that closed each milestone is carried into the tracker, not just the
-      // fact that it closed. "m-14: Run the application — VERIFIED" told a reader nothing
-      // about whether the application had ever been run; the cause makes that auditable.
+      // The evidence that closed each milestone is carried into the tracker, not just the fact that it closed.
       completedTasks: milestones
         .filter((m) => m.status === 'verified')
         .map((m) => `${m.id}: ${m.title}${m.notes ? ` — ${m.notes}` : ''}`),

@@ -1,18 +1,18 @@
 # Contratto IPC
 
-Il Preload espone le funzioni in [`electron/preload.ts`](../electron/preload.ts). I 95 canali request/response sono registrati nei file Presentation; gli argomenti reali sono la firma del Preload e i tipi in [`shared/types/index.ts`](../shared/types/index.ts).
+Il Preload espone le funzioni in [`electron/preload.ts`](../electron/preload.ts). Le firme del Preload e i tipi in [`shared/types/index.ts`](../shared/types/index.ts) sono il contratto; gli handler stanno in Presentation.
 
 ## Canali request/response
 
 | Prefisso | Canali registrati |
 | --- | --- |
-| `agent` | `approval-response`, `cancel-task`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `logs-analyze`, `parse-tool-call`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `start-task` |
+| `agent` | `approval-response`, `cancel-task`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `logs-analyze`, `parse-tool-call`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `start-task` |
 | `artifacts` | `delete`, `get`, `list`, `save` |
 | `diagnostics` | `clear-logs`, `get-http-metrics`, `get-log-filepath`, `get-logs`, `log-telemetry`, `open-logs-folder`, `run` |
 | `dialog` | `open-directory`, `open-file` |
 | `history` | `index`, `search` |
 | `ingest` | `delete`, `export`, `file`, `list`, `page-preview`, `search`, `translate-inplace`, `update` |
-| `ollama` | `benchmark-model`, `cancel-pull`, `cancel-stream`, `check-model-updates`, `delete-model`, `generate-stream`, `get-model-metrics`, `get-running-models`, `install-or-launch`, `pull-model`, `test-connection`, `unload-model` |
+| `ollama` | `benchmark-model`, `cancel-pull`, `cancel-stream`, `check-model-updates`, `delete-model`, `generate-stream`, `get-generation-status`, `get-model-metrics`, `get-running-models`, `install-or-launch`, `pull-model`, `test-connection`, `unload-model` |
 | `projects` | `list`, `migrate-legacy`, `register`, `remove`, `rename`, `touch` |
 | `sessions` | `clear`, `delete`, `list`, `migrate-legacy`, `save` |
 | `settings` | `get`, `save` |
@@ -26,7 +26,7 @@ Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`wor
 
 ## Eventi Renderer
 
-Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:document-deleted`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:chunk`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`.
+Eventi `on` esposti: `agent:approval-request`, `agent:change-metrics`, `agent:done`, `agent:log`, `agent:skill-install-request`, `agent:skills-matched`, `agent:step-update`, `agent:stream-thought`, `agent:stream-token`, `ingest:document-deleted`, `ingest:stream-progress`, `ingest:translate-progress`, `ollama:chunk`, `ollama:done`, `ollama:pull-progress`, `workspace:file-deleted`, `workspace:file-version`.
 
 I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run includono l'identità immutabile `{ runId, conversationId, planRevisionId, workspaceId }`. Risposte di annullamento e approvazione vengono accettate solo per la stessa identità.
 

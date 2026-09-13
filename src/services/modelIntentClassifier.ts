@@ -61,11 +61,7 @@ const TRANSLATION_CATALOG_NAMES = new Set(TRANSLATION_TIER_CATALOG.map((m) => m.
 const MEDICAL_CATALOG_NAMES = new Set(MEDICAL_TIER_CATALOG.map((m) => m.modelName.toLowerCase().split(':')[0]))
 const LEGAL_CATALOG_NAMES = new Set(LEGAL_TIER_CATALOG.map((m) => m.modelName.toLowerCase().split(':')[0]))
 
-/**
- * Determines if a model is a Vision-Language / Multimodal model capable of processing images in Ollama.
- * Matches: llama3.2-vision, minicpm-v, llava, moondream, qwen2-vl, qwen2.5-vl, gemma3:4b/12b/27b, bakllava, etc.
- * Explicitly EXCLUDES text-only LLMs and embedding models.
- */
+/** Determines if a model is a Vision-Language / Multimodal model capable of processing images in Ollama. */
 export function isVisionModel(name: string): boolean {
   if (!name) return false
   const { normalized, baseName, tag } = normalizeModelNameForIntent(name)
@@ -176,12 +172,7 @@ export function isEmbeddingModel(name: string): boolean {
   return false
 }
 
-/**
- * Determines if a model is suitable for the AI Coding Agent Studio.
- * Matches coding-specialized models (qwen2.5-coder, codestral, deepseek-coder, etc.)
- * as well as strong general-purpose reasoning models (qwen2.5, qwen3, deepseek-r1, llama3.1, mistral, etc.).
- * Strictly excludes pure embedding models and pure vision-only models.
- */
+/** Determines if a model is suitable for the AI Coding Agent Studio. */
 export function isCodingModel(name: string): boolean {
   if (!name) return false
   if (isEmbeddingModel(name)) return false
@@ -238,12 +229,7 @@ export function isCodingModel(name: string): boolean {
   return false
 }
 
-/**
- * Determines if a model is suitable for Document & Text Translation.
- * Matches translation-specific models (aya-expanse, tower-instruct, nllb, etc.)
- * as well as versatile multilingual models (qwen2.5, llama3.1, gemma2, mistral, etc.).
- * Strictly excludes embedding models and vision models.
- */
+/** Determines if a model is suitable for Document & Text Translation. */
 export function isTranslationModel(name: string): boolean {
   if (!name) return false
   if (isEmbeddingModel(name)) return false

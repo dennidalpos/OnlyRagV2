@@ -1,13 +1,4 @@
-/**
- * Live scenario — recovery from a package import that names unavailable exports.
- *
- * The package is declared and installed as a local fixture before the agent starts. Its
- * declaration file exports `Dialog`, `Menu`, `Listbox` and `Switch`, while the source imports
- * `Card` and `List`. The task forbids changing the manifest and node_modules, so a passing build
- * requires the model to follow the TS2305 directive and rewrite the importer.
- *
- *   npx vitest run --config vitest.live.config.mts -t "TS2305"
- */
+
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

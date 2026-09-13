@@ -450,9 +450,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     ]
 
     it('must never pre-select a model its own compatibility assessment flags as exceeding memory', () => {
-      // The wizard defaults to `isRecommended` entries, so an over-ambitious catalog row used
-      // to hand minimum-spec hosts (and even 24GB cards) a model the engine itself rated
-      // exceeds_vram. Every recommended model must be at worst `tight_vram` on its profile.
+      // The wizard defaults to `isRecommended` entries, so an over-ambitious catalog row used to hand minimum-spec hosts (and even 24GB cards) a model the engine itself rated exceeds_vram.
       for (const host of REPRESENTATIVE_HOSTS) {
         const recs = analyzeHardwareAndRecommend(host.diagnostics)
         expect(recs.profileTier).toBe(host.tier)
@@ -519,9 +517,7 @@ describe('hardwareRecommendationEngine Unit Tests', () => {
     })
 
     it('should keep every catalog entry priced consistently with its advertised size', () => {
-      // Guards against a new catalog row silently falling through to the 4.5GB "unknown
-      // model" default: the size string shown in the wizard and the weight the VRAM
-      // budgeting math uses must describe the same model.
+      // Guards against a new catalog row silently falling through to the 4.5GB "unknown model" default: the size string shown in the wizard and the weight the VRAM budgeting math uses must describe the same model.
       const ALL_CATALOGS: RawModelCatalogEntry[] = [
         ...COMPACT_CODING_CATALOG,
         ...WORKHORSE_CODING_CATALOG,

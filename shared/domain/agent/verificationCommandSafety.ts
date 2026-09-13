@@ -50,24 +50,7 @@ const VACUOUS_COMMANDS = new Set([
   'write-output',
 ])
 
-/**
- * Commands that print a file or list a directory: they exit 0 for anything that exists,
- * whatever it contains.
- *
- * Not vacuous in the strict sense — `cat missing.txt` does fail — but the only thing they can
- * fail on is absence, and the file whose absence they would report is the one the agent has
- * just written. The exit code therefore carries no information about the code at all.
- *
- * This was the dominant verification in coding_agent_audit.log session-1787562597025-q8a5:
- * seven of fifteen milestones declared `cat <file>` as their proof. Milestone m-2 promised
- * `vite.config.ts` AND `tsconfig.json`, passed on `cat vite.config.ts`, and was recorded as the
- * single verified milestone of the session — while `tsconfig.json` was never created and the
- * project's own `tsc && vite build` could not run at all.
- *
- * Content searches are deliberately absent from this list: `grep`, `findstr` and
- * `Select-String` fail when the file exists but does not say what it should, which is a real
- * claim about the code and a legitimate proof.
- */
+/** Commands that print a file or list a directory: they exit 0 for anything that exists, whatever it contains. */
 const EXISTENCE_ONLY_COMMANDS = new Set([
   'cat',
   'type',
@@ -83,11 +66,7 @@ const EXISTENCE_ONLY_COMMANDS = new Set([
   'stat',
 ])
 
-/**
- * Terminal editors and pagers. Every one of these waits for a keypress or a TTY that
- * run_command cannot supply, so none of them can report pass or fail — they either hang until
- * the timeout or exit on a signal that says nothing about the file's content.
- */
+/** Terminal editors and pagers. */
 const INTERACTIVE_PROGRAMS = new Set([
   'nano',
   'vi',
@@ -112,18 +91,7 @@ const INTERACTIVE_PROGRAMS = new Set([
   'start-storybook',
 ])
 
-/**
- * Test runners invoked in their graphical mode.
- *
- * The binary is a legitimate verification tool — `npx cypress run` and `npx playwright test`
- * are exactly the falsifiable proof a milestone wants — but `open`, `--ui` and `--headed`
- * switch it into a window that waits for a human and reports only whether that window was
- * closed. The distinction is the subcommand, so it cannot be made by the first token alone.
- *
- * session-1787562597025-q8a5 carried `npx cypress open` as the declared proof for four
- * milestones (validating the interface at 375, 768, 1024 and 1440 px). Cypress was not even a
- * dependency of the project: those four were unverifiable from the moment the plan was parsed.
- */
+/** Test runners invoked in their graphical mode. */
 function isGuiModeVerificationSegment(segment: string): boolean {
   const cmd = segment.trim().toLowerCase()
   if (!cmd) return false
@@ -133,13 +101,7 @@ function isGuiModeVerificationSegment(segment: string): boolean {
   )
 }
 
-/**
- * Mirrors isBlockingDevServerSubcommand in agentToolExecutorService.ts. Domain code must not
- * import the application layer (see loopDetector.ts's SHELL_TOOL_KEYWORDS for the same
- * constraint handled the same way), so the patterns are kept here in sync by hand. Both copies
- * exist to catch the same commands at two different times: this one keeps them out of the plan
- * before the model ever tries them, the other refuses to execute one if it slips through anyway.
- */
+/** Mirrors isBlockingDevServerSubcommand in agentToolExecutorService.ts. */
 function isNonExitingVerificationSegment(segment: string): boolean {
   const cmd = segment.trim().toLowerCase()
   if (!cmd) return false
@@ -209,13 +171,7 @@ function tokens(segment: string): string[] {
   return segment.trim().split(/\s+/).filter(Boolean).map((t) => t.toLowerCase())
 }
 
-/**
- * Decides whether a command may stand as proof that a milestone is done.
- *
- * Pure and workspace-independent by design: it runs both when a plan is parsed and again
- * immediately before execution, and the second call has to hold for plans restored from a
- * previous session or edited by hand in the UI.
- */
+/** Decides whether a command may stand as proof that a milestone is done. */
 export function checkVerificationCommandSafety(rawCommand: string): VerificationCommandVerdict {
   if (!rawCommand || typeof rawCommand !== 'string' || !rawCommand.trim()) {
     return { isSafe: false, reason: 'the command is empty' }

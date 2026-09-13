@@ -89,11 +89,7 @@ export class AgentSessionStateRepository {
     return fallbackDir
   }
 
-  /**
-   * One-time move of `.agent_state_*.json` files left directly under the workspace's
-   * `.onlyrag/` folder by the pre-unification layout (`.assistant/` + `.onlyrag/`), into
-   * the new `.onlyrag/sessions/` subfolder, so existing sessions are not orphaned.
-   */
+  /** One-time move of `.agent_state_*.json` files left directly under the workspace's `.onlyrag/` folder by the pre-unification layout (`.assistant/` + `.onlyrag/`), into the new `.onlyrag/sessions/` subfolder, so existing sessions are not orphaned. */
   private migrateLegacyStateFiles(workspacePath: string, newStateDir: string): void {
     const legacyDir = path.join(workspacePath, '.onlyrag')
     try {
@@ -125,13 +121,7 @@ export class AgentSessionStateRepository {
     }
   }
 
-  /**
-   * Writes .onlyrag/assistant/SESSION_TRACKER.md. Single writer, single format: the tracker is
-   * read back with SessionDebtTracker.parseTrackerMarkdown (both by the next turn's prompt
-   * assembly and by a resumed session), so it must be written in exactly that format. A second,
-   * plan-shaped format used to be written here on every checkpoint, which the parser could
-   * not read — the injected "previous turn debt" block was silently empty.
-   */
+  /** Writes .onlyrag/assistant/SESSION_TRACKER.md. */
   public async saveSessionTrackerMarkdown(
     workspacePath: string | null,
     tracker: SessionDebtTracker
@@ -193,15 +183,7 @@ export class AgentSessionStateRepository {
     }
   }
 
-  /**
-   * Seeds (or merges into existing) persisted session state with the
-   * user-approved plan milestones, so that runAgentOrchestratorLoop's
-   * restore-from-savedState path (see agentOrchestratorAppService.ts,
-   * `goalPlanner.loadMilestones(savedState.planMilestones)`) picks up the
-   * approved plan as GoalDecompositionPlanner's starting state instead of
-   * only auto-detecting a (possibly different) plan from the model's first
-   * turn. Called from the Plan Approval UI right before task execution starts.
-   */
+  /** Seeds (or merges into existing) persisted session state with the user-approved plan milestones, so that runAgentOrchestratorLoop's restore-from-savedState path (see agentOrchestratorAppService.ts, `goalPlanner.loadMilestones(savedState.planMilestones)`) picks */
   public async seedPlanMilestones(
     sessionId: string,
     workspacePath: string | null,

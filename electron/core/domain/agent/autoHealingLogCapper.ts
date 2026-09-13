@@ -14,13 +14,7 @@ interface StepBlock {
   isAutoHealing: boolean
 }
 
-/**
- * Caps the number of "[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]" blocks retained
- * inside a compacted history text, keeping only the most recent N occurrences.
- * Older auto-healing blocks are collapsed to a one-line placeholder so that
- * repeated build/test failure diagnostics don't crowd out newer turn context
- * once the heuristic context watermark has been exceeded.
- */
+/** Caps the number of "[TERMINAL AUTO-HEALING DIAGNOSTICS LOG]" blocks retained inside a compacted history text, keeping only the most recent N occurrences. */
 export class AutoHealingLogCapper {
   public static capBlocks(historyText: string, maxBlocks: number = 2): AutoHealingCapResult {
     if (!historyText) {

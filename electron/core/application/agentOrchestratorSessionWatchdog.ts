@@ -34,11 +34,7 @@ export interface SessionWatchdog {
   requestApproval: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
 }
 
-/**
- * Arms the global session timeout (guarantees SESSION END is always written to the audit
- * log even if the loop hangs) and builds the finalize/approval closures tied to it. Default
- * timeout: 45 minutes, configurable via settings.agentSessionTimeoutMinutes.
- */
+/** Arms the global session timeout (guarantees SESSION END is always written to the audit log even if the loop hangs) and builds the finalize/approval closures tied to it. */
 export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchdog {
   const { session, sessionId, settings, emitLog, emitDone, persistCurrentState, stepCountBox, isSessionActive, deregisterSession } = params
 
@@ -56,9 +52,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
 
   const SESSION_TIMEOUT_MS = Math.max(5, settings.agentSessionTimeoutMinutes || 45) * 60 * 1000
   session.timeoutHandle = setTimeout(async () => {
-    // isSessionActive() already covers both guards a bare identity check would add: it is
-    // false the instant this session is no longer the one registered under sessionId (e.g. a
-    // reused sessionId now owned by a later run) or once it has already been cancelled/ended.
+    // isSessionActive() already covers both guards a bare identity check would add: it is false the instant this session is no longer the one registered under sessionId (e.g.
     if (!isSessionActive()) return
     const timeoutSummary = `Sessione terminata automaticamente: superato il limite di ${Math.round(SESSION_TIMEOUT_MS / 60000)} minuti.`
     logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
@@ -78,14 +72,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     finalizeSession()
   }, SESSION_TIMEOUT_MS)
 
-  /**
-   * Sends `agent:approval-request` and pauses the calling step in place until the renderer
-   * answers via the `agent:approval-response` IPC channel (see `respondToApproval` in
-   * agentOrchestratorAppService.ts), or until cancellation/timeout resolves it to `false`.
-   * The session stays registered the whole time, so this is a real pause of the same loop
-   * iteration -- not the "end the task, then have the renderer re-execute the action on its
-   * own" round trip this replaces.
-   */
+  /** Sends `agent:approval-request` and pauses the calling step in place until the renderer answers via the `agent:approval-response` IPC channel (see `respondToApproval` in agentOrchestratorAppService.ts), or until cancellation/timeout resolves it to `false`. */
   const requestApproval = (approvalPayload: Record<string, unknown>): Promise<ApprovalResponse> => {
     return new Promise<ApprovalResponse>((resolve) => {
       if (!session.targetWindow || session.targetWindow.isDestroyed()) {

@@ -102,9 +102,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
   const { generationState, trackOperation } = useOllamaGenerationState()
   const activeStreamIdRef = useRef<string | null>(null)
 
-  // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion
-  // module can block starting their own task while a translation is mid-flight (see
-  // globalTaskLock.ts).
+  // Mirrors isTranslating into the cross-module task lock so the coding agent/ingestion module can block starting their own task while a translation is mid-flight (see globalTaskLock.ts).
   useEffect(() => {
     if (isTranslating) {
       acquireGlobalTaskLock('translation')
@@ -238,10 +236,7 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
         modelMetrics[modelToUse]?.contextLength
       )
 
-      // The language pair goes in as template variables. It used to be appended as a second
-      // "Strict Directives" block that restated markdown preservation and the no-preamble rule
-      // the prompt already carried, so every chunk shipped those rules twice — and the template's
-      // own {sourceLang}/{targetLang} placeholders went out to the model unsubstituted.
+      // The language pair goes in as template variables.
       const systemInstruction = getEffectivePrompt('translation', settings, {
         variables: { sourceLang, targetLang },
       }).prompt

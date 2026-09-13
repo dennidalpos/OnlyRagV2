@@ -1,11 +1,4 @@
-/**
- * Approximate token count for the context-usage banner in Coding Agent Studio. Ollama exposes
- * no tokenizer API and local model vocabularies differ (Llama, Qwen, Phi, ...), so there is no
- * single "real" tokenizer to call here — this uses gpt-tokenizer's o200k_base (GPT-4o) BPE
- * encoding as a stand-in, which tracks actual token boundaries far more closely than a raw
- * character count (the previous heuristic) while remaining an estimate, not an exact count for
- * the model actually running.
- */
+
 import { countTokens } from 'gpt-tokenizer'
 
 const MAX_CACHE_ENTRIES = 1000

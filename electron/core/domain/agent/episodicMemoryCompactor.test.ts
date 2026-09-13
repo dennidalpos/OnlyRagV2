@@ -104,9 +104,7 @@ describe('failure-block accumulation', () => {
   it('collapses alternating failures on two targets instead of stacking them', () => {
     const compactor = new EpisodicMemoryCompactor()
 
-    // What a blocked model actually does: A, B, A, B... Comparing only the buffer's tail
-    // matched none of these, and eight near-identical intervention blocks filled the prompt
-    // (session-1787562597025-q8a5, steps 25-36).
+    // What a blocked model actually does: A, B, A, B...
     for (let step = 1; step <= 8; step++) {
       const target = step % 2 === 0 ? 'src/App.tsx' : 'src/pages/Dashboard.tsx'
       compactor.recordStep(
@@ -181,15 +179,7 @@ describe('workspace-state output expiry', () => {
   })
 })
 
-/**
- * The recent-outputs window is the model's view of what just happened, and it was a plain FIFO.
- *
- * Measured on live-full-task, 2026-08-24, step 48: of the 4.780 characters that section
- * contributed to the prompt, 3.988 — 83% — were four copies of `[CRITICAL FILE EDIT LOOP: N
- * EDITS ON src/pages/TasksPage.tsx]`, differing only in N. 792 characters were left for
- * anything the model had actually done; after this change the same step of a fresh run
- * carried 1.293.
- */
+/** The recent-outputs window is the model's view of what just happened, and it was a plain FIFO. */
 describe('EpisodicMemoryCompactor — the recent window does not fill with one repeated intervention', () => {
   const loopWarning = (n: number) =>
     `[CRITICAL FILE EDIT LOOP: ${n} EDITS ON src/pages/TasksPage.tsx WITHOUT VERIFICATION]\nDo not edit it again.`

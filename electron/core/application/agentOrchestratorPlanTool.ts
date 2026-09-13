@@ -32,6 +32,7 @@ export interface UpdatePlanToolContext {
   sessionId: string
   stepCount: number
   maxStepsLabel: string
+  signal?: AbortSignal
 }
 
 /**
@@ -90,7 +91,8 @@ export async function handleUpdatePlanTool(ctx: UpdatePlanToolContext): Promise<
           secCheck.sanitizedCommand,
           (chunk) => emitLog('terminal', chunk.trim()),
           undefined,
-          60000
+          60000,
+          ctx.signal,
         )
         const passed = verifyRes.code === 0 && !verifyRes.timedOut
         effectiveStatus = passed ? 'verified' : 'failed'

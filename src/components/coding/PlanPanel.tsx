@@ -9,6 +9,7 @@ import { PlanPanelChecklistView } from './PlanPanelChecklistView'
 import { PlanPanelDocumentView } from './PlanPanelDocumentView'
 import { PlanInterviewCard } from './PlanInterviewCard'
 import { PlanReviewCard } from './PlanReviewCard'
+import type { OllamaOperationState } from '../../hooks/useOllamaGenerationState'
 
 interface PlanPanelProps {
   plan: AgentPlan | null
@@ -19,6 +20,8 @@ interface PlanPanelProps {
   isExecuting?: boolean
   isApprovingPlan?: boolean
   isSavingPlanReview?: boolean
+  generationState?: OllamaOperationState
+  isCancellingFlow?: boolean
   interviewQuestions?: InterviewQuestion[]
   isInterviewActive?: boolean
   isAnalyzingInterview?: boolean
@@ -41,6 +44,8 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
   isExecuting = false,
   isApprovingPlan = false,
   isSavingPlanReview = false,
+  generationState = null,
+  isCancellingFlow = false,
   interviewQuestions = [],
   isInterviewActive = false,
   isAnalyzingInterview = false,
@@ -84,6 +89,15 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
     : -1
 
   const progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0
+  const schedulerState = generationState === 'queued'
+    ? 'In coda nello scheduler Ollama'
+    : generationState === 'running'
+      ? 'In esecuzione nello scheduler Ollama'
+      : generationState === 'cancelling'
+        ? 'Annullamento nello scheduler Ollama'
+        : generationState === 'failed'
+          ? 'Errore nello scheduler Ollama'
+          : null
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 text-slate-200 select-text font-sans overflow-hidden">
@@ -99,13 +113,20 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {isAnalyzingInterview ? (
+        {isCancellingFlow || generationState === 'cancelling' ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400" role="status">
+            <Loader2 className="w-8 h-8 animate-spin text-rose-400" />
+            <div className="font-bold text-slate-200 text-xs">Annullamento in corso...</div>
+            <p className="text-[11px] text-slate-400 max-w-xs">{schedulerState || 'La richiesta viene arrestata in modo sicuro.'}</p>
+          </div>
+        ) : isAnalyzingInterview ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
             <div className="font-bold text-slate-200 text-xs">Analisi del Prompt &amp; Scelte Tecniche...</div>
             <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI sta valutando se ci sono trade-off architetturali da confermare prima di generare la checklist.
             </p>
+            {schedulerState && <span className="text-[10px] text-amber-300" role="status">{schedulerState}</span>}
             <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">Annulla</button>
           </div>
         ) : isInterviewActive && interviewQuestions.length > 0 ? (
@@ -122,6 +143,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
             <p className="text-[11px] text-slate-400 max-w-xs">
               L'AI Agent sta analizzando il prompt per delineare la strategia di esecuzione passo-passo.
             </p>
+            {schedulerState && <span className="text-[10px] text-amber-300" role="status">{schedulerState}</span>}
             <button type="button" onClick={onCancelFlow} className="text-xs text-rose-300 hover:text-rose-200">Annulla</button>
           </div>
         ) : !plan ? (
@@ -139,6 +161,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({
               {plan.errorPhase === 'interview' ? 'Intervista non completata' : 'Pianificazione non completata'}
             </div>
             <p className="text-[11px] text-slate-400 max-w-md">{plan.errorMessage}</p>
+            {generationState === 'failed' && <span className="text-[10px] text-rose-300" role="status">{schedulerState}</span>}
             <pre className="w-full max-w-2xl max-h-40 overflow-auto text-left whitespace-pre-wrap p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-300">
               {formattedPrompt || plan.prompt}
             </pre>

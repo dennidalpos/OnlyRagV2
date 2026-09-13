@@ -48,21 +48,22 @@ async function dispatchToLlm(
     toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
     previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
     onTokenChunk: (chunk) => {
-      if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+      if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
         ctx.session.targetWindow.webContents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
       }
     },
     onThoughtChunk: (chunk) => {
-      if (ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+      if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
         ctx.session.targetWindow.webContents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
       }
     },
     isCancelled: () => !ctx.isSessionActive(),
+    signal: ctx.session.abortController?.signal,
     onCancelHandle: (abort) => { ctx.session.activeCancelHandle = abort },
     onToolProtocolObserved: selection.targetModelToolCallingProbe ? latchProtocol : undefined,
     onGenerationTelemetry: (telemetry) => { generationTelemetry = telemetry },
     onContextReceived: (contextTokens, respondingModel) => {
-      if (wasCompacted) return
+      if (wasCompacted || !ctx.isSessionActive()) return
       ctx.session.ollamaContextTokens = contextTokens
       ctx.session.ollamaContextModel = respondingModel
       ctx.session.ollamaContextStableSection = assembled.stableSection

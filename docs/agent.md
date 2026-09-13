@@ -17,10 +17,11 @@ plan/interview -> plan -> collect_context -> propose_action -> apply_action
 - Workspace: ogni run con progetto usa un worktree temporaneo (o una copia temporanea fuori da Git). File tool, comandi, generatori, download e package manager operano solo lì.
 - Runtime: modello, endpoint, digest, opzioni e metriche vengono salvati nel checkpoint e rivalidati al resume. Senza un limite di contesto verificato, `num_ctx` conserva la capacità hardware invece di cadere a 2048.
 - Identità run: comandi ed eventi di esecuzione trasportano sempre `runId`, `conversationId`, `planRevisionId` e `workspaceId`; il Renderer accetta solo eventi che coincidono con la run attiva.
+- Annullamento: una `AbortSignal` per run arresta streaming, web/tool, shell persistente, verifiche di milestone e verifica finale. Timeout e annullamento utente usano lo stesso segnale; nessun evento successivo alla chiusura viene inoltrato al Renderer.
 - Ripresa: cronologia della conversazione e checkpoint esecutivo sono distinti. Si ripristinano step, recovery e milestone solo per la stessa run `IN_PROGRESS`; un nuovo prompt usa eventualmente il piano approvato come seme e azzera i budget.
 - Cronologia: log e coda prompt sono scritti subito per conversazione tramite IPC serializzato e store atomico; la chiusura della finestra non è un percorso di persistenza.
 - File attivo: il solo contesto editor trasmesso alla run è `activeFile` (`path`, `content`, `versionHash` SHA-256); l'IPC valida il contratto e scarta il legacy `contextFiles`.
-- Piano e intervista: ogni flusso usa una `AgentRunIdentity` propria; una seconda richiesta resta bloccata finché la prima non termina o viene annullata tramite il suo `runId` nello scheduler Ollama.
+- Piano e intervista: ogni flusso usa una `AgentRunIdentity` propria; una seconda richiesta resta bloccata finché la prima non termina o viene annullata tramite il suo `runId` nello scheduler Ollama. Il pannello mostra lo stato autorevole `queued`, `running`, `cancelling` o `failed` della sua operazione.
 - Coda: l'accettazione restituisce `runId` e `queuePosition`; l'annullamento richiede sempre l'identità della singola run.
 - Timeline: gli eventi usano le categorie tipizzate di `AgentLogCategory`; la richiesta di generazione piano è informativa (`generic_info`).
 

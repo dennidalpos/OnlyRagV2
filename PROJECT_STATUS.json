@@ -1,7 +1,5 @@
 {
   "todos": [
-    "[P1] Residual: expose authoritative queued/running/cancelling/failed scheduler state for plan and interview flows in the UI; current controls cover identity-bound start/cancel only.",
-    "[P1] Propagate one run AbortSignal through model streaming, tools, final verification, timeout handling, and the persistent shell; suppress events after terminal completion and recreate killed shells safely.",
     "[P1] Add an Agent Coding preflight for Ollama reachability, exact installed model, model qualification, context capacity, workspace writability, toolchain availability, and workspace trust.",
     "[P1] Default Agent Coding to a finite safe capability profile and expose file, terminal, network, and step-budget controls in onboarding and per-run review.",
     "[P1] Replace regex-only command blocking with structured command validation or PowerShell AST inspection, workspace confinement, and mandatory approval for destructive operations.",
@@ -15,6 +13,7 @@
     "[P2] Show remote Ollama recovery actions in remote mode instead of offering local installation or launch.",
     "[P2] Replace the estimated Agent Coding context meter with the backend prompt budget breakdown and make Compact reduce backend context without deleting the visible audit timeline.",
     "[P2] Default Agent Coding debug logs to metadata only; require opt-in for prompt and source payloads and add retention and clear controls.",
-    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back."
+    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back.",
+    "[P2] Residual: stabilize restored-plan verification in agentOrchestratorAppService.test.ts; the test \"never executes a verificationCommand that writes the workspace, even from a restored session\" finds no persisted m-1 milestone."
   ]
 }

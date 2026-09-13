@@ -23,6 +23,7 @@ const activeAgentSessions = new Map<string, AgentSession>()
 
 function cleanupSession(session: AgentSession) {
   session.isCancelled = true
+  session.abortController?.abort()
   session.completionStatus = 'cancelled'
   session.terminalSummary = "Task interrotto dall'utente."
   void session.persistCancellation?.()
@@ -141,6 +142,7 @@ export async function runAgentOrchestratorLoop(
     id: runId,
     identity,
     isCancelled: false,
+    abortController: new AbortController(),
     targetWindow: win,
     activeCancelHandle: null,
     activeChildProcess: null,
@@ -264,6 +266,7 @@ export async function runAgentOrchestratorLoop(
       recordVerificationEvidence: (evidence) => { session.lastVerification = evidence },
       requestApproval,
       workspaceTransaction,
+      signal: session.abortController?.signal,
     }, request)
 
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
@@ -432,6 +435,7 @@ export async function runAgentOrchestratorLoop(
         sessionId,
         stepCount: stepCountBox.value,
         maxStepsLabel,
+        signal: session.abortController?.signal,
       })
       setExecutionPhase('collect_context')
       continue
@@ -448,7 +452,7 @@ export async function runAgentOrchestratorLoop(
         session.activeChildProcess = childProc
       },
       skillsBlock,
-      undefined,
+      session.abortController?.signal,
       gateResult.policyConsent,
       sessionId,
       preparedTurn.toolPolicy.allowedTools,

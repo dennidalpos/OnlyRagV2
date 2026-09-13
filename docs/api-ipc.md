@@ -40,7 +40,7 @@ Le run Agent Coding non ricevono il path utente: Main sostituisce il workspace c
 
 `ingest:file` riceve un `taskId` generato dal Renderer. Il progresso porta lo stesso ID e `task:cancel` annulla solo quella ingestion.
 
-Le operazioni `ollama:pull-model`, `ollama:delete-model`, `ollama:generate-stream` e `ollama:benchmark-model` ricevono l'host configurato; Main ne fissa protocollo e destinazione per l'intera richiesta, anche con host concorrenti. Ogni stream ha un `operationId`: accompagna gli eventi `ollama:chunk` e `ollama:done`, isola i listener Renderer, consente a `ollama:cancel-stream` di annullare solo quella richiesta e permette alla UI di mostrare lo stato attivo/in coda letto da `ollama:get-generation-status`.
+Le operazioni `ollama:pull-model`, `ollama:delete-model`, `ollama:generate-stream` e `ollama:benchmark-model` ricevono l'host configurato; Main ne fissa protocollo e destinazione per l'intera richiesta, anche con host concorrenti. Ogni stream ha un `operationId`: accompagna gli eventi `ollama:chunk` e `ollama:done`, isola i listener Renderer, consente a `ollama:cancel-stream` di annullare solo quella richiesta e permette alla UI di leggere da `ollama:get-generation-status` gli stati `queued`, `running`, `cancelling` e `failed`. Piano e intervista usano lo stesso scheduler con il loro `runId`.
 
 `ollama:generate-stream` restituisce l'esito `{ success, error? }`: errori HTTP, di trasporto o timeout non diventano chunk testuali. Chat e Traduzione accettano come completata solo una risposta riuscita e non vuota; l'export della traduzione resta disabilitato per risultati parziali o falliti.
 

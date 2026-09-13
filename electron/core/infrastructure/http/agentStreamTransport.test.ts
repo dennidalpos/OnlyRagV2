@@ -28,6 +28,19 @@ describe('AgentStreamTransport — native tool-calling routing', () => {
     }
   })
 
+  it('does not enqueue a model request after the run signal is aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(AgentStreamTransport.streamCompletion({
+      targetModel: 'qwen2.5-coder:7b',
+      prompt: 'Do not send this request',
+      runtimeOpts,
+      isCancelled: () => false,
+      signal: controller.signal,
+    })).rejects.toThrow('Agent run cancelled')
+  })
+
   it('should route to /api/chat streamed (stream:true) with a tools array when toolCallingCapable + toolCatalog are set, and serialize a populated tool_calls response into the {"name","arguments"} shape toolParser.ts understands (AGT7: incremental streaming, tool_calls arrives on the final NDJSON line)', async () => {
     let capturedBody: any = null
     const observed: string[] = []

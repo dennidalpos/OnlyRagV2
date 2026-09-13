@@ -60,11 +60,34 @@ describe('OllamaGenerationScheduler', () => {
     expect(scheduler.getStatus()).toEqual({
       active: { id: 'stream-1', label: 'stream' },
       queued: [{ id: 'stream-2', label: 'stream' }],
+      operations: [
+        { id: 'stream-1', label: 'stream', state: 'running' },
+        { id: 'stream-2', label: 'stream', state: 'queued' },
+      ],
     })
     expect(scheduler.cancel('stream-2')).toBe(true)
     await expect(second.promise).rejects.toBeInstanceOf(OllamaGenerationCancelledError)
     expect(scheduler.cancel('missing')).toBe(false)
     gate.resolve('first')
     await expect(first.promise).resolves.toBe('first')
+  })
+
+  it('keeps cancelling and failed operations available to the status reader', async () => {
+    const scheduler = new OllamaGenerationScheduler()
+    const gate = deferred<string>()
+    const active = scheduler.schedule('structured', async (setCancel) => {
+      setCancel(() => {})
+      return gate.promise
+    }, 'cancelled-id')
+
+    await Promise.resolve()
+    expect(scheduler.cancel('cancelled-id')).toBe(true)
+    expect(scheduler.getStatus().operations).toContainEqual({ id: 'cancelled-id', label: 'structured', state: 'cancelling' })
+    gate.resolve('ignored')
+    await expect(active.promise).rejects.toBeInstanceOf(OllamaGenerationCancelledError)
+
+    const failed = scheduler.schedule('structured', async () => { throw new Error('offline') }, 'failed-id')
+    await expect(failed.promise).rejects.toThrow('offline')
+    expect(scheduler.getStatus().operations).toContainEqual({ id: 'failed-id', label: 'structured', state: 'failed' })
   })
 })

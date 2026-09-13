@@ -50,6 +50,7 @@ export interface ApplicationClosureContext {
   recordVerificationEvidence?: (evidence: AgentVerificationEvidence) => void
   requestApproval?: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
   workspaceTransaction?: DisposableAgentWorkspace
+  signal?: AbortSignal
 }
 
 function toVerificationEvidence(run: VerificationRunResult): AgentVerificationEvidence {
@@ -226,7 +227,7 @@ export async function closeAgentRunFromEvidence(
 
   if (shouldRunVerification) {
     ctx.emitLog('info', '🔎 Verifica finale governata dall’applicazione...')
-    run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk))
+    run = await runProjectVerification(ctx.workspacePath, (chunk) => ctx.emitLog('terminal', chunk), ctx.signal)
     const verificationEvidence = toVerificationEvidence(run)
     ctx.recordVerificationEvidence?.(verificationEvidence)
     ctx.lastVerification = verificationEvidence

@@ -19,6 +19,7 @@ export interface StreamSession {
   onTokenChunk?: (chunk: string) => void
   onThoughtChunk?: (chunk: string) => void
   isCancelled: () => boolean
+  signal?: AbortSignal
   onCancelHandle?: (abort: () => void) => void
   /**
    * When true (and toolCatalog is non-empty), routes through POST /api/chat
@@ -77,6 +78,9 @@ function serializeNativeToolCall(name: string, args: Record<string, unknown>): s
 
 export class AgentStreamTransport {
   static streamCompletion(session: StreamSession): Promise<string> {
+    if (session.signal?.aborted || session.isCancelled()) {
+      return Promise.reject(new Error('Agent run cancelled.'))
+    }
     const scheduled = ollamaGenerationScheduler.schedule('agent', (setActiveCancel) =>
       this.streamCompletionNow({ ...session, onCancelHandle: setActiveCancel })
     )
@@ -98,6 +102,7 @@ export class AgentStreamTransport {
       onTokenChunk,
       onThoughtChunk,
       isCancelled,
+      signal,
       onCancelHandle,
       previousContext,
       onContextReceived,
@@ -265,9 +270,10 @@ export class AgentStreamTransport {
             }
           })
 
-          if (onCancelHandle) {
-            onCancelHandle(() => req.destroy())
-          }
+          const abortRequest = () => req.destroy(new Error('Agent run cancelled.'))
+          if (onCancelHandle) onCancelHandle(abortRequest)
+          signal?.addEventListener('abort', abortRequest, { once: true })
+          req.on('close', () => signal?.removeEventListener('abort', abortRequest))
 
           req.write(postData)
           req.end()
@@ -290,7 +296,7 @@ export class AgentStreamTransport {
    * parsed identically downstream by toolParser.ts.
    */
   private static async streamChatWithTools(session: StreamSession): Promise<string> {
-    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, onCancelHandle, toolCatalog } = session
+    const { targetModel, prompt, runtimeOpts, keepAlive, ollamaEndpoint, onTokenChunk, onThoughtChunk, isCancelled, signal, onCancelHandle, toolCatalog } = session
 
     const hostStr = ollamaEndpoint?.trim() || 'http://127.0.0.1:11434'
     let chatUrl: URL
@@ -453,9 +459,10 @@ export class AgentStreamTransport {
         }
       })
 
-      if (onCancelHandle) {
-        onCancelHandle(() => req.destroy())
-      }
+      const abortRequest = () => req.destroy(new Error('Agent run cancelled.'))
+      if (onCancelHandle) onCancelHandle(abortRequest)
+      signal?.addEventListener('abort', abortRequest, { once: true })
+      req.on('close', () => signal?.removeEventListener('abort', abortRequest))
 
       req.write(postData)
       req.end()

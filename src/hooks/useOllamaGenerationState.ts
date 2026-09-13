@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { OllamaGenerationStatus } from '../../shared/types'
 
-export type OllamaOperationState = 'queued' | 'running' | null
+export type OllamaOperationState = 'queued' | 'running' | 'cancelling' | 'failed' | null
 
 export function resolveOllamaOperationState(status: OllamaGenerationStatus, operationId: string): OllamaOperationState {
+  const operation = status.operations?.find((item) => item.id === operationId)
+  if (operation) return operation.state
   if (status.active?.id === operationId) return 'running'
   if (status.queued.some((job) => job.id === operationId)) return 'queued'
   return null
@@ -28,7 +30,7 @@ export function useOllamaGenerationState() {
         const status = await electronAPI.getOllamaGenerationStatus()
         if (active) {
           const next = resolveOllamaOperationState(status, operationId)
-          if (next) setGenerationState(next)
+          setGenerationState(next)
         }
       } catch {
         if (active) setGenerationState(null)

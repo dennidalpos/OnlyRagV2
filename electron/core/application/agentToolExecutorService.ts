@@ -653,7 +653,7 @@ export class AgentToolExecutorService {
       }
 
       case 'run_tests': {
-        return this.processToolService.executeRunTests(parameters.command, workspacePath, settings.allowTerminalExecution, onTerminalOutput, onProcessSpawned)
+        return this.processToolService.executeRunTests(parameters.command, workspacePath, settings.allowTerminalExecution, onTerminalOutput, onProcessSpawned, signal)
       }
 
       case 'git_status': {

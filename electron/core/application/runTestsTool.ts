@@ -17,6 +17,7 @@ export async function executeRunTestsTool(
   getOrCreateShellSession: ShellSessionProvider,
   onTerminalOutput?: (data: string) => void,
   onProcessSpawned?: (proc: ChildProcess) => void,
+  signal?: AbortSignal,
 ): Promise<ToolExecutionResult> {
   let execCmd = explicitCommand
   let detectionNote = ''
@@ -66,6 +67,7 @@ export async function executeRunTestsTool(
       },
       onProcessSpawned,
       TEST_TIMEOUT_MS,
+      signal,
     )
 
     const rawOutput = DiagnosticOutputReducer.composeCommandOutput(res.stdout, res.stderr, res.code)

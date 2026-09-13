@@ -64,6 +64,7 @@ export function armSessionWatchdog(params: SessionWatchdogParams): SessionWatchd
     logger.log('WARN', 'AgentOrchestratorApp', `[SESSION TIMEOUT] ${timeoutSummary} SessionId: ${sessionId}`)
     emitLog('info', `⏱️ Session Timeout: ${timeoutSummary}`)
     session.isCancelled = true
+    session.abortController?.abort()
     session.completionStatus = 'blocked'
     session.terminalSummary = timeoutSummary
     if (session.pendingApprovalResolve) {

@@ -840,7 +840,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({ settings, diagnos
                     )}
 
                     {/* Active Model Pill */}
-                    {c.isGenerating && c.generationState && (
+                    {c.isGenerating && (c.generationState === 'queued' || c.generationState === 'running') && (
                       <span className="px-2 py-0.5 rounded-xl border border-sky-500/30 bg-sky-950/50 text-[10px] font-semibold text-sky-300" role="status">
                         {t(`common.${c.generationState}`)}
                       </span>

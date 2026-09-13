@@ -192,7 +192,7 @@ export const TranslationView: React.FC<TranslationViewProps> = React.memo(({ set
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
                   <span className="font-semibold">{tr.selectedDoc?.filename || t('common.document')}</span>
                   <span className="text-slate-400">•</span>
-                  {tr.generationState && (
+                  {(tr.generationState === 'queued' || tr.generationState === 'running') && (
                     <>
                       <span className="text-amber-300 font-semibold">{t(`common.${tr.generationState}`)}</span>
                       <span className="text-slate-400">•</span>

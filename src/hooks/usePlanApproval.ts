@@ -9,6 +9,7 @@ import {
 import { shouldRunPlanInterview } from '../../shared/domain/agent/planInterviewPolicy'
 import { validateInterviewAnswers } from '../../shared/domain/agent/interviewValidation'
 import { createAgentRunIdentity } from '../../shared/domain/agent/agentRunIdentity'
+import { useOllamaGenerationState } from './useOllamaGenerationState'
 
 export type { AgentPlan } from '../types'
 
@@ -68,6 +69,8 @@ export function usePlanApproval({
   const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false)
   const [isApprovingPlan, setIsApprovingPlan] = useState<boolean>(false)
   const [isSavingPlanReview, setIsSavingPlanReview] = useState<boolean>(false)
+  const [isCancellingPlanFlow, setIsCancellingPlanFlow] = useState<boolean>(false)
+  const { generationState, trackOperation } = useOllamaGenerationState()
 
   // Pre-flight Clarification Interview state
   const [interviewQuestions, setInterviewQuestions] = useState<InterviewQuestion[]>([])
@@ -137,10 +140,12 @@ export function usePlanApproval({
     setIsGeneratingPlan(false)
     setIsApprovingPlan(false)
     setIsSavingPlanReview(false)
+    setIsCancellingPlanFlow(false)
+    trackOperation(null)
     setIsAnalyzingInterview(false)
     setIsInterviewActive(false)
     setInterviewQuestions([])
-  }, [activeSessionId, workspacePath])
+  }, [activeSessionId, trackOperation, workspacePath])
 
   useEffect(() => {
     mountedRef.current = true
@@ -204,6 +209,7 @@ export function usePlanApproval({
         if (window.electronAPI?.agentPlanGenerate && settings) {
           try {
             logger.info('usePlanApproval', `Dispatching plan generation (prompt length: ${prompt.length}).`)
+            trackOperation(scope.identity.runId)
             const genRes = await window.electronAPI.agentPlanGenerate(
               prompt,
               modelToUse,
@@ -275,6 +281,7 @@ export function usePlanApproval({
           return copy
         })
         setIsGeneratingPlan(false)
+        trackOperation(null)
         if (activeOperationRef.current?.token === scope.token) activeOperationRef.current = null
         soundEffectsService.play('interactive', settings?.enableSoundEffects !== false)
         return finalPlan
@@ -309,7 +316,7 @@ export function usePlanApproval({
         return failedPlan
       }
     },
-    [beginFlowScope, isFlowCurrent, settings, updateCurrentSessionPlans]
+    [beginFlowScope, isFlowCurrent, settings, trackOperation, updateCurrentSessionPlans]
   )
 
   const replacePlanRevision = useCallback((revision: AgentPlan) => {
@@ -441,6 +448,7 @@ export function usePlanApproval({
         plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan
       ))
       setIsGeneratingPlan(false)
+      setIsCancellingPlanFlow(false)
       setIsAnalyzingInterview(false)
       setIsInterviewActive(false)
       setInterviewQuestions([])
@@ -456,6 +464,7 @@ export function usePlanApproval({
         setIsAnalyzingInterview(true)
         try {
           const modelToUse = targetModel || settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+          trackOperation(scope.identity.runId)
           const interviewRes = await window.electronAPI.agentPlanInterview(
             prompt,
             modelToUse,
@@ -467,6 +476,7 @@ export function usePlanApproval({
           if (!isFlowCurrent(scope)) return null
           if (activeOperationRef.current?.token === scope.token) activeOperationRef.current = null
           setIsAnalyzingInterview(false)
+          trackOperation(null)
 
           if (interviewRes?.status === 'error') {
             const failedPlan: AgentPlan = {
@@ -553,7 +563,7 @@ export function usePlanApproval({
       setInterviewQuestions([])
       return generatePlan(prompt, targetModel, currentStep, { originalPrompt: prompt, answers: [] }, scope)
     },
-    [beginFlowScope, generatePlan, isFlowCurrent, settings, updateCurrentSessionPlans]
+    [beginFlowScope, generatePlan, isFlowCurrent, settings, trackOperation, updateCurrentSessionPlans]
   )
 
   const confirmInterviewAnswers = useCallback(
@@ -609,16 +619,20 @@ export function usePlanApproval({
   const cancelPlanFlow = useCallback(async () => {
     const scope = activeOperationRef.current
     if (!scope) return false
-    activeOperationRef.current = null
+    setIsCancellingPlanFlow(true)
     pendingFlowRef.current = null
     flowTokenRef.current += 1
-    setIsGeneratingPlan(false)
-    setIsAnalyzingInterview(false)
     setIsInterviewActive(false)
     setInterviewQuestions([])
     updateCurrentSessionPlans((plans) => plans.map((plan) => plan.status === 'generating' ? { ...plan, status: 'cancelled' } : plan))
-    return Boolean(await window.electronAPI?.agentPlanCancel?.(scope.identity).then((result) => result.success))
-  }, [updateCurrentSessionPlans])
+    const cancelled = Boolean(await window.electronAPI?.agentPlanCancel?.(scope.identity).then((result) => result.success))
+    activeOperationRef.current = null
+    setIsCancellingPlanFlow(false)
+    setIsGeneratingPlan(false)
+    setIsAnalyzingInterview(false)
+    trackOperation(null)
+    return cancelled
+  }, [trackOperation, updateCurrentSessionPlans])
 
   return {
     currentPlan,
@@ -627,6 +641,8 @@ export function usePlanApproval({
     isGeneratingPlan,
     isApprovingPlan,
     isSavingPlanReview,
+    planGenerationState: generationState,
+    isCancellingPlanFlow,
     generatePlan,
     startPlanFlow,
     interviewQuestions,

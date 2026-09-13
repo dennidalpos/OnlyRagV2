@@ -38,9 +38,11 @@ export interface VerificationRunResult {
 
 export async function runProjectVerification(
   workspacePath: string | null,
-  onOutput?: (chunk: string) => void
+  onOutput?: (chunk: string) => void,
+  signal?: AbortSignal,
 ): Promise<VerificationRunResult> {
   if (!workspacePath) return { hasVerificationCommand: false, status: 'unverifiable' }
+  if (signal?.aborted) return { hasVerificationCommand: false, status: 'unverifiable' }
 
   const profile = discoverProjectProfile(workspacePath)
   const verifications = resolvePrimaryProfileVerificationTargets(profile)
@@ -88,7 +90,8 @@ export async function runProjectVerification(
       security.sanitizedCommand,
       (chunk) => onOutput?.(chunk.trim()),
       undefined,
-      VERIFICATION_TIMEOUT_MS
+      VERIFICATION_TIMEOUT_MS,
+      signal,
     )
     if (res.code !== 0 || res.timedOut) {
       const result: VerificationRunResult = {

@@ -264,11 +264,12 @@ export class ProcessToolService {
     allowTerminalExecution: boolean | undefined,
     onTerminalOutput: ((data: string) => void) | undefined,
     onProcessSpawned: ((proc: ChildProcess) => void) | undefined,
+    signal?: AbortSignal,
   ): Promise<ToolExecutionResult> {
     if (allowTerminalExecution === false) {
       return Promise.resolve({ outcome: 'blocked', outputForHistory: 'Terminal command execution disabled in Settings.', logMessage: 'Terminal command execution disabled in Settings.', isTerminal: true })
     }
-    return executeRunTestsTool(command, workspacePath, (path) => this.dependencies.getShellSession(path), onTerminalOutput, onProcessSpawned)
+    return executeRunTestsTool(command, workspacePath, (path) => this.dependencies.getShellSession(path), onTerminalOutput, onProcessSpawned, signal)
   }
 
   async executeEnsureTool(

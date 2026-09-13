@@ -528,9 +528,18 @@ export interface PromptHistoryIndexPayload {
   completedAt?: string
 }
 
+export type OllamaGenerationOperationState = 'queued' | 'running' | 'cancelling' | 'failed'
+
+export interface OllamaGenerationOperation {
+  id: string
+  label: string
+  state: OllamaGenerationOperationState
+}
+
 export interface OllamaGenerationStatus {
   active: { id: string; label: string } | null
   queued: { id: string; label: string }[]
+  operations: OllamaGenerationOperation[]
 }
 
 export interface OllamaStreamChunkEvent {

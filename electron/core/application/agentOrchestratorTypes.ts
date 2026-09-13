@@ -14,6 +14,7 @@ export interface AgentSession {
   id: string
   identity: Readonly<AgentRunIdentity>
   isCancelled: boolean
+  abortController?: AbortController
   targetWindow: BrowserWindow | null
   activeCancelHandle?: (() => void) | null
   activeChildProcess?: any | null

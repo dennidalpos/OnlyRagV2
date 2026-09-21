@@ -198,7 +198,14 @@ export interface AgentActionLog extends Partial<AgentRunIdentity> {
   meta?: Record<string, any>
 }
 
-import type { ExecutedPrompt, ExecutedPromptOutcome, QueuedPromptRecord, WorkspaceProject } from './workspace'
+import type {
+  AgentCompletionEvidence,
+  AgentCompletionStatus,
+  ExecutedPrompt,
+  ExecutedPromptOutcome,
+  QueuedPromptRecord,
+  WorkspaceProject,
+} from './workspace'
 
 export * from './workspace'
 
@@ -814,22 +821,11 @@ export interface UserInterviewAnswer {
   provenance?: 'explicit' | 'accepted_recommendation' | 'unconfirmed_assumption'
 }
 
-/** Evidence-based terminal state emitted by the application-owned agent closure. */
-export type AgentCompletionStatus = 'verified' | 'unverifiable' | 'blocked' | 'cancelled'
-
-/** Last application-owned verification attempt persisted with a coding session. */
-export interface AgentVerificationEvidence {
-  status: 'verified' | 'failed' | 'unavailable'
-  checkedAt: string
-  command?: string
-  evidenceLevel?: 'structural' | 'behavioral'
-  detail?: string
-}
-
 export interface AgentDoneResult {
   success: boolean
   summary: string
   completionStatus?: AgentCompletionStatus
+  evidence?: AgentCompletionEvidence
 }
 
 // ---------------------------------------------------------------------------

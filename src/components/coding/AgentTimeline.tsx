@@ -5,6 +5,7 @@ import { AgentActionLog, WorkspaceFile, CodingSession } from '../../types'
 import { useTranslation } from '../../i18n'
 import { AgentTimelineMessage } from './AgentTimelineMessage'
 import { resolveWorkspaceQuickActions } from './workspaceQuickActions'
+import { AgentEvidenceCard } from './AgentEvidenceCard'
 
 interface AgentTimelineProps {
   actionLogs: AgentActionLog[]
@@ -55,6 +56,10 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
   const quickActions = useMemo(
     () => resolveWorkspaceQuickActions(workspacePath, files),
     [workspacePath, files]
+  )
+  const latestCompletedPrompt = useMemo(
+    () => [...(activeSession?.executedPrompts || [])].reverse().find((prompt) => prompt.outcome !== 'running'),
+    [activeSession?.executedPrompts],
   )
 
   const toggleExpand = useCallback((id: string) => {
@@ -196,6 +201,13 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
             </div>
           )}
         </div>
+      )}
+      {!isExecuting && latestCompletedPrompt && (
+        <AgentEvidenceCard
+          prompt={latestCompletedPrompt}
+          onOpenFile={onOpenFile}
+          onOpenRightTab={onOpenRightTab}
+        />
       )}
       <div ref={bottomRef} />
     </div>

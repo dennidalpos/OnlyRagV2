@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   AgentActionLog,
   AgentCapabilityProfile,
+  AgentCompletionEvidence,
+  AgentCompletionStatus,
   AgentPlan,
   AppSettings,
   IngestedDocument,
@@ -510,7 +512,8 @@ export function useCodingAgent(settings?: AppSettings) {
       updateActiveRunIdentity(null)
       soundEffectsService.play(res?.success === false ? 'error' : 'completion', settings?.enableSoundEffects !== false)
       setCurrentLiveModel(null)
-      closeRunningExecutedPrompt(res?.success === false ? 'failed' : 'success', res?.summary)
+      const outcome = res?.completionStatus === 'cancelled' ? 'cancelled' : res?.success === false ? 'failed' : 'success'
+      closeRunningExecutedPrompt(outcome, res?.summary, res?.completionStatus, res?.evidence)
       setIsExecuting(false)
       clearStreamBuffer()
       setStreamingText('')
@@ -527,7 +530,7 @@ export function useCodingAgent(settings?: AppSettings) {
         previousTabRef.current = null
       }
 
-      const nextItem = dequeueNextPrompt()
+      const nextItem = res?.completionStatus === 'cancelled' ? undefined : dequeueNextPrompt()
       if (nextItem) {
         setTimeout(() => {
           executeTask(nextItem.prompt)
@@ -552,13 +555,10 @@ export function useCodingAgent(settings?: AppSettings) {
 
   const handleCancelAgent = () => {
     const identity = activeRunIdentityRef.current
-    updateActiveRunIdentity(null)
-    setIsExecuting(false)
-    setCurrentLiveModel(null)
+    setCurrentStatusText('Annullamento in corso...')
     if (window.electronAPI) {
       if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
     }
-    closeRunningExecutedPrompt('cancelled')
     addActionLog('info', "Esecuzione interrotta dall'utente.")
   }
 
@@ -669,7 +669,12 @@ export function useCodingAgent(settings?: AppSettings) {
     [activeSessionId, persistSessionPlan],
   )
 
-  const closeRunningExecutedPrompt = (outcome: ExecutedPromptOutcome, summary?: string) => {
+  const closeRunningExecutedPrompt = (
+    outcome: ExecutedPromptOutcome,
+    summary?: string,
+    completionStatus?: AgentCompletionStatus,
+    evidence?: AgentCompletionEvidence,
+  ) => {
     const running = runningExecutedPromptRef.current
     if (!running) return
     runningExecutedPromptRef.current = null
@@ -678,6 +683,8 @@ export function useCodingAgent(settings?: AppSettings) {
       totalSteps: currentStepRef.current,
       metrics: changeMetricsRef.current,
       summary,
+      completionStatus,
+      evidence,
     })
   }
 

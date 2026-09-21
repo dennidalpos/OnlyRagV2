@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../shared/types'
 import type { AgentToolCall } from '../domain/agent/agentTypes'
 import type { ClassifiedToolExecutionResult } from './agentToolExecutorService'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
@@ -57,7 +57,9 @@ export interface ToolResultProcessingContext {
   targetWindow: BrowserWindow | null
   runIdentity: Readonly<AgentRunIdentity>
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
+  recordChangedFile?: (filePath: string) => void
+  recordNonRollbackEffect?: (effect: string) => void
   persistCurrentState: () => Promise<void>
   finalizeSession: () => void
   closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>

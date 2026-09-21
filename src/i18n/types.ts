@@ -209,6 +209,20 @@ export interface TranslationSchema {
     outcomeFailed: string
     outcomeCancelled: string
     outcomeUnknown: string
+    evidenceTitle: string
+    evidenceFiles: string
+    evidenceVerification: string
+    evidenceCancellation: string
+    evidenceNonRollback: string
+    evidenceNone: string
+    evidenceVerified: string
+    evidenceFailed: string
+    evidenceUnavailable: string
+    evidenceNotCancelled: string
+    evidenceRolledBack: string
+    evidenceResiduals: string
+    evidenceRollbackCount: string
+    evidenceLegacyFiles: string
     skillInstallTitle: string
     skillInstallQuestion: string
     skillInstallScore: string
@@ -435,6 +449,9 @@ export interface TranslationSchema {
     ollamaTitle: string
     gpuTitle: string
     ramTitle: string
+    ramAvailable: string
+    ramUsed: string
+    ramTotal: string
     filterPlaceholder: string
     allLevels: string
     allCategories: string

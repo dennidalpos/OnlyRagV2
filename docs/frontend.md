@@ -28,3 +28,4 @@ Il Renderer in `src/` usa React 19, Vite, Tailwind CSS e Monaco. Lo stato è ges
 - `monacoTheme.ts` centralizza tema e opzioni Monaco.
 - `errorNormalizer.ts` converte errori tecnici in messaggi e remediation UI.
 - Le chiamate al Main passano da `window.electronAPI`; non si accede direttamente a Node o al filesystem.
+- La RAM di sistema è mostrata con valori distinti per memoria disponibile, in uso e totale sia nella barra laterale sia nella diagnostica; il report copiabile mantiene le stesse etichette.

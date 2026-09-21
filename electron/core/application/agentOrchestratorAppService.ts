@@ -58,9 +58,14 @@ function cleanupSession(session: AgentSession) {
     }
     session.activeChildProcess = null
   }
+  let rollbackRestoredFiles = 0
+  const rollbackErrors: string[] = []
   try {
-    agentToolExecutorService.rollbackJournal()
+    const rollback = agentToolExecutorService.rollbackJournal()
+    rollbackRestoredFiles = rollback.restoredCount
+    rollbackErrors.push(...rollback.errors)
   } catch (err: any) {
+    rollbackErrors.push(err?.message || String(err))
     logger.log('WARN', 'AgentOrchestrator', `Failed rolling back journal during cleanup: ${err?.message}`)
   }
   try {
@@ -69,6 +74,10 @@ function cleanupSession(session: AgentSession) {
     logger.log('WARN', 'AgentOrchestrator', `Failed discarding isolated workspace during cleanup: ${err?.message}`)
   }
   if (session.targetWindow && !session.targetWindow.isDestroyed()) {
+    const nonRollbackEffects = [
+      ...(session.nonRollbackEffects || []),
+      ...rollbackErrors.map((error) => `rollback_workspace: ${error}`),
+    ]
     session.targetWindow.webContents.send('agent:log', {
       ...session.identity,
       id: `${Date.now()}-cancelled`,
@@ -81,6 +90,13 @@ function cleanupSession(session: AgentSession) {
       success: false,
       summary: "Task interrotto dall'utente.",
       completionStatus: 'cancelled',
+      evidence: {
+        changedFiles: session.changedFiles || [],
+        verification: session.lastVerification,
+        cancellationStatus: nonRollbackEffects.length > 0 ? 'residual_effects' : 'rolled_back',
+        rollbackRestoredFiles,
+        nonRollbackEffects,
+      },
     })
   }
 }
@@ -285,6 +301,9 @@ export async function runAgentOrchestratorLoop(
 
   void ollamaAppService.preloadModel(codingModel, settings.ollamaHost).catch(() => {})
 
+  session.changedFiles ||= []
+  session.nonRollbackEffects ||= []
+
   const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
     closeAgentRunFromEvidence(
       {
@@ -310,6 +329,7 @@ export async function runAgentOrchestratorLoop(
         recordVerificationEvidence: (evidence) => {
           session.lastVerification = evidence
         },
+        nonRollbackEffects: session.nonRollbackEffects,
         requestApproval,
         workspaceTransaction,
         signal: session.abortController?.signal,
@@ -512,6 +532,12 @@ export async function runAgentOrchestratorLoop(
       runIdentity: identity,
       emitLog,
       emitDone,
+      recordChangedFile: (filePath) => {
+        if (!session.changedFiles!.includes(filePath)) session.changedFiles!.push(filePath)
+      },
+      recordNonRollbackEffect: (effect) => {
+        if (!session.nonRollbackEffects!.includes(effect)) session.nonRollbackEffects!.push(effect)
+      },
       persistCurrentState,
       finalizeSession,
       closeApplicationRun,

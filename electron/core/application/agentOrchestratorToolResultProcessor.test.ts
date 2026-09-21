@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { applyVersionedReadEvidence, isToolExecutionFailure, shouldSpendExecutionRecoveryBudget, terminalOutcomeFor, updateVersionConflictRecovery } from './agentOrchestratorToolResultProcessor'
+import { applyVersionedReadEvidence, describeNonRollbackEffect, isToolExecutionFailure, shouldSpendExecutionRecoveryBudget, terminalOutcomeFor, updateVersionConflictRecovery } from './agentOrchestratorToolResultProcessor'
 import { packagesWithFailedInstall } from '../domain/agent/installCommandParser'
 import { resolvePlanDirective } from '../domain/agent/planDirectiveArbiter'
 import { FileSystemRepository } from '../infrastructure/filesystem/fileSystemRepository'
@@ -12,6 +12,17 @@ describe('structured tool outcomes', () => {
   it('does not infer failure from output text', () => {
     expect(isToolExecutionFailure({ outcome: 'success', outputForHistory: 'Error is discussed here.', logMessage: 'Read file' })).toBe(false)
     expect(isToolExecutionFailure({ outcome: 'rejected', outputForHistory: 'Looks fine.', logMessage: 'Policy rejected' })).toBe(true)
+  })
+
+  it('reports confirmed commands and uncertain failures as effects outside automatic rollback', () => {
+    expect(describeNonRollbackEffect(
+      { tool: 'run_command', parameters: { command: 'npm install demo' } },
+      { outcome: 'success', outputForHistory: 'done', logMessage: 'done', effectOutcome: 'confirmed' },
+    )).toBe('run_command: npm install demo')
+    expect(describeNonRollbackEffect(
+      { tool: 'run_command', parameters: { command: 'deploy' } },
+      { outcome: 'failure', outputForHistory: 'timeout', logMessage: 'timeout', effectOutcome: 'uncertain' },
+    )).toContain('effetto esterno incerto')
   })
 })
 

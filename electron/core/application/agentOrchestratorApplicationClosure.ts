@@ -1,4 +1,4 @@
-import type { AgentCompletionStatus, AgentVerificationEvidence, AppSettings } from '../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentVerificationEvidence, AppSettings } from '../../../shared/types'
 import { isCompletionMilestoneTitle, type GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import { decideVerificationGate } from '../domain/agent/verificationGatePolicy'
@@ -35,7 +35,7 @@ export interface ApplicationClosureContext {
   episodicCompactor: EpisodicMemoryCompactor
   isSessionActive: () => boolean
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
   persistCurrentState: (
     terminationReason?: AgentSessionTerminationReason,
     completionStatus?: AgentCompletionStatus
@@ -48,6 +48,7 @@ export interface ApplicationClosureContext {
   generationTelemetry?: readonly OllamaGenerationTelemetry[]
   lastVerification?: AgentVerificationEvidence
   recordVerificationEvidence?: (evidence: AgentVerificationEvidence) => void
+  nonRollbackEffects?: readonly string[]
   requestApproval?: (approvalPayload: Record<string, unknown>) => Promise<ApprovalResponse>
   workspaceTransaction?: DisposableAgentWorkspace
   signal?: AbortSignal
@@ -331,6 +332,12 @@ export async function closeAgentRunFromEvidence(
     ctx.recordVerificationEvidence?.(unavailable)
   }
   const diagnosticDetail = renderDiagnosticDetail(ctx, request, status, ctx.lastVerification)
+  const completionEvidence: AgentCompletionEvidence = {
+    changedFiles: [...tracker.getData().modifiedFiles],
+    verification: ctx.lastVerification,
+    cancellationStatus: 'not_cancelled',
+    nonRollbackEffects: [...(ctx.nonRollbackEffects || [])],
+  }
   ctx.setExecutionPhase('outcome')
   agentToolExecutorService.commitJournal()
   const success = status === 'verified'
@@ -341,7 +348,7 @@ export async function closeAgentRunFromEvidence(
     category: 'generic_info',
     modelName: ctx.runtimeProfile?.model,
   })
-  ctx.emitDone(success, summary, status)
+  ctx.emitDone(success, summary, status, completionEvidence)
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logSessionEnd(ctx.sessionId, ctx.stepCount, success, summary)
   }
@@ -355,5 +362,5 @@ export async function closeAgentRunFromEvidence(
     // The source workspace has either been published or left untouched.
   }
   ctx.finalizeSession()
-  return { outcome: 'closed', result: { success, summary, completionStatus: status } }
+  return { outcome: 'closed', result: { success, summary, completionStatus: status, evidence: completionEvidence } }
 }

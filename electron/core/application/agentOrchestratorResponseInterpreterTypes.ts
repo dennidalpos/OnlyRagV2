@@ -1,5 +1,5 @@
 import type { AgentToolCall, AgentTaskResult } from '../domain/agent/agentTypes'
-import type { AgentCompletionStatus, AgentExecutionMode, AppSettings } from '../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentExecutionMode, AppSettings } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { TransactionalExecutionGuard } from '../infrastructure/filesystem/transactionalExecutionGuard'
@@ -59,7 +59,7 @@ export interface ResponseInterpreterContext {
   executionGuard: TransactionalExecutionGuard
   loopDetector: AgentActionLoopDetector
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
   persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   finalizeSession: () => void
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker

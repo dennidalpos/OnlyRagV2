@@ -28,6 +28,7 @@ const DiagnosticsDrawer = lazy(() => import('../diagnostics/DiagnosticsDrawer').
 const AboutModal = lazy(() => import('../common/AboutModal').then((m) => ({ default: m.AboutModal })))
 const HardwareSetupWizardModal = lazy(() => import('../common/HardwareSetupWizardModal').then((m) => ({ default: m.HardwareSetupWizardModal })))
 import { OnlyRagLogo } from '../common/OnlyRagLogo'
+import { SystemRamBreakdown } from '../common/SystemRamBreakdown'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
@@ -402,18 +403,12 @@ export const AppLayout: React.FC = () => {
               </span>
             </div>
 
-            <div
-              className="flex items-center justify-between text-[11px]"
-            >
-              <span className="text-slate-400 flex items-center gap-1.5">
+            <div className="space-y-1 text-[11px]">
+              <div className="text-slate-400 flex items-center gap-1.5">
                 <HardDrive className="w-3 h-3 text-sky-400" />
                 {t('sidebar.systemRam')}
-              </span>
-              <span className="font-mono text-slate-200 text-[10px]">
-                {diagnostics?.memory
-                  ? `${diagnostics.memory.usedRAMGB}/${diagnostics.memory.freeRAMGB} GB`
-                  : '--/-- GB'}
-              </span>
+              </div>
+              <SystemRamBreakdown memory={diagnostics?.memory} />
             </div>
           </div>
 

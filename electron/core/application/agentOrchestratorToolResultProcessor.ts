@@ -12,6 +12,7 @@ import { runCircuitBreaker, recordMutationSideEffects, recordCommandTouchedFiles
 import type { ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY, recordRecoveryFailure, recoveryStopDiagnostic } from '../domain/agent/recoveryBudget'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
+import { redactSecrets } from '../../logRedactor'
 
 export type { ToolResultMutableFlags, ToolResultProcessingContext, ToolResultProcessingOutcome } from './agentOrchestratorToolResultTypes'
 
@@ -98,6 +99,20 @@ function extractTargetParam(parsedTool: AgentToolCall): string | undefined {
   )
 }
 
+export function describeNonRollbackEffect(
+  parsedTool: AgentToolCall,
+  toolRes: ClassifiedToolExecutionResult,
+  targetParam = extractTargetParam(parsedTool),
+): string | undefined {
+  if (toolRes.effectOutcome === 'uncertain') {
+    return redactSecrets(`${parsedTool.tool}: effetto esterno incerto dopo ${targetParam || 'esecuzione senza target'}`)
+  }
+  if (toolRes.outcome === 'success' && ['run_command', 'ensure_tool', 'git_commit'].includes(parsedTool.tool)) {
+    return redactSecrets(`${parsedTool.tool}: ${targetParam || 'effetto esterno confermato'}`)
+  }
+  return undefined
+}
+
 function distillOutput(toolRes: ClassifiedToolExecutionResult, isToolFailure: boolean): string {
   let distilled = toolRes.isTerminal ? DiagnosticOutputReducer.distillTerminalOutput(toolRes.outputForHistory, 2500) : toolRes.outputForHistory
   if (isToolFailure && toolRes.isTerminal) {
@@ -111,6 +126,7 @@ function distillOutput(toolRes: ClassifiedToolExecutionResult, isToolFailure: bo
 
 function emitChangeMetrics(ctx: ToolResultProcessingContext) {
   if (!ctx.toolRes.changeStats) return
+  ctx.recordChangedFile?.(ctx.toolRes.changeStats.filePath)
   const previous = ctx.sessionChangedFiles.get(ctx.toolRes.changeStats.filePath) || { additions: 0, deletions: 0 }
   ctx.sessionChangedFiles.set(ctx.toolRes.changeStats.filePath, {
     additions: previous.additions + ctx.toolRes.changeStats.additions,
@@ -177,6 +193,8 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
 
   const targetParam = extractTargetParam(parsedTool)
   const distilledOutput = distillOutput(toolRes, isToolFailure)
+  const nonRollbackEffect = describeNonRollbackEffect(parsedTool, toolRes, targetParam)
+  if (nonRollbackEffect) ctx.recordNonRollbackEffect?.(nonRollbackEffect)
   const isMutating =
     ['write_file', 'replace_file_content', 'multi_replace_file_content', 'delete_file', 'download_file'].includes(parsedTool.tool) &&
     !toolRes.noOpMutation
@@ -245,6 +263,9 @@ export async function runToolResultProcessing(ctx: ToolResultProcessingContext):
   // Runs on failure too: a generator that aborts halfway still leaves directories behind,
   // and that leftover is precisely what the agent needs to be told about.
   const commandTouchedPaths = recordCommandTouchedFiles(ctx, isToolFailure)
+  for (const filePath of [...commandTouchedPaths, ...resolvedMutationPaths(ctx, isToolFailure)]) {
+    ctx.recordChangedFile?.(filePath)
+  }
   emitWorkspaceFileVersions(ctx, [
     toolRes.changeStats?.filePath,
     ...commandTouchedPaths,

@@ -1,4 +1,4 @@
-import type { AgentCapabilityProfile, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
+import type { AgentCapabilityProfile, AgentCompletionEvidence, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
 
 export type AgentMode = 'ask' | 'guided' | 'auto'
 
@@ -69,6 +69,7 @@ export interface AgentTaskResult {
   summary: string
   error?: string
   completionStatus?: AgentCompletionStatus
+  evidence?: AgentCompletionEvidence
   runId?: string
   queuePosition?: number
 }

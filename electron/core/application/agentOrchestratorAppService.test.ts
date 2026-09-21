@@ -314,6 +314,9 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       )
 
       expect(res.summary).toContain('Effetto incerto')
+      expect(res.evidence?.nonRollbackEffects).toEqual([
+        'run_command: effetto esterno incerto dopo pytest failing_test.py',
+      ])
       expect(execute).toHaveBeenCalledOnce()
       expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(1)
     } finally {
@@ -479,6 +482,15 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     cancelActiveAgentTask(sessionId)
 
     await expect(resultPromise).resolves.toMatchObject({ success: false })
+    expect(mockWin.send).toHaveBeenCalledWith('agent:done', expect.objectContaining({
+      completionStatus: 'cancelled',
+      evidence: expect.objectContaining({
+        changedFiles: [],
+        cancellationStatus: 'rolled_back',
+        rollbackRestoredFiles: 0,
+        nonRollbackEffects: [],
+      }),
+    }))
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(false)
     expect(respondToApproval(sessionId, true)).toBe(false)
     expect(requestActiveAgentContextCompaction(sessionId)).toBe(false)

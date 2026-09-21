@@ -104,7 +104,7 @@ describe('application-owned agent closure', () => {
       command: 'npm test',
       evidenceLevel: 'behavioral',
     })
-    const { ctx, emitDone, emitLog, persistCurrentState, finalizeSession, setExecutionPhase } = makeContext()
+    const { ctx, emitDone, emitLog, persistCurrentState, finalizeSession, setExecutionPhase, filePath } = makeContext()
 
     const outcome = await closeAgentRunFromEvidence(ctx, {
       trigger: 'model_silence',
@@ -113,7 +113,17 @@ describe('application-owned agent closure', () => {
     })
 
     expect(outcome).toMatchObject({ outcome: 'closed', result: { success: true, completionStatus: 'verified' } })
-    expect(emitDone).toHaveBeenCalledWith(true, expect.stringContaining('VERIFICATO'), 'verified')
+    expect(emitDone).toHaveBeenCalledWith(
+      true,
+      expect.stringContaining('VERIFICATO'),
+      'verified',
+      expect.objectContaining({
+        changedFiles: [filePath],
+        cancellationStatus: 'not_cancelled',
+        verification: expect.objectContaining({ status: 'verified', command: 'npm test' }),
+        nonRollbackEffects: [],
+      }),
+    )
     expect(persistCurrentState).toHaveBeenCalledWith('model_silence', 'verified')
     expect(ctx.lastVerification).toMatchObject({ status: 'verified', command: 'npm test' })
     expect(emitLog).toHaveBeenCalledWith(

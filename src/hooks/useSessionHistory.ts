@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AgentChangeMetrics,
+  AgentCompletionEvidence,
+  AgentCompletionStatus,
   AgentExecutionMode,
   AgentPlan,
   CodingSession,
@@ -17,6 +19,8 @@ export interface ExecutedPromptResult {
   totalSteps: number
   metrics: AgentChangeMetrics
   summary?: string
+  completionStatus?: AgentCompletionStatus
+  evidence?: AgentCompletionEvidence
 }
 
 /** An untouched session is not written to disk, so browsing workspaces leaves no empty records. */
@@ -347,6 +351,8 @@ export function useSessionHistory(workspacePath: string | null) {
                 additions: result.metrics.additions,
                 deletions: result.metrics.deletions,
                 summary: result.summary,
+                completionStatus: result.completionStatus,
+                evidence: result.evidence,
               }
             : item
         )

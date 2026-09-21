@@ -24,6 +24,7 @@ complexity check -> [interview -> plan] -> collect_context -> propose_action
 - Impostazioni consente di conservare da 1 a 5 generazioni del log e di pulire subito file attivo e rotazioni. Anche il debug bundle omette i payload se l'opt-in non è attivo.
 - Comandi ed eventi portano `{ runId, conversationId, planRevisionId, workspaceId }`; il Renderer accetta solo la run attiva.
 - Timeout e annullamento condividono una `AbortSignal`; la chiusura blocca eventi successivi.
+- Al termine, la timeline mostra una scheda di evidenze persistita con file modificati, ultima verifica applicativa, stato del rollback in caso di annullamento ed eventuali effetti esterni non coperti dal journal.
 - Cronologia e checkpoint sono distinti. Si riprende solo la stessa run `IN_PROGRESS`; un nuovo prompt riparte con budget nuovi.
 - Il contesto editor è il solo `activeFile` (`path`, `content`, `versionHash`); `contextFiles` è rifiutato.
 - Coda e stati Ollama sono autorevoli: `queued`, `running`, `cancelling`, `failed`.

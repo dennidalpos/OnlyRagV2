@@ -26,6 +26,17 @@ export interface LegacySidecarDataMigration {
   conflicts: string[]
 }
 
+/** Uvicorn writes routine lifecycle and access records to stderr; classify by content instead of stream. */
+export function classifySidecarStderr(message: string): 'INFO' | 'WARN' | 'ERROR' {
+  const lines = message.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  if (lines.some((line) => /^(ERROR|CRITICAL):/i.test(line)) || /Traceback \(most recent call last\):/i.test(message)) {
+    return 'ERROR'
+  }
+  if (lines.some((line) => /^(WARNING|WARN):/i.test(line))) return 'WARN'
+  if (lines.length > 0 && lines.every((line) => /^INFO:/i.test(line))) return 'INFO'
+  return 'WARN'
+}
+
 /**
  * Older Electron builds passed `<userData>/data` as ONLYRAG_DATA_DIR while Python
  * appended its own `data` segment. Move that nested content back to the canonical
@@ -392,11 +403,12 @@ export class SidecarProcessManager {
 
     sidecarProcess.stderr?.on('data', (data) => {
       const msg = data.toString().trim()
-      this.writeSidecarLog('WARN', msg)
+      const level = classifySidecarStderr(msg)
+      this.writeSidecarLog(level, msg)
       if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200')) {
         return
       }
-      logger.log('WARN', 'SidecarProcess', msg)
+      logger.log(level, 'SidecarProcess', msg)
     })
 
     sidecarProcess.on('close', (code) => {

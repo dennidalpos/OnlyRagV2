@@ -76,6 +76,34 @@ function normalizePlan(raw: any, fallbackTimestamp: string): AgentPlan | null {
 
 function normalizeExecutedPrompt(raw: any, sessionId: string, fallbackTimestamp: string): ExecutedPrompt | null {
   if (!raw || typeof raw.prompt !== 'string') return null
+  const completionStatuses = ['verified', 'unverifiable', 'blocked', 'cancelled']
+  const cancellationStatuses = ['not_cancelled', 'rolled_back', 'residual_effects']
+  const verificationStatuses = ['verified', 'failed', 'unavailable']
+  const evidenceLevels = ['structural', 'behavioral']
+  const verification = raw.evidence?.verification
+  const evidence = raw.evidence && cancellationStatuses.includes(raw.evidence.cancellationStatus)
+    ? {
+        changedFiles: Array.isArray(raw.evidence.changedFiles)
+          ? raw.evidence.changedFiles.filter((value: unknown): value is string => typeof value === 'string')
+          : [],
+        verification: verification && verificationStatuses.includes(verification.status) && typeof verification.checkedAt === 'string'
+          ? {
+              status: verification.status,
+              checkedAt: toIsoTimestamp(verification.checkedAt, fallbackTimestamp),
+              command: typeof verification.command === 'string' ? verification.command : undefined,
+              evidenceLevel: evidenceLevels.includes(verification.evidenceLevel) ? verification.evidenceLevel : undefined,
+              detail: typeof verification.detail === 'string' ? verification.detail : undefined,
+            }
+          : undefined,
+        cancellationStatus: raw.evidence.cancellationStatus,
+        rollbackRestoredFiles: Number.isFinite(raw.evidence.rollbackRestoredFiles)
+          ? Math.max(0, Number(raw.evidence.rollbackRestoredFiles))
+          : undefined,
+        nonRollbackEffects: Array.isArray(raw.evidence.nonRollbackEffects)
+          ? raw.evidence.nonRollbackEffects.filter((value: unknown): value is string => typeof value === 'string')
+          : [],
+      }
+    : undefined
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : `${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     sessionId,
@@ -90,6 +118,8 @@ function normalizeExecutedPrompt(raw: any, sessionId: string, fallbackTimestamp:
     additions: Number.isFinite(raw.additions) ? Number(raw.additions) : 0,
     deletions: Number.isFinite(raw.deletions) ? Number(raw.deletions) : 0,
     summary: typeof raw.summary === 'string' ? raw.summary : undefined,
+    completionStatus: completionStatuses.includes(raw.completionStatus) ? raw.completionStatus : undefined,
+    evidence,
   }
 }
 

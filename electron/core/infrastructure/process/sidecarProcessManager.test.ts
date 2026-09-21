@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-import { migrateLegacyNestedSidecarData, SidecarProcessManager } from './sidecarProcessManager'
+import { classifySidecarStderr, migrateLegacyNestedSidecarData, SidecarProcessManager } from './sidecarProcessManager'
 
 const temporaryRoots: string[] = []
 
@@ -29,6 +29,21 @@ describe('SidecarProcessManager process state', () => {
     ;(manager as any).markProcessExited(1)
 
     expect(manager.getSidecarState()).toEqual({ status: 'offline', error: 'Process exited with code 1' })
+  })
+})
+
+describe('SidecarProcessManager stderr severity', () => {
+  it('keeps routine Uvicorn stderr lifecycle and access records informational', () => {
+    expect(classifySidecarStderr('INFO:     Started server process [1234]')).toBe('INFO')
+    expect(classifySidecarStderr('INFO:     Application startup complete.\nINFO:     Uvicorn running on http://127.0.0.1:8000')).toBe('INFO')
+    expect(classifySidecarStderr('INFO:     127.0.0.1:50123 - "GET /health HTTP/1.1" 200 OK')).toBe('INFO')
+  })
+
+  it('preserves warnings and promotes errors or tracebacks', () => {
+    expect(classifySidecarStderr('WARNING:  Retry scheduled')).toBe('WARN')
+    expect(classifySidecarStderr('ERROR:    Application startup failed.')).toBe('ERROR')
+    expect(classifySidecarStderr('Traceback (most recent call last):\n  File "main.py", line 1')).toBe('ERROR')
+    expect(classifySidecarStderr('unclassified diagnostic')).toBe('WARN')
   })
 })
 

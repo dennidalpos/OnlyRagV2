@@ -1,5 +1,5 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
-import type { AgentCompletionStatus, AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AgentExecutionMode, AppSettings, OllamaModelMetrics } from '../../../shared/types'
 import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryCompactor'
 import type { GoalDecompositionPlanner } from '../../../shared/domain/agent/planAndSolveGraph'
 import type { AgentRuntimeModeFsm } from '../domain/agent/agentRuntimeMode'
@@ -77,7 +77,7 @@ export interface AgentSessionBootstrap {
   maxStepsLabel: string
   isUnlimitedSteps: boolean
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
   emitStepUpdate: (statusText?: string) => void
   persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   buildSessionTracker: (summaryText?: string) => SessionDebtTracker
@@ -108,9 +108,9 @@ export async function bootstrapAgentSession(params: BootstrapParams): Promise<Ag
     }
   }
 
-  const emitDone = (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => {
+  const emitDone = (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => {
     if (isSessionActive() && session.targetWindow && !session.targetWindow.isDestroyed()) {
-      session.targetWindow.webContents.send('agent:done', { ...session.identity, success, summary, completionStatus })
+      session.targetWindow.webContents.send('agent:done', { ...session.identity, success, summary, completionStatus, evidence })
     }
   }
 

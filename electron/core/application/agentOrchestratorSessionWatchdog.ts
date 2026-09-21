@@ -1,4 +1,4 @@
-import type { AgentCompletionStatus, AppSettings } from '../../../shared/types'
+import type { AgentCompletionEvidence, AgentCompletionStatus, AppSettings } from '../../../shared/types'
 import type { AgentSession, ApprovalResponse } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { agentToolExecutorService } from './agentToolExecutorService'
@@ -19,7 +19,7 @@ export interface SessionWatchdogParams {
   sessionId: string
   settings: AppSettings
   emitLog: EmitLog
-  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus) => void
+  emitDone: (success: boolean, summary: string, completionStatus?: AgentCompletionStatus, evidence?: AgentCompletionEvidence) => void
   persistCurrentState: (terminationReason?: AgentSessionTerminationReason, completionStatus?: AgentCompletionStatus) => Promise<void>
   stepCountBox: { value: number }
   isSessionActive: () => boolean

@@ -1,7 +1,3 @@
 {
-  "todos": [
-    "[P2] Push the bundled vocabulary manifest and packs from local master to origin/master, then verify the raw.githubusercontent.com URLs: offline startup is repaired locally, but the remote URLs will keep returning HTTP 404 until publication.",
-    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back.",
-    "[P3] Normalize packaged Sidecar log severity so Uvicorn informational stderr lines are not surfaced as warnings."
-  ]
+  "todos": []
 }

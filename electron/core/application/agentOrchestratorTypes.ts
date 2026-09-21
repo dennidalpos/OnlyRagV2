@@ -40,6 +40,10 @@ export interface AgentSession {
   ollamaGenerationTelemetry?: OllamaGenerationTelemetry[]
   /** Last project check, including an explicit unavailable state. */
   lastVerification?: AgentVerificationEvidence
+  /** Files observed as changed during this run, retained for cancellation evidence. */
+  changedFiles?: string[]
+  /** Effects that the workspace journal cannot guarantee to undo. */
+  nonRollbackEffects?: string[]
   /** User-requested aggressive prompt compaction; the Renderer audit timeline is unaffected. */
   forceContextCompaction?: boolean
   /** Isolated workspace owned by this run; discarded after cancellation or completion. */

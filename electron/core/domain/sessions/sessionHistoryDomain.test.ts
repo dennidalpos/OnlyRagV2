@@ -62,6 +62,18 @@ describe('SessionHistoryDomain Unit Tests', () => {
           filesTouched: 3,
           additions: 40,
           deletions: 7,
+          completionStatus: 'verified',
+          evidence: {
+            changedFiles: ['src/app.ts'],
+            verification: {
+              status: 'verified',
+              checkedAt: '2026-03-01T08:29:00.000Z',
+              command: 'npm test',
+              evidenceLevel: 'behavioral',
+            },
+            cancellationStatus: 'not_cancelled',
+            nonRollbackEffects: [],
+          },
         },
       ],
     })
@@ -71,6 +83,12 @@ describe('SessionHistoryDomain Unit Tests', () => {
     expect(normalized!.executedPrompts).toHaveLength(1)
     expect(normalized!.executedPrompts[0].outcome).toBe('success')
     expect(normalized!.executedPrompts[0].additions).toBe(40)
+    expect(normalized!.executedPrompts[0].completionStatus).toBe('verified')
+    expect(normalized!.executedPrompts[0].evidence).toMatchObject({
+      changedFiles: ['src/app.ts'],
+      cancellationStatus: 'not_cancelled',
+      verification: { status: 'verified', command: 'npm test' },
+    })
   })
 
   it('keeps only structured v2 plans and does not migrate legacy plan text', () => {

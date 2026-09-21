@@ -20,6 +20,7 @@ import {
   ArrowDownCircle,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
+import { SystemRamBreakdown } from '../common/SystemRamBreakdown'
 
 interface DiagnosticsDrawerProps {
   isOpen: boolean
@@ -117,7 +118,7 @@ Generated at: ${diagnostics.timestamp}
 ## System Overview
 - **Platform:** ${diagnostics.system.platform} (${diagnostics.system.arch})
 - **CPU:** ${diagnostics.system.cpuModel} (${diagnostics.system.cpusCount} cores)
-- **Memory:** ${diagnostics.memory.usedRAMGB} GB / ${diagnostics.memory.totalRAMGB} GB (${diagnostics.memory.ramUsagePercent}% used)
+- **Memory:** available ${diagnostics.memory.freeRAMGB} GB; used ${diagnostics.memory.usedRAMGB} GB (${diagnostics.memory.ramUsagePercent}%); total ${diagnostics.memory.totalRAMGB} GB
 - **Status:** ${(diagnostics.requirements?.overallStatus || 'UNKNOWN').toUpperCase()}
 
 ## Hardware & Acceleration
@@ -299,12 +300,10 @@ ${logs.slice(-200).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${
                 <span className="font-semibold text-slate-300">{t('diagnostics.ramTitle')}</span>
                 <HardDrive className="w-3.5 h-3.5 text-sky-400" />
               </div>
-              <div className="text-xs font-bold text-slate-100">
-                {diagnostics.memory.usedRAMGB} / {diagnostics.memory.totalRAMGB} GB
-              </div>
+              <SystemRamBreakdown memory={diagnostics.memory} />
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                  <span>Uso</span>
+                  <span>{t('diagnostics.ramStatus')}</span>
                   <span className="text-sky-300">{diagnostics.memory.ramUsagePercent}%</span>
                 </div>
                 <div className="w-full bg-slate-950 h-1 rounded-full overflow-hidden">

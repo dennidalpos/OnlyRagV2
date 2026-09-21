@@ -15,6 +15,6 @@ describe('inspectStructuredCommand', () => {
 
   it('requires approval for a confined file mutation and destructive git action', () => {
     expect(inspectStructuredCommand('Set-Content -Path src\\state.txt -Value ready', workspace)).toEqual({ allowed: true, requiresApproval: true })
-    expect(inspectStructuredCommand('git reset --hard HEAD', workspace)).toEqual({ allowed: true, requiresApproval: true })
+    expect(inspectStructuredCommand('git reset --hard HEAD', workspace)).toMatchObject({ allowed: false, requiresApproval: false })
   })
 })

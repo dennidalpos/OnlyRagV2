@@ -61,6 +61,21 @@ export function getTotalLines(content: string): number {
   return content ? content.split('\n').length : 1
 }
 
+export async function runDocumentDeletion(
+  id: string,
+  onFailure: (message?: string) => void,
+  onSuccess: () => void,
+  deleteDocument: (docId: string) => Promise<{ success: boolean; error?: string }> = apiService.deleteIngestedDocument,
+): Promise<boolean> {
+  const result = await deleteDocument(id)
+  if (!result.success) {
+    onFailure(result.error)
+    return false
+  }
+  onSuccess()
+  return true
+}
+
 export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsData | null) {
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics || null))
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings?.ollamaHost)
@@ -321,7 +336,12 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
 
   const handleDeleteDoc = async (id: string, filename?: string) => {
     try {
-      await apiService.deleteIngestedDocument(id)
+      const deleted = await runDocumentDeletion(
+        id,
+        (message) => setUploadError(t('ingestion.deleteError', { message: message || t('ingestion.deleteUnknownError') })),
+        () => setUploadError(null),
+      )
+      if (!deleted) return
       notifyDocumentsChanged()
       if (selectedDoc?.id === id) {
         const remaining = documents.filter((d) => d.id !== id)

@@ -16,6 +16,18 @@ import {
 } from '../domain/workspaceContract'
 
 export function registerWorkspaceIpcHandlers() {
+  ipcMain.handle('workspace:get-standalone-scratch', async () => {
+    return workspaceAppService.getStandaloneScratchWorkspace()
+  })
+
+  ipcMain.handle('workspace:export-standalone-scratch', async (_event: unknown, destinationDirectory: string) => {
+    return workspaceAppService.exportStandaloneScratchWorkspace(destinationDirectory)
+  })
+
+  ipcMain.handle('workspace:clear-standalone-scratch', async () => {
+    return workspaceAppService.clearStandaloneScratchWorkspace()
+  })
+
   ipcMain.handle('workspace:list-files', async (_event: unknown, targetPath?: string) => {
     const payload = workspaceListFilesPayloadSchema.parse({ targetPath })
     return workspaceAppService.listFiles(payload.targetPath)

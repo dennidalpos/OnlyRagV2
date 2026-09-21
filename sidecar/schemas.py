@@ -17,6 +17,7 @@ class IngestResponse(BaseModel):
     extracted_markdown: str
     status: str
     ingested_at: str
+    file_type: str
     used_fallback_embeddings: Optional[bool] = False
 
 

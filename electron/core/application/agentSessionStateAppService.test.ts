@@ -26,6 +26,6 @@ describe('AgentSessionStateAppService', () => {
     vi.mocked(agentSessionStateRepository.seedPlanMilestones).mockResolvedValue(true)
 
     await agentSessionStateAppService.seedPlanMilestones('session-1', '/repo', milestones, 'Create app')
-    expect(agentSessionStateRepository.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Create app')
+    expect(agentSessionStateRepository.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Create app', undefined)
   })
 })

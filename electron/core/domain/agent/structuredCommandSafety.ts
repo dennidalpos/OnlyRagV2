@@ -113,11 +113,16 @@ function inspectCommand(command: ParsedCommand, workspacePath?: string | null): 
   if (name !== 'git') return { allowed: true, requiresApproval: false }
   const lowerArgs = args.map((arg) => arg.toLowerCase())
   const action = lowerArgs[0]
-  if (action === 'reset' && lowerArgs.includes('--hard')) return { allowed: true, requiresApproval: true }
-  if (action === 'clean' && lowerArgs.some((arg) => arg.includes('f'))) return { allowed: true, requiresApproval: true }
-  if (action === 'restore' || (action === 'checkout' && lowerArgs.includes('--'))) return { allowed: true, requiresApproval: true }
-  if (action === 'push' && lowerArgs.some((arg) => arg === '--force' || arg === '-f')) return { allowed: true, requiresApproval: true }
-  if (action === 'branch' && lowerArgs.includes('-d')) return { allowed: true, requiresApproval: true }
+  const rejectDestructiveGit = (operation: string): StructuredCommandSafetyResult => ({
+    allowed: false,
+    requiresApproval: false,
+    reason: `Destructive command pattern detected: ${operation}.`,
+  })
+  if (action === 'reset' && lowerArgs.includes('--hard')) return rejectDestructiveGit('git reset --hard')
+  if (action === 'clean' && lowerArgs.some((arg) => arg.includes('f'))) return rejectDestructiveGit('git clean -f')
+  if (action === 'restore' || (action === 'checkout' && lowerArgs.includes('--'))) return rejectDestructiveGit(`git ${action}`)
+  if (action === 'push' && lowerArgs.some((arg) => arg === '--force' || arg === '-f')) return rejectDestructiveGit('git push --force')
+  if (action === 'branch' && lowerArgs.includes('-d')) return rejectDestructiveGit('git branch -D')
   return { allowed: true, requiresApproval: false }
 }
 

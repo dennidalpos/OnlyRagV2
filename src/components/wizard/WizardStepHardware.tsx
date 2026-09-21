@@ -1,5 +1,5 @@
 import React from 'react'
-import { Sparkles, Zap, Download, Cpu } from 'lucide-react'
+import { Sparkles, Zap, Download, Cpu, RefreshCw, Settings } from 'lucide-react'
 import { DiagnosticsData } from '../../types'
 import { HardwareRecommendations } from '../../services/hardwareRecommendationEngine'
 import { useTranslation } from '../../i18n'
@@ -11,6 +11,10 @@ export interface WizardStepHardwareProps {
   isInstallingOllama: boolean
   isInitialSetup?: boolean
   onLaunchOrInstallOllama: () => void
+  isRemoteMode?: boolean
+  remoteHost?: string
+  onRetryRemote?: () => void
+  onConfigureRemote?: () => void
   onAutoApply: () => void
 }
 
@@ -21,6 +25,10 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
   isInstallingOllama,
   isInitialSetup,
   onLaunchOrInstallOllama,
+  isRemoteMode = false,
+  remoteHost,
+  onRetryRemote,
+  onConfigureRemote,
   onAutoApply,
 }) => {
   const { t } = useTranslation()
@@ -100,12 +108,14 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
             <p className="text-[11px] text-slate-400 mt-0.5">
               {diagnostics?.ollama.status === 'online'
                 ? `${downloadedModels.length} ${t('settings.installedLocalModels')}`
-                : t('sidebar.installLaunchOllama')}
+                : isRemoteMode
+                  ? t('sidebar.remoteOllamaOffline', { host: remoteHost || '-' })
+                  : t('sidebar.installLaunchOllama')}
             </p>
           </div>
         </div>
 
-        {diagnostics?.ollama.status !== 'online' && (
+        {diagnostics?.ollama.status !== 'online' && !isRemoteMode && (
           <button
             type="button"
             onClick={onLaunchOrInstallOllama}
@@ -115,6 +125,26 @@ export const WizardStepHardware: React.FC<WizardStepHardwareProps> = ({
             <Download className="w-3.5 h-3.5" />{' '}
             {isInstallingOllama ? t('common.loading') : t('sidebar.installLaunchOllama')}
           </button>
+        )}
+        {diagnostics?.ollama.status !== 'online' && isRemoteMode && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onRetryRemote}
+              className="px-3 py-1.5 bg-sky-700 hover:bg-sky-600 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> {t('sidebar.retryRemoteOllama')}
+            </button>
+            {onConfigureRemote && (
+              <button
+                type="button"
+                onClick={onConfigureRemote}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-xs rounded-xl flex items-center gap-1.5"
+              >
+                <Settings className="w-3.5 h-3.5" /> {t('sidebar.configureRemoteOllama')}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

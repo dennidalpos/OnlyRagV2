@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Server, CheckCircle2, XCircle, Loader2, HardDrive, Wifi, Radio } from 'lucide-react'
 import { AppSettings } from '../../types'
 import { apiService } from '../../services/api'
+import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 
 interface OllamaServerConfigProps {
   settings: AppSettings
@@ -14,7 +15,7 @@ export const OllamaServerConfig: React.FC<OllamaServerConfigProps> = ({
   onUpdateSettings,
   onRefreshDiagnostics,
 }) => {
-  const currentMode = settings.ollamaMode || (settings.ollamaHost && !settings.ollamaHost.includes('127.0.0.1') && !settings.ollamaHost.includes('localhost') ? 'remote' : 'local')
+  const currentMode = isRemoteOllamaMode(settings) ? 'remote' : 'local'
   const [remoteUrl, setRemoteUrl] = useState(settings.ollamaHost && settings.ollamaHost !== 'http://127.0.0.1:11434' ? settings.ollamaHost : 'http://192.168.1.100:11434')
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; modelsCount?: number } | null>(null)

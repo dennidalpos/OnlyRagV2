@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { sessionHistoryRepository } from './sessionHistoryRepository'
+import { SessionHistoryRepository, sessionHistoryRepository } from './sessionHistoryRepository'
 import type { CodingSession } from '../../../../shared/types'
 
 function buildSession(id: string, workspacePath: string | null, overrides: Partial<CodingSession> = {}): CodingSession {
@@ -158,5 +158,20 @@ describe('SessionHistoryRepository Unit Tests', () => {
 
     // Cleanup standalone test session
     await sessionHistoryRepository.deleteSession('session-standalone-keep', null)
+  })
+
+  it('migrates legacy standalone sessions into the persistent scratch workspace', async () => {
+    const fallbackDir = path.join(tempDir, 'fallback')
+    const scratchPath = path.join(tempDir, 'agent-scratch')
+    fs.mkdirSync(scratchPath)
+    const repository = new SessionHistoryRepository(fallbackDir)
+    await repository.saveSession(buildSession('legacy-standalone', null, { title: 'Chat precedente' }))
+
+    expect(await repository.migrateStandaloneSessions(scratchPath)).toBe(1)
+    expect(await repository.listSessions(null)).toEqual([])
+    expect(await repository.listSessions(scratchPath)).toEqual([
+      expect.objectContaining({ id: 'legacy-standalone', workspacePath: scratchPath, title: 'Chat precedente' }),
+    ])
+    expect(await repository.migrateStandaloneSessions(scratchPath)).toBe(0)
   })
 })

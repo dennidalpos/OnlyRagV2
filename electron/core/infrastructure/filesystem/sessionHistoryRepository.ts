@@ -17,6 +17,15 @@ interface SessionHistoryStore {
 /** Single filesystem store for the coding session history (sessions and their ExecutedPrompt records). */
 export class SessionHistoryRepository {
   private mutationTail: Promise<void> = Promise.resolve()
+  private readonly customFallbackDir?: string
+
+  constructor(customFallbackDir?: string) {
+    this.customFallbackDir = customFallbackDir
+  }
+
+  private getFallbackDir(): string {
+    return this.customFallbackDir || path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+  }
 
   private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
     const previous = this.mutationTail
@@ -44,7 +53,7 @@ export class SessionHistoryRepository {
       if (fs.existsSync(stateDir)) return stateDir
     }
 
-    const fallbackDir = path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+    const fallbackDir = this.getFallbackDir()
     if (!fs.existsSync(fallbackDir)) {
       try {
         fs.mkdirSync(fallbackDir, { recursive: true })
@@ -76,7 +85,7 @@ export class SessionHistoryRepository {
     if (workspacePath && fs.existsSync(workspacePath)) {
       dirs.push(path.join(workspacePath, '.onlyrag', 'sessions'))
     }
-    dirs.push(path.join(os.homedir(), '.onlyrag_v2', 'sessions'))
+    dirs.push(this.getFallbackDir())
     return dirs
   }
 
@@ -119,6 +128,31 @@ export class SessionHistoryRepository {
     return sortSessionsByRecency(await this.readStore(workspacePath))
   }
 
+  public async migrateStandaloneSessions(workspacePath: string): Promise<number> {
+    return this.runExclusive(async () => {
+      const fallbackDir = this.getFallbackDir()
+      const legacySessions = await this.readStoreAtDir(fallbackDir)
+      const standaloneSessions = legacySessions.filter((session) => !session.workspacePath)
+      if (standaloneSessions.length === 0) return 0
+
+      const targetDir = this.getStorageDir(workspacePath)
+      const targetSessions = await this.readStoreAtDir(targetDir)
+      const targetIds = new Set(targetSessions.map((session) => session.id))
+      const migrated = standaloneSessions
+        .filter((session) => !targetIds.has(session.id))
+        .map((session) => ({ ...session, workspacePath }))
+      const targetSaved = await this.writeStoreAtDir(targetDir, sortSessionsByRecency([...targetSessions, ...migrated]))
+      if (!targetSaved) return 0
+
+      const standaloneIds = new Set(standaloneSessions.map((session) => session.id))
+      const fallbackSaved = await this.writeStoreAtDir(
+        fallbackDir,
+        legacySessions.filter((session) => !standaloneIds.has(session.id)),
+      )
+      return fallbackSaved ? migrated.length : 0
+    })
+  }
+
   public async saveSession(session: CodingSession): Promise<CodingSession | null> {
     const normalized = normalizeSession(session)
     if (!normalized) return null
@@ -156,7 +190,7 @@ export class SessionHistoryRepository {
         }
       }
 
-      const fallbackDir = path.join(os.homedir(), '.onlyrag_v2', 'sessions')
+      const fallbackDir = this.getFallbackDir()
       if (fs.existsSync(fallbackDir)) {
         const fallbackSessions = await this.readStoreAtDir(fallbackDir)
         if (fallbackSessions.length > 0) {

@@ -79,6 +79,9 @@ export interface TranslationSchema {
     systemRam: string
     cpuOnly: string
     installLaunchOllama: string
+    retryRemoteOllama: string
+    configureRemoteOllama: string
+    remoteOllamaOffline: string
     logsConsole: string
     switchLanguage: string
     contributionsAndInfo: string
@@ -375,6 +378,8 @@ export interface TranslationSchema {
     date: string
     fileSize: string
     deleteConfirm: string
+    deleteError: string
+    deleteUnknownError: string
     searchPlaceholder: string
     noDocuments: string
     vectorSearch: string

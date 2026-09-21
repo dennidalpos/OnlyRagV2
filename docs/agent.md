@@ -13,6 +13,7 @@ plan/interview -> plan -> collect_context -> propose_action -> apply_action
 - `AgentPlan` strutturato (`formatVersion: 2`) è eseguibile; il Markdown è solo una vista.
 - La policy limita i tool per turno e gate/executor ricontrollano la stessa allowlist.
 - Una run di progetto lavora in un worktree o copia temporanea. File, shell, download e package manager non ricevono il path utente.
+- Lo standalone usa `userData/agent-scratch`: è persistente tra sessioni, visibile nell'esplora-file e dispone di Mostra, Esporta e Svuota. Le run standalone operano direttamente su questo workspace dedicato; al primo accesso la cronologia standalone precedente viene migrata nel nuovo store.
 - Prima dell'esecuzione vengono controllati Ollama, tag esatto, tool calling, contesto minimo, scrivibilità e confinamento. Toolchain assente è un avviso.
 - Runtime e checkpoint sono legati alla run; `num_ctx` conserva il limite hardware quando il modello non ne dichiara uno verificato.
 - Comandi ed eventi portano `{ runId, conversationId, planRevisionId, workspaceId }`; il Renderer accetta solo la run attiva.
@@ -27,6 +28,7 @@ plan/interview -> plan -> collect_context -> propose_action -> apply_action
 - Le scritture esistenti usano versione letta e compare-and-swap. Le modifiche concorrenti richiedono ricarica, merge o sovrascrittura esplicita.
 - Pubblicazione e commit richiedono consenso. Si pubblicano solo path ancora uguali al baseline e il commit include solo path approvati.
 - Installazioni, shell e rete sono confinate e autorizzate; symlink/junction fuori workspace e comandi non sicuri sono bloccati.
+- I comandi Git distruttivi (`reset --hard`, `clean -f`, ripristino/checkout globale, force-push e cancellazione branch) sono bloccati, non delegati alla sola approvazione.
 - Una milestone richiede deliverable ed evidenza coerenti; un esito incerto non viene ritentato automaticamente.
 
 Gli esiti tool sono strutturati (`success`, `failure`, `rejected`, `blocked`); errori incerti non vengono ripetuti automaticamente. La prova comportamentale corrente è descritta in [`verification.md`](./verification.md).

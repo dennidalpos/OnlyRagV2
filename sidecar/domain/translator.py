@@ -536,7 +536,8 @@ def translate_docx_inplace(
         num_chunks=int(doc_record.get("num_chunks", 1)),
         extracted_markdown=str(doc_record.get("extracted_markdown", "")),
         status=str(doc_record.get("status", "indexed")),
-        ingested_at=str(doc_record.get("ingested_at", ""))
+        ingested_at=str(doc_record.get("ingested_at", "")),
+        file_type="docx"
     )
 
 
@@ -909,7 +910,8 @@ def translate_pdf_inplace_fine(
         num_chunks=int(doc_record.get("num_chunks", 1)),
         extracted_markdown=str(doc_record.get("extracted_markdown", "")),
         status=str(doc_record.get("status", "indexed")),
-        ingested_at=str(doc_record.get("ingested_at", ""))
+        ingested_at=str(doc_record.get("ingested_at", "")),
+        file_type="pdf"
     )
 
 
@@ -966,7 +968,7 @@ async def translate_document_stream_generator(
                 "extracted_markdown": str(doc_record.get("extracted_markdown", "")),
                 "status": "translated",
                 "ingested_at": str(doc_record.get("ingested_at", "")),
-                "fileType": "docx"
+                "file_type": "docx"
             }
         }) + "\n"
         return
@@ -1046,7 +1048,7 @@ async def translate_document_stream_generator(
             "extracted_markdown": str(doc_record.get("extracted_markdown", "")),
             "status": "translated",
             "ingested_at": str(doc_record.get("ingested_at", "")),
-            "fileType": "pdf"
+            "file_type": "pdf"
         }
     }) + "\n"
 

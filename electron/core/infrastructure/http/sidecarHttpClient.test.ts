@@ -230,4 +230,21 @@ describe('SidecarHttpClient health failures', () => {
       error: 'Health probe timed out after 25ms',
     })
   })
+
+  it('returns an actionable document deletion error from the sidecar', async () => {
+    const unavailable = await createMockServer([{
+      method: 'DELETE',
+      path: '/documents/doc-locked',
+      handler: (_req, res) => {
+        res.writeHead(409, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ detail: 'Documento in uso. Riprova al termine della traduzione.' }))
+      },
+    }])
+    servers.push(unavailable.server)
+
+    await expect(new SidecarHttpClient(unavailable.baseUrl).deleteDocument('doc-locked')).resolves.toEqual({
+      success: false,
+      error: 'Documento in uso. Riprova al termine della traduzione.',
+    })
+  })
 })

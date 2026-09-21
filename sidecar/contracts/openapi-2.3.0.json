@@ -554,6 +554,10 @@
             "title": "File Size",
             "type": "integer"
           },
+          "file_type": {
+            "title": "File Type",
+            "type": "string"
+          },
           "filename": {
             "title": "Filename",
             "type": "string"
@@ -599,7 +603,8 @@
           "num_chunks",
           "extracted_markdown",
           "status",
-          "ingested_at"
+          "ingested_at",
+          "file_type"
         ],
         "title": "IngestResponse",
         "type": "object"

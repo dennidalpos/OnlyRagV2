@@ -27,5 +27,6 @@ Per il Sidecar: `npm run test:sidecar`. Per tipi e confini: `npm run typecheck` 
 - L'offload CPU può aumentare la latenza per modelli oltre la VRAM disponibile.
 - Le prove su Ollama dipendono da versione, modelli installati, hardware e stato del daemon.
 - Una verifica non disponibile non equivale a una verifica superata; il sistema conserva esiti distinti.
+- Al ripristino di una sessione, le prove persistite vengono rivalidate. Un `verificationCommand` che modifica il workspace viene rifiutato senza essere eseguito e la milestone non passa a `verified`.
 
 Per i contratti da verificare consultare [`api-ipc.md`](./api-ipc.md), [`api-rest.md`](./api-rest.md) e [`PROJECT_STATUS.json`](../PROJECT_STATUS.json).

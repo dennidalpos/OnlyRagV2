@@ -50,7 +50,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
 
   const loadWorkspaceFiles = useCallback(
     async (targetPath?: string | null) => {
-      if (isStandaloneMode || !targetPath) {
+      if (!targetPath) {
         resetWorkspaceFiles()
         return
       }
@@ -61,7 +61,7 @@ export function useWorkspaceFiles({ workspacePath, isStandaloneMode, onFileNotic
         logger.warn('useWorkspaceFiles', `Error loading workspace files: ${err?.message}`)
       }
     },
-    [isStandaloneMode, resetWorkspaceFiles]
+    [resetWorkspaceFiles]
   )
 
   const handleOpenFile = useCallback(async (file: WorkspaceFile) => {

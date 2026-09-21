@@ -579,7 +579,7 @@ export interface IElectronAPI {
   translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
-  deleteIngestedDocument: (docId: string) => Promise<{ success: boolean }>
+  deleteIngestedDocument: (docId: string) => Promise<{ success: boolean; error?: string }>
   searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => Promise<VectorSearchResult[]>
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => Promise<{ success: boolean; message?: string; error?: string }>
   generateOllamaStream: (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any, host?: string, operationId?: string, onDone?: () => void) => Promise<{ success: boolean; error?: string }>
@@ -588,6 +588,9 @@ export interface IElectronAPI {
   cancelTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
   cleanTempResiduals: () => Promise<{ success: boolean; cleanedCount: number; bytesFreed: number }>
   listWorkspaceFiles: (dirPath?: string) => Promise<WorkspaceFile[]>
+  getStandaloneScratchWorkspace?: () => Promise<{ path: string }>
+  exportStandaloneScratchWorkspace?: (destinationDirectory: string) => Promise<{ success: boolean; path?: string; error?: string }>
+  clearStandaloneScratchWorkspace?: () => Promise<{ success: boolean; removedEntries: number; error?: string }>
   getProjectMap: (dirPath: string) => Promise<ProjectMapItem[]>
   readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
   writeWorkspaceFile: (filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) => Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }>

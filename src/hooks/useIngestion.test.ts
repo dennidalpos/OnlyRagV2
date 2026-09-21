@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getPageLineNumber, getTotalLines, resolveVisionOcrPrompt } from './useIngestion'
+import { getPageLineNumber, getTotalLines, resolveVisionOcrPrompt, runDocumentDeletion } from './useIngestion'
 import { DEFAULT_IMAGE_ANALYSIS_PROMPT } from '../constants/promptConfig'
 import type { AppSettings } from '../types'
 
@@ -78,5 +78,37 @@ describe('useIngestion vision OCR engine gate', () => {
       customPromptOverrides: { 'images:analysis': 'Transcribe page {{currentPage}} verbatim.' },
     } as unknown as AppSettings
     expect(resolveVisionOcrPrompt(settings)).toBe('Transcribe page {{currentPage}} verbatim.')
+  })
+})
+
+describe('document deletion state guard', () => {
+  it('does not authorize renderer mutation when backend deletion fails', async () => {
+    let successCalls = 0
+    let failureMessage = ''
+
+    const deleted = await runDocumentDeletion(
+      'doc-locked',
+      (message) => { failureMessage = message || '' },
+      () => { successCalls += 1 },
+      async () => ({ success: false, error: 'Documento in uso.' }),
+    )
+
+    expect(deleted).toBe(false)
+    expect(successCalls).toBe(0)
+    expect(failureMessage).toBe('Documento in uso.')
+  })
+
+  it('authorizes renderer mutation only after confirmed deletion', async () => {
+    let successCalls = 0
+
+    const deleted = await runDocumentDeletion(
+      'doc-ok',
+      () => {},
+      () => { successCalls += 1 },
+      async () => ({ success: true }),
+    )
+
+    expect(deleted).toBe(true)
+    expect(successCalls).toBe(1)
   })
 })

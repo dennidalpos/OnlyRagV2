@@ -1,14 +1,9 @@
 {
   "todos": [
-    "[P1] Make standalone Agent Coding use a visible first-class scratch workspace with reveal, export, persistence, and cleanup controls.",
     "[P1] Add Electron end-to-end scenarios for project and session switching, queued prompts, cancellation in every phase, crash resume, dirty Git, stale editor saves, missing models, standalone artifacts, spaced paths, and symlink escapes.",
     "[P1] Simplify Agent Coding into read-only Ask, default Guided review, and trusted local Auto modes; make planning an automatic stage for complex work and use one primary action.",
-    "[P2] Respect document deletion failures before mutating renderer state and surface an actionable error.",
-    "[P2] Preserve the actual imported file type across ingest, update, and list responses so DOCX translation eligibility stays consistent.",
-    "[P2] Show remote Ollama recovery actions in remote mode instead of offering local installation or launch.",
     "[P2] Replace the estimated Agent Coding context meter with the backend prompt budget breakdown and make Compact reduce backend context without deleting the visible audit timeline.",
     "[P2] Default Agent Coding debug logs to metadata only; require opt-in for prompt and source payloads and add retention and clear controls.",
-    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back.",
-    "[P2] Residual: stabilize restored-plan verification in agentOrchestratorAppService.test.ts; the test \"never executes a verificationCommand that writes the workspace, even from a restored session\" finds no persisted m-1 milestone."
+    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back."
   ]
 }

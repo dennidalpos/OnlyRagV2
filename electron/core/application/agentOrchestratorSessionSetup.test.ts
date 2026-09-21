@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, it, expect, afterEach } from 'vitest'
 import { resolveWorkspacePath, buildDefaultAgentSettings, buildAttachedContextBlock, buildPinnedFilesContextBlock } from './agentOrchestratorSessionSetup'
+import { StandaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 
 describe('agentOrchestratorSessionSetup', () => {
   const createdDirs: string[] = []
@@ -27,14 +28,16 @@ describe('agentOrchestratorSessionSetup', () => {
     expect(fs.existsSync(tempDir)).toBe(true)
   })
 
-  it('should allocate an isolated temp session workspace when in standalone mode or without workspacePath', () => {
-    const sessionId = `test-session-${Date.now()}`
-    const resolved = resolveWorkspacePath({ workspacePath: null, isStandaloneMode: true, sessionId } as any)
+  it('should reuse one persistent scratch workspace across standalone sessions', () => {
+    const stateDir = path.join(os.tmpdir(), `test_scratch_${Date.now()}`)
+    createdDirs.push(stateDir)
+    const scratch = new StandaloneScratchWorkspace(stateDir)
+    const resolved = resolveWorkspacePath({ workspacePath: null, isStandaloneMode: true, sessionId: 'session-one' }, scratch)
+    const second = resolveWorkspacePath({ workspacePath: null, isStandaloneMode: true, sessionId: 'session-two' }, scratch)
     expect(resolved).not.toBeNull()
-    expect(resolved).toContain('onlyrag_sessions')
-    expect(resolved).toContain(sessionId)
+    expect(resolved).toBe(second)
+    expect(resolved).toBe(path.join(stateDir, 'agent-scratch'))
     expect(fs.existsSync(resolved!)).toBe(true)
-    if (resolved) createdDirs.push(resolved)
   })
 
   it('should return null when workspacePath is inside protected system directory and not standalone', () => {
@@ -47,17 +50,19 @@ describe('agentOrchestratorSessionSetup', () => {
     expect(resolved).toBeNull()
   })
 
-  it('should fallback to temp workspace when in standalone mode even with protected or empty workspace', () => {
+  it('should fallback to the persistent scratch workspace in standalone mode with a protected workspace', () => {
     const sessionId = `sys-standalone-${Date.now()}`
+    const stateDir = path.join(os.tmpdir(), `test_scratch_protected_${Date.now()}`)
+    createdDirs.push(stateDir)
+    const scratch = new StandaloneScratchWorkspace(stateDir)
     const resolved = resolveWorkspacePath({
       workspacePath: 'C:\\Program Files\\OnlyRag V2',
       isStandaloneMode: true,
       sessionId,
-    } as any)
+    }, scratch)
     expect(resolved).not.toBeNull()
-    expect(resolved).toContain('onlyrag_sessions')
+    expect(resolved).toBe(path.join(stateDir, 'agent-scratch'))
     expect(fs.existsSync(resolved!)).toBe(true)
-    if (resolved) createdDirs.push(resolved)
   })
 
   it('should build default agent settings properly', () => {

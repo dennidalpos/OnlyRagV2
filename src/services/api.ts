@@ -138,18 +138,18 @@ export const apiService = {
     }
   },
 
-  async deleteIngestedDocument(docId: string): Promise<boolean> {
-    if (!window.electronAPI) return false
+  async deleteIngestedDocument(docId: string): Promise<{ success: boolean; error?: string }> {
+    if (!window.electronAPI) return { success: false, error: 'API Electron non disponibile.' }
     try {
       logger.info('ApiService:Ingestion', `Deleting document ${docId} from LanceDB`)
       const res = await window.electronAPI.deleteIngestedDocument(docId)
       if (res.success) {
         window.dispatchEvent(new CustomEvent('onlyrag:documents-changed'))
       }
-      return res.success
+      return res
     } catch (err: any) {
       logger.error('ApiService:Ingestion', `Failed deleting document ${docId}: ${err.message}`)
-      return false
+      return { success: false, error: err.message }
     }
   },
 

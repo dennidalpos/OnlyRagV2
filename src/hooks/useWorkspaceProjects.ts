@@ -33,11 +33,13 @@ async function migrateLegacyProjects(): Promise<void> {
 
 /** Saved project folders and the workspace root the Coding Agent Studio is attached to, including standalone (no-workspace) mode. */
 export function useWorkspaceProjects(settings?: AppSettings) {
+  const startsStandalone = settings?.noWorkspaceMode || false
   const [projects, setProjects] = useState<WorkspaceProject[]>([])
   const [workspacePath, setWorkspacePath] = useState<string | null>(
-    () => settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null
+    () => startsStandalone ? null : settings?.customWorkspacePath || localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY) || null
   )
-  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(settings?.noWorkspaceMode || false)
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(startsStandalone)
+  const [standaloneWorkspacePath, setStandaloneWorkspacePath] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -57,10 +59,33 @@ export function useWorkspaceProjects(settings?: AppSettings) {
     }
   }, [])
 
+  const ensureStandaloneWorkspace = useCallback(async (): Promise<string | null> => {
+    if (standaloneWorkspacePath) return standaloneWorkspacePath
+    if (!window.electronAPI?.getStandaloneScratchWorkspace) return null
+    try {
+      const result = await window.electronAPI.getStandaloneScratchWorkspace()
+      setStandaloneWorkspacePath(result.path)
+      return result.path
+    } catch (err: any) {
+      logger.warn('useWorkspaceProjects', `Could not initialize standalone scratch workspace: ${err?.message}`)
+      return null
+    }
+  }, [standaloneWorkspacePath])
+
+  useEffect(() => {
+    if (!isStandaloneMode) return
+    void ensureStandaloneWorkspace().then((scratchPath) => {
+      if (scratchPath) setWorkspacePath(scratchPath)
+    })
+  }, [ensureStandaloneWorkspace, isStandaloneMode])
+
   const handleSelectProject = useCallback((pathStr: string | null) => {
     if (!pathStr || !pathStr.trim()) {
-      setWorkspacePath(null)
       setIsStandaloneMode(true)
+      setWorkspacePath(standaloneWorkspacePath)
+      void ensureStandaloneWorkspace().then((scratchPath) => {
+        if (scratchPath) setWorkspacePath(scratchPath)
+      })
       try {
         localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
       } catch (err: any) {
@@ -104,7 +129,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
         logger.warn('useWorkspaceProjects', `Could not update project registry: ${err?.message}`)
       }
     })()
-  }, [])
+  }, [ensureStandaloneWorkspace, standaloneWorkspacePath])
 
   const handleAddProject = useCallback(async () => {
     if (!window.electronAPI?.openDirectoryDialog) return
@@ -153,13 +178,7 @@ export function useWorkspaceProjects(settings?: AppSettings) {
           if (updated.length > 0) {
             handleSelectProject(updated[0].path)
           } else {
-            setWorkspacePath(null)
-            setIsStandaloneMode(true)
-            try {
-              localStorage.removeItem(LAST_WORKSPACE_STORAGE_KEY)
-            } catch (err: any) {
-              logger.warn('useWorkspaceProjects', `Could not clear last workspace: ${err?.message}`)
-            }
+            handleSelectProject(null)
           }
         }
 
@@ -170,12 +189,18 @@ export function useWorkspaceProjects(settings?: AppSettings) {
   )
 
   const handleToggleStandalone = useCallback(() => {
-    setIsStandaloneMode((prev) => !prev)
-  }, [])
+    if (isStandaloneMode) {
+      const previousWorkspace = localStorage.getItem(LAST_WORKSPACE_STORAGE_KEY)
+      if (previousWorkspace) handleSelectProject(previousWorkspace)
+      return
+    }
+    handleSelectProject(null)
+  }, [handleSelectProject, isStandaloneMode])
 
   return {
     projects,
     workspacePath,
+    standaloneWorkspacePath,
     isStandaloneMode,
     handleSelectProject,
     handleAddProject,

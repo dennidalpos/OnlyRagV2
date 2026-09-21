@@ -190,6 +190,7 @@ export function useCodingAgent(settings?: AppSettings) {
     handleOverwriteConflict,
     handleTogglePinFile,
     purgeFileReferences,
+    resetWorkspaceFiles,
     setPinnedFiles,
   } = useWorkspaceFiles({
     workspacePath,
@@ -197,6 +198,42 @@ export function useCodingAgent(settings?: AppSettings) {
     onFileNotice: handleFileNotice,
     onPathPurged: handlePathPurged,
   })
+
+  const handleRevealStandaloneWorkspace = useCallback(async () => {
+    if (!isStandaloneMode || !workspacePath || !window.electronAPI?.openPath) return
+    try {
+      await window.electronAPI.openPath(workspacePath)
+    } catch (err: any) {
+      addActionLog('info', `Impossibile aprire il workspace scratch: ${err?.message || String(err)}`)
+    }
+  }, [addActionLog, isStandaloneMode, workspacePath])
+
+  const handleExportStandaloneWorkspace = useCallback(async () => {
+    const api = window.electronAPI
+    if (!isStandaloneMode || !api?.exportStandaloneScratchWorkspace || !api.openDirectoryDialog) return
+    const destination = await api.openDirectoryDialog({ title: 'Esporta il workspace scratch' })
+    if (!destination) return
+    const result = await api.exportStandaloneScratchWorkspace(destination)
+    if (result.success && result.path) {
+      addActionLog('info', `Workspace scratch esportato in ${result.path}`)
+    } else {
+      addActionLog('info', `Esportazione workspace scratch non riuscita: ${result.error || 'errore sconosciuto'}`)
+    }
+  }, [addActionLog, isStandaloneMode])
+
+  const handleClearStandaloneWorkspace = useCallback(async () => {
+    const api = window.electronAPI
+    if (!isStandaloneMode || !workspacePath || !api?.clearStandaloneScratchWorkspace) return
+    const result = await api.clearStandaloneScratchWorkspace()
+    if (!result.success) {
+      addActionLog('info', `Pulizia workspace scratch non riuscita: ${result.error || 'errore sconosciuto'}`)
+      return
+    }
+    purgeFileReferences(workspacePath)
+    resetWorkspaceFiles()
+    await loadWorkspaceFiles(workspacePath)
+    addActionLog('info', `Workspace scratch svuotato (${result.removedEntries} elementi rimossi).`)
+  }, [addActionLog, isStandaloneMode, loadWorkspaceFiles, purgeFileReferences, resetWorkspaceFiles, workspacePath])
 
   const handleCommandNotice = useCallback(
     (command: string, output: string) => {
@@ -671,7 +708,7 @@ export function useCodingAgent(settings?: AppSettings) {
     const identity = createAgentRunIdentity({
       conversationId: runSessionId,
       planRevisionId,
-      workspacePath: isStandaloneMode ? null : workspacePath,
+      workspacePath,
     })
     updateActiveRunIdentity(identity)
     if (runSessionId) {
@@ -721,7 +758,7 @@ export function useCodingAgent(settings?: AppSettings) {
         userTask: taskPrompt,
         initialUserTask,
         agentMode: effectiveMode,
-        workspacePath: isStandaloneMode ? null : workspacePath,
+        workspacePath,
         isStandaloneMode,
         activeModel,
         activeFile,
@@ -824,6 +861,9 @@ export function useCodingAgent(settings?: AppSettings) {
     handleOpenProjectPath,
     handleRemoveProject,
     handleSelectProject,
+    handleRevealStandaloneWorkspace,
+    handleExportStandaloneWorkspace,
+    handleClearStandaloneWorkspace,
     grepQuery,
     setGrepQuery,
     grepIsRegex,

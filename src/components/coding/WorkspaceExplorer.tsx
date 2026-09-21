@@ -14,6 +14,7 @@ import {
   ExternalLink,
   Edit2,
   Check,
+  Download,
   Layers,
   Pin,
   PinOff,
@@ -26,11 +27,15 @@ import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 interface WorkspaceExplorerProps {
   projects: WorkspaceProject[]
   activeProjectPath: string | null
+  isStandaloneMode: boolean
   onAddProject: () => void
   onRemoveProject: (path: string) => void
   onSelectProject: (path: string | null) => void
   onRenameProject?: (path: string, newName: string) => void
   onOpenProjectPath?: (path: string) => void
+  onRevealStandaloneWorkspace: () => void
+  onExportStandaloneWorkspace: () => void
+  onClearStandaloneWorkspace: () => void
   // File Tree props
   files: WorkspaceFile[]
   selectedFilePath: string | null
@@ -54,11 +59,15 @@ interface WorkspaceExplorerProps {
 export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   projects,
   activeProjectPath,
+  isStandaloneMode,
   onAddProject,
   onRemoveProject,
   onSelectProject,
   onRenameProject,
   onOpenProjectPath,
+  onRevealStandaloneWorkspace,
+  onExportStandaloneWorkspace,
+  onClearStandaloneWorkspace,
   files,
   selectedFilePath,
   pinnedPaths,
@@ -83,7 +92,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
   const [filesSectionExpanded, setFilesSectionExpanded] = useState<boolean>(true)
   const [pinnedExpanded, setPinnedExpanded] = useState<boolean>(true)
 
-  const isStandalone = !activeProjectPath || !activeProjectPath.trim()
+  const isStandalone = isStandaloneMode
 
   const handleStartRenameProject = (proj: WorkspaceProject, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -168,7 +177,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
             </button>
           </div>
 
-          {/* 1.1 Ambiente Temporaneo (Standalone / No Project) */}
+          {/* 1.1 Persistent scratch workspace (standalone / no project). */}
           <div
             className={`rounded-xl border transition-all ${
               isStandalone
@@ -196,10 +205,10 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                 </div>
                 <div className="truncate min-w-0">
                   <div className={`font-bold text-[11px] truncate ${isStandalone ? 'text-indigo-200' : 'text-slate-300'}`}>
-                    Ambiente Temporaneo
+                    Workspace Scratch
                   </div>
                   <div className="text-[9px] text-slate-400 truncate">
-                    Chat libera senza cartella progetto
+                    Persistente, senza cartella progetto
                   </div>
                 </div>
               </div>
@@ -294,6 +303,39 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
                       </div>
                     )
                   })}
+                </div>
+
+                <div className="grid grid-cols-3 gap-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onRevealStandaloneWorkspace()
+                    }}
+                    className="py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[9px] font-semibold rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                    title="Mostra il workspace scratch in Esplora file"
+                  >
+                    <FolderOpen className="w-3 h-3" /> Mostra
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onExportStandaloneWorkspace()
+                    }}
+                    className="py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[9px] font-semibold rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                    title="Esporta una copia del workspace scratch"
+                  >
+                    <Download className="w-3 h-3" /> Esporta
+                  </button>
+                  <InlineDestructiveConfirm
+                    itemLabel="workspace scratch"
+                    actionLabel="Svuota"
+                    hint="Rimuove tutti i file dal workspace scratch persistente"
+                    className="justify-center border border-slate-700 rounded-lg"
+                    iconClassName="w-3 h-3"
+                    onConfirm={onClearStandaloneWorkspace}
+                  />
                 </div>
 
                 <div className="pt-1">
@@ -602,9 +644,9 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({
 
               {/* File Tree */}
               <div className="px-1.5">
-                {isStandalone ? (
+                {!activeProjectPath ? (
                   <div className="p-3 text-center text-[11px] text-slate-500 space-y-2 bg-slate-900/30 rounded-xl border border-slate-800/60">
-                    <p>Nessuna cartella di progetto collegata.</p>
+                    <p>{isStandalone ? 'Inizializzazione del workspace scratch…' : 'Nessuna cartella di progetto collegata.'}</p>
                     <button
                       type="button"
                       onClick={onAddProject}

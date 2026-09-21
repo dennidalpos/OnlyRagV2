@@ -9,7 +9,15 @@ import { sidecarProcessManager } from '../infrastructure/process/sidecarProcessM
 import { taskRunner } from '../infrastructure/process/taskRunner'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { sidecarHttpClient } from '../infrastructure/http/sidecarHttpClient'
-import type { SlmLogDiagnosticReport } from '../../../shared/types'
+import type { IngestedDocument, SlmLogDiagnosticReport } from '../../../shared/types'
+
+export function normalizeIngestedFileType(fileType?: string, filename?: string): IngestedDocument['fileType'] {
+  const rawType = (fileType || filename?.split('.').pop() || '').trim().toLowerCase().replace(/^\./, '')
+  if (rawType === 'pdf') return 'pdf'
+  if (rawType === 'docx') return 'docx'
+  if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff', 'gif', 'image'].includes(rawType)) return 'image'
+  return 'text'
+}
 
 export function getAnomalyRemediation(anomalyType: string): string {
   if (anomalyType.includes('CUDA_OOM') || anomalyType.includes('VRAM_EXCEEDED')) {
@@ -123,7 +131,7 @@ export class SidecarAppService {
             extractedMarkdown: finalResult.extracted_markdown,
             status: finalResult.status,
             ingestedAt: finalResult.ingested_at,
-            fileType: filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text',
+            fileType: normalizeIngestedFileType(finalResult.file_type, finalResult.filename || filename),
             usedFallbackEmbeddings: Boolean(finalResult.used_fallback_embeddings),
           },
         }
@@ -157,7 +165,7 @@ export class SidecarAppService {
           extractedMarkdown: data.extracted_markdown,
           status: data.status,
           ingestedAt: data.ingested_at,
-          fileType: (data.filename || '').toLowerCase().endsWith('.pdf') ? 'pdf' : 'text',
+          fileType: normalizeIngestedFileType(data.file_type, data.filename),
           usedFallbackEmbeddings: Boolean(data.used_fallback_embeddings),
         },
       }
@@ -211,7 +219,7 @@ export class SidecarAppService {
           extractedMarkdown: finalResult.extracted_markdown,
           status: finalResult.status,
           ingestedAt: finalResult.ingested_at,
-          fileType: (finalResult.filename || '').toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx',
+          fileType: normalizeIngestedFileType(finalResult.file_type, finalResult.filename),
         },
       }
     }
@@ -237,13 +245,13 @@ export class SidecarAppService {
       extractedMarkdown: item.extracted_markdown,
       status: item.status,
       ingestedAt: item.ingested_at,
-      fileType: item.file_type || 'text',
+      fileType: normalizeIngestedFileType(item.file_type, item.filename),
       usedFallbackEmbeddings: Boolean(item.used_fallback_embeddings),
     }))
   }
 
-  async deleteDocument(docId: string): Promise<{ success: boolean }> {
-    if (typeof docId !== 'string' || !docId.trim()) return { success: false }
+  async deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
+    if (typeof docId !== 'string' || !docId.trim()) return { success: false, error: 'ID documento non valido.' }
     const result = await sidecarHttpClient.deleteDocument(docId)
     if (result.success) {
       try {

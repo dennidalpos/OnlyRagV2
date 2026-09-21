@@ -34,6 +34,7 @@ import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
 import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
+import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 
 export type NavTab = 'ingestion' | 'chat' | 'translation' | 'coding' | 'settings'
 
@@ -99,6 +100,7 @@ export const AppLayout: React.FC = () => {
       hasCompletedInitialSetup: false,
     }
   })
+  const isRemoteOllama = isRemoteOllamaMode(settings)
 
   // Triggers non-blocking background model update checks on application start
   useOllamaModelUpdates(settings.ollamaHost)
@@ -413,7 +415,7 @@ export const AppLayout: React.FC = () => {
             </div>
           </div>
 
-          {diagnostics?.ollama.status !== 'online' && (
+          {diagnostics?.ollama.status !== 'online' && !isRemoteOllama && (
             <button
               type="button"
               onClick={async () => {
@@ -427,6 +429,27 @@ export const AppLayout: React.FC = () => {
             >
               <Zap className="w-3.5 h-3.5 fill-current" /> {t('sidebar.installLaunchOllama')}
             </button>
+          )}
+
+          {diagnostics?.ollama.status !== 'online' && isRemoteOllama && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={runDiagnosticsScan}
+                aria-label={t('sidebar.retryRemoteOllama')}
+                className="py-2 bg-sky-950/60 hover:bg-sky-900/70 border border-sky-700/60 text-sky-300 text-[11px] font-semibold rounded-xl transition-all focus-ring"
+              >
+                {t('sidebar.retryRemoteOllama')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('settings')}
+                aria-label={t('sidebar.configureRemoteOllama')}
+                className="py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold rounded-xl transition-all focus-ring"
+              >
+                {t('sidebar.configureRemoteOllama')}
+              </button>
+            </div>
           )}
 
           <div className="flex items-center gap-2">
@@ -542,6 +565,10 @@ export const AppLayout: React.FC = () => {
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
             onRefreshDiagnostics={runDiagnosticsScan}
+            onOpenOllamaSettings={() => {
+              setIsWizardOpen(false)
+              handleSelectTab('settings')
+            }}
             isInitialSetup={!settings.hasCompletedInitialSetup}
           />
         </Suspense>

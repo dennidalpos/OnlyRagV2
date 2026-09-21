@@ -1,13 +1,15 @@
 import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import { logger } from '../../diagnostics'
 import { isProtectedSystemDirectory } from '../domain/agent/contextFilter'
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
 import type { AppSettings } from '../../../shared/types'
+import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
 
 /** Resolves the effective workspace directory for a run: 1. */
-export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspacePath' | 'isStandaloneMode' | 'sessionId'>): string | null {
+export function resolveWorkspacePath(
+  payload: Pick<AgentTaskPayload, 'workspacePath' | 'isStandaloneMode' | 'sessionId'>,
+  scratchWorkspace: Pick<typeof standaloneScratchWorkspace, 'getPath'> = standaloneScratchWorkspace,
+): string | null {
   const rawPath = payload.workspacePath ? payload.workspacePath.trim() : null
   if (rawPath && !isProtectedSystemDirectory(rawPath)) {
     if (!fs.existsSync(rawPath)) {
@@ -22,17 +24,12 @@ export function resolveWorkspacePath(payload: Pick<AgentTaskPayload, 'workspaceP
     }
   }
 
-  // Standalone / Chat Libera mode: allocate an isolated user temp scratch directory
+  // Standalone mode owns one visible, persistent scratch workspace under userData.
   if (payload.isStandaloneMode) {
-    const sessionSubdir = payload.sessionId ? payload.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_') : `standalone-${Date.now()}`
-    const tempBase = path.join(os.tmpdir(), 'onlyrag_sessions', sessionSubdir)
     try {
-      if (!fs.existsSync(tempBase)) {
-        fs.mkdirSync(tempBase, { recursive: true })
-      }
-      return tempBase
+      return scratchWorkspace.getPath()
     } catch (err: any) {
-      logger.log('WARN', 'AgentOrchestratorApp', `Could not create temp session directory '${tempBase}': ${err.message}`)
+      logger.log('WARN', 'AgentOrchestratorApp', `Could not create the standalone scratch workspace: ${err.message}`)
       return null
     }
   }

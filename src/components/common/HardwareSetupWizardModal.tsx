@@ -26,6 +26,7 @@ import {
   buildHardwareWizardModelSuite,
 } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
+import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 
 interface HardwareSetupWizardModalProps {
   isOpen: boolean
@@ -34,6 +35,7 @@ interface HardwareSetupWizardModalProps {
   settings: AppSettings
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
   onRefreshDiagnostics: () => void
+  onOpenOllamaSettings?: () => void
   isInitialSetup?: boolean
 }
 
@@ -44,6 +46,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   settings,
   onUpdateSettings,
   onRefreshDiagnostics,
+  onOpenOllamaSettings,
   isInitialSetup = false,
 }) => {
   const { t } = useTranslation()
@@ -55,6 +58,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const getModelFit = buildModelFitLookup(diagnostics)
 
   const downloadedModels = diagnostics?.ollama.models ?? []
+  const isRemoteOllama = isRemoteOllamaMode(settings)
 
   const recommendedSuite = buildHardwareWizardModelSuite(recommendations.profileTier)
   const wizardModelOptions = buildHardwareWizardModelOptions()
@@ -516,6 +520,10 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
               isInstallingOllama={isInstallingOllama}
               isInitialSetup={isInitialSetup}
               onLaunchOrInstallOllama={handleLaunchOrInstallOllama}
+              isRemoteMode={isRemoteOllama}
+              remoteHost={settings.ollamaHost}
+              onRetryRemote={onRefreshDiagnostics}
+              onConfigureRemote={onOpenOllamaSettings}
               onAutoApply={handleAutoApplyRecommended}
             />
           )}

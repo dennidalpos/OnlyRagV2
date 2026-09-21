@@ -4,16 +4,17 @@ import { checkCommandSecurity } from './commandSecurity'
 describe('commandSecurity Domain Unit Tests', () => {
   const workspace = 'C:\\workspace'
 
-  it('requires approval for destructive git commands', () => {
+  it('blocks destructive git commands', () => {
     const res = checkCommandSecurity('git reset --hard HEAD')
-    expect(res).toMatchObject({ isAllowed: true, requiresApproval: true })
+    expect(res.isAllowed).toBe(false)
+    expect(res.blockedReason).toContain('Destructive command pattern detected')
   })
 
-  it('requires approval for destructive git clean and force push commands', () => {
+  it('blocks destructive git clean and force push commands', () => {
     const clean = checkCommandSecurity('git clean -fd')
     const push = checkCommandSecurity('git push origin main --force')
-    expect(clean).toMatchObject({ isAllowed: true, requiresApproval: true })
-    expect(push).toMatchObject({ isAllowed: true, requiresApproval: true })
+    expect(clean.isAllowed).toBe(false)
+    expect(push.isAllowed).toBe(false)
   })
 
   it('should block broad root deletion commands', () => {
@@ -24,12 +25,12 @@ describe('commandSecurity Domain Unit Tests', () => {
     expect(res2.isAllowed).toBe(false)
   })
 
-  it('requires approval for destructive git restore and checkout commands', () => {
+  it('blocks destructive git restore and checkout commands', () => {
     const res1 = checkCommandSecurity('git restore .')
-    expect(res1).toMatchObject({ isAllowed: true, requiresApproval: true })
+    expect(res1.isAllowed).toBe(false)
 
     const res2 = checkCommandSecurity('git checkout -- .')
-    expect(res2).toMatchObject({ isAllowed: true, requiresApproval: true })
+    expect(res2.isAllowed).toBe(false)
   })
 
   it('should translate harmless Unix commands to PowerShell equivalents', () => {

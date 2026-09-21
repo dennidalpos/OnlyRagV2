@@ -20,7 +20,7 @@ Il Preload espone le funzioni in [`electron/preload.ts`](../electron/preload.ts)
 | `skills` | `add-custom-source`, `get-hub-skill-content`, `install-from-hub`, `install-from-url`, `list-hub-all`, `list-hub-by-source`, `list-installed`, `list-sources`, `remove-custom-source`, `reset-original`, `save-custom`, `toggle-active`, `uninstall` |
 | `system` | `check-disk-space`, `open-external`, `open-path` |
 | `task` | `cancel`, `clean-residuals` |
-| `workspace` | `download-file`, `execute-powershell`, `fetch-web`, `get-git-status-and-diff`, `get-project-map`, `git-commit`, `grep-search`, `init-git`, `inspect-guest-os`, `list-files`, `multi-replace-chunks`, `read-file`, `replace-chunk`, `search-web`, `write-file` |
+| `workspace` | `clear-standalone-scratch`, `download-file`, `execute-powershell`, `export-standalone-scratch`, `fetch-web`, `get-git-status-and-diff`, `get-project-map`, `get-standalone-scratch`, `git-commit`, `grep-search`, `init-git`, `inspect-guest-os`, `list-files`, `multi-replace-chunks`, `read-file`, `replace-chunk`, `search-web`, `write-file` |
 
 Registrazione: [`agentIpc.ts`](../electron/core/presentation/agentIpc.ts), [`workspaceIpc.ts`](../electron/core/presentation/workspaceIpc.ts), [`ollamaIpc.ts`](../electron/core/presentation/ollamaIpc.ts), [`sidecarIpc.ts`](../electron/core/presentation/sidecarIpc.ts), [`skillIpc.ts`](../electron/core/presentation/skillIpc.ts), [`settingsIpc.ts`](../electron/core/presentation/settingsIpc.ts), [`diagnosticsIpc.ts`](../electron/core/presentation/diagnosticsIpc.ts), [`systemIpc.ts`](../electron/core/presentation/systemIpc.ts), [`projectRegistryIpc.ts`](../electron/core/presentation/projectRegistryIpc.ts), [`sessionHistoryIpc.ts`](../electron/core/presentation/sessionHistoryIpc.ts), [`artifactIpc.ts`](../electron/core/presentation/artifactIpc.ts).
 
@@ -34,7 +34,7 @@ I comandi di esecuzione Agent Coding e tutti gli eventi `agent:*` della run incl
 
 `workspace:write-file` riceve anche `workspaceRoot`: il salvataggio editor applica lo stesso controllo realpath delle mutazioni Agent Coding.
 
-Le run Agent Coding non ricevono il path utente: Main sostituisce il workspace con un worktree/copia temporanea e chiede il consenso `publish_workspace` prima di riportare le modifiche. Non viene aggiunto un canale IPC: il consenso usa `agent:approval-response` con la stessa identità immutabile della run.
+Le run Agent Coding di progetto non ricevono il path utente: Main sostituisce il workspace con un worktree/copia temporanea e chiede il consenso `publish_workspace` prima di riportare le modifiche. Lo standalone opera invece nel workspace persistente dedicato `userData/agent-scratch`. Il consenso di pubblicazione usa `agent:approval-response` con la stessa identità immutabile della run.
 
 `agent:start-task` restituisce `runId` e `queuePosition`; `agent:cancel-task` richiede quell'identità e non annulla altre run.
 

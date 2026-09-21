@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { AddressInfo } from 'node:net'
-import { sidecarAppService } from './sidecarAppService'
+import { normalizeIngestedFileType, sidecarAppService } from './sidecarAppService'
 
 // ---------------------------------------------------------------------------
 // Minimal mock sidecar HTTP server
@@ -263,5 +263,18 @@ describe('SidecarSlmBridgeService — IPC Roundtrip Integration Tests', () => {
         expect(a.remediation?.length).toBeGreaterThan(5)
       }
     })
+  })
+})
+
+describe('ingested file type normalization', () => {
+  it('preserves DOCX eligibility from authoritative sidecar metadata', () => {
+    expect(normalizeIngestedFileType('docx', 'renamed-without-extension')).toBe('docx')
+    expect(normalizeIngestedFileType('pdf', 'report.bin')).toBe('pdf')
+  })
+
+  it('falls back to the filename for older records and groups image formats', () => {
+    expect(normalizeIngestedFileType(undefined, 'contract.docx')).toBe('docx')
+    expect(normalizeIngestedFileType('png', 'scan.png')).toBe('image')
+    expect(normalizeIngestedFileType('csv', 'data.csv')).toBe('text')
   })
 })

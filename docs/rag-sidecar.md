@@ -6,10 +6,12 @@ Lo stato è `online` solo con HTTP 200 e un payload `/health` completo: risposta
 ## Ingestion
 
 - Parser per PDF, DOCX, testo, immagini e dati tabellari.
+- `file_type` è parte del contratto di ingestione, aggiornamento e lista: il Main lo normalizza senza perdere `docx`, così l'idoneità alla traduzione in-place resta stabile.
 - PDF: estrazione nativa; OCR locale RapidOCR quando serve; Vision Ollama come percorso configurabile.
 - I chunk ricevono intestazioni contestuali e vengono indicizzati in LanceDB.
 - Se l'embedding Ollama fallisce, il vettore deterministico CPU marca il documento `indexed_fallback`.
 - Ogni stream ha un `task_id`: l'annullamento è cooperativo ai confini sicuri e pulisce i record LanceDB parziali.
+- L'eliminazione aggiorna lista e selezione del Renderer solo dopo `DELETE /documents/{doc_id}` riuscita; errori HTTP, rete e timeout restano visibili e non producono uno stato locale falso.
 
 Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py), [`sidecar/services/ingest_service.py`](../sidecar/services/ingest_service.py), [`sidecar/infrastructure/embeddings.py`](../sidecar/infrastructure/embeddings.py).
 

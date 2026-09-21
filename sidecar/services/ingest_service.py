@@ -136,6 +136,7 @@ def process_and_index_document(
         extracted_markdown=full_markdown,
         status=doc_status,
         ingested_at=ingested_at,
+        file_type=ext,
         used_fallback_embeddings=used_fallback_embeddings
     )
 
@@ -409,6 +410,7 @@ def process_and_index_document_generator(
             "extracted_markdown": full_markdown,
             "status": doc_status,
             "ingested_at": ingested_at,
+            "file_type": ext,
             "used_fallback_embeddings": used_fallback_embeddings
         }
 
@@ -533,6 +535,7 @@ def update_and_reindex_document(doc_id: str, new_markdown: str) -> IngestRespons
         extracted_markdown=clean_markdown,
         status=doc_status,
         ingested_at=updated_at,
+        file_type=file_type,
         used_fallback_embeddings=used_fallback_embeddings
     )
 

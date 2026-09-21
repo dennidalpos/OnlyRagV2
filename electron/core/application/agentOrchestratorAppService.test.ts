@@ -591,14 +591,29 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
   it('never executes a verificationCommand that writes the workspace, even from a restored session', async () => {
     // Plans parsed today drop such a command at ingestion, but a session persisted before that rule existed still carries it, and executing it is what rewrote src/App.tsx and src/pages/Tasks.tsx as UTF-16 garbage in session-1787497654743-4enx — after which the miles
     const sessionId = 'plan-verify-unsafe-session'
+    const identity = {
+      runId: 'plan-verify-unsafe-run',
+      conversationId: sessionId,
+      planRevisionId: 'plan-verify-unsafe:v1',
+      workspaceId: `workspace:${tempDir}`,
+    }
     const sessionDir = path.join(tempDir, '.onlyrag', 'sessions')
     fs.mkdirSync(sessionDir, { recursive: true })
     fs.writeFileSync(
       path.join(sessionDir, `.agent_state_${sessionId}.json`),
       JSON.stringify({
         sessionId,
+        runIdentity: identity,
+        workspacePath: tempDir,
+        agentMode: 'agent',
         stepCount: 1,
+        maxSteps: 50,
+        episodes: [],
+        recentFullLogs: [],
+        userTask: 'Build the app',
         initialUserTask: 'Build the app',
+        updatedAt: new Date().toISOString(),
+        status: 'IN_PROGRESS',
         planMilestones: [
           { id: 'm-1', title: 'Create `legacy.txt`', status: 'in_progress', verificationCommand: 'echo hello > legacy.txt' },
           { id: 'm-2', title: 'Add tests', status: 'pending' },
@@ -614,7 +629,7 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
       .mockResolvedValueOnce(finishJson)
       .mockResolvedValueOnce(finishJson)
 
-    await runAgentOrchestratorLoop({ userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId }, null)
+    await runAgentOrchestratorLoop({ identity, userTask: 'Build the app', agentMode: 'agent', workspacePath: tempDir, sessionId }, null)
 
     expect(fs.existsSync(path.join(tempDir, 'legacy.txt'))).toBe(false)
     const saved = JSON.parse(fs.readFileSync(path.join(sessionDir, `.agent_state_${sessionId}.json`), 'utf-8'))

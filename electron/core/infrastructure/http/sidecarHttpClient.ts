@@ -534,7 +534,7 @@ export class SidecarHttpClient {
   /**
    * Deletes a document and all its embedded chunks from LanceDB.
    */
-  deleteDocument(docId: string): Promise<{ success: boolean }> {
+  deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
     const urlOpts = this.resolveUrl(`/documents/${encodeURIComponent(docId)}`)
     return new Promise((resolve) => {
       const req = http.request(
@@ -547,19 +547,35 @@ export class SidecarHttpClient {
           timeout: 5000,
         },
         (res) => {
-          resolve({ success: res.statusCode === 200 })
+          let raw = ''
+          res.on('data', (chunk) => { raw += chunk })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              resolve({ success: true })
+              return
+            }
+            let detail = ''
+            try {
+              const parsed = JSON.parse(raw) as { detail?: unknown; error?: unknown }
+              detail = typeof parsed.detail === 'string' ? parsed.detail : typeof parsed.error === 'string' ? parsed.error : ''
+            } catch {}
+            resolve({
+              success: false,
+              error: detail || `Il Sidecar ha rifiutato l'eliminazione (HTTP ${res.statusCode || 'sconosciuto'}).`,
+            })
+          })
         }
       )
 
       req.on('error', (err) => {
         logger.log('ERROR', 'SidecarClient', `Failed deleting document ${docId}: ${err.message}`)
-        resolve({ success: false })
+        resolve({ success: false, error: `Sidecar non raggiungibile: ${err.message}` })
       })
 
       req.setTimeout(5000, () => {
         req.destroy()
         logger.log('WARN', 'SidecarClient', `Deleting document ${docId} timed out`)
-        resolve({ success: false })
+        resolve({ success: false, error: 'Eliminazione scaduta dopo 5 secondi. Verifica il Sidecar e riprova.' })
       })
 
       req.end()

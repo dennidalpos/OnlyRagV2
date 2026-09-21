@@ -3,7 +3,7 @@ import { GrepSearchResult } from '../types'
 import { logger } from '../lib/logger'
 
 /** Workspace-wide text/regex search, backed by the `workspace:grep-search` IPC channel. */
-export function useGrepSearch(workspacePath: string | null, isStandaloneMode: boolean) {
+export function useGrepSearch(workspacePath: string | null, _isStandaloneMode: boolean) {
   const [grepQuery, setGrepQuery] = useState<string>('')
   const [grepIsRegex, setGrepIsRegex] = useState<boolean>(false)
   const [grepCaseInsensitive, setGrepCaseInsensitive] = useState<boolean>(true)
@@ -12,7 +12,7 @@ export function useGrepSearch(workspacePath: string | null, isStandaloneMode: bo
   const searchRequestIdRef = useRef<number>(0)
 
   const handleRunGrepSearch = useCallback(async () => {
-    if (!grepQuery.trim() || !workspacePath || isStandaloneMode || !window.electronAPI?.grepWorkspaceFiles) return
+    if (!grepQuery.trim() || !workspacePath || !window.electronAPI?.grepWorkspaceFiles) return
     const requestId = ++searchRequestIdRef.current
     setIsSearchingGrep(true)
     try {
@@ -29,7 +29,7 @@ export function useGrepSearch(workspacePath: string | null, isStandaloneMode: bo
         setIsSearchingGrep(false)
       }
     }
-  }, [grepQuery, workspacePath, isStandaloneMode, grepIsRegex, grepCaseInsensitive])
+  }, [grepQuery, workspacePath, grepIsRegex, grepCaseInsensitive])
 
   return {
     grepQuery,

@@ -9,6 +9,8 @@ import { authorizeOfflineStrict } from '../domain/agent/offlineStrictPolicy'
 import { authorizeLocalOnly } from '../domain/agent/localOnlyPolicy'
 import { contentVersion } from '../infrastructure/filesystem/fileContentVersion'
 import { validateWorkspaceRealpath } from '../infrastructure/filesystem/workspaceRealpathGuard'
+import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
+import { sessionHistoryRepository } from '../infrastructure/filesystem/sessionHistoryRepository'
 
 export class WorkspaceAppService {
   private repo = new FileSystemRepository()
@@ -16,6 +18,20 @@ export class WorkspaceAppService {
   listFiles(targetPath?: string) {
     if (!targetPath) return Promise.resolve([])
     return this.repo.listFiles(targetPath)
+  }
+
+  async getStandaloneScratchWorkspace() {
+    const scratchPath = standaloneScratchWorkspace.getPath()
+    await sessionHistoryRepository.migrateStandaloneSessions(scratchPath)
+    return { path: scratchPath }
+  }
+
+  exportStandaloneScratchWorkspace(destinationDirectory: string) {
+    return standaloneScratchWorkspace.exportTo(destinationDirectory)
+  }
+
+  clearStandaloneScratchWorkspace() {
+    return standaloneScratchWorkspace.clear()
   }
 
   getProjectMap(dirPath: string) {

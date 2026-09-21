@@ -63,6 +63,12 @@ export interface SavedAgentSessionState {
   lastVerification?: AgentVerificationEvidence
 }
 
+function normalizePersistedMode(raw: any): SavedAgentSessionState {
+  const mode = raw?.agentMode
+  const agentMode: AgentMode = mode === 'ask' || mode === 'guided' || mode === 'auto' ? mode : mode === 'agent' ? 'auto' : 'guided'
+  return { ...raw, agentMode } as SavedAgentSessionState
+}
+
 export class AgentSessionStateRepository {
   private getStorageDir(workspacePath?: string | null): string {
     if (workspacePath && fs.existsSync(workspacePath)) {
@@ -122,10 +128,7 @@ export class AgentSessionStateRepository {
   }
 
   /** Writes .onlyrag/assistant/SESSION_TRACKER.md. */
-  public async saveSessionTrackerMarkdown(
-    workspacePath: string | null,
-    tracker: SessionDebtTracker
-  ): Promise<boolean> {
+  public async saveSessionTrackerMarkdown(workspacePath: string | null, tracker: SessionDebtTracker): Promise<boolean> {
     if (!workspacePath || !fs.existsSync(workspacePath)) return false
     try {
       const assistantDir = path.join(workspacePath, '.onlyrag', 'assistant')
@@ -173,10 +176,10 @@ export class AgentSessionStateRepository {
         const fallbackPath = path.join(os.homedir(), '.onlyrag_v2', 'sessions', `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
         if (!fs.existsSync(fallbackPath)) return null
         const rawFallback = await fs.promises.readFile(fallbackPath, 'utf-8')
-        return JSON.parse(rawFallback) as SavedAgentSessionState
+        return normalizePersistedMode(JSON.parse(rawFallback))
       }
       const raw = await fs.promises.readFile(filePath, 'utf-8')
-      return JSON.parse(raw) as SavedAgentSessionState
+      return normalizePersistedMode(JSON.parse(raw))
     } catch (err: any) {
       logger.log('WARN', 'AgentSessionStateRepo', `Failed loading session state for ${sessionId}: ${err.message}`)
       return null
@@ -203,7 +206,7 @@ export class AgentSessionStateRepository {
       : {
           sessionId,
           workspacePath,
-          agentMode: 'agent',
+          agentMode: 'guided',
           stepCount: 0,
           maxSteps: 0,
           episodes: [],
@@ -225,12 +228,7 @@ export class AgentSessionStateRepository {
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath)
       }
-      const fallbackPath = path.join(
-        os.homedir(),
-        '.onlyrag_v2',
-        'sessions',
-        `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`
-      )
+      const fallbackPath = path.join(os.homedir(), '.onlyrag_v2', 'sessions', `.agent_state_${sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`)
       if (fs.existsSync(fallbackPath)) {
         await fs.promises.unlink(fallbackPath)
       }

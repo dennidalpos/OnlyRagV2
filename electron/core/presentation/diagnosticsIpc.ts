@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { runFullDiagnostics, type LogLevel } from '../../diagnostics'
 import { diagnosticsAppService } from '../application/diagnosticsAppService'
 import { sidecarAppService } from '../application/sidecarAppService'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export function registerDiagnosticsIpcHandlers() {
   ipcMain.handle('diagnostics:get-http-metrics', () => diagnosticsAppService.getHttpMetrics())
@@ -18,6 +19,10 @@ export function registerDiagnosticsIpcHandlers() {
   ipcMain.handle('diagnostics:clear-logs', async () => {
     diagnosticsAppService.clearLogs()
     return true
+  })
+
+  ipcMain.handle('diagnostics:clear-agent-audit-log', async () => {
+    return codingAgentLogger.clearAuditLog()
   })
 
   ipcMain.handle('diagnostics:get-log-filepath', async () => {

@@ -22,19 +22,15 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     const mockState: SavedAgentSessionState = {
       sessionId: 'session-test-123',
       workspacePath: tempDir,
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 5,
       maxSteps: 50,
       episodes: [
         { step: 1, tool: 'read_file', status: 'SUCCESS', summary: 'Read index.html' },
         { step: 2, tool: 'replace_file_content', status: 'FAILURE', summary: 'Target content mismatch' },
       ],
-      recentFullLogs: [
-        { step: 2, tool: 'replace_file_content', output: 'Target content mismatch line 15' },
-      ],
-      planMilestones: [
-        { id: 'm1', title: 'Setup structure', status: 'verified' },
-      ],
+      recentFullLogs: [{ step: 2, tool: 'replace_file_content', output: 'Target content mismatch line 15' }],
+      planMilestones: [{ id: 'm1', title: 'Setup structure', status: 'verified' }],
       userTask: 'Fix replace file content bug',
       ollamaRuntimeProfile: {
         model: 'qwen2.5-coder:7b',
@@ -65,17 +61,28 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     expect(loadedAfterClear).toBeNull()
   })
 
+  it('maps persisted pre-simplification modes to the canonical modes', async () => {
+    const stateDir = path.join(tempDir, '.onlyrag', 'sessions')
+    fs.mkdirSync(stateDir, { recursive: true })
+    const base = {
+      workspacePath: tempDir,
+      stepCount: 0,
+      maxSteps: 10,
+      episodes: [],
+      recentFullLogs: [],
+      planMilestones: [],
+      userTask: 'Resume',
+      updatedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(path.join(stateDir, '.agent_state_legacy-agent.json'), JSON.stringify({ ...base, sessionId: 'legacy-agent', agentMode: 'agent' }))
+    fs.writeFileSync(path.join(stateDir, '.agent_state_legacy-plan.json'), JSON.stringify({ ...base, sessionId: 'legacy-plan', agentMode: 'plan' }))
+
+    await expect(agentSessionStateRepository.loadSessionState('legacy-agent', tempDir)).resolves.toMatchObject({ agentMode: 'auto' })
+    await expect(agentSessionStateRepository.loadSessionState('legacy-plan', tempDir)).resolves.toMatchObject({ agentMode: 'guided' })
+  })
+
   it('persists the terminal reason as structured state rather than requiring summary parsing', async () => {
-    const reasons = [
-      'finish',
-      'step_budget',
-      'cancelled',
-      'timeout',
-      'circuit_breaker',
-      'model_silence',
-      'transport_error',
-      'protocol_error',
-    ] as const
+    const reasons = ['finish', 'step_budget', 'cancelled', 'timeout', 'circuit_breaker', 'model_silence', 'transport_error', 'protocol_error'] as const
 
     for (const terminationReason of reasons) {
       const sessionId = `terminal-${terminationReason}`
@@ -83,7 +90,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
         agentSessionStateRepository.saveSessionState({
           sessionId,
           workspacePath: tempDir,
-          agentMode: 'agent',
+          agentMode: 'auto',
           stepCount: 1,
           maxSteps: 50,
           episodes: [],
@@ -92,7 +99,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
           userTask: 'Terminal state test',
           updatedAt: new Date().toISOString(),
           terminationReason,
-        })
+        }),
       ).resolves.toBe(true)
 
       await expect(agentSessionStateRepository.loadSessionState(sessionId, tempDir)).resolves.toMatchObject({ terminationReason })
@@ -103,7 +110,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     await agentSessionStateRepository.saveSessionState({
       sessionId: 'completion-status',
       workspacePath: tempDir,
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 3,
       maxSteps: 50,
       episodes: [],
@@ -127,7 +134,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     const s1: SavedAgentSessionState = {
       sessionId: 'session-1',
       workspacePath: tempDir,
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 1,
       maxSteps: 50,
       episodes: [],
@@ -196,7 +203,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
       'plan-seed-new-session',
       tempDir,
       [{ id: 'm-1', title: 'Design schema', status: 'pending' }],
-      'Build the login flow'
+      'Build the login flow',
     )
     expect(seeded).toBe(true)
 
@@ -235,7 +242,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     fs.writeFileSync(
       path.join(legacyOnlyragDir, '.agent_state_legacy-migrated-session.json'),
       JSON.stringify({ sessionId: 'legacy-migrated-session', stepCount: 3 }),
-      'utf-8'
+      'utf-8',
     )
 
     const loaded = await agentSessionStateRepository.loadSessionState('legacy-migrated-session', tempDir)
@@ -249,7 +256,7 @@ describe('AgentSessionStateRepository Unit Tests', () => {
     const existing: SavedAgentSessionState = {
       sessionId: 'plan-seed-existing-session',
       workspacePath: tempDir,
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 7,
       maxSteps: 50,
       episodes: [{ step: 1, tool: 'read_file', status: 'SUCCESS', summary: 'Read app.ts' }],

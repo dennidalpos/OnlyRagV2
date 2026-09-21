@@ -55,6 +55,28 @@ describe('HeuristicContextCompactor', () => {
     expect(result.prompt).toContain(FAKE_PLAN)
   })
 
+  it('forces a smaller prompt below the automatic watermark without deleting immutable context', () => {
+    const result = HeuristicContextCompactor.compile(
+      {
+        systemPrompt: 'SYSTEM '.repeat(100),
+        activePlanBlock: 'PLAN '.repeat(80),
+        pinnedFilesBlock: 'PINNED '.repeat(400),
+        activeFileBlock: 'ACTIVE '.repeat(200),
+        skillsBlock: 'SKILL '.repeat(100),
+        historyBlock: 'HISTORY '.repeat(400),
+        attachedContext: 'ATTACHED '.repeat(200),
+        projectMapBlock: 'MAP '.repeat(200),
+      },
+      100_000,
+      { force: true },
+    )
+
+    expect(result.wasCompacted).toBe(true)
+    expect(result.finalChars).toBeLessThan(result.originalChars)
+    expect(result.prompt).toContain('SYSTEM SYSTEM')
+    expect(result.prompt).toContain('PLAN PLAN')
+  })
+
   it('should always preserve immutable anchors even under extreme pressure', () => {
     const extreme = makeRepeated('A very long string to inflate the context size drastically.\n', 2000)
     const result = HeuristicContextCompactor.compile(

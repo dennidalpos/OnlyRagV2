@@ -75,4 +75,29 @@ describe('preload Ollama stream isolation', () => {
       error: 'connection lost',
     })
   })
+
+  it('forwards backend context budgets and context-compaction requests', async () => {
+    const callback = vi.fn()
+    const unsubscribe = electronMock.api!.onAgentContextBudget!(callback)
+    const payload = { runId: 'run-1', promptTokens: 1200, promptBudgetTokens: 4000 }
+    emit('agent:context-budget', payload)
+
+    expect(callback).toHaveBeenCalledWith(payload)
+    await electronMock.api!.compactAgentContext!({
+      runId: 'run-1',
+      conversationId: 'conversation-1',
+      planRevisionId: 'plan-1',
+      workspaceId: 'workspace-1',
+    })
+    expect(electronMock.invoke).toHaveBeenCalledWith('agent:compact-context', expect.objectContaining({ runId: 'run-1' }))
+
+    unsubscribe()
+    expect(electronMock.listeners.get('agent:context-budget')?.size || 0).toBe(0)
+  })
+
+  it('exposes explicit Coding Agent audit-log cleanup', async () => {
+    electronMock.invoke.mockResolvedValue(true)
+    await expect(electronMock.api!.clearCodingAgentAuditLog!()).resolves.toBe(true)
+    expect(electronMock.invoke).toHaveBeenCalledWith('diagnostics:clear-agent-audit-log')
+  })
 })

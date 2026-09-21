@@ -19,18 +19,22 @@ describe('CodingAgentLogger Unit Tests', () => {
     if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('should format and write session start log entry', () => {
+  it('defaults session audit entries to metadata without prompt or workspace payloads', () => {
     loggerInstance.logSessionStart('test-session-123', 'Build a React counter component', 'agent', 'qwen2.5-coder:7b', 'D:/Workspace')
     expect(fs.existsSync(logPath)).toBe(true)
 
     const content = fs.readFileSync(logPath, 'utf-8')
     expect(content).toContain('test-session-123')
     expect(content).toContain('AGENT SESSION START')
-    expect(content).toContain('Build a React counter component')
+    expect(content).toContain('User Task: [payload omitted]')
+    expect(content).toContain('Workspace Path: [payload omitted]')
+    expect(content).not.toContain('Build a React counter component')
+    expect(content).not.toContain('D:/Workspace')
     expect(content).toContain('qwen2.5-coder:7b')
   })
 
   it('should format and write tool call and tool execution result', () => {
+    loggerInstance.logSessionStart('test-session-123', 'Task', 'auto', 'model', null, true)
     loggerInstance.logToolCall('test-session-123', 1, 'write_file', { filePath: 'src/Counter.tsx', content: 'export const Counter = () => null' }, 'Creating counter')
     loggerInstance.logToolResult('test-session-123', 1, 'write_file', 'Successfully wrote file src/Counter.tsx')
 
@@ -41,7 +45,24 @@ describe('CodingAgentLogger Unit Tests', () => {
     expect(content).toContain('Successfully wrote file src/Counter.tsx')
   })
 
+  it('keeps tool parameters, results, and model output out of metadata-only logs', () => {
+    loggerInstance.logSessionStart('metadata-session', 'private task', 'guided', 'model', 'D:/Private')
+    loggerInstance.logToolCall('metadata-session', 1, 'write_file', { filePath: 'secret.ts', content: 'private source' })
+    loggerInstance.logToolResult('metadata-session', 1, 'write_file', 'private result')
+    loggerInstance.logLlmResponse('metadata-session', 1, 'private model output')
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('Tool Parameters: [payload omitted]')
+    expect(content).toContain('Tool Result: [payload omitted]')
+    expect(content).toContain('LLM Streamed Output: [payload omitted]')
+    expect(content).not.toContain('secret.ts')
+    expect(content).not.toContain('private source')
+    expect(content).not.toContain('private result')
+    expect(content).not.toContain('private model output')
+  })
+
   it('should format and write session completion summary', () => {
+    loggerInstance.logSessionStart('test-session-123', 'Task', 'auto', 'model', null, true)
     loggerInstance.logSessionEnd('test-session-123', 2, true, 'Counter component created and verified.')
 
     const content = fs.readFileSync(logPath, 'utf-8')
@@ -80,6 +101,7 @@ describe('CodingAgentLogger Unit Tests', () => {
   })
 
   it('writes the first turn prompt of a session in full as the baseline', () => {
+    loggerInstance.logSessionStart('delta-session', 'Task', 'auto', 'model', null, true)
     const prompt = `${'STABLE HEAD '.repeat(60)}
 PLAN: step 1`
     loggerInstance.logTurnPrompt('delta-session', 1, 'qwen2.5-coder:7b', 8192, prompt)
@@ -90,6 +112,7 @@ PLAN: step 1`
   })
 
   it('elides the prefix a later prompt shares with the previous step', () => {
+    loggerInstance.logSessionStart('elide-session', 'Task', 'auto', 'model', null, true)
     const head = 'STABLE HEAD '.repeat(60)
     loggerInstance.logTurnPrompt('elide-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
 PLAN: step 1`)
@@ -108,6 +131,7 @@ PLAN: step 2 with new trajectory`)
   })
 
   it('writes a diverged prompt in full rather than a misleading delta', () => {
+    loggerInstance.logSessionStart('diverge-session', 'Task', 'auto', 'model', null, true)
     loggerInstance.logTurnPrompt('diverge-session', 1, 'qwen2.5-coder:7b', 8192, 'A'.repeat(2000))
     const afterBaseline = fs.readFileSync(logPath, 'utf-8').length
 
@@ -119,12 +143,14 @@ PLAN: step 2 with new trajectory`)
   })
 
   it('starts a fresh baseline for a session reusing an id after it ended', () => {
+    loggerInstance.logSessionStart('reuse-session', 'Task', 'auto', 'model', null, true)
     const head = 'STABLE HEAD '.repeat(60)
     loggerInstance.logTurnPrompt('reuse-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
 first run`)
     loggerInstance.logSessionEnd('reuse-session', 1, true, 'done')
     const afterEnd = fs.readFileSync(logPath, 'utf-8').length
 
+    loggerInstance.logSessionStart('reuse-session', 'Task', 'auto', 'model', null, true)
     loggerInstance.logTurnPrompt('reuse-session', 1, 'qwen2.5-coder:7b', 8192, `${head}
 second run`)
     const newEntry = fs.readFileSync(logPath, 'utf-8').slice(afterEnd)
@@ -133,6 +159,7 @@ second run`)
   })
 
   it('records a milestone transition with the cause that produced it', () => {
+    loggerInstance.logSessionStart('transition-session', 'Task', 'auto', 'model', null, true)
     loggerInstance.logMilestoneTransition(
       'transition-session',
       12,
@@ -150,6 +177,7 @@ second run`)
   })
 
   it('redacts secrets from agent payloads before persisting them', () => {
+    loggerInstance.logSessionStart('redaction-session', 'Task', 'auto', 'model', null, true)
     loggerInstance.logToolCall('redaction-session', 1, 'run_command', {
       command: 'curl https://example.test?access_token=secret-value',
       authorization: 'Bearer secret-value',

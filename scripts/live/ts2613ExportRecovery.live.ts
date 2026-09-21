@@ -1,4 +1,3 @@
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -24,18 +23,14 @@ function seedWorkspace(): { packageJson: string; widgetSource: string } {
       scripts: { build: 'tsc --noEmit' },
     },
     null,
-    2
+    2,
   )
   const widgetSource = 'export const Widget = "widget"\n'
   fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
   fs.writeFileSync(
     path.join(WORKSPACE, 'tsconfig.json'),
-    JSON.stringify(
-      { compilerOptions: { strict: true, module: 'commonjs', target: 'es2020', moduleResolution: 'node' }, include: ['src'] },
-      null,
-      2
-    ),
-    'utf-8'
+    JSON.stringify({ compilerOptions: { strict: true, module: 'commonjs', target: 'es2020', moduleResolution: 'node' }, include: ['src'] }, null, 2),
+    'utf-8',
   )
   fs.writeFileSync(path.join(WORKSPACE, 'src', 'Widget.ts'), widgetSource, 'utf-8')
   fs.writeFileSync(path.join(WORKSPACE, 'src', 'Dashboard.ts'), "import Widget from './Widget'\nexport const dashboard = Widget\n", 'utf-8')
@@ -54,7 +49,7 @@ describe('live: TS2613 export recovery', () => {
       SESSION,
       WORKSPACE,
       [{ id: 'm-ts2613', title: 'Fix src/Dashboard.ts', status: 'pending', verificationCommand: 'npm run build' }],
-      'Fix the TypeScript build error in src/Dashboard.ts.'
+      'Fix the TypeScript build error in src/Dashboard.ts.',
     )
 
     const result = await runAgentOrchestratorLoop(
@@ -63,14 +58,20 @@ describe('live: TS2613 export recovery', () => {
           'Run `npm run build` first and fix the TypeScript error in src/Dashboard.ts. ' +
           'The local module src/Widget.ts is correct and must not be edited. Stop only after npm run build passes.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: SESSION,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 12 } as never),
       },
-      null
+      null,
     )
 
-    const metrics = reportRun({ label: 'TS2613 export recovery', workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
+    const metrics = reportRun({
+      label: 'TS2613 export recovery',
+      workspacePath: WORKSPACE,
+      sessionId: SESSION,
+      success: result.success,
+      summary: result.summary,
+    })
     const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'Dashboard.ts'), 'utf-8')
 
     expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)

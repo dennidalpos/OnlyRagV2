@@ -6,6 +6,12 @@ import { isAllowedAppNavigation } from './navigationPolicy'
 // Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/onlyrag-v2)
 app.name = 'onlyrag-v2'
 
+const isElectronE2ETest = process.env.ONLYRAG_E2E_TEST === '1'
+const e2eUserDataPath = process.env.ONLYRAG_E2E_USER_DATA?.trim()
+if (isElectronE2ETest && e2eUserDataPath) {
+  app.setPath('userData', path.resolve(e2eUserDataPath))
+}
+
 const isSingleInstance = app.requestSingleInstanceLock()
 if (!isSingleInstance && !process.env.ONLYRAG_SMOKE_TEST && !process.argv.includes('--smoke-test')) {
   app.quit()
@@ -36,10 +42,10 @@ import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsI
 import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
 import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
 
+logger.rebindToUserData(app.getPath('userData'))
+
 process.env.DIST = path.join(__dirname, '../dist')
-process.env.VITE_PUBLIC = app.isPackaged
-  ? process.env.DIST
-  : path.join(__dirname, '../public')
+process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(__dirname, '../public')
 
 let win: BrowserWindow | null = null
 
@@ -129,10 +135,10 @@ app.whenReady().then(() => {
   logger.log(
     'INFO',
     'MainProcess',
-    `Run context: ${app.isPackaged ? 'PACKAGED' : 'DEV'} | version ${app.getVersion()} | pid ${process.pid} | exec ${process.execPath} | userData ${app.getPath('userData')}`
+    `Run context: ${app.isPackaged ? 'PACKAGED' : 'DEV'} | version ${app.getVersion()} | pid ${process.pid} | exec ${process.execPath} | userData ${app.getPath('userData')}`,
   )
   logger.log('INFO', 'MainProcess', 'Electron App Ready. Creating window & initializing Sidecar...')
-  
+
   // Clean startup residuals
   taskRunner.cleanTempResiduals().catch(() => {})
 
@@ -157,5 +163,7 @@ app.whenReady().then(() => {
   }
 
   createWindow()
-  sidecarProcessManager.startPythonSidecar()
+  if (!isElectronE2ETest) {
+    sidecarProcessManager.startPythonSidecar()
+  }
 })

@@ -22,7 +22,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   it('should assemble turn prompt with base guidelines and user task', () => {
     const { prompt } = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 1,
       maxSteps: 50,
       workspacePath: 'D:/project',
@@ -42,7 +42,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   it('should include pinned files and active file snippet when provided', () => {
     const { prompt } = assembleTurnPrompt({
       userTask: 'Refactor calculateTotal',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 2,
       maxSteps: 50,
       workspacePath: 'D:/project',
@@ -65,7 +65,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     const hugeMap = 'a'.repeat(25000)
     const { prompt } = assembleTurnPrompt({
       userTask: 'Optimize database queries',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 3,
       maxSteps: 50,
       workspacePath: 'D:/project',
@@ -83,7 +83,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   it('should omit the prose tool schema block when toolCallingCapable=true (AGT2: native tool-calling models already receive it via the `tools` API param)', () => {
     const withProse = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 1,
       maxSteps: 50,
       workspacePath: 'D:/project',
@@ -93,7 +93,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
     })
     const nativeToolCalling = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 1,
       maxSteps: 50,
       workspacePath: 'D:/project',
@@ -111,7 +111,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   it('renders only the application-selected tools for text fallback models', () => {
     const { prompt } = assembleTurnPrompt({
       userTask: 'Fix typo in index.html',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 1,
       maxSteps: 50,
       workspacePath: 'D:/project',
@@ -130,7 +130,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   it('should render ∞ when maxSteps is Infinity or 0', () => {
     const { prompt } = assembleTurnPrompt({
       userTask: 'Long running task',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 1,
       maxSteps: Infinity,
       workspacePath: 'D:/project',
@@ -145,7 +145,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
   describe('stableSection / historyBlock / turnSuffix decomposition (AGT1: Ollama context/KV-cache reuse)', () => {
     const baseInput = {
       userTask: 'Fix typo in index.html',
-      agentMode: 'agent' as const,
+      agentMode: 'auto' as const,
       maxSteps: 50,
       workspacePath: 'D:/project',
       settings: defaultSettings,
@@ -211,7 +211,7 @@ describe('AgentPromptAssembler Domain Unit Tests', () => {
       // The orchestrator must feed HeuristicContextCompactor these segments, never stableSection itself.
       const { stableSection, segments } = assembleTurnPrompt({
         userTask: 'Build a dashboard',
-        agentMode: 'agent',
+        agentMode: 'auto',
         stepCount: 3,
         maxSteps: 50,
         workspacePath: 'D:/project',

@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -29,19 +28,19 @@ function seedConflictingWorkspace(): void {
         devDependencies: { vite: PINNED_VITE },
       },
       null,
-      2
+      2,
     ),
-    'utf-8'
+    'utf-8',
   )
   fs.writeFileSync(
     path.join(WORKSPACE, 'index.html'),
     '<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>',
-    'utf-8'
+    'utf-8',
   )
   fs.writeFileSync(
     path.join(WORKSPACE, 'src', 'main.jsx'),
     "import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')).render('ok')\n",
-    'utf-8'
+    'utf-8',
   )
 
   // Really installed, so npm reports `Found: vite@4.5.14` from the tree and not from the
@@ -65,11 +64,11 @@ describe('live: eresolve recovery', () => {
           `Use npm for every command (not pnpm, not yarn). Run exactly this command first: \`npm install ${CONFLICTING_PLUGIN}\`. ` +
           'It will fail. Resolve the failure so the install succeeds, then run `npm run build` and make it pass. Do not rewrite src files.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: SESSION,
         settings,
       },
-      null
+      null,
     )
 
     const metrics = reportRun({

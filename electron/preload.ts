@@ -5,6 +5,7 @@ const api: IElectronAPI = {
   runDiagnostics: (host?: string) => ipcRenderer.invoke('diagnostics:run', host),
   getLogs: () => ipcRenderer.invoke('diagnostics:get-logs'),
   clearLogs: () => ipcRenderer.invoke('diagnostics:clear-logs'),
+  clearCodingAgentAuditLog: () => ipcRenderer.invoke('diagnostics:clear-agent-audit-log'),
   getLogFilePath: () => ipcRenderer.invoke('diagnostics:get-log-filepath'),
   openLogsFolder: () => ipcRenderer.invoke('diagnostics:open-logs-folder'),
   logTelemetry: (level, category, message) => ipcRenderer.invoke('diagnostics:log-telemetry', level, category, message),
@@ -118,6 +119,12 @@ const api: IElectronAPI = {
     ipcRenderer.on('agent:step-update', subscription)
     return () => ipcRenderer.removeListener('agent:step-update', subscription)
   },
+  onAgentContextBudget: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('agent:context-budget', subscription)
+    return () => ipcRenderer.removeListener('agent:context-budget', subscription)
+  },
+  compactAgentContext: (identity: AgentRunIdentity) => ipcRenderer.invoke('agent:compact-context', identity),
   /** Aggregate size of the file changes applied so far in the active agent session. */
   onAgentChangeMetrics: (callback: (data: AgentChangeMetrics & AgentRunIdentity) => void) => {
     const subscription = (_: any, data: any) => callback(data)

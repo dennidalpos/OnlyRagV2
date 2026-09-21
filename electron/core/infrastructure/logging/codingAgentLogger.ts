@@ -4,6 +4,7 @@ import { app } from 'electron'
 import { logger } from '../../../diagnostics'
 import { sanitizeLogMessage } from '../../../logRedactor'
 import { AgentRunMetrics } from '../../domain/agent/agentRunMetrics'
+import { createHash } from 'node:crypto'
 
 /** Below this, eliding a shared prefix costs more in explanation than it saves. */
 const MIN_ELIDABLE_PREFIX_CHARS = 400
@@ -15,6 +16,7 @@ export class CodingAgentLogger {
   /** Previous turn prompt of each live session, kept to elide the part the next one repeats. */
   private previousPromptBySession = new Map<string, { step: number; prompt: string }>()
   private runMetricsBySession = new Map<string, AgentRunMetrics>()
+  private payloadCaptureBySession = new Map<string, boolean>()
 
   constructor(options?: { logFilePath?: string; maxSizeBytes?: number; maxRetainedFiles?: number }) {
     const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
@@ -34,6 +36,20 @@ export class CodingAgentLogger {
 
   public getLogFilePath(): string {
     return this.logFilePath
+  }
+
+  public configureRetention(maxRetainedFiles: number): void {
+    this.maxRetainedFiles = Math.max(1, Math.min(5, Math.floor(maxRetainedFiles)))
+    this.cleanupRetainedFiles()
+  }
+
+  private includesPayload(sessionId: string): boolean {
+    return this.payloadCaptureBySession.get(sessionId) === true
+  }
+
+  private static payloadSummary(label: string, value: string): string {
+    const digest = createHash('sha256').update(value).digest('hex').slice(0, 12)
+    return `${label}: [payload omitted] | Chars: ${value.length} | SHA-256: ${digest}`
   }
 
   /** Returns every persisted audit entry for one session, including rotated files. */
@@ -69,6 +85,8 @@ export class CodingAgentLogger {
         const retainedFile = path.join(logDir, `coding_agent_audit.${index}.log`)
         if (fs.existsSync(retainedFile)) fs.writeFileSync(retainedFile, '', 'utf-8')
       }
+      this.previousPromptBySession.clear()
+      this.payloadCaptureBySession.clear()
       return true
     } catch (err: any) {
       logger.log('WARN', 'CodingAgentLogger', `Failed clearing audit log: ${err?.message}`)
@@ -165,17 +183,19 @@ export class CodingAgentLogger {
     userTask: string,
     mode: string,
     model: string,
-    workspacePath?: string | null
+    workspacePath?: string | null,
+    includePayloads = false,
   ): void {
+    this.payloadCaptureBySession.set(sessionId, includePayloads)
+    const workspaceDetail = includePayloads
+      ? `Workspace Path: ${workspacePath || 'Standalone'}`
+      : CodingAgentLogger.payloadSummary('Workspace Path', workspacePath || 'Standalone')
     const content = [
       `Session ID: ${sessionId}`,
       `Starting Mode: ${mode.toUpperCase()}`,
       `Active Model: ${model}`,
-      `Workspace Path: ${workspacePath || 'Standalone'}`,
-      `User Task:`,
-      `"""`,
-      `${userTask}`,
-      `"""`,
+      workspaceDetail,
+      includePayloads ? `User Task:\n"""\n${userTask}\n"""` : CodingAgentLogger.payloadSummary('User Task', userTask),
     ].filter(Boolean).join('\n')
 
     this.writeEntry(`[AGENT SESSION START] Session: ${sessionId}`, content)
@@ -189,7 +209,7 @@ export class CodingAgentLogger {
   ): void {
     const content = `Session ID: ${sessionId}
 Mode Changed: ${fromMode.toUpperCase()} ➔ ${toMode.toUpperCase()}
-${reason ? `Reason: ${reason}` : ''}`
+${reason ? (this.includesPayload(sessionId) ? `Reason: ${reason}` : CodingAgentLogger.payloadSummary('Reason', reason)) : ''}`
     this.writeEntry(`[AGENT MODE TRANSITION] Session: ${sessionId}`, content)
   }
 
@@ -199,10 +219,13 @@ ${reason ? `Reason: ${reason}` : ''}`
     milestonesCount: number,
     mode: string
   ): void {
+    const promptDetail = this.includesPayload(sessionId)
+      ? `Source Prompt: "${prompt.slice(0, 300)}"`
+      : CodingAgentLogger.payloadSummary('Source Prompt', prompt)
     const content = `Session ID: ${sessionId}
 Mode: ${mode.toUpperCase()}
 Generated Plan Milestones Count: ${milestonesCount}
-Source Prompt: "${prompt.slice(0, 300)}"`
+${promptDetail}`
     this.writeEntry(`[PLAN GENERATION FLOW] Session: ${sessionId}`, content)
   }
 
@@ -227,6 +250,13 @@ Source Prompt: "${prompt.slice(0, 300)}"`
     prompt: string
   ): void {
     const header = `Session ID: ${sessionId} | Step: ${step} | Target Model: ${model} | Context Limit: ${numCtx}`
+    if (!this.includesPayload(sessionId)) {
+      this.writeEntry(
+        `[STEP ${step} - PROMPT SENT TO LLM] Session: ${sessionId}`,
+        `${header}\n${CodingAgentLogger.payloadSummary('Turn Prompt', prompt)}`,
+      )
+      return
+    }
     const previous = this.previousPromptBySession.get(sessionId)
     this.previousPromptBySession.set(sessionId, { step, prompt })
 
@@ -271,11 +301,11 @@ ${tail.slice(0, 15000)}
   }
 
   public logLlmResponse(sessionId: string, step: number, rawResponse: string): void {
-    const content = `Session ID: ${sessionId} | Step: ${step}
+    const content = this.includesPayload(sessionId) ? `Session ID: ${sessionId} | Step: ${step}
 LLM Streamed Output:
 \`\`\`
 ${rawResponse}
-\`\`\``
+\`\`\`` : `Session ID: ${sessionId} | Step: ${step}\n${CodingAgentLogger.payloadSummary('LLM Streamed Output', rawResponse)}`
     this.writeEntry(`[STEP ${step} - LLM RESPONSE] Session: ${sessionId}`, content)
   }
 
@@ -287,11 +317,14 @@ ${rawResponse}
     explanation?: string
   ): void {
     this.metricsFor(sessionId).recordToolCall()
-    const content = `Session ID: ${sessionId} | Step: ${step}
+    const content = this.includesPayload(sessionId) ? `Session ID: ${sessionId} | Step: ${step}
 Invoked Tool: ${tool}
 Explanation: ${explanation || 'None provided'}
 Parameters:
-${JSON.stringify(parameters, null, 2)}`
+${JSON.stringify(parameters, null, 2)}` : `Session ID: ${sessionId} | Step: ${step}
+Invoked Tool: ${tool}
+Parameter Keys: ${Object.keys(parameters).sort().join(', ') || 'None'}
+${CodingAgentLogger.payloadSummary('Tool Parameters', JSON.stringify(parameters))}`
     this.writeEntry(`[STEP ${step} - TOOL EXECUTION INITIATED] ${tool}`, content)
   }
 
@@ -308,12 +341,14 @@ ${JSON.stringify(parameters, null, 2)}`
     }
     const succeeded = !/\[TERMINAL AUTO-HEALING DIAGNOSTICS LOG\]|Security Violation|\[POLICY BLOCK\]|^Error:/i.test(result || '')
     this.metricsFor(sessionId).recordToolResult(succeeded, result, tool)
-    const content = `Session ID: ${sessionId} | Step: ${step} | Tool: ${tool} | IsTerminal: ${Boolean(isTerminal)}
+    const content = this.includesPayload(sessionId) ? `Session ID: ${sessionId} | Step: ${step} | Tool: ${tool} | IsTerminal: ${Boolean(isTerminal)}
 Execution Result:
 \`\`\`
 ${result}
 \`\`\`
-${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` : ''}`
+${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` : ''}` : `Session ID: ${sessionId} | Step: ${step} | Tool: ${tool} | IsTerminal: ${Boolean(isTerminal)}
+Succeeded: ${succeeded}
+${CodingAgentLogger.payloadSummary('Tool Result', `${result}${terminalDetail || ''}`)}`
     this.writeEntry(`[STEP ${step} - TOOL RESULT COMPLETED] ${tool}`, content)
   }
 
@@ -330,10 +365,13 @@ ${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` :
     if (toStatus.toLowerCase() === 'verified' && !/build|test|typecheck|lint|run_tests/i.test(cause)) {
       this.metricsFor(sessionId).recordFalseVerified()
     }
-    const content = `Session ID: ${sessionId} | Step: ${step}
+    const content = this.includesPayload(sessionId) ? `Session ID: ${sessionId} | Step: ${step}
 Milestone: ${milestoneId} — ${milestoneTitle}
 Transition: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}
-Cause: ${cause}`
+Cause: ${cause}` : `Session ID: ${sessionId} | Step: ${step}
+Milestone: ${milestoneId}
+Transition: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}
+${CodingAgentLogger.payloadSummary('Milestone Payload', `${milestoneTitle}\n${cause}`)}`
     this.writeEntry(`[STEP ${step} - MILESTONE ${milestoneId}: ${fromStatus.toUpperCase()} -> ${toStatus.toUpperCase()}] Session: ${sessionId}`, content)
   }
 
@@ -353,7 +391,9 @@ Cause: ${cause}`
         if (m.status === 'verified') icon = '[x]'
         else if (m.status === 'in_progress') icon = '[>]'
         else if (m.status === 'failed') icon = '[!]'
-        return `${idx + 1}. ${icon} ${m.title} — Status: ${m.status.toUpperCase()}${m.notes ? ` (${m.notes})` : ''}`
+        return this.includesPayload(sessionId)
+          ? `${idx + 1}. ${icon} ${m.title} — Status: ${m.status.toUpperCase()}${m.notes ? ` (${m.notes})` : ''}`
+          : `${idx + 1}. ${icon} ${m.id} — Status: ${m.status.toUpperCase()}`
       })
       .join('\n')
 
@@ -371,11 +411,12 @@ ${milestoneLines}`
     repeatCount: number,
     interventionMessage: string
   ): void {
-    const content = `Session ID: ${sessionId} | Step: ${step} | Blocked Tool: ${tool} | Target: ${target || 'N/A'} | Duplicate Count: ${repeatCount}
+    const content = this.includesPayload(sessionId) ? `Session ID: ${sessionId} | Step: ${step} | Blocked Tool: ${tool} | Target: ${target || 'N/A'} | Duplicate Count: ${repeatCount}
 Intervention Strategy Delivered to LLM:
 \`\`\`
 ${interventionMessage}
-\`\`\``
+\`\`\`` : `Session ID: ${sessionId} | Step: ${step} | Blocked Tool: ${tool} | Duplicate Count: ${repeatCount}
+${CodingAgentLogger.payloadSummary('Intervention Payload', `${target || ''}\n${interventionMessage}`)}`
     this.writeEntry(`[STEP ${step} - LOOP INTERVENTION PREVENTED] ${tool}`, content)
   }
 
@@ -390,12 +431,10 @@ Status: ${success ? 'COMPLETED' : 'STOPPED/FAILED'}
 Total Steps: ${totalSteps}
 Run Metrics:
 ${JSON.stringify(metrics.snapshot(), null, 2)}
-Final Summary:
-"""
-${summary}
-"""`
+${this.includesPayload(sessionId) ? `Final Summary:\n"""\n${summary}\n"""` : CodingAgentLogger.payloadSummary('Final Summary', summary)}`
     this.writeEntry(`[AGENT SESSION END] Session: ${sessionId}`, content)
     this.runMetricsBySession.delete(sessionId)
+    this.payloadCaptureBySession.delete(sessionId)
   }
 }
 

@@ -42,7 +42,7 @@ describe('SessionHistoryRepository Unit Tests', () => {
             sessionId: 'session-1',
             prompt: 'Aggiungi i test di regressione',
             startedAt: new Date().toISOString(),
-            agentMode: 'agent',
+            agentMode: 'auto',
             outcome: 'success',
             totalSteps: 8,
             filesTouched: 2,
@@ -50,7 +50,7 @@ describe('SessionHistoryRepository Unit Tests', () => {
             deletions: 4,
           },
         ],
-      })
+      }),
     )
 
     expect(saved).not.toBeNull()
@@ -72,7 +72,7 @@ describe('SessionHistoryRepository Unit Tests', () => {
     fs.writeFileSync(
       path.join(legacyOnlyragDir, 'session_history.json'),
       JSON.stringify({ version: 1, sessions: [buildSession('legacy-migrated-session', tempDir, { title: 'Legacy' })] }),
-      'utf-8'
+      'utf-8',
     )
 
     const listed = await sessionHistoryRepository.listSessions(tempDir)

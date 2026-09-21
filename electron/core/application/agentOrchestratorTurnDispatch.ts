@@ -4,21 +4,13 @@ import { AgentStreamTransport } from '../infrastructure/http/agentStreamTranspor
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import { selectModelForTurn, assembleTurnPrompt, freezeContextWindow, decideContextReuse } from './agentOrchestratorPromptAssembly'
-import type {
-  PreparedAgentTurn,
-  TurnDispatchContext,
-  TurnDispatchOutcome,
-  ModelSelection,
-} from './agentOrchestratorTurnDispatchTypes'
+import type { PreparedAgentTurn, TurnDispatchContext, TurnDispatchOutcome, ModelSelection } from './agentOrchestratorTurnDispatchTypes'
 import type { TurnToolPolicy } from '../domain/agent/turnToolPolicy'
-import {
-  recordRecoveryFailure,
-  recoveryStopDiagnostic,
-  type RecoveryFailureState,
-} from '../domain/agent/recoveryBudget'
+import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureState } from '../domain/agent/recoveryBudget'
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
 import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
 import { ollamaAppService } from './ollamaAppService'
+import { countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 
 export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
@@ -29,7 +21,7 @@ async function dispatchToLlm(
   turnPrompt: string,
   contextReuseDecision: OllamaContextReuseDecision,
   wasCompacted: boolean,
-  toolPolicy: TurnToolPolicy
+  toolPolicy: TurnToolPolicy,
 ): Promise<{ streamedOutput: string; usedModel?: string } | { error: string }> {
   let generationTelemetry: OllamaStreamTelemetry | undefined
   const latchProtocol = (protocol: 'native' | 'text') => {
@@ -38,38 +30,43 @@ async function dispatchToLlm(
       [selection.targetModel]: protocol,
     }
   }
-  const stream = (toolCallingCapable: boolean) => AgentStreamTransport.streamCompletion({
-    targetModel: selection.targetModel,
-    prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
-    runtimeOpts: selection.runtimeOpts,
-    keepAlive: CODING_MODEL_KEEP_ALIVE,
-    ollamaEndpoint: ctx.settings.ollamaHost,
-    toolCallingCapable,
-    toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
-    previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
-    onTokenChunk: (chunk) => {
-      if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-        ctx.session.targetWindow.webContents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
-      }
-    },
-    onThoughtChunk: (chunk) => {
-      if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
-        ctx.session.targetWindow.webContents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
-      }
-    },
-    isCancelled: () => !ctx.isSessionActive(),
-    signal: ctx.session.abortController?.signal,
-    onCancelHandle: (abort) => { ctx.session.activeCancelHandle = abort },
-    onToolProtocolObserved: selection.targetModelToolCallingProbe ? latchProtocol : undefined,
-    onGenerationTelemetry: (telemetry) => { generationTelemetry = telemetry },
-    onContextReceived: (contextTokens, respondingModel) => {
-      if (wasCompacted || !ctx.isSessionActive()) return
-      ctx.session.ollamaContextTokens = contextTokens
-      ctx.session.ollamaContextModel = respondingModel
-      ctx.session.ollamaContextStableSection = assembled.stableSection
-      ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
-    },
-  })
+  const stream = (toolCallingCapable: boolean) =>
+    AgentStreamTransport.streamCompletion({
+      targetModel: selection.targetModel,
+      prompt: contextReuseDecision.reusedContext ? contextReuseDecision.promptToSend : turnPrompt,
+      runtimeOpts: selection.runtimeOpts,
+      keepAlive: CODING_MODEL_KEEP_ALIVE,
+      ollamaEndpoint: ctx.settings.ollamaHost,
+      toolCallingCapable,
+      toolCatalog: toolCallingCapable ? selectToolSchemas(toolPolicy.allowedTools) : undefined,
+      previousContext: contextReuseDecision.reusedContext ? contextReuseDecision.contextTokens : undefined,
+      onTokenChunk: (chunk) => {
+        if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+          ctx.session.targetWindow.webContents.send('agent:stream-token', { ...ctx.session.identity, step: ctx.stepCount, chunk })
+        }
+      },
+      onThoughtChunk: (chunk) => {
+        if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+          ctx.session.targetWindow.webContents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
+        }
+      },
+      isCancelled: () => !ctx.isSessionActive(),
+      signal: ctx.session.abortController?.signal,
+      onCancelHandle: (abort) => {
+        ctx.session.activeCancelHandle = abort
+      },
+      onToolProtocolObserved: selection.targetModelToolCallingProbe ? latchProtocol : undefined,
+      onGenerationTelemetry: (telemetry) => {
+        generationTelemetry = telemetry
+      },
+      onContextReceived: (contextTokens, respondingModel) => {
+        if (wasCompacted || !ctx.isSessionActive()) return
+        ctx.session.ollamaContextTokens = contextTokens
+        ctx.session.ollamaContextModel = respondingModel
+        ctx.session.ollamaContextStableSection = assembled.stableSection
+        ctx.session.ollamaContextHistoryBlock = assembled.historyBlock
+      },
+    })
   let transportFailure: RecoveryFailureState | undefined
   let toolCallingCapable = selection.targetModelToolCallingCapable
   while (true) {
@@ -113,11 +110,28 @@ async function dispatchToLlm(
 export async function collectTurnContext(ctx: TurnDispatchContext): Promise<PreparedAgentTurn> {
   const hasRecentToolFailure = ctx.episodicCompactor.failureCount > 0
   const errorCountInHistory = ctx.episodicCompactor.failureCount
-  const compiledHistoryBlock = ctx.episodicCompactor.compilePromptHistoryBlock(10000)
+  const compiledHistoryBlock = ctx.episodicCompactor.compilePromptHistoryBlock(ctx.session.forceContextCompaction ? 4000 : 10000)
 
   const selection = selectModelForTurn(ctx)
   freezeContextWindow(ctx, selection.runtimeOpts)
   const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
+
+  if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
+    const promptTokens = countPromptTokens(turnPrompt)
+    const promptBudgetTokens = Math.max(1, selection.runtimeOpts.num_ctx - selection.runtimeOpts.num_predict)
+    ctx.session.targetWindow.webContents.send('agent:context-budget', {
+      ...ctx.session.identity,
+      model: selection.targetModel,
+      contextWindowTokens: selection.runtimeOpts.num_ctx,
+      outputReserveTokens: selection.runtimeOpts.num_predict,
+      promptBudgetTokens,
+      originalPromptTokens: countPromptTokens(assembled.prompt),
+      promptTokens,
+      utilizationPercent: Math.min(100, Math.round((promptTokens / promptBudgetTokens) * 100)),
+      wasCompacted: compactionResult.wasCompacted,
+      manualCompaction: Boolean(ctx.session.forceContextCompaction),
+    })
+  }
 
   const contextReuseDecision = decideContextReuse(ctx, selection, assembled, turnPrompt, compactionResult.wasCompacted)
   return {
@@ -134,16 +148,13 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
 }
 
 /** Requests exactly one current-turn proposal from the selected model. */
-export async function requestTurnProposal(
-  ctx: TurnDispatchContext,
-  prepared: PreparedAgentTurn
-): Promise<TurnDispatchOutcome> {
+export async function requestTurnProposal(ctx: TurnDispatchContext, prepared: PreparedAgentTurn): Promise<TurnDispatchOutcome> {
   const { selection, assembled, turnPrompt, contextReuseDecision, wasCompacted, toolPolicy } = prepared
   ctx.emitLog(
     'tool_call',
     `[Step ${ctx.stepCount}/${ctx.maxStepsLabel}] Consulting LLM (${selection.targetModel}) [ctx:${selection.runtimeOpts.num_ctx}${
-      ctx.fsmMode.getMode() !== 'AGENT' ? ` | Mode:${ctx.fsmMode.getMode()}` : ''
-    }]...`
+      ctx.fsmMode.getMode() !== 'AUTO' ? ` | Mode:${ctx.fsmMode.getMode()}` : ''
+    }]...`,
   )
   if (ctx.settings.enableCodingAgentDebugLog) {
     codingAgentLogger.logTurnPrompt(ctx.sessionId, ctx.stepCount, selection.targetModel, selection.runtimeOpts.num_ctx, turnPrompt)
@@ -172,9 +183,7 @@ export async function requestTurnProposal(
     })
     return {
       outcome: 'return',
-      result: closure.outcome === 'closed'
-        ? closure.result
-        : { success: false, summary: `LLM Error: ${dispatchResult.error}`, completionStatus: 'blocked' },
+      result: closure.outcome === 'closed' ? closure.result : { success: false, summary: `LLM Error: ${dispatchResult.error}`, completionStatus: 'blocked' },
     }
   }
 

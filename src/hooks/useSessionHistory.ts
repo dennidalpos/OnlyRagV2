@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AgentActionLog,
   AgentChangeMetrics,
   AgentExecutionMode,
   AgentPlan,
   CodingSession,
   ExecutedPrompt,
   ExecutedPromptOutcome,
-  QueuedPromptRecord,
 } from '../types'
 import { logger } from '../lib/logger'
 
@@ -265,11 +263,16 @@ export function useSessionHistory(workspacePath: string | null) {
   )
 
   const updateSessionContent = useCallback(
-    (sessionId: string, content: { actionLogs?: AgentActionLog[]; promptQueue?: QueuedPromptRecord[] }) => {
+    (
+      sessionId: string,
+      content: Partial<Pick<CodingSession, 'actionLogs' | 'promptQueue' | 'contextBudget' | 'forceContextCompaction'>>,
+    ) => {
       mutateSession(sessionId, (session) => ({
         ...session,
         actionLogs: content.actionLogs ?? session.actionLogs,
         promptQueue: content.promptQueue ?? session.promptQueue,
+        contextBudget: content.contextBudget ?? session.contextBudget,
+        forceContextCompaction: content.forceContextCompaction ?? session.forceContextCompaction,
       }))
     },
     [mutateSession]

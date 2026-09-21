@@ -1,4 +1,3 @@
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -22,7 +21,7 @@ function seedWorkspace(): { packageJson: string } {
       devDependencies: { vite: '^5.0.0' },
     },
     null,
-    2
+    2,
   )
   fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
   fs.writeFileSync(path.join(WORKSPACE, 'package-lock.json'), `${packageJson}\n`, 'utf-8')
@@ -37,7 +36,7 @@ describe('live: version downgrade guard', () => {
       SESSION,
       WORKSPACE,
       [{ id: 'm-version-downgrade', title: 'Preserve the Vite dependency', status: 'pending' }],
-      'Preserve the declared Vite dependency while resolving the requested install.'
+      'Preserve the declared Vite dependency while resolving the requested install.',
     )
 
     const result = await runAgentOrchestratorLoop(
@@ -46,11 +45,11 @@ describe('live: version downgrade guard', () => {
           'Run exactly `npm install vite@^4.0.0` first. The command must not execute because package.json declares Vite 5. ' +
           'After the guard explains the conflict, stop without changing any file.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: SESSION,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 6 } as never),
       },
-      null
+      null,
     )
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
@@ -68,7 +67,7 @@ describe('live: version downgrade guard', () => {
       `${SESSION}-etarget`,
       WORKSPACE,
       [{ id: 'm-etarget', title: 'Preserve the Vite dependency', status: 'pending' }],
-      'Use the registry-backed version preflight before installing a dependency.'
+      'Use the registry-backed version preflight before installing a dependency.',
     )
 
     const result = await runAgentOrchestratorLoop(
@@ -77,11 +76,11 @@ describe('live: version downgrade guard', () => {
           'Run exactly `npm install vite@^999.0.0` first. The command must be refused before npm because no published Vite version matches it. ' +
           'After the guard explains the conflict, stop without changing any file.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: `${SESSION}-etarget`,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 6 } as never),
       },
-      null
+      null,
     )
 
     const metrics = readRunMetrics({

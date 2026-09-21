@@ -97,6 +97,8 @@ export const AppLayout: React.FC = () => {
       capabilityPolicyMode: 'offline-strict',
       maxToolCallSteps: 25,
       enableCodingAgentDebugLog: false,
+      includeCodingAgentDebugPayloads: false,
+      codingAgentDebugRetentionFiles: 2,
       hasCompletedInitialSetup: false,
     }
   })

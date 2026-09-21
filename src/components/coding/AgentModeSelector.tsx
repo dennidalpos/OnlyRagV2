@@ -10,7 +10,7 @@ interface AgentModeSelectorProps {
 export const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({ agentMode, setAgentMode }) => {
   const { t } = useTranslation()
 
-  const modes: AgentMode[] = ['ask', 'agent']
+  const modes: AgentMode[] = ['ask', 'guided', 'auto']
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const currentIdx = modes.indexOf(agentMode)
@@ -36,7 +36,7 @@ export const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({ agentMode,
         <button
           type="button"
           role="radio"
-          tabIndex={agentMode === 'ask' || agentMode === 'plan' ? 0 : -1}
+          tabIndex={agentMode === 'ask' ? 0 : -1}
           aria-checked={agentMode === 'ask'}
           onClick={() => setAgentMode('ask')}
           title={`${t('coding.askMode')}: ${t('coding.askModeDesc')}`}
@@ -49,28 +49,30 @@ export const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({ agentMode,
         <button
           type="button"
           role="radio"
-          tabIndex={agentMode === 'agent' ? 0 : -1}
-          aria-checked={agentMode === 'agent'}
-          onClick={() => setAgentMode('agent')}
-          title={`${t('coding.agentMode')}: ${t('coding.agentModeDesc')}`}
+          tabIndex={agentMode === 'guided' ? 0 : -1}
+          aria-checked={agentMode === 'guided'}
+          onClick={() => setAgentMode('guided')}
+          title={`${t('coding.guidedMode')}: ${t('coding.guidedModeDesc')}`}
           className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
-            agentMode === 'agent' ? 'bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+            agentMode === 'guided' ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          {t('coding.agentModeShort')}
+          {t('coding.guidedModeShort')}
+        </button>
+        <button
+          type="button"
+          role="radio"
+          tabIndex={agentMode === 'auto' ? 0 : -1}
+          aria-checked={agentMode === 'auto'}
+          onClick={() => setAgentMode('auto')}
+          title={`${t('coding.autoMode')}: ${t('coding.autoModeDesc')}`}
+          className={`px-2 py-0.5 rounded-lg font-semibold transition-all focus-ring ${
+            agentMode === 'auto' ? 'bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {t('coding.autoModeShort')}
         </button>
       </div>
-      <button
-        type="button"
-        aria-pressed={agentMode === 'plan'}
-        onClick={() => setAgentMode('plan')}
-        title={`${t('coding.planMode')}: ${t('coding.planModeDesc')}`}
-        className={`px-2 py-1 rounded-lg border font-semibold transition-all focus-ring ${
-          agentMode === 'plan' ? 'bg-cyan-950 text-cyan-300 font-bold border-cyan-800/80 shadow-sm' : 'border-slate-800 text-slate-400 hover:text-slate-200'
-        }`}
-      >
-        {t('coding.planModeShort')}
-      </button>
     </div>
   )
 }

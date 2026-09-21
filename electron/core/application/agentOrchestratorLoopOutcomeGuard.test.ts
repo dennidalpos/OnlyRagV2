@@ -28,7 +28,7 @@ describe('handleLoopDetection — successful vs failed repeats', () => {
 
     ctx = {
       streamedOutput: '',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 12,
       maxSteps: 50,
       isUnlimitedSteps: false,

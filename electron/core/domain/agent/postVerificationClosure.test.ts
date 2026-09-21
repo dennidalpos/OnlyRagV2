@@ -25,10 +25,7 @@ describe('assessPostVerificationClosure', () => {
   it('refuses closure while a milestone still names a file that is missing', () => {
     const result = assessPostVerificationClosure({
       hasVerifiedBuild: true,
-      milestones: [
-        milestone('m-1', 'Ensure the buttons are large enough'),
-        milestone('m-2', 'Create `src/pages/Tasks.tsx`'),
-      ],
+      milestones: [milestone('m-1', 'Ensure the buttons are large enough'), milestone('m-2', 'Create `src/pages/Tasks.tsx`')],
       deliverableStatusOf: statusMap({ 'm-1': 'not_applicable', 'm-2': 'unsatisfied' }),
     })
     expect(result.state).toBe('not_closable')
@@ -64,10 +61,7 @@ describe('assessPostVerificationClosure', () => {
   it('does not let an abandoned milestone block closure', () => {
     const result = assessPostVerificationClosure({
       hasVerifiedBuild: true,
-      milestones: [
-        milestone('m-1', 'Create `src/App.tsx`', 'verified'),
-        milestone('m-2', 'Create `src/pages/Tasks.tsx`', 'failed'),
-      ],
+      milestones: [milestone('m-1', 'Create `src/App.tsx`', 'verified'), milestone('m-2', 'Create `src/pages/Tasks.tsx`', 'failed')],
       deliverableStatusOf: statusMap({ 'm-2': 'unsatisfied' }),
     })
     expect(result.state).toBe('finish_now')
@@ -76,10 +70,7 @@ describe('assessPostVerificationClosure', () => {
   it('does not let the completion milestone block closure — the finish tool owns it', () => {
     const result = assessPostVerificationClosure({
       hasVerifiedBuild: true,
-      milestones: [
-        milestone('m-1', 'Create `src/App.tsx`', 'verified'),
-        milestone('m-2', 'Finish and report the results to the user', 'pending'),
-      ],
+      milestones: [milestone('m-1', 'Create `src/App.tsx`', 'verified'), milestone('m-2', 'Finish and report the results to the user', 'pending')],
       deliverableStatusOf: statusMap({}),
     })
     expect(result.state).toBe('finish_now')
@@ -112,7 +103,7 @@ describe('buildClosureDirective', () => {
   })
 
   // A directive that offers a choice invites the model to delegate it — that is how the first
-  // ERESOLVE wording ended a session with `ask` in AGENT mode, where nobody can answer.
+  // ERESOLVE wording ended a session with `ask` in Auto mode, where nobody can answer.
   it('gives one sequence rather than options to weigh', () => {
     const directive = buildClosureDirective({
       state: 'close_unprovable_then_finish',

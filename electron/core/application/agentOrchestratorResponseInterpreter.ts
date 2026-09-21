@@ -11,14 +11,10 @@ import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from '
 
 export type { ResponseInterpreterContext, ResponseInterpretationOutcome } from './agentOrchestratorResponseInterpreterTypes'
 
-async function handleMissingToolCall(
-  ctx: ResponseInterpreterContext,
-  rejections: readonly ToolCallRejection[] = []
-): Promise<ResponseInterpretationOutcome> {
+async function handleMissingToolCall(ctx: ResponseInterpreterContext, rejections: readonly ToolCallRejection[] = []): Promise<ResponseInterpretationOutcome> {
   const streamedOutput = ctx.streamedOutput || ''
   const hasToolCallAttempt =
-    rejections.length > 0 ||
-    streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
+    rejections.length > 0 || streamedOutput.includes('<tool_call>') || streamedOutput.includes('```json') || streamedOutput.toLowerCase().includes('"tool"')
 
   if (hasToolCallAttempt) {
     // This branch used to return `continue` without incrementing anything, and the loop detector never sees these calls because validation rejects them before it runs.
@@ -37,9 +33,7 @@ async function handleMissingToolCall(
         reason: summary,
         modelSummary: streamedOutput,
       })
-      return closure.outcome === 'closed'
-        ? { outcome: 'return', result: closure.result }
-        : { outcome: 'continue' }
+      return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
     }
 
     const feedback = rejected
@@ -57,13 +51,13 @@ async function handleMissingToolCall(
           ? `Tool call rejected (${ctx.state.schemaRejectionStreak}x): ${rejected.errors.join('; ').slice(0, 100)}`
           : 'Tool call rejected: no parsable JSON tool call',
       },
-      feedback
+      feedback,
     )
     ctx.emitLog(
       'info',
       rejected
         ? `Step ${ctx.stepCount} Tool Call Rejected [${rejected.toolName}] — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: ${rejected.errors.join('; ')}`
-        : `Step ${ctx.stepCount} Tool Call Rejected — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: no parsable JSON tool call.`
+        : `Step ${ctx.stepCount} Tool Call Rejected — recupero schema ${decision.state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}: no parsable JSON tool call.`,
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, toolLabel, feedback)
@@ -71,19 +65,19 @@ async function handleMissingToolCall(
     return { outcome: 'continue' }
   }
 
-  const hasOperationalWork = !ctx.goalPlanner.hasPlan() || ctx.goalPlanner.getMilestones().some(
-    (milestone) =>
-      !isCompletionMilestoneTitle(milestone) &&
-      (milestone.status === 'pending' || milestone.status === 'in_progress')
-  )
+  const hasOperationalWork =
+    !ctx.goalPlanner.hasPlan() ||
+    ctx.goalPlanner
+      .getMilestones()
+      .some((milestone) => !isCompletionMilestoneTitle(milestone) && (milestone.status === 'pending' || milestone.status === 'in_progress'))
 
   // If operational work remains, give prose-only output two chances to turn into an action.
-  if (ctx.agentMode === 'agent' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.noToolStreak < 2) {
+  if (ctx.agentMode !== 'ask' && hasOperationalWork && ctx.stepCount < ctx.maxSteps && ctx.state.noToolStreak < 2) {
     ctx.state.noToolStreak++
     const feedback = `[ACTION REQUIRED: NO TOOL INVOCATION DETECTED]\nYour previous response was purely descriptive while operational work is still open. Invoke one concrete tool for the current milestone. When the work is actually complete, provide the final report as prose: the application will run the final evidence gate and close the session.`
     ctx.episodicCompactor.recordStep(
       { step: ctx.stepCount, tool: 'no_tool_detected', status: 'BLOCKED', summary: 'No tool call found in conversational response' },
-      feedback
+      feedback,
     )
     ctx.emitLog('info', `Step ${ctx.stepCount}: No tool call found in LLM response. Requesting tool invocation...`)
     if (ctx.settings.enableCodingAgentDebugLog) {
@@ -95,7 +89,7 @@ async function handleMissingToolCall(
   const summary = streamedOutput.trim() || 'Task completed successfully.'
 
   // In CHAT mode a prose answer with no tool call IS the deliverable: the turn is done.
-  if (ctx.agentMode !== 'agent') {
+  if (ctx.agentMode === 'ask') {
     agentToolExecutorService.commitJournal()
     ctx.emitLog('info', `Task Finished: ${summary.slice(0, 300)}`)
     ctx.emitDone(true, summary)
@@ -114,9 +108,7 @@ async function handleMissingToolCall(
       : 'Il modello ha consegnato il riepilogo finale senza richiedere un tool di chiusura.',
     modelSummary: summary,
   })
-  return closure.outcome === 'closed'
-    ? { outcome: 'return', result: closure.result }
-    : { outcome: 'continue' }
+  return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
 }
 
 /** Interprets one turn's raw LLM output: plan extraction, tool-call parsing (with the no-tool-call / malformed-call recovery paths), the finish/loop-detection/ask special cases (see agentOrchestratorFinishAndLoopGuards.ts and agentOrchestratorAskAutoHealing.ts), */

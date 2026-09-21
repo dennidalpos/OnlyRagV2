@@ -32,4 +32,9 @@ Implementazione: [`sidecar/domain/ingestion.py`](../sidecar/domain/ingestion.py)
 
 - Tabelle e filtri sono gestiti da [`sidecar/infrastructure/db.py`](../sidecar/infrastructure/db.py).
 - Il Main avvia e arresta il processo tramite `sidecarProcessManager`.
+- Il database persistente vive in `<userData>/data/lancedb_store`. All'avvio il Main sposta in modo non distruttivo gli archivi creati dal vecchio percorso `<userData>/data/data`; in caso di collisione conserva entrambe le copie e registra un avviso.
+- Durante l'avvio il Renderer ripete la diagnostica ogni secondo finché il Sidecar non risponde, poi torna all'intervallo ordinario di 10 secondi. Il primo controllo `offline` non viene quindi mantenuto mentre LanceDB sta ancora inizializzando.
 - I residui su `:8000` sono reclamati solo se il processo appartiene ai binari autorizzati.
+- Il vocabolario aggiuntivo usa il manifest `sidecar/assets/vocab/manifest.json`: prova prima il repository `master`, risolve i pack relativi allo stesso percorso e aggiorna la cache con sostituzione atomica.
+- Il pacchetto Sidecar include lo stesso manifest e un pack di base. Se rete o manifest remoto non sono disponibili, avvia quindi una cache funzionante dagli asset inclusi invece di dipendere da una cache preesistente.
+- Residuo esterno tracciato: gli asset remoti diventano raggiungibili da `raw.githubusercontent.com` solo dopo la pubblicazione delle modifiche su `origin/master`; fino ad allora viene usata la copia inclusa.

@@ -15,7 +15,6 @@ interface CodingAgentLeftPanelProps {
   diagnostics?: DiagnosticsData | null
   hasPendingUnconsolidatedMilestones: boolean
   onExecute: () => void
-  onGeneratePlan: () => void
   onOpenSkillHubModal: () => void
   onOpenDiagnosticsModal?: () => void
   onOpenPromptHistorySearch?: () => void
@@ -36,7 +35,6 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
   diagnostics,
   hasPendingUnconsolidatedMilestones,
   onExecute,
-  onGeneratePlan,
   onOpenSkillHubModal,
   onOpenDiagnosticsModal,
   onOpenPromptHistorySearch,
@@ -61,7 +59,6 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           streamingText={c.streamingText}
           currentStatusText={c.currentStatusText}
           onExecute={onExecute}
-          onGeneratePlan={onGeneratePlan}
           hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
           onCancel={c.handleCancelAgent}
           pinnedFiles={c.pinnedFiles}
@@ -72,7 +69,7 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
           selectedFile={c.selectedFile}
           activeModelName={activeModelName}
           settings={settings}
-          diagnostics={diagnostics}
+          contextBudget={c.contextBudget}
           availableModels={diagnostics?.ollama.models}
           onOpenFile={c.handleOpenFile}
           promptQueue={c.promptQueue}

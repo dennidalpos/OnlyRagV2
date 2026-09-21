@@ -34,7 +34,10 @@ export interface DiagnosticsData {
     modelsCount: number
     models: string[]
     /** Per-model metadata from /api/tags' `details` field (parameter_size, quantization_level, ...), when available. */
-    modelDetails?: Record<string, { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }>
+    modelDetails?: Record<
+      string,
+      { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }
+    >
     error?: string
   }
   gpu: {
@@ -78,7 +81,7 @@ class SystemDiagnosticsLogger {
   private maxLogFileSizeBytes = 2 * 1024 * 1024 // 2 MB max per log file
 
   constructor() {
-    const baseDir = (app && typeof app.getPath === 'function') ? app.getPath('userData') : process.cwd()
+    const baseDir = app && typeof app.getPath === 'function' ? app.getPath('userData') : process.cwd()
     const logDir = path.join(baseDir, 'logs')
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true })
@@ -90,6 +93,17 @@ class SystemDiagnosticsLogger {
 
   public getLogFilePath(): string {
     return this.logFilePath
+  }
+
+  /** Rebind after main.ts has applied the canonical app name or an isolated E2E userData path. */
+  public rebindToUserData(baseDir: string): void {
+    const nextLogDir = path.join(baseDir, 'logs')
+    fs.mkdirSync(nextLogDir, { recursive: true })
+    const nextLogFilePath = path.join(nextLogDir, 'app.log')
+    if (nextLogFilePath === this.logFilePath) return
+    this.logFilePath = nextLogFilePath
+    this.rotateLogsIfNeeded()
+    this.log('INFO', 'Logger', `System Diagnostics Logger rebound to canonical userData. Log path: ${this.logFilePath}`)
   }
 
   private rotateLogsIfNeeded(): void {
@@ -138,7 +152,12 @@ class SystemDiagnosticsLogger {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log(logFormatted.trim())
+      try {
+        console.log(logFormatted.trim())
+      } catch {
+        // A detached Electron process can outlive the terminal pipe that started it.
+        // File logging must keep working without recursively crashing the global handler.
+      }
     }
     return entry
   }
@@ -187,7 +206,10 @@ Generated at: ${diagnostics.timestamp}
 
 ## Recent Diagnostic Logs (${recentLogs.length} entries)
 \`\`\`text
-${recentLogs.slice(-150).map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${l.message}`).join('\n')}
+${recentLogs
+  .slice(-150)
+  .map((l) => `[${l.timestamp}] [${l.level}] [${l.category}]: ${l.message}`)
+  .join('\n')}
 \`\`\`
 `
 }
@@ -262,10 +284,7 @@ let lastOllamaSignature: string | null = null
 
 export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Promise<DiagnosticsData['ollama']> {
   const effectiveHost = hostUrl.replace('localhost', '127.0.0.1')
-  const isLocal =
-    effectiveHost.includes('127.0.0.1') ||
-    effectiveHost.includes('0.0.0.0') ||
-    effectiveHost.includes('localhost')
+  const isLocal = effectiveHost.includes('127.0.0.1') || effectiveHost.includes('0.0.0.0') || effectiveHost.includes('localhost')
 
   const [tagsRes, v1Res] = await Promise.allSettled([
     fetchJsonEndpoint(`${effectiveHost}/api/tags`, 4500),
@@ -274,12 +293,7 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
 
   const isOnline = tagsRes.status === 'fulfilled' || v1Res.status === 'fulfilled'
   if (!isOnline) {
-    const err =
-      tagsRes.status === 'rejected'
-        ? tagsRes.reason?.message
-        : v1Res.status === 'rejected'
-        ? v1Res.reason?.message
-        : 'Ollama unreachable'
+    const err = tagsRes.status === 'rejected' ? tagsRes.reason?.message : v1Res.status === 'rejected' ? v1Res.reason?.message : 'Ollama unreachable'
     logger.log('WARN', 'Ollama', `Ollama offline or unreachable at ${hostUrl}: ${err}`)
     return {
       status: 'offline',
@@ -291,7 +305,10 @@ export async function checkOllamaStatus(hostUrl = 'http://127.0.0.1:11434'): Pro
   }
 
   const modelSet = new Set<string>()
-  const modelDetails: Record<string, { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }> = {}
+  const modelDetails: Record<
+    string,
+    { parent_model?: string; format?: string; family?: string; families?: string[]; parameter_size?: string; quantization_level?: string }
+  > = {}
 
   // 1.
   if (tagsRes.status === 'fulfilled' && tagsRes.value?.models && Array.isArray(tagsRes.value.models)) {
@@ -389,7 +406,11 @@ export async function detectNvidiaGpu(): Promise<DiagnosticsData['gpu']> {
           let vramUsedMB = 0
 
           if (!csvErr && csvStdout.trim()) {
-            const parts = csvStdout.trim().split('\n')[0].split(',').map((s) => s.trim())
+            const parts = csvStdout
+              .trim()
+              .split('\n')[0]
+              .split(',')
+              .map((s) => s.trim())
             gpuName = parts[0] || gpuName
             vramTotalMB = parseInt(parts[1], 10) || 0
             vramUsedMB = parseInt(parts[2], 10) || 0
@@ -447,12 +468,9 @@ let lastOverallDiagnosticsSignature: string | null = null
 
 export async function runFullDiagnostics(
   sidecarStatus: DiagnosticsData['sidecar'] = { status: 'offline', error: 'Not checked' },
-  ollamaHost = 'http://127.0.0.1:11434'
+  ollamaHost = 'http://127.0.0.1:11434',
 ): Promise<DiagnosticsData> {
-  const [ollama, gpu] = await Promise.all([
-    checkOllamaStatus(ollamaHost),
-    detectNvidiaGpu(),
-  ])
+  const [ollama, gpu] = await Promise.all([checkOllamaStatus(ollamaHost), detectNvidiaGpu()])
 
   const memory = getMemoryInfo()
   const cpus = os.cpus()
@@ -497,7 +515,11 @@ export async function runFullDiagnostics(
   const currentDiagSig = `${overallStatus}:${sidecarStatus.status}:${ollama.status}:${gpu.hasNvidiaGpu}`
   if (lastOverallDiagnosticsSignature !== currentDiagSig) {
     lastOverallDiagnosticsSignature = currentDiagSig
-    logger.log('INFO', 'Diagnostics', `System status: ${overallStatus} | Sidecar: ${sidecarStatus.status} | Ollama: ${ollama.status} | GPU: ${gpu.hasNvidiaGpu ? gpu.gpuName : 'None'} | RAM: ${memory.usedRAMGB}/${memory.totalRAMGB} GB`)
+    logger.log(
+      'INFO',
+      'Diagnostics',
+      `System status: ${overallStatus} | Sidecar: ${sidecarStatus.status} | Ollama: ${ollama.status} | GPU: ${gpu.hasNvidiaGpu ? gpu.gpuName : 'None'} | RAM: ${memory.usedRAMGB}/${memory.totalRAMGB} GB`,
+    )
   }
 
   return diagnosticsData

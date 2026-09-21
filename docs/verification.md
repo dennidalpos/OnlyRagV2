@@ -15,9 +15,16 @@ npx vitest run <path>
 
 Per il Sidecar: `npm run test:sidecar`. Per tipi e confini: `npm run typecheck` e `npm run audit:cycles`.
 
+Per gli scenari Agent Coding attraverso il bundle Electron reale:
+
+```powershell
+npm run test:e2e:electron
+```
+
 ## Verifiche native
 
 - `npm run test:smoke` controlla l'avvio del bundle Electron e la registrazione IPC.
+- `npm run test:e2e:electron` compila l'app, avvia Electron con profilo temporaneo e attraversa preload, IPC, Main e filesystem. Copre cambio progetto/sessione, coda, annullamento nelle fasi `collect_context`, `propose_action`, `apply_action` e `verify`, ripresa dopo crash, Git sporco, salvataggi editor obsoleti, modello mancante, artefatti standalone, path con spazi e fughe symlink/junction. Usa un server Ollama locale deterministico; non qualifica un modello reale.
 - `npm run test:live` usa Ollama reale e workspace isolati; richiede il runtime locale e non fa parte del test rapido.
 - I test live qualificano uno scenario e un modello specifici: non implicano autonomia generale del coding agent.
 

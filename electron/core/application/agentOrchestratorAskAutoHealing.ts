@@ -4,12 +4,7 @@ import type { EpisodicMemoryCompactor } from '../domain/agent/episodicMemoryComp
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { ApplicationClosureOutcome, ApplicationClosureRequest } from './agentOrchestratorApplicationClosureTypes'
 
-type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface AskToolContext {
   parsedTool: AgentToolCall
@@ -31,23 +26,22 @@ export interface AskToolContext {
   closeApplicationRun: (request: ApplicationClosureRequest) => Promise<ApplicationClosureOutcome>
 }
 
-export type AskToolOutcome =
-  | { outcome: 'continue'; stagnationStreak: number }
-  | { outcome: 'return'; result: AgentTaskResult }
+export type AskToolOutcome = { outcome: 'continue'; stagnationStreak: number } | { outcome: 'return'; result: AgentTaskResult }
 
 const ASK_REDIRECT_LIMIT = 2
 
-/** Proactive Auto-Healing Enforcement: in AGENT mode, a vague clarification request that follows a tool/command failure (or a cancelled/interrupted terminal run) is intercepted up to ASK_REDIRECT_LIMIT times against the shared stagnation streak, redirecting the m */
+/** In Auto mode, intercepts vague clarification after a failure and redirects the model to recovery. */
 export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome> {
   const { parsedTool } = ctx
   const question = parsedTool.parameters?.question || parsedTool.parameters?.query || parsedTool.explanation || 'Clarification requested from user.'
 
   const historyText = ctx.compiledHistoryBlock.toLowerCase()
-  const hasCancellationInHistory =
-    historyText.includes('cancelled') || historyText.includes('canceled') || historyText.includes('interrupted')
+  const hasCancellationInHistory = historyText.includes('cancelled') || historyText.includes('canceled') || historyText.includes('interrupted')
 
-  const PERMISSION_REGEX = /\b(proceed|procedere|start|iniziare|cominciare|confirm|conferma|shall we|should we|can we|do you want|would you like|vuoi che|posso)\b/i
-  const TRIVIAL_PREFERENCE_REGEX = /\b(which (library|framework|styling|animation)|what (library|framework)|quale (libreria|framework)|quali (librerie|framework)|preferisci|prefer to|prefer)\b/i
+  const PERMISSION_REGEX =
+    /\b(proceed|procedere|start|iniziare|cominciare|confirm|conferma|shall we|should we|can we|do you want|would you like|vuoi che|posso)\b/i
+  const TRIVIAL_PREFERENCE_REGEX =
+    /\b(which (library|framework|styling|animation)|what (library|framework)|quale (libreria|framework)|quali (librerie|framework)|preferisci|prefer to|prefer)\b/i
   const VAGUE_WHAT_NEXT_REGEX = /\b(what next|what should (?:we|i) do|how should (?:we|i) proceed|what to do next|how to proceed|interrupted)\b/i
 
   const isPermissionOrProceedQuestion = PERMISSION_REGEX.test(question)
@@ -61,28 +55,29 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
     ctx.stepCount === 1 ||
     VAGUE_WHAT_NEXT_REGEX.test(question)
 
-  if (ctx.agentMode === 'agent' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.stagnationStreak < ASK_REDIRECT_LIMIT) {
-    const feedback = isPermissionOrProceedQuestion || ctx.stepCount === 1
-      ? `[AUTONOMOUS EXECUTION DIRECTIVE: DO NOT ASK FOR PERMISSION TO PROCEED]\nYou are operating in AGENT mode. The execution plan has ALREADY been approved by the user.\nYou have FULL authorization to implement the task immediately.\nDO NOT ask "Do you want to proceed?", "Posso procedere?", or request confirmation to start.\nProceed IMMEDIATELY by executing the first milestone using write_file, replace_file_content, read_file, or run_command.`
-      : isTrivialPreferenceQuestion
-      ? `[AUTONOMOUS TECHNICAL DECISION DIRECTIVE: DO NOT STALL FOR TECHNICAL CHOICES]\nIn AGENT mode, you MUST autonomously select sensible standard technologies (e.g. standard CSS keyframes, GSAP, vanilla HTML5/JS, standard npm packages) and implement the requested feature directly. DO NOT ask the user for library or aesthetic preferences.\nProceed IMMEDIATELY by creating or editing the required files with write_file / replace_file_content or running build/test commands.`
-      : hasCancellationInHistory
-      ? `[PROACTIVE AUTO-HEALING DIRECTIVE: CLI GENERATOR CANCELLED]\nYour previous terminal command or CLI generator cancelled or was interrupted. In AGENT mode, DO NOT ask the user what to do next.\nFallback IMMEDIATELY to constructing the project files directly with write_file (e.g. package.json, index.html, src/main.tsx, src/App.tsx).`
-      : historyText.includes('ast validation error') || historyText.includes('ast syntax error')
-      ? `[PROACTIVE AUTO-HEALING DIRECTIVE: FIX AST SYNTAX ERROR]\nYour previous file write contained a syntax error and was blocked by pre-commit AST validation. In AGENT mode, DO NOT ask the user to fix or review your code.\nInspect the syntax error line and character reported in the error trace, and immediately reissue write_file or replace_file_content with valid, complete syntax (fix unexpected braces, unclosed tags, or malformed expressions).`
-      : `[PROACTIVE AUTO-HEALING DIRECTIVE: DO NOT ASK LAZY QUESTIONS]\nYour previous tool or command encountered an error or was interrupted. In AGENT mode, you MUST NOT ask vague clarification questions to the user.\nInspect the error trace in your episodic history, analyze the root cause (e.g. missing dependency, syntax error, path issue, or process timeout), and immediately issue a corrective tool call (such as run_command with a fix, read_file, list_dir, or replace_file_content) to resolve the issue autonomously.`
+  if (ctx.agentMode === 'auto' && isVagueClarification && ctx.stepCount < ctx.maxSteps && ctx.stagnationStreak < ASK_REDIRECT_LIMIT) {
+    const feedback =
+      isPermissionOrProceedQuestion || ctx.stepCount === 1
+        ? `[AUTONOMOUS EXECUTION DIRECTIVE: DO NOT ASK FOR PERMISSION TO PROCEED]\nYou are operating in AUTO mode. The task is authorized for trusted local execution.\nDO NOT ask for confirmation to start. Proceed with the first milestone.`
+        : isTrivialPreferenceQuestion
+          ? `[AUTONOMOUS TECHNICAL DECISION DIRECTIVE: DO NOT STALL FOR TECHNICAL CHOICES]\nIn AUTO mode, select sensible standard technologies and implement directly. Ask only for a genuine business decision.`
+          : hasCancellationInHistory
+            ? `[PROACTIVE AUTO-HEALING DIRECTIVE: CLI GENERATOR CANCELLED]\nYour previous command was interrupted. In AUTO mode, change strategy and continue without asking what to do next.`
+            : historyText.includes('ast validation error') || historyText.includes('ast syntax error')
+              ? `[PROACTIVE AUTO-HEALING DIRECTIVE: FIX AST SYNTAX ERROR]\nInspect the reported syntax error and issue a corrected edit in AUTO mode.`
+              : `[PROACTIVE AUTO-HEALING DIRECTIVE: DO NOT ASK LAZY QUESTIONS]\nInspect the failure, change strategy, and issue a corrective tool call in AUTO mode.`
     ctx.episodicCompactor.recordStep(
       {
         step: ctx.stepCount,
         tool: 'ask',
         status: 'BLOCKED',
-        summary: 'Auto-Healing Interception: Intercepted lazy clarification or permission request in AGENT mode',
+        summary: 'Auto-Healing Interception: intercepted a redundant clarification in AUTO mode',
       },
-      feedback
+      feedback,
     )
     ctx.emitLog(
       'info',
-      `⚡ Proactive Auto-Healing: Intercettata richiesta di permesso/chiarimento ridondante. L'agente procede direttamente con l'implementazione.`
+      `⚡ Proactive Auto-Healing: Intercettata richiesta di permesso/chiarimento ridondante. L'agente procede direttamente con l'implementazione.`,
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logToolResult(ctx.sessionId, ctx.stepCount, 'ask', feedback)
@@ -96,17 +91,15 @@ export async function handleAskTool(ctx: AskToolContext): Promise<AskToolOutcome
   ctx.emitLog('info', `❓ AI Agent Question: ${question}`, undefined, {
     category: 'agent_question',
   })
-  if (ctx.agentMode === 'agent') {
+  if (ctx.agentMode === 'auto') {
     const closure = await ctx.closeApplicationRun({
       trigger: 'guard_stop',
       reason: gaveUpWhileStuck
         ? 'Il modello ha esaurito il recupero automatico e richiede intervento.'
-        : 'Il modello richiede una decisione dell\'utente prima di proseguire.',
+        : "Il modello richiede una decisione dell'utente prima di proseguire.",
       modelSummary: question,
     })
-    return closure.outcome === 'closed'
-      ? { outcome: 'return', result: closure.result }
-      : { outcome: 'continue', stagnationStreak: ctx.stagnationStreak }
+    return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue', stagnationStreak: ctx.stagnationStreak }
   }
 
   ctx.emitDone(!gaveUpWhileStuck, question)

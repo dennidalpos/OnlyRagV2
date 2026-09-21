@@ -21,6 +21,41 @@ const ORPHAN_PORT_RELEASE_INTERVAL_MS = 400
 
 let sidecarProcess: ChildProcess | null = null
 
+export interface LegacySidecarDataMigration {
+  moved: string[]
+  conflicts: string[]
+}
+
+/**
+ * Older Electron builds passed `<userData>/data` as ONLYRAG_DATA_DIR while Python
+ * appended its own `data` segment. Move that nested content back to the canonical
+ * directory without overwriting any entry already present there.
+ */
+export function migrateLegacyNestedSidecarData(userDataDir: string): LegacySidecarDataMigration {
+  const canonicalDataDir = path.join(userDataDir, 'data')
+  const legacyNestedDataDir = path.join(canonicalDataDir, 'data')
+  const result: LegacySidecarDataMigration = { moved: [], conflicts: [] }
+
+  if (!fs.existsSync(legacyNestedDataDir)) return result
+
+  fs.mkdirSync(canonicalDataDir, { recursive: true })
+  for (const entry of fs.readdirSync(legacyNestedDataDir)) {
+    const source = path.join(legacyNestedDataDir, entry)
+    const destination = path.join(canonicalDataDir, entry)
+    if (fs.existsSync(destination)) {
+      result.conflicts.push(entry)
+      continue
+    }
+    fs.renameSync(source, destination)
+    result.moved.push(entry)
+  }
+
+  if (fs.readdirSync(legacyNestedDataDir).length === 0) {
+    fs.rmdirSync(legacyNestedDataDir)
+  }
+  return result
+}
+
 export class SidecarProcessManager {
   private state: {
     status: 'online' | 'offline' | 'checking'
@@ -135,9 +170,7 @@ export class SidecarProcessManager {
     }
 
     logger.log('WARN', 'Sidecar', `Dependencies missing in ${initialPython}. Initializing virtual environment setup...`)
-    const venvDir = app.isPackaged
-      ? path.join(app.getPath('userData'), 'python_venv')
-      : path.join(DEV_PROJECT_ROOT, '.venv')
+    const venvDir = app.isPackaged ? path.join(app.getPath('userData'), 'python_venv') : path.join(DEV_PROJECT_ROOT, '.venv')
     const venvPython = path.join(venvDir, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
 
     if (!fs.existsSync(venvPython)) {
@@ -220,9 +253,7 @@ export class SidecarProcessManager {
 
     const netstat = await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp'])
     const pid = parseListeningPidFromNetstat(netstat, SIDECAR_PORT)
-    const imageName = pid === null ? null : parseImageNameFromTasklist(
-      await this.readCommandOutput('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'])
-    )
+    const imageName = pid === null ? null : parseImageNameFromTasklist(await this.readCommandOutput('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']))
 
     const decision = decidePortReclaim({ pid, imageName, ownPid: process.pid })
     if (decision.action === 'skip') {
@@ -262,19 +293,26 @@ export class SidecarProcessManager {
 
     this.stopPythonSidecar()
 
-    const dataDir = path.join(app.getPath('userData'), 'data')
+    const userDataDir = app.getPath('userData')
+    const migration = migrateLegacyNestedSidecarData(userDataDir)
+    if (migration.moved.length > 0) {
+      logger.log('INFO', 'Sidecar', `Migrated legacy nested data entries: ${migration.moved.join(', ')}`)
+    }
+    if (migration.conflicts.length > 0) {
+      logger.log('WARN', 'Sidecar', `Legacy nested data entries left in place because canonical entries already exist: ${migration.conflicts.join(', ')}`)
+    }
+
+    const dataDir = path.join(userDataDir, 'data')
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true })
     }
 
-    const devSidecarDir = app.isPackaged
-      ? path.join(process.resourcesPath, 'sidecar')
-      : path.join(DEV_PROJECT_ROOT, 'sidecar')
+    const devSidecarDir = app.isPackaged ? path.join(process.resourcesPath, 'sidecar') : path.join(DEV_PROJECT_ROOT, 'sidecar')
     const parentSidecarDir = path.dirname(devSidecarDir)
 
     const envVars = {
       ...process.env,
-      ONLYRAG_DATA_DIR: dataDir,
+      ONLYRAG_DATA_DIR: userDataDir,
       PYTHONUNBUFFERED: '1',
       PYTHONPATH: `${devSidecarDir}${path.delimiter}${parentSidecarDir}${process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : ''}`,
     }
@@ -346,11 +384,7 @@ export class SidecarProcessManager {
     sidecarProcess.stdout?.on('data', (data) => {
       const msg = data.toString().trim()
       this.writeSidecarLog('INFO', msg)
-      if (
-        msg.includes('GET /health HTTP/1.1" 200') ||
-        msg.includes('GET /documents HTTP/1.1" 200') ||
-        msg.includes('GET /docs HTTP/1.1" 200')
-      ) {
+      if (msg.includes('GET /health HTTP/1.1" 200') || msg.includes('GET /documents HTTP/1.1" 200') || msg.includes('GET /docs HTTP/1.1" 200')) {
         return // Suppress redundant periodic polling stdout access logs in main diagnostics logger
       }
       logger.log('INFO', 'SidecarProcess', msg)

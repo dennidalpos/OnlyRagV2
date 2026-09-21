@@ -23,6 +23,7 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 - Ingestion e re-indicizzazione usano embedding Ollama; in caso di errore possono registrare `status: indexed_fallback`.
 - La ricerca combina embedding, matching lessicale e RRF; il reranking usa FlashRank quando disponibile e un fallback locale altrimenti.
 - Il Sidecar gestisce LanceDB, OCR RapidOCR/Vision, traduzione PDF/DOCX, export e storico semantico.
+- `POST /vocab/sync` restituisce anche la sorgente effettiva (`remote`, `bundled` o `cache`); il fallback `bundled` inizializza atomicamente la cache anche durante un avvio offline.
 - Gli errori non gestiti rispondono `500` con `error_id`; la validazione dei body è Pydantic.
 
 Verifica: `npm run test:sidecar`. Rigenerazione OpenAPI: `npm run generate:openapi`.

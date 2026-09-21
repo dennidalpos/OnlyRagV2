@@ -37,7 +37,8 @@ export class HeuristicContextCompactor {
    */
   public static compile(
     segments: PromptSegment,
-    hardwareMaxContextChars: number
+    hardwareMaxContextChars: number,
+    options: { force?: boolean } = {}
   ): CompactionResult {
     const parts = this.buildParts(segments)
     const fullPrompt = parts.filter(Boolean).join('\n\n')
@@ -45,15 +46,17 @@ export class HeuristicContextCompactor {
 
     const watermark = Math.floor(hardwareMaxContextChars * this.WATERMARK_RATIO)
 
-    if (originalChars <= watermark) {
+    if (!options.force && originalChars <= watermark) {
       return { prompt: fullPrompt, wasCompacted: false, originalChars, finalChars: originalChars }
     }
 
     // --- Heuristic Compaction ---
-    const budget = Math.floor(hardwareMaxContextChars * 0.72)
-
     // Tier 1 (immutable): system prompt + active plan
     const immutableSize = (segments.systemPrompt || '').length + (segments.activePlanBlock || '').length
+    const regularBudget = Math.floor(hardwareMaxContextChars * 0.72)
+    const budget = options.force
+      ? Math.max(immutableSize, Math.min(regularBudget, Math.floor(originalChars * 0.65)))
+      : regularBudget
 
     // Tool history is what makes the agent stateful: without it the prompt is byte-identical every turn and the model deterministically repeats its last action.
     const historyFloor = Math.min(

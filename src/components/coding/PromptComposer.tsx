@@ -1,19 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import {
-  ArrowUp,
-  ArrowDown,
-  RotateCcw,
-  ClipboardList,
-  ListPlus,
-  Pin,
-  X,
-  FileText,
-  Minimize2,
-  Layers,
-  Sparkles,
-  Loader2,
-} from 'lucide-react'
-import { IngestedDocument, WorkspaceFile, AgentChangeMetrics, AgentMode } from '../../types'
+import { ArrowUp, ArrowDown, RotateCcw, ListPlus, Pin, X, FileText, Minimize2, Layers, Sparkles, Loader2 } from 'lucide-react'
+import { IngestedDocument, WorkspaceFile, AgentChangeMetrics, AgentMode, AgentContextBudgetBreakdown } from '../../types'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
 import { useTranslation } from '../../i18n'
@@ -31,7 +18,6 @@ interface PromptComposerProps {
   autoScroll: boolean
   onToggleAutoScroll: () => void
   onResetSession?: () => void
-  onGeneratePlan?: () => void
   hasPendingUnconsolidatedMilestones: boolean
   ingestedDocs: IngestedDocument[]
   attachedDocIds: Set<string>
@@ -51,6 +37,7 @@ interface PromptComposerProps {
   maxContextLimit?: number
   isContextHeavy?: boolean
   onCompactContext?: () => void
+  contextBudget?: AgentContextBudgetBreakdown | null
   autoInstallHubSkills?: 'disabled' | 'prompt'
   onToggleAutoInstallSkills?: () => void
 }
@@ -66,7 +53,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   autoScroll,
   onToggleAutoScroll,
   onResetSession,
-  onGeneratePlan,
   hasPendingUnconsolidatedMilestones,
   ingestedDocs,
   attachedDocIds,
@@ -85,6 +71,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   maxContextLimit = 0,
   isContextHeavy = false,
   onCompactContext,
+  contextBudget,
   autoInstallHubSkills = 'disabled',
   onToggleAutoInstallSkills,
 }) => {
@@ -158,11 +145,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <span className="text-cyan-400 font-bold">#{idx + 1}</span>
                 <span className="truncate max-w-[140px]">{item.prompt}</span>
                 {onRemoveFromQueue && (
-                  <button
-                    type="button"
-                    onClick={() => onRemoveFromQueue(item.id)}
-                    className="p-0.5 hover:text-rose-400 text-slate-500 rounded cursor-pointer"
-                  >
+                  <button type="button" onClick={() => onRemoveFromQueue(item.id)} className="p-0.5 hover:text-rose-400 text-slate-500 rounded cursor-pointer">
                     <X className="w-2.5 h-2.5" />
                   </button>
                 )}
@@ -176,7 +159,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       {isModelUpdating && (
         <div className="px-3.5 py-2 rounded-xl bg-amber-950/60 border border-amber-500/50 text-amber-300 text-xs flex items-center gap-2 animate-pulse shadow-sm">
           <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
-          <span className="font-medium">{t('settings.modelUpdatingBlocked')} ({downloadProgress.percent}%)</span>
+          <span className="font-medium">
+            {t('settings.modelUpdatingBlocked')} ({downloadProgress.percent}%)
+          </span>
         </div>
       )}
 
@@ -269,9 +254,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               aria-label={autoScroll ? t('common.autoscrollOnAria') : t('common.autoscrollOffAria')}
               title={autoScroll ? t('common.autoscrollOnTitle') : t('common.autoscrollOffTitle')}
               className={`p-1.5 rounded-lg transition-colors cursor-pointer focus-ring ${
-                autoScroll
-                  ? 'text-cyan-400 bg-cyan-950/60 border border-cyan-800/60'
-                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
+                autoScroll ? 'text-cyan-400 bg-cyan-950/60 border border-cyan-800/60' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
               }`}
             >
               <ArrowDown className="w-3.5 h-3.5" />
@@ -290,24 +273,12 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               </button>
             )}
 
-            {/* Generate Plan Icon */}
-            {onGeneratePlan && (
-              <button
-                type="button"
-                onClick={onGeneratePlan}
-                disabled={!agentPrompt.trim() || isModelUpdating}
-                aria-label={t('coding.generatePlanFromPrompt')}
-                title={isModelUpdating ? t('settings.modelUpdatingBlocked') : t('coding.generatePlanFromPrompt')}
-                className="relative p-1.5 text-slate-500 hover:text-cyan-300 hover:bg-slate-800/60 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer focus-ring"
-              >
-                <ClipboardList className="w-3.5 h-3.5" />
-                {hasPendingUnconsolidatedMilestones && (
-                  <span
-                    className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-400 border border-slate-900"
-                    title={t('coding.pendingMilestonesBadge')}
-                  />
-                )}
-              </button>
+            {hasPendingUnconsolidatedMilestones && (
+              <span
+                className="w-2 h-2 rounded-full bg-amber-400 border border-slate-900"
+                title={t('coding.pendingMilestonesBadge')}
+                aria-label={t('coding.pendingMilestonesBadge')}
+              />
             )}
           </div>
 
@@ -322,8 +293,15 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               </span>
             )}
 
-            <span className={`flex items-center gap-1 ${isContextHeavy ? 'text-amber-300 font-bold' : 'text-slate-400'}`} title={`${estimatedTurnTokens}/${maxContextLimit} tokens stimati`}>
-              <span>Ctx: {contextPercent}%</span>
+            <span
+              className={`flex items-center gap-1 ${isContextHeavy ? 'text-amber-300 font-bold' : 'text-slate-400'}`}
+              title={
+                contextBudget
+                  ? `${estimatedTurnTokens}/${maxContextLimit} token prompt · finestra ${contextBudget.contextWindowTokens} · risposta ${contextBudget.outputReserveTokens}${contextBudget.wasCompacted ? ' · compattato' : ''}`
+                  : 'Il budget apparirà dopo la prima composizione del prompt nel backend'
+              }
+            >
+              <span>Ctx: {contextBudget ? `${contextPercent}%` : '—'}</span>
               {isContextHeavy && onCompactContext && (
                 <button
                   type="button"

@@ -17,7 +17,7 @@ function savedState(overrides: Partial<SavedAgentSessionState> = {}): SavedAgent
   return {
     sessionId: 'conversation-1',
     workspacePath: null,
-    agentMode: 'agent',
+    agentMode: 'auto',
     stepCount: 3,
     maxSteps: 50,
     episodes: [{ step: 1, tool: 'read_file', status: 'SUCCESS', summary: 'Read file' }],
@@ -45,12 +45,15 @@ describe('revalidateRestoredMilestones', () => {
     const changedEvidence = captureMilestoneFileEvidence(workspace, changedMilestone)
     fs.writeFileSync(path.join(workspace, 'changed.ts'), 'export const changed = true')
 
-    const restored = revalidateRestoredMilestones([
-      { ...freshMilestone, fileEvidence: freshEvidence },
-      { ...changedMilestone, fileEvidence: changedEvidence },
-      { id: 'm-3', title: 'Missing file', status: 'verified', filePaths: ['missing.ts'] },
-      { id: 'm-4', title: 'Verified build', status: 'verified', verificationCommand: 'npm test' },
-    ], workspace)
+    const restored = revalidateRestoredMilestones(
+      [
+        { ...freshMilestone, fileEvidence: freshEvidence },
+        { ...changedMilestone, fileEvidence: changedEvidence },
+        { id: 'm-3', title: 'Missing file', status: 'verified', filePaths: ['missing.ts'] },
+        { id: 'm-4', title: 'Verified build', status: 'verified', verificationCommand: 'npm test' },
+      ],
+      workspace,
+    )
 
     expect(restored.map((item) => item.status)).toEqual(['verified', 'pending', 'pending', 'in_progress'])
     expect(restored[1].notes).toContain('changed')
@@ -62,9 +65,7 @@ describe('revalidateRestoredMilestones', () => {
     dirs.push(workspace)
     fs.writeFileSync(path.join(workspace, 'legacy.ts'), 'export const legacy = true')
 
-    const [restored] = revalidateRestoredMilestones([
-      { id: 'm-1', title: 'Legacy file', status: 'verified', filePaths: ['legacy.ts'] },
-    ], workspace)
+    const [restored] = revalidateRestoredMilestones([{ id: 'm-1', title: 'Legacy file', status: 'verified', filePaths: ['legacy.ts'] }], workspace)
 
     expect(restored.status).toBe('pending')
     expect(restored.notes).toContain('changed')

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
 import { logger, generateDiagnosticsReport, DiagnosticsData, sanitizeLogMessage } from './diagnostics'
 import { redactSecrets } from './logRedactor'
@@ -79,5 +79,15 @@ describe('SystemDiagnosticsLogger Tests', () => {
     expect(redacted).toContain('http://[redacted]@127.0.0.1:11434?token=[redacted]')
     expect(redacted).not.toContain('pass')
     expect(redacted).not.toContain('secret-value')
+  })
+
+  it('keeps file logging alive when a detached console pipe is closed', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementationOnce(() => {
+      throw new Error('EPIPE')
+    })
+
+    expect(() => logger.log('WARN', 'TestCategory', 'Detached console pipe')).not.toThrow()
+    expect(fs.readFileSync(logger.getLogFilePath(), 'utf-8')).toContain('Detached console pipe')
+    consoleSpy.mockRestore()
   })
 })

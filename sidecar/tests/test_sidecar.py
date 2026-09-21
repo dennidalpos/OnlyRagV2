@@ -690,21 +690,63 @@ def test_vocab_sync_service_offline_and_caching(tmp_path):
     from sidecar.domain.word_segmenter import MultiLangVocabManager
 
     cache_dir = str(tmp_path / "vocab_cache")
-    svc = VocabSyncService(manifest_url="http://127.0.0.1:9999/nonexistent/manifest.json", cache_dir=cache_dir)
-    
-    # Run sync against offline URL
+    bundled_dir = tmp_path / "bundled_vocab"
+    bundled_dir.mkdir()
+    (bundled_dir / "manifest.json").write_text(
+        json.dumps({"packs": {"it": {"version": "1.0.0", "url": "it.json"}}}),
+        encoding="utf-8",
+    )
+    custom_vocab = {"personalizzato": 6.8, "ultratecnico": 7.2}
+    (bundled_dir / "it.json").write_text(json.dumps(custom_vocab), encoding="utf-8")
+    svc = VocabSyncService(
+        manifest_url="http://127.0.0.1:9999/nonexistent/manifest.json",
+        cache_dir=cache_dir,
+        bundled_vocab_dir=str(bundled_dir),
+    )
+
+    # An unavailable remote source must seed the cache from packaged assets.
     import asyncio
     res = asyncio.run(svc.sync_vocabularies(timeout_sec=0.5))
-    assert res["status"] in ("offline", "cached")
+    assert res["status"] == "bundled"
+    assert res["source"] == "bundled"
+    assert res["updated_languages"] == ["it"]
 
-    # Verify custom local dictionary loading in MultiLangVocabManager
-    custom_vocab = {"personalizzato": 6.8, "ultratecnico": 7.2}
-    with open(tmp_path / "vocab_cache" / "it.json", "w", encoding="utf-8") as f:
-        json.dump(custom_vocab, f)
-
+    # Verify the atomically cached dictionary is consumable by the manager.
     mgr = MultiLangVocabManager(cache_dir=cache_dir)
     assert mgr.get_word_zipf("personalizzato", "it") == pytest.approx(6.8)
     assert mgr.get_word_zipf("ultratecnico", "it") == pytest.approx(7.2)
+
+
+def test_vocab_sync_service_resolves_remote_pack_relative_to_master_manifest(tmp_path, monkeypatch):
+    import asyncio
+    from sidecar.services import vocab_service
+
+    requested_urls = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, timeout):
+        requested_urls.append((url, timeout))
+        if url.endswith("manifest.json"):
+            return FakeResponse(200, {"packs": {"it": {"version": "2.0.0", "url": "it.json"}}})
+        return FakeResponse(200, {"onlyrag": 5.0})
+
+    monkeypatch.setattr(vocab_service.httpx_client, "get", fake_get)
+    manifest_url = "https://raw.githubusercontent.com/dennidalpos/OnlyRagV2/master/sidecar/assets/vocab/manifest.json"
+    svc = vocab_service.VocabSyncService(manifest_url=manifest_url, cache_dir=str(tmp_path / "cache"))
+    result = asyncio.run(svc.sync_vocabularies(timeout_sec=1.0))
+
+    assert result["status"] == "success"
+    assert result["source"] == "remote"
+    assert requested_urls == [(manifest_url, 1.0), (manifest_url.removesuffix("manifest.json") + "it.json", 1.0)]
+    cached = json.loads((tmp_path / "cache" / "it.json").read_text(encoding="utf-8"))
+    assert cached == {"onlyrag": 5.0, "__version__": "2.0.0"}
 
 
 def test_vocab_status_and_sync_endpoints():
@@ -944,4 +986,3 @@ def test_render_pdf_page_content_routes_scanned_page_to_vision(monkeypatch):
 
     assert "Vision transcription" in content
     assert captured["prompt"] == "File scan.pdf, page 1/4"
-

@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { AgentRuntimeModeFsm } from './agentRuntimeMode'
 
 describe('AgentRuntimeModeFsm', () => {
-  it('should initialize with default AGENT mode', () => {
+  it('initializes in the default Guided mode', () => {
     const fsm = new AgentRuntimeModeFsm()
-    expect(fsm.getMode()).toBe('AGENT')
+    expect(fsm.getMode()).toBe('GUIDED')
     expect(fsm.isToolAllowed('write_file')).toBe(true)
     expect(fsm.isToolAllowed('run_command')).toBe(true)
   })
@@ -18,16 +18,16 @@ describe('AgentRuntimeModeFsm', () => {
     expect(fsm.isToolAllowed('run_command')).toBe(false)
   })
 
-  it('should restrict permissions in PLAN mode', () => {
-    const fsm = new AgentRuntimeModeFsm('plan')
-    expect(fsm.getMode()).toBe('PLAN')
-    expect(fsm.isToolAllowed('grep_search')).toBe(true)
-    expect(fsm.isToolAllowed('replace_file_content')).toBe(false)
+  it('allows mutating tools in Guided mode for the approval gate to review', () => {
+    const fsm = new AgentRuntimeModeFsm('guided')
+    expect(fsm.getMode()).toBe('GUIDED')
+    expect(fsm.isToolAllowed('replace_file_content')).toBe(true)
+    expect(fsm.isToolAllowed('run_command')).toBe(true)
   })
 
-  it('should allow all execution and diagnostic tools in AGENT mode', () => {
-    const fsm = new AgentRuntimeModeFsm('agent')
-    expect(fsm.getMode()).toBe('AGENT')
+  it('allows all execution and diagnostic tools in Auto mode', () => {
+    const fsm = new AgentRuntimeModeFsm('auto')
+    expect(fsm.getMode()).toBe('AUTO')
     expect(fsm.isToolAllowed('list_files_recursive')).toBe(true)
     expect(fsm.isToolAllowed('get_file_info')).toBe(true)
     expect(fsm.isToolAllowed('open_in_browser')).toBe(true)
@@ -40,7 +40,7 @@ describe('AgentRuntimeModeFsm', () => {
     expect(fsm.isToolAllowed('git_diff')).toBe(true)
   })
 
-  it('should allow read-only exploration and open_in_browser in ASK and PLAN modes', () => {
+  it('allows read-only exploration in Ask mode', () => {
     const askFsm = new AgentRuntimeModeFsm('ask')
     expect(askFsm.isToolAllowed('list_files_recursive')).toBe(true)
     expect(askFsm.isToolAllowed('get_file_info')).toBe(true)
@@ -50,16 +50,10 @@ describe('AgentRuntimeModeFsm', () => {
     expect(askFsm.isToolAllowed('git_diff')).toBe(true)
     expect(askFsm.isToolAllowed('create_directory')).toBe(false)
     expect(askFsm.isToolAllowed('run_command')).toBe(false)
-
-    const planFsm = new AgentRuntimeModeFsm('plan')
-    expect(planFsm.isToolAllowed('list_files_recursive')).toBe(true)
-    expect(planFsm.isToolAllowed('get_file_info')).toBe(true)
-    expect(planFsm.isToolAllowed('open_in_browser')).toBe(true)
-    expect(planFsm.isToolAllowed('validate_visual_artifact')).toBe(true)
   })
 
   it('safely handles arbitrary or unknown tool names without throwing or requiring casts', () => {
-    const fsm = new AgentRuntimeModeFsm('agent')
+    const fsm = new AgentRuntimeModeFsm('auto')
     expect(fsm.isToolAllowed('unknown_custom_tool')).toBe(false)
     expect(fsm.isToolAllowed('')).toBe(false)
     expect(fsm.isToolAllowed('eval')).toBe(false)

@@ -65,7 +65,6 @@ export interface LogEntry {
   category: string
 }
 
-
 export interface IngestedDocument {
   id: string
   filename: string
@@ -155,7 +154,7 @@ export interface ArtifactSaveInput {
   content: string
 }
 
-export type AgentMode = 'plan' | 'ask' | 'agent'
+export type AgentMode = 'ask' | 'guided' | 'auto'
 
 export interface AgentRunIdentity {
   runId: string
@@ -231,6 +230,10 @@ export interface AppSettings {
   maxToolCallSteps?: number // Range: 10-200, 0 = unlimited, default unlimited
   // Coding Agent Audit & Debug Logging
   enableCodingAgentDebugLog?: boolean
+  /** Explicit opt-in for prompts, source snippets and tool payloads in the audit log. */
+  includeCodingAgentDebugPayloads?: boolean
+  /** Total audit-log generations kept on disk, including the active file. */
+  codingAgentDebugRetentionFiles?: number
   // Plan Approval Settings
   enablePrePlanInterview?: boolean
   // Verification and execution guards
@@ -265,6 +268,19 @@ export interface AgentChangeMetrics {
   filesTouched: number
   additions: number
   deletions: number
+}
+
+/** Prompt-window measurements emitted by Main after assembling the actual Agent turn. */
+export interface AgentContextBudgetBreakdown {
+  model: string
+  contextWindowTokens: number
+  outputReserveTokens: number
+  promptBudgetTokens: number
+  originalPromptTokens: number
+  promptTokens: number
+  utilizationPercent: number
+  wasCompacted: boolean
+  manualCompaction: boolean
 }
 
 export interface TaskQueueStatus {
@@ -355,6 +371,8 @@ export interface CodingSession {
   plans?: AgentPlan[]
   promptQueue?: QueuedPromptRecord[]
   pinnedFilePaths?: string[]
+  forceContextCompaction?: boolean
+  contextBudget?: AgentContextBudgetBreakdown
 }
 
 /** Hub skill the router wants to install while autoInstallHubSkills is set to 'prompt'. */
@@ -555,6 +573,7 @@ export interface IElectronAPI {
   runDiagnostics: (host?: string) => Promise<DiagnosticsData>
   getLogs: () => Promise<LogEntry[]>
   clearLogs: () => Promise<boolean>
+  clearCodingAgentAuditLog?: () => Promise<boolean>
   getLogFilePath: () => Promise<string>
   openLogsFolder?: () => Promise<{ success: boolean; path?: string; error?: string }>
   logTelemetry: (level: LogLevel, category: string, message: string) => Promise<boolean>
@@ -573,16 +592,32 @@ export interface IElectronAPI {
     normalizeWithLlm?: boolean,
     normalizationModel?: string,
     numCtx?: number,
-    taskId?: string
+    taskId?: string,
   ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
+  translateDocumentInplace: (
+    docId: string,
+    sourceLang: string,
+    targetLang: string,
+    model?: string,
+    backupOriginal?: boolean,
+    targetDir?: string,
+    numCtx?: number,
+  ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
   deleteIngestedDocument: (docId: string) => Promise<{ success: boolean; error?: string }>
   searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) => Promise<VectorSearchResult[]>
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => Promise<{ success: boolean; message?: string; error?: string }>
-  generateOllamaStream: (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any, host?: string, operationId?: string, onDone?: () => void) => Promise<{ success: boolean; error?: string }>
+  generateOllamaStream: (
+    model: string,
+    prompt: string,
+    onChunk: (chunk: string) => void,
+    options?: any,
+    host?: string,
+    operationId?: string,
+    onDone?: () => void,
+  ) => Promise<{ success: boolean; error?: string }>
   cancelOllamaStream: (operationId: string) => Promise<{ success: boolean }>
   getOllamaGenerationStatus: () => Promise<OllamaGenerationStatus>
   cancelTask: (taskId?: string) => Promise<{ success: boolean; message?: string }>
@@ -592,10 +627,22 @@ export interface IElectronAPI {
   exportStandaloneScratchWorkspace?: (destinationDirectory: string) => Promise<{ success: boolean; path?: string; error?: string }>
   clearStandaloneScratchWorkspace?: () => Promise<{ success: boolean; removedEntries: number; error?: string }>
   getProjectMap: (dirPath: string) => Promise<ProjectMapItem[]>
-  readWorkspaceFile: (filePath: string, startLine?: number, endLine?: number) => Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
-  writeWorkspaceFile: (filePath: string, content: string, expectedContentHash?: string, workspaceRoot?: string) => Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }>
+  readWorkspaceFile: (
+    filePath: string,
+    startLine?: number,
+    endLine?: number,
+  ) => Promise<{ success: boolean; content?: string; contentHash?: string; totalLines?: number; startLine?: number; endLine?: number; error?: string }>
+  writeWorkspaceFile: (
+    filePath: string,
+    content: string,
+    expectedContentHash?: string,
+    workspaceRoot?: string,
+  ) => Promise<{ success: boolean; contentHash?: string; currentContentHash?: string; currentContent?: string; conflict?: boolean; error?: string }>
   replaceWorkspaceFileChunk: (filePath: string, targetContent: string, replacementContent: string) => Promise<{ success: boolean; error?: string }>
-  multiReplaceWorkspaceFileChunks: (filePath: string, replacements: AgentToolReplacementChunk[]) => Promise<{ success: boolean; replacedCount?: number; error?: string }>
+  multiReplaceWorkspaceFileChunks: (
+    filePath: string,
+    replacements: AgentToolReplacementChunk[],
+  ) => Promise<{ success: boolean; replacedCount?: number; error?: string }>
   grepWorkspaceFiles: (dirPath: string, query: string, isRegex?: boolean, caseInsensitive?: boolean) => Promise<GrepSearchResult[]>
   searchWeb: (query: string, maxResults?: number) => Promise<{ success: boolean; results: { title: string; url: string; snippet: string }[]; error?: string }>
   fetchWebContent: (url: string, maxChars?: number) => Promise<{ success: boolean; content?: string; title?: string; error?: string }>
@@ -650,7 +697,11 @@ export interface IElectronAPI {
   /** Semantic search across every indexed project's prompt history. */
   searchPromptHistory?: (query: string, topK?: number, projectPaths?: string[]) => Promise<PromptHistorySearchResult[]>
   onAgentLog: (callback: (log: AgentActionLog & AgentRunIdentity) => void) => () => void
-  onAgentStepUpdate?: (callback: (data: AgentRunIdentity & { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void) => () => void
+  onAgentStepUpdate?: (
+    callback: (data: AgentRunIdentity & { step: number; maxSteps: number; maxStepsLabel: string; statusText?: string; milestones?: PlanMilestone[] }) => void,
+  ) => () => void
+  onAgentContextBudget?: (callback: (data: AgentRunIdentity & AgentContextBudgetBreakdown) => void) => () => void
+  compactAgentContext?: (identity: AgentRunIdentity) => Promise<boolean>
   onAgentStreamToken?: (callback: (data: AgentRunIdentity & { step: number; chunk: string }) => void) => () => void
   onAgentStreamThought?: (callback: (data: AgentRunIdentity & { step: number; chunk: string }) => void) => () => void
   onAgentDone: (callback: (res: AgentDoneResult & AgentRunIdentity) => void) => () => void
@@ -666,7 +717,10 @@ export interface IElectronAPI {
   onIngestDocumentDeleted?: (callback: (data: { docId: string }) => void) => () => void
   onIngestStreamProgress?: (callback: (data: IngestionStreamProgressPayload) => void) => () => void
   onTranslateProgress?: (callback: (data: TranslateProgressPayload) => void) => () => void
-  benchmarkModel: (modelName: string, host?: string) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
+  benchmarkModel: (
+    modelName: string,
+    host?: string,
+  ) => Promise<{ success: boolean; tokensPerSec: number; evalCount: number; evalDurationMs: number; isEmbedding?: boolean; error?: string }>
   listInstalledSkills: (workspaceRoot?: string) => Promise<SkillDefinition[]>
   listHubSources: () => Promise<SkillHubSource[]>
   addCustomHubSource: (input: CustomHubInput) => Promise<{ success: boolean; source?: SkillHubSource; error?: string }>
@@ -675,7 +729,11 @@ export interface IElectronAPI {
   listHubSkillsAcrossSources: (workspaceRoot?: string, forceRefresh?: boolean) => Promise<HubSkillItem[]>
   getHubSkillContent: (item: HubSkillItem) => Promise<{ success: boolean; content?: string; error?: string }>
   toggleSkillActive: (skillId: string, isActive: boolean) => Promise<boolean>
-  installSkillFromHub: (hubSkillId: string, workspaceRoot?: string, hubSourceId?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
+  installSkillFromHub: (
+    hubSkillId: string,
+    workspaceRoot?: string,
+    hubSourceId?: string,
+  ) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   installSkillFromUrl: (url: string, workspaceRoot?: string, customName?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   saveCustomSkill: (input: SkillSaveInput, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
   resetSkillToOriginal: (skillId: string, workspaceRoot?: string) => Promise<{ success: boolean; skill?: SkillDefinition; error?: string }>
@@ -686,16 +744,37 @@ export interface IElectronAPI {
   /** SLM Agent Studio: trigger log anomaly diagnostics scan and return structured report. */
   agentLogsAnalyze?: (extraPaths?: string[]) => Promise<SlmLogDiagnosticReport | null>
   /** Pre-flight Clarification Interview: analyze prompt for architectural decisions before drafting plan. */
-  agentPlanInterview?: (prompt: string, model: string | undefined, settings: AppSettings, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => Promise<InterviewAnalysisResult>
+  agentPlanInterview?: (
+    prompt: string,
+    model: string | undefined,
+    settings: AppSettings,
+    workspacePath?: string | null,
+    previousDecisions?: UserInterviewAnswer[],
+    identity?: AgentRunIdentity,
+  ) => Promise<InterviewAnalysisResult>
   /** Enriches prompt with user's confirmed interview answers. */
   agentPlanEnrichPrompt?: (prompt: string, answers: UserInterviewAnswer[], questions: InterviewQuestion[]) => Promise<string>
   /** Plan Approval: draft a canonical structured plan via the backend. */
-  agentPlanGenerate?: (prompt: string, model: string | undefined, settings: AppSettings, previousPlan?: AgentPlan, workspacePath?: string | null, previousDecisions?: UserInterviewAnswer[], identity?: AgentRunIdentity) => Promise<PlanGenerationResult>
+  agentPlanGenerate?: (
+    prompt: string,
+    model: string | undefined,
+    settings: AppSettings,
+    previousPlan?: AgentPlan,
+    workspacePath?: string | null,
+    previousDecisions?: UserInterviewAnswer[],
+    identity?: AgentRunIdentity,
+  ) => Promise<PlanGenerationResult>
   agentPlanCancel?: (identity: AgentRunIdentity) => Promise<{ success: boolean }>
   /** Plan Approval: read the backend's persisted plan milestone completion state for a session. */
   agentGetPlanState?: (sessionId: string, workspacePath?: string | null, planRevisionId?: string) => Promise<AgentPlanState | null>
   /** Plan Approval: seed the approved plan's milestones into session state before execution starts. */
-  agentPlanSeed?: (sessionId: string, workspacePath: string | null, planMilestones: PlanMilestone[], userTask?: string, planRevisionId?: string) => Promise<boolean>
+  agentPlanSeed?: (
+    sessionId: string,
+    workspacePath: string | null,
+    planMilestones: PlanMilestone[],
+    userTask?: string,
+    planRevisionId?: string,
+  ) => Promise<boolean>
   /** Generates a self-contained AI-optimized debug diagnostic bundle in Markdown. */
   exportAiDebugBundle?: (options: {
     sessionId: string

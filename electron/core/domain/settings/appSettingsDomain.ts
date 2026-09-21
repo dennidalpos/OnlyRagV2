@@ -15,6 +15,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   capabilityPolicyMode: 'offline-strict',
   maxToolCallSteps: 25,
   enableCodingAgentDebugLog: false,
+  includeCodingAgentDebugPayloads: false,
+  codingAgentDebugRetentionFiles: 2,
   hasCompletedInitialSetup: false,
 }
 
@@ -90,6 +92,12 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     enableSkillRouter: typeof raw.enableSkillRouter === 'boolean' ? raw.enableSkillRouter : defaults.enableSkillRouter,
     maxToolCallSteps: typeof raw.maxToolCallSteps === 'number' && (raw.maxToolCallSteps === 0 || (raw.maxToolCallSteps >= 5 && raw.maxToolCallSteps <= 500)) ? raw.maxToolCallSteps : defaults.maxToolCallSteps,
     enableCodingAgentDebugLog: typeof raw.enableCodingAgentDebugLog === 'boolean' ? raw.enableCodingAgentDebugLog : defaults.enableCodingAgentDebugLog,
+    includeCodingAgentDebugPayloads:
+      typeof raw.includeCodingAgentDebugPayloads === 'boolean' ? raw.includeCodingAgentDebugPayloads : defaults.includeCodingAgentDebugPayloads,
+    codingAgentDebugRetentionFiles:
+      typeof raw.codingAgentDebugRetentionFiles === 'number' && raw.codingAgentDebugRetentionFiles >= 1 && raw.codingAgentDebugRetentionFiles <= 5
+        ? Math.floor(raw.codingAgentDebugRetentionFiles)
+        : defaults.codingAgentDebugRetentionFiles,
     hasCompletedInitialSetup: typeof raw.hasCompletedInitialSetup === 'boolean' ? raw.hasCompletedInitialSetup : defaults.hasCompletedInitialSetup,
     modelContextLengths: sanitizeModelContextLengths(raw.modelContextLengths),
   }

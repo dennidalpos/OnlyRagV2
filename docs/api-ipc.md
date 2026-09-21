@@ -8,7 +8,7 @@ Il Preload espone le funzioni in [`electron/preload.ts`](../electron/preload.ts)
 | --- | --- |
 | `agent` | `approval-response`, `cancel-task`, `export-ai-debug-bundle`, `get-plan-state`, `get-queue-status`, `logs-analyze`, `parse-tool-call`, `plan-cancel`, `plan-enrich-prompt`, `plan-generate`, `plan-interview`, `plan-seed`, `start-task` |
 | `artifacts` | `delete`, `get`, `list`, `save` |
-| `diagnostics` | `clear-logs`, `get-http-metrics`, `get-log-filepath`, `get-logs`, `log-telemetry`, `open-logs-folder`, `run` |
+| `diagnostics` | `clear-logs`, `clear-agent-audit-log`, `get-http-metrics`, `get-log-filepath`, `get-logs`, `log-telemetry`, `open-logs-folder`, `run` |
 | `dialog` | `open-directory`, `open-file` |
 | `history` | `index`, `search` |
 | `ingest` | `delete`, `export`, `file`, `list`, `page-preview`, `search`, `translate-inplace`, `update` |

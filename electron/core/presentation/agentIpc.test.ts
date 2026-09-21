@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const handlers = new Map<string, (...args: any[]) => any>()
 
 vi.mock('electron', async (importOriginal) => ({
-  ...await importOriginal<typeof import('electron')>(),
+  ...(await importOriginal<typeof import('electron')>()),
   app: { getPath: vi.fn(() => process.cwd()) },
   BrowserWindow: class {},
   ipcMain: {
@@ -102,7 +102,19 @@ describe('agent IPC session-state facade', () => {
 
     expect(payload.activeFile).toMatchObject({ path: 'D:/repo/app.ts', versionHash: 'a'.repeat(64) })
     expect(payload).not.toHaveProperty('contextFiles')
-    expect(() => parseAgentTaskPayload({ userTask: 'Inspect', agentMode: 'ask', activeFile: { path: 'app.ts', content: '', versionHash: 'bad' } })).toThrow('Invalid activeFile contract')
+    expect(() => parseAgentTaskPayload({ userTask: 'Inspect', agentMode: 'ask', activeFile: { path: 'app.ts', content: '', versionHash: 'bad' } })).toThrow(
+      'Invalid activeFile contract',
+    )
+  })
+
+  it('defaults to Guided and rejects removed execution modes', () => {
+    expect(parseAgentTaskPayload({ userTask: 'Inspect' }).agentMode).toBe('guided')
+    expect(() => parseAgentTaskPayload({ userTask: 'Inspect', agentMode: 'agent' })).toThrow()
+    expect(() => parseAgentTaskPayload({ userTask: 'Inspect', agentMode: 'plan' })).toThrow()
+  })
+
+  it('accepts the explicit backend context-compaction flag', () => {
+    expect(parseAgentTaskPayload({ userTask: 'Inspect', agentMode: 'guided', forceContextCompaction: true }).forceContextCompaction).toBe(true)
   })
 
   it('returns null when no persisted session state exists and forwards plan seeding', async () => {
@@ -124,11 +136,13 @@ describe('agent IPC session-state facade', () => {
     await handlers.get('agent:plan-generate')?.({}, 'Build app', 'model', settings, previousPlan, '/repo', decisions)
 
     expect(agentInterviewAppService.conductInterview).toHaveBeenCalledWith('Build app', 'model', settings, '/repo', decisions)
-    expect(planGenerationAppService.generatePlanText).toHaveBeenCalledWith(expect.objectContaining({
-      workspacePath: '/repo',
-      previousDecisions: decisions,
-      previousPlan,
-    }))
+    expect(planGenerationAppService.generatePlanText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspacePath: '/repo',
+        previousDecisions: decisions,
+        previousPlan,
+      }),
+    )
   })
 
   it('forwards the current question set when enriching answers', async () => {

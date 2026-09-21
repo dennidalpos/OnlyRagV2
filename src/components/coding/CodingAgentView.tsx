@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { GripVertical } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
 import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
@@ -24,6 +24,7 @@ import { SystemDiagnosticsModal } from './SystemDiagnosticsModal'
 import { ArtifactPreviewPanel } from './ArtifactPreviewPanel'
 import type { AgentMode } from '../../types'
 import { logger } from '../../lib/logger'
+import { shouldAutomaticallyPlanCodingTask } from '../../../shared/domain/agent/automaticPlanningPolicy'
 
 export type { AgentMode }
 
@@ -34,393 +35,401 @@ interface CodingAgentViewProps {
   isActive?: boolean
 }
 
-export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(({ settings, onUpdateSettings, diagnostics, isActive = true }) => {
-  const { t } = useTranslation()
-  const c = useCodingAgent(settings)
+export const CodingAgentView: React.FC<CodingAgentViewProps> = React.memo(
+  ({ settings, onUpdateSettings, diagnostics, isActive = true }) => {
+    const { t } = useTranslation()
+    const c = useCodingAgent(settings)
 
-  // Single autoscroll toggle shared by every agent-opened panel
-  const [autoScroll, setAutoScroll] = useState<boolean>(true)
+    // Single autoscroll toggle shared by every agent-opened panel
+    const [autoScroll, setAutoScroll] = useState<boolean>(true)
 
-  // Unified Right Workspace View
-  const [activeRightTab, setActiveRightTab] = useState<CodingRightTab>('editor')
+    // Unified Right Workspace View
+    const [activeRightTab, setActiveRightTab] = useState<CodingRightTab>('editor')
+    const plannedExecutionModeRef = useRef<Exclude<AgentMode, 'ask'>>('guided')
 
-  // Plan Hook Integration with Session Isolation
-  const planApproval = usePlanApproval({
-    settings,
-    activeSessionId: c.activeSessionId,
-    workspacePath: c.workspacePath,
-    sessionPlans: c.activeSessionPlans,
-    onSessionPlansChange: c.updateActiveSessionPlans,
-    onPersistPlan: c.persistActiveSessionPlan,
-    onPlanApproved: (approvedPlan) => {
-      c.setAgentMode('agent')
-      void c.handleAgentExecute(approvedPlan.prompt, 'agent', `${approvedPlan.id}:v${approvedPlan.version}`, approvedPlan.capabilityProfile)
-    },
-  })
+    // Plan Hook Integration with Session Isolation
+    const planApproval = usePlanApproval({
+      settings,
+      activeSessionId: c.activeSessionId,
+      workspacePath: c.workspacePath,
+      sessionPlans: c.activeSessionPlans,
+      onSessionPlansChange: c.updateActiveSessionPlans,
+      onPersistPlan: c.persistActiveSessionPlan,
+      onPlanApproved: (approvedPlan) => {
+        const executionMode = plannedExecutionModeRef.current
+        void c.handleAgentExecute(approvedPlan.prompt, executionMode, `${approvedPlan.id}:v${approvedPlan.version}`, approvedPlan.capabilityProfile)
+      },
+    })
 
-  const defaultInitialWidth = typeof window !== 'undefined'
-    ? Math.max(560, Math.min(Math.round(window.innerWidth * 0.38), 750))
-    : 560
-  const { width: leftPanelWidth, isResizing, handleMouseDown, handleKeyDown } = useResizablePanel(
-    defaultInitialWidth,
-    320,
-    950,
-    'onlyrag_coding_left_panel_width'
-  )
-  const {
-    width: explorerWidth,
-    isResizing: isExplorerResizing,
-    handleMouseDown: handleExplorerMouseDown,
-    handleKeyDown: handleExplorerKeyDown,
-  } = useResizablePanel(288, 200, 480, 'onlyrag_coding_workspace_explorer_width')
-  const [showWorkspaceSidebar, setShowWorkspaceSidebar] = useState<boolean>(false)
-  const [isDiffMode, setIsDiffMode] = useState<boolean>(false)
-  const [copiedPath, setCopiedPath] = useState<boolean>(false)
-  const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
-  const [isPromptHistorySearchOpen, setIsPromptHistorySearchOpen] = useState<boolean>(false)
-  const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false)
-  const {
-    activeRequest: activeSkillInstallRequest,
-    approveInstall: approveSkillInstall,
-    rejectInstall: rejectSkillInstall,
-  } = useSkillInstallApproval(settings, c.activeRunIdentity)
+    const defaultInitialWidth = typeof window !== 'undefined' ? Math.max(560, Math.min(Math.round(window.innerWidth * 0.38), 750)) : 560
+    const {
+      width: leftPanelWidth,
+      isResizing,
+      handleMouseDown,
+      handleKeyDown,
+    } = useResizablePanel(defaultInitialWidth, 320, 950, 'onlyrag_coding_left_panel_width')
+    const {
+      width: explorerWidth,
+      isResizing: isExplorerResizing,
+      handleMouseDown: handleExplorerMouseDown,
+      handleKeyDown: handleExplorerKeyDown,
+    } = useResizablePanel(288, 200, 480, 'onlyrag_coding_workspace_explorer_width')
+    const [showWorkspaceSidebar, setShowWorkspaceSidebar] = useState<boolean>(false)
+    const [isDiffMode, setIsDiffMode] = useState<boolean>(false)
+    const [copiedPath, setCopiedPath] = useState<boolean>(false)
+    const [isSkillHubOpen, setIsSkillHubOpen] = useState<boolean>(false)
+    const [isPromptHistorySearchOpen, setIsPromptHistorySearchOpen] = useState<boolean>(false)
+    const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false)
+    const {
+      activeRequest: activeSkillInstallRequest,
+      approveInstall: approveSkillInstall,
+      rejectInstall: rejectSkillInstall,
+    } = useSkillInstallApproval(settings, c.activeRunIdentity)
 
-  const activeModelName = (c.isExecuting && c.currentLiveModel)
-    ? c.currentLiveModel
-    : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
+    const activeModelName = c.isExecuting && c.currentLiveModel ? c.currentLiveModel : settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
 
-  const hasPendingUnconsolidatedMilestones = useMemo(() => {
-    if (c.isExecuting) return false
-    const plan = planApproval.currentPlan
-    if (!plan || plan.status !== 'approved' || !plan.milestones) return false
-    return plan.milestones.some((m) => m.status !== 'verified')
-  }, [c.isExecuting, planApproval.currentPlan])
+    const hasPendingUnconsolidatedMilestones = useMemo(() => {
+      if (c.isExecuting) return false
+      const plan = planApproval.currentPlan
+      if (!plan || plan.status !== 'approved' || !plan.milestones) return false
+      return plan.milestones.some((m) => m.status !== 'verified')
+    }, [c.isExecuting, planApproval.currentPlan])
 
-  const handleCopyPath = () => {
-    if (c.selectedFile?.path) {
-      navigator.clipboard.writeText(c.selectedFile.path)
-      setCopiedPath(true)
-      setTimeout(() => setCopiedPath(false), 2000)
+    const handleCopyPath = () => {
+      if (c.selectedFile?.path) {
+        navigator.clipboard.writeText(c.selectedFile.path)
+        setCopiedPath(true)
+        setTimeout(() => setCopiedPath(false), 2000)
+      }
     }
-  }
 
-  const handleGeneratePlanFromPrompt = async () => {
-    const prompt = c.agentPrompt.trim()
-    if (!prompt) return
-    setActiveRightTab('plan')
-    c.addActionLog('info', 'Plan generation requested.', undefined, { category: 'generic_info' })
-    logger.info('CodingAgentView', `Plan generation requested (prompt length: ${prompt.length}).`)
-    await planApproval.startPlanFlow(prompt, undefined, c.currentStep)
-  }
-
-  useEffect(() => {
-    if (planApproval.isGeneratingPlan || planApproval.isInterviewActive || planApproval.currentPlan?.status === 'ready') {
+    const handleGeneratePlanFromPrompt = async (prompt: string, mode: Exclude<AgentMode, 'ask'>) => {
+      plannedExecutionModeRef.current = mode
       setActiveRightTab('plan')
+      c.setAgentPrompt('')
+      c.addActionLog('info', 'Automatic planning started for a complex task.', undefined, { category: 'generic_info' })
+      logger.info('CodingAgentView', `Automatic planning started for ${mode} mode (prompt length: ${prompt.length}).`)
+      await planApproval.startPlanFlow(prompt, undefined, c.currentStep)
     }
-  }, [planApproval.isGeneratingPlan, planApproval.isInterviewActive, planApproval.currentPlan?.status])
 
-  const handleInitiateTaskExecution = () => {
-    if (!c.agentPrompt.trim()) return
-    if (c.agentMode === 'plan') {
-      handleGeneratePlanFromPrompt()
-    } else {
-      c.handleAgentExecute()
+    useEffect(() => {
+      if (planApproval.isGeneratingPlan || planApproval.isInterviewActive || planApproval.currentPlan?.status === 'ready') {
+        setActiveRightTab('plan')
+      }
+    }, [planApproval.isGeneratingPlan, planApproval.isInterviewActive, planApproval.currentPlan?.status])
+
+    useEffect(() => {
+      if (
+        plannedExecutionModeRef.current === 'auto' &&
+        planApproval.currentPlan?.status === 'ready' &&
+        !planApproval.isApprovingPlan &&
+        !planApproval.isGeneratingPlan &&
+        !planApproval.isInterviewActive
+      ) {
+        void planApproval.handleApprovePlan()
+      }
+    }, [
+      planApproval.currentPlan?.status,
+      planApproval.handleApprovePlan,
+      planApproval.isApprovingPlan,
+      planApproval.isGeneratingPlan,
+      planApproval.isInterviewActive,
+    ])
+
+    const handleInitiateTaskExecution = () => {
+      const prompt = c.agentPrompt.trim()
+      if (!prompt) return
+      if (shouldAutomaticallyPlanCodingTask(prompt, c.agentMode)) {
+        void handleGeneratePlanFromPrompt(prompt, c.agentMode as Exclude<AgentMode, 'ask'>)
+        return
+      }
+      void c.handleAgentExecute()
     }
-  }
 
-  const handleSelectTab = (tab: CodingRightTab) => {
-    setActiveRightTab(tab)
-    if (tab === 'git_diff') {
-      c.fetchGitStatusAndDiff()
+    const handleSelectTab = (tab: CodingRightTab) => {
+      setActiveRightTab(tab)
+      if (tab === 'git_diff') {
+        c.fetchGitStatusAndDiff()
+      }
     }
-  }
 
-  const handleOpenFileTab = (file: typeof c.openFiles[0]) => {
-    c.handleOpenFile(file)
-    setActiveRightTab('editor')
-  }
+    const handleOpenFileTab = (file: (typeof c.openFiles)[0]) => {
+      c.handleOpenFile(file)
+      setActiveRightTab('editor')
+    }
 
-  return (
-    <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
-      {/* Top Header Bar */}
-      <CodingHeader
-        guestOsInfo={c.guestOsInfo}
-        settings={settings}
-        onUpdateSettings={onUpdateSettings}
-        activeSkills={c.activeSkills}
-        installedModels={diagnostics?.ollama?.models || []}
-        activeModel={activeModelName}
-        onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
-        onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
-        onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
-      />
-
-      {/* Main Workspace Split Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Full Workspace Explorer Sidebar */}
-        {showWorkspaceSidebar && (
-          <>
-            <WorkspaceExplorer
-              width={explorerWidth}
-              projects={c.projects}
-              activeProjectPath={c.workspacePath}
-              isStandaloneMode={c.isStandaloneMode}
-              onAddProject={c.handleAddProject}
-              onRemoveProject={c.handleRemoveProject}
-              onSelectProject={c.handleSelectProject}
-              onRenameProject={c.handleRenameProject}
-              onOpenProjectPath={c.handleOpenProjectPath}
-              onRevealStandaloneWorkspace={c.handleRevealStandaloneWorkspace}
-              onExportStandaloneWorkspace={c.handleExportStandaloneWorkspace}
-              onClearStandaloneWorkspace={c.handleClearStandaloneWorkspace}
-              files={c.files}
-              selectedFilePath={c.selectedFile?.path || null}
-              pinnedPaths={new Set(c.pinnedFiles.keys())}
-              onOpenFile={handleOpenFileTab}
-              onTogglePinFile={c.handleTogglePinFile}
-              onRefreshFiles={() => c.workspacePath && c.loadWorkspaceFiles(c.workspacePath)}
-              workspaceSessions={c.workspaceSessions}
-              activeSessionId={c.activeSessionId}
-              onCreateSession={c.handleCreateSession}
-              onSwitchSession={c.handleSwitchSession}
-              onDeleteSession={c.handleDeleteSession}
-              onRenameSession={c.handleRenameSession}
-              onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
-              onClose={() => setShowWorkspaceSidebar(false)}
-            />
-            {/* Resizable Explorer Divider Handle */}
-            <div
-              role="separator"
-              tabIndex={0}
-              aria-orientation="vertical"
-              aria-valuenow={explorerWidth}
-              aria-valuemin={200}
-              aria-valuemax={480}
-              aria-label={t('coding.resizePanels')}
-              onMouseDown={handleExplorerMouseDown}
-              onKeyDown={handleExplorerKeyDown}
-              className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring z-20 ${
-                isExplorerResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
-              }`}
-              title={t('coding.resizePanels')}
-            >
-              <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isExplorerResizing ? 'opacity-100 text-slate-950' : ''}`} />
-            </div>
-          </>
-        )}
-
-        {/* Left Column: Interactive Timeline & Prompt Composer */}
-        <CodingAgentLeftPanel
-          c={c}
-          planApproval={planApproval}
-          leftPanelWidth={leftPanelWidth}
-          showWorkspaceSidebar={showWorkspaceSidebar}
-          onToggleWorkspaceSidebar={() => setShowWorkspaceSidebar(!showWorkspaceSidebar)}
-          activeModelName={activeModelName}
+    return (
+      <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden select-text">
+        {/* Top Header Bar */}
+        <CodingHeader
+          guestOsInfo={c.guestOsInfo}
           settings={settings}
-          diagnostics={diagnostics}
-          hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
-          onExecute={handleInitiateTaskExecution}
-          onGeneratePlan={handleGeneratePlanFromPrompt}
-          onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
-          onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
-          onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
-          autoScroll={autoScroll}
-          onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
-          onSelectRightTab={handleSelectTab}
           onUpdateSettings={onUpdateSettings}
+          activeSkills={c.activeSkills}
+          installedModels={diagnostics?.ollama?.models || []}
+          activeModel={activeModelName}
+          onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
+          onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
+          onOpenPromptModal={() => c.setIsPromptModalOpen(true)}
         />
 
-        {/* Resizable Divider Handle */}
-        <div
-          role="separator"
-          tabIndex={0}
-          aria-orientation="vertical"
-          aria-valuenow={leftPanelWidth}
-          aria-valuemin={300}
-          aria-valuemax={850}
-          aria-label={t('coding.resizePanels')}
-          onMouseDown={handleMouseDown}
-          onKeyDown={handleKeyDown}
-          className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
-            isResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
-          }`}
-          title={t('coding.resizePanels')}
-        >
-          <GripVertical className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`} />
-        </div>
-
-        {/* Right Column: Unified Full-Height Workspace Area */}
-        <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
-          <CodingEditorTabBar
-            openFiles={c.openFiles}
-            selectedFile={c.selectedFile}
-            isSaved={c.isSaved}
-            onOpenFile={handleOpenFileTab}
-            onCloseFile={c.handleCloseFile}
-            isDiffMode={isDiffMode}
-            setIsDiffMode={setIsDiffMode}
-            onSaveFile={c.handleSaveFile}
-            activeTab={activeRightTab}
-            onSelectTab={handleSelectTab}
-            changedFilesCount={c.changeMetrics?.filesTouched || 0}
-            planIsReady={planApproval.currentPlan?.status === 'ready'}
-            planIsInProgress={planApproval.isGeneratingPlan}
-          />
-
-          {c.saveConflict && (
-            <div className="flex items-center justify-between gap-3 border-b border-amber-600/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-100">
-              <span className="truncate">Il file {c.saveConflict.fileName} è cambiato su disco. Scegli come risolvere prima di salvare.</span>
-              <div className="flex shrink-0 gap-2">
-                <button type="button" onClick={c.handleReloadConflict} className="rounded border border-slate-600 px-2 py-1 hover:bg-slate-800">Ricarica</button>
-                <button type="button" onClick={c.handleMergeConflict} className="rounded border border-cyan-700 px-2 py-1 hover:bg-cyan-950">Unisci</button>
-                <button type="button" onClick={c.handleOverwriteConflict} className="rounded border border-rose-700 px-2 py-1 hover:bg-rose-950">Sovrascrivi</button>
+        {/* Main Workspace Split Layout */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Full Workspace Explorer Sidebar */}
+          {showWorkspaceSidebar && (
+            <>
+              <WorkspaceExplorer
+                width={explorerWidth}
+                projects={c.projects}
+                activeProjectPath={c.workspacePath}
+                isStandaloneMode={c.isStandaloneMode}
+                onAddProject={c.handleAddProject}
+                onRemoveProject={c.handleRemoveProject}
+                onSelectProject={c.handleSelectProject}
+                onRenameProject={c.handleRenameProject}
+                onOpenProjectPath={c.handleOpenProjectPath}
+                onRevealStandaloneWorkspace={c.handleRevealStandaloneWorkspace}
+                onExportStandaloneWorkspace={c.handleExportStandaloneWorkspace}
+                onClearStandaloneWorkspace={c.handleClearStandaloneWorkspace}
+                files={c.files}
+                selectedFilePath={c.selectedFile?.path || null}
+                pinnedPaths={new Set(c.pinnedFiles.keys())}
+                onOpenFile={handleOpenFileTab}
+                onTogglePinFile={c.handleTogglePinFile}
+                onRefreshFiles={() => c.workspacePath && c.loadWorkspaceFiles(c.workspacePath)}
+                workspaceSessions={c.workspaceSessions}
+                activeSessionId={c.activeSessionId}
+                onCreateSession={c.handleCreateSession}
+                onSwitchSession={c.handleSwitchSession}
+                onDeleteSession={c.handleDeleteSession}
+                onRenameSession={c.handleRenameSession}
+                onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
+                onClose={() => setShowWorkspaceSidebar(false)}
+              />
+              {/* Resizable Explorer Divider Handle */}
+              <div
+                role="separator"
+                tabIndex={0}
+                aria-orientation="vertical"
+                aria-valuenow={explorerWidth}
+                aria-valuemin={200}
+                aria-valuemax={480}
+                aria-label={t('coding.resizePanels')}
+                onMouseDown={handleExplorerMouseDown}
+                onKeyDown={handleExplorerKeyDown}
+                className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring z-20 ${
+                  isExplorerResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
+                }`}
+                title={t('coding.resizePanels')}
+              >
+                <GripVertical
+                  className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isExplorerResizing ? 'opacity-100 text-slate-950' : ''}`}
+                />
               </div>
-            </div>
+            </>
           )}
 
-          {/* Active View Container */}
-          <div className="flex-1 w-full h-full overflow-hidden relative flex flex-col">
-            {activeRightTab === 'editor' && (
-              <CodingEditorContent
-                c={c}
-                settings={settings}
-                isDiffMode={isDiffMode}
-                copiedPath={copiedPath}
-                onCopyPath={handleCopyPath}
-                onShowWorkspaceSidebar={() => setShowWorkspaceSidebar(true)}
-              />
+          {/* Left Column: Interactive Timeline & Prompt Composer */}
+          <CodingAgentLeftPanel
+            c={c}
+            planApproval={planApproval}
+            leftPanelWidth={leftPanelWidth}
+            showWorkspaceSidebar={showWorkspaceSidebar}
+            onToggleWorkspaceSidebar={() => setShowWorkspaceSidebar(!showWorkspaceSidebar)}
+            activeModelName={activeModelName}
+            settings={settings}
+            diagnostics={diagnostics}
+            hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
+            onExecute={handleInitiateTaskExecution}
+            onOpenSkillHubModal={() => setIsSkillHubOpen(true)}
+            onOpenDiagnosticsModal={() => setIsDiagnosticsModalOpen(true)}
+            onOpenPromptHistorySearch={() => setIsPromptHistorySearchOpen(true)}
+            autoScroll={autoScroll}
+            onToggleAutoScroll={() => setAutoScroll((prev) => !prev)}
+            onSelectRightTab={handleSelectTab}
+            onUpdateSettings={onUpdateSettings}
+          />
+
+          {/* Resizable Divider Handle */}
+          <div
+            role="separator"
+            tabIndex={0}
+            aria-orientation="vertical"
+            aria-valuenow={leftPanelWidth}
+            aria-valuemin={300}
+            aria-valuemax={850}
+            aria-label={t('coding.resizePanels')}
+            onMouseDown={handleMouseDown}
+            onKeyDown={handleKeyDown}
+            className={`w-1 hover:bg-cyan-500 bg-slate-800/80 cursor-col-resize transition-colors duration-150 shrink-0 flex items-center justify-center group focus-ring ${
+              isResizing ? 'bg-cyan-500 ring-2 ring-cyan-500/50' : ''
+            }`}
+            title={t('coding.resizePanels')}
+          >
+            <GripVertical
+              className={`w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ${isResizing ? 'opacity-100 text-slate-950' : ''}`}
+            />
+          </div>
+
+          {/* Right Column: Unified Full-Height Workspace Area */}
+          <div className={`flex-1 flex flex-col overflow-hidden bg-slate-950 min-w-[350px] ${isResizing ? 'pointer-events-none select-none' : ''}`}>
+            <CodingEditorTabBar
+              openFiles={c.openFiles}
+              selectedFile={c.selectedFile}
+              isSaved={c.isSaved}
+              onOpenFile={handleOpenFileTab}
+              onCloseFile={c.handleCloseFile}
+              isDiffMode={isDiffMode}
+              setIsDiffMode={setIsDiffMode}
+              onSaveFile={c.handleSaveFile}
+              activeTab={activeRightTab}
+              onSelectTab={handleSelectTab}
+              changedFilesCount={c.changeMetrics?.filesTouched || 0}
+              planIsReady={planApproval.currentPlan?.status === 'ready'}
+              planIsInProgress={planApproval.isGeneratingPlan}
+            />
+
+            {c.saveConflict && (
+              <div className="flex items-center justify-between gap-3 border-b border-amber-600/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-100">
+                <span className="truncate">Il file {c.saveConflict.fileName} è cambiato su disco. Scegli come risolvere prima di salvare.</span>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={c.handleReloadConflict} className="rounded border border-slate-600 px-2 py-1 hover:bg-slate-800">
+                    Ricarica
+                  </button>
+                  <button type="button" onClick={c.handleMergeConflict} className="rounded border border-cyan-700 px-2 py-1 hover:bg-cyan-950">
+                    Unisci
+                  </button>
+                  <button type="button" onClick={c.handleOverwriteConflict} className="rounded border border-rose-700 px-2 py-1 hover:bg-rose-950">
+                    Sovrascrivi
+                  </button>
+                </div>
+              </div>
             )}
 
-            {activeRightTab === 'terminal' && (
-              <CodingTerminal
-                terminalLogs={c.terminalLogs}
-                terminalInput={c.terminalInput}
-                setTerminalInput={c.setTerminalInput}
-                onRunCommand={c.handleRunTerminalCommand}
-                onClearTerminal={c.handleClearTerminal}
-                isExecuting={c.isExecuting}
-                autoScroll={autoScroll}
-                navigateHistory={c.navigateHistory}
-                workspacePath={c.workspacePath}
-              />
-            )}
+            {/* Active View Container */}
+            <div className="flex-1 w-full h-full overflow-hidden relative flex flex-col">
+              {activeRightTab === 'editor' && (
+                <CodingEditorContent
+                  c={c}
+                  settings={settings}
+                  isDiffMode={isDiffMode}
+                  copiedPath={copiedPath}
+                  onCopyPath={handleCopyPath}
+                  onShowWorkspaceSidebar={() => setShowWorkspaceSidebar(true)}
+                />
+              )}
 
-            {activeRightTab === 'git_diff' && (
-              <GitDiffPanel
-                gitStatusLines={c.gitStatusLines}
-                gitDiffText={c.gitDiffText}
-                isFetchingGit={c.isFetchingGit}
-                isGitRepo={c.isGitRepo}
-                onRefreshGit={c.fetchGitStatusAndDiff}
-                onInitGit={c.initGit}
-              />
-            )}
+              {activeRightTab === 'terminal' && (
+                <CodingTerminal
+                  terminalLogs={c.terminalLogs}
+                  terminalInput={c.terminalInput}
+                  setTerminalInput={c.setTerminalInput}
+                  onRunCommand={c.handleRunTerminalCommand}
+                  onClearTerminal={c.handleClearTerminal}
+                  isExecuting={c.isExecuting}
+                  autoScroll={autoScroll}
+                  navigateHistory={c.navigateHistory}
+                  workspacePath={c.workspacePath}
+                />
+              )}
 
-            {activeRightTab === 'plan' && (
-              <PlanPanel
-                plan={planApproval.currentPlan}
-                planHistory={planApproval.planHistory}
-                activePlanIndex={planApproval.activePlanIndex}
-                onSelectPlanVersion={planApproval.selectPlanVersion}
-                isGenerating={planApproval.isGeneratingPlan}
-                isExecuting={c.isExecuting}
-                isApprovingPlan={planApproval.isApprovingPlan}
-                isSavingPlanReview={planApproval.isSavingPlanReview}
-                generationState={planApproval.planGenerationState}
-                isCancellingFlow={planApproval.isCancellingPlanFlow}
-                interviewQuestions={planApproval.interviewQuestions}
-                isInterviewActive={planApproval.isInterviewActive}
-                isAnalyzingInterview={planApproval.isAnalyzingInterview}
-                onConfirmInterview={planApproval.confirmInterviewAnswers}
-                onSkipInterview={planApproval.skipInterviewWithRecommended}
-                onCancelFlow={planApproval.cancelPlanFlow}
-                onRetry={planApproval.retryCurrentPlan}
-                onApprove={planApproval.handleApprovePlan}
-                onReject={planApproval.handleRejectPlan}
-                onSaveReview={planApproval.savePlanReview}
-                completedStepCount={c.currentStep}
-              />
-            )}
+              {activeRightTab === 'git_diff' && (
+                <GitDiffPanel
+                  gitStatusLines={c.gitStatusLines}
+                  gitDiffText={c.gitDiffText}
+                  isFetchingGit={c.isFetchingGit}
+                  isGitRepo={c.isGitRepo}
+                  onRefreshGit={c.fetchGitStatusAndDiff}
+                  onInitGit={c.initGit}
+                />
+              )}
 
-            {activeRightTab === 'slm_diagnostics' && (
-              <SlmDiagnosticsPanel />
-            )}
+              {activeRightTab === 'plan' && (
+                <PlanPanel
+                  plan={planApproval.currentPlan}
+                  planHistory={planApproval.planHistory}
+                  activePlanIndex={planApproval.activePlanIndex}
+                  onSelectPlanVersion={planApproval.selectPlanVersion}
+                  isGenerating={planApproval.isGeneratingPlan}
+                  isExecuting={c.isExecuting}
+                  isApprovingPlan={planApproval.isApprovingPlan}
+                  isSavingPlanReview={planApproval.isSavingPlanReview}
+                  generationState={planApproval.planGenerationState}
+                  isCancellingFlow={planApproval.isCancellingPlanFlow}
+                  interviewQuestions={planApproval.interviewQuestions}
+                  isInterviewActive={planApproval.isInterviewActive}
+                  isAnalyzingInterview={planApproval.isAnalyzingInterview}
+                  onConfirmInterview={planApproval.confirmInterviewAnswers}
+                  onSkipInterview={planApproval.skipInterviewWithRecommended}
+                  onCancelFlow={planApproval.cancelPlanFlow}
+                  onRetry={planApproval.retryCurrentPlan}
+                  onApprove={planApproval.handleApprovePlan}
+                  onReject={planApproval.handleRejectPlan}
+                  onSaveReview={planApproval.savePlanReview}
+                  completedStepCount={c.currentStep}
+                />
+              )}
 
-            {activeRightTab === 'artifacts' && (
-              <ArtifactPreviewPanel workspacePath={c.workspacePath} />
-            )}
+              {activeRightTab === 'slm_diagnostics' && <SlmDiagnosticsPanel />}
+
+              {activeRightTab === 'artifacts' && <ArtifactPreviewPanel workspacePath={c.workspacePath} />}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Pending Approval Modal (Ask Mode) */}
-      <PendingApprovalModal
-        pendingApproval={c.pendingApproval}
-        onApprove={c.handleApproveAction}
-        onReject={c.handleRejectAction}
-      />
+        {/* Pending Approval Modal (Ask Mode) */}
+        <PendingApprovalModal pendingApproval={c.pendingApproval} onApprove={c.handleApproveAction} onReject={c.handleRejectAction} />
 
-      {/* System Prompt Customization Modal */}
-      {settings && onUpdateSettings && (
-        <PromptConfigurationModal
-          isOpen={c.isPromptModalOpen}
-          onClose={() => c.setIsPromptModalOpen(false)}
-          initialNodeId="coding:master"
-          settings={settings}
-          onUpdateSettings={onUpdateSettings}
-          workspacePath={c.workspacePath}
-          isStandaloneMode={c.isStandaloneMode}
-          userTask={c.promptQueue[0]?.prompt || undefined}
+        {/* System Prompt Customization Modal */}
+        {settings && onUpdateSettings && (
+          <PromptConfigurationModal
+            isOpen={c.isPromptModalOpen}
+            onClose={() => c.setIsPromptModalOpen(false)}
+            initialNodeId="coding:master"
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            workspacePath={c.workspacePath}
+            isStandaloneMode={c.isStandaloneMode}
+            userTask={c.promptQueue[0]?.prompt || undefined}
+          />
+        )}
+
+        {/* Skill Hub & Marketplace Modal */}
+        <SkillHubModal isOpen={isSkillHubOpen} onClose={() => setIsSkillHubOpen(false)} workspacePath={c.workspacePath} />
+
+        {/* Hub Skill Auto-Install Confirmation (autoInstallHubSkills: 'prompt') */}
+        <SkillInstallApprovalModal request={activeSkillInstallRequest} onApprove={approveSkillInstall} onReject={rejectSkillInstall} />
+
+        {/* Cross-Project Prompt History Search */}
+        <PromptHistorySearchModal
+          isOpen={isPromptHistorySearchOpen}
+          onClose={() => setIsPromptHistorySearchOpen(false)}
+          projects={c.projects}
+          onJump={c.jumpToProjectAndSession}
         />
-      )}
 
-      {/* Skill Hub & Marketplace Modal */}
-      <SkillHubModal
-        isOpen={isSkillHubOpen}
-        onClose={() => setIsSkillHubOpen(false)}
-        workspacePath={c.workspacePath}
-      />
-
-      {/* Hub Skill Auto-Install Confirmation (autoInstallHubSkills: 'prompt') */}
-      <SkillInstallApprovalModal
-        request={activeSkillInstallRequest}
-        onApprove={approveSkillInstall}
-        onReject={rejectSkillInstall}
-      />
-
-      {/* Cross-Project Prompt History Search */}
-      <PromptHistorySearchModal
-        isOpen={isPromptHistorySearchOpen}
-        onClose={() => setIsPromptHistorySearchOpen(false)}
-        projects={c.projects}
-        onJump={c.jumpToProjectAndSession}
-      />
-
-      {/* System Diagnostics & Telemetry Modal */}
-      <SystemDiagnosticsModal
-        isOpen={isDiagnosticsModalOpen}
-        onClose={() => setIsDiagnosticsModalOpen(false)}
-        guestOsInfo={c.guestOsInfo}
-        settings={settings}
-        actionLogs={c.actionLogs}
-        isExecuting={c.isExecuting}
-        activeModelName={activeModelName}
-        openFilesCount={c.openFiles.length}
-        pinnedFilesCount={c.pinnedFiles.size}
-        attachedDocsCount={c.attachedDocIds.size}
-        sessionId={c.activeSessionId}
-        workspacePath={c.workspacePath}
-        activeSkills={c.activeSkills}
-      />
-    </div>
-  )
-}, (prev, next) => {
-  if (prev.isActive === false && next.isActive === false) return true
-  if (prev.isActive !== next.isActive) return false
-  return (
-    prev.settings === next.settings &&
-    prev.diagnostics === next.diagnostics &&
-    prev.onUpdateSettings === next.onUpdateSettings
-  )
-})
+        {/* System Diagnostics & Telemetry Modal */}
+        <SystemDiagnosticsModal
+          isOpen={isDiagnosticsModalOpen}
+          onClose={() => setIsDiagnosticsModalOpen(false)}
+          guestOsInfo={c.guestOsInfo}
+          settings={settings}
+          actionLogs={c.actionLogs}
+          isExecuting={c.isExecuting}
+          activeModelName={activeModelName}
+          openFilesCount={c.openFiles.length}
+          pinnedFilesCount={c.pinnedFiles.size}
+          attachedDocsCount={c.attachedDocIds.size}
+          sessionId={c.activeSessionId}
+          workspacePath={c.workspacePath}
+          activeSkills={c.activeSkills}
+        />
+      </div>
+    )
+  },
+  (prev, next) => {
+    if (prev.isActive === false && next.isActive === false) return true
+    if (prev.isActive !== next.isActive) return false
+    return prev.settings === next.settings && prev.diagnostics === next.diagnostics && prev.onUpdateSettings === next.onUpdateSettings
+  },
+)

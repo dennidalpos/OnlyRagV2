@@ -1,4 +1,3 @@
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -25,14 +24,11 @@ function seedWorkspace(): { packageJson: string; packageTypes: string } {
       dependencies: { [PACKAGE_NAME]: '1.0.0' },
     },
     null,
-    2
+    2,
   )
-  const packageTypes = [
-    'export declare const Dialog: any',
-    'export declare const Menu: any',
-    'export declare const Listbox: any',
-    'export declare const Switch: any',
-  ].join('\n') + '\n'
+  const packageTypes =
+    ['export declare const Dialog: any', 'export declare const Menu: any', 'export declare const Listbox: any', 'export declare const Switch: any'].join('\n') +
+    '\n'
 
   fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
   fs.writeFileSync(
@@ -40,16 +36,20 @@ function seedWorkspace(): { packageJson: string; packageTypes: string } {
     JSON.stringify(
       { compilerOptions: { strict: true, module: 'commonjs', target: 'es2020', moduleResolution: 'node', jsx: 'preserve' }, include: ['src'] },
       null,
-      2
+      2,
     ),
-    'utf-8'
+    'utf-8',
   )
   fs.writeFileSync(path.join(WORKSPACE, 'src', 'global.d.ts'), 'declare namespace JSX { interface IntrinsicElements { [element: string]: any } }\n', 'utf-8')
-  fs.writeFileSync(path.join(WORKSPACE, 'src', 'TaskCard.tsx'), `import { Card, List } from '${PACKAGE_NAME}'\n\nexport const taskCard = Card + List\n`, 'utf-8')
+  fs.writeFileSync(
+    path.join(WORKSPACE, 'src', 'TaskCard.tsx'),
+    `import { Card, List } from '${PACKAGE_NAME}'\n\nexport const taskCard = Card + List\n`,
+    'utf-8',
+  )
   fs.writeFileSync(
     path.join(WORKSPACE, 'node_modules', PACKAGE_NAME, 'package.json'),
     JSON.stringify({ name: PACKAGE_NAME, version: '1.0.0', types: 'index.d.ts' }, null, 2),
-    'utf-8'
+    'utf-8',
   )
   fs.writeFileSync(path.join(WORKSPACE, 'node_modules', PACKAGE_NAME, 'index.d.ts'), packageTypes, 'utf-8')
   return { packageJson, packageTypes }
@@ -62,7 +62,7 @@ describe('live: TS2305 export recovery', () => {
       SESSION,
       WORKSPACE,
       [{ id: 'm-ts2305', title: 'Fix src/TaskCard.tsx', status: 'pending', verificationCommand: 'npm run build' }],
-      'Fix the TypeScript build error in src/TaskCard.tsx.'
+      'Fix the TypeScript build error in src/TaskCard.tsx.',
     )
 
     const result = await runAgentOrchestratorLoop(
@@ -72,14 +72,20 @@ describe('live: TS2305 export recovery', () => {
           `The package ${PACKAGE_NAME} and node_modules are already correct: do not edit package.json, ` +
           'do not edit node_modules, and do not install any package. Stop only after npm run build passes.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: SESSION,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 12 } as never),
       },
-      null
+      null,
     )
 
-    const metrics = reportRun({ label: 'TS2305 export recovery', workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })
+    const metrics = reportRun({
+      label: 'TS2305 export recovery',
+      workspacePath: WORKSPACE,
+      sessionId: SESSION,
+      success: result.success,
+      summary: result.summary,
+    })
     const source = fs.readFileSync(path.join(WORKSPACE, 'src', 'TaskCard.tsx'), 'utf-8')
 
     expect(metrics.commands.some((command) => command.includes('npm run build'))).toBe(true)

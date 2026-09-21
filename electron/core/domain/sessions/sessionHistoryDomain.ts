@@ -22,11 +22,7 @@ export function deriveSessionTitle(prompt: string): string {
 }
 
 /** Rebuilds ExecutedPrompt records from an action log. */
-export function extractExecutedPromptsFromLogs(
-  sessionId: string,
-  logs: AgentActionLog[],
-  fallbackTimestamp: string
-): ExecutedPrompt[] {
+export function extractExecutedPromptsFromLogs(sessionId: string, logs: AgentActionLog[], fallbackTimestamp: string): ExecutedPrompt[] {
   return logs
     .filter((log) => typeof log?.message === 'string' && log.message.startsWith(USER_PROMPT_LOG_PREFIX))
     .map((log, index) => ({
@@ -34,7 +30,7 @@ export function extractExecutedPromptsFromLogs(
       sessionId,
       prompt: log.message.slice(USER_PROMPT_LOG_PREFIX.length).trim(),
       startedAt: toIsoTimestamp(log.timestamp, fallbackTimestamp),
-      agentMode: 'agent' as const,
+      agentMode: 'guided' as const,
       outcome: 'unknown' as const,
       totalSteps: 0,
       filesTouched: 0,
@@ -47,15 +43,16 @@ const PLAN_STATUSES: AgentPlan['status'][] = ['idle', 'generating', 'ready', 'ap
 
 function normalizePlan(raw: any, fallbackTimestamp: string): AgentPlan | null {
   if (
-    !raw
-    || raw.formatVersion !== 2
-    || typeof raw.id !== 'string'
-    || typeof raw.objective !== 'string'
-    || !Array.isArray(raw.decisions)
-    || !Array.isArray(raw.retainedEvidence)
-    || !Array.isArray(raw.milestones)
-    || !Array.isArray(raw.supersededWork)
-  ) return null
+    !raw ||
+    raw.formatVersion !== 2 ||
+    typeof raw.id !== 'string' ||
+    typeof raw.objective !== 'string' ||
+    !Array.isArray(raw.decisions) ||
+    !Array.isArray(raw.retainedEvidence) ||
+    !Array.isArray(raw.milestones) ||
+    !Array.isArray(raw.supersededWork)
+  )
+    return null
   return {
     formatVersion: 2,
     id: raw.id,
@@ -85,7 +82,8 @@ function normalizeExecutedPrompt(raw: any, sessionId: string, fallbackTimestamp:
     prompt: raw.prompt,
     startedAt: toIsoTimestamp(raw.startedAt, fallbackTimestamp),
     completedAt: raw.completedAt ? toIsoTimestamp(raw.completedAt, fallbackTimestamp) : undefined,
-    agentMode: raw.agentMode === 'plan' || raw.agentMode === 'ask' ? raw.agentMode : 'agent',
+    agentMode:
+      raw.agentMode === 'ask' || raw.agentMode === 'guided' || raw.agentMode === 'auto' ? raw.agentMode : raw.agentMode === 'agent' ? 'auto' : 'guided',
     outcome: ['running', 'success', 'failed', 'cancelled'].includes(raw.outcome) ? raw.outcome : 'unknown',
     totalSteps: Number.isFinite(raw.totalSteps) ? Number(raw.totalSteps) : 0,
     filesTouched: Number.isFinite(raw.filesTouched) ? Number(raw.filesTouched) : 0,
@@ -108,16 +106,13 @@ export function normalizeSession(raw: any): CodingSession | null {
         .map((log: any) => ({ ...log, timestamp: toIsoTimestamp(log.timestamp, createdAt) }))
     : []
 
-  const executedPrompts = Array.isArray(raw.executedPrompts) && raw.executedPrompts.length > 0
-    ? raw.executedPrompts
-        .map((p: any) => normalizeExecutedPrompt(p, raw.id, createdAt))
-        .filter((p: ExecutedPrompt | null): p is ExecutedPrompt => p !== null)
-    : extractExecutedPromptsFromLogs(raw.id, actionLogs, createdAt)
+  const executedPrompts =
+    Array.isArray(raw.executedPrompts) && raw.executedPrompts.length > 0
+      ? raw.executedPrompts.map((p: any) => normalizeExecutedPrompt(p, raw.id, createdAt)).filter((p: ExecutedPrompt | null): p is ExecutedPrompt => p !== null)
+      : extractExecutedPromptsFromLogs(raw.id, actionLogs, createdAt)
 
   const plans = Array.isArray(raw.plans)
-    ? raw.plans
-        .map((plan: any) => normalizePlan(plan, createdAt))
-        .filter((plan: AgentPlan | null): plan is AgentPlan => plan !== null)
+    ? raw.plans.map((plan: any) => normalizePlan(plan, createdAt)).filter((plan: AgentPlan | null): plan is AgentPlan => plan !== null)
     : undefined
 
   const promptQueue = Array.isArray(raw.promptQueue)
@@ -140,11 +135,7 @@ export function normalizeSession(raw: any): CodingSession | null {
   return {
     id: raw.id,
     workspacePath: typeof raw.workspacePath === 'string' && raw.workspacePath ? raw.workspacePath : null,
-    title: hasCustomTitle
-      ? raw.title.trim()
-      : executedPrompts.length > 0
-        ? deriveSessionTitle(executedPrompts[0].prompt)
-        : 'Nuova Sessione',
+    title: hasCustomTitle ? raw.title.trim() : executedPrompts.length > 0 ? deriveSessionTitle(executedPrompts[0].prompt) : 'Nuova Sessione',
     createdAt,
     updatedAt,
     actionLogs,
@@ -152,6 +143,14 @@ export function normalizeSession(raw: any): CodingSession | null {
     plans,
     promptQueue,
     pinnedFilePaths: Array.isArray(raw.pinnedFilePaths) ? raw.pinnedFilePaths.filter((p: any) => typeof p === 'string') : undefined,
+    forceContextCompaction: raw.forceContextCompaction === true,
+    contextBudget:
+      raw.contextBudget &&
+      typeof raw.contextBudget.model === 'string' &&
+      Number.isFinite(raw.contextBudget.promptTokens) &&
+      Number.isFinite(raw.contextBudget.promptBudgetTokens)
+        ? raw.contextBudget
+        : undefined,
   }
 }
 

@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  deriveSessionTitle,
-  normalizeSession,
-  sortSessionsByRecency,
-  toIsoTimestamp,
-  upsertSession,
-} from './sessionHistoryDomain'
+import { deriveSessionTitle, normalizeSession, sortSessionsByRecency, toIsoTimestamp, upsertSession } from './sessionHistoryDomain'
 import type { CodingSession } from '../../../../shared/types'
 
 describe('SessionHistoryDomain Unit Tests', () => {
@@ -62,7 +56,7 @@ describe('SessionHistoryDomain Unit Tests', () => {
           prompt: 'Ship the release',
           startedAt: '2026-03-01T08:05:00.000Z',
           completedAt: '2026-03-01T08:30:00.000Z',
-          agentMode: 'agent',
+          agentMode: 'auto',
           outcome: 'success',
           totalSteps: 12,
           filesTouched: 3,

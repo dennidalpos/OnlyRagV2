@@ -5,7 +5,7 @@ export interface WorkspaceProject {
   lastOpenedAt?: string
 }
 
-export type AgentExecutionMode = 'plan' | 'ask' | 'agent'
+export type AgentExecutionMode = 'ask' | 'guided' | 'auto'
 
 /** Outcome of a single prompt run inside a coding session. */
 export type ExecutedPromptOutcome = 'running' | 'success' | 'failed' | 'cancelled' | 'unknown'

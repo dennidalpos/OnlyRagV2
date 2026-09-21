@@ -11,12 +11,7 @@ import path from 'node:path'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
-type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 type RequestApproval = (payload: Record<string, unknown>) => Promise<ApprovalResponse>
 
 export interface ToolGateContext {
@@ -37,16 +32,27 @@ export interface ToolGateContext {
 
 export type ToolGateResult =
   | { outcome: 'denied' }
-  | { outcome: 'allowed'; toolCallForExecution: AgentToolCall; policyConsent?: { requested: boolean; granted: boolean; consentId: string }; commandApprovalGranted?: boolean }
+  | {
+      outcome: 'allowed'
+      toolCallForExecution: AgentToolCall
+      policyConsent?: { requested: boolean; granted: boolean; consentId: string }
+      commandApprovalGranted?: boolean
+    }
 
-const MUTATING_TOOLS_REQUIRING_ASK_APPROVAL = [
+const MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL = [
+  'create_directory',
+  'copy_file',
+  'move_file',
   'run_command',
+  'run_tests',
   'write_file',
   'replace_file_content',
   'multi_replace_file_content',
   'delete_file',
   'download_file',
   'ensure_tool',
+  'rollback_workspace',
+  'rollback_last_step',
 ]
 
 /** Always-Confirm Gate: git_commit rewrites shared git history, a harder-to-reverse action than an in-workspace file edit, so it ALWAYS requires explicit user approval regardless of agent mode (unlike write_file/delete_file, which execute autonomously in AGENT mo */
@@ -121,11 +127,12 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
 
   const requiresNetwork = ctx.capabilityPolicyMode === 'network-approved' && requiresNetworkConsent(toolCall)
   const requiresInstall = toolCall.tool === 'ensure_tool'
-  const requiresAsk = ctx.agentMode === 'ask' && MUTATING_TOOLS_REQUIRING_ASK_APPROVAL.includes(toolCall.tool)
-  if (!commandApprovalGranted && !requiresNetwork && !requiresInstall && !requiresAsk) return undefined
+  const requiresGuided = ctx.agentMode === 'guided' && MUTATING_TOOLS_REQUIRING_GUIDED_APPROVAL.includes(toolCall.tool)
+  if (!commandApprovalGranted && !requiresNetwork && !requiresInstall && !requiresGuided) return undefined
 
   const toolName = String(toolCall.parameters.toolName || '')
-  const target = toolCall.parameters.filePath || toolCall.parameters.command || toolCall.parameters.url || toolCall.parameters.query || toolName || 'Target Action'
+  const target =
+    toolCall.parameters.filePath || toolCall.parameters.command || toolCall.parameters.url || toolCall.parameters.query || toolName || 'Target Action'
   const contentOrCmd =
     (requiresInstall ? buildInstallCommand(toolName) : undefined) ||
     toolCall.parameters.command ||
@@ -140,7 +147,12 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
     replacement: toolCall.parameters.replacementContent,
     replacements: toolCall.parameters.replacements,
     parameters: toolCall.parameters,
-    reasons: [commandApprovalGranted && 'workspace mutation', requiresNetwork && 'network access', requiresInstall && 'external installation', requiresAsk && 'Ask mode'].filter(Boolean),
+    reasons: [
+      commandApprovalGranted && 'workspace mutation',
+      requiresNetwork && 'network access',
+      requiresInstall && 'external installation',
+      requiresGuided && 'Guided review',
+    ].filter(Boolean),
   })
   if (!approval.approved) {
     const feedback = `[USER DENIED] L'utente ha rifiutato l'azione proposta (${toolCall.tool} su "${target}").`
@@ -158,19 +170,22 @@ async function gateContextualConsent(ctx: ToolGateContext): Promise<ContextualCo
 function denyFsm(ctx: ToolGateContext) {
   const { parsedTool, fsmMode, episodicCompactor, emitLog, stepCount } = ctx
   const allowedToolsList = fsmMode.filterAllowedTools([parsedTool.tool]).join(', ') || 'read-only tools only'
-  const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${allowedToolsList}. Switch to AGENT mode to execute mutating operations.`
-  episodicCompactor.recordStep({ step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` }, feedback)
+  const feedback = `[FSM PERMISSION DENIED] Tool "${parsedTool.tool}" is not permitted in ${fsmMode.getMode()} mode. Allowed tools: ${allowedToolsList}. Switch to GUIDED or AUTO mode to execute mutating operations.`
+  episodicCompactor.recordStep(
+    { step: stepCount, tool: parsedTool.tool, status: 'BLOCKED', summary: `FSM denied: ${parsedTool.tool} in ${fsmMode.getMode()} mode` },
+    feedback,
+  )
   emitLog('info', `🔒 [${fsmMode.getMode()}] Tool blocked: ${parsedTool.tool}`)
 }
 
-/** Runs, in order: the always-on git_commit approval gate, the ASK-mode mutating-tool approval gate, then the FSM tool-permission gate (skipped for a tool just explicitly approved by either gate above). */
+/** Applies phase constraints, strict Ask read-only permissions, contextual consent, and the always-on git_commit gate. */
 export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult> {
   if (ctx.allowedToolsForTurn && !ctx.allowedToolsForTurn.includes(ctx.parsedTool.tool)) {
     const allowed = ctx.allowedToolsForTurn.join(', ') || 'none'
     const feedback = `[TURN TOOL POLICY DENIED] Tool "${ctx.parsedTool.tool}" is not available for this phase. Available now: ${allowed}.`
     ctx.episodicCompactor.recordStep(
       { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: `Turn policy denied: ${ctx.parsedTool.tool}` },
-      feedback
+      feedback,
     )
     ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
     return { outcome: 'denied' }
@@ -183,11 +198,18 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       const feedback = `[FILE VERSION RECOVERY DENIED] Read "${ctx.requiredReadPath}" before proposing another edit.`
       ctx.episodicCompactor.recordStep(
         { step: ctx.stepCount, tool: ctx.parsedTool.tool, status: 'BLOCKED', summary: 'Required version refresh was not performed' },
-        feedback
+        feedback,
       )
       ctx.emitLog('info', `🔒 Lettura versione richiesta: ${ctx.requiredReadPath}`)
       return { outcome: 'denied' }
     }
+  }
+
+  // Ask is a hard read-only boundary. Network or command consent must never turn a
+  // disallowed mutating tool into an executable one.
+  if (ctx.agentMode === 'ask' && !ctx.fsmMode.isToolAllowed(ctx.parsedTool.tool)) {
+    denyFsm(ctx)
+    return { outcome: 'denied' }
   }
 
   let approvalGranted = false
@@ -195,8 +217,12 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
   let policyConsent: { requested: boolean; granted: boolean; consentId: string } | undefined
   let commandApprovalGranted = false
   if (ctx.isIsolatedWorkspace && ctx.parsedTool.tool === 'git_commit') {
-    const feedback = '[ISOLATED WORKSPACE] Git commits are disabled during an isolated run. Publish the reviewed workspace changes first, then commit them from the user workspace.'
-    ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'Git commit deferred until workspace publication' }, feedback)
+    const feedback =
+      '[ISOLATED WORKSPACE] Git commits are disabled during an isolated run. Publish the reviewed workspace changes first, then commit them from the user workspace.'
+    ctx.episodicCompactor.recordStep(
+      { step: ctx.stepCount, tool: 'git_commit', status: 'BLOCKED', summary: 'Git commit deferred until workspace publication' },
+      feedback,
+    )
     ctx.emitLog('info', 'Git commit rinviato: pubblica prima le modifiche isolate.')
     return { outcome: 'denied' }
   }

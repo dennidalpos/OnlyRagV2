@@ -21,16 +21,14 @@ describe('Studio primary actions', () => {
     container.remove()
   })
 
-  it('keeps Ask and Edit primary while Plan remains explicit', async () => {
+  it('offers Ask, Guided, and Auto with Guided as the default workflow', async () => {
     const setMode = vi.fn()
-    await act(async () => root.render(<AgentModeSelector agentMode="ask" setAgentMode={setMode} />))
+    await act(async () => root.render(<AgentModeSelector agentMode="guided" setAgentMode={setMode} />))
 
-    expect(container.querySelectorAll('[role="radio"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[role="radio"]')).toHaveLength(3)
     expect(container.textContent).toContain('Chiedi')
-    expect(container.textContent).toContain('Modifica')
-    const plan = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Pianifica')!
-    await act(async () => plan.click())
-    expect(setMode).toHaveBeenCalledWith('plan')
+    expect(container.textContent).toContain('Guidata')
+    expect(container.textContent).toContain('Auto')
   })
 
   it('switches the primary action with the keyboard', async () => {
@@ -40,7 +38,7 @@ describe('Studio primary actions', () => {
     const group = container.querySelector('[role="radiogroup"]')!
     await act(async () => group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
 
-    expect(setMode).toHaveBeenCalledWith('agent')
+    expect(setMode).toHaveBeenCalledWith('guided')
   })
 
   it('hides terminal and diagnostics until details are expanded', async () => {

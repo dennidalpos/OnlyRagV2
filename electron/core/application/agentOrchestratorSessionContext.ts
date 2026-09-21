@@ -5,12 +5,7 @@ import type { SkillMatchingOptions } from './skillAppService'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { logger } from '../../diagnostics'
 import { generateCompactRepoMap } from '../infrastructure/filesystem/compactSemanticRepoMapper'
-import {
-  resolveWorkspacePath,
-  buildDefaultAgentSettings,
-  buildAttachedContextBlock,
-  buildPinnedFilesContextBlock,
-} from './agentOrchestratorSessionSetup'
+import { resolveWorkspacePath, buildDefaultAgentSettings, buildAttachedContextBlock, buildPinnedFilesContextBlock } from './agentOrchestratorSessionSetup'
 import { documentIoRepository } from '../infrastructure/filesystem/documentIoRepository'
 import { skillAppService } from './skillAppService'
 import { skillInstallApprovalService, type SkillInstallCandidate } from './skillInstallApprovalService'
@@ -24,12 +19,7 @@ import { applyAgentCapabilityProfile } from '../../../shared/domain/agent/agentC
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
-export type EmitLog = (
-  type: 'info' | 'tool_call' | 'terminal' | 'approval_request',
-  message: string,
-  detail?: string,
-  meta?: Partial<AgentLogEntry>
-) => void
+export type EmitLog = (type: 'info' | 'tool_call' | 'terminal' | 'approval_request', message: string, detail?: string, meta?: Partial<AgentLogEntry>) => void
 
 export interface SessionContextParams {
   payload: AgentTaskPayload
@@ -75,7 +65,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const { payload, session, sessionId, emitLog } = params
 
   const userTask = payload.userTask.trim()
-  const agentMode = payload.agentMode || 'plan'
+  const agentMode = payload.agentMode || 'guided'
   const workspacePath = resolveWorkspacePath(payload)
   const isStandaloneMode = Boolean(payload.isStandaloneMode)
   const settings = payload.capabilityProfile
@@ -85,9 +75,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const attachedContext = buildAttachedContextBlock(payload)
   const pinnedFilesContextStr = buildPinnedFilesContextBlock(payload)
 
-  const projectContextMapStr = workspacePath && !isStandaloneMode && documentIoRepository.exists(workspacePath)
-    ? await scanProjectMap(workspacePath)
-    : ''
+  const projectContextMapStr = workspacePath && !isStandaloneMode && documentIoRepository.exists(workspacePath) ? await scanProjectMap(workspacePath) : ''
 
   const availableModels = await ollamaAppService.getInstalledModels(settings.ollamaHost)
   const savedState = await agentSessionStateRepository.loadSessionState(sessionId, workspacePath)
@@ -98,9 +86,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   const codingModel = session.ollamaRuntimeProfile?.model || findMatchingInstalledModel(requestedCodingModel, availableModels) || requestedCodingModel
   // One `/api/tags` read, both facts.
   const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)
-  const modelCapabilities: Record<string, string[]> = Object.fromEntries(
-    Object.entries(modelMetrics).map(([name, metrics]) => [name, metrics.capabilities])
-  )
+  const modelCapabilities: Record<string, string[]> = Object.fromEntries(Object.entries(modelMetrics).map(([name, metrics]) => [name, metrics.capabilities]))
   const resumeValidationError = session.ollamaRuntimeProfile
     ? validateRestoredOllamaRuntime(session.ollamaRuntimeProfile, settings.ollamaHost, availableModels, modelMetrics)
     : null
@@ -108,17 +94,12 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
   emitLog(
     'info',
     `Task received: "${userTask}"`,
-    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${codingModel} | Workspace: ${workspacePath || 'Standalone'}`
+    `Mode: ${agentMode.toUpperCase()} | Engine: Clean Layered Architecture | Model: ${codingModel} | Workspace: ${workspacePath || 'Standalone'}`,
   )
 
   if (settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logSessionStart(
-      sessionId,
-      userTask,
-      agentMode,
-      codingModel,
-      workspacePath
-    )
+    codingAgentLogger.configureRetention(settings.codingAgentDebugRetentionFiles || 2)
+    codingAgentLogger.logSessionStart(sessionId, userTask, agentMode, codingModel, workspacePath, settings.includeCodingAgentDebugPayloads === true)
   }
 
   const skillMatchContext = {

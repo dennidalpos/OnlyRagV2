@@ -36,7 +36,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     vi.mocked(agentSessionStateRepository.loadSessionState).mockResolvedValue({
       sessionId: 'session-123',
       workspacePath: 'D:/TestWorkspace',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 2,
       maxSteps: 50,
       episodes: [
@@ -84,15 +84,17 @@ describe('AiDebugBundleService Unit Tests', () => {
         digest: 'sha256:test',
         options: { num_ctx: 8192, num_predict: 2048, maxContextChars: 24000, temperature: 0.1, top_p: 0.9, repeat_penalty: 1.1, stop: [] },
       },
-      ollamaGenerationTelemetry: [{
-        step: 2,
-        model: 'qwen2.5-coder:7b',
-        numCtx: 8192,
-        startedAt: new Date().toISOString(),
-        wallDurationMs: 420,
-        promptTokens: 100,
-        completionTokens: 20,
-      }],
+      ollamaGenerationTelemetry: [
+        {
+          step: 2,
+          model: 'qwen2.5-coder:7b',
+          numCtx: 8192,
+          startedAt: new Date().toISOString(),
+          wallDurationMs: 420,
+          promptTokens: 100,
+          completionTokens: 20,
+        },
+      ],
       lastVerification: {
         status: 'failed',
         checkedAt: new Date().toISOString(),
@@ -114,6 +116,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     const bundle = await aiDebugBundleService.generateDebugBundle({
       sessionId: 'session-123',
       workspacePath: 'D:/TestWorkspace',
+      settings: { includeCodingAgentDebugPayloads: true } as any,
       activeModelName: 'qwen2.5-coder:7b',
       activeSkills: ['test-skill'],
     })
@@ -135,6 +138,31 @@ describe('AiDebugBundleService Unit Tests', () => {
     expect(bundle).toContain('token=[redacted]')
     expect(bundle).not.toContain('secret-value')
     expect(bundle).not.toContain('secret-password')
+  })
+
+  it('omits prompts, source paths, diffs, and raw failures unless payload capture is enabled', async () => {
+    vi.mocked(agentSessionStateRepository.loadSessionState).mockResolvedValue({
+      sessionId: 'metadata-session',
+      agentMode: 'guided',
+      userTask: 'private prompt',
+      episodes: [{ step: 1, tool: 'read_file', target: 'src/private.ts', status: 'FAILURE', summary: 'private summary' }],
+      recentFullLogs: [{ step: 1, tool: 'read_file', output: 'private failure output', isFailure: true }],
+      updatedAt: new Date().toISOString(),
+    } as any)
+    vi.mocked(gitCliRepository.run).mockImplementation((_cwd, args) => args.includes('status') ? ' M src/private.ts' : '+private source')
+    vi.mocked(devToolProbeRepository.probeVersion).mockReturnValue('v20.18.0')
+
+    const bundle = await aiDebugBundleService.generateDebugBundle({
+      sessionId: 'metadata-session',
+      workspacePath: 'D:/PrivateWorkspace',
+    })
+
+    expect(bundle).toContain('[payload omitted; 14 chars]')
+    expect(bundle).toContain('1 changed path(s)')
+    expect(bundle).not.toContain('private prompt')
+    expect(bundle).not.toContain('src/private.ts')
+    expect(bundle).not.toContain('private failure output')
+    expect(bundle).not.toContain('D:/PrivateWorkspace')
   })
 
   it('should handle sessions with no git or state gracefully', async () => {

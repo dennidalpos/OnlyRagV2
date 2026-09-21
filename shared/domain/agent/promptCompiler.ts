@@ -1,13 +1,6 @@
 import type { FeatureModule } from './promptPresets'
 import type { AppSettings } from '../../types'
-import {
-  PROMPT_HIERARCHY,
-  findPromptNode,
-  partialNodesForModule,
-  rootNodeForModule,
-  type PromptNode,
-  type PromptNodeId,
-} from './promptHierarchyRegistry'
+import { PROMPT_HIERARCHY, findPromptNode, partialNodesForModule, rootNodeForModule, type PromptNode, type PromptNodeId } from './promptHierarchyRegistry'
 import { renderPromptTemplate, collapseBlankRuns } from './promptTemplateEngine'
 
 export type { FeatureModule }
@@ -35,10 +28,7 @@ export interface CompiledPrompt {
  * Resolves one node's template: the user's override when present and non-empty, otherwise the
  * factory default. One key per node, so nothing can shadow anything else.
  */
-export function resolveNodeTemplate(
-  nodeId: PromptNodeId,
-  settings?: AppSettings
-): { template: string; isCustom: boolean } {
+export function resolveNodeTemplate(nodeId: PromptNodeId, settings?: AppSettings): { template: string; isCustom: boolean } {
   const node = findPromptNode(nodeId)
   if (!node) return { template: '', isCustom: false }
 
@@ -100,7 +90,7 @@ export class PromptCompiler {
     variables: Record<string, unknown> = {},
     settings?: AppSettings,
     toolCallingCapable = false,
-    toolPromptOverride?: string
+    toolPromptOverride?: string,
   ): CompiledPrompt {
     return PromptCompiler.compileModulePrompt('coding', {
       variables,
@@ -117,11 +107,7 @@ export class PromptCompiler {
 }
 
 /** The prompt a module will actually send, given current settings. */
-export function getEffectivePrompt(
-  module: FeatureModule,
-  settings?: AppSettings,
-  options: Omit<CompileOptions, 'settings'> = {}
-): CompiledPrompt {
+export function getEffectivePrompt(module: FeatureModule, settings?: AppSettings, options: Omit<CompileOptions, 'settings'> = {}): CompiledPrompt {
   return PromptCompiler.compileModulePrompt(module, { ...options, settings })
 }
 
@@ -163,7 +149,7 @@ export function compilePromptWithSampleVars(
     currentPage?: string
     numPages?: string
     activePageContent?: string
-  }
+  },
 ): string {
   const node = findPromptNode(nodeId)
   if (!node) return rawTemplate
@@ -174,7 +160,7 @@ export function compilePromptWithSampleVars(
 
   const resolvedWorkspacePath = contextOverrides?.isStandaloneMode
     ? 'Standalone (No Workspace)'
-    : (contextOverrides?.workspacePath || (typeof window !== 'undefined' ? localStorage.getItem('onlyrag_last_workspace_path') : null) || '[workspace path]')
+    : contextOverrides?.workspacePath || (typeof window !== 'undefined' ? localStorage.getItem('onlyrag_last_workspace_path') : null) || '[workspace path]'
 
   const samples: Record<string, string> = {}
   for (const variable of node.variables) {
@@ -183,7 +169,7 @@ export function compilePromptWithSampleVars(
     } else if (variable.name === 'workspacePath') {
       samples.workspacePath = resolvedWorkspacePath
     } else if (variable.name === 'agentMode') {
-      samples.agentMode = (contextOverrides?.agentMode || 'AGENT').toUpperCase()
+      samples.agentMode = (contextOverrides?.agentMode || 'GUIDED').toUpperCase()
     } else if (variable.name === 'userTask') {
       samples.userTask = contextOverrides?.userTask || variable.sample || '[User instruction / task prompt entered in the chat]'
     } else if (variable.name === 'sourceLang') {
@@ -206,7 +192,7 @@ export function compilePromptWithSampleVars(
   const partials: Record<string, string> = {}
   for (const child of partialNodesForModule(node.module)) {
     const override = settings?.customPromptOverrides?.[child.id]
-    partials[child.partialName as string] = (override && override.trim()) ? override : child.defaultValue
+    partials[child.partialName as string] = override && override.trim() ? override : child.defaultValue
   }
 
   const activeModel = settings ? activeModelForModule(node.module, settings) : ''

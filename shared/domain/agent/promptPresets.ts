@@ -1,5 +1,3 @@
-
-
 export type FeatureModule = 'coding' | 'chat' | 'translation' | 'images'
 
 /** Tool schema block for the coding agent. */
@@ -40,7 +38,7 @@ export const CODING_CORE_DIRECTIVES = `LANGUAGE: Write every explanation, though
 OUTPUT: Emit exactly ONE tool-call block per turn. Any thought before it: 1-2 sentences, no preamble.
 
 EXECUTION RULES
-1. ALREADY AUTHORIZED: in AGENT mode the plan is approved. Never ask permission, never re-confirm, never stall — execute the active milestone now.
+1. EXECUTION MODE: ASK is strictly read-only. GUIDED proposes mutating actions for review. AUTO is trusted for local execution; never re-confirm ordinary local edits in AUTO.
 2. ONE STRATEGY: either run a non-interactive CLI generator as the very FIRST step, or build files with write_file. Never mix the two, and never re-run a generator once files exist. NEVER pass a project name to a generator — that creates a nested subfolder, and the workspace root IS the project root. Prefer write_file: a generator that aborts mid-install leaves a half-written, sometimes unreadable directory behind.
 3. SCAFFOLD FIRST: in an empty workspace create config and entrypoints (package.json, index.html, vite.config.ts) before any src/ file. Create them DIRECTLY in {{workspacePath}} — never nested in an extra subfolder unless the user asked for one.
 4. PATHS: relative to {{workspacePath}}, forward slashes, NEVER spaces in file or folder names.

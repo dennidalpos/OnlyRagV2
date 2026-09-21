@@ -137,16 +137,15 @@ export interface TranslationSchema {
     activeSkillsTitle: string
     skillsInUse: string
     osDetecting: string
-    planMode: string
-    planModeShort: string
     askMode: string
     askModeShort: string
-    agentMode: string
-    agentModeShort: string
-    planModeDesc: string
+    guidedMode: string
+    guidedModeShort: string
+    autoMode: string
+    autoModeShort: string
     askModeDesc: string
-    agentModeDesc: string
-    generatePlanFromPrompt: string
+    guidedModeDesc: string
+    autoModeDesc: string
     pendingMilestonesBadge: string
     terminalTab: string
     filesTab: string
@@ -492,6 +491,10 @@ export interface TranslationSchema {
     maxConcurrentTasks: string
     codingAgentDebugLog: string
     codingAgentDebugLogDesc: string
+    codingAgentDebugPayloads: string
+    codingAgentDebugPayloadsDesc: string
+    codingAgentDebugRetention: string
+    clearCodingAgentDebugLog: string
     openLogsFolder: string
     translationOutputFolderTitle: string
     translationOutputFolderDesc: string

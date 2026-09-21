@@ -153,7 +153,7 @@ describe('handleLoopDetection — a repeat after a green build gets a way out, n
     recordedDirectives = []
     return {
       streamedOutput: '',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 30,
       maxSteps: 50,
       isUnlimitedSteps: false,
@@ -271,7 +271,7 @@ describe('a repeated command must not abandon a milestone that is already delive
   function contextFor(planner: GoalDecompositionPlanner): ResponseInterpreterContext {
     return {
       streamedOutput: '',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 20,
       maxSteps: 50,
       isUnlimitedSteps: false,
@@ -284,7 +284,11 @@ describe('a repeated command must not abandon a milestone that is already delive
       flags: { hasFileMutations: true, hasVerifiedBuild: false },
       surfacedDodReasons: new Set<string>(),
       state: { noToolStreak: 0, schemaRejectionStreak: 0, stagnationStreak: 0, redundantSuccessStreak: 0, verificationFixCycles: 0 },
-      episodicCompactor: { recordStep: () => {}, getEpisodes: () => [], lastFailureOutputFor: () => null } as unknown as ResponseInterpreterContext['episodicCompactor'],
+      episodicCompactor: {
+        recordStep: () => {},
+        getEpisodes: () => [],
+        lastFailureOutputFor: () => null,
+      } as unknown as ResponseInterpreterContext['episodicCompactor'],
       goalPlanner: planner,
       executionGuard: new TransactionalExecutionGuard(tempDir),
       loopDetector: new AgentActionLoopDetector(2),
@@ -332,10 +336,7 @@ describe('a repeated command must not abandon a milestone that is already delive
     writeWorkspaceFile('src/App.tsx', 'export default function App() { return null }\n')
     const planner = plannerWith([{ id: 'm-1', title: 'Create `src/App.tsx`', status: 'in_progress' }])
 
-    await repeatUntilEscape(
-      { tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'x' } } as AgentToolCall,
-      planner
-    )
+    await repeatUntilEscape({ tool: 'write_file', parameters: { filePath: 'src/App.tsx', content: 'x' } } as AgentToolCall, planner)
 
     expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).toBe('failed')
   })
@@ -346,10 +347,7 @@ describe('a repeated command must not abandon a milestone that is already delive
     writeWorkspaceFile('src/pages/DashboardPage.tsx', 'export default function D() { return null }\n')
     const planner = plannerWith([{ id: 'm-1', title: 'The project declares its dependencies — `package.json`', status: 'in_progress' }])
 
-    await repeatUntilEscape(
-      { tool: 'write_file', parameters: { filePath: 'src/pages/DashboardPage.tsx', content: 'y' } } as AgentToolCall,
-      planner
-    )
+    await repeatUntilEscape({ tool: 'write_file', parameters: { filePath: 'src/pages/DashboardPage.tsx', content: 'y' } } as AgentToolCall, planner)
 
     expect(planner.getMilestones().find((m) => m.id === 'm-1')!.status).not.toBe('failed')
   })
@@ -361,17 +359,13 @@ describe('the loop guard yields when the arbitrated directive orders the blocked
 
   function verificationDueContext(): { ctx: ResponseInterpreterContext; loopDetector: AgentActionLoopDetector } {
     // A delivered milestone plus a project that offers a check is exactly verification_due.
-    fs.writeFileSync(
-      path.join(tempDir, 'package.json'),
-      JSON.stringify({ name: 'p', scripts: { build: 'tsc' } }),
-      'utf-8'
-    )
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'p', scripts: { build: 'tsc' } }), 'utf-8')
     fs.writeFileSync(path.join(tempDir, 'App.tsx'), 'export const App = () => null\n', 'utf-8')
 
     const loopDetector = new AgentActionLoopDetector(2)
     const ctx = {
       streamedOutput: '',
-      agentMode: 'agent',
+      agentMode: 'auto',
       stepCount: 44,
       maxSteps: 50,
       isUnlimitedSteps: false,

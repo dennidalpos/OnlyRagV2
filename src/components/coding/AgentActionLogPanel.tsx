@@ -1,9 +1,7 @@
 import React from 'react'
-import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, AgentMode, DiagnosticsData } from '../../types'
+import { AgentActionLog, IngestedDocument, WorkspaceFile, AppSettings, CodingSession, AgentChangeMetrics, AgentMode, AgentContextBudgetBreakdown } from '../../types'
 import type { QueuedPrompt } from '../../hooks/useCodingAgent'
 import { useAgentTimelineScroll } from '../../hooks/useAgentTimelineScroll'
-import { estimateTokenCount } from '../../lib/tokenEstimate'
-import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
 import { AgentSessionHeaderBar } from './AgentSessionHeaderBar'
 import { AgentTimeline } from './AgentTimeline'
 import { PromptComposer } from './PromptComposer'
@@ -32,7 +30,7 @@ interface AgentActionLogPanelProps {
   selectedFile: WorkspaceFile | null
   activeModelName?: string
   settings?: AppSettings
-  diagnostics?: DiagnosticsData | null
+  contextBudget?: AgentContextBudgetBreakdown | null
   availableModels?: string[]
   onOpenFile?: (file: WorkspaceFile) => void
   promptQueue?: QueuedPrompt[]
@@ -44,7 +42,6 @@ interface AgentActionLogPanelProps {
   onOpenPromptHistorySearch?: () => void
   onResetSession?: () => void
   onCompactContext?: () => void
-  onGeneratePlan?: () => void
   hasPendingUnconsolidatedMilestones?: boolean
   workspacePath?: string | null
   activeSession?: CodingSession | null
@@ -80,7 +77,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onToggleAttachDoc,
   activeModelName,
   settings,
-  diagnostics,
+  contextBudget,
   onOpenFile,
   promptQueue = [],
   onRemoveFromQueue,
@@ -91,7 +88,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
   onOpenPromptHistorySearch,
   onResetSession,
   onCompactContext,
-  onGeneratePlan,
   hasPendingUnconsolidatedMilestones = false,
   workspacePath,
   activeSession,
@@ -117,32 +113,18 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
       }
     : undefined
 
-  const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } =
-    useAgentTimelineScroll(actionLogs, streamingText, isExecuting, autoScroll, onToggleAutoScroll)
+  const { bottomRef, scrollContainerRef, isScrolledUp, handleScroll, scrollToBottom, handleToggleAutoScroll } = useAgentTimelineScroll(
+    actionLogs,
+    streamingText,
+    isExecuting,
+    autoScroll,
+    onToggleAutoScroll,
+  )
 
-  // Context window tracking (dynamic RAM-aware hardware limit, single source of truth with backend)
-  const maxContextLimit = React.useMemo(() => {
-    const facts = diagnostics
-      ? {
-          hasGpu: diagnostics.gpu.hasNvidiaGpu,
-          vramTotalMB: diagnostics.gpu.vramTotalMB || 0,
-          systemRamGB: Math.round(diagnostics.memory.totalRAMGB || 8),
-          cpuCount: diagnostics.system.cpusCount || 4,
-        }
-      : {}
-    return resolveMaxContextTokens('Auto', facts)
-  }, [diagnostics])
-
-  const BASE_PROMPT_OVERHEAD_TOKENS = 650
-  const recentLogsTokens = React.useMemo(() => {
-    const recentLogs = actionLogs.slice(-8)
-    return recentLogs.reduce((acc, log) => acc + estimateTokenCount(log.message) + estimateTokenCount((log.detail || '').slice(0, 1200)), 0)
-  }, [actionLogs])
-  const deferredPrompt = React.useDeferredValue(agentPrompt)
-  const promptTokens = React.useMemo(() => estimateTokenCount(deferredPrompt), [deferredPrompt])
-  const estimatedTurnTokens = Math.min(maxContextLimit, BASE_PROMPT_OVERHEAD_TOKENS + promptTokens + recentLogsTokens)
-  const contextPercent = Math.min(100, Math.round((estimatedTurnTokens / maxContextLimit) * 100))
-  const isContextHeavy = contextPercent >= 70 || (contextPercent >= 50 && actionLogs.length > 25)
+  const maxContextLimit = contextBudget?.promptBudgetTokens || 0
+  const estimatedTurnTokens = contextBudget?.promptTokens || 0
+  const contextPercent = contextBudget?.utilizationPercent || 0
+  const isContextHeavy = contextPercent >= 70
 
   return (
     <div className="h-full flex flex-col bg-slate-950 text-slate-200 overflow-hidden select-text relative">
@@ -192,7 +174,6 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         autoScroll={autoScroll}
         onToggleAutoScroll={handleToggleAutoScroll}
         onResetSession={onResetSession}
-        onGeneratePlan={onGeneratePlan}
         hasPendingUnconsolidatedMilestones={hasPendingUnconsolidatedMilestones}
         ingestedDocs={ingestedDocs}
         attachedDocIds={attachedDocIds}
@@ -212,6 +193,7 @@ export const AgentActionLogPanel: React.FC<AgentActionLogPanelProps> = ({
         maxContextLimit={maxContextLimit}
         isContextHeavy={isContextHeavy}
         onCompactContext={onCompactContext}
+        contextBudget={contextBudget}
         autoInstallHubSkills={autoInstallHubSkills}
         onToggleAutoInstallSkills={handleToggleAutoInstallSkills}
       />

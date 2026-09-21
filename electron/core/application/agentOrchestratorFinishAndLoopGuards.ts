@@ -10,12 +10,12 @@ import type { ResponseInterpreterContext, ResponseInterpretationOutcome } from '
 
 /** Handles the optional finish signal; the application-owned closure decides the real outcome. */
 export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTool: AgentToolCall): Promise<ResponseInterpretationOutcome> {
-  if (ctx.agentMode === 'agent') {
+  if (ctx.agentMode !== 'ask') {
     // Reject only the obviously premature step-1/2 signal. Every other finish reaches the
     // evidence gate, which can return verified, unverifiable or blocked without trusting it.
-    const nonFinishPendingMilestones = ctx.goalPlanner.getMilestones().filter(
-      (m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)
-    )
+    const nonFinishPendingMilestones = ctx.goalPlanner
+      .getMilestones()
+      .filter((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m))
     const pendingMilestonesCount = nonFinishPendingMilestones.length
 
     // Critical Early-Finish Defense: If the model tries to finish immediately at step 1 or 2 with 0 file mutations and pending work milestones (>0), and has not executed any mutating tool, block it and force it to take action.
@@ -24,7 +24,10 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
       ctx.surfacedDodReasons.add('premature_start')
       const zeroMutationIntervention = `[CRITICAL EXECUTION ERROR: PREMATURE FINISH WITH ZERO WORK DONE]\nYou have NOT created or modified any files yet in this workspace (0 files touched).\nYou are STRICTLY FORBIDDEN from calling the "finish" tool at this stage.\nDirectives:\n1. You MUST begin implementing the first milestone immediately.\n2. Create the necessary project files (e.g. package.json, src/App.tsx, index.html) using "write_file" or scaffold with "run_command".\n3. DO NOT invoke "finish" until your implementation is written and verified.`
 
-      ctx.episodicCompactor.recordStep({ step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: 'Premature finish with 0 file mutations on session start' }, zeroMutationIntervention)
+      ctx.episodicCompactor.recordStep(
+        { step: ctx.stepCount, tool: 'finish', status: 'BLOCKED', summary: 'Premature finish with 0 file mutations on session start' },
+        zeroMutationIntervention,
+      )
       ctx.emitLog('info', '⛔ DoD Guard: Chiusura rifiutata — Nessun file creato o modificato nel workspace.', zeroMutationIntervention, {
         category: 'system_alert',
       })
@@ -36,13 +39,14 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
   }
   const paramSummary = parsedTool.parameters?.summary || parsedTool.parameters?.report || parsedTool.parameters?.finalReport || parsedTool.parameters?.content
   const explanation = parsedTool.explanation
-  const summary = (paramSummary && paramSummary.trim().length > 0)
-    ? paramSummary.trim()
-    : (explanation && explanation.trim().length > 0)
-    ? explanation.trim()
-    : 'Task completed successfully.'
+  const summary =
+    paramSummary && paramSummary.trim().length > 0
+      ? paramSummary.trim()
+      : explanation && explanation.trim().length > 0
+        ? explanation.trim()
+        : 'Task completed successfully.'
 
-  if (ctx.agentMode !== 'agent') {
+  if (ctx.agentMode === 'ask') {
     agentToolExecutorService.commitJournal()
     ctx.emitLog('info', `Task Finished: ${summary}`, summary, { category: 'final_report' })
     ctx.emitDone(true, summary)
@@ -64,9 +68,7 @@ export async function handleFinishTool(ctx: ResponseInterpreterContext, parsedTo
     modelSummary: summary,
     allowCorrection: true,
   })
-  return closure.outcome === 'continue'
-    ? { outcome: 'continue' }
-    : { outcome: 'return', result: closure.result }
+  return closure.outcome === 'continue' ? { outcome: 'continue' } : { outcome: 'return', result: closure.result }
 }
 
 /** Moves the plan's focus off the milestone the model is stuck on and onto the next one, returning the directive that tells the model what changed. */
@@ -74,11 +76,7 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
   const stuckMilestone = ctx.goalPlanner.getActiveMilestone()
   if (!stuckMilestone || isCompletionMilestoneTitle(stuckMilestone)) return null
 
-  ctx.goalPlanner.updateMilestone(
-    stuckMilestone.id,
-    'failed',
-    abandonedMilestoneNote(ctx.state.stagnationStreak, loopTarget || 'target')
-  )
+  ctx.goalPlanner.updateMilestone(stuckMilestone.id, 'failed', abandonedMilestoneNote(ctx.state.stagnationStreak, loopTarget || 'target'))
 
   // The next milestone may legitimately need to touch the same file the model was just
   // blocked on, so the detector's memory of that target is cleared along with the focus.
@@ -89,7 +87,7 @@ function forceMilestoneAdvance(ctx: ResponseInterpreterContext, loopTarget: stri
     'info',
     `⏭️ Escape strutturale: milestone ${stuckMilestone.id} abbandonata dopo ${ctx.state.stagnationStreak} blocchi consecutivi.`,
     nextMilestone ? `Nuova milestone attiva: ${nextMilestone.id}: ${nextMilestone.title}` : 'Nessuna milestone operativa rimasta.',
-    { category: 'system_alert' }
+    { category: 'system_alert' },
   )
 
   return nextMilestone
@@ -137,7 +135,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
     ctx.goalPlanner,
     ctx.flags.hasVerifiedBuild,
     ctx.episodicCompactor.getEpisodes(),
-    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build')
+    ctx.episodicCompactor.lastFailureOutputFor('run_command', 'npm run build'),
   )
 
   // REPLACES the advisory text rather than following it. Appended, it lost: the live
@@ -170,7 +168,7 @@ export async function handleLoopDetection(ctx: ResponseInterpreterContext, parse
       'info',
       `▶️ Loop guard yielded: "${loopTarget}" is the action the plan directive orders (verification_due).`,
       'Bloccarlo avrebbe lasciato il modello senza alcuna mossa eseguibile.',
-      { category: 'system_alert' }
+      { category: 'system_alert' },
     )
     return null
   }
@@ -203,8 +201,7 @@ ${planDirective.blockDirective}`
 
   // A repeat whose earlier executions SUCCEEDED is redundancy, not stagnation: the deliverable exists.
   ctx.state.redundantSuccessStreak = loopCheck.repeatOutcome === 'succeeding' ? ctx.state.redundantSuccessStreak + 1 : 0
-  const isExemptRedundantSuccess =
-    loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
+  const isExemptRedundantSuccess = loopCheck.repeatOutcome === 'succeeding' && resolveRedundantSuccessAction(ctx.state.redundantSuccessStreak) === 'advise'
 
   if (isExemptRedundantSuccess) {
     const redundancyIntervention =
@@ -219,14 +216,14 @@ ${planDirective.blockDirective}`
         status: 'BLOCKED',
         summary: `Redundant repeat of a SUCCESSFUL action (${loopCheck.consecutiveDuplicateCount} repeats, Redundancy: ${ctx.state.redundantSuccessStreak})`,
       },
-      redundancyIntervention
+      redundancyIntervention,
     )
     ctx.emitLog(
       'info',
       `♻️ Azione ridondante: ${parsedTool.tool} già riuscito, ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
       arbitratedIntervention
         ? loopInterventionLogDetail(planDirective.kind)
-        : 'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.'
+        : 'Nessuna stagnazione conteggiata: il modello è invitato ad avanzare al passo successivo.',
     )
     if (ctx.settings.enableCodingAgentDebugLog) {
       codingAgentLogger.logLoopIntervention(
@@ -235,7 +232,7 @@ ${planDirective.blockDirective}`
         parsedTool.tool,
         loopTarget,
         loopCheck.consecutiveDuplicateCount,
-        redundancyIntervention
+        redundancyIntervention,
       )
     }
     return { outcome: 'continue' }
@@ -253,9 +250,7 @@ ${planDirective.blockDirective}`
     canAdvanceMilestone:
       !isClosure &&
       !loopIsUnrelatedToActiveMilestone &&
-      ctx.goalPlanner
-        .getMilestones()
-        .some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)),
+      ctx.goalPlanner.getMilestones().some((m) => m.status !== 'verified' && m.status !== 'failed' && !isCompletionMilestoneTitle(m)),
     isUnlimitedSteps: ctx.isUnlimitedSteps,
   })
   const planAdvanceDirective = escapeAction === 'force_milestone_advance' ? forceMilestoneAdvance(ctx, loopTarget) : null
@@ -272,24 +267,15 @@ ${planDirective.blockDirective}`
       status: 'BLOCKED',
       summary: `Loop / Oscillation Trap Detected (${loopCheck.consecutiveDuplicateCount} repeats, Stagnation: ${ctx.state.stagnationStreak})`,
     },
-    enhancedIntervention
+    enhancedIntervention,
   )
   ctx.emitLog(
     'info',
     `⚠️ Loop Prevented: ${parsedTool.tool} ripetuto ${loopCheck.consecutiveDuplicateCount} volte`,
-    arbitratedIntervention
-      ? loopInterventionLogDetail(planDirective.kind)
-      : 'Intervento automatico: cambio di strategia inviato al modello.'
+    arbitratedIntervention ? loopInterventionLogDetail(planDirective.kind) : 'Intervento automatico: cambio di strategia inviato al modello.',
   )
   if (ctx.settings.enableCodingAgentDebugLog) {
-    codingAgentLogger.logLoopIntervention(
-      ctx.sessionId,
-      ctx.stepCount,
-      parsedTool.tool,
-      loopTarget,
-      loopCheck.consecutiveDuplicateCount,
-      enhancedIntervention
-    )
+    codingAgentLogger.logLoopIntervention(ctx.sessionId, ctx.stepCount, parsedTool.tool, loopTarget, loopCheck.consecutiveDuplicateCount, enhancedIntervention)
   }
   if (escapeAction === 'abort') {
     // A hard stop here means the model never broke out of its loop -- this is the session
@@ -300,9 +286,7 @@ ${planDirective.blockDirective}`
       trigger: 'guard_stop',
       reason: stagSummary,
     })
-    return closure.outcome === 'closed'
-      ? { outcome: 'return', result: closure.result }
-      : { outcome: 'continue' }
+    return closure.outcome === 'closed' ? { outcome: 'return', result: closure.result } : { outcome: 'continue' }
   }
 
   return { outcome: 'continue' }

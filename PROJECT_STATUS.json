@@ -1,9 +1,7 @@
 {
   "todos": [
-    "[P1] Add Electron end-to-end scenarios for project and session switching, queued prompts, cancellation in every phase, crash resume, dirty Git, stale editor saves, missing models, standalone artifacts, spaced paths, and symlink escapes.",
-    "[P1] Simplify Agent Coding into read-only Ask, default Guided review, and trusted local Auto modes; make planning an automatic stage for complex work and use one primary action.",
-    "[P2] Replace the estimated Agent Coding context meter with the backend prompt budget breakdown and make Compact reduce backend context without deleting the visible audit timeline.",
-    "[P2] Default Agent Coding debug logs to metadata only; require opt-in for prompt and source payloads and add retention and clear controls.",
-    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back."
+    "[P2] Push the bundled vocabulary manifest and packs from local master to origin/master, then verify the raw.githubusercontent.com URLs: offline startup is repaired locally, but the remote URLs will keep returning HTTP 404 until publication.",
+    "[P2] Show a final Agent Coding evidence card with changed files, verification results, cancellation status, and any effects that could not be rolled back.",
+    "[P3] Normalize packaged Sidecar log severity so Uvicorn informational stderr lines are not surfaced as warnings."
   ]
 }

@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
 import os from 'node:os'
@@ -79,8 +78,8 @@ describe('live: full task run', () => {
     // The SAME prompt the plan was drafted against. Passing the raw task here instead would
     // have the agent re-deciding, every turn, what the interview already settled.
     const result = await runAgentOrchestratorLoop(
-      { userTask: seeded.effectivePrompt, workspacePath: WORKSPACE, agentMode: 'agent', sessionId: SESSION, settings },
-      null
+      { userTask: seeded.effectivePrompt, workspacePath: WORKSPACE, agentMode: 'auto', sessionId: SESSION, settings },
+      null,
     )
 
     // Printed BEFORE the assertions on purpose: the first failing expect aborts the test, and the metrics block is what turns "red" into "50/50 steps, 0/13 verified, blocked, 4 commands run".
@@ -92,19 +91,17 @@ describe('live: full task run', () => {
       summary: result.summary,
     })
 
-    expect(metrics.milestones.length, 'the run produced no plan at all').toBeGreaterThanOrEqual(
-      MIN_PLAN_MILESTONES
-    )
+    expect(metrics.milestones.length, 'the run produced no plan at all').toBeGreaterThanOrEqual(MIN_PLAN_MILESTONES)
 
     // Milestone status is the agent's own record of what it proved, not the probe's guess: `verified` is only reachable through update_plan or through a verification command that actually passed (agentOrchestratorCircuitBreakerAndVerification.ts).
     expect(
       metrics.verifiedRatio,
-      `verified milestones ${metrics.verified}/${metrics.milestones.length} — blueprint §5.6h claims ${RUN9_VERIFIED_MILESTONES}/${RUN9_TOTAL_MILESTONES}`
+      `verified milestones ${metrics.verified}/${metrics.milestones.length} — blueprint §5.6h claims ${RUN9_VERIFIED_MILESTONES}/${RUN9_TOTAL_MILESTONES}`,
     ).toBeGreaterThanOrEqual(MIN_VERIFIED_MILESTONE_RATIO)
 
     expect(
       metrics.completionStatus,
-      `application closure status was ${metrics.completionStatus || 'missing'} after ${metrics.stepsUsed}/${metrics.maxSteps} steps`
+      `application closure status was ${metrics.completionStatus || 'missing'} after ${metrics.stepsUsed}/${metrics.maxSteps} steps`,
     ).toBe('verified')
   })
 })

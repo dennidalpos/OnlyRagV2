@@ -7,7 +7,7 @@ describe('runToolGates network-approved policy', () => {
     const recordStep = vi.fn()
     const result = await runToolGates({
       parsedTool: { tool: 'run_command', parameters: { command: 'npm test' } },
-      agentMode: 'agent',
+      agentMode: 'auto',
       fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
       workspacePath: null,
       stepCount: 2,
@@ -27,8 +27,12 @@ describe('runToolGates network-approved policy', () => {
 
     const result = await runToolGates({
       parsedTool: { tool: 'web_search', parameters: { query: 'official documentation' } },
-      agentMode: 'agent',
-      fsmMode: { isToolAllowed: vi.fn(() => false) } as any,
+      agentMode: 'auto',
+      fsmMode: {
+        isToolAllowed: vi.fn(() => false),
+        filterAllowedTools: vi.fn(() => []),
+        getMode: vi.fn(() => 'ASK'),
+      } as any,
       workspacePath: null,
       stepCount: 4,
       episodicCompactor: { recordStep: vi.fn() } as any,
@@ -45,12 +49,34 @@ describe('runToolGates network-approved policy', () => {
     if (result.outcome === 'allowed') expect(result.policyConsent?.consentId).toMatch(/^consent-/)
   })
 
-  it('combines Ask-mode mutation and network approval into one consent', async () => {
+  it('keeps Ask read-only even when a mutation also requests network consent', async () => {
     const requestApproval = vi.fn().mockResolvedValue({ approved: true })
     const result = await runToolGates({
       parsedTool: { tool: 'download_file', parameters: { url: 'https://example.test/data.txt', filePath: 'data.txt' } },
       agentMode: 'ask',
-      fsmMode: { isToolAllowed: vi.fn(() => false) } as any,
+      fsmMode: {
+        isToolAllowed: vi.fn(() => false),
+        filterAllowedTools: vi.fn(() => []),
+        getMode: vi.fn(() => 'ASK'),
+      } as any,
+      workspacePath: 'C:\\workspace',
+      stepCount: 5,
+      episodicCompactor: { recordStep: vi.fn() } as any,
+      emitLog: vi.fn(),
+      requestApproval,
+      capabilityPolicyMode: 'network-approved',
+    })
+
+    expect(requestApproval).not.toHaveBeenCalled()
+    expect(result).toEqual({ outcome: 'denied' })
+  })
+
+  it('combines Guided mutation and network consent into one review', async () => {
+    const requestApproval = vi.fn().mockResolvedValue({ approved: true })
+    const result = await runToolGates({
+      parsedTool: { tool: 'download_file', parameters: { url: 'https://example.test/data.txt', filePath: 'data.txt' } },
+      agentMode: 'guided',
+      fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
       workspacePath: 'C:\\workspace',
       stepCount: 5,
       episodicCompactor: { recordStep: vi.fn() } as any,
@@ -60,14 +86,14 @@ describe('runToolGates network-approved policy', () => {
     })
 
     expect(requestApproval).toHaveBeenCalledOnce()
-    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ reasons: expect.arrayContaining(['network access', 'Ask mode']) }))
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ reasons: expect.arrayContaining(['network access', 'Guided review']) }))
     expect(result).toMatchObject({ outcome: 'allowed', policyConsent: { requested: true, granted: true } })
   })
 })
 
 describe('runToolGates structured command safety', () => {
   const base = {
-    agentMode: 'agent' as const,
+    agentMode: 'auto' as const,
     fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
     workspacePath: 'C:\\workspace',
     stepCount: 6,
@@ -102,7 +128,7 @@ describe('runToolGates structured command safety', () => {
 
 describe('runToolGates version refresh', () => {
   const base = {
-    agentMode: 'agent' as const,
+    agentMode: 'auto' as const,
     fsmMode: { isToolAllowed: vi.fn(() => true) } as any,
     workspacePath: 'C:\\workspace',
     stepCount: 3,

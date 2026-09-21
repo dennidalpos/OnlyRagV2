@@ -60,6 +60,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   isActive = true,
 }) => {
   const { t, language, setLanguage } = useTranslation()
+  const [auditLogCleared, setAuditLogCleared] = useState(false)
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
   const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
@@ -327,6 +328,38 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
               </button>
             </div>
           </div>
+          <div className="grid gap-3 border-t border-slate-800 pt-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+            <div>
+              <div className="text-xs font-semibold text-slate-200">{t('settings.codingAgentDebugPayloads')}</div>
+              <div className="text-[11px] text-slate-500">{t('settings.codingAgentDebugPayloadsDesc')}</div>
+            </div>
+            <ToggleSwitch
+              checked={Boolean(settings.includeCodingAgentDebugPayloads)}
+              onChange={(checked) => onUpdateSettings({ includeCodingAgentDebugPayloads: checked })}
+              activeColor="bg-amber-500"
+              ariaLabel={t('settings.codingAgentDebugPayloads')}
+            />
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              {t('settings.codingAgentDebugRetention')}
+              <select
+                value={settings.codingAgentDebugRetentionFiles || 2}
+                onChange={(event) => onUpdateSettings({ codingAgentDebugRetentionFiles: Number(event.target.value) })}
+                className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200"
+              >
+                {[1, 2, 3, 4, 5].map((count) => <option key={count} value={count}>{count}</option>)}
+              </select>
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              const cleared = await window.electronAPI?.clearCodingAgentAuditLog?.()
+              setAuditLogCleared(cleared === true)
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 hover:border-rose-700 hover:text-rose-300"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> {t('settings.clearCodingAgentDebugLog')}{auditLogCleared ? ' ✓' : ''}
+          </button>
         </div>
       </section>
 

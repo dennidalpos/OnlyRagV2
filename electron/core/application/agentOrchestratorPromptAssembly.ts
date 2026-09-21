@@ -321,7 +321,8 @@ export async function assembleTurnPrompt(ctx: TurnDispatchContext, selection: Mo
       attachedContext: seg.attachedBlock,
       projectMapBlock: seg.mapBlock,
     },
-    selection.runtimeOpts.maxContextChars
+    selection.runtimeOpts.maxContextChars,
+    { force: Boolean(ctx.session.forceContextCompaction) }
   )
   const turnPrompt = compactionResult.wasCompacted ? compactionResult.prompt : basePrompt
   if (compactionResult.wasCompacted) {

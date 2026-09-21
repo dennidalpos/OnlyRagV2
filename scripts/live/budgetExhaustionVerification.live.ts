@@ -25,9 +25,9 @@ describe('live: budget exhaustion verification', () => {
           scripts: { build: 'node -e "process.exit(0)"' },
         },
         null,
-        2
+        2,
       ),
-      'utf-8'
+      'utf-8',
     )
     const milestones = [
       { id: 'm-proven', title: 'Preserve src/Proven.ts', status: 'in_progress' as const },
@@ -41,7 +41,7 @@ describe('live: budget exhaustion verification', () => {
       SESSION,
       WORKSPACE,
       milestones,
-      'Create the planned files one at a time. Do not call finish or run commands; keep working until the step budget ends.'
+      'Create the planned files one at a time. Do not call finish or run commands; keep working until the step budget ends.',
     )
 
     const result = await runAgentOrchestratorLoop(
@@ -49,11 +49,11 @@ describe('live: budget exhaustion verification', () => {
         userTask:
           'Create the planned files one at a time with valid exported constants. Do not call finish and do not run commands: use file tools only until the step budget is exhausted.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: SESSION,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 10 } as never),
       },
-      null
+      null,
     )
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })

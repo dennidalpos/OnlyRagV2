@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { AgentActionLog, AgentCapabilityProfile, AgentPlan, AppSettings, IngestedDocument, ExecutedPromptOutcome, AgentChangeMetrics, AgentMode, AgentDoneResult, AgentRunIdentity } from '../types'
+import {
+  AgentActionLog,
+  AgentCapabilityProfile,
+  AgentPlan,
+  AppSettings,
+  IngestedDocument,
+  ExecutedPromptOutcome,
+  AgentChangeMetrics,
+  AgentMode,
+  AgentDoneResult,
+  AgentRunIdentity,
+  AgentContextBudgetBreakdown,
+} from '../types'
 import { useIngestedDocuments } from './useIngestedDocuments'
 import { useSessionHistory } from './useSessionHistory'
 import { useWorkspaceProjects } from './useWorkspaceProjects'
@@ -28,7 +40,7 @@ export type CodingAgentTab = 'editor' | 'terminal' | 'git_diff' | 'grep_search' 
  * terminal, git, grep, approvals, queue and session-history hooks.
  */
 export function useCodingAgent(settings?: AppSettings) {
-  const [agentMode, setAgentModeState] = useState<AgentMode>('ask')
+  const [agentMode, setAgentModeState] = useState<AgentMode>('guided')
   const [capabilityProfile, setCapabilityProfile] = useState<AgentCapabilityProfile>(() => resolveAgentCapabilityProfile(settings))
   const [activeTab, setActiveTab] = useState<CodingAgentTab>('editor')
   const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false)
@@ -45,22 +57,19 @@ export function useCodingAgent(settings?: AppSettings) {
     setActiveRunIdentity(identity)
   }, [])
 
-  const addActionLog = useCallback(
-    (type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
-      setActionLogs((prev) => [
-        ...prev,
-        {
-          id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          type,
-          message,
-          detail,
-          timestamp: new Date().toLocaleTimeString(),
-          ...meta,
-        },
-      ])
-    },
-    []
-  )
+  const addActionLog = useCallback((type: AgentActionLog['type'], message: string, detail?: string, meta?: Partial<AgentActionLog>) => {
+    setActionLogs((prev) => [
+      ...prev,
+      {
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        type,
+        message,
+        detail,
+        timestamp: new Date().toLocaleTimeString(),
+        ...meta,
+      },
+    ])
+  }, [])
 
   const setAgentMode = useCallback((newMode: AgentMode) => {
     setAgentModeState(newMode)
@@ -84,39 +93,29 @@ export function useCodingAgent(settings?: AppSettings) {
   const [currentStep, setCurrentStep] = useState<number>(0)
   const [maxSteps, setMaxSteps] = useState<number | string>(() => {
     const isUnlimited = settings?.maxToolCallSteps === 0 || (settings?.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
-    return isUnlimited ? '∞' : (settings?.maxToolCallSteps || 50)
+    return isUnlimited ? '∞' : settings?.maxToolCallSteps || 50
   })
 
   // Synchronize maxSteps with user settings when idle
   useEffect(() => {
     if (!isExecuting) {
       const isUnlimited = settings?.maxToolCallSteps === 0 || (settings?.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
-      setMaxSteps(isUnlimited ? '∞' : (settings?.maxToolCallSteps || 50))
+      setMaxSteps(isUnlimited ? '∞' : settings?.maxToolCallSteps || 50)
     }
   }, [settings?.maxToolCallSteps, isExecuting])
 
   const [changeMetrics, setChangeMetrics] = useState<AgentChangeMetrics>({ filesTouched: 0, additions: 0, deletions: 0 })
   const [currentLiveModel, setCurrentLiveModel] = useState<string | null>(null)
+  const [contextBudget, setContextBudget] = useState<AgentContextBudgetBreakdown | null>(null)
+  const [forceContextCompaction, setForceContextCompaction] = useState(false)
 
   // Modular Approvals Hook
-  const {
-    pendingApproval,
-    setPendingApproval,
-    clearPendingApproval,
-  } = useAgentApprovals()
+  const { pendingApproval, setPendingApproval, clearPendingApproval } = useAgentApprovals()
 
   // Modular Prompt Queue Hook
   const handleQueueNotice = useCallback((msg: string) => addActionLog('info', msg), [addActionLog])
-  const {
-    promptQueue,
-    addToPromptQueue,
-    removeFromPromptQueue,
-    editPromptInQueue,
-    movePromptInQueue,
-    dequeueNextPrompt,
-    clearPromptQueue,
-    setPromptQueue,
-  } = useAgentPromptQueue(handleQueueNotice)
+  const { promptQueue, addToPromptQueue, removeFromPromptQueue, editPromptInQueue, movePromptInQueue, dequeueNextPrompt, clearPromptQueue, setPromptQueue } =
+    useAgentPromptQueue(handleQueueNotice)
 
   // Attached RAG documents
   const [attachedDocIds, setAttachedDocIds] = useState<Set<string>>(new Set())
@@ -240,21 +239,14 @@ export function useCodingAgent(settings?: AppSettings) {
       addActionLog(
         'terminal',
         `Command execution notice for "${command}":`,
-        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.\n${output.slice(0, 300)}`
+        `Command output indicates tool or executable is not installed on Windows PATH or exited with error.\n${output.slice(0, 300)}`,
       )
     },
-    [addActionLog]
+    [addActionLog],
   )
 
-  const {
-    terminalInput,
-    setTerminalInput,
-    terminalLogs,
-    appendTerminalLogs,
-    handleRunTerminalCommand,
-    handleClearTerminal,
-    navigateHistory,
-  } = useAgentTerminal({ workspacePath, onCommandNotice: handleCommandNotice })
+  const { terminalInput, setTerminalInput, terminalLogs, appendTerminalLogs, handleRunTerminalCommand, handleClearTerminal, navigateHistory } =
+    useAgentTerminal({ workspacePath, onCommandNotice: handleCommandNotice })
 
   const { gitStatusLines, gitDiffText, isGitRepo, isFetchingGit, fetchGitStatusAndDiff, initGit } = useGitStatus(workspacePath)
   const {
@@ -299,13 +291,15 @@ export function useCodingAgent(settings?: AppSettings) {
       setStreamingText('')
       clearPendingApproval()
       setCurrentStep(0)
+      setContextBudget(activeSession?.contextBudget || null)
+      setForceContextCompaction(Boolean(activeSession?.forceContextCompaction))
     }
   }, [activeSessionId, activeSession, clearPendingApproval, setPromptQueue])
 
   useEffect(() => {
     if (!activeSessionId || contentSessionId !== activeSessionId) return
-    updateSessionContent(activeSessionId, { actionLogs, promptQueue })
-  }, [activeSessionId, actionLogs, contentSessionId, promptQueue, updateSessionContent])
+    updateSessionContent(activeSessionId, { actionLogs, promptQueue, contextBudget: contextBudget || undefined, forceContextCompaction })
+  }, [activeSessionId, actionLogs, contentSessionId, contextBudget, forceContextCompaction, promptQueue, updateSessionContent])
 
   const completeExecutedPromptRef = useRef(completeExecutedPrompt)
   useEffect(() => {
@@ -410,9 +404,7 @@ export function useCodingAgent(settings?: AppSettings) {
 
       if (
         log.type === 'info' &&
-        (log.detail?.includes('Circuit Breaker Triggered') ||
-          log.message.includes('LLM Stream error') ||
-          log.category === 'system_alert')
+        (log.detail?.includes('Circuit Breaker Triggered') || log.message.includes('LLM Stream error') || log.category === 'system_alert')
       ) {
         soundEffectsService.play('error', settings?.enableSoundEffects !== false)
       }
@@ -487,6 +479,11 @@ export function useCodingAgent(settings?: AppSettings) {
       }
     })
 
+    const unsubContextBudget = window.electronAPI.onAgentContextBudget?.((data) => {
+      if (!matchesAgentRunIdentity(activeRunIdentityRef.current, data)) return
+      setContextBudget(data)
+    })
+
     const unsubApproval = window.electronAPI.onAgentApprovalRequest?.((req: any) => {
       if (!matchesAgentRunIdentity(activeRunIdentityRef.current, req)) return
       setPendingApproval(req)
@@ -545,6 +542,7 @@ export function useCodingAgent(settings?: AppSettings) {
       unsubStreamToken?.()
       unsubStreamThought?.()
       unsubStep?.()
+      unsubContextBudget?.()
       unsubApproval?.()
       unsubSkills?.()
       unsubChangeMetrics?.()
@@ -561,7 +559,7 @@ export function useCodingAgent(settings?: AppSettings) {
       if (identity && window.electronAPI.cancelAgentTask) window.electronAPI.cancelAgentTask(identity)
     }
     closeRunningExecutedPrompt('cancelled')
-    addActionLog('info', 'Esecuzione interrotta dall\'utente.')
+    addActionLog('info', "Esecuzione interrotta dall'utente.")
   }
 
   const resetSessionViewState = () => {
@@ -575,6 +573,8 @@ export function useCodingAgent(settings?: AppSettings) {
     setAgentPrompt('')
     setActiveSkills([])
     setChangeMetrics({ filesTouched: 0, additions: 0, deletions: 0 })
+    setContextBudget(null)
+    setForceContextCompaction(false)
     clearPendingApproval()
   }
 
@@ -650,7 +650,7 @@ export function useCodingAgent(settings?: AppSettings) {
       // 3. Remove project from registry, delete .onlyrag and purge LanceDB prompt index
       rawHandleRemoveProject(pathStr)
     },
-    [purgeWorkspace, workspacePath, resetSessionViewState, clearPromptQueue, clearPendingApproval, rawHandleRemoveProject]
+    [purgeWorkspace, workspacePath, resetSessionViewState, clearPromptQueue, clearPendingApproval, rawHandleRemoveProject],
   )
 
   const handleNewSession = handleCreateSession
@@ -661,12 +661,12 @@ export function useCodingAgent(settings?: AppSettings) {
       if (!activeSessionId) return
       updateSessionPlans(activeSessionId, updater)
     },
-    [activeSessionId, updateSessionPlans]
+    [activeSessionId, updateSessionPlans],
   )
 
   const persistActiveSessionPlan = useCallback(
-    (plan: AgentPlan) => activeSessionId ? persistSessionPlan(activeSessionId, plan) : Promise.resolve(false),
-    [activeSessionId, persistSessionPlan]
+    (plan: AgentPlan) => (activeSessionId ? persistSessionPlan(activeSessionId, plan) : Promise.resolve(false)),
+    [activeSessionId, persistSessionPlan],
   )
 
   const closeRunningExecutedPrompt = (outcome: ExecutedPromptOutcome, summary?: string) => {
@@ -720,9 +720,8 @@ export function useCodingAgent(settings?: AppSettings) {
 
     try {
       const activeModel = settings?.codingModel || settings?.defaultModel || 'qwen2.5-coder:7b'
-      const activeFile = selectedFile && loadedContentHash
-        ? { name: selectedFile.name, path: selectedFile.path, content: editorContent, versionHash: loadedContentHash }
-        : null
+      const activeFile =
+        selectedFile && loadedContentHash ? { name: selectedFile.name, path: selectedFile.path, content: editorContent, versionHash: loadedContentHash } : null
 
       const attachedDocs = ingestedDocs
         .filter((d) => attachedDocIds.has(d.id))
@@ -746,7 +745,7 @@ export function useCodingAgent(settings?: AppSettings) {
             }
           }
           return { name: f.name, path: f.path, content }
-        })
+        }),
       )
 
       const initialLog = actionLogs.find((l) => l.message.startsWith('User Prompt: '))
@@ -765,6 +764,7 @@ export function useCodingAgent(settings?: AppSettings) {
         pinnedFiles: resolvedPinnedFiles,
         attachedDocs,
         capabilityProfile: resolveAgentCapabilityProfile(runProfile),
+        forceContextCompaction,
         settings,
       })
 
@@ -828,17 +828,19 @@ export function useCodingAgent(settings?: AppSettings) {
     await window.electronAPI?.respondToAgentApproval?.(current, false)
   }
 
-  const compactContext = useCallback(() => {
-    if (actionLogs.length === 0) return
-    const recentLogs = actionLogs.slice(-6)
-    const summaryLog: AgentActionLog = {
-      id: `compacted-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      type: 'info',
-      message: `🧹 Session Context Compacted: Pruned older action steps (${actionLogs.length - recentLogs.length} entries removed) to optimize context window headroom.`,
-    }
-    setActionLogs([summaryLog, ...recentLogs])
-  }, [actionLogs])
+  const compactContext = useCallback(async () => {
+    setForceContextCompaction(true)
+    const identity = activeRunIdentityRef.current
+    const appliedToActiveRun = identity && window.electronAPI?.compactAgentContext
+      ? await window.electronAPI.compactAgentContext(identity)
+      : false
+    addActionLog(
+      'info',
+      appliedToActiveRun
+        ? '🧹 Context compaction requested: Main will reduce the next model prompt; the audit timeline remains complete.'
+        : '🧹 Context compaction enabled for the next run; the audit timeline remains complete.',
+    )
+  }, [addActionLog])
 
   return {
     agentMode,
@@ -852,6 +854,7 @@ export function useCodingAgent(settings?: AppSettings) {
     isGitRepo,
     initGit,
     changeMetrics,
+    contextBudget,
     isFetchingGit,
     guestOsInfo,
     isInspectingOs,

@@ -1,4 +1,3 @@
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -22,7 +21,7 @@ function seedWorkspace(): { packageJson: string; source: string } {
       scripts: { build: 'node -e "process.exit(0)"' },
     },
     null,
-    2
+    2,
   )
   const source = `import { missingWidget } from '${PACKAGE_NAME}'\nexport const dashboard = missingWidget\n`
   fs.writeFileSync(path.join(WORKSPACE, 'package.json'), packageJson, 'utf-8')
@@ -42,7 +41,7 @@ describe('live: uninstallable dependency recovery', () => {
       SESSION,
       WORKSPACE,
       [{ id: 'm-uninstallable', title: 'Fix src/Dashboard.ts', status: 'pending' }],
-      'Remove the unavailable package import from src/Dashboard.ts.'
+      'Remove the unavailable package import from src/Dashboard.ts.',
     )
 
     const result = await runAgentOrchestratorLoop(
@@ -52,11 +51,11 @@ describe('live: uninstallable dependency recovery', () => {
           'After the failure, remove that import from src/Dashboard.ts with one write_file call. ' +
           'Do not run another install and do not edit package.json. Stop after the file is fixed.',
         workspacePath: WORKSPACE,
-        agentMode: 'agent',
+        agentMode: 'auto',
         sessionId: SESSION,
         settings: loadRealSettings({ codingModel: 'qwen2.5-coder:7b', maxToolCallSteps: 10 } as never),
       },
-      liveWindow
+      liveWindow,
     )
 
     const metrics = readRunMetrics({ workspacePath: WORKSPACE, sessionId: SESSION, success: result.success, summary: result.summary })

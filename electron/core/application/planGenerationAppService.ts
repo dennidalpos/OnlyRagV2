@@ -245,7 +245,18 @@ export class PlanGenerationAppService {
       supersededWork: [...(req.previousPlan?.supersededWork || []), ...(structuredPlan?.supersededWork || [])],
     }
     if (req.settings.enableCodingAgentDebugLog) {
-      codingAgentLogger.logPlanGeneration('plan-flow', req.prompt, milestones.length, 'plan')
+      const auditSessionId = req.operationId || `plan-flow-${Date.now()}`
+      codingAgentLogger.configureRetention(req.settings.codingAgentDebugRetentionFiles || 2)
+      codingAgentLogger.logSessionStart(
+        auditSessionId,
+        req.prompt,
+        'guided',
+        req.model || req.settings.codingModel || req.settings.defaultModel || 'default',
+        req.workspacePath,
+        req.settings.includeCodingAgentDebugPayloads === true,
+      )
+      codingAgentLogger.logPlanGeneration(auditSessionId, req.prompt, milestones.length, 'guided')
+      codingAgentLogger.logSessionEnd(auditSessionId, 0, true, `Generated ${milestones.length} milestones.`)
     }
     return generationError
       ? { status: 'error', ...result, error: generationError }

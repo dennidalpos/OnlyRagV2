@@ -1,6 +1,6 @@
 import type { AgentCapabilityProfile, AgentCompletionStatus, AgentRunIdentity, AppSettings } from '../../../../shared/types'
 
-export type AgentMode = 'plan' | 'ask' | 'agent'
+export type AgentMode = 'ask' | 'guided' | 'auto'
 
 export interface ActiveFileContext {
   name: string
@@ -25,6 +25,8 @@ export interface AgentTaskPayload {
   pinnedFiles?: { name: string; path: string; content: string }[]
   attachedDocs?: { id: string; filename: string; extractedMarkdown: string }[]
   activeFile?: ActiveFileContext | null
+  /** Keeps the visible audit timeline intact while asking Main to send a smaller model context. */
+  forceContextCompaction?: boolean
   settings?: AppSettings
 }
 

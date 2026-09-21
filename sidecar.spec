@@ -8,6 +8,7 @@ datas = [
     # preserves that relative layout under _internal/ for bundled data files, but only if listed
     # here -- it does not pick up arbitrary non-Python files from the source tree on its own.
     (os.path.join(SPECPATH, 'sidecar', 'assets', 'fonts'), os.path.join('sidecar', 'assets', 'fonts')),
+    (os.path.join(SPECPATH, 'sidecar', 'assets', 'vocab'), os.path.join('sidecar', 'assets', 'vocab')),
 ]
 binaries = []
 hiddenimports = []

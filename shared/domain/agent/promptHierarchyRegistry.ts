@@ -10,13 +10,7 @@ import {
 
 /** The configuration tree: every system prompt the user can edit, and nothing else. */
 
-export type PromptNodeId =
-  | 'coding:master'
-  | 'coding:directives'
-  | 'coding:tools'
-  | 'chat'
-  | 'translation'
-  | 'images:analysis'
+export type PromptNodeId = 'coding:master' | 'coding:directives' | 'coding:tools' | 'chat' | 'translation' | 'images:analysis'
 
 /** Capabilities Ollama reports per model via /api/tags. */
 export type OllamaCapability = 'tools' | 'vision' | 'completion' | 'insert' | 'embedding'
@@ -63,7 +57,7 @@ export interface PromptCategory {
 }
 
 const CODING_VARIABLES: PromptVariableMeta[] = [
-  { name: 'agentMode', description: 'Agent execution mode (plan, ask, agent)', sample: 'AGENT' },
+  { name: 'agentMode', description: 'Agent execution mode (ask, guided, auto)', sample: 'GUIDED' },
   {
     name: 'userTask',
     description: "The user's coding instruction for this run",

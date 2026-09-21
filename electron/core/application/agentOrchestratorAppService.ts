@@ -10,7 +10,6 @@ import { bootstrapAgentSession } from './agentOrchestratorBootstrap'
 import { closeAgentRunFromEvidence } from './agentOrchestratorApplicationClosure'
 import { agentToolExecutorService } from './agentToolExecutorService'
 import { taskRunner } from '../infrastructure/process/taskRunner'
-import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import type { AgentSession } from './agentOrchestratorTypes'
 import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
@@ -103,6 +102,19 @@ export function cancelActiveAgentTask(targetRunId?: string) {
   }
 }
 
+/** Applies manual prompt compaction to the next turn without altering Renderer audit logs. */
+export function requestActiveAgentContextCompaction(target: AgentRunIdentity | string): boolean {
+  const runId = typeof target === 'string' ? target : target.runId
+  const session = activeAgentSessions.get(runId)
+  if (!session || (typeof target !== 'string' && !matchesAgentRunIdentity(session.identity, target))) return false
+  session.forceContextCompaction = true
+  session.ollamaContextTokens = undefined
+  session.ollamaContextModel = undefined
+  session.ollamaContextStableSection = undefined
+  session.ollamaContextHistoryBlock = undefined
+  return true
+}
+
 /** Answers a step paused inside requestApproval(). */
 export function respondToApproval(target: AgentRunIdentity | string, approved: boolean, approvedHunkIndices?: number[]): boolean {
   const targetRunId = typeof target === 'string' ? target : target.runId
@@ -125,7 +137,8 @@ export async function runAgentOrchestratorLoop(
     return { success: false, summary: 'Task prompt empty', error: 'Task prompt is required', completionStatus: 'blocked' }
   }
 
-  const conversationId = payload.identity?.conversationId || payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  const conversationId =
+    payload.identity?.conversationId || payload.sessionId || customSessionId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
   const identity = createAgentRunIdentity({
     ...payload.identity,
     runId: payload.identity?.runId || customSessionId || conversationId,
@@ -143,6 +156,7 @@ export async function runAgentOrchestratorLoop(
     activeCancelHandle: null,
     activeChildProcess: null,
     workspaceTransaction,
+    forceContextCompaction: Boolean(payload.forceContextCompaction),
   }
   activeAgentSessions.set(runId, session)
 
@@ -226,7 +240,8 @@ export async function runAgentOrchestratorLoop(
   }
 
   if (!workspacePath && !isStandaloneMode) {
-    const errorMsg = 'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
+    const errorMsg =
+      'Nessuna cartella di progetto / workspace specificata. Per creare o scrivere file di progetto, seleziona o apri prima una directory di lavoro in OnlyRag.'
     emitLog('info', `❌ Errore Workspace: ${errorMsg}`)
     emitDone(false, errorMsg, 'blocked')
     await persistCurrentState('runtime_validation', 'blocked')
@@ -252,10 +267,13 @@ export async function runAgentOrchestratorLoop(
     toolchain: guestOsInfo.tools,
   })
   for (const check of preflight.checks) {
-    emitLog('info', `${check.passed ? '✓' : check.blocking ? '✗' : '!' } Preflight ${check.id}: ${check.detail}`)
+    emitLog('info', `${check.passed ? '✓' : check.blocking ? '✗' : '!'} Preflight ${check.id}: ${check.detail}`)
   }
   if (!preflight.ready) {
-    const failures = preflight.checks.filter((check) => check.blocking && !check.passed).map((check) => check.id).join(', ')
+    const failures = preflight.checks
+      .filter((check) => check.blocking && !check.passed)
+      .map((check) => check.id)
+      .join(', ')
     const errorMsg = `Agent Coding preflight blocked: ${failures}.`
     emitDone(false, errorMsg, 'blocked')
     await persistCurrentState('runtime_validation', 'blocked')
@@ -268,31 +286,36 @@ export async function runAgentOrchestratorLoop(
   void ollamaAppService.preloadModel(codingModel, settings.ollamaHost).catch(() => {})
 
   const closeApplicationRun = (request: Parameters<typeof closeAgentRunFromEvidence>[1]) =>
-    closeAgentRunFromEvidence({
-      workspacePath,
-      settings,
-      sessionId,
-      stepCount: stepCountBox.value,
-      flags: mutableFlags,
-      state: responseInterpreterState,
-      goalPlanner,
-      episodicCompactor,
-      isSessionActive,
-      emitLog,
-      emitDone,
-      persistCurrentState,
-      buildSessionTracker,
-      finalizeSession,
-      setExecutionPhase,
-      getExecutionPhase: () => phaseController.getPhase(),
-      runtimeProfile: session.ollamaRuntimeProfile,
-      generationTelemetry: session.ollamaGenerationTelemetry,
-      lastVerification: session.lastVerification,
-      recordVerificationEvidence: (evidence) => { session.lastVerification = evidence },
-      requestApproval,
-      workspaceTransaction,
-      signal: session.abortController?.signal,
-    }, request)
+    closeAgentRunFromEvidence(
+      {
+        workspacePath,
+        settings,
+        sessionId,
+        stepCount: stepCountBox.value,
+        flags: mutableFlags,
+        state: responseInterpreterState,
+        goalPlanner,
+        episodicCompactor,
+        isSessionActive,
+        emitLog,
+        emitDone,
+        persistCurrentState,
+        buildSessionTracker,
+        finalizeSession,
+        setExecutionPhase,
+        getExecutionPhase: () => phaseController.getPhase(),
+        runtimeProfile: session.ollamaRuntimeProfile,
+        generationTelemetry: session.ollamaGenerationTelemetry,
+        lastVerification: session.lastVerification,
+        recordVerificationEvidence: (evidence) => {
+          session.lastVerification = evidence
+        },
+        requestApproval,
+        workspaceTransaction,
+        signal: session.abortController?.signal,
+      },
+      request,
+    )
 
   // Checkpoint cadence for the periodic (non-mutation-triggered) persistCurrentState() calls.
   const PERSIST_EVERY_N_STEPS = 5
@@ -351,13 +374,7 @@ export async function runAgentOrchestratorLoop(
       setExecutionPhase('outcome')
       return dispatchOutcome.result
     }
-    const {
-      streamedOutput,
-      hasRecentToolFailure,
-      errorCountInHistory,
-      compiledHistoryBlock,
-      targetModel,
-    } = dispatchOutcome.data
+    const { streamedOutput, hasRecentToolFailure, errorCountInHistory, compiledHistoryBlock, targetModel } = dispatchOutcome.data
 
     // Interprets the raw LLM output for this turn: plan extraction, tool-call parsing (with no-tool-call / malformed-call recovery), and the finish/loop-detection/ask special cases.
     const interpretation = await interpretTurnResponse({
@@ -396,19 +413,8 @@ export async function runAgentOrchestratorLoop(
     }
     const parsedTool = interpretation.parsedTool
 
-    if (fsmMode.getMode() === 'PLAN') {
-      setExecutionPhase('outcome')
-      emitLog('info', `[PLAN Mode] Proposed Tool (${parsedTool.tool}):`, JSON.stringify(parsedTool.parameters, null, 2))
-      emitDone(true, `Plan Mode completed step proposal for ${parsedTool.tool}`)
-      if (settings.enableCodingAgentDebugLog) {
-        codingAgentLogger.logSessionEnd(sessionId, stepCountBox.value, true, `Proposed tool call: ${parsedTool.tool}`)
-      }
-      await persistCurrentState('plan_proposal')
-      finalizeSession()
-      return { success: true, summary: `Proposed tool call: ${parsedTool.tool}` }
-    }
-
-    // Approval + FSM permission gates (git_commit always-confirm, ASK-mode mutating-tool approval, FSM tool-permission check) — see agentOrchestratorToolGates.ts for the exact gate ordering rationale.
+    // Approval + FSM permission gates (strict Ask, Guided review, always-confirm commit,
+    // and contextual network/install consent).
     setExecutionPhase('apply_action')
     const gateResult = await runToolGates({
       parsedTool,

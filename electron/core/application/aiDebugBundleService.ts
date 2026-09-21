@@ -1,5 +1,3 @@
-
-
 import os from 'node:os'
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { gitCliRepository } from '../infrastructure/process/gitCliRepository'
@@ -25,12 +23,13 @@ export class AiDebugBundleService {
    * Generates a self-contained AI-optimized debug diagnostic bundle in Markdown.
    */
   public async generateDebugBundle(options: AiDebugBundleOptions): Promise<string> {
-    const { sessionId, workspacePath, activeModelName = 'LLM', activeSkills = [] } = options
+    const { sessionId, workspacePath, settings, activeModelName = 'LLM', activeSkills = [] } = options
+    const includePayloads = settings?.includeCodingAgentDebugPayloads === true
     const timestamp = new Date().toISOString()
 
     // 1. Host & Toolchain facts
     const hostInfo = `${os.platform()} (${os.arch()}) | CPUs: ${os.cpus().length} | RAM Free: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)}GB / ${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)}GB`
-    
+
     const toolchainStatuses = DEV_TOOL_ALLOWLIST.map((tool) => {
       const stdout = devToolProbeRepository.probeVersion(tool.binary, tool.versionArgs)
       const version = stdout ? extractVersion(stdout) : null
@@ -47,11 +46,13 @@ export class AiDebugBundleService {
       try {
         const rawStatus = gitCliRepository.run(workspacePath, 'status --short', 10000)
         gitStatusLines = rawStatus ? rawStatus.split(/\r?\n/).filter((l) => l.trim().length > 0) : []
-        const rawDiff = gitCliRepository.run(workspacePath, 'diff', 15000)
+        const rawDiff = includePayloads ? gitCliRepository.run(workspacePath, 'diff', 15000) : ''
         if (rawDiff && rawDiff.trim()) {
           gitDiffBlock = `\`\`\`diff\n${rawDiff.trim().slice(0, 12000)}\n\`\`\``
-        } else if (gitStatusLines.length > 0) {
+        } else if (gitStatusLines.length > 0 && includePayloads) {
           gitDiffBlock = `Status:\n${gitStatusLines.join('\n')}\n(No text diff generated)`
+        } else if (gitStatusLines.length > 0) {
+          gitDiffBlock = `${gitStatusLines.length} changed path(s); names and diff omitted by metadata-only logging.`
         }
       } catch (err: any) {
         gitDiffBlock = `Git inspection error: ${err.message}`
@@ -64,18 +65,14 @@ export class AiDebugBundleService {
 
     const trajectoryRows = episodes.map((ep) => {
       const statusIcon = ep.status === 'SUCCESS' ? '✅ SUCCESS' : ep.status === 'FAILURE' ? '❌ FAILURE' : '⛔ BLOCKED'
-      const cleanTarget = (ep.target || '-').replace(/[\r\n|]/g, ' ')
-      const cleanSummary = (ep.summary || '').replace(/[\r\n|]/g, ' ').slice(0, 100)
+      const cleanTarget = includePayloads ? (ep.target || '-').replace(/[\r\n|]/g, ' ') : '[omitted]'
+      const cleanSummary = includePayloads ? (ep.summary || '').replace(/[\r\n|]/g, ' ').slice(0, 100) : '[metadata only]'
       return `| ${ep.step} | \`${ep.tool}\` | \`${cleanTarget}\` | ${statusIcon} | ${cleanSummary} |`
     })
 
     const trajectoryTable =
       trajectoryRows.length > 0
-        ? [
-            '| Step | Tool | Target | Status | Esito / Summary |',
-            '|:---:|:---|:---|:---:|:---|',
-            ...trajectoryRows,
-          ].join('\n')
+        ? ['| Step | Tool | Target | Status | Esito / Summary |', '|:---:|:---|:---|:---:|:---|', ...trajectoryRows].join('\n')
         : 'Nessun passaggio registrato per questa sessione.'
 
     // 5. Extract critical failures & stack traces
@@ -91,26 +88,30 @@ export class AiDebugBundleService {
       )
     })
 
-    let failureSection = 'Nessun errore fatale riscontrato durante l\'esecuzione.'
+    let failureSection = "Nessun errore fatale riscontrato durante l'esecuzione."
     if (failureLogs.length > 0) {
       failureSection = failureLogs
         .map((f: any) => {
-          const cleanOutput = stripAnsi(f.output).slice(0, 3000)
+          const cleanOutput = includePayloads ? stripAnsi(f.output).slice(0, 3000) : `[payload omitted; ${String(f.output || '').length} chars]`
           return `### ⚠️ Step ${f.step} — Tool: \`${f.tool}\`\n\`\`\`text\n${cleanOutput}\n\`\`\``
         })
         .join('\n\n')
     }
 
     // Keep the complete chronological payload available to a log analyst.
-    const persistedAuditLog = codingAgentLogger.readSessionAuditLog(sessionId)
-    const detailedLogSection = persistedAuditLog || (rawLogs.length > 0
-      ? rawLogs.map((entry: any) => [
-          `### Step ${entry.step} — Tool: \`${entry.tool}\``,
-          '```text',
-          stripAnsi(String(entry.output || '')),
-          '```',
-        ].join('\n')).join('\n\n')
-      : 'Nessun dettaglio cronologico persistito per questa sessione.')
+    const persistedAuditLog = includePayloads ? codingAgentLogger.readSessionAuditLog(sessionId) : ''
+    const detailedLogSection =
+      persistedAuditLog ||
+      (rawLogs.length > 0
+        ? rawLogs
+            .map((entry: any) => [
+              `### Step ${entry.step} — Tool: \`${entry.tool}\``,
+              '```text',
+              includePayloads ? stripAnsi(String(entry.output || '')) : `[payload omitted; ${String(entry.output || '').length} chars]`,
+              '```',
+            ].join('\n'))
+            .join('\n\n')
+        : 'Nessun dettaglio cronologico persistito per questa sessione.')
 
     // 6. Plan Milestones State
     const milestones = sessionState?.planMilestones || []
@@ -119,20 +120,25 @@ export class AiDebugBundleService {
       const completed = milestones.filter((m) => m.status === 'verified').length
       const lines = milestones.map((m, idx) => {
         const icon = m.status === 'verified' ? '[x]' : m.status === 'in_progress' ? '[>]' : m.status === 'failed' ? '[!]' : '[ ]'
-        return `${idx + 1}. ${icon} **${m.title}** (Status: ${m.status.toUpperCase()})${m.notes ? ` — *${m.notes}*` : ''}`
+        return includePayloads
+          ? `${idx + 1}. ${icon} **${m.title}** (Status: ${m.status.toUpperCase()})${m.notes ? ` — *${m.notes}*` : ''}`
+          : `${idx + 1}. ${icon} **${m.id}** (Status: ${m.status.toUpperCase()})`
       })
       planSummary = `Progresso: **${completed}/${milestones.length} (${Math.round((completed / milestones.length) * 100)}%)**\n${lines.join('\n')}`
     }
 
     // 7. Compile the Final Markdown Bundle
-    const userPrompt = sessionState?.userTask || sessionState?.initialUserTask || 'N/A'
-    const agentMode = sessionState?.agentMode || 'AGENT'
+    const rawUserPrompt = sessionState?.userTask || sessionState?.initialUserTask || 'N/A'
+    const userPrompt = includePayloads ? rawUserPrompt : `[payload omitted; ${rawUserPrompt.length} chars]`
+    const agentMode = sessionState?.agentMode || 'GUIDED'
     const runtime = sessionState?.ollamaRuntimeProfile
     const lastVerification = sessionState?.lastVerification
     const telemetry = sessionState?.ollamaGenerationTelemetry || []
-    const telemetryRows = telemetry.slice(-20).map((item) =>
-      `| ${item.step} | ${item.model} | ${item.numCtx} | ${item.wallDurationMs} | ${item.promptTokens ?? '-'} | ${item.completionTokens ?? '-'} |`
-    )
+    const telemetryRows = telemetry
+      .slice(-20)
+      .map(
+        (item) => `| ${item.step} | ${item.model} | ${item.numCtx} | ${item.wallDurationMs} | ${item.promptTokens ?? '-'} | ${item.completionTokens ?? '-'} |`,
+      )
     const recovery = sessionState?.recoveryFailures
     const recoverySummary = [
       `- **Schema:** ${recovery?.schema?.totalFailures || 0}/${MAX_FAILURES_PER_RECOVERY_CATEGORY}`,
@@ -143,26 +149,25 @@ export class AiDebugBundleService {
       ? [
           `- **Status:** ${lastVerification.status}`,
           `- **Checked at:** ${lastVerification.checkedAt}`,
-          `- **Command:** ${lastVerification.command || 'Unavailable'}`,
+          `- **Command:** ${includePayloads ? lastVerification.command || 'Unavailable' : '[omitted]'}`,
           `- **Evidence level:** ${lastVerification.evidenceLevel || 'None'}`,
-          lastVerification.detail ? `- **Detail:** ${lastVerification.detail}` : '',
-        ].filter(Boolean).join('\n')
+          lastVerification.detail ? `- **Detail:** ${includePayloads ? lastVerification.detail : '[omitted]'}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n')
       : '- **Status:** not run'
     const runtimeSummary = runtime
       ? [
           `- **Pinned model:** \`${runtime.model}\``,
           `- **Model digest:** \`${runtime.digest || 'Unavailable'}\``,
-          `- **Ollama endpoint:** \`${runtime.host}\``,
+          `- **Ollama endpoint:** \`${includePayloads ? runtime.host : '[omitted]'}\``,
           `- **Runtime options:** num_ctx=${runtime.options.num_ctx}, num_predict=${runtime.options.num_predict}, temperature=${runtime.options.temperature}`,
         ].join('\n')
       : '- No pinned runtime profile was persisted.'
-    const telemetryTable = telemetryRows.length > 0
-      ? [
-          '| Step | Model | num_ctx | Wall ms | Prompt tokens | Output tokens |',
-          '|:---:|:---|---:|---:|---:|---:|',
-          ...telemetryRows,
-        ].join('\n')
-      : 'No generation telemetry was persisted.'
+    const telemetryTable =
+      telemetryRows.length > 0
+        ? ['| Step | Model | num_ctx | Wall ms | Prompt tokens | Output tokens |', '|:---:|:---|---:|---:|---:|---:|', ...telemetryRows].join('\n')
+        : 'No generation telemetry was persisted.'
 
     const bundle = `# 🐞 ONLYRAG V2 — CODING AGENT DEBUG BUNDLE
 *Generato per AI Diagnostic Assistant — ${timestamp}*
@@ -178,7 +183,7 @@ export class AiDebugBundleService {
 - **Host OS:** ${hostInfo}
 - **Toolchain Status:** ${toolchainStatuses}
 - **Active Model:** \`${activeModelName}\`
-- **Active Workspace:** \`${workspacePath || 'Standalone'}\`
+- **Active Workspace:** \`${includePayloads ? workspacePath || 'Standalone' : '[omitted]'}\`
 - **Active Skills:** ${activeSkills.length > 0 ? activeSkills.map((s) => `\`${s}\``).join(', ') : 'None'}
 - **Session ID:** \`${sessionId}\`
 
@@ -215,7 +220,7 @@ ${detailedLogSection}
 ---
 
 ## 6. File Modifications & Working Tree Diff
-- **Status Git Files:** ${gitStatusLines.length > 0 ? gitStatusLines.join(', ') : 'None'}
+- **Status Git Files:** ${gitStatusLines.length > 0 ? (includePayloads ? gitStatusLines.join(', ') : `${gitStatusLines.length} changed path(s)`) : 'None'}
 - **Diff Unificato:**
 ${gitDiffBlock}
 

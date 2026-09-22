@@ -7,6 +7,22 @@ import { sanitizeAppSettings } from '../../domain/settings/appSettingsDomain'
 import { safeAtomicWrite } from './safeAtomicFileWriter'
 
 const SETTINGS_FILE_NAME = 'settings.json'
+const SETTINGS_FORMAT_VERSION = 2
+
+export function decodeSettingsFile(value: unknown): { settings: AppSettings; needsMigration: boolean } {
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'version' in value) {
+    const envelope = value as { version?: unknown; settings?: unknown }
+    if (envelope.version !== SETTINGS_FORMAT_VERSION) throw new Error('Unsupported settings version')
+    return { settings: sanitizeAppSettings(envelope.settings), needsMigration: false }
+  }
+  const legacy = value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...value as Record<string, unknown> }
+    : {}
+  if (typeof legacy.maxToolCallSteps === 'number' && legacy.maxToolCallSteps >= 200) {
+    legacy.maxToolCallSteps = 0
+  }
+  return { settings: sanitizeAppSettings(legacy), needsMigration: true }
+}
 
 /**
  * Single canonical filesystem store for AppSettings under Electron userData,
@@ -56,12 +72,11 @@ export class AppSettingsRepository {
     try {
       const raw = await fs.promises.readFile(targetPath, 'utf-8')
       const parsed = JSON.parse(raw)
-      const sanitized = sanitizeAppSettings(parsed)
-      // If we read from a fallback location, save immediately to the canonical path
-      if (targetPath !== filePath) {
-        await this.saveSettings(sanitized)
+      const { settings, needsMigration } = decodeSettingsFile(parsed)
+      if (targetPath !== filePath || needsMigration) {
+        await this.saveSettings(settings)
       }
-      return sanitized
+      return settings
     } catch (err: any) {
       logger.log('WARN', 'AppSettingsRepo', `Failed reading settings from ${targetPath}: ${err.message}`)
       return null
@@ -73,7 +88,7 @@ export class AppSettingsRepository {
     const sanitized = sanitizeAppSettings(settings)
 
     try {
-      const payload = JSON.stringify(sanitized, null, 2)
+      const payload = JSON.stringify({ version: SETTINGS_FORMAT_VERSION, settings: sanitized }, null, 2)
       return await safeAtomicWrite(filePath, payload)
     } catch (err: any) {
       logger.log('ERROR', 'AppSettingsRepo', `Failed writing settings to ${filePath}: ${err.message}`)

@@ -100,7 +100,7 @@ describe('PlanReviewCard', () => {
       allowFileModifications: true,
       allowTerminalExecution: true,
       capabilityPolicyMode: 'network-approved',
-      maxToolCallSteps: 100,
+      maxToolCallSteps: 200,
     })
   })
 })

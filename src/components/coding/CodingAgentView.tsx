@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { GripVertical } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { CodingAgentLeftPanel } from './CodingAgentLeftPanel'
 import { useCodingAgent } from '../../hooks/useCodingAgent'

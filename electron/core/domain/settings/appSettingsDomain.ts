@@ -1,5 +1,6 @@
 import type { AppSettings } from '../../../../shared/types'
 import { PROMPT_NODE_IDS, type PromptNodeId } from '../../../../shared/domain/agent/promptHierarchyRegistry'
+import { DEFAULT_AGENT_STEP_BUDGET, normalizeAgentStepBudget } from '../../../../shared/domain/agent/agentStepBudget'
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultModel: '',
@@ -13,7 +14,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   allowFileModifications: false,
   allowTerminalExecution: false,
   capabilityPolicyMode: 'offline-strict',
-  maxToolCallSteps: 25,
+  maxToolCallSteps: DEFAULT_AGENT_STEP_BUDGET,
   enableCodingAgentDebugLog: false,
   includeCodingAgentDebugPayloads: false,
   codingAgentDebugRetentionFiles: 2,
@@ -102,7 +103,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
     autoInstallHubSkills,
     autoInstallMinScore: typeof raw.autoInstallMinScore === 'number' && !isNaN(raw.autoInstallMinScore) ? raw.autoInstallMinScore : defaults.autoInstallMinScore,
     enableSkillRouter: typeof raw.enableSkillRouter === 'boolean' ? raw.enableSkillRouter : defaults.enableSkillRouter,
-    maxToolCallSteps: typeof raw.maxToolCallSteps === 'number' && (raw.maxToolCallSteps === 0 || (raw.maxToolCallSteps >= 5 && raw.maxToolCallSteps <= 500)) ? raw.maxToolCallSteps : defaults.maxToolCallSteps,
+    maxToolCallSteps: normalizeAgentStepBudget(raw.maxToolCallSteps),
     enableCodingAgentDebugLog: typeof raw.enableCodingAgentDebugLog === 'boolean' ? raw.enableCodingAgentDebugLog : defaults.enableCodingAgentDebugLog,
     includeCodingAgentDebugPayloads:
       typeof raw.includeCodingAgentDebugPayloads === 'boolean' ? raw.includeCodingAgentDebugPayloads : defaults.includeCodingAgentDebugPayloads,

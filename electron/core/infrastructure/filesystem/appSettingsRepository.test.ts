@@ -52,4 +52,14 @@ describe('AppSettingsRepository Unit Tests', () => {
     const loaded = await repo.loadSettings()
     expect(loaded).toBeNull()
   })
+
+  it('migrates flat legacy budgets while preserving finite 200 in the versioned format', async () => {
+    const target = path.join(tmpDir, 'settings.json')
+    fs.writeFileSync(target, JSON.stringify({ maxToolCallSteps: 200 }), 'utf-8')
+    expect((await repo.loadSettings())?.maxToolCallSteps).toBe(0)
+    expect(JSON.parse(fs.readFileSync(target, 'utf-8')).version).toBe(2)
+
+    await repo.saveSettings({ ...getDefaultAppSettings(), maxToolCallSteps: 200 })
+    expect((await repo.loadSettings())?.maxToolCallSteps).toBe(200)
+  })
 })

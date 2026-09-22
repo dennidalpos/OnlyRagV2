@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { sidecarAppService } from '../application/sidecarAppService'
 import { parsePromptHistoryIndexPayload, parsePromptHistorySearchPayload } from '../domain/promptHistoryContract'
 import {

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { workspaceAppService } from '../application/workspaceAppService'
 import {
   workspaceDownloadFilePayloadSchema,

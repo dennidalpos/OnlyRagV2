@@ -93,10 +93,10 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(customSteps.maxToolCallSteps).toBe(120)
 
     const invalidNegative = sanitizeAppSettings({ maxToolCallSteps: -5 })
-    expect(invalidNegative.maxToolCallSteps).toBe(25)
+    expect(invalidNegative.maxToolCallSteps).toBe(10)
 
     const invalidTooHigh = sanitizeAppSettings({ maxToolCallSteps: 9999 })
-    expect(invalidTooHigh.maxToolCallSteps).toBe(25)
+    expect(invalidTooHigh.maxToolCallSteps).toBe(200)
   })
 
   it('drops prompt override keys that do not name a prompt node', () => {

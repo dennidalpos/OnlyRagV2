@@ -1,4 +1,5 @@
 import type { AgentTaskPayload } from '../domain/agent/agentTypes'
+import { normalizeAgentStepBudget } from '../../../shared/domain/agent/agentStepBudget'
 import type { AgentExecutionMode, AgentRunIdentity, AppSettings } from '../../../shared/types'
 import type { ResponseInterpreterState } from './agentOrchestratorResponseInterpreterTypes'
 import type { ToolResultMutableFlags } from './agentOrchestratorToolResultTypes'
@@ -134,8 +135,9 @@ export async function initializeSessionState(params: SessionStateParams): Promis
   const phaseController = new AgentExecutionPhaseController()
   const goalPlanner = new GoalDecompositionPlanner()
   const fsmMode = new AgentRuntimeModeFsm(agentMode)
-  const isUnlimitedSteps = settings.maxToolCallSteps === 0 || (settings.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
-  const MAX_STEPS = isUnlimitedSteps ? Infinity : Math.max(10, Math.min(200, settings.maxToolCallSteps || 50))
+  const stepBudget = normalizeAgentStepBudget(settings.maxToolCallSteps)
+  const isUnlimitedSteps = stepBudget === 0
+  const MAX_STEPS = stepBudget === 0 ? Infinity : stepBudget
   const maxStepsLabel = MAX_STEPS === Infinity ? '∞' : String(MAX_STEPS)
   const stepCountBox = { value: 0 }
   // Bundled (rather than loose `let`s) because agentOrchestratorToolResultProcessor.ts

@@ -1,7 +1,8 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import { isAllowedAppNavigation } from './navigationPolicy'
+import { pathToFileURL } from 'node:url'
+import { isAllowedAppNavigation, isAllowedExternalUrl } from './navigationPolicy'
 
 // Ensure canonical app name across dev and packaged runs to align userData (%APPDATA%/onlyrag-v2)
 app.name = 'onlyrag-v2'
@@ -41,6 +42,8 @@ import { registerProjectRegistryIpcHandlers } from './core/presentation/projectR
 import { registerDiagnosticsIpcHandlers } from './core/presentation/diagnosticsIpc'
 import { registerSettingsIpcHandlers } from './core/presentation/settingsIpc'
 import { registerArtifactIpcHandlers } from './core/presentation/artifactIpc'
+import { setTrustedIpcWindowProvider } from './core/presentation/secureIpcMain'
+import { systemAppService } from './core/application/systemAppService'
 
 logger.rebindToUserData(app.getPath('userData'))
 
@@ -52,14 +55,17 @@ let win: BrowserWindow | null = null
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 // Global Exception & Unhandled Rejection Crash Safeguards
-process.on('uncaughtException', (error) => {
-  logger.log('ERROR', 'MainProcess', `Uncaught Exception in Main Process: ${error.message}\n${error.stack}`)
+let fatalShutdownStarted = false
+function fatalMainError(reason: unknown) {
+  if (fatalShutdownStarted) return
+  fatalShutdownStarted = true
+  logger.log('ERROR', 'MainProcess', `Fatal Main error: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
   taskRunner.cancelAllTasks()
-})
-
-process.on('unhandledRejection', (reason: any) => {
-  logger.log('ERROR', 'MainProcess', `Unhandled Promise Rejection: ${reason?.message || reason}`)
-})
+  sidecarProcessManager.stopPythonSidecar()
+  app.exit(1)
+}
+process.on('uncaughtException', fatalMainError)
+process.on('unhandledRejection', fatalMainError)
 
 function createWindow() {
   const iconPath = path.join(__dirname, '../assets/icon.png')
@@ -81,14 +87,15 @@ function createWindow() {
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
-      shell.openExternal(url)
+    if (isAllowedExternalUrl(url)) {
+      void systemAppService.openExternal(url).catch((error: unknown) => logger.log('WARN', 'MainProcess', `External URL failed: ${String(error)}`))
     }
     return { action: 'deny' }
   })
 
   win.webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedAppNavigation(url, VITE_DEV_SERVER_URL)) {
+    const packagedIndexUrl = pathToFileURL(path.join(process.env.DIST || path.join(__dirname, '../dist'), 'index.html')).href
+    if (!isAllowedAppNavigation(url, VITE_DEV_SERVER_URL, packagedIndexUrl)) {
       event.preventDefault()
       logger.log('WARN', 'MainProcess', `Blocked renderer navigation outside the application origin: ${url}`)
     }
@@ -131,6 +138,7 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
+  setTrustedIpcWindowProvider(() => win)
   // Log run identity before startup work so dev and packaged logs remain attributable.
   logger.log(
     'INFO',

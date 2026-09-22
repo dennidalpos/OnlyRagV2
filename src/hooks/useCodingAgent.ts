@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { normalizeAgentStepBudget } from '../../shared/domain/agent/agentStepBudget'
 import {
   AgentActionLog,
   AgentCapabilityProfile,
@@ -94,15 +95,15 @@ export function useCodingAgent(settings?: AppSettings) {
   const [currentStatusText, setCurrentStatusText] = useState<string>('')
   const [currentStep, setCurrentStep] = useState<number>(0)
   const [maxSteps, setMaxSteps] = useState<number | string>(() => {
-    const isUnlimited = settings?.maxToolCallSteps === 0 || (settings?.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
-    return isUnlimited ? '∞' : settings?.maxToolCallSteps || 50
+    const budget = normalizeAgentStepBudget(settings?.maxToolCallSteps)
+    return budget === 0 ? '∞' : budget
   })
 
   // Synchronize maxSteps with user settings when idle
   useEffect(() => {
     if (!isExecuting) {
-      const isUnlimited = settings?.maxToolCallSteps === 0 || (settings?.maxToolCallSteps !== undefined && settings.maxToolCallSteps >= 200)
-      setMaxSteps(isUnlimited ? '∞' : settings?.maxToolCallSteps || 50)
+      const budget = normalizeAgentStepBudget(settings?.maxToolCallSteps)
+      setMaxSteps(budget === 0 ? '∞' : budget)
     }
   }, [settings?.maxToolCallSteps, isExecuting])
 

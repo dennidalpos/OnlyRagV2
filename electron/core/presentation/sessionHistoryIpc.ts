@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { sessionHistoryAppService } from '../application/sessionHistoryAppService'
 import type { CodingSession } from '../../../shared/types'
 

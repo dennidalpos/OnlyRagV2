@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { artifactAppService } from '../application/artifactAppService'
 import {
   artifactsDeletePayloadSchema,

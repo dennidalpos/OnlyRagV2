@@ -31,11 +31,18 @@ vi.mock('../application/ollamaAppService', () => ({
 
 import { ollamaAppService } from '../application/ollamaAppService'
 import { registerOllamaIpcHandlers } from './ollamaIpc'
+import { setTrustedIpcWindowProvider } from './secureIpcMain'
+
+const frame = {}
+const send = vi.fn()
+const sender = { mainFrame: frame, send }
+const trustedEvent = { sender, senderFrame: frame }
 
 describe('ollama IPC stream facade', () => {
   beforeEach(() => {
     handlers.clear()
     vi.clearAllMocks()
+    setTrustedIpcWindowProvider(() => ({ webContents: sender }) as never)
     registerOllamaIpcHandlers()
   })
 
@@ -45,9 +52,7 @@ describe('ollama IPC stream facade', () => {
       onDone()
       return { success: true }
     })
-    const send = vi.fn()
-
-    await handlers.get('ollama:generate-stream')?.({ sender: { send } }, 'model', 'prompt', {}, 'http://host:11434', 'stream-1')
+    await handlers.get('ollama:generate-stream')?.(trustedEvent, 'model', 'prompt', {}, 'http://host:11434', 'stream-1')
 
     expect(send).toHaveBeenNthCalledWith(1, 'ollama:chunk', { operationId: 'stream-1', chunk: 'hello' })
     expect(send).toHaveBeenNthCalledWith(2, 'ollama:done', { operationId: 'stream-1' })

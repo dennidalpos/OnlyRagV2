@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
 import { logger } from '../../../diagnostics'
 import { parseSidecarHealthResponse } from '../../../../shared/domain/sidecarHealth'
-import { decidePortReclaim, parseImageNameFromTasklist, parseListeningPidFromNetstat } from './orphanPortReclaim'
+import { matchesSidecarOwnership, parseListeningPidFromNetstat, type SidecarOwnershipMarker } from './orphanPortReclaim'
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
 
@@ -14,6 +14,7 @@ const DEV_PROJECT_ROOT = path.join(__dirname, '..')
 
 const SIDECAR_PORT = 8000
 const SIDECAR_BASE_URL = `http://127.0.0.1:${SIDECAR_PORT}`
+const OWNERSHIP_FILE_NAME = 'sidecar-ownership.json'
 
 /** How long to wait for a terminated orphan to actually release the port before giving up. */
 const ORPHAN_PORT_RELEASE_ATTEMPTS = 5
@@ -264,16 +265,19 @@ export class SidecarProcessManager {
 
     const netstat = await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp'])
     const pid = parseListeningPidFromNetstat(netstat, SIDECAR_PORT)
-    const imageName = pid === null ? null : parseImageNameFromTasklist(await this.readCommandOutput('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']))
-
-    const decision = decidePortReclaim({ pid, imageName, ownPid: process.pid })
-    if (decision.action === 'skip') {
-      logger.log('WARN', 'Sidecar', `Orphan sidecar on port ${SIDECAR_PORT} left running: ${decision.reason}.`)
+    let marker: SidecarOwnershipMarker | null = null
+    try {
+      marker = JSON.parse(await fs.promises.readFile(path.join(app.getPath('userData'), OWNERSHIP_FILE_NAME), 'utf-8')) as SidecarOwnershipMarker
+    } catch { /* Missing marker is not ownership proof. */ }
+    const current = pid === null ? null : await this.readProcessIdentity(pid)
+    if (!matchesSidecarOwnership(marker, current) || pid === process.pid) {
+      this.state = { status: 'offline', error: `Port ${SIDECAR_PORT} is occupied by an unowned process.` }
+      logger.log('ERROR', 'Sidecar', this.state.error || 'Unowned sidecar port')
       return false
     }
 
-    logger.log('INFO', 'Sidecar', `Reclaiming port ${SIDECAR_PORT} from orphan sidecar "${imageName}" (PID ${decision.pid}) left by a previous session.`)
-    await this.readCommandOutput('taskkill', ['/pid', String(decision.pid), '/f', '/t'])
+    logger.log('INFO', 'Sidecar', `Reclaiming owned sidecar on port ${SIDECAR_PORT} (PID ${pid}).`)
+    await this.readCommandOutput('taskkill', ['/pid', String(pid), '/f', '/t'])
 
     // The port is not free the instant taskkill returns, and spawning into a still-bound port
     // is exactly the failure this is meant to prevent.
@@ -282,8 +286,18 @@ export class SidecarProcessManager {
       await new Promise((resolve) => setTimeout(resolve, ORPHAN_PORT_RELEASE_INTERVAL_MS))
     }
 
-    logger.log('WARN', 'Sidecar', `Port ${SIDECAR_PORT} still answering after terminating PID ${decision.pid}.`)
+    logger.log('WARN', 'Sidecar', `Port ${SIDECAR_PORT} still answering after terminating PID ${pid}.`)
     return false
+  }
+
+  private async readProcessIdentity(pid: number): Promise<SidecarOwnershipMarker | null> {
+    if (!Number.isSafeInteger(pid) || pid <= 0) return null
+    const command = `$p = Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'; if ($p) { [pscustomobject]@{ pid = [int]$p.ProcessId; executablePath = $p.ExecutablePath; startedAt = $p.CreationDate.ToString('o') } | ConvertTo-Json -Compress }`
+    try {
+      const raw = await this.readCommandOutput('powershell', ['-NoProfile', '-NonInteractive', '-Command', command])
+      const identity = JSON.parse(raw) as SidecarOwnershipMarker
+      return typeof identity.executablePath === 'string' && typeof identity.startedAt === 'string' ? identity : null
+    } catch { return null }
   }
 
   async startPythonSidecar(): Promise<boolean> {
@@ -297,8 +311,16 @@ export class SidecarProcessManager {
       // depends on, and would keep serving the previous build after an update.
       const reclaimed = await this.reclaimOrphanSidecarPort()
       if (!reclaimed) {
-        logger.log('WARN', 'Sidecar', 'Continuing with the pre-existing sidecar; this session does not own its lifecycle.')
-        return true
+        return false
+      }
+    }
+
+    if (process.platform === 'win32') {
+      const listener = parseListeningPidFromNetstat(await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp']), SIDECAR_PORT)
+      if (listener !== null) {
+        this.state = { status: 'offline', error: `Port ${SIDECAR_PORT} is occupied by process ${listener}; Sidecar was not started.` }
+        logger.log('ERROR', 'Sidecar', this.state.error || 'Port conflict')
+        return false
       }
     }
 
@@ -369,7 +391,26 @@ export class SidecarProcessManager {
     }
 
     this.attachSidecarProcessLogs()
-    return await this.waitForSidecarHealth()
+    if (!await this.waitForSidecarHealth()) return false
+    const childPid = sidecarProcess?.pid
+    const listenerPid = process.platform === 'win32'
+      ? parseListeningPidFromNetstat(await this.readCommandOutput('netstat', ['-ano', '-p', 'tcp']), SIDECAR_PORT)
+      : childPid
+    if (!childPid || listenerPid !== childPid) {
+      this.stopPythonSidecar()
+      this.state = { status: 'offline', error: 'Sidecar port was taken by another process during startup.' }
+      return false
+    }
+    if (process.platform === 'win32') {
+      const identity = await this.readProcessIdentity(childPid)
+      if (!identity) {
+        this.stopPythonSidecar()
+        this.state = { status: 'offline', error: 'Could not verify Sidecar process ownership.' }
+        return false
+      }
+      await fs.promises.writeFile(path.join(app.getPath('userData'), OWNERSHIP_FILE_NAME), JSON.stringify(identity), 'utf-8')
+    }
+    return true
   }
 
   private writeSidecarLog(level: 'INFO' | 'WARN' | 'ERROR', msg: string) {

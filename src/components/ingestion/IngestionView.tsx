@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { OcrEngineBadge } from './OcrEngineBadge'
 import { DocumentListTable } from './DocumentListTable'

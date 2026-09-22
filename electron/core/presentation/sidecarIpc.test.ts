@@ -21,17 +21,22 @@ vi.mock('../application/sidecarAppService', () => ({
 
 import { sidecarAppService } from '../application/sidecarAppService'
 import { registerSidecarIpcHandlers } from './sidecarIpc'
+import { setTrustedIpcWindowProvider } from './secureIpcMain'
+
+const trustedContents = { mainFrame: {} }
+const trustedEvent = { sender: trustedContents, senderFrame: trustedContents.mainFrame }
 
 describe('sidecar IPC facade', () => {
   beforeEach(() => {
     handlers.clear()
     vi.clearAllMocks()
+    setTrustedIpcWindowProvider(() => ({ webContents: trustedContents }) as never)
     registerSidecarIpcHandlers()
   })
 
   it('forwards status and restart requests to the application service', async () => {
-    await expect(handlers.get('sidecar:status')?.({})).resolves.toEqual({ status: 'online' })
-    await expect(handlers.get('sidecar:restart')?.({})).resolves.toEqual({ success: true })
+    await expect(handlers.get('sidecar:status')?.(trustedEvent)).resolves.toEqual({ status: 'online' })
+    await expect(handlers.get('sidecar:restart')?.(trustedEvent)).resolves.toEqual({ success: true })
 
     expect(sidecarAppService.getStatus).toHaveBeenCalledOnce()
     expect(sidecarAppService.restartSidecar).toHaveBeenCalledOnce()
@@ -39,7 +44,7 @@ describe('sidecar IPC facade', () => {
 
   it('validates ingest payloads before forwarding normalized values', async () => {
     const handler = handlers.get('ingest:file')
-    await handler?.({}, 'D:/docs/report.pdf', 'vision-model', 'Describe the page', true, 'normalizer', 8192, 'ingest-test-1')
+    await handler?.(trustedEvent, 'D:/docs/report.pdf', 'vision-model', 'Describe the page', true, 'normalizer', 8192, 'ingest-test-1')
 
     expect(sidecarAppService.ingestFile).toHaveBeenCalledWith(
       'D:/docs/report.pdf',
@@ -51,7 +56,7 @@ describe('sidecar IPC facade', () => {
       'ingest-test-1',
       undefined
     )
-    await expect(handler?.({}, ' ')).rejects.toThrow()
+    await expect(handler?.(trustedEvent, ' ')).rejects.toThrow()
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)
   })
 })

@@ -234,7 +234,7 @@ export interface AppSettings {
   /** User-edited system prompts, keyed by prompt node id ('coding:master', 'chat', ...). */
   customPromptOverrides?: Record<string, string>
   // Concurrency & Task Queue Settings
-  maxToolCallSteps?: number // Range: 10-200, 0 = unlimited, default unlimited
+  maxToolCallSteps?: number // 0 = unlimited; finite range 10-200; default 25
   // Coding Agent Audit & Debug Logging
   enableCodingAgentDebugLog?: boolean
   /** Explicit opt-in for prompts, source snippets and tool payloads in the audit log. */

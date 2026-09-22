@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { runFullDiagnostics, type LogLevel } from '../../diagnostics'
 import { diagnosticsAppService } from '../application/diagnosticsAppService'
 import { sidecarAppService } from '../application/sidecarAppService'

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { skillAppService } from '../application/skillAppService'
 import { CustomHubInput, SkillSaveInput, HubSkillItem } from '../domain/skills/skillTypes'
 

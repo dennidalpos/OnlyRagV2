@@ -44,7 +44,7 @@ import { estimateTokenCount } from '../../lib/tokenEstimate'
 import { useTranslation } from '../../i18n'
 import type { TranslationKey } from '../../i18n'
 
-interface PromptConfigurationModalProps {
+export interface PromptConfigurationModalProps {
   isOpen: boolean
   onClose: () => void
   settings: AppSettings

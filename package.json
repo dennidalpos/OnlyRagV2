@@ -82,7 +82,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.11",
     "dpdm": "^4.3.0",
-    "electron": "^43.4.0",
+    "electron": "43.7.4",
     "electron-builder": "^26.15.3",
     "gpt-tokenizer": "^4.0.0",
     "happy-dom": "^20.11.2",
@@ -158,6 +158,6 @@
     "@parcel/watcher@2.6.0": true,
     "electron-winstaller@5.4.0": true,
     "node-pty@1.1.0": true,
-    "electron@43.4.1": true
+    "electron@43.7.4": true
   }
 }

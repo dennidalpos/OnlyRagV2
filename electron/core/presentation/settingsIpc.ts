@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { appSettingsAppService } from '../application/appSettingsAppService'
 import type { AppSettings } from '../../../shared/types'
 

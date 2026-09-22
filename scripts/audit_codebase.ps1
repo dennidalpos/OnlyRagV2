@@ -64,12 +64,14 @@ try {
         if (-not $Fast) {
             Write-Host "`n[2/3] Analisi di dead code e file orfani (knip + Python Sidecar)..." -ForegroundColor Yellow
         }
-        npx knip --no-exit-code
+        npx knip
+        if ($LASTEXITCODE -ne 0) { throw "knip detected dead code or unused dependencies." }
         if (-not $Fast) { Write-Host "[OK] Scansione dead code knip completata." -ForegroundColor Green }
 
         $venvPython = Join-Path -Path $rootDir -ChildPath ".venv\Scripts\python.exe"
         if (Test-Path $venvPython) {
             & $venvPython -m compileall -q sidecar
+            if ($LASTEXITCODE -ne 0) { throw "Python sidecar compilation failed." }
             if ($LASTEXITCODE -eq 0 -and (-not $Fast)) {
                 Write-Host "[OK] Scansione sintassi e integrità Python sidecar completata." -ForegroundColor Green
             }
@@ -81,11 +83,13 @@ try {
         if ($WebUI) {
             Write-Host "`n[3/3] Avvio Web UI interattiva del grafo di dipendenze (skott)..." -ForegroundColor Cyan
             npx skott src/main.tsx electron/main.ts --displayMode=webapp
+            if ($LASTEXITCODE -ne 0) { throw "skott graph analysis failed." }
         } else {
             if (-not $Fast) {
                 Write-Host "`n[3/3] Analisi grafo di dipendenze (skott)..." -ForegroundColor Yellow
             }
             npx skott src/main.tsx electron/main.ts --displayMode=file-tree
+            if ($LASTEXITCODE -ne 0) { throw "skott graph analysis failed." }
             if (-not $Fast) { Write-Host "[OK] Analisi grafo skott completata." -ForegroundColor Green }
         }
     }

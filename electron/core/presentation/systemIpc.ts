@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { systemAppService } from '../application/systemAppService'
 import { taskAppService } from '../application/taskAppService'
 

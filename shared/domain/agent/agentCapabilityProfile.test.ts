@@ -16,7 +16,14 @@ describe('Agent capability profile', () => {
       allowFileModifications: true,
       allowTerminalExecution: true,
       capabilityPolicyMode: 'network-approved',
-      maxToolCallSteps: 100,
+      maxToolCallSteps: 200,
     })
+  })
+
+  it('preserves the unlimited sentinel and finite upper limit', () => {
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 0 }).maxToolCallSteps).toBe(0)
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 10 }).maxToolCallSteps).toBe(10)
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 100 }).maxToolCallSteps).toBe(100)
+    expect(resolveAgentCapabilityProfile({ maxToolCallSteps: 200 }).maxToolCallSteps).toBe(200)
   })
 })

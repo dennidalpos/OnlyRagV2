@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { projectRegistryAppService } from '../application/projectRegistryAppService'
 
 export function registerProjectRegistryIpcHandlers() {

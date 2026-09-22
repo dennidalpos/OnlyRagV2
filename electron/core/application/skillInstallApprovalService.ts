@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow } from 'electron'
+import { secureIpcMain as ipcMain } from '../presentation/secureIpcMain'
 import { logger } from '../../diagnostics'
 import type { AgentRunIdentity } from '../../../shared/types'
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'

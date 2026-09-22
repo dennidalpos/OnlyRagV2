@@ -51,7 +51,7 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
-    logger.info("FastAPI Sidecar starting up. Launching background vocabulary sync & DB maintenance...")
+    logger.info("FastAPI Sidecar starting up. Loading bundled vocabulary & DB maintenance...")
     asyncio.create_task(background_vocab_sync_startup())
     asyncio.create_task(asyncio.to_thread(run_db_maintenance))
     yield

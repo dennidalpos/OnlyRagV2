@@ -30,7 +30,8 @@ export const AgentCapabilityProfileControls: React.FC<AgentCapabilityProfileCont
       </label>
       <label className="grid gap-1 text-slate-300">
         Budget di step
-        <input type="number" min="5" max="100" value={profile.maxToolCallSteps} onChange={(event) => onChange({ ...profile, maxToolCallSteps: Number(event.target.value) || 5 })} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100" />
+        <input type="number" min="10" max="200" disabled={profile.maxToolCallSteps === 0} value={profile.maxToolCallSteps === 0 ? 25 : profile.maxToolCallSteps} onChange={(event) => onChange({ ...profile, maxToolCallSteps: Number(event.target.value) || 10 })} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100" />
+        <span className="flex items-center gap-2"><input type="checkbox" checked={profile.maxToolCallSteps === 0} onChange={(event) => onChange({ ...profile, maxToolCallSteps: event.target.checked ? 0 : 25 })} />Illimitato</span>
       </label>
     </div>
   </fieldset>

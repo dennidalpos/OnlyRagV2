@@ -25,7 +25,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { useChatEngine } from '../../hooks/useChatEngine'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'

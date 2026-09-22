@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { InlineDestructiveConfirm } from '../common/InlineDestructiveConfirm'
 import { HardwareSetupWizardModal } from '../common/HardwareSetupWizardModal'
-import { PromptConfigurationModal } from './PromptConfigurationModal'
+import { PromptConfigurationModal } from './PromptConfigurationModalLazy'
 import { ToggleSwitch } from '../common/ToggleSwitch'
 import { ModelAssignmentGrid } from './ModelAssignmentGrid'
 import { OcrEngineSelector } from './OcrEngineSelector'
@@ -64,7 +64,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   const { t, language, setLanguage } = useTranslation()
   const [auditLogCleared, setAuditLogCleared] = useState(false)
   const s = useSettingsManager(diagnostics, settings, onUpdateSettings, onRefreshDiagnostics)
-  const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost)
+  const { metrics: modelMetrics } = useOllamaModelMetrics(settings.ollamaHost, isActive)
   const hardwareDefault = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
   const {
     updateAvailableMap,
@@ -110,6 +110,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
   const displayedModels = buildOllamaModelOptions(installedModels, undefined, configuredMissingModels)
 
   useEffect(() => {
+    if (!isActive) return
     let cancelled = false
     const fetchRunning = async () => {
       if (!window.electronAPI?.getRunningModels) return
@@ -126,7 +127,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
     return () => {
       cancelled = true
     }
-  }, [settings.ollamaHost, diagnostics?.timestamp, s.pullMessage])
+  }, [settings.ollamaHost, diagnostics?.timestamp, s.pullMessage, isActive])
 
   const handleLanguageChange = (newLang: Language) => {
     setLanguage(newLang)
@@ -698,6 +699,7 @@ export const SettingsView: React.FC<SettingsViewProps> = React.memo(({
         <AgentExecutionLimitsConfig
           settings={settings}
           onUpdateSettings={onUpdateSettings}
+          isActive={isActive}
         />
 
         {/* Coding Agent Studio Audit & Debug Logging */}

@@ -45,11 +45,16 @@ import { planGenerationAppService } from '../application/planGenerationAppServic
 import { agentInterviewAppService } from '../application/agentInterviewAppService'
 import { taskQueueAppService } from '../application/taskQueueAppService'
 import { parseAgentTaskPayload, registerAgentIpcHandlers } from './agentIpc'
+import { setTrustedIpcWindowProvider } from './secureIpcMain'
+
+const trustedContents = { mainFrame: {} }
+const trustedEvent = { sender: trustedContents, senderFrame: trustedContents.mainFrame }
 
 describe('agent IPC session-state facade', () => {
   beforeEach(() => {
     handlers.clear()
     vi.clearAllMocks()
+    setTrustedIpcWindowProvider(() => ({ webContents: trustedContents }) as never)
     registerAgentIpcHandlers(() => null)
   })
 
@@ -61,7 +66,7 @@ describe('agent IPC session-state facade', () => {
       planMilestones: [{ id: 'm-1', title: 'Build app', status: 'completed' }],
     } as never)
 
-    await expect(handlers.get('agent:get-plan-state')?.({}, 'session-1', '/repo')).resolves.toEqual({
+    await expect(handlers.get('agent:get-plan-state')?.(trustedEvent, 'session-1', '/repo')).resolves.toEqual({
       planMilestones: [{ id: 'm-1', title: 'Build app', status: 'completed' }],
       status: 'completed',
       stepCount: 4,
@@ -78,13 +83,21 @@ describe('agent IPC session-state facade', () => {
     }
     const payload = { identity, sessionId: identity.conversationId, userTask: 'Inspect', agentMode: 'ask' }
 
-    await handlers.get('agent:start-task')?.({}, payload)
-    await handlers.get('agent:cancel-task')?.({}, identity)
-    await handlers.get('agent:approval-response')?.({}, identity, true, [0])
+    await handlers.get('agent:start-task')?.(trustedEvent, payload)
+    await handlers.get('agent:cancel-task')?.(trustedEvent, identity)
+    await handlers.get('agent:approval-response')?.(trustedEvent, identity, true, [0])
 
     expect(taskQueueAppService.scheduleAgentTask).toHaveBeenCalledWith({ ...payload, activeFile: null }, expect.any(Function))
     expect(taskQueueAppService.cancelTask).toHaveBeenCalledWith(identity)
     expect(respondToApproval).toHaveBeenCalledWith(identity, true, [0])
+  })
+
+  it('rejects external senders, subframes, and malformed payloads before dispatch', async () => {
+    const handler = handlers.get('agent:cancel-task')!
+    expect(() => handler({ sender: {}, senderFrame: trustedContents.mainFrame }, { runId: 'x' })).toThrow('Untrusted IPC sender')
+    expect(() => handler({ sender: trustedContents, senderFrame: {} }, { runId: 'x' })).toThrow('Untrusted IPC sender')
+    expect(() => handler(trustedEvent, 'not an identity')).toThrow('Invalid IPC payload')
+    expect(taskQueueAppService.cancelTask).not.toHaveBeenCalled()
   })
 
   it('accepts exactly one versioned active-file context and discards legacy contextFiles', () => {
@@ -122,8 +135,8 @@ describe('agent IPC session-state facade', () => {
     vi.mocked(agentSessionStateAppService.seedPlanMilestones).mockResolvedValue(true)
     const milestones = [{ id: 'm-1', title: 'Build app', status: 'pending' as const }]
 
-    await expect(handlers.get('agent:get-plan-state')?.({}, 'missing', null)).resolves.toBeNull()
-    await expect(handlers.get('agent:plan-seed')?.({}, 'session-1', '/repo', milestones, 'Build app', 'plan-1:v1')).resolves.toBe(true)
+    await expect(handlers.get('agent:get-plan-state')?.(trustedEvent, 'missing', null)).resolves.toBeNull()
+    await expect(handlers.get('agent:plan-seed')?.(trustedEvent, 'session-1', '/repo', milestones, 'Build app', 'plan-1:v1')).resolves.toBe(true)
     expect(agentSessionStateAppService.seedPlanMilestones).toHaveBeenCalledWith('session-1', '/repo', milestones, 'Build app', 'plan-1:v1')
   })
 
@@ -131,9 +144,9 @@ describe('agent IPC session-state facade', () => {
     const settings = {} as any
     const decisions = [{ questionId: 'q1', questionText: 'Storage', selectedOption: 'Local' }]
 
-    await handlers.get('agent:plan-interview')?.({}, 'Build app', 'model', settings, '/repo', decisions)
+    await handlers.get('agent:plan-interview')?.(trustedEvent, 'Build app', 'model', settings, '/repo', decisions)
     const previousPlan = { id: 'plan-1' }
-    await handlers.get('agent:plan-generate')?.({}, 'Build app', 'model', settings, previousPlan, '/repo', decisions)
+    await handlers.get('agent:plan-generate')?.(trustedEvent, 'Build app', 'model', settings, previousPlan, '/repo', decisions)
 
     expect(agentInterviewAppService.conductInterview).toHaveBeenCalledWith('Build app', 'model', settings, '/repo', decisions)
     expect(planGenerationAppService.generatePlanText).toHaveBeenCalledWith(
@@ -149,7 +162,7 @@ describe('agent IPC session-state facade', () => {
     const answers = [{ questionId: 'q1', questionText: 'Storage?', selectedOption: 'SQLite', provenance: 'explicit' }]
     const questions = [{ id: 'q1', question: 'Storage?', rationale: 'Changes persistence.', options: ['SQLite', 'JSON'], recommendedIndex: 0 }]
 
-    await handlers.get('agent:plan-enrich-prompt')?.({}, 'Build app', answers, questions)
+    await handlers.get('agent:plan-enrich-prompt')?.(trustedEvent, 'Build app', answers, questions)
 
     expect(agentInterviewAppService.enrichPromptWithAnswers).toHaveBeenCalledWith('Build app', answers, questions)
   })

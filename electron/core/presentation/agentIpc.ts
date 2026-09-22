@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { taskQueueAppService } from '../application/taskQueueAppService'
 import { requestActiveAgentContextCompaction, respondToApproval } from '../application/agentOrchestratorAppService'
 import { parseAgentToolCall } from '../domain/agent/toolParser'

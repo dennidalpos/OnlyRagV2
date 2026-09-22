@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  decidePortReclaim,
-  isReclaimableSidecarImage,
-  parseImageNameFromTasklist,
+  matchesSidecarOwnership,
   parseListeningPidFromNetstat,
 } from './orphanPortReclaim'
 
@@ -39,53 +37,15 @@ describe('parseListeningPidFromNetstat', () => {
   })
 })
 
-describe('parseImageNameFromTasklist', () => {
-  it('reads the image name out of the CSV row', () => {
-    expect(parseImageNameFromTasklist('"python.exe","13664","Console","1","45.000 K"')).toBe('python.exe')
+describe('matchesSidecarOwnership', () => {
+  const marker = { pid: 13664, executablePath: 'C:\\venv\\python.exe', startedAt: '2026-09-22T10:00:00.000Z' }
+  it('accepts the exact owned process only', () => {
+    expect(matchesSidecarOwnership(marker, { ...marker, executablePath: 'c:\\VENV\\PYTHON.EXE' })).toBe(true)
   })
-
-  it('treats the "no tasks are running" notice as no process, in any locale', () => {
-    // Verified against the real tool on this machine: an Italian Windows answers "Informazioni: nessuna attività...", so matching the English "INFO:" would miss it.
-    expect(parseImageNameFromTasklist('INFO: No tasks are running which match the specified criteria.')).toBeNull()
-    expect(parseImageNameFromTasklist('Informazioni: nessuna attività in esecuzione corrispondente ai\ncriteri specificati.')).toBeNull()
-  })
-
-  it('returns null for empty output', () => {
-    expect(parseImageNameFromTasklist('')).toBeNull()
-  })
-})
-
-describe('isReclaimableSidecarImage', () => {
-  it('accepts the packaged binary and the interpreters the dev sidecar runs under', () => {
-    expect(isReclaimableSidecarImage('sidecar.exe')).toBe(true)
-    expect(isReclaimableSidecarImage('Python.exe')).toBe(true)
-    expect(isReclaimableSidecarImage('pythonw.exe')).toBe(true)
-  })
-
-  it('refuses anything else, however plausible it looks', () => {
-    expect(isReclaimableSidecarImage('node.exe')).toBe(false)
-    expect(isReclaimableSidecarImage('uvicorn.exe')).toBe(false)
-    expect(isReclaimableSidecarImage(null)).toBe(false)
-  })
-})
-
-describe('decidePortReclaim', () => {
-  it('kills an orphan sidecar holding the port', () => {
-    expect(decidePortReclaim({ pid: 13664, imageName: 'sidecar.exe', ownPid: 4242 })).toEqual({ action: 'kill', pid: 13664 })
-  })
-
-  it('never kills the process doing the reclaiming', () => {
-    const decision = decidePortReclaim({ pid: 4242, imageName: 'python.exe', ownPid: 4242 })
-    expect(decision.action).toBe('skip')
-  })
-
-  it('leaves an unrelated process alone rather than freeing the port at any cost', () => {
-    const decision = decidePortReclaim({ pid: 900, imageName: 'node.exe', ownPid: 4242 })
-    expect(decision).toEqual({ action: 'skip', reason: 'process 900 runs "node.exe", which is not a known sidecar image' })
-  })
-
-  it('skips when the holder could not be resolved at all', () => {
-    const decision = decidePortReclaim({ pid: null, imageName: null, ownPid: 4242 })
-    expect(decision.action).toBe('skip')
+  it('rejects missing marker, reused PID, different executable, and changed start time', () => {
+    expect(matchesSidecarOwnership(null, marker)).toBe(false)
+    expect(matchesSidecarOwnership(marker, { ...marker, pid: 1 })).toBe(false)
+    expect(matchesSidecarOwnership(marker, { ...marker, executablePath: 'C:\\other\\python.exe' })).toBe(false)
+    expect(matchesSidecarOwnership(marker, { ...marker, startedAt: '2026-09-22T11:00:00.000Z' })).toBe(false)
   })
 })

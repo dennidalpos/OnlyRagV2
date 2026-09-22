@@ -76,7 +76,7 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
     })
 
     try {
-      logger.info('useOllamaModelUpdates', 'Running non-blocking background check for model updates...')
+      logger.info('useOllamaModelUpdates', 'Checking model updates on user request...')
       const results = await window.electronAPI.checkOllamaModelUpdates(customHost || ollamaHost)
       
       const availableMap: Record<string, boolean> = {}
@@ -109,16 +109,6 @@ export function useOllamaModelUpdates(ollamaHost?: string, onRefreshDiagnostics?
       isCheckingRef.current = false
     }
   }, [ollamaHost])
-
-  // Non-blocking check on mount if never checked
-  useEffect(() => {
-    if (globalUpdatesState.lastCheckedAt === null && !isCheckingRef.current) {
-      const timer = setTimeout(() => {
-        void checkForUpdates()
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [checkForUpdates])
 
   const triggerUpdateModel = useCallback(async (modelName: string): Promise<{ success: boolean; error?: string }> => {
     if (!modelName || typeof modelName !== 'string') {

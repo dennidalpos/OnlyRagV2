@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { ipcMain } from 'electron'
+import { secureIpcMain as ipcMain } from './secureIpcMain'
 import { ollamaAppService } from '../application/ollamaAppService'
 import type { OllamaGenerationOptions } from '../../../shared/types'
 

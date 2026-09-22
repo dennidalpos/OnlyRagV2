@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react'
 import { AppSettings, DiagnosticsData } from '../../types'
-import { PromptConfigurationModal } from '../settings/PromptConfigurationModal'
+import { PromptConfigurationModal } from '../settings/PromptConfigurationModalLazy'
 import { QuickModelSelector } from '../common/QuickModelSelector'
 import { InplaceTranslationPanel } from './InplaceTranslationPanel'
 import { useDocumentTranslation, LANGUAGES } from '../../hooks/useTranslation'

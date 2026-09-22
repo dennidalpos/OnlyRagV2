@@ -1,8 +1,5 @@
 
 
-/** Executable names a reclaim may terminate. */
-const RECLAIMABLE_IMAGES = new Set(['sidecar.exe', 'python.exe', 'pythonw.exe', 'python3.exe', 'python'])
-
 /** Extracts the PID of the process LISTENING on `port` from `netstat -ano` output. */
 export function parseListeningPidFromNetstat(output: string, port: number): number | null {
   if (!output) return null
@@ -26,46 +23,16 @@ export function parseListeningPidFromNetstat(output: string, port: number): numb
   return null
 }
 
-/**
- * Extracts the image name from `tasklist /FI "PID eq N" /FO CSV /NH` output
- * (e.g. `"python.exe","13664","Console","1","45.000 K"`).
- */
-export function parseImageNameFromTasklist(output: string): string | null {
-  if (!output) return null
-
-  const firstRow = output.split(/\r?\n/).find((line) => line.trim().length > 0)
-  if (!firstRow) return null
-
-  // tasklist reports a missing PID on stdout with exit code 0, and that notice is LOCALISED ("INFO: No tasks..." / "Informazioni: nessuna attività..."), so its text cannot be matched.
-  const match = firstRow.trim().match(/^"([^"]+)"/)
-  const imageName = match ? match[1].trim() : null
-
-  return imageName || null
+export interface SidecarOwnershipMarker {
+  pid: number
+  executablePath: string
+  startedAt: string
 }
 
-/** Whether a process holding the port may be terminated to reclaim it. */
-export function isReclaimableSidecarImage(imageName: string | null | undefined): boolean {
-  if (!imageName) return false
-  return RECLAIMABLE_IMAGES.has(imageName.trim().toLowerCase())
-}
-
-export type ReclaimDecision =
-  | { action: 'kill'; pid: number }
-  | { action: 'skip'; reason: string }
-
-/** Decides what to do with the process found holding the sidecar's port. */
-export function decidePortReclaim(params: {
-  pid: number | null
-  imageName: string | null
-  ownPid: number
-}): ReclaimDecision {
-  const { pid, imageName, ownPid } = params
-
-  if (pid === null) return { action: 'skip', reason: 'no listening process could be resolved for the port' }
-  if (pid === ownPid) return { action: 'skip', reason: 'the port is held by this very process' }
-  if (!isReclaimableSidecarImage(imageName)) {
-    return { action: 'skip', reason: `process ${pid} runs "${imageName || 'unknown'}", which is not a known sidecar image` }
-  }
-
-  return { action: 'kill', pid }
+/** PID alone is insufficient: reject reused PIDs and unrelated Python processes. */
+export function matchesSidecarOwnership(marker: SidecarOwnershipMarker | null, current: SidecarOwnershipMarker | null): boolean {
+  return Boolean(marker && current
+    && marker.pid === current.pid
+    && marker.executablePath.toLowerCase() === current.executablePath.toLowerCase()
+    && marker.startedAt === current.startedAt)
 }

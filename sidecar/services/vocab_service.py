@@ -77,13 +77,13 @@ class VocabSyncService:
     def _cached_languages(self) -> List[Path]:
         return sorted(Path(self.cache_dir).glob("*.json"), key=lambda item: item.name)
 
-    async def sync_vocabularies(self, timeout_sec: float = 3.0) -> Dict[str, Any]:
+    async def sync_vocabularies(self, timeout_sec: float = 3.0, *, allow_remote: bool = True) -> Dict[str, Any]:
         """Apply newer vocabulary packs atomically without blocking offline startup."""
         self._ensure_cache_dir()
         updated_languages: List[str] = []
 
         try:
-            manifest, source = await self._load_manifest(timeout_sec)
+            manifest, source = await self._load_manifest(timeout_sec) if allow_remote else (self._load_bundled_manifest(), "bundled")
             packs = manifest.get("packs", {})
             if not isinstance(packs, dict):
                 raise ValueError("Vocabulary manifest 'packs' must be a JSON object.")
@@ -151,5 +151,5 @@ def get_vocab_sync_service() -> VocabSyncService:
 
 
 async def background_vocab_sync_startup() -> None:
-    """Run the startup vocabulary update without delaying Sidecar readiness."""
-    await get_vocab_sync_service().sync_vocabularies(timeout_sec=2.5)
+    """Load bundled vocabulary without network access during startup."""
+    await get_vocab_sync_service().sync_vocabularies(allow_remote=False)

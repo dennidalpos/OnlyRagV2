@@ -42,10 +42,6 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
       return initialLanguage
     }
     try {
-      const saved = localStorage.getItem('onlyrag_language') as Language
-      if (saved === 'it' || saved === 'en') {
-        return saved
-      }
       // Check system language
       const navLang = navigator?.language?.toLowerCase() || ''
       if (navLang.startsWith('en')) {
@@ -59,11 +55,6 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
 
   const setLanguage = useCallback((newLang: Language) => {
     setLanguageState(newLang)
-    try {
-      localStorage.setItem('onlyrag_language', newLang)
-    } catch (err: any) {
-      logger.error('I18n', `Failed persisting language to localStorage: ${err.message}`)
-    }
     onLanguageChange?.(newLang)
   }, [onLanguageChange])
 

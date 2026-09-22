@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react'
+import React, { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react'
 import { AppSettings } from '../../types'
 import {
   Layers,
@@ -31,7 +31,6 @@ import { OnlyRagLogo } from '../common/OnlyRagLogo'
 import { SystemRamBreakdown } from '../common/SystemRamBreakdown'
 import { useDiagnostics } from '../../hooks/useDiagnostics'
 import { useModelDownloadProgress } from '../../hooks/useModelDownloadProgress'
-import { useOllamaModelUpdates } from '../../hooks/useOllamaModelUpdates'
 import { notifyTabChanged } from '../../hooks/useIngestedDocuments'
 import { useTranslation, Language } from '../../i18n'
 import { logger } from '../../lib/logger'
@@ -75,16 +74,7 @@ export const AppLayout: React.FC = () => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false)
 
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    try {
-      const saved = localStorage.getItem('onlyrag_app_settings')
-      if (saved) {
-        return JSON.parse(saved)
-      }
-    } catch (err: any) {
-      logger.error('AppLayout', `Failed loading app settings from localStorage: ${err.message}`)
-    }
-    return {
+  const [settings, setSettings] = useState<AppSettings>(() => ({
       defaultModel: '',
       ocrEngine: 'native_cuda',
       ollamaHost: 'http://127.0.0.1:11434',
@@ -102,12 +92,10 @@ export const AppLayout: React.FC = () => {
       modelThinkingPreferences: {},
       codingAgentDebugRetentionFiles: 2,
       hasCompletedInitialSetup: false,
-    }
-  })
+  }))
+  const [settingsReady, setSettingsReady] = useState(false)
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve())
   const isRemoteOllama = isRemoteOllamaMode(settings)
-
-  // Triggers non-blocking background model update checks on application start
-  useOllamaModelUpdates(settings.ollamaHost)
 
   // Load and synchronize settings with canonical Electron main process filesystem store
   useEffect(() => {
@@ -115,32 +103,34 @@ export const AppLayout: React.FC = () => {
     const loadMainSettings = async () => {
       try {
         if (window.electronAPI?.getAppSettings) {
-          const backendSettings = await window.electronAPI.getAppSettings()
-          if (backendSettings && isMounted) {
-            setSettings(backendSettings)
-            if (backendSettings.language && backendSettings.language !== language) {
-              setLanguage(backendSettings.language)
+          let backendSettings = await window.electronAPI.getAppSettings()
+          if (!backendSettings) {
+            const legacy = localStorage.getItem('onlyrag_app_settings')
+            if (legacy) {
+              const parsed = JSON.parse(legacy) as AppSettings
+              backendSettings = {
+                ...parsed,
+                maxToolCallSteps: typeof parsed.maxToolCallSteps === 'number' && parsed.maxToolCallSteps >= 200 ? 0 : parsed.maxToolCallSteps,
+                hasCompletedInitialSetup: parsed.hasCompletedInitialSetup || localStorage.getItem('onlyrag_initial_setup_completed') === 'true',
+                language: parsed.language || (localStorage.getItem('onlyrag_language') === 'en' ? 'en' : 'it'),
+              }
+              if (window.electronAPI.saveAppSettings && !await window.electronAPI.saveAppSettings(backendSettings)) {
+                throw new Error('Legacy settings migration failed')
+              }
             }
-            try {
-              localStorage.setItem('onlyrag_app_settings', JSON.stringify(backendSettings))
-            } catch {}
-
-            // Auto-launch initial setup wizard ONLY on the very first install/launch if never completed or dismissed
-            const alreadyCompleted =
-              localStorage.getItem('onlyrag_initial_setup_completed') === 'true' ||
-              Boolean(backendSettings.hasCompletedInitialSetup) ||
-              Boolean(backendSettings.defaultModel)
-            if (!alreadyCompleted) {
-              setIsWizardOpen(true)
-            }
-            return
           }
-        }
-        // If backend store has no settings yet, migrate existing localStorage settings to backend store
-        const saved = localStorage.getItem('onlyrag_app_settings')
-        if (saved && window.electronAPI?.saveAppSettings) {
-          const parsed = JSON.parse(saved)
-          await window.electronAPI.saveAppSettings(parsed)
+          if (isMounted) {
+            if (backendSettings) {
+              setSettings(backendSettings)
+              if (backendSettings.language && backendSettings.language !== language) setLanguage(backendSettings.language)
+            }
+            localStorage.removeItem('onlyrag_app_settings')
+            localStorage.removeItem('onlyrag_initial_setup_completed')
+            localStorage.removeItem('onlyrag_language')
+            if (!backendSettings?.hasCompletedInitialSetup && !backendSettings?.defaultModel) setIsWizardOpen(true)
+            setSettingsReady(true)
+          }
+          return
         }
       } catch (err: any) {
         logger.error('AppLayout', `Failed initializing settings from filesystem store: ${err?.message}`)
@@ -150,7 +140,18 @@ export const AppLayout: React.FC = () => {
     return () => {
       isMounted = false
     }
-  }, [language, setLanguage])
+  }, [setLanguage])
+
+  useEffect(() => {
+    if (!settingsReady || !window.electronAPI?.saveAppSettings) return
+    const timer = setTimeout(() => {
+      const snapshot = settings
+      saveChain.current = saveChain.current.then(async () => {
+        if (!await window.electronAPI!.saveAppSettings!(snapshot)) throw new Error('Settings save failed')
+      }).catch((err: unknown) => logger.error('AppLayout', `Failed saving settings: ${String(err)}`))
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [settings, settingsReady])
 
   const handleUpdateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     // Applied before setSettings: React runs state updaters during the render phase, so updating another component's state (I18nProvider) from inside one is a render-phase update and React warns about it.
@@ -158,25 +159,7 @@ export const AppLayout: React.FC = () => {
       setLanguage(newSettings.language)
     }
 
-    setSettings((prev) => {
-      const updated = { ...prev, ...newSettings }
-
-      // Prompt overrides deliberately survive a model change.
-
-      queueMicrotask(() => {
-        try {
-          localStorage.setItem('onlyrag_app_settings', JSON.stringify(updated))
-        } catch (err: any) {
-          logger.error('AppLayout', `Failed persisting app settings: ${err.message}`)
-        }
-        if (window.electronAPI?.saveAppSettings) {
-          window.electronAPI.saveAppSettings(updated).catch((err: any) => {
-            logger.error('AppLayout', `Failed saving app settings to main store: ${err?.message}`)
-          })
-        }
-      })
-      return updated
-    })
+    setSettings((prev) => ({ ...prev, ...newSettings }))
   }, [language, setLanguage])
 
   const { diagnostics, refreshDiagnostics: runDiagnosticsScan } = useDiagnostics(settings, handleUpdateSettings)
@@ -200,9 +183,6 @@ export const AppLayout: React.FC = () => {
 
   const handleCloseWizard = useCallback(() => {
     setIsWizardOpen(false)
-    try {
-      localStorage.setItem('onlyrag_initial_setup_completed', 'true')
-    } catch {}
     handleUpdateSettings({ hasCompletedInitialSetup: true })
   }, [handleUpdateSettings])
 

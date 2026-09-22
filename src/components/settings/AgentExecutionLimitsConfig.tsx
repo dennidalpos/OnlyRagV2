@@ -6,6 +6,7 @@ import { useTranslation } from '../../i18n'
 interface AgentExecutionLimitsConfigProps {
   settings: AppSettings
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void
+  isActive?: boolean
 }
 
 const QUEUE_STATUS_POLL_MS = 3000
@@ -14,12 +15,13 @@ const QUEUE_STATUS_POLL_MS = 3000
 export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProps> = ({
   settings,
   onUpdateSettings,
+  isActive = true,
 }) => {
   const { t } = useTranslation()
   const [queueStatus, setQueueStatus] = useState<TaskQueueStatus | null>(null)
 
   useEffect(() => {
-    if (!window.electronAPI?.getAgentQueueStatus) return
+    if (!isActive || !window.electronAPI?.getAgentQueueStatus) return
     let cancelled = false
 
     const poll = async () => {
@@ -33,7 +35,7 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
       cancelled = true
       clearInterval(interval)
     }
-  }, [])
+  }, [isActive])
 
   return (
     <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
@@ -79,19 +81,24 @@ export const AgentExecutionLimitsConfig: React.FC<AgentExecutionLimitsConfigProp
             min={10}
             max={200}
             step={5}
-            value={settings.maxToolCallSteps === 0 || settings.maxToolCallSteps === undefined || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200) ? 200 : settings.maxToolCallSteps}
+            disabled={settings.maxToolCallSteps === 0}
+            value={settings.maxToolCallSteps === 0 ? 25 : settings.maxToolCallSteps ?? 25}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10)
-              onUpdateSettings({ maxToolCallSteps: val >= 200 ? 0 : val })
+              onUpdateSettings({ maxToolCallSteps: val })
             }}
             className="w-32 accent-cyan-400 bg-slate-900 cursor-pointer"
             aria-label={t('settings.toolCallStepsTitle')}
           />
           <span className="text-xs font-mono font-bold text-cyan-300 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 min-w-[70px] text-center shadow-inner">
-            {settings.maxToolCallSteps === 0 || settings.maxToolCallSteps === undefined || (settings.maxToolCallSteps && settings.maxToolCallSteps >= 200)
+            {settings.maxToolCallSteps === 0
               ? t('settings.toolCallStepsUnlimited')
-              : t('settings.toolCallStepsValue', { steps: settings.maxToolCallSteps || 50 })}
+              : t('settings.toolCallStepsValue', { steps: settings.maxToolCallSteps ?? 25 })}
           </span>
+          <label className="flex items-center gap-1 text-xs text-slate-200">
+            <input type="checkbox" checked={settings.maxToolCallSteps === 0} onChange={(event) => onUpdateSettings({ maxToolCallSteps: event.target.checked ? 0 : 25 })} />
+            {t('settings.toolCallStepsUnlimited')}
+          </label>
         </div>
       </div>
     </div>

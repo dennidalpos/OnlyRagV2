@@ -5,6 +5,7 @@ import { appSettingsRepository } from '../infrastructure/filesystem/appSettingsR
 import { isLoopbackTarget } from '../domain/agent/localOnlyPolicy'
 import { estimateModelWeightGB } from '../../../shared/domain/hardware/modelWeightEstimator'
 import type { AppSettings } from '../../../shared/types'
+import { isAllowedExternalUrl } from '../../navigationPolicy'
 
 export interface DiskSpaceCheckResult {
   allowed: boolean
@@ -114,7 +115,7 @@ export class SystemAppService {
   }
 
   async openExternal(url: string): Promise<boolean> {
-    if (url && (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('mailto:'))) {
+    if (isAllowedExternalUrl(url)) {
       const settings = await this.settingsRepo.loadSettings()
       if (settings?.capabilityPolicyMode === 'offline-strict') return false
       if (settings?.capabilityPolicyMode === 'local-only' && !isLoopbackTarget(url)) return false

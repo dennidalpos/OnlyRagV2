@@ -13,7 +13,9 @@ Se fallisce il test rapido, usare il target indicato:
 npx vitest run <path>
 ```
 
-Per il Sidecar: `npm run test:sidecar`. Per tipi e confini: `npm run typecheck` e `npm run audit:cycles`.
+Per il Sidecar: `npm run test:sidecar`. Per tipi e confini: `npm run typecheck`, `npm run audit:cycles` e `npm run audit:deadcode`.
+
+L'audit dead code esclude `electron-builder`: non e importato dal codice TypeScript, ma viene eseguito con `npx --no-install` dalla pipeline PowerShell `package:win`.
 
 Per gli scenari Agent Coding attraverso il bundle Electron reale:
 

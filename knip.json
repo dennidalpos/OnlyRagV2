@@ -20,6 +20,7 @@
   ],
   "ignoreDependencies": [
     "@types/diff",
-    "@biomejs/biome"
+    "@biomejs/biome",
+    "electron-builder"
   ]
 }

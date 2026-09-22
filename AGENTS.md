@@ -12,7 +12,7 @@ Commands were verified on 2026-09-09; refreshed results are dated in the relevan
 
 | Workflow | Command | Shell / Cwd | Notes / Examples |
 | :--- | :--- | :--- | :--- |
-| **Fast Verification** | `npm run test:fast` | pwsh / root | 249 files, 1965 tests (2026-09-22) |
+| **Fast Verification** | `npm run test:fast` | pwsh / root | 251 files, 1971 tests (2026-09-22) |
 | **Electron Agent E2E** | `npm run test:e2e:electron` | pwsh / root | 8 isolated reliability scenarios (2026-09-21) |
 | **Static Quality** | `npm run quality:static` | pwsh / root | Biome lint all; format-check newly added files |
 | **Full Verification** | `powershell -ExecutionPolicy Bypass -File ./scripts/audit_codebase.ps1 -Fast` | pwsh / root | PASS 2026-09-22; fail-fast on cycles and dead code |

@@ -10,7 +10,7 @@ import { recordRecoveryFailure, recoveryStopDiagnostic, type RecoveryFailureStat
 import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver'
 import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
 import { ollamaAppService } from './ollamaAppService'
-import { countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { calculateAvailableOutputTokens, countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 
 export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
@@ -115,6 +115,13 @@ export async function collectTurnContext(ctx: TurnDispatchContext): Promise<Prep
   const selection = selectModelForTurn(ctx)
   freezeContextWindow(ctx, selection.runtimeOpts)
   const { assembled, compactionResult, turnPrompt, toolPolicy } = await assembleTurnPrompt(ctx, selection, compiledHistoryBlock)
+  selection.runtimeOpts.num_predict = calculateAvailableOutputTokens(
+    turnPrompt,
+    selection.runtimeOpts.num_ctx,
+  )
+  if (ctx.session.ollamaRuntimeProfile?.model === selection.targetModel) {
+    ctx.session.ollamaRuntimeProfile.options.num_predict = selection.runtimeOpts.num_predict
+  }
 
   if (ctx.isSessionActive() && ctx.session.targetWindow && !ctx.session.targetWindow.isDestroyed()) {
     const promptTokens = countPromptTokens(turnPrompt)

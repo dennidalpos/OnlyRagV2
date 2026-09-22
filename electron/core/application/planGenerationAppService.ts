@@ -22,6 +22,8 @@ import {
   type PlanningPhaseResponse,
 } from '../domain/agent/ollamaStructuredResponse'
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
+import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { ollamaAppService } from './ollamaAppService'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
 Use one intervention for a small fix and normally three to five for medium work; never exceed fifteen.
@@ -161,9 +163,15 @@ export class PlanGenerationAppService {
       systemRamGB: memInfo?.totalRAMGB,
       cpuCount: os.cpus()?.length,
     })
-    runtimeOpts.num_ctx = resolveModelContextLength(model, req.settings.modelContextLengths, runtimeOpts.num_ctx)
-    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx, 'plan')
-    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx, 'plan')
+    const trainedContext = await ollamaAppService.getModelContextLength(model, req.settings.ollamaHost)
+    runtimeOpts.num_ctx = resolveModelContextLength(
+      model,
+      req.settings.modelContextLengths,
+      runtimeOpts.num_ctx,
+      trainedContext,
+    )
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
 
     const discovery = collectProjectPlanningFacts(req.workspacePath, req.prompt, req.previousDecisions)
     const profile = discovery.profile
@@ -180,6 +188,10 @@ export class PlanGenerationAppService {
         interventions: previousInterventions,
       } : null,
     })
+    runtimeOpts.num_predict = calculateAvailableOutputTokens(
+      `${PLAN_SYSTEM_PROMPT}\n${userContent}`,
+      runtimeOpts.num_ctx,
+    )
 
     let structuredPlan: PlanningPhaseResponse | null = null
     let generationError: string | undefined
@@ -190,6 +202,7 @@ export class PlanGenerationAppService {
         systemPrompt: PLAN_SYSTEM_PROMPT,
         userContent,
         format: toOllamaJsonSchema(planningPhaseResponseSchema),
+        think: false,
         host: req.settings.ollamaHost,
         keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,

@@ -36,7 +36,7 @@ export function recordRecoveryFailure(
 
 export function recoveryStopDiagnostic(category: RecoveryCategory, state: RecoveryFailureState): string {
   const reason = state.equivalentFailures >= MAX_FAILURES_PER_RECOVERY_CATEGORY
-    ? 'the same failure recurred after its corrective attempt'
+    ? 'the same failure recurred after one retry'
     : 'the category recovery budget was exhausted'
   return `${category} recovery stopped after ${state.totalFailures}/${MAX_FAILURES_PER_RECOVERY_CATEGORY} failures: ${reason}. Last signature: ${state.signature}`
 }

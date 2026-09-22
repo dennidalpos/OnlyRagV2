@@ -5,12 +5,17 @@ import path from 'node:path'
 import { planGenerationAppService } from './planGenerationAppService'
 import { ollamaAppService } from './ollamaAppService'
 import { isFalsifiableMilestone } from '../../../shared/domain/agent/planFalsifiabilityNormalizer'
-import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import type { AgentPlan, AppSettings } from '../../../shared/types'
 import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 import * as planCompilation from '../../../shared/domain/agent/planCompilation'
+import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 
-vi.mock('./ollamaAppService', () => ({ ollamaAppService: { generateStructured: vi.fn() } }))
+vi.mock('./ollamaAppService', () => ({
+  ollamaAppService: {
+    generateStructured: vi.fn(),
+    getModelContextLength: vi.fn().mockResolvedValue(undefined),
+  },
+}))
 
 const settings = {
   defaultModel: 'llama3.2',
@@ -84,9 +89,11 @@ describe('PlanGenerationAppService', () => {
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
     expect(request.model).toBe('qwen2.5-coder:7b')
     expect(request.keepAlive).toBe('30m')
-    expect(request.options?.num_predict).toBe(
-      HardwareProfileResolver.deriveNumPredict(request.options?.num_ctx || 0, 'plan')
-    )
+    expect(request.options?.num_predict).toBe(calculateAvailableOutputTokens(
+      `${request.systemPrompt}\n${request.userContent}`,
+      request.options?.num_ctx || 0,
+    ))
+    expect(request.think).toBe(false)
     expect(JSON.parse(request.userContent).request).toBe('Add login')
     expect(request.format).toEqual(expect.objectContaining({ type: 'object' }))
   })
@@ -103,6 +110,25 @@ describe('PlanGenerationAppService', () => {
 
     expect(result.milestones.map((item) => item.id)).toEqual(['m-1', 'm-2'])
     expect(result.decisions[0].id).toBe('a-1')
+  })
+
+  it('clamps the saved setup window to the model trained context', async () => {
+    vi.mocked(ollamaAppService.getModelContextLength).mockResolvedValueOnce(4096)
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+      intervention('m-1', 'Create endpoint'),
+    ]))
+
+    await planGenerationAppService.generatePlanText({
+      prompt: 'Add endpoint',
+      settings: { ...settings, modelContextLengths: { 'qwen2.5-coder:7b': 32768 } },
+    })
+
+    const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
+    expect(request.options?.num_ctx).toBe(4096)
+    expect(request.options?.num_predict).toBe(calculateAvailableOutputTokens(
+      `${request.systemPrompt}\n${request.userContent}`,
+      4096,
+    ))
   })
 
   it('drops invented prior-work references from a fresh plan', async () => {

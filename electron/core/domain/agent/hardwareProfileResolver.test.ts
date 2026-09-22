@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { HardwareProfileResolver, AGENT_STOP_SEQUENCES } from './hardwareProfileResolver'
 
 describe('HardwareProfileResolver Domain Unit Tests', () => {
-  it('uses separate output caps for interview, plan and edit generations', () => {
-    expect(HardwareProfileResolver.deriveNumPredict(16384, 'interview')).toBe(768)
-    expect(HardwareProfileResolver.deriveNumPredict(16384, 'plan')).toBe(2048)
-    expect(HardwareProfileResolver.deriveNumPredict(16384, 'edit')).toBe(4096)
+  it('scales the generation reserve with the effective context window without phase caps', () => {
+    expect(HardwareProfileResolver.deriveNumPredict(4096)).toBe(1433)
+    expect(HardwareProfileResolver.deriveNumPredict(8192)).toBe(2867)
+    expect(HardwareProfileResolver.deriveNumPredict(16384)).toBe(5734)
+    expect(HardwareProfileResolver.deriveNumPredict(32768)).toBe(11468)
   })
 
   it('should resolve Low profile with 4096 context and thread throttling', () => {

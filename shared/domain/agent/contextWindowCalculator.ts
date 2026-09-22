@@ -6,6 +6,8 @@ const STANDARD_CONTEXT_BUCKETS = [2048, 4096, 8192, 16384, 32768, 65536]
 const COMPLETION_HEADROOM_TOKENS = 2048
 const MIN_CONTEXT_TOKENS = 2048
 const DEFAULT_MAX_CONTEXT_TOKENS = 32768
+const MIN_CONTEXT_SAFETY_TOKENS = 256
+const CONTEXT_SAFETY_RATIO = 0.02
 
 /**
  * Counts actual BPE tokens using gpt-tokenizer (o200k_base), falling back to character approximation.
@@ -20,6 +22,20 @@ export function countPromptTokens(prompt: string | number): number {
   } catch {
     return Math.ceil(prompt.length / 3.8)
   }
+}
+
+/** Maximum generation budget that still keeps the composed prompt inside the selected window. */
+export function calculateAvailableOutputTokens(
+  prompt: string,
+  contextWindowTokens: number,
+  safetyTokens?: number,
+): number {
+  const window = Math.max(1, Math.floor(contextWindowTokens))
+  const safety = safetyTokens ?? Math.max(
+    MIN_CONTEXT_SAFETY_TOKENS,
+    Math.ceil(window * CONTEXT_SAFETY_RATIO),
+  )
+  return Math.max(1, window - countPromptTokens(prompt) - safety)
 }
 
 export function calculateDynamicContextWindow(

@@ -4,6 +4,7 @@ import { AgentCapabilityProfile, AppSettings, DiagnosticsData } from '../../type
 import {
   analyzeHardwareAndRecommend,
   buildModelFitLookup,
+  extractHardwareFacts,
   HardwareRecommendations,
   isOllamaModelInstalled,
 } from '../../services/hardwareRecommendationEngine'
@@ -26,6 +27,8 @@ import {
   buildHardwareWizardModelSuite,
 } from '../../../shared/domain/hardware/hardwareModelCatalog'
 import { resolveAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
+import { resolveMaxContextTokens } from '../../../shared/domain/hardware/hardwareProfileTiers'
+import { buildSetupModelContextPreferences } from '../../../shared/domain/settings/setupModelContextPreferences'
 import { isRemoteOllamaMode } from '../../services/ollamaConnectionMode'
 
 interface HardwareSetupWizardModalProps {
@@ -55,6 +58,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
   const recommendations: HardwareRecommendations = analyzeHardwareAndRecommend(
     diagnostics,
   )
+  const hardwareContext = resolveMaxContextTokens('Auto', extractHardwareFacts(diagnostics))
   const getModelFit = buildModelFitLookup(diagnostics)
 
   const downloadedModels = diagnostics?.ollama.models ?? []
@@ -145,6 +149,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       legalModel: selectedLegal || settings.legalModel,
       visionModel: selectedVision || settings.visionModel,
       embeddingModel: selectedEmbedding || settings.embeddingModel,
+      modelContextLengths: buildSetupModelContextPreferences(
+        [selectedCoding, selectedChat, selectedTranslation, selectedMedical, selectedLegal, selectedVision],
+        settings.modelContextLengths,
+        hardwareContext,
+      ),
       ocrEngine,
       enableSoundEffects,
       ...capabilityProfile,
@@ -163,6 +172,7 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
     ocrEngine,
     enableSoundEffects,
     capabilityProfile,
+    hardwareContext,
     settings,
     onClose,
   ])
@@ -396,6 +406,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       translationModel: recommendedSuite.translation,
       visionModel: recommendedSuite.vision,
       embeddingModel: recommendedSuite.embedding,
+      modelContextLengths: buildSetupModelContextPreferences(
+        [recommendedSuite.coding, recommendedSuite.chat, recommendedSuite.translation, recommendedSuite.vision],
+        settings.modelContextLengths,
+        hardwareContext,
+      ),
       ocrEngine: 'native_cuda',
       enableSoundEffects,
       ...capabilityProfile,
@@ -414,6 +429,11 @@ export const HardwareSetupWizardModal: React.FC<HardwareSetupWizardModalProps> =
       legalModel: selectedLegal,
       visionModel: selectedVision,
       embeddingModel: selectedEmbedding,
+      modelContextLengths: buildSetupModelContextPreferences(
+        [selectedCoding, selectedChat, selectedTranslation, selectedMedical, selectedLegal, selectedVision],
+        settings.modelContextLengths,
+        hardwareContext,
+      ),
       ocrEngine,
       enableSoundEffects,
       ...capabilityProfile,

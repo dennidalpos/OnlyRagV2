@@ -78,6 +78,10 @@ export class OllamaAppService {
     return ollamaHttpClient.getModelMetrics(host)
   }
 
+  getModelContextLength(model: string, host?: string): Promise<number | undefined> {
+    return ollamaHttpClient.getModelContextLength(model, host)
+  }
+
   /** Checks for model updates against official registry using SHA256 manifest digests. */
   checkModelUpdates(host?: string): Promise<Record<string, ModelUpdateCheckResult>> {
     return ollamaModelUpdateAppService.checkModelUpdates(host)

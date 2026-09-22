@@ -5,6 +5,7 @@ import {
   type RecoveryFailureState,
 } from '../domain/agent/recoveryBudget'
 import { ollamaAppService } from './ollamaAppService'
+import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 
 export type StructuredContentValidation<T> =
   | { status: 'valid'; data: T }
@@ -33,6 +34,19 @@ function correctionPayload(userContent: string, previousResponse: string, valida
   })
 }
 
+function maximumStructuredOutput(request: OllamaStructuredRequest): number | undefined {
+  const numCtx = request.options?.num_ctx
+  if (!numCtx) return undefined
+  return calculateAvailableOutputTokens(`${request.systemPrompt}\n${request.userContent}`, numCtx)
+}
+
+function withMaximumStructuredOutput(request: OllamaStructuredRequest): OllamaStructuredRequest {
+  const numPredict = maximumStructuredOutput(request)
+  return numPredict === undefined
+    ? request
+    : { ...request, options: { ...request.options, num_predict: numPredict } }
+}
+
 /** Shares one two-call ceiling across transport and schema recovery. */
 export async function generateStructuredWithRecovery<T>(
   request: OllamaStructuredRequest,
@@ -48,6 +62,35 @@ export async function generateStructuredWithRecovery<T>(
       response = await ollamaAppService.generateStructured(currentRequest)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
+      const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
+      transportFailure = decision.state
+      if (attempt === 2 || decision.action === 'stop') {
+        const diagnostic = decision.action === 'stop'
+          ? recoveryStopDiagnostic('transport', decision.state)
+          : 'Structured generation call budget exhausted after 2/2 calls.'
+        return { status: 'error', error: `${diagnostic} Last error: ${message}`, attempts: attempt }
+      }
+      continue
+    }
+    if (response.status === 'incomplete') {
+      const message = response.error || `Ollama structured response ${response.status}`
+      const maximumOutput = maximumStructuredOutput(currentRequest)
+      const currentOutput = currentRequest.options?.num_predict || 0
+      const stoppedForLength = response.doneReason === 'length' || /incomplete \(length/i.test(message)
+      if (stoppedForLength) {
+        if (attempt < 2 && maximumOutput !== undefined && maximumOutput > currentOutput) {
+          currentRequest = {
+            ...currentRequest,
+            options: { ...currentRequest.options, num_predict: maximumOutput },
+          }
+          continue
+        }
+        return {
+          status: 'error',
+          error: `Structured response exhausted the configured context window after ${attempt}/2 call(s); no larger output budget is available. Last error: ${message}`,
+          attempts: attempt,
+        }
+      }
       const decision = recordRecoveryFailure(transportFailure, normalizedSignature('transport', message))
       transportFailure = decision.state
       if (attempt === 2 || decision.action === 'stop') {
@@ -82,10 +125,10 @@ export async function generateStructuredWithRecovery<T>(
         : 'Structured generation call budget exhausted after 2/2 calls.'
       return { status: 'error', error: `${diagnostic} Last error: ${validated.error}`, attempts: attempt }
     }
-    currentRequest = {
+    currentRequest = withMaximumStructuredOutput({
       ...request,
       userContent: correctionPayload(request.userContent, response.content, validated.error),
-    }
+    })
   }
 
   return { status: 'error', error: 'Structured generation recovery ended without a result.', attempts: 2 }

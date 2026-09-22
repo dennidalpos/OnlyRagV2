@@ -169,15 +169,29 @@ describe('OllamaHttpClient — structured chat responses', () => {
     systemPrompt: 'Return the requested shape.',
     userContent: '{"request":"inspect"}',
     format: { type: 'object', properties: { result: { type: 'string' } } },
+    think: false,
     options: { num_ctx: 4096, temperature: 0, num_predict: 128 },
   })
 
   it('sends separate system and user messages with format and bounded options', async () => {
-    responseBody = { done: true, done_reason: 'stop', message: { content: '{"result":"ok"}' } }
+    responseBody = {
+      done: true,
+      done_reason: 'stop',
+      prompt_eval_count: 42,
+      eval_count: 18,
+      message: { content: '{"result":"ok"}', thinking: 'hidden reasoning' },
+    }
 
     const result = await client.generateStructured(request())
 
-    expect(result).toEqual({ status: 'complete', content: '{"result":"ok"}', doneReason: 'stop' })
+    expect(result).toEqual({
+      status: 'complete',
+      content: '{"result":"ok"}',
+      doneReason: 'stop',
+      promptEvalCount: 42,
+      evalCount: 18,
+      thinkingChars: 16,
+    })
     expect(capturedRequest).toMatchObject({
       model: 'qwen2.5-coder:1.5b',
       stream: false,
@@ -186,6 +200,7 @@ describe('OllamaHttpClient — structured chat responses', () => {
         { role: 'user', content: '{"request":"inspect"}' },
       ],
       format: { type: 'object' },
+      think: false,
       options: { num_ctx: 4096, temperature: 0, num_predict: 128 },
     })
     expect(capturedRequest.tools).toBeUndefined()

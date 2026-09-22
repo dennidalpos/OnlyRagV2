@@ -5,9 +5,13 @@ import path from 'node:path'
 import { AgentInterviewAppService } from './agentInterviewAppService'
 import { ollamaAppService } from './ollamaAppService'
 import type { AppSettings } from '../../../shared/types'
+import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 
 vi.mock('./ollamaAppService', () => ({
-  ollamaAppService: { generateStructured: vi.fn() },
+  ollamaAppService: {
+    generateStructured: vi.fn(),
+    getModelContextLength: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 
 describe('AgentInterviewAppService', () => {
@@ -116,7 +120,14 @@ describe('AgentInterviewAppService', () => {
     )
 
     const request = vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0]
-    expect(request.options).toEqual(expect.objectContaining({ num_ctx: 8192, num_predict: 768 }))
+    expect(request.options).toEqual(expect.objectContaining({
+      num_ctx: 8192,
+      num_predict: calculateAvailableOutputTokens(
+        `${request.systemPrompt}\n${request.userContent}`,
+        8192,
+      ),
+    }))
+    expect(request.think).toBe(false)
     expect(request.keepAlive).toBe('30m')
     expect(request.systemPrompt).not.toContain('Crea una funzione somma')
     expect(JSON.parse(request.userContent)).toMatchObject({

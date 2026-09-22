@@ -23,6 +23,8 @@ import {
 } from '../domain/agent/ollamaStructuredResponse'
 import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projectPlanningFacts'
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
+import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { ollamaAppService } from './ollamaAppService'
 
 export type { InterviewAnalysisResult, UserInterviewAnswer } from '../../../shared/types'
 
@@ -66,18 +68,30 @@ export class AgentInterviewAppService {
       systemRamGB: memInfo?.totalRAMGB,
       cpuCount: os.cpus()?.length,
     })
-    runtimeOpts.num_ctx = resolveModelContextLength(modelToUse, settings.modelContextLengths, runtimeOpts.num_ctx)
-    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx, 'interview')
-    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx, 'interview')
+    const trainedContext = await ollamaAppService.getModelContextLength(modelToUse, settings.ollamaHost)
+    runtimeOpts.num_ctx = resolveModelContextLength(
+      modelToUse,
+      settings.modelContextLengths,
+      runtimeOpts.num_ctx,
+      trainedContext,
+    )
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
 
     try {
       const { facts } = collectProjectPlanningFacts(workspacePath, prompt, previousDecisions)
+      const userContent = JSON.stringify({ request: prompt, projectFacts: facts })
+      runtimeOpts.num_predict = calculateAvailableOutputTokens(
+        `${INTERVIEW_SYSTEM_PROMPT}\n${userContent}`,
+        runtimeOpts.num_ctx,
+      )
       const response = await generateStructuredWithRecovery({
         operationId,
         model: modelToUse,
         systemPrompt: INTERVIEW_SYSTEM_PROMPT,
-        userContent: JSON.stringify({ request: prompt, projectFacts: facts }),
+        userContent,
         format: toOllamaJsonSchema(interviewPhaseResponseSchema),
+        think: false,
         host: settings.ollamaHost,
         keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,

@@ -29,15 +29,7 @@ export interface HardwareEnvironment {
   cpuCount?: number
 }
 
-export type GenerationPhase = 'interview' | 'plan' | 'edit'
-
 export const CODING_MODEL_KEEP_ALIVE = '30m'
-
-const OUTPUT_CAP_BY_PHASE: Record<GenerationPhase, number> = {
-  interview: 768,
-  plan: 2048,
-  edit: 4096,
-}
 
 export class HardwareProfileResolver {
 
@@ -46,16 +38,13 @@ export class HardwareProfileResolver {
   /** Chars per BPE token for this prompt mix (English directives + markdown + code). */
   private static readonly CHARS_PER_TOKEN = 3.6
 
-  static deriveNumPredict(numCtx: number, phase: GenerationPhase = 'edit'): number {
-    return Math.min(
-      OUTPUT_CAP_BY_PHASE[phase],
-      Math.floor(numCtx * HardwareProfileResolver.GENERATION_RESERVE_RATIO)
-    )
+  static deriveNumPredict(numCtx: number): number {
+    return Math.max(1, Math.floor(numCtx * HardwareProfileResolver.GENERATION_RESERVE_RATIO))
   }
 
   /** The prompt-assembly char budget that actually fits `numCtx` once the generation reserve is held back. */
-  static deriveMaxContextChars(numCtx: number, phase: GenerationPhase = 'edit'): number {
-    const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx, phase)
+  static deriveMaxContextChars(numCtx: number): number {
+    const promptTokens = numCtx - HardwareProfileResolver.deriveNumPredict(numCtx)
     return Math.floor(promptTokens * HardwareProfileResolver.CHARS_PER_TOKEN)
   }
   /** Resolves optimal Ollama runtime options from user settings and hardware diagnostics. */

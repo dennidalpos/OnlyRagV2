@@ -341,8 +341,8 @@ export function freezeContextWindow(
     ctx.sessionNumCtxBox.value = runtimeOpts.num_ctx
   } else {
     runtimeOpts.num_ctx = ctx.sessionNumCtxBox.value
-    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx, 'edit')
-    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx, 'edit')
+    runtimeOpts.num_predict = HardwareProfileResolver.deriveNumPredict(runtimeOpts.num_ctx)
+    runtimeOpts.maxContextChars = HardwareProfileResolver.deriveMaxContextChars(runtimeOpts.num_ctx)
   }
 }
 

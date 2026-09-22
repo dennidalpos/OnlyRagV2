@@ -16,6 +16,8 @@ export interface OllamaStructuredRequest {
   format: Record<string, unknown>
   host?: string
   keepAlive?: string
+  /** Structured JSON does not benefit from hidden reasoning consuming its output budget. */
+  think?: boolean
   options?: {
     num_ctx?: number
     temperature?: number
@@ -27,8 +29,8 @@ export interface OllamaStructuredRequest {
 }
 
 export type OllamaStructuredResponse =
-  | { status: 'complete'; content: string; doneReason?: string }
-  | { status: 'incomplete'; content: string; error: string }
+  | { status: 'complete'; content: string; doneReason?: string; promptEvalCount?: number; evalCount?: number; thinkingChars?: number }
+  | { status: 'incomplete'; content: string; error: string; doneReason?: string; promptEvalCount?: number; evalCount?: number; thinkingChars?: number }
   | { status: 'transport_error'; content: string; error: string }
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
@@ -218,7 +220,7 @@ export class OllamaHttpClient {
     return map
   }
 
-  private getModelContextLength(modelName: string, customHost?: string): Promise<number | undefined> {
+  getModelContextLength(modelName: string, customHost?: string): Promise<number | undefined> {
     const urlOpts = this.resolveUrl('/api/show', customHost)
     const postData = JSON.stringify({ model: modelName })
     return new Promise((resolve) => {
@@ -732,6 +734,7 @@ export class OllamaHttpClient {
       ],
       format: request.format,
       stream: false,
+      ...(request.think !== undefined ? { think: request.think } : {}),
       keep_alive: request.keepAlive || '30m',
       options: {
         num_ctx: request.options?.num_ctx || 16384,
@@ -778,11 +781,27 @@ export class OllamaHttpClient {
           try {
             const parsed = JSON.parse(raw)
             const content = typeof parsed?.message?.content === 'string' ? parsed.message.content : ''
+            const telemetry = {
+              ...(typeof parsed?.done_reason === 'string' ? { doneReason: parsed.done_reason } : {}),
+              ...(typeof parsed?.prompt_eval_count === 'number' ? { promptEvalCount: parsed.prompt_eval_count } : {}),
+              ...(typeof parsed?.eval_count === 'number' ? { evalCount: parsed.eval_count } : {}),
+              ...(typeof parsed?.message?.thinking === 'string' ? { thinkingChars: parsed.message.thinking.length } : {}),
+            }
             if (parsed?.done !== true || parsed?.done_reason === 'length') {
-              finish({ status: 'incomplete', content, error: `Ollama response incomplete${parsed?.done_reason ? ` (${parsed.done_reason})` : ''}` })
+              const metrics = [
+                telemetry.promptEvalCount !== undefined ? `prompt_tokens=${telemetry.promptEvalCount}` : '',
+                telemetry.evalCount !== undefined ? `output_tokens=${telemetry.evalCount}` : '',
+                telemetry.thinkingChars !== undefined ? `thinking_chars=${telemetry.thinkingChars}` : '',
+              ].filter(Boolean).join(', ')
+              finish({
+                status: 'incomplete',
+                content,
+                error: `Ollama response incomplete${telemetry.doneReason ? ` (${telemetry.doneReason}${metrics ? `; ${metrics}` : ''})` : ''}`,
+                ...telemetry,
+              })
               return
             }
-            finish({ status: 'complete', content, doneReason: parsed.done_reason })
+            finish({ status: 'complete', content, ...telemetry })
           } catch (err: any) {
             finish({ status: 'transport_error', content: '', error: `Invalid Ollama response: ${err.message}` })
           }

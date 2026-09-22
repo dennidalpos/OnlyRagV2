@@ -339,7 +339,7 @@ ${CodingAgentLogger.payloadSummary('Tool Parameters', JSON.stringify(parameters)
     if (tool === 'unparsed_tool' || tool === 'no_tool_detected' || result.includes('[TOOL PARSER REJECTION DIAGNOSTIC]')) {
       this.metricsFor(sessionId).recordInvalidTool()
     }
-    const succeeded = !/\[TERMINAL AUTO-HEALING DIAGNOSTICS LOG\]|Security Violation|\[POLICY BLOCK\]|^Error:/i.test(result || '')
+    const succeeded = !/\[TERMINAL AUTO-HEALING DIAGNOSTICS LOG\]|Security Violation|\[POLICY BLOCK\]|\[(?:TURN TOOL POLICY|FSM PERMISSION|FILE VERSION RECOVERY) DENIED\]|^Error:/i.test(result || '')
     this.metricsFor(sessionId).recordToolResult(succeeded, result, tool)
     const content = this.includesPayload(sessionId) ? `Session ID: ${sessionId} | Step: ${step} | Tool: ${tool} | IsTerminal: ${Boolean(isTerminal)}
 Execution Result:
@@ -349,7 +349,7 @@ ${result}
 ${terminalDetail ? `\nTerminal Raw Output:\n\`\`\`\n${terminalDetail}\n\`\`\`` : ''}` : `Session ID: ${sessionId} | Step: ${step} | Tool: ${tool} | IsTerminal: ${Boolean(isTerminal)}
 Succeeded: ${succeeded}
 ${CodingAgentLogger.payloadSummary('Tool Result', `${result}${terminalDetail || ''}`)}`
-    this.writeEntry(`[STEP ${step} - TOOL RESULT COMPLETED] ${tool}`, content)
+    this.writeEntry(`[STEP ${step} - TOOL RESULT ${succeeded ? 'COMPLETED' : 'FAILED'}] ${tool}`, content)
   }
 
   /** Records one milestone changing status, with what caused it. */

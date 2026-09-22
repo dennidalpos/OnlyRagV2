@@ -8,6 +8,9 @@ import { createAgentRunIdentity } from '../../../shared/domain/agent/agentRunIde
 import { matchesAgentRunIdentity } from '../../../shared/domain/agent/agentRunIdentity'
 import type { AgentRunIdentity } from '../../../shared/types'
 import { DisposableAgentWorkspace } from '../infrastructure/filesystem/disposableAgentWorkspace'
+import { standaloneScratchWorkspace } from '../infrastructure/filesystem/standaloneScratchWorkspace'
+import fs from 'node:fs'
+import path from 'node:path'
 
 export interface QueuedAgentTask {
   id: string
@@ -23,6 +26,8 @@ const AGENT_TASK_CONCURRENCY = 1
 export class TaskQueueAppService {
   private queue = new TaskQueueDomain<QueuedAgentTask>(AGENT_TASK_CONCURRENCY)
   private pQueue = new PQueue({ concurrency: AGENT_TASK_CONCURRENCY })
+
+  constructor(private readonly resolveStandaloneWorkspacePath: () => string = () => standaloneScratchWorkspace.getPath()) {}
 
   public getMaxConcurrency(): number {
     return this.queue.getMaxConcurrency()
@@ -46,14 +51,41 @@ export class TaskQueueAppService {
       return { success: false, summary: 'Agent run identity mismatch', error: 'conversationId does not match sessionId' }
     }
 
+    let boundWorkspacePath: string
+    try {
+      if (payload.isStandaloneMode) {
+        boundWorkspacePath = path.resolve(this.resolveStandaloneWorkspacePath())
+      } else {
+        const requestedWorkspace = payload.workspacePath?.trim()
+        if (!requestedWorkspace) {
+          return {
+            success: false,
+            summary: 'Project workspace is required',
+            error: 'Select a project workspace or enable standalone mode before starting the agent.',
+          }
+        }
+        boundWorkspacePath = path.resolve(requestedWorkspace)
+      }
+      if (!fs.existsSync(boundWorkspacePath) || !fs.statSync(boundWorkspacePath).isDirectory()) {
+        return {
+          success: false,
+          summary: 'Agent workspace is unavailable',
+          error: `Workspace directory does not exist: ${boundWorkspacePath}`,
+        }
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { success: false, summary: 'Agent workspace is unavailable', error: message }
+    }
+
     const conversationId = payload.identity?.conversationId || payload.sessionId || `conversation-${Date.now()}`
     const identity = createAgentRunIdentity({
       ...payload.identity,
       conversationId,
-      workspacePath: payload.workspacePath,
+      workspacePath: boundWorkspacePath,
     })
     const taskId = identity.runId
-    const taskPayload: AgentTaskPayload = { ...payload, sessionId: conversationId, identity }
+    const taskPayload: AgentTaskPayload = { ...payload, workspacePath: boundWorkspacePath, sessionId: conversationId, identity }
 
     if (this.queue.findTask(taskId)) {
       return { success: false, summary: 'Agent run already exists', error: `Duplicate runId: ${taskId}` }

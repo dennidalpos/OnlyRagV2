@@ -18,6 +18,7 @@ import type { DisposableAgentWorkspace } from '../infrastructure/filesystem/disp
 import { evaluateAgentCodingPreflight } from './agentCodingPreflight'
 import { workspaceAppService } from './workspaceAppService'
 import { ollamaAppService } from './ollamaAppService'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
 
 export type { AgentSession }
 
@@ -452,6 +453,9 @@ export async function runAgentOrchestratorLoop(
       isIsolatedWorkspace: Boolean(workspaceTransaction),
     })
     if (gateResult.outcome === 'denied') {
+      if (settings.enableCodingAgentDebugLog && gateResult.feedback) {
+        codingAgentLogger.logToolResult(sessionId, stepCountBox.value, parsedTool.tool, gateResult.feedback)
+      }
       setExecutionPhase('collect_context')
       continue
     }

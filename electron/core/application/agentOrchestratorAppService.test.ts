@@ -352,6 +352,37 @@ describe('AgentOrchestratorAppService Resilience & Loop Integration Tests', () =
     expect(fs.existsSync(path.join(tempDir, 'index.ts'))).toBe(true)
   })
 
+  it('routes a colloquial Italian build request to Guided write approval on the first turn', async () => {
+    const writeFileJson = '```json\n{\n  "tool": "write_file",\n  "parameters": { "filePath": "index.html", "content": "<main>Gatto</main>" }\n}\n```'
+    const finishJson = '```json\n{\n  "tool": "finish",\n  "parameters": { "summary": "Sito creato." }\n}\n```'
+    vi.mocked(AgentStreamTransport.streamCompletion).mockResolvedValueOnce(writeFileJson).mockResolvedValueOnce(finishJson)
+
+    const mockWin = createMockWindow()
+    const sessionId = 'italian-colloquial-guided-approval'
+    const resultPromise = runAgentOrchestratorLoop(
+      {
+        sessionId,
+        userTask: "Fammi un sito con un'immagine di un gatto che corre",
+        agentMode: 'guided',
+        workspacePath: tempDir,
+      },
+      mockWin.window,
+    )
+
+    await vi.waitFor(() => {
+      expect(mockWin.send).toHaveBeenCalledWith('agent:approval-request', expect.objectContaining({ sessionId, type: 'write_file' }))
+    })
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(AgentStreamTransport.streamCompletion).mock.calls[0][0].toolCatalog?.map((entry) => entry.function.name)).toContain('write_file')
+
+    expect(respondToApproval(sessionId, true)).toBe(true)
+    const result = await resultPromise
+
+    expect(AgentStreamTransport.streamCompletion).toHaveBeenCalledTimes(2)
+    expect(result.summary).toContain('Sito creato.')
+    expect(fs.readFileSync(path.join(tempDir, 'index.html'), 'utf-8')).toBe('<main>Gatto</main>')
+  })
+
   it('should apply only the approved hunks when the user partially approves a write_file proposal', async () => {
     const filePath = path.join(tempDir, 'partial.ts')
     fs.writeFileSync(filePath, 'line1\nline2\nline3\nline4\nline5', 'utf-8')

@@ -53,6 +53,29 @@ describe('DisposableAgentWorkspace', () => {
     expect(fs.existsSync(path.join(source, 'new.txt'))).toBe(false)
   })
 
+  it('excludes runtime metadata from publication previews and results', () => {
+    const source = workspace()
+    fs.writeFileSync(path.join(source, 'app.ts'), 'export const value = 1\n')
+
+    const transaction = DisposableAgentWorkspace.create(source, 'runtime-metadata')
+    try {
+      const runtimeStateDir = path.join(transaction.workspacePath, '.onlyrag', 'sessions')
+      fs.mkdirSync(runtimeStateDir, { recursive: true })
+      fs.writeFileSync(path.join(runtimeStateDir, 'state.json'), '{}')
+
+      expect(transaction.preview()).toEqual({
+        changedPaths: [],
+        createdCount: 0,
+        deletedCount: 0,
+        modifiedCount: 0,
+      })
+      expect(transaction.publish()).toEqual({ success: true, changedPaths: [] })
+      expect(fs.existsSync(path.join(source, '.onlyrag'))).toBe(false)
+    } finally {
+      transaction.dispose()
+    }
+  })
+
   it('uses a disposable worktree without changing a dirty Git source workspace', () => {
     const source = workspace()
     execFileSync('git', ['init'], { cwd: source })

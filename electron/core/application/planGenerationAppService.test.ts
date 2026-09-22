@@ -7,6 +7,8 @@ import { ollamaAppService } from './ollamaAppService'
 import { isFalsifiableMilestone } from '../../../shared/domain/agent/planFalsifiabilityNormalizer'
 import { HardwareProfileResolver } from '../domain/agent/hardwareProfileResolver'
 import type { AgentPlan, AppSettings } from '../../../shared/types'
+import { codingAgentLogger } from '../infrastructure/logging/codingAgentLogger'
+import * as planCompilation from '../../../shared/domain/agent/planCompilation'
 
 vi.mock('./ollamaAppService', () => ({ ollamaAppService: { generateStructured: vi.fn() } }))
 
@@ -171,6 +173,56 @@ describe('PlanGenerationAppService', () => {
       { id: 'm-1', objective: 'Build passes', filePaths: [], acceptanceCriteria: ['Build exits 0'], verificationCommand: 'npm run invented' },
     ]))
     expect((await planGenerationAppService.generatePlanText({ prompt: 'Task', settings })).error).toContain('unavailable verification command')
+  })
+
+  it('audits failed and zero-milestone plan generation as failed sessions', async () => {
+    const logSessionStart = vi.spyOn(codingAgentLogger, 'logSessionStart').mockImplementation(() => {})
+    const logPlanGeneration = vi.spyOn(codingAgentLogger, 'logPlanGeneration').mockImplementation(() => {})
+    const logSessionEnd = vi.spyOn(codingAgentLogger, 'logSessionEnd').mockImplementation(() => {})
+    const debugSettings = { ...settings, enableCodingAgentDebugLog: true }
+
+    try {
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue({
+        status: 'transport_error', content: '', error: 'connection refused',
+      })
+      await planGenerationAppService.generatePlanText({
+        operationId: 'plan-audit-failure',
+        prompt: 'Task',
+        settings: debugSettings,
+      })
+      expect(logSessionEnd).toHaveBeenCalledWith(
+        'plan-audit-failure',
+        0,
+        false,
+        expect.stringContaining('connection refused'),
+      )
+
+      vi.mocked(ollamaAppService.generateStructured).mockResolvedValue(complete([
+        intervention('m-1', 'Create the requested behavior'),
+      ]))
+      const compilePlanMilestones = vi.spyOn(planCompilation, 'compilePlanMilestones').mockReturnValueOnce([])
+      const zeroMilestoneResult = await planGenerationAppService.generatePlanText({
+        operationId: 'plan-audit-empty',
+        prompt: 'Task',
+        settings: debugSettings,
+      })
+      compilePlanMilestones.mockRestore()
+
+      expect(zeroMilestoneResult).toMatchObject({
+        status: 'error',
+        error: 'Plan response contained no executable interventions',
+      })
+      expect(logSessionEnd).toHaveBeenCalledWith(
+        'plan-audit-empty',
+        0,
+        false,
+        expect.stringContaining('no executable interventions'),
+      )
+    } finally {
+      logSessionStart.mockRestore()
+      logPlanGeneration.mockRestore()
+      logSessionEnd.mockRestore()
+    }
   })
 
   it('drops unavailable verification commands from file-backed interventions', async () => {

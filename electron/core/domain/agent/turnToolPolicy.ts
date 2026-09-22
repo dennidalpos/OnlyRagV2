@@ -55,7 +55,9 @@ function editToolFor(state: EditTargetState): SupportedToolName | null {
 }
 
 function requestsFileMutation(task: string): boolean {
-  return /\b(create|add|update|change|edit|fix|refactor|implement|crea|aggiungi|aggiorna|modifica|cambia|correggi|rifattorizza|implementa)\b/i.test(task)
+  const directMutation = /\b(create|add|update|change|edit|fix|refactor|implement|crea|aggiungi|aggiorna|modifica|cambia|correggi|rifattorizza|implementa|costruisci|sviluppa|realizza|prepara|genera)\b/i
+  const italianColloquialBuild = /\b(fammi|fai)\b(?!\s+(vedere|capire|spiegare|analizzare|controllare|ispezionare)\b)(?:\s+\S+){0,4}\s+\b(sito|pagina|app|applicazione|progetto|componente|file|codice|interfaccia|dashboard|gioco|script)\b/i
+  return directMutation.test(task) || italianColloquialBuild.test(task)
 }
 
 /** Selects the smallest useful tool surface for one model proposal. */

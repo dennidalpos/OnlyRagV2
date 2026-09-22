@@ -45,6 +45,22 @@ describe('CodingAgentLogger Unit Tests', () => {
     expect(content).toContain('Successfully wrote file src/Counter.tsx')
   })
 
+  it('records turn-policy denials as failed tool results', () => {
+    loggerInstance.logToolCall('policy-session', 1, 'write_file', { filePath: 'src/App.tsx' })
+    loggerInstance.logToolResult(
+      'policy-session',
+      1,
+      'write_file',
+      '[TURN TOOL POLICY DENIED] Tool "write_file" is not available for this phase.',
+    )
+    loggerInstance.logSessionEnd('policy-session', 1, false, 'Tool denied by turn policy.')
+
+    const content = fs.readFileSync(logPath, 'utf-8')
+    expect(content).toContain('[STEP 1 - TOOL RESULT FAILED] write_file')
+    expect(content).toContain('Succeeded: false')
+    expect(content).toContain('Status: STOPPED/FAILED')
+  })
+
   it('keeps tool parameters, results, and model output out of metadata-only logs', () => {
     loggerInstance.logSessionStart('metadata-session', 'private task', 'guided', 'model', 'D:/Private')
     loggerInstance.logToolCall('metadata-session', 1, 'write_file', { filePath: 'secret.ts', content: 'private source' })

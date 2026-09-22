@@ -24,7 +24,7 @@ export interface WorkspacePublicationResult {
   error?: string
 }
 
-const IGNORED_DIRECTORY_NAMES = new Set(['.git', 'node_modules'])
+const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.onlyrag', 'node_modules'])
 
 function hashFile(filePath: string): string {
   return createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')

@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { StandaloneScratchWorkspace } from './standaloneScratchWorkspace'
+import { resolveStandaloneScratchBasePath, StandaloneScratchWorkspace } from './standaloneScratchWorkspace'
 
 describe('StandaloneScratchWorkspace', () => {
   let basePath: string
@@ -52,5 +52,10 @@ describe('StandaloneScratchWorkspace', () => {
       success: false,
       error: 'Scegli una destinazione esterna al workspace scratch.',
     })
+  })
+
+  it('uses a home-scoped fallback instead of the process working directory', () => {
+    expect(resolveStandaloneScratchBasePath()).toBe(path.join(os.homedir(), '.onlyrag_v2'))
+    expect(resolveStandaloneScratchBasePath()).not.toBe(path.resolve(process.cwd()))
   })
 })

@@ -25,6 +25,24 @@ describe('resolveTurnToolPolicy', () => {
     expect(requested.allowedTools).toEqual(expect.arrayContaining(['git_status', 'git_diff']))
   })
 
+  it('recognizes colloquial Italian build requests without turning inspections into edits', () => {
+    const build = resolveTurnToolPolicy({
+      directiveKind: 'focus',
+      editTargetState: 'unknown',
+      userTask: "Fammi un sito con un'immagine di un gatto che corre",
+    })
+    expect(build.allowedTools).toContain('write_file')
+    expect(build.allowedTools).not.toContain('read_file')
+
+    const inspection = resolveTurnToolPolicy({
+      directiveKind: 'focus',
+      editTargetState: 'unknown',
+      userTask: 'Fammi vedere come funziona questo sito',
+    })
+    expect(inspection.allowedTools).toContain('read_file')
+    expect(inspection.allowedTools).not.toContain('write_file')
+  })
+
   it('allows only finish after verified closure', () => {
     const result = resolveTurnToolPolicy({ directiveKind: 'session_closure', editTargetState: 'unknown', userTask: 'Commit this work' })
     expect(result.allowedTools).toEqual(['finish'])

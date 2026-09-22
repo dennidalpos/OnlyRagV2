@@ -89,4 +89,50 @@ describe('TaskQueueAppService serial execution invariant', () => {
     expect(cancelActiveAgentTask).toHaveBeenLastCalledWith('run-second')
     releaseFirst?.()
   })
+
+  it('binds standalone runs to the authoritative scratch workspace, never the supplied installation path', async () => {
+    const scratchPath = fs.mkdtempSync(path.join(os.tmpdir(), 'onlyrag-queue-scratch-'))
+    workspaces.push(scratchPath)
+    const service = new TaskQueueAppService(() => scratchPath)
+    const identity = {
+      runId: 'run-standalone',
+      conversationId: 'conversation-standalone',
+      planRevisionId: 'unplanned:standalone',
+      workspaceId: 'standalone:conversation-standalone',
+    }
+
+    await expect(service.scheduleAgentTask({
+      identity,
+      sessionId: identity.conversationId,
+      userTask: 'Create index.html',
+      agentMode: 'guided',
+      workspacePath: 'C:\\Program Files\\OnlyRag V2',
+      isStandaloneMode: true,
+    }, () => null)).resolves.toMatchObject({ success: true, runId: identity.runId })
+
+    await vi.waitFor(() => {
+      expect(runAgentOrchestratorLoop).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: scratchPath, isStandaloneMode: true }),
+        null,
+        identity.runId,
+        undefined,
+      )
+    })
+  })
+
+  it('rejects a project run without an explicit workspace instead of falling back to process.cwd()', async () => {
+    const service = new TaskQueueAppService()
+
+    await expect(service.scheduleAgentTask({
+      sessionId: 'conversation-missing-workspace',
+      userTask: 'Create src/App.tsx',
+      agentMode: 'guided',
+      workspacePath: null,
+      isStandaloneMode: false,
+    }, () => null)).resolves.toMatchObject({
+      success: false,
+      summary: 'Project workspace is required',
+    })
+    expect(runAgentOrchestratorLoop).not.toHaveBeenCalled()
+  })
 })

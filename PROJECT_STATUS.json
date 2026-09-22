@@ -1,8 +1,3 @@
 {
-  "todos": [
-    "AGENT-TOOL-POLICY-IT-01: fix the mutation-intent policy that classifies colloquial Italian requests such as 'fammi un sito con un'immagine di un gatto che corre' as read-only exploration; add a regression test proving write_file reaches Guided approval instead of exhausting 10 steps (session session-1790024463092-1qaw).",
-    "AGENT-INTERNAL-DIFF-01: exclude .onlyrag runtime metadata from isolated-workspace change previews/publication so a zero-output run cannot report 'Workspace pubblicato: 3 path(s)' while filesTouched is 0.",
-    "AGENT-AUDIT-OUTCOME-01: record tool-policy denials as failed tool results and mark failed/zero-milestone plan generation as failed in coding_agent_audit.log instead of COMPLETED.",
-    "AGENT-WORKSPACE-BINDING-01: reproduce the run that resolved relative project files below Program Files/OnlyRag V2 and ensure missing or standalone workspace routing never targets the installation directory."
-  ]
+  "todos": []
 }

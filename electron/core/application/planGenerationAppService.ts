@@ -256,7 +256,13 @@ export class PlanGenerationAppService {
         req.settings.includeCodingAgentDebugPayloads === true,
       )
       codingAgentLogger.logPlanGeneration(auditSessionId, req.prompt, milestones.length, 'guided')
-      codingAgentLogger.logSessionEnd(auditSessionId, 0, true, `Generated ${milestones.length} milestones.`)
+      const auditSucceeded = !generationError && milestones.length > 0
+      codingAgentLogger.logSessionEnd(
+        auditSessionId,
+        0,
+        auditSucceeded,
+        auditSucceeded ? `Generated ${milestones.length} milestones.` : `Plan generation failed: ${generationError || 'no executable milestones'}`,
+      )
     }
     return generationError
       ? { status: 'error', ...result, error: generationError }

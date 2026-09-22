@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { app } from 'electron'
 
@@ -19,6 +20,10 @@ function isInside(candidate: string, parent: string): boolean {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
 
+export function resolveStandaloneScratchBasePath(userDataPath?: string): string {
+  return path.resolve(userDataPath?.trim() || path.join(os.homedir(), '.onlyrag_v2'))
+}
+
 export class StandaloneScratchWorkspace {
   private readonly customBasePath?: string
 
@@ -27,7 +32,8 @@ export class StandaloneScratchWorkspace {
   }
 
   getPath(): string {
-    const basePath = this.customBasePath || (app && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(process.cwd(), 'userdata_dev'))
+    const electronUserDataPath = app && typeof app.getPath === 'function' ? app.getPath('userData') : undefined
+    const basePath = resolveStandaloneScratchBasePath(this.customBasePath || electronUserDataPath)
     const scratchPath = path.join(basePath, 'agent-scratch')
     fs.mkdirSync(scratchPath, { recursive: true })
     return scratchPath

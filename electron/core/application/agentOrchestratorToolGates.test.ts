@@ -17,7 +17,7 @@ describe('runToolGates network-approved policy', () => {
       allowedToolsForTurn: ['read_file'],
     })
 
-    expect(result).toEqual({ outcome: 'denied' })
+    expect(result).toMatchObject({ outcome: 'denied', feedback: expect.stringContaining('[TURN TOOL POLICY DENIED]') })
     expect(requestApproval).not.toHaveBeenCalled()
     expect(recordStep).toHaveBeenCalledOnce()
   })

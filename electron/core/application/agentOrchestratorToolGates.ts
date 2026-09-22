@@ -31,7 +31,7 @@ export interface ToolGateContext {
 }
 
 export type ToolGateResult =
-  | { outcome: 'denied' }
+  | { outcome: 'denied'; feedback?: string }
   | {
       outcome: 'allowed'
       toolCallForExecution: AgentToolCall
@@ -188,7 +188,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
       feedback,
     )
     ctx.emitLog('info', `🧰 Tool blocked by current phase: ${ctx.parsedTool.tool}`)
-    return { outcome: 'denied' }
+    return { outcome: 'denied', feedback }
   }
 
   if (ctx.requiredReadPath) {
@@ -201,7 +201,7 @@ export async function runToolGates(ctx: ToolGateContext): Promise<ToolGateResult
         feedback,
       )
       ctx.emitLog('info', `🔒 Lettura versione richiesta: ${ctx.requiredReadPath}`)
-      return { outcome: 'denied' }
+      return { outcome: 'denied', feedback }
     }
   }
 

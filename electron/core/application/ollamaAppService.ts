@@ -1,4 +1,5 @@
 import { checkOllamaStatus } from '../../diagnostics'
+import type { OllamaGenerationOptions } from '../../../shared/types'
 import {
   ollamaHttpClient,
   type OllamaModelMetrics,
@@ -44,7 +45,7 @@ export class OllamaAppService {
     prompt: string,
     onChunk: (chunk: string) => void,
     onDone: () => void,
-    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number },
+    customOptions?: OllamaGenerationOptions,
     host?: string,
     operationId?: string
   ) {

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentChangeMetrics, AgentPlan, AgentRunIdentity, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, OllamaStreamChunkEvent, OllamaStreamDoneEvent, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
+import type { AgentChangeMetrics, AgentPlan, AgentRunIdentity, IElectronAPI, AppSettings, CodingSession, InterviewQuestion, OllamaGenerationOptions, OllamaStreamChunkEvent, OllamaStreamDoneEvent, PlanMilestone, SkillInstallApprovalRequest, PromptHistoryIndexPayload, UserInterviewAnswer } from '../shared/types'
 
 const api: IElectronAPI = {
   runDiagnostics: (host?: string) => ipcRenderer.invoke('diagnostics:run', host),
@@ -17,17 +17,17 @@ const api: IElectronAPI = {
   restartSidecar: () => ipcRenderer.invoke('sidecar:restart'),
   openFileDialog: (options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('dialog:open-file', options),
   openDirectoryDialog: (options?: { title?: string }) => ipcRenderer.invoke('dialog:open-directory', options),
-  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string) =>
-    ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId),
+  ingestFile: (filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string, normalizationThink?: boolean) =>
+    ipcRenderer.invoke('ingest:file', filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId, normalizationThink),
   updateIngestedDocument: (docId: string, markdownContent: string) => ipcRenderer.invoke('ingest:update', docId, markdownContent),
-  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx),
+  translateDocumentInplace: (docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number, think?: boolean) => ipcRenderer.invoke('ingest:translate-inplace', docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx, think),
   getDocumentPagePreview: (docId: string, pageNumber: number) => ipcRenderer.invoke('ingest:page-preview', docId, pageNumber),
   getIngestedDocuments: () => ipcRenderer.invoke('ingest:list'),
   deleteIngestedDocument: (docId: string) => ipcRenderer.invoke('ingest:delete', docId),
   searchVectorDb: (query: string, topK?: number, embeddingModel?: string, docIds?: string[]) =>
     ipcRenderer.invoke('ingest:search', query, topK, embeddingModel, docIds),
   exportDocument: (markdownContent: string, format: string, outputFolder?: string) => ipcRenderer.invoke('ingest:export', markdownContent, format, outputFolder),
-  generateOllamaStream: async (model: string, prompt: string, onChunk: (chunk: string) => void, options?: any, host?: string, operationId?: string, onDone?: () => void) => {
+  generateOllamaStream: async (model: string, prompt: string, onChunk: (chunk: string) => void, options?: OllamaGenerationOptions, host?: string, operationId?: string, onDone?: () => void) => {
     const streamId = operationId || crypto.randomUUID()
     const chunkListener = (_: any, event: OllamaStreamChunkEvent) => {
       if (event.operationId === streamId) onChunk(event.chunk)

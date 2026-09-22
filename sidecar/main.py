@@ -117,7 +117,8 @@ async def db_maintenance():
 async def ingest_document(
     file: UploadFile = File(...),
     normalize_with_llm: bool = Form(False),
-    normalization_model: Optional[str] = Form(None)
+    normalization_model: Optional[str] = Form(None),
+    normalization_think: bool = Form(False)
 ):
     logger.info(f"Received file upload for ingestion: {file.filename} (normalize_with_llm={normalize_with_llm})")
     try:
@@ -127,7 +128,8 @@ async def ingest_document(
             file.filename or "uploaded_document",
             content,
             normalize_with_llm=normalize_with_llm,
-            normalization_model=normalization_model
+            normalization_model=normalization_model,
+            normalization_think=normalization_think
         )
     except Exception as e:
         logger.error(f"Error ingesting uploaded document: {str(e)}")
@@ -146,6 +148,7 @@ async def ingest_document_by_path(req: IngestPathRequest):
             req.vision_model, req.vision_prompt,
             normalize_with_llm=bool(req.normalize_with_llm),
             normalization_model=req.normalization_model,
+            normalization_think=bool(req.normalization_think),
             num_ctx=req.num_ctx,
             max_tabular_rows=req.max_tabular_rows,
             max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
@@ -170,6 +173,7 @@ async def ingest_document_by_path_stream(req: IngestPathRequest):
                 vision_model=req.vision_model, vision_prompt=req.vision_prompt,
                 normalize_with_llm=bool(req.normalize_with_llm),
                 normalization_model=req.normalization_model,
+                normalization_think=bool(req.normalization_think),
                 num_ctx=req.num_ctx,
                 max_tabular_rows=req.max_tabular_rows,
                 max_excel_rows_per_sheet=req.max_excel_rows_per_sheet,
@@ -204,7 +208,8 @@ async def translate_document_inplace_endpoint(doc_id: str, req: TranslateInplace
             req.model or "llama3.2",
             req.backup_original if req.backup_original is not None else True,
             req.target_dir,
-            req.num_ctx
+            req.num_ctx,
+            bool(req.think)
         )
     except UnsupportedDocumentTypeError as type_err:
         raise HTTPException(status_code=400, detail=str(type_err))
@@ -225,7 +230,8 @@ async def translate_document_inplace_stream_endpoint(doc_id: str, req: Translate
                 req.target_lang,
                 model=req.model or "llama3.2",
                 target_dir=req.target_dir,
-                num_ctx=req.num_ctx
+                num_ctx=req.num_ctx,
+                think=bool(req.think)
             ),
             media_type="application/x-ndjson"
         )

@@ -206,6 +206,16 @@ describe('OllamaHttpClient — structured chat responses', () => {
     expect(capturedRequest.tools).toBeUndefined()
   })
 
+  it('sends enabled thinking while returning only final JSON content', async () => {
+    responseBody = {
+      done: true,
+      message: { content: '{"result":"ok"}', thinking: 'not JSON' },
+    }
+    const result = await client.generateStructured({ ...request(), think: true })
+    expect(capturedRequest.think).toBe(true)
+    expect(result).toMatchObject({ status: 'complete', content: '{"result":"ok"}' })
+  })
+
   it('reports missing completion and length truncation as incomplete', async () => {
     responseBody = { done: false, message: { content: '{"result":' } }
     expect(await client.generateStructured(request())).toMatchObject({ status: 'incomplete' })
@@ -293,6 +303,31 @@ describe('OllamaHttpClient — stream failures', () => {
   let server: http.Server
 
   afterEach(() => server.close())
+
+  it('sends the top-level thinking choice and streams only final content', async () => {
+    let capturedRequest: Record<string, unknown> | undefined
+    const mock = await createMockOllamaServer([{
+      method: 'POST',
+      path: '/api/generate',
+      handler: (req, res) => {
+        let raw = ''
+        req.on('data', (chunk) => { raw += chunk })
+        req.on('end', () => {
+          capturedRequest = JSON.parse(raw)
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end('{"thinking":"private","response":"answer","done":false}\n{"done":true}\n')
+        })
+      },
+    }])
+    server = mock.server
+    const chunks: string[] = []
+    const result = await new OllamaHttpClient().generateStream(
+      'qwen3:4b', 'hello', (chunk) => chunks.push(chunk), () => {}, { think: true }, mock.baseUrl,
+    )
+    expect(result.success).toBe(true)
+    expect(capturedRequest?.think).toBe(true)
+    expect(chunks).toEqual(['answer'])
+  })
 
   it('returns HTTP failures without emitting error text or completion', async () => {
     const mock = await createMockOllamaServer([{

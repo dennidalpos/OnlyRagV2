@@ -98,6 +98,19 @@ def test_call_ollama_translate_retries_once_on_timeout_then_succeeds(monkeypatch
     assert call_count["n"] == 2
 
 
+def test_call_ollama_translate_sends_binary_thinking_choice(monkeypatch):
+    sent = []
+
+    class FakeHttpxClient:
+        def post(self, url, json=None, timeout=None):
+            sent.append(json)
+            return _FakeResponse(200, {"message": {"content": "translated", "thinking": "private"}})
+
+    monkeypatch.setattr(translator_module, "httpx_client", FakeHttpxClient())
+    assert translator_module._call_ollama_translate("hello", "English", "Italian", "qwen3:4b", think=True) == "translated"
+    assert sent[0]["think"] is True
+
+
 def test_call_ollama_translate_gives_up_after_max_attempts_on_repeated_timeout(monkeypatch):
     import httpx
 
@@ -855,4 +868,3 @@ def test_translate_texts_skips_segments_already_in_target_language(monkeypatch):
     assert "This paragraph is already written" not in called_prompts[0]
     assert res_batch[0] == "Traduzione di un testo in italiano"
     assert res_batch[1] == "This paragraph is already written in English and should be preserved."
-

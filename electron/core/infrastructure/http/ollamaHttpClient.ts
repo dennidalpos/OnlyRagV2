@@ -1,7 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import { logger } from '../../../diagnostics'
-import type { RunningModelInfo, OllamaModelMetrics } from '../../../../shared/types'
+import type { RunningModelInfo, OllamaGenerationOptions, OllamaModelMetrics } from '../../../../shared/types'
 import { consumeNdjsonChunk } from './ndjsonStreamParser'
 import { httpMetrics } from './httpMetrics'
 import { ollamaGenerationScheduler } from './ollamaGenerationScheduler'
@@ -601,7 +601,7 @@ export class OllamaHttpClient {
     prompt: string,
     onChunk: (chunk: string) => void,
     onDone: () => void,
-    customOptions?: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string },
+    customOptions?: OllamaGenerationOptions,
     customHost?: string,
     operationId?: string
   ): Promise<{ success: boolean; error?: string }> {
@@ -620,7 +620,7 @@ export class OllamaHttpClient {
     prompt: string,
     onChunk: (chunk: string) => void,
     onDone: () => void,
-    customOptions: { num_ctx?: number; temperature?: number; top_p?: number; repeat_penalty?: number; num_thread?: number; keep_alive?: string } | undefined,
+    customOptions: OllamaGenerationOptions | undefined,
     urlOpts: OllamaUrl,
     setActiveCancel: (cancel: () => void) => void
   ): Promise<{ success: boolean; error?: string }> {
@@ -629,6 +629,7 @@ export class OllamaHttpClient {
         model: model || 'llama3.2',
         prompt,
         stream: true,
+        think: customOptions?.think === true,
         keep_alive: customOptions?.keep_alive,
         options: {
           num_ctx: customOptions?.num_ctx || 16384,
@@ -734,7 +735,7 @@ export class OllamaHttpClient {
       ],
       format: request.format,
       stream: false,
-      ...(request.think !== undefined ? { think: request.think } : {}),
+      think: request.think === true,
       keep_alive: request.keepAlive || '30m',
       options: {
         num_ctx: request.options?.num_ctx || 16384,

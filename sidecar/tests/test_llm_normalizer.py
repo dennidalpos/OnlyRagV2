@@ -32,6 +32,18 @@ def test_normalize_page_markdown_with_llm_success(monkeypatch):
         res = normalize_page_markdown_with_llm(raw_ocr, page_num=1, model="llama3.2")
         assert cleaned_expected in res
 
+def test_normalizer_sends_thinking_separately_from_content():
+    raw_ocr = "Long OCR content with broken spacing and layout requiring normalization here."
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = b'{"response":"Clean content","thinking":"Private trace"}'
+    mock_resp.__enter__.return_value = mock_resp
+
+    with patch("urllib.request.urlopen", return_value=mock_resp) as urlopen:
+        assert normalize_page_markdown_with_llm(raw_ocr, think=True) == "Clean content"
+        request = urlopen.call_args.args[0]
+        assert __import__("json").loads(request.data)["think"] is True
+
 def test_normalize_page_markdown_with_llm_graceful_fallback(monkeypatch):
     raw_ocr = "Contratto Telepass numero 123456 con testo lungo sufficiente per la normalizzazione"
     with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):

@@ -435,7 +435,11 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
   })
 
   it('should stream thinking deltas via onThoughtChunk on /api/generate path', async () => {
-    const mock = await startMockOllama((_req, res) => {
+    let capturedBody: Record<string, unknown> | undefined
+    const mock = await startMockOllama((req, res) => {
+      let raw = ''
+      req.on('data', (chunk) => { raw += chunk })
+      req.on('end', () => { capturedBody = JSON.parse(raw) })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.write(JSON.stringify({ thinking: 'Analyzing ', response: '', done: false }) + '\n')
       res.write(JSON.stringify({ thinking: 'the request...', response: '', done: false }) + '\n')
@@ -455,15 +459,21 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
       isCancelled: () => false,
       onThoughtChunk: (thought) => thoughts.push(thought),
       onTokenChunk: (token) => tokens.push(token),
+      think: true,
     })
 
     expect(thoughts).toEqual(['Analyzing ', 'the request...'])
     expect(tokens).toEqual(['Done!'])
     expect(output).toBe('Done!')
+    expect(capturedBody?.think).toBe(true)
   })
 
   it('should stream thinking deltas via onThoughtChunk on /api/chat path', async () => {
-    const mock = await startMockOllama((_req, res) => {
+    let capturedBody: Record<string, unknown> | undefined
+    const mock = await startMockOllama((req, res) => {
+      let raw = ''
+      req.on('data', (chunk) => { raw += chunk })
+      req.on('end', () => { capturedBody = JSON.parse(raw) })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.write(JSON.stringify({ message: { role: 'assistant', thinking: 'Evaluating tool... ' }, done: false }) + '\n')
       res.write(
@@ -491,11 +501,13 @@ describe('AgentStreamTransport — /api/generate context continuation (AGT1: Oll
       toolCallingCapable: true,
       toolCatalog: OLLAMA_TOOL_SCHEMA_CATALOG,
       onThoughtChunk: (thought) => thoughts.push(thought),
+      think: true,
     })
 
     expect(thoughts).toEqual(['Evaluating tool... '])
     const parsedCall = parseAgentToolCall(output)
     expect(parsedCall?.tool).toBe('read_file')
     expect(parsedCall?.parameters.filePath).toBe('index.ts')
+    expect(capturedBody?.think).toBe(true)
   })
 })

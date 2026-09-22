@@ -123,6 +123,7 @@ def prepare_pdf_page_work_item(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
+    normalization_think: bool = False,
     filename: str = "",
     num_pages: int = 1,
     num_ctx: Optional[int] = None,
@@ -150,6 +151,7 @@ def prepare_pdf_page_work_item(
         "vision_prompt": vision_prompt,
         "normalize_with_llm": normalize_with_llm,
         "normalization_model": normalization_model,
+        "normalization_think": normalization_think,
         "filename": filename,
         "num_pages": num_pages,
         "num_ctx": num_ctx,
@@ -204,7 +206,12 @@ def render_prepared_pdf_page(work_item: Dict[str, Any]) -> Tuple[int, str]:
 
     if work_item.get("normalize_with_llm"):
         norm_model = work_item.get("normalization_model") or "llama3.2"
-        sanitized = normalize_page_markdown_with_llm(sanitized, page_num=page_num, model=norm_model)
+        sanitized = normalize_page_markdown_with_llm(
+            sanitized,
+            page_num=page_num,
+            model=norm_model,
+            think=bool(work_item.get("normalization_think")),
+        )
 
     return page_num, sanitized
 
@@ -215,6 +222,7 @@ def extract_pdf_document(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
+    normalization_think: bool = False,
     filename: str = "",
     num_ctx: Optional[int] = None
 ) -> List[Tuple[int, str]]:
@@ -254,6 +262,7 @@ def extract_pdf_document(
             vision_prompt=vision_prompt,
             normalize_with_llm=normalize_with_llm,
             normalization_model=normalization_model,
+            normalization_think=normalization_think,
             filename=filename,
             num_pages=num_pages,
             num_ctx=num_ctx
@@ -355,6 +364,7 @@ def extract_document_markdown(
     vision_prompt: Optional[str] = None,
     normalize_with_llm: bool = False,
     normalization_model: Optional[str] = None,
+    normalization_think: bool = False,
     max_tabular_rows: Optional[int] = None,
     max_excel_rows: Optional[int] = None,
     max_sheets: Optional[int] = None,
@@ -384,6 +394,7 @@ def extract_document_markdown(
                 vision_prompt=vision_prompt,
                 normalize_with_llm=normalize_with_llm,
                 normalization_model=normalization_model,
+                normalization_think=normalization_think,
                 filename=filename,
                 num_ctx=num_ctx
             )
@@ -407,7 +418,12 @@ def extract_document_markdown(
         sanitized_ocr = sanitize_extracted_text(ocr_text)
         if normalize_with_llm and sanitized_ocr:
             norm_model = normalization_model or "llama3.2"
-            sanitized_ocr = normalize_page_markdown_with_llm(sanitized_ocr, page_num=1, model=norm_model)
+            sanitized_ocr = normalize_page_markdown_with_llm(
+                sanitized_ocr,
+                page_num=1,
+                model=norm_model,
+                think=normalization_think,
+            )
         if sanitized_ocr:
             page_blocks.append((1, sanitized_ocr))
         else:
@@ -602,4 +618,3 @@ def create_semantic_chunks(filename: str, full_markdown: str) -> List[Tuple[int,
         raw_chunks = [(0, f"[Documento: {filename} | Sezione: Document Content]\n{fallback_text}", filename)]
 
     return raw_chunks
-

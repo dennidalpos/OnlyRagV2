@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  findExactInstalledModelAlias,
   findMatchingInstalledModel,
   isOllamaModelInstalled,
   parseModelTagComponents,
@@ -7,6 +8,14 @@ import {
 } from '../../../../shared/domain/agent/modelTagMatcher'
 
 describe('ModelTagMatcher Domain Unit Tests', () => {
+  describe('findExactInstalledModelAlias', () => {
+    it('resolves exact and implicit latest aliases without family-prefix matching', () => {
+      expect(findExactInstalledModelAlias('llama3.2', ['llama3.2:latest'])).toBe('llama3.2:latest')
+      expect(findExactInstalledModelAlias('qwen3:4b', ['qwen3-vl:4b'])).toBeNull()
+      expect(findExactInstalledModelAlias('vendor/qwen3:4b', ['qwen3:4b'])).toBeNull()
+    })
+  })
+
   describe('parseModelTagComponents', () => {
     it('should parse bare model name', () => {
       const parsed = parseModelTagComponents('llama3.2')

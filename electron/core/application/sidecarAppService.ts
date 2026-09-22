@@ -67,7 +67,8 @@ export class SidecarAppService {
     normalizeWithLlm?: boolean,
     normalizationModel?: string,
     numCtx?: number,
-    taskId?: string
+    taskId?: string,
+    normalizationThink?: boolean
   ) {
     if (typeof filePath !== 'string' || !filePath.trim()) {
       return { success: false, error: 'Invalid file path' }
@@ -95,6 +96,7 @@ export class SidecarAppService {
           normalize_with_llm: normalizeWithLlm || undefined,
           normalization_model: normalizationModel || undefined,
           num_ctx: numCtx || undefined,
+          normalization_think: normalizationThink === true,
         },
         (event) => {
           BrowserWindow.getAllWindows().forEach((win) => {
@@ -180,7 +182,8 @@ export class SidecarAppService {
     model?: string,
     backupOriginal: boolean = true,
     targetDir?: string,
-    numCtx?: number
+    numCtx?: number,
+    think?: boolean
   ) {
     if (!docId || typeof docId !== 'string') {
       return { success: false, error: 'Invalid document ID' }
@@ -195,6 +198,7 @@ export class SidecarAppService {
         backup_original: backupOriginal,
         target_dir: targetDir || undefined,
         num_ctx: numCtx || undefined,
+        think: think === true,
       },
       (event) => {
         BrowserWindow.getAllWindows().forEach((win) => {

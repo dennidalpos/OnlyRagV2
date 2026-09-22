@@ -116,7 +116,7 @@ describe('AiDebugBundleService Unit Tests', () => {
     const bundle = await aiDebugBundleService.generateDebugBundle({
       sessionId: 'session-123',
       workspacePath: 'D:/TestWorkspace',
-      settings: { includeCodingAgentDebugPayloads: true } as any,
+      settings: { enableCodingAgentDebugLog: true, includeCodingAgentDebugPayloads: true } as any,
       activeModelName: 'qwen2.5-coder:7b',
       activeSkills: ['test-skill'],
     })
@@ -163,6 +163,14 @@ describe('AiDebugBundleService Unit Tests', () => {
     expect(bundle).not.toContain('src/private.ts')
     expect(bundle).not.toContain('private failure output')
     expect(bundle).not.toContain('D:/PrivateWorkspace')
+
+    const savedPreferenceWithLoggingOff = await aiDebugBundleService.generateDebugBundle({
+      sessionId: 'metadata-session',
+      workspacePath: 'D:/PrivateWorkspace',
+      settings: { enableCodingAgentDebugLog: false, includeCodingAgentDebugPayloads: true } as any,
+    })
+    expect(savedPreferenceWithLoggingOff).not.toContain('private prompt')
+    expect(savedPreferenceWithLoggingOff).not.toContain('src/private.ts')
   })
 
   it('should handle sessions with no git or state gracefully', async () => {

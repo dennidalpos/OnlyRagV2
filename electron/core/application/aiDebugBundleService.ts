@@ -9,6 +9,7 @@ import type { AppSettings } from '../../../shared/types'
 import { redactSecrets } from '../../logRedactor'
 import { MAX_FAILURES_PER_RECOVERY_CATEGORY } from '../domain/agent/recoveryBudget'
 import { MAX_VERIFICATION_FIX_CYCLES } from '../domain/agent/verificationGatePolicy'
+import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 
 export interface AiDebugBundleOptions {
   sessionId: string
@@ -24,7 +25,7 @@ export class AiDebugBundleService {
    */
   public async generateDebugBundle(options: AiDebugBundleOptions): Promise<string> {
     const { sessionId, workspacePath, settings, activeModelName = 'LLM', activeSkills = [] } = options
-    const includePayloads = settings?.includeCodingAgentDebugPayloads === true
+    const includePayloads = isCodingAgentDebugPayloadCaptureEnabled(settings)
     const timestamp = new Date().toISOString()
 
     // 1. Host & Toolchain facts

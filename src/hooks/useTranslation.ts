@@ -12,6 +12,7 @@ import { extractHardwareFacts } from '../services/hardwareRecommendationEngine'
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
+import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 
 export const LANGUAGES = [
   'English',
@@ -264,7 +265,10 @@ export function useDocumentTranslation(settings?: AppSettings, diagnostics?: Dia
               currentChunkTranslation += c
               const livePreview = accumulatedResults + (accumulatedResults ? '\n\n' : '') + currentChunkTranslation
               setTranslatedMarkdown(livePreview)
-            }, { num_ctx: modelContext }, settings?.ollamaHost, operationId)
+            }, {
+              num_ctx: modelContext,
+              think: resolveOllamaThinkingPreference(modelToUse, settings || {}, modelMetrics).think,
+            }, settings?.ollamaHost, operationId)
             if (!result.success) throw new Error(result.error || 'Ollama translation failed.')
             if (!currentChunkTranslation.trim()) throw new Error('Ollama returned an empty translation.')
           } finally {
@@ -468,7 +472,10 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
           settings?.modelContextLengths,
           hardwareDefault,
           modelMetrics[modelToUse]?.contextLength
-        ) : undefined
+        ) : undefined,
+        modelToUse
+          ? resolveOllamaThinkingPreference(modelToUse, settings || {}, modelMetrics).think
+          : false
       )
 
       if (res.success && res.data) {
@@ -516,5 +523,3 @@ export function useInplaceTranslation(settings?: AppSettings, diagnostics?: Diag
     fetchDocuments,
   }
 }
-
-

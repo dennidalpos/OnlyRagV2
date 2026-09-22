@@ -25,6 +25,7 @@ import { collectProjectPlanningFacts, type ProjectPlanningFacts } from './projec
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
 import { ollamaAppService } from './ollamaAppService'
+import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
 
 export type { InterviewAnalysisResult, UserInterviewAnswer } from '../../../shared/types'
 
@@ -69,6 +70,7 @@ export class AgentInterviewAppService {
       cpuCount: os.cpus()?.length,
     })
     const trainedContext = await ollamaAppService.getModelContextLength(modelToUse, settings.ollamaHost)
+    const modelMetrics = await ollamaAppService.getModelMetrics(settings.ollamaHost)
     runtimeOpts.num_ctx = resolveModelContextLength(
       modelToUse,
       settings.modelContextLengths,
@@ -91,7 +93,7 @@ export class AgentInterviewAppService {
         systemPrompt: INTERVIEW_SYSTEM_PROMPT,
         userContent,
         format: toOllamaJsonSchema(interviewPhaseResponseSchema),
-        think: false,
+        think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
         host: settings.ollamaHost,
         keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,

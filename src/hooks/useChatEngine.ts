@@ -13,6 +13,7 @@ import { resolveModelContextLength } from '../../shared/domain/settings/modelCon
 import { resolveMaxContextTokens } from '../../shared/domain/hardware/hardwareProfileTiers'
 import { useOllamaModelMetrics } from './useOllamaModelMetrics'
 import { useOllamaGenerationState } from './useOllamaGenerationState'
+import { resolveOllamaThinkingPreference } from '../../shared/domain/agent/ollamaThinkingPolicy'
 
 const STORAGE_KEY_CONVERSATIONS = 'onlyrag_chat_conversations'
 const STORAGE_KEY_ACTIVE_ID = 'onlyrag_chat_active_id'
@@ -521,6 +522,7 @@ export function useChatEngine(settings: AppSettings, diagnostics: DiagnosticsDat
               num_ctx: budget.maxNumCtx,
               num_thread: resolveChatThreadCount(hardwareFacts.cpuCount),
               keep_alive: budget.keepAlive,
+              think: resolveOllamaThinkingPreference(modelToUse, settings, modelMetrics).think,
             },
             settings.ollamaHost,
             operationId

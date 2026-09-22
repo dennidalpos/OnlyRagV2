@@ -444,7 +444,8 @@ export function useIngestion(settings?: AppSettings, diagnostics?: DiagnosticsDa
           hardwareDefault,
           modelMetrics[visionModelName]?.contextLength
         ),
-        taskId
+        taskId,
+        false
       )
 
       if (activeTaskIdRef.current !== taskId) return

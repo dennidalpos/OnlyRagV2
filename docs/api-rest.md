@@ -19,6 +19,7 @@ Il server FastAPI ascolta su `127.0.0.1:8000`. Route e schemi sono definiti in [
 ## Note operative
 
 - `/ingest` usa multipart upload; gli endpoint `ingest-path` ricevono JSON e possono emettere NDJSON. Lo stream riceve `task_id`; `POST /tasks/cancel` lo richiede e arresta solo quel task.
+- L'ingestion accetta `normalization_think` per la normalizzazione LLM opzionale; la traduzione documenti accetta `think`. Entrambi sono booleani e partono da `false`. Le risposte Ollama usano solo il contenuto finale, senza incorporare il campo separato `thinking`.
 - L'annullamento controlla i confini tra estrazione, embedding e scrittura LanceDB; eventuali chunk o record già avviati vengono rimossi prima della risposta `cancelled`.
 - Ingestion e re-indicizzazione usano embedding Ollama; in caso di errore possono registrare `status: indexed_fallback`.
 - La ricerca combina embedding, matching lessicale e RRF; il reranking usa FlashRank quando disponibile e un fallback locale altrimenti.

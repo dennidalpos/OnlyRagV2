@@ -23,7 +23,8 @@ def normalize_page_markdown_with_llm(
     page_num: int = 1,
     model: str = "llama3.2",
     timeout_seconds: float = 25.0,
-    ollama_url: Optional[str] = None
+    ollama_url: Optional[str] = None,
+    think: bool = False
 ) -> str:
     """
     Optional, per-page LLM Markdown normalizer.
@@ -53,6 +54,7 @@ def normalize_page_markdown_with_llm(
         "model": model,
         "prompt": prompt,
         "stream": False,
+        "think": bool(think),
         "options": {
             "temperature": 0.1,
             "num_predict": 2048,

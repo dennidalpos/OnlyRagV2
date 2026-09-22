@@ -511,6 +511,10 @@ export interface TranslationSchema {
     codingAgentDebugPayloads: string
     codingAgentDebugPayloadsDesc: string
     codingAgentDebugRetention: string
+    thinkingLabel: string
+    thinkingEnabled: string
+    thinkingDisabled: string
+    thinkingLevelOnlyNote: string
     clearCodingAgentDebugLog: string
     openLogsFolder: string
     translationOutputFolderTitle: string

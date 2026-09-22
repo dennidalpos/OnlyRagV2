@@ -99,6 +99,7 @@ export const AppLayout: React.FC = () => {
       maxToolCallSteps: 25,
       enableCodingAgentDebugLog: false,
       includeCodingAgentDebugPayloads: false,
+      modelThinkingPreferences: {},
       codingAgentDebugRetentionFiles: 2,
       hasCompletedInitialSetup: false,
     }

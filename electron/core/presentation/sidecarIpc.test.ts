@@ -48,7 +48,8 @@ describe('sidecar IPC facade', () => {
       true,
       'normalizer',
       8192,
-      'ingest-test-1'
+      'ingest-test-1',
+      undefined
     )
     await expect(handler?.({}, ' ')).rejects.toThrow()
     expect(sidecarAppService.ingestFile).toHaveBeenCalledTimes(1)

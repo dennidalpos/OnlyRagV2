@@ -17,6 +17,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   enableCodingAgentDebugLog: false,
   includeCodingAgentDebugPayloads: false,
   codingAgentDebugRetentionFiles: 2,
+  modelThinkingPreferences: {},
   hasCompletedInitialSetup: false,
 }
 
@@ -32,6 +33,17 @@ export function sanitizeModelContextLengths(raw: unknown): Record<string, number
     if (context >= MIN_MODEL_CONTEXT_LENGTH) result[normalizedModel] = context
   }
   return Object.keys(result).length > 0 ? result : undefined
+}
+
+export function sanitizeModelThinkingPreferences(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const result: Record<string, boolean> = {}
+  for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
+    const normalizedModel = model.trim()
+    if (!normalizedModel || normalizedModel.length > 200 || typeof value !== 'boolean') continue
+    result[normalizedModel] = value
+  }
+  return result
 }
 
 export function getDefaultAppSettings(): AppSettings {
@@ -98,6 +110,7 @@ export function sanitizeAppSettings(input: unknown): AppSettings {
       typeof raw.codingAgentDebugRetentionFiles === 'number' && raw.codingAgentDebugRetentionFiles >= 1 && raw.codingAgentDebugRetentionFiles <= 5
         ? Math.floor(raw.codingAgentDebugRetentionFiles)
         : defaults.codingAgentDebugRetentionFiles,
+    modelThinkingPreferences: sanitizeModelThinkingPreferences(raw.modelThinkingPreferences),
     hasCompletedInitialSetup: typeof raw.hasCompletedInitialSetup === 'boolean' ? raw.hasCompletedInitialSetup : defaults.hasCompletedInitialSetup,
     modelContextLengths: sanitizeModelContextLengths(raw.modelContextLengths),
   }

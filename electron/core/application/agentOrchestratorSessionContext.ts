@@ -16,6 +16,7 @@ import { findMatchingInstalledModel } from '../../../shared/domain/agent/modelTa
 import { agentSessionStateRepository } from '../infrastructure/filesystem/agentSessionStateRepository'
 import { validateRestoredOllamaRuntime } from '../domain/agent/ollamaSessionRuntime'
 import { applyAgentCapabilityProfile } from '../../../shared/domain/agent/agentCapabilityProfile'
+import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 
 import type { AgentLogEntry } from '../domain/agent/agentTypes'
 
@@ -99,7 +100,7 @@ export async function resolveSessionContext(params: SessionContextParams): Promi
 
   if (settings.enableCodingAgentDebugLog) {
     codingAgentLogger.configureRetention(settings.codingAgentDebugRetentionFiles || 2)
-    codingAgentLogger.logSessionStart(sessionId, userTask, agentMode, codingModel, workspacePath, settings.includeCodingAgentDebugPayloads === true)
+    codingAgentLogger.logSessionStart(sessionId, userTask, agentMode, codingModel, workspacePath, isCodingAgentDebugPayloadCaptureEnabled(settings))
   }
 
   const skillMatchContext = {

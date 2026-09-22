@@ -11,6 +11,7 @@ vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {
     generateStructured: vi.fn(),
     getModelContextLength: vi.fn().mockResolvedValue(undefined),
+    getModelMetrics: vi.fn().mockResolvedValue({}),
   },
 }))
 
@@ -31,6 +32,20 @@ describe('AgentInterviewAppService', () => {
     const result = await service.conductInterview('Crea una funzione somma', undefined, settings)
 
     expect(result).toMatchObject({ status: 'completed', hasQuestions: false, questions: [] })
+  })
+
+  it('uses the enabled thinking preference only for the exact installed model', async () => {
+    vi.mocked(ollamaAppService.getModelMetrics).mockResolvedValueOnce({
+      'qwen3:4b': { capabilities: ['completion', 'thinking'], family: 'qwen3' },
+    })
+    vi.mocked(ollamaAppService.generateStructured).mockResolvedValueOnce({
+      status: 'complete', content: '{"hasQuestions":false,"questions":[]}',
+    })
+    await service.conductInterview('Create a sum function', 'qwen3:4b', {
+      ...settings,
+      modelThinkingPreferences: { 'qwen3:4b': true },
+    })
+    expect(vi.mocked(ollamaAppService.generateStructured).mock.calls[0][0].think).toBe(true)
   })
 
   it('falls back to alternatives stated explicitly when the model returns no questions', async () => {

@@ -18,6 +18,8 @@ export interface StreamSession {
   ollamaEndpoint?: string
   onTokenChunk?: (chunk: string) => void
   onThoughtChunk?: (chunk: string) => void
+  /** Effective, policy-gated binary thinking choice. Defaults to false. */
+  think?: boolean
   isCancelled: () => boolean
   signal?: AbortSignal
   onCancelHandle?: (abort: () => void) => void
@@ -102,6 +104,7 @@ export class AgentStreamTransport {
             model: targetModel,
             prompt,
             stream: true,
+            think: session.think === true,
             keep_alive: keepAlive || '30m',
             ...(previousContext && previousContext.length > 0 ? { context: previousContext } : {}),
             options: {
@@ -278,6 +281,7 @@ export class AgentStreamTransport {
         messages: [{ role: 'user', content: prompt }],
         tools: toolCatalog,
         stream: true,
+        think: session.think === true,
         keep_alive: keepAlive || '30m',
         options: {
           num_ctx: runtimeOpts.num_ctx,

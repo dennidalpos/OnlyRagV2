@@ -57,6 +57,11 @@
             ],
             "title": "Normalization Model"
           },
+          "normalization_think": {
+            "default": false,
+            "title": "Normalization Think",
+            "type": "boolean"
+          },
           "normalize_with_llm": {
             "default": false,
             "title": "Normalize With Llm",
@@ -469,6 +474,18 @@
               }
             ],
             "title": "Normalization Model"
+          },
+          "normalization_think": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Normalization Think"
           },
           "normalize_with_llm": {
             "anyOf": [
@@ -1079,6 +1096,18 @@
             "pattern": ".*\\S.*",
             "title": "Target Lang",
             "type": "string"
+          },
+          "think": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "title": "Think"
           }
         },
         "required": [

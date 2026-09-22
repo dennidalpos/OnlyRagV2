@@ -87,6 +87,7 @@ class IngestPathRequest(StrictRequest):
     vision_prompt: Optional[str] = Field(default=None, min_length=1, max_length=20000, pattern=NON_BLANK)
     normalize_with_llm: Optional[bool] = False
     normalization_model: Optional[str] = MODEL_NAME
+    normalization_think: Optional[bool] = False
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
     max_tabular_rows: Optional[int] = Field(default=None, ge=1, le=1_000_000)
     max_excel_rows_per_sheet: Optional[int] = Field(default=None, ge=1, le=1_000_000)
@@ -103,6 +104,7 @@ class TranslateInplaceRequest(StrictRequest):
     backup_original: Optional[bool] = True
     target_dir: Optional[str] = PATH_VALUE
     num_ctx: Optional[int] = Field(default=None, ge=4096, le=131072)
+    think: Optional[bool] = False
 
 class PagePreviewResponse(BaseModel):
     doc_id: str

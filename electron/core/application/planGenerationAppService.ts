@@ -23,6 +23,8 @@ import {
 } from '../domain/agent/ollamaStructuredResponse'
 import { generateStructuredWithRecovery } from './structuredGenerationRecovery'
 import { calculateAvailableOutputTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
+import { isCodingAgentDebugPayloadCaptureEnabled } from '../../../shared/domain/agent/codingAgentDebugPolicy'
 import { ollamaAppService } from './ollamaAppService'
 
 const PLAN_SYSTEM_PROMPT = `Create a short, sequential coding plan in the requested JSON shape.
@@ -164,6 +166,7 @@ export class PlanGenerationAppService {
       cpuCount: os.cpus()?.length,
     })
     const trainedContext = await ollamaAppService.getModelContextLength(model, req.settings.ollamaHost)
+    const modelMetrics = await ollamaAppService.getModelMetrics(req.settings.ollamaHost)
     runtimeOpts.num_ctx = resolveModelContextLength(
       model,
       req.settings.modelContextLengths,
@@ -202,7 +205,7 @@ export class PlanGenerationAppService {
         systemPrompt: PLAN_SYSTEM_PROMPT,
         userContent,
         format: toOllamaJsonSchema(planningPhaseResponseSchema),
-        think: false,
+        think: resolveOllamaThinkingPreference(model, req.settings, modelMetrics).think,
         host: req.settings.ollamaHost,
         keepAlive: CODING_MODEL_KEEP_ALIVE,
         options: runtimeOpts,
@@ -266,7 +269,7 @@ export class PlanGenerationAppService {
         'guided',
         req.model || req.settings.codingModel || req.settings.defaultModel || 'default',
         req.workspacePath,
-        req.settings.includeCodingAgentDebugPayloads === true,
+        isCodingAgentDebugPayloadCaptureEnabled(req.settings),
       )
       codingAgentLogger.logPlanGeneration(auditSessionId, req.prompt, milestones.length, 'guided')
       const auditSucceeded = !generationError && milestones.length > 0

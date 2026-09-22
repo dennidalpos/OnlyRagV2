@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { ollamaAppService } from '../application/ollamaAppService'
+import type { OllamaGenerationOptions } from '../../../shared/types'
 
 export function registerOllamaIpcHandlers() {
   ipcMain.handle('ollama:install-or-launch', async () => {
@@ -29,7 +30,7 @@ export function registerOllamaIpcHandlers() {
 
   ipcMain.handle('ollama:get-generation-status', () => ollamaAppService.getGenerationStatus())
 
-  ipcMain.handle('ollama:generate-stream', async (event, model: string, prompt: string, options?: any, host?: string, operationId?: string) => {
+  ipcMain.handle('ollama:generate-stream', async (event, model: string, prompt: string, options?: OllamaGenerationOptions, host?: string, operationId?: string) => {
     const streamId = operationId || randomUUID()
     return ollamaAppService.generateStream(
       model,

@@ -13,6 +13,7 @@ export const sidecarIngestFilePayloadSchema = z.object({
   normalizeWithLlm: z.boolean().optional(),
   normalizationModel: modelName.optional(),
   numCtx: contextTokens.optional(),
+  normalizationThink: z.boolean().optional(),
   taskId,
 }).strict()
 
@@ -29,6 +30,7 @@ export const sidecarTranslatePayloadSchema = z.object({
   backupOriginal: z.boolean().optional(),
   targetDir: boundedPath.optional(),
   numCtx: contextTokens.optional(),
+  think: z.boolean().optional(),
 }).strict()
 
 export const sidecarPagePreviewPayloadSchema = z.object({

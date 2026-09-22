@@ -13,6 +13,7 @@ export interface SidecarIngestStreamPayload {
   normalize_with_llm?: boolean
   normalization_model?: string
   num_ctx?: number
+  normalization_think?: boolean
 }
 
 export interface SidecarTranslateStreamPayload {
@@ -22,6 +23,7 @@ export interface SidecarTranslateStreamPayload {
   backup_original?: boolean
   target_dir?: string
   num_ctx?: number
+  think?: boolean
 }
 
 export interface SidecarDocumentRecord {

@@ -25,9 +25,9 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.restartSidecar()
   })
 
-  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string) => {
-    const payload: SidecarIngestFilePayload = sidecarIngestFilePayloadSchema.parse({ filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, taskId })
-    return sidecarAppService.ingestFile(payload.filePath, payload.visionModel, payload.visionPrompt, payload.normalizeWithLlm, payload.normalizationModel, payload.numCtx, payload.taskId)
+  ipcMain.handle('ingest:file', async (_, filePath: string, visionModel?: string, visionPrompt?: string, normalizeWithLlm?: boolean, normalizationModel?: string, numCtx?: number, taskId?: string, normalizationThink?: boolean) => {
+    const payload: SidecarIngestFilePayload = sidecarIngestFilePayloadSchema.parse({ filePath, visionModel, visionPrompt, normalizeWithLlm, normalizationModel, numCtx, normalizationThink, taskId })
+    return sidecarAppService.ingestFile(payload.filePath, payload.visionModel, payload.visionPrompt, payload.normalizeWithLlm, payload.normalizationModel, payload.numCtx, payload.taskId, payload.normalizationThink)
   })
 
   ipcMain.handle('ingest:update', async (_, docId: string, markdownContent: string) => {
@@ -35,9 +35,9 @@ export function registerSidecarIpcHandlers() {
     return sidecarAppService.updateDocument(payload.docId, payload.markdownContent)
   })
 
-  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number) => {
-    const payload: SidecarTranslatePayload = sidecarTranslatePayloadSchema.parse({ docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx })
-    return sidecarAppService.translateDocumentInplace(payload.docId, payload.sourceLang, payload.targetLang, payload.model, payload.backupOriginal, payload.targetDir, payload.numCtx)
+  ipcMain.handle('ingest:translate-inplace', async (_, docId: string, sourceLang: string, targetLang: string, model?: string, backupOriginal?: boolean, targetDir?: string, numCtx?: number, think?: boolean) => {
+    const payload: SidecarTranslatePayload = sidecarTranslatePayloadSchema.parse({ docId, sourceLang, targetLang, model, backupOriginal, targetDir, numCtx, think })
+    return sidecarAppService.translateDocumentInplace(payload.docId, payload.sourceLang, payload.targetLang, payload.model, payload.backupOriginal, payload.targetDir, payload.numCtx, payload.think)
   })
 
   ipcMain.handle('ingest:page-preview', async (_, docId: string, pageNumber: number) => {

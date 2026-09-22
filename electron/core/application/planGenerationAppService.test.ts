@@ -14,6 +14,7 @@ vi.mock('./ollamaAppService', () => ({
   ollamaAppService: {
     generateStructured: vi.fn(),
     getModelContextLength: vi.fn().mockResolvedValue(undefined),
+    getModelMetrics: vi.fn().mockResolvedValue({}),
   },
 }))
 

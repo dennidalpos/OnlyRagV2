@@ -241,6 +241,8 @@ export interface AppSettings {
   includeCodingAgentDebugPayloads?: boolean
   /** Total audit-log generations kept on disk, including the active file. */
   codingAgentDebugRetentionFiles?: number
+  /** Per-installed-model binary thinking preferences. Missing entries are disabled. */
+  modelThinkingPreferences?: Record<string, boolean>
   // Plan Approval Settings
   enablePrePlanInterview?: boolean
   // Verification and execution guards
@@ -576,6 +578,17 @@ export interface OllamaStreamDoneEvent {
   operationId: string
 }
 
+export interface OllamaGenerationOptions {
+  num_ctx?: number
+  temperature?: number
+  top_p?: number
+  repeat_penalty?: number
+  num_thread?: number
+  keep_alive?: string
+  /** Effective, already policy-gated binary thinking choice. */
+  think?: boolean
+}
+
 export interface IElectronAPI {
   runDiagnostics: (host?: string) => Promise<DiagnosticsData>
   getLogs: () => Promise<LogEntry[]>
@@ -600,6 +613,7 @@ export interface IElectronAPI {
     normalizationModel?: string,
     numCtx?: number,
     taskId?: string,
+    normalizationThink?: boolean,
   ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   updateIngestedDocument: (docId: string, markdownContent: string) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   translateDocumentInplace: (
@@ -610,6 +624,7 @@ export interface IElectronAPI {
     backupOriginal?: boolean,
     targetDir?: string,
     numCtx?: number,
+    think?: boolean,
   ) => Promise<{ success: boolean; data?: IngestedDocument; error?: string }>
   getDocumentPagePreview: (docId: string, pageNumber: number) => Promise<PagePreviewData | null>
   getIngestedDocuments: () => Promise<IngestedDocument[]>
@@ -620,7 +635,7 @@ export interface IElectronAPI {
     model: string,
     prompt: string,
     onChunk: (chunk: string) => void,
-    options?: any,
+    options?: OllamaGenerationOptions,
     host?: string,
     operationId?: string,
     onDone?: () => void,

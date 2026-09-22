@@ -11,6 +11,7 @@ import { CODING_MODEL_KEEP_ALIVE } from '../domain/agent/hardwareProfileResolver
 import { enrichOllamaGenerationTelemetry, type OllamaStreamTelemetry } from '../domain/agent/ollamaSessionRuntime'
 import { ollamaAppService } from './ollamaAppService'
 import { calculateAvailableOutputTokens, countPromptTokens } from '../../../shared/domain/agent/contextWindowCalculator'
+import { resolveOllamaThinkingPreference } from '../../../shared/domain/agent/ollamaThinkingPolicy'
 
 export type { TurnDispatchContext, TurnDispatchOutcome } from './agentOrchestratorTurnDispatchTypes'
 
@@ -50,6 +51,7 @@ async function dispatchToLlm(
           ctx.session.targetWindow.webContents.send('agent:stream-thought', { ...ctx.session.identity, step: ctx.stepCount, chunk })
         }
       },
+      think: resolveOllamaThinkingPreference(selection.targetModel, ctx.settings, ctx.modelMetrics).think,
       isCancelled: () => !ctx.isSessionActive(),
       signal: ctx.session.abortController?.signal,
       onCancelHandle: (abort) => {

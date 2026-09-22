@@ -139,6 +139,23 @@ export function findMatchingInstalledModel(target: string, available: string[]):
   return null
 }
 
+/** Resolves only exact model aliases, including the implicit `:latest` form. */
+export function findExactInstalledModelAlias(target: string, available: string[]): string | null {
+  const parsedTarget = parseModelTagComponents(target)
+  if (!parsedTarget.normalized) return null
+
+  const exact = available.find((model) => model.trim().toLowerCase() === parsedTarget.normalized)
+  if (exact) return exact
+
+  const targetTag = parsedTarget.tag || 'latest'
+  return available.find((model) => {
+    const parsedModel = parseModelTagComponents(model)
+    if (!parsedModel.normalized || parsedModel.baseName !== parsedTarget.baseName) return false
+    if (parsedTarget.namespace !== parsedModel.namespace) return false
+    return (parsedModel.tag || 'latest') === targetTag
+  }) || null
+}
+
 /**
  * Accurately determines if a target Ollama model tag is installed locally.
  */

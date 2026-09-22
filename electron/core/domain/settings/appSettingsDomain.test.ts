@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDefaultAppSettings, sanitizeAppSettings, mergeAppSettings } from './appSettingsDomain'
+import { getDefaultAppSettings, sanitizeAppSettings, mergeAppSettings, sanitizeModelThinkingPreferences } from './appSettingsDomain'
 
 describe('AppSettingsDomain Unit Tests', () => {
   it('should return valid default settings', () => {
@@ -13,6 +13,7 @@ describe('AppSettingsDomain Unit Tests', () => {
     expect(defaults.allowFileModifications).toBe(false)
     expect(defaults.allowTerminalExecution).toBe(false)
     expect(defaults.capabilityPolicyMode).toBe('offline-strict')
+    expect(defaults.modelThinkingPreferences).toEqual({})
   })
 
   it('should sanitize empty or corrupted input to defaults', () => {
@@ -24,6 +25,28 @@ describe('AppSettingsDomain Unit Tests', () => {
   it('preserves a valid capability policy mode and drops invalid values', () => {
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'offline-strict' }).capabilityPolicyMode).toBe('offline-strict')
     expect(sanitizeAppSettings({ capabilityPolicyMode: 'auto' }).capabilityPolicyMode).toBe('offline-strict')
+  })
+
+  it('sanitizes independent per-model thinking preferences', () => {
+    expect(sanitizeModelThinkingPreferences({
+      ' qwen3:4b ': true,
+      'gpt-oss:20b': false,
+      invalid: 'yes',
+      '': true,
+    })).toEqual({ 'qwen3:4b': true, 'gpt-oss:20b': false })
+
+    expect(sanitizeAppSettings({
+      modelThinkingPreferences: { 'qwen3:4b': true, invalid: 1 },
+    }).modelThinkingPreferences).toEqual({ 'qwen3:4b': true })
+  })
+
+  it('preserves the saved sensitive-payload preference while logging is off', () => {
+    const settings = sanitizeAppSettings({
+      enableCodingAgentDebugLog: false,
+      includeCodingAgentDebugPayloads: true,
+    })
+    expect(settings.includeCodingAgentDebugPayloads).toBe(true)
+    expect(settings.enableCodingAgentDebugLog).toBe(false)
   })
 
   it('retires the legacy automatic skill-install mode to disabled', () => {

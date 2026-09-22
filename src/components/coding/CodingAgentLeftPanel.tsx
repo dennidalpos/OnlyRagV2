@@ -44,7 +44,10 @@ export const CodingAgentLeftPanel: React.FC<CodingAgentLeftPanelProps> = ({
   onUpdateSettings,
 }) => {
   return (
-    <div style={{ width: `${leftPanelWidth}px` }} className="flex flex-col border-r border-slate-800 bg-slate-950 shrink-0 overflow-hidden">
+    <div
+      style={{ width: `min(${leftPanelWidth}px, calc(100% - 354px))` }}
+      className="flex flex-col border-r border-slate-800 bg-slate-950 shrink-0 overflow-hidden"
+    >
       <div className="flex-1 overflow-hidden">
         <AgentActionLogPanel
           actionLogs={c.actionLogs}

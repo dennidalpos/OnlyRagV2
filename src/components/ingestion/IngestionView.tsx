@@ -1,5 +1,4 @@
-import React, { useRef, useMemo, useEffect, useState } from 'react'
-import Editor from '@monaco-editor/react'
+import React, { useRef, useMemo, useEffect, useState, Suspense, lazy } from 'react'
 import {
   FileText,
   Upload,
@@ -35,11 +34,7 @@ import { useIngestion } from '../../hooks/useIngestion'
 import { useToast } from '../common/Toast'
 import { useTranslation } from '../../i18n'
 import { useResizablePanel } from '../../hooks/useResizablePanel'
-import {
-  ONLYRAG_MONACO_THEME_NAME,
-  defineOnlyRagMonacoTheme,
-  getStandardMonacoOptions,
-} from '../../lib/monacoTheme'
+const IngestionMarkdownEditor = lazy(() => import('./IngestionMarkdownEditor').then((module) => ({ default: module.IngestionMarkdownEditor })))
 
 interface IngestionViewProps {
   settings?: AppSettings
@@ -874,20 +869,14 @@ export const IngestionView: React.FC<IngestionViewProps> = React.memo(({ setting
                 </div>
 
                 <div className="flex-1 bg-[#080c14]">
-                  <Editor
-                    height="100%"
-                    theme={ONLYRAG_MONACO_THEME_NAME}
-                    beforeMount={defineOnlyRagMonacoTheme}
-                    language="markdown"
-                    value={ing.markdownContent}
-                    onChange={(val) => ing.setMarkdownContent(val || '')}
-                    onMount={ing.handleEditorDidMount}
-                    options={getStandardMonacoOptions({
-                      minimap: false,
-                      wordWrap: settings?.editorWordWrap !== false,
-                      lineNumbers: 'on',
-                    })}
-                  />
+                  <Suspense fallback={<div className="p-4 text-xs text-slate-400">{t('common.loading')}</div>}>
+                    <IngestionMarkdownEditor
+                      content={ing.markdownContent}
+                      onChange={ing.setMarkdownContent}
+                      onMount={ing.handleEditorDidMount}
+                      wordWrap={settings?.editorWordWrap !== false}
+                    />
+                  </Suspense>
                 </div>
               </div>
             </div>

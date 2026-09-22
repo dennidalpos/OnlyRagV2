@@ -30,3 +30,5 @@ Adapter principali:
 - [`diagnostics.ts`](../electron/diagnostics.ts) e [`logRedactor.ts`](../electron/logRedactor.ts): log e redazione.
 
 I contratti IPC sono in [`api-ipc.md`](./api-ipc.md); le dipendenze tra layer sono controllate da `npm run audit:cycles`.
+
+Su Windows il recupero di `:8000` richiede il marker `sidecar-ownership.json` in `userData` e la corrispondenza di PID, percorso eseguibile e ora di avvio letti dal processo reale. Un listener sconosciuto o un PID riutilizzato lascia il Sidecar offline senza terminare il processo sulla porta. La prova con processi reali, incluso `sidecar.exe`, è `npm run test:e2e:sidecar-ownership`.

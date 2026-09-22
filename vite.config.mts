@@ -73,7 +73,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('@monaco-editor') || id.includes('monaco-editor')) {
-              return 'monaco-vendor'
+              return undefined
             }
             if (id.includes('gpt-tokenizer')) {
               return 'tokenizer-vendor'

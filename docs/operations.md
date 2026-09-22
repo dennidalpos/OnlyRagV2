@@ -25,6 +25,8 @@ Setup: `npm run setup:dev`.
 | Dead code | `npm run audit:deadcode` |
 | Audit composito | `npm run audit:all` |
 | Smoke bundle | `npm run test:smoke` |
+| Rete avvio Renderer | `npm run test:e2e:cold-start` |
+| Bundle e interfaccia | `npm run test:e2e:bundle-ux` |
 | OpenAPI | `npm run generate:openapi` |
 | Asset | `npm run assets:check`, `npm run assets:generate` |
 | Installer | `npm run package:win` |
